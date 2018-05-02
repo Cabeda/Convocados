@@ -8,7 +8,7 @@ import logo from './ball.svg';
 class App extends React.Component<any, IRandomizer> {
 
 
-  public players: string[] = ["Moura", "Cabeda", "Ricardo", "Ivan", "Andr√© Sousa", "Sim√£o", "Jo√£o"];
+  public players: string[] = ["Moura", "Cabeda", "Ricardo", "Ivan", "AndrÈ Sousa", "Sim„o", "Jo„o", "JosÈ Pedro"];
 
   public teams: string[] = ["Egypt", "Morocco",
     "Nigeria", "Senegal", "Tunisia", "Australia",
@@ -42,9 +42,9 @@ class App extends React.Component<any, IRandomizer> {
   constructor(props: any) {
     super(props);
     this.state = {
-      players: this.players,
+      players: this.printData(this.players),
       result: [],
-      teams: this.teams
+      teams: this.printData(this.teams)
     };
 
     this.handleTeamsChange = this.handleTeamsChange.bind(this);
@@ -72,6 +72,12 @@ class App extends React.Component<any, IRandomizer> {
     return result;
   }
 
+
+  public printData(list: string[]): string[] {
+    return list.map(x => x.trim() + "\n");
+
+  }
+
   public getItemFromList(list: string[]) {
     const item = list.splice(Math.floor((Math.random() * list.length)), 1)[0];
     return item.trim();
@@ -92,7 +98,7 @@ class App extends React.Component<any, IRandomizer> {
       matches.push(newTeam);
     }
 
-    this.setState({ result: matches });
+    this.setState({teams: this.printData(this.state.teams), players: this.printData(this.state.players), result: matches });
   }
 
   public render() {
@@ -103,14 +109,19 @@ class App extends React.Component<any, IRandomizer> {
           <h1 className="App-title">Team Randomizer</h1>
         </header>
         <div>
-
-          <textarea id="players" placeholder="Insert players here" value={this.state.players} onChange={this.handlePlayersChange} />
-          <textarea id="teams" placeholder="Insert teams here" value={this.state.teams} onChange={this.handleTeamsChange} />
+          <div className="container">
+          <div className="cell">
+            <textarea id="players" placeholder="Insert players here" value={this.state.players} onChange={this.handlePlayersChange} />
+          </div>
+          <div className="cell">
+            <textarea id="teams" placeholder="Insert teams here" value={this.state.teams} onChange={this.handleTeamsChange} />
+            </div>
+          </div>
+          <button id="randomizeBtn" onClick={this.randomize}>
+            <h4 >Randomize!!!</h4>
+          </button>
+          <textarea id="result" value={this.printResults(this.state.result)} />
         </div>
-        <button id="randomizeBtn" onClick={this.randomize}>
-          <h4 >Randomize!!!</h4>
-        </button>
-        <textarea id="result" value={this.printResults(this.state.result)} />
       </div>
     );
   }

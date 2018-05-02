@@ -27,7 +27,17 @@
   to { transform: rotate(360deg); }
 }
 
+.container {
+  display: grid;
+  grid-template-columns: 50% 50%;
+  grid-template-rows: 50% 50%;
+}
+
+.cell {
+}
+
 textarea {
-  width: 100%;
-  height: 100%;
+  height: 50vh;
+  min-width: 100%;
+  max-width: 100%;
 }
