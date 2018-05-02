@@ -111,15 +111,19 @@ class App extends React.Component<any, IRandomizer> {
         <div>
           <div className="container">
           <div className="cell">
+          <h4>Players</h4>
             <textarea id="players" placeholder="Insert players here" value={this.state.players} onChange={this.handlePlayersChange} />
           </div>
           <div className="cell">
+          <h4>Teams</h4>
             <textarea id="teams" placeholder="Insert teams here" value={this.state.teams} onChange={this.handleTeamsChange} />
             </div>
           </div>
-          <button id="randomizeBtn" onClick={this.randomize}>
-            <h4 >Randomize!!!</h4>
+          <button id="randomizeBtn" className="btn" onClick={this.randomize}>
+            <h2 >Randomize!!!</h2>
           </button>
+
+          <h4>Result</h4>
           <textarea id="result" value={this.printResults(this.state.result)} />
         </div>
       </div>
