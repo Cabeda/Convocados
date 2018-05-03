@@ -8,7 +8,7 @@ import logo from './ball.svg';
 class App extends React.Component<any, IRandomizer> {
 
 
-  public players: string[] = ["Moura", "Cabeda", "Ricardo", "Ivan", "AndrÈ Sousa", "Sim„o", "Jo„o", "JosÈ Pedro"];
+  public players: string[] = ["Moura", "Cabeda", "Ricardo", "Ivan", "Andr√© Sousa", "Sim√£o", "Jo√£o", "Jos√© Pedro"];
 
   public teams: string[] = ["Egypt", "Morocco",
     "Nigeria", "Senegal", "Tunisia", "Australia",
@@ -74,7 +74,7 @@ class App extends React.Component<any, IRandomizer> {
 
 
   public printData(list: string[]): string[] {
-    return list.map(x => x.trim() + "\n");
+    return list.map(x => "\n" + x.trim() );
 
   }
 
