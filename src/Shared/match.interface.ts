@@ -1,4 +1,4 @@
 export interface Imatch {
-    team: string,
-    player: string
+    team: String,
+    player: String
 }

@@ -1,90 +1,88 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import { Imatch } from "./Shared/match.interface";
+import { Randomize } from "./Shared/random";
 import "./App.css";
+import { GameMode } from "./Shared/GameMode.enum";
 
 function App() {
-  const [players, setPlayers] = useState<String[]>([])
-  const [teams, setTeams] = useState<String[]>([])
-  const [result, setResult] = useState<Imatch[]>([])
+  const [playersField, setPlayersField] = useState<string>();
+  const [teamsField, setTeamsField] = useState<string>();
+  const [players, setPlayers] = useState<string[]>([]);
+  const [teams, setTeams] = useState<string[]>([]);
+  const [result, setResult] = useState<Imatch[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string>();
+  const handleTeamsChange = (e: React.FormEvent<HTMLTextAreaElement>) => {
+    setTeamsField(e.currentTarget.value);
+    setTeams(e.currentTarget.value ? e.currentTarget.value.split(","): []);
+  };
 
-  const handleTeamsChange = (e: React.FormEvent<HTMLTextAreaElement>) => setTeams(e.currentTarget.value.split(","))
-
-  const handlePlayersChange = (e: React.FormEvent<HTMLTextAreaElement>) => setPlayers(e.currentTarget.value.split(","))
+  const handlePlayersChange = (e: React.FormEvent<HTMLTextAreaElement>) => {
+  setPlayersField(e.currentTarget.value);
+    setPlayers(e.currentTarget.value ? e.currentTarget.value.split(",") : []);
+  };
 
   const printResults = (list: Imatch[]): string => {
-    let result: string = "";
-    for (const item of list) {
-      result += "\n" + item.player + " - " + item.team;
+    const matches: string[] = list.map(item => item.player + " - " + item.team);
+
+    return list.length
+      ? matches.reduce((result, match) => `${result}\n ${match}`)
+      : "";
+  };
+
+  const runRandomize = (mode: GameMode) => {
+    try {
+      const result = Randomize([...players], [...teams], mode)
+      setResult(result);
+      setErrorMessage("")
+    } catch (error) {
+      setErrorMessage(error.message)
     }
-    return result;
-  }
+  };
 
-  const printData = (list: String[]): string[] => {
-    return list.map(x => "\n" + x.trim());
-  }
-
-  const getItemFromList = (list: string[]) => {
-    const item = list.splice(Math.floor(Math.random() * list.length), 1)[0];
-    return item.trim();
-  }
-
-  const randomize = () => {
-    const matches: Imatch[] = [];
-    const playersLength = players.length;
-    const playersToAdd = JSON.parse(JSON.stringify(players));
-    const teamsToAdd = JSON.parse(JSON.stringify(teams));
-
-    for (let i = 0; i < playersLength; i++) {
-      const player: string = getItemFromList(playersToAdd);
-      const team: string = getItemFromList(teamsToAdd);
-      const newTeam: Imatch = { player, team };
-
-      matches.push(newTeam);
-    }
-
-      setResult(matches); 
-  }
-
-    return (
-      <div className="App">
-        <header className="App-header">
-          <h1 className="App-title">Team Randomizer</h1>
-        </header>
-        <div>
-          <div className="container">
-            <label>
-              Mode
-            </label>
-          </div>
-          <div className="container">
-            <div className="cell">
-              <h4>Players</h4>
-              <textarea
-                id="players"
-                placeholder="Insert players separated by a comma here"
-                value={printData(players)}
-                onChange={handlePlayersChange}
-              />
-            </div>
-            <div className="cell">
-              <h4>Teams</h4>
-              <textarea
-                id="teams"
-                placeholder="Insert teams separated by a comma here"
-                value={printData(teams)}
-                onChange={handleTeamsChange}
-              />
-            </div>
-          </div>
-          <button id="randomizeBtn" className="btn" onClick={randomize}>
-            <h2>Randomize!!!</h2>
-          </button>
-
-          <h4>Result</h4>
-          <textarea id="result" value={printResults(result)} />
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1 className="App-title">Team Randomizer</h1>
+      </header>
+      <div>
+        <div className="errorMessage">
+  {errorMessage && <h3 >{errorMessage}</h3>}
         </div>
+        <div className="container">
+          <div className="cell">
+            <h4>Players</h4>
+            <textarea
+              id="players"
+              placeholder="Insert players separated by a comma here"
+              value={playersField}
+              onChange={handlePlayersChange}
+            />
+          </div>
+          <div className="cell">
+            <h4>Teams</h4>
+            <textarea
+              id="teams"
+              placeholder="Insert teams separated by a comma here"
+              value={teamsField}
+              onChange={handleTeamsChange}
+            />
+          </div>
+        </div>
+        <button id="randomizeBtn" className="btn" onClick={() => runRandomize(GameMode.TeamPickerUnique)}>
+          <h2>Pick a team</h2>
+        </button>
+        <button
+          id="randomizeBtn"
+          className="btn"
+          onClick={() =>runRandomize(GameMode.TeamPickerShared)}>
+          <h2>Distribute by teams</h2>
+        </button>
+
+        <h3>Result</h3>
+        <textarea id="result" value={printResults(result)} />
       </div>
-    );
+    </div>
+  );
 }
 
 export default App;

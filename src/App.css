@@ -32,7 +32,11 @@
   grid-template-rows: 50% 50%;
 }
 
-.cell {
+
+.errorMessage {
+  display: grid;
+  background-color: lightcoral;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .6);
 }
 
 textarea {
