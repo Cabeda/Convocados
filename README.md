@@ -1,11 +1,12 @@
 # Team Randomizer
+
 Web application to randomize teams. Currently the only existing mode is to select a random team and attribute to a player.
 
-
 ## Roadmap
+
 - [ ] Add unit tests
 - [ ] Improve interface
-- [ ] Add new mode to distribute teams  
+- [ ] Add new mode to distribute teams
 
 ## Test locally
 
