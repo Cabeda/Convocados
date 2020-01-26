@@ -5,6 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "firefox",
+            "request": "attach",
+            "name": "Firefox Attach",
+            "url": "http://localhost:3000",
+            "webRoot": "${workspaceRoot}/src"
+        },
+        {
             "type": "chrome",
             "request": "launch",
             "name": "Launch Chrome against localhost",

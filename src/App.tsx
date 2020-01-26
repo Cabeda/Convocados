@@ -13,12 +13,12 @@ function App() {
   const [errorMessage, setErrorMessage] = useState<string>();
   const handleTeamsChange = (e: React.FormEvent<HTMLTextAreaElement>) => {
     setTeamsField(e.currentTarget.value);
-    setTeams(e.currentTarget.value ? e.currentTarget.value.split(","): []);
+    setTeams(e.currentTarget.value ? e.currentTarget.value.replace('\n', '').split(",") : []);
   };
 
   const handlePlayersChange = (e: React.FormEvent<HTMLTextAreaElement>) => {
-  setPlayersField(e.currentTarget.value);
-    setPlayers(e.currentTarget.value ? e.currentTarget.value.split(",") : []);
+    setPlayersField(e.currentTarget.value);
+    setPlayers(e.currentTarget.value ? e.currentTarget.value.replace('\n', '').split(",") : []);
   };
 
   const printResults = (list: Imatch[]): string => {
@@ -31,11 +31,11 @@ function App() {
 
   const runRandomize = (mode: GameMode) => {
     try {
-      const result = Randomize([...players], [...teams], mode)
+      const result = Randomize([...players], [...teams], mode);
       setResult(result);
-      setErrorMessage("")
+      setErrorMessage("");
     } catch (error) {
-      setErrorMessage(error.message)
+      setErrorMessage(error.message);
     }
   };
 
@@ -46,7 +46,7 @@ function App() {
       </header>
       <div>
         <div className="errorMessage">
-  {errorMessage && <h3 >{errorMessage}</h3>}
+          {errorMessage && <h3>{errorMessage}</h3>}
         </div>
         <div className="container">
           <div className="cell">
@@ -68,18 +68,26 @@ function App() {
             />
           </div>
         </div>
-        <button id="randomizeBtn" className="btn" onClick={() => runRandomize(GameMode.TeamPickerUnique)}>
+        <button
+          id="randomizeBtn"
+          className="btn"
+          onClick={() => runRandomize(GameMode.TeamPickerUnique)}
+        >
           <h2>Pick a team</h2>
         </button>
         <button
           id="randomizeBtn"
           className="btn"
-          onClick={() =>runRandomize(GameMode.TeamPickerShared)}>
+          onClick={() => runRandomize(GameMode.TeamPickerShared)}
+        >
           <h2>Distribute by teams</h2>
         </button>
-
-        <h3>Result</h3>
-        <textarea id="result" value={printResults(result)} />
+        {result.length > 0 && (
+          <div>
+            <h3>Result</h3>
+            <textarea disabled id="result" value={printResults(result)} />
+          </div>
+        )}
       </div>
     </div>
   );
