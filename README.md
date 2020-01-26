@@ -6,7 +6,7 @@ Web application to randomize teams. Currently the only existing mode is to selec
 
 - [ ] Add unit tests
 - [ ] Improve interface
-- [ ] Add new mode to distribute teams
+- [X] Add new mode to distribute teams
 
 ## Test locally
 
