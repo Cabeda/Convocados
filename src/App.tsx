@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { Imatch } from '../public/Shared/match.interface';
-import { IRandomizer } from '../public/Shared/random.interface';
+import { Imatch } from './Shared/match.interface';
+import { IRandomizer } from './Shared/random.interface';
 import './App.css';
 import logo from './ball.svg';
 
@@ -105,7 +105,6 @@ class App extends React.Component<any, IRandomizer> {
     return (
       <div className="App">
         <header className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
           <h1 className="App-title">Team Randomizer</h1>
         </header>
         <div>
