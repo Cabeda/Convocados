@@ -7,8 +7,8 @@ function getItemFromList(list: string[]) {
 }
 
 export function Randomize(
-  players: string[],
-  teams: string[],
+  players: any[],
+  teams: any[],
   mode: GameMode = GameMode.TeamPickerShared
 ): Imatch[] {
   const matches: Imatch[] = [];

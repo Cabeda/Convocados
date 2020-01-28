@@ -3,22 +3,29 @@ import { Imatch } from "./Shared/match.interface";
 import { Randomize } from "./Shared/random";
 import "./App.css";
 import { GameMode } from "./Shared/GameMode.enum";
+import ChipInput from "material-ui-chip-input";
 
 function App() {
-  const [playersField, setPlayersField] = useState<string>();
-  const [teamsField, setTeamsField] = useState<string>();
   const [players, setPlayers] = useState<string[]>([]);
   const [teams, setTeams] = useState<string[]>([]);
   const [result, setResult] = useState<Imatch[]>([]);
   const [errorMessage, setErrorMessage] = useState<string>();
-  const handleTeamsChange = (e: React.FormEvent<HTMLTextAreaElement>) => {
-    setTeamsField(e.currentTarget.value);
-    setTeams(e.currentTarget.value ? e.currentTarget.value.replace('\n', '').split(",") : []);
+
+  const handlePlayerDelete = (chipToDelete: string) => {
+    setPlayers(players.filter(player => player !== chipToDelete));
   };
 
-  const handlePlayersChange = (e: React.FormEvent<HTMLTextAreaElement>) => {
-    setPlayersField(e.currentTarget.value);
-    setPlayers(e.currentTarget.value ? e.currentTarget.value.replace('\n', '').split(",") : []);
+  const handleTeamDelete = (chipToDelete: string) => {
+
+    setTeams(teams.filter(player => player !== chipToDelete));
+  };
+
+  const handleTeamsChange = (team: string) => {
+    setTeams([...teams, team]);
+  };
+
+  const handlePlayersChange = (player: string) => {
+    setPlayers([...players, player]);
   };
 
   const printResults = (list: Imatch[]): string => {
@@ -51,20 +58,18 @@ function App() {
         <div className="container">
           <div className="cell">
             <h4>Players</h4>
-            <textarea
-              id="players"
-              placeholder="Insert players separated by a comma here"
-              value={playersField}
-              onChange={handlePlayersChange}
+            <ChipInput
+              value={players}
+              onAdd={(chip: string) => handlePlayersChange(chip)}
+              onDelete={(deletedChip: string) => handlePlayerDelete(deletedChip)}
             />
           </div>
           <div className="cell">
             <h4>Teams</h4>
-            <textarea
-              id="teams"
-              placeholder="Insert teams separated by a comma here"
-              value={teamsField}
-              onChange={handleTeamsChange}
+            <ChipInput
+              value={teams}
+              onAdd={(chip: string) => handleTeamsChange(chip)}
+              onDelete={(deletedChip) => handleTeamDelete(deletedChip)}
             />
           </div>
         </div>
