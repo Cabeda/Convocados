@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { Imatch } from "./Shared/match.interface";
 import { Randomize } from "./Shared/random";
 import "./App.css";
 import { GameMode } from "./Shared/GameMode.enum";
@@ -27,14 +26,6 @@ function App() {
 
   const handlePlayersChange = (player: string[]) => {
     setPlayers([...players, ...player]);
-  };
-
-  const printResults = (list: Imatch[]): string => {
-    const matches: string[] = list.map(item => item.player + " - " + item.team);
-
-    return list.length
-      ? matches.reduce((result, match) => `${result}\n ${match}`)
-      : "";
   };
 
   const runRandomize = (mode: GameMode) => {
