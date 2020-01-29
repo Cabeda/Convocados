@@ -13,14 +13,14 @@ export function Randomize(
 ): Imatch[] {
   const matches: Imatch[] = [];
 
-  if(players.length === 0 || teams.length === 0)
-    throw Error("You need at least one player and one team")
+  if (players.length === 0 || teams.length === 0)
+    throw Error("You need at least one player and one team");
 
   switch (mode) {
     case GameMode.TeamPickerUnique:
-        if(teams.length < players.length) {
-            throw Error("For this mode you need at least an equal number of teams")
-        }
+      if (teams.length < players.length) {
+        throw Error("For this mode you need at least an equal number of teams");
+      }
       while (players.length > 0) {
         const player = getItemFromList(players);
         const team = getItemFromList(teams);
@@ -36,7 +36,10 @@ export function Randomize(
       for (let i = 0; i < shuffledPlayers.length; i++) {
         const newTeam: Imatch = {
           player: shuffledPlayers[i],
-          team: shuffledTeams[i - (Math.floor(i / shuffledTeams.length) * shuffledTeams.length)]
+          team:
+            shuffledTeams[
+              i - Math.floor(i / shuffledTeams.length) * shuffledTeams.length
+            ]
         };
         matches.push(newTeam);
       }

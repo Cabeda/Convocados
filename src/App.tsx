@@ -9,7 +9,10 @@ import { IResult } from "./Shared/result.interface";
 function App() {
   const [players, setPlayers] = useState<string[]>([]);
   const [teams, setTeams] = useState<string[]>([]);
-  const [result, setResult] = useState<IResult>({matches: [], mode: GameMode.TeamPickerUnique});
+  const [result, setResult] = useState<IResult>({
+    matches: [],
+    mode: GameMode.TeamPickerUnique
+  });
   const [errorMessage, setErrorMessage] = useState<string>();
 
   const handlePlayerDelete = (chipToDelete: string) => {
@@ -106,7 +109,7 @@ function App() {
         {result.matches.length > 0 && (
           <div>
             <h3>Result</h3>
-            <Result  matches= {result.matches!} mode={result.mode}/>
+            <Result matches={result.matches!} mode={result.mode} />
           </div>
         )}
       </div>
