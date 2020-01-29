@@ -1,4 +1,4 @@
-name: Tests
+name: Unit test - Jest
 
 on: [push]
 
@@ -8,6 +8,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v1
-    - name: Run Jest
-      uses: stefanoeb/jest-action@1.0.2
+    - uses: actions/checkout@v2
+    - name: Yarn install
+      run: yarn install
+    - name: Run tests
+      run: yarn test --watchAll=false
