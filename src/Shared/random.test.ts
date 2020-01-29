@@ -1,5 +1,4 @@
 import React from 'react';
-import { render } from '@testing-library/react';
 import {Randomize} from './random';
 
 const players = ["A", "B", "C", "D"]
