@@ -42,7 +42,7 @@ export function Randomize(
       }
       break;
     default:
-      throw "Game Mode doesn't exist";
+      throw new Error("Game Mode doesn't exist");
   }
 
   return matches;

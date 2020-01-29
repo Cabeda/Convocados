@@ -24,7 +24,7 @@ function Result(props:IResult) {
         );
     
         default:
-            throw "Unknown mode";
+            throw new Error("Unknown mode");
             
     }
 }
