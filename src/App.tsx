@@ -4,11 +4,13 @@ import { Randomize } from "./Shared/random";
 import "./App.css";
 import { GameMode } from "./Shared/GameMode.enum";
 import ChipInput from "material-ui-chip-input";
+import Result from "./Shared/Components/Result";
+import { IResult } from "./Shared/result.interface";
 
 function App() {
   const [players, setPlayers] = useState<string[]>([]);
   const [teams, setTeams] = useState<string[]>([]);
-  const [result, setResult] = useState<Imatch[]>([]);
+  const [result, setResult] = useState<IResult>({matches: [], mode: GameMode.TeamPickerUnique});
   const [errorMessage, setErrorMessage] = useState<string>();
 
   const handlePlayerDelete = (chipToDelete: string) => {
@@ -38,7 +40,7 @@ function App() {
   const runRandomize = (mode: GameMode) => {
     try {
       const result = Randomize([...players], [...teams], mode);
-      setResult(result);
+      setResult({ matches: result, mode });
       setErrorMessage("");
     } catch (error) {
       setErrorMessage(error.message);
@@ -60,14 +62,19 @@ function App() {
             <ChipInput
               value={players}
               onAdd={(chip: string) => handlePlayersChange([chip])}
-              onDelete={(deletedChip: string) => handlePlayerDelete(deletedChip)}
-              onPaste={(event) => {
-                const clipboardText:string = event.clipboardData.getData('Text')
-      
-                event.preventDefault()
-      
-                handlePlayersChange(clipboardText.split('\n').filter((t) => t.length > 0))
-      
+              onDelete={(deletedChip: string) =>
+                handlePlayerDelete(deletedChip)
+              }
+              onPaste={event => {
+                const clipboardText: string = event.clipboardData.getData(
+                  "Text"
+                );
+
+                event.preventDefault();
+
+                handlePlayersChange(
+                  clipboardText.split("\n").filter(t => t.length > 0)
+                );
               }}
             />
           </div>
@@ -76,14 +83,17 @@ function App() {
             <ChipInput
               value={teams}
               onAdd={(chip: string) => handleTeamsChange([chip])}
-              onDelete={(deletedChip) => handleTeamDelete(deletedChip)}
-              onPaste={(event) => {
-                const clipboardText:string = event.clipboardData.getData('Text')
-      
-                event.preventDefault()
-      
-                handleTeamsChange(clipboardText.split('\n').filter((t) => t.length > 0))
-      
+              onDelete={deletedChip => handleTeamDelete(deletedChip)}
+              onPaste={event => {
+                const clipboardText: string = event.clipboardData.getData(
+                  "Text"
+                );
+
+                event.preventDefault();
+
+                handleTeamsChange(
+                  clipboardText.split("\n").filter(t => t.length > 0)
+                );
               }}
             />
           </div>
@@ -102,10 +112,10 @@ function App() {
         >
           <h2>Distribute by teams</h2>
         </button>
-        {result.length > 0 && (
+        {result.matches.length > 0 && (
           <div>
             <h3>Result</h3>
-            <textarea disabled id="result" value={printResults(result)} />
+            <Result  matches= {result.matches!} mode={result.mode}/>
           </div>
         )}
       </div>
