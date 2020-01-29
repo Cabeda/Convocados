@@ -1,4 +1,3 @@
-import React from 'react';
 import {Randomize} from './random';
 
 const players = ["A", "B", "C", "D"]
