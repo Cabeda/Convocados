@@ -54,6 +54,7 @@ function App() {
           <div className="cell">
             <h4>Players</h4>
             <ChipInput
+              helperText="Insert players above"
               value={players}
               onAdd={(chip: string) => handlePlayersChange([chip])}
               onDelete={(deletedChip: string) =>
@@ -75,6 +76,7 @@ function App() {
           <div className="cell">
             <h4>Teams</h4>
             <ChipInput
+              helperText="Insert teams above"
               value={teams}
               onAdd={(chip: string) => handleTeamsChange([chip])}
               onDelete={deletedChip => handleTeamDelete(deletedChip)}
