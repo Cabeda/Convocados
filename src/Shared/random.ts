@@ -1,7 +1,7 @@
 import { Imatch } from "./match.interface";
 import { GameMode } from "./GameMode.enum";
 
-function getItemFromList(list: string[]) {
+function getItemFromList(list: string[]):string {
   const item = list.splice(Math.floor(Math.random() * list.length), 1)[0];
   return item.trim();
 }
