@@ -1,4 +1,4 @@
-name: CI
+name: Unit test - Jest
 
 on: [push]
 
@@ -9,8 +9,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Run a one-line script
+    - name: Yarn install
       run: yarn install
-    - name: Run a multi-line script
-      run: |
-        yarn test
+    - name: Run testes
+      run: yarn test
