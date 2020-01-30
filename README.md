@@ -1,4 +1,7 @@
 # Team Randomizer
+![Unit test - Jest](https://github.com/Cabeda/team-Randomizer/workflows/Unit%20test%20-%20Jest/badge.svg)
+
+
 
 Web application to randomize teams. Currently the only existing mode is to select a random team and attribute to a player.
 
