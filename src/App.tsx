@@ -5,6 +5,9 @@ import { GameMode } from "./Shared/GameMode.enum";
 import ChipInput from "material-ui-chip-input";
 import Result from "./Shared/Components/Result";
 import { IResult } from "./Shared/result.interface";
+import * as Sentry from '@sentry/browser';
+
+Sentry.init({ dsn: 'https://73775aa8e8f44e3c95e4cb9047e1a5b7@sentry.io/2098114' });
 
 function App() {
   const [players, setPlayers] = useState<string[]>([]);
