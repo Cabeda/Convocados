@@ -1,6 +1,6 @@
 # Team Randomizer
-![Unit test - Jest](https://github.com/Cabeda/team-Randomizer/workflows/Unit%20test%20-%20Jest/badge.svg)
 
+![Unit test - Jest](https://github.com/Cabeda/team-Randomizer/workflows/Unit%20test%20-%20Jest/badge.svg)
 
 ![Screenshot](./public/screenshot.png)
 
@@ -10,7 +10,7 @@ Web application to randomize teams. Currently the only existing mode is to selec
 
 - [ ] Add unit tests
 - [ ] Improve interface
-- [X] Add new mode to distribute teams
+- [x] Add new mode to distribute teams
 
 ## Test locally
 
