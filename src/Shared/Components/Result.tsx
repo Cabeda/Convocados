@@ -5,9 +5,6 @@ import TeamPickerShared from "./TeamPickerShared.component";
 import TeamPickerUnique from "./TeamPickerUnique.component";
 
 function Result(props: IResult) {
-  const teams: string[] = Array.from(
-    new Set(props.matches.map(team => team.team))
-  );
 
   switch (props.mode) {
     case GameMode.TeamPickerUnique:

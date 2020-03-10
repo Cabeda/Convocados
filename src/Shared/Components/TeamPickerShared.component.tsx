@@ -1,19 +1,20 @@
 import React from "react";
 import { IResult } from "../result.interface";
 import { makeStyles } from "@material-ui/core/styles";
-import List from "@material-ui/core/List";
-import ListItem from "@material-ui/core/ListItem";
-import ListItemText from "@material-ui/core/ListItemText";
-import Divider from "@material-ui/core/Divider";
-import ListItemAvatar from "@material-ui/core/ListItemAvatar";
 import Avatar from "@material-ui/core/Avatar";
-import PersonIcon from "@material-ui/icons/Person";
+import Grid from "@material-ui/core/Grid";
+import Paper from "@material-ui/core/Paper";
+import ListItemText from "@material-ui/core/ListItemText";
 
 const useStyles = makeStyles(theme => ({
   root: {
-    width: "100%",
-    maxWidth: 360,
+    flexGrow: 1,
     backgroundColor: theme.palette.background.paper
+  },
+  paper: {
+    padding: theme.spacing(2),
+    margin: "auto",
+    maxWidth: 500
   }
 }));
 
@@ -21,29 +22,21 @@ function TeamPickerShared(props: IResult) {
   const classes = useStyles();
 
   return (
-    <div>
-      <List
-        component="nav"
-        className={classes.root}
-        aria-label="mailbox folders"
-      >
-        {props.matches.map(match => {
-          return (
-            <div>
-              <Divider  component="li" />
-              <ListItem button key={match.player}>
-                <ListItemAvatar>
-                  <Avatar>
-                    <PersonIcon />
-                  </Avatar>
-                </ListItemAvatar>
+    <div className={classes.root}>
+      {props.matches.map(match => {
+        return (
+          <Paper className={classes.paper}>
+            <Grid container spacing={2}>
+              <Grid item>
+                <Avatar>{match.team.slice(0, 1).toUpperCase()}</Avatar>
+              </Grid>
+              <Grid item xs>
                 <ListItemText primary={match.player} secondary={match.team} />
-              </ListItem>
-            </div>
-          );
-        })}
-        <Divider />
-      </List>
+              </Grid>
+            </Grid>
+          </Paper>
+        );
+      })}
     </div>
   );
 }

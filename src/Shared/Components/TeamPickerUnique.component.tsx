@@ -1,19 +1,29 @@
 import React from "react";
 import { IResult } from "../result.interface";
 import { makeStyles } from "@material-ui/core/styles";
-import List from "@material-ui/core/List";
-import ListItem from "@material-ui/core/ListItem";
-import ListItemText from "@material-ui/core/ListItemText";
+import Chip from "@material-ui/core/Chip";
+import Grid from "@material-ui/core/Grid";
 import Divider from "@material-ui/core/Divider";
-import ListItemAvatar from "@material-ui/core/ListItemAvatar";
-import Avatar from "@material-ui/core/Avatar";
-import PersonIcon from "@material-ui/icons/Person";
+import Typography from "@material-ui/core/Typography";
+import Paper from "@material-ui/core/Paper";
 
 const useStyles = makeStyles(theme => ({
   root: {
-    width: "100%",
-    maxWidth: 360,
-    backgroundColor: theme.palette.background.paper
+    flexGrow: 1,
+    backgroundColor: theme.palette.background.paper,
+    margin: "auto"
+  },
+  item: {
+    maxWidth:500
+  },
+  chip: {
+    margin: theme.spacing(0.5)
+  },
+  section1: {
+    margin: theme.spacing(3, 2)
+  },
+  section2: {
+    margin: theme.spacing(2)
   }
 }));
 
@@ -25,35 +35,36 @@ function TeamPickerUnique(props: IResult) {
   );
 
   return (
-    <div>
-      {teams.map(team => {
-        const players = props.matches
-          .filter(m => m.team === team)
-          .map(m => m.player)
-          
-        return (
-          <List
-            component="nav"
-            className={classes.root}
-            aria-label="mailbox folders"
-          >
-            <h1>{team}</h1>
-            {players.map(player => {
-              return (<div>
-                <Divider component="li" />
-                <ListItem button key={player}>
-                  <ListItemAvatar>
-                    <Avatar>
-                      <PersonIcon />
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText primary={player} />
-                </ListItem>
-              </div>);
-            })}
-          </List>
-        );
-      })}
+    <div className={classes.root}>
+      <Grid container spacing={3}>
+        {teams.map(team => {
+          const players = props.matches
+            .filter(m => m.team === team)
+            .map(m => m.player);
+
+          return (
+            <Grid className={classes.item} item xs>
+              <Paper elevation={3}>
+                <div className={classes.section1}>
+                  <Typography gutterBottom variant="h4">
+                    {team}
+                  </Typography>
+                </div>
+                <div className={classes.section2}>
+                  <Divider variant="middle" />
+                  {players.map(player => {
+                    return (
+                      <div>
+                        <Chip className={classes.chip} label={player} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </Paper>
+            </Grid>
+          );
+        })}
+      </Grid>
     </div>
   );
 }
