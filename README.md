@@ -6,12 +6,6 @@
 
 Web application to randomize teams. Currently the only existing mode is to select a random team and attribute to a player.
 
-## Roadmap
-
-- [ ] Add unit tests
-- [ ] Improve interface
-- [x] Add new mode to distribute teams
-
 ## Test locally
 
 1. Install yarn
