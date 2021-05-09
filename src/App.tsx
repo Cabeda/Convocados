@@ -52,6 +52,12 @@ function App() {
     history.pushState({}, title, url.toString());
   };
 
+  const getUniqueList = (array: Array<string>) => {
+    const set = new Set(array);
+
+    return Array.from(set)
+  }
+
   const getresultFromURI = () => {
     let url = new URL(window.location.toString());
 
@@ -62,6 +68,8 @@ function App() {
       let result: Imatch[] = JSON.parse(decodeURI(resultParam as string));
       let mode: GameMode = JSON.parse(decodeURI(modeParam as string));
 
+      setPlayers(result.flatMap((x) => x.player));
+      setTeams(getUniqueList(result.flatMap((x) => x.team)));
       setResult({ matches: result, mode });
     }
   };
