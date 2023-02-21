@@ -1,87 +1,73 @@
 import React, { useEffect, useState } from "react";
 import { Randomize } from "./Shared/random";
 import "./App.css";
-import { GameMode } from "./Shared/GameMode.enum";
-import ChipInput from "material-ui-chip-input";
+import { Chip, Grid, TextField } from "@mui/material";
+
 import Result from "./Shared/Components/Result";
 import { IResult } from "./Shared/result.interface";
-import * as Sentry from "@sentry/browser";
 import { Imatch } from "./Shared/match.interface";
 
-Sentry.init({
-  dsn: "https://73775aa8e8f44e3c95e4cb9047e1a5b7@sentry.io/2098114",
-});
-
+function pickRandomNames(): string[] {
+  return ["Ninjas", "Gunas"];
+}
 function App() {
+  const [playerInput, setPlayerInput] = useState<string>("");
   const [players, setPlayers] = useState<string[]>([]);
-  const [teams, setTeams] = useState<string[]>([]);
+  const teams: string[] = pickRandomNames();
   const [result, setResult] = useState<IResult>({
     matches: [],
-    mode: GameMode.TeamPickerUnique,
   });
   const [errorMessage, setErrorMessage] = useState<string>();
 
   useEffect(() => {
-    getresultFromURI();
-  }, []);
-
-  const handlePlayerDelete = (chipToDelete: string) => {
-    setPlayers(players.filter((player) => player !== chipToDelete));
-  };
-
-  const handleTeamDelete = (chipToDelete: string) => {
-    setTeams(teams.filter((player) => player !== chipToDelete));
-  };
-
-  const handleTeamsChange = (team: string[]) => {
-    setTeams([...teams, ...team]);
-  };
-
-  const handlePlayersChange = (player: string[]) => {
-    setPlayers([...players, ...player]);
-  };
-
-  const saveResultToURI = (result: Imatch[], mode: GameMode) => {
-    const title = "Team Randomizer Result";
-    const url = new URL(window.location.toString());
-
-    url.searchParams.set("result", encodeURI(JSON.stringify(result)));
-    url.searchParams.set("mode", mode.toString());
-
-    // eslint-disable-next-line no-restricted-globals
-    history.pushState({}, title, url.toString());
-  };
-
-  const getUniqueList = (array: Array<string>) => {
-    const set = new Set(array);
-
-    return Array.from(set)
-  }
-
-  const getresultFromURI = () => {
     let url = new URL(window.location.toString());
-
     const resultParam = url.searchParams.get("result");
     const modeParam = url.searchParams.get("mode");
 
     if (resultParam && modeParam) {
       let result: Imatch[] = JSON.parse(decodeURI(resultParam as string));
-      let mode: GameMode = JSON.parse(decodeURI(modeParam as string));
 
       setPlayers(result.flatMap((x) => x.player));
-      setTeams(getUniqueList(result.flatMap((x) => x.team)));
-      setResult({ matches: result, mode });
+      setResult({ matches: result });
     }
+  }, []);
+
+  const handlePlayerDelete = (chipToDelete: string) => {
+    console.log(chipToDelete);
+
+    setPlayers(players.filter((player) => player !== chipToDelete));
   };
 
-  const runRandomize = (mode: GameMode) => {
+  const handlePlayersChange = (player: string) => {
+    setPlayers([...players, player]);
+    setPlayerInput("");
+  };
+
+  const handlePlayersPasteChange = (player: string[]) => {
+    setPlayers([...players, ...player]);
+    setPlayerInput("");
+  };
+
+  const saveResultToURI = (result: Imatch[]) => {
+    const title = "Team Randomizer Result";
+    const url = new URL(window.location.toString());
+
+    url.searchParams.set("result", encodeURI(JSON.stringify(result)));
+
+    // eslint-disable-next-line no-restricted-globals
+    history.pushState({}, title, url.toString());
+  };
+
+  const runRandomize = () => {
     try {
-      const result = Randomize([...players], [...teams], mode);
-      setResult({ matches: result, mode });
-      saveResultToURI(result, mode);
+      const result = Randomize([...players], [...teams]);
+      setResult({ matches: result });
+      saveResultToURI(result);
       setErrorMessage("");
     } catch (error) {
-      setErrorMessage(error.message);
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      }
     }
   };
 
@@ -90,75 +76,60 @@ function App() {
       <header className="App-header">
         <h1 className="App-title">Team Randomizer</h1>
       </header>
-      <div>
-        <div className="errorMessage">
-          {errorMessage && <h3>{errorMessage}</h3>}
-        </div>
-        <div className="container">
-          <div className="cell">
-            <h4>Players</h4>
-            <ChipInput
-              helperText="Insert players above"
-              value={players}
-              onAdd={(chip: string) => handlePlayersChange([chip])}
-              onDelete={(deletedChip: string) =>
-                handlePlayerDelete(deletedChip)
-              }
-              onPaste={(event) => {
-                const clipboardText: string = event.clipboardData.getData(
-                  "Text"
-                );
-
-                event.preventDefault();
-
-                handlePlayersChange(
-                  clipboardText.split("\n").filter((t) => t.length > 0)
-                );
-              }}
-            />
-          </div>
-          <div className="cell">
-            <h4>Teams</h4>
-            <ChipInput
-              helperText="Insert teams above"
-              value={teams}
-              onAdd={(chip: string) => handleTeamsChange([chip])}
-              onDelete={(deletedChip) => handleTeamDelete(deletedChip)}
-              onPaste={(event) => {
-                const clipboardText: string = event.clipboardData.getData(
-                  "Text"
-                );
-
-                event.preventDefault();
-
-                handleTeamsChange(
-                  clipboardText.split("\n").filter((t) => t.length > 0)
-                );
-              }}
-            />
-          </div>
-        </div>
-        <button
-          id="randomizeBtn"
-          className="btn"
-          onClick={() => runRandomize(GameMode.TeamPickerUnique)}
-        >
-          <h2>Pick a team</h2>
-        </button>
-        <button
-          id="randomizeBtn"
-          className="btn"
-          onClick={() => runRandomize(GameMode.TeamPickerShared)}
-        >
-          <h2>Distribute by teams</h2>
-        </button>
-        {result.matches.length > 0 && (
-          <div>
-            <h3>Result</h3>
-            <Result matches={result.matches!} mode={result.mode} />
-          </div>
-        )}
+      <div className="errorMessage">
+        {errorMessage && <h3>{errorMessage}</h3>}
       </div>
+      <Grid container className="container" columns={1}>
+        <Grid
+          xs={1}
+          className="cell"
+          justifyContent="center"
+          alignItems="center"
+        >
+          <h4>Players</h4>
+          <TextField
+            id="outlined-basic"
+            variant="outlined"
+            autoFocus
+            helperText="Insert players above"
+            fullWidth={true}
+            value={playerInput}
+            onChange={(e) => setPlayerInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handlePlayersChange(playerInput);
+            }}
+            onPaste={(event) => {
+              const clipboardText: string = event.clipboardData.getData("Text");
+              event.preventDefault();
+
+              const players = clipboardText
+                .split("\n")
+                .filter((t) => t.length > 0);
+
+              handlePlayersPasteChange(players);
+            }}
+          />
+          {players.map((player) => {
+            return (
+              <Chip
+                key={player}
+                label={player}
+                variant="outlined"
+                onDelete={() => handlePlayerDelete(player)}
+              />
+            );
+          })}
+        </Grid>
+      </Grid>
+      <button id="randomizeBtn" className="btn" onClick={runRandomize}>
+        <h2>Distribute by teams</h2>
+      </button>
+      {result.matches.length > 0 && (
+        <div>
+          <h3>Result</h3>
+          <Result matches={result.matches!} />
+        </div>
+      )}
     </div>
   );
 }
