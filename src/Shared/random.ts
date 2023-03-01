@@ -1,19 +1,25 @@
 import { Imatch } from "./match.interface";
 
-export function Randomize(players: any[], teams: any[]): Imatch[] {
-  const matches: Imatch[] = [];
+export function Randomize(players: string[], teams: string[]): Imatch[] {
+  const matches: Imatch[] = teams.map((team) => {
+    return { team, players: [] };
+  });
 
-  const shuffledPlayers = players.sort((x) => 0.5 - Math.random());
-  const shuffledTeams = teams.sort((x) => 0.5 - Math.random());
+  players.sort(() => 0.5 - Math.random());
 
-  for (let i = 0; i < shuffledPlayers.length; i++) {
-    const newTeam: Imatch = {
-      player: shuffledPlayers[i],
-      team: shuffledTeams[
-        i - Math.floor(i / shuffledTeams.length) * shuffledTeams.length
-      ],
-    };
-    matches.push(newTeam);
+  while (players.length > 0) {
+    for (let i = 0; i <= matches.length - 1; i++) {
+      const player = players.shift();
+
+      if (!player) {
+        break;
+      }
+
+      matches[i].players.push({
+        name: player,
+        order: matches[i].players.length,
+      });
+    }
   }
 
   return matches;

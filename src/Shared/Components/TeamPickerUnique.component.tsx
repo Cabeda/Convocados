@@ -1,11 +1,17 @@
 import React from "react";
-import { IResult } from "../result.interface";
+import { IResultMatch } from "../result.interface";
 import { makeStyles } from "tss-react/mui";
-import Chip from "@mui/material/Chip";
-import Grid from "@mui/material/Grid";
+import { Box, Chip, Grid } from "@mui/material";
 import Divider from "@mui/material/Divider";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
+import {
+  DragDropContext,
+  DropResult,
+  ResponderProvided,
+  Droppable,
+  Draggable,
+} from "react-beautiful-dnd";
 
 const useStyles = makeStyles()((theme) => {
   return {
@@ -29,47 +35,108 @@ const useStyles = makeStyles()((theme) => {
   };
 });
 
-function TeamPickerUnique(props: IResult) {
+function TeamPickerUnique(props: IResultMatch) {
   const { classes } = useStyles();
 
-  const teams: string[] = Array.from(
-    new Set(props.matches.map((team) => team.team))
-  );
+  function updateResults(
+    result: DropResult,
+    provided: ResponderProvided
+  ): void {
+    const { destination, source, draggableId } = result;
+    if (!destination) {
+      return;
+    }
+
+    if (
+      destination.droppableId === source.droppableId &&
+      destination.index === source.index
+    ) {
+      return;
+    }
+
+    let start = props.matches.find((x) => x.team === source.droppableId);
+    let finish = props.matches.find((x) => x.team === destination.droppableId);
+
+    if (!start || !finish)
+      throw new Error(
+        `No list with these ID's ${source.droppableId} and ${destination.droppableId}`
+      );
+
+    if (start === finish) {
+      return;
+    }
+
+    const newMatches = props.matches.map((match) => {
+      if (match.team === source.droppableId) {
+        match.players = match.players.filter((x) => x.name !== draggableId);
+      }
+
+      if (match.team === destination.droppableId) {
+        match.players.push({
+          name: draggableId,
+          order: destination.index,
+        });
+      }
+      return match;
+    });
+
+    props.setResult({ matches: newMatches });
+  }
 
   return (
-    <div className={classes.root}>
+    <DragDropContext onDragEnd={updateResults}>
       <Grid container spacing={3}>
-        {teams.map((team) => {
-          const players = props.matches
-            .filter((m) => m.team === team)
-            .map((m) => m.player);
-
+        {props.matches.map((team) => {
           return (
             <Grid key={classes.item} className={classes.item} item xs>
               <Paper elevation={3}>
                 <div className={classes.section1}>
                   <Typography gutterBottom variant="h4">
-                    {team}
+                    {team.team}
                   </Typography>
                 </div>
-                <div className={classes.section2}>
-                  <Divider variant="middle" />
-                  {players.map((player) => {
-                    return (
-                      <Chip
-                        key={player}
-                        className={classes.chip}
-                        label={player}
-                      />
-                    );
-                  })}
-                </div>
+                <Droppable droppableId={team.team}>
+                  {(provided) => (
+                    <div
+                      className={classes.section2}
+                      ref={provided.innerRef as any}
+                      {...provided.droppableProps}
+                    >
+                      <Divider variant="middle" />
+                      {team.players.map((player) => (
+                        <Draggable
+                          draggableId={player.name}
+                          index={player.order}
+                          key={player.name}
+                        >
+                          {(dragProvided) => (
+                            <Box
+                              {...dragProvided.draggableProps}
+                              {...dragProvided.dragHandleProps}
+                              ref={dragProvided.innerRef}
+                            >
+                              <Chip
+                                key={player.name}
+                                className={classes.chip}
+                                label={player.name}
+                                sx={{
+                                  minWidth: "50%",
+                                }}
+                              />
+                            </Box>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
               </Paper>
             </Grid>
           );
         })}
       </Grid>
-    </div>
+    </DragDropContext>
   );
 }
 

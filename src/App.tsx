@@ -10,31 +10,33 @@ import { Imatch } from "./Shared/match.interface";
 function pickRandomNames(): string[] {
   return ["Ninjas", "Gunas"];
 }
+
+function getResultFromUrl(): IResult {
+  let url = new URL(window.location.toString());
+  const resultParam = url.searchParams.get("result");
+
+  if (resultParam) {
+    const result: Imatch[] = JSON.parse(decodeURI(resultParam as string));
+    return { matches: result };
+  }
+  return { matches: [] };
+}
 function App() {
   const [playerInput, setPlayerInput] = useState<string>("");
   const [players, setPlayers] = useState<string[]>([]);
   const teams: string[] = pickRandomNames();
-  const [result, setResult] = useState<IResult>({
-    matches: [],
+  const [result, setResult] = useState<IResult>(() => {
+    const result = getResultFromUrl();
+    setPlayers(result.matches.flatMap((x) => x.players.map((y) => y.name)));
+    return result;
   });
   const [errorMessage, setErrorMessage] = useState<string>();
 
   useEffect(() => {
-    let url = new URL(window.location.toString());
-    const resultParam = url.searchParams.get("result");
-    const modeParam = url.searchParams.get("mode");
-
-    if (resultParam && modeParam) {
-      let result: Imatch[] = JSON.parse(decodeURI(resultParam as string));
-
-      setPlayers(result.flatMap((x) => x.player));
-      setResult({ matches: result });
-    }
-  }, []);
+    saveResultToURI(result.matches);
+  }, [result]);
 
   const handlePlayerDelete = (chipToDelete: string) => {
-    console.log(chipToDelete);
-
     setPlayers(players.filter((player) => player !== chipToDelete));
   };
 
@@ -81,6 +83,7 @@ function App() {
       </div>
       <Grid container className="container" columns={1}>
         <Grid
+          item
           xs={1}
           className="cell"
           justifyContent="center"
@@ -127,7 +130,7 @@ function App() {
       {result.matches.length > 0 && (
         <div>
           <h3>Result</h3>
-          <Result matches={result.matches!} />
+          <Result matches={result.matches!} setResult={setResult} />
         </div>
       )}
     </div>

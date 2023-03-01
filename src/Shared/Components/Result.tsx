@@ -1,9 +1,9 @@
 import React from "react";
-import { IResult } from "../result.interface";
+import { IResultMatch } from "../result.interface";
 import TeamPickerUnique from "./TeamPickerUnique.component";
 
-function Result(props: IResult) {
-  return <TeamPickerUnique matches={props.matches!}></TeamPickerUnique>;
+function Result(props: IResultMatch) {
+  return <TeamPickerUnique {...props}></TeamPickerUnique>;
 }
 
 export default Result;
