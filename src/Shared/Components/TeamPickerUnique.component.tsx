@@ -62,19 +62,16 @@ function TeamPickerUnique(props: IResultMatch) {
         `No list with these ID's ${source.droppableId} and ${destination.droppableId}`
       );
 
-    if (start === finish) {
-      return;
-    }
-
     const newMatches = props.matches.map((match) => {
       if (match.team === source.droppableId) {
         match.players = match.players.filter((x) => x.name !== draggableId);
       }
 
       if (match.team === destination.droppableId) {
-        match.players.push({
-          name: draggableId,
-          order: destination.index,
+        const newPlayers = match.players.map((x) => x.name);
+        newPlayers.splice(destination.index, 0, draggableId);
+        match.players = newPlayers.map((x, i) => {
+          return { name: x, order: i };
         });
       }
       return match;
