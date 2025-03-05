@@ -8,8 +8,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Yarn install
-      run: yarn install
+    - uses: actions/checkout@v4
+    - name: npm install
+      run: npm install --include=dev
     - name: Run tests
-      run: yarn test --watchAll=false
+      run: npm test -- --watchAll=false
