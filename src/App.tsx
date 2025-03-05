@@ -1,80 +1,60 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Randomize } from "./Shared/random";
 import "./App.css";
-import { Chip, Grid, TextField, Button } from "@mui/material";
-import { 
+import { Chip, Grid2, TextField, Button } from "@mui/material";
+import {
   Typography,
   Paper,
   Box,
   useTheme,
   useMediaQuery,
-  alpha 
+  alpha
 } from '@mui/material';
 import ResponsiveLayout from './components/ResponsiveLayout';
 import { useThemeMode } from './components/ThemeModeProvider';
+import { Team, useTeamState } from './hooks/useTeamState';
 
 import Result from "./Shared/Components/Result";
-import { IResult } from "./Shared/result.interface";
 import { Imatch } from "./Shared/match.interface";
 
 function pickRandomNames(): string[] {
   return ["Ninjas", "Gunas"];
 }
 
-function getResultFromUrl(): IResult {
-  let url = new URL(window.location.toString());
-  const resultParam = url.searchParams.get("result");
-
-  if (resultParam) {
-    const result: Imatch[] = JSON.parse(decodeURI(resultParam as string));
-    return { matches: result };
-  }
-  return { matches: [] };
-}
 function App() {
+  const { teams, players, setTeams, setPlayers, loading } = useTeamState();
   const [playerInput, setPlayerInput] = useState<string>("");
-  const [players, setPlayers] = useState<string[]>([]);
-  const teams: string[] = pickRandomNames();
-  const [result, setResult] = useState<IResult>(() => {
-    const result = getResultFromUrl();
-    setPlayers(result.matches.flatMap((x) => x.players.map((y) => y.name)));
-    return result;
-  });
+  const teamNames: string[] = pickRandomNames();
   const [errorMessage, setErrorMessage] = useState<string>();
-
-  useEffect(() => {
-    saveResultToURI(result.matches);
-  }, [result]);
 
   const handlePlayerDelete = (chipToDelete: string) => {
     setPlayers(players.filter((player) => player !== chipToDelete));
   };
 
   const handlePlayersChange = (player: string) => {
+    if (player.trim() === "") return;
     setPlayers([...players, player]);
     setPlayerInput("");
   };
 
   const handlePlayersPasteChange = (player: string[]) => {
+    if (player.length === 0) return;
     setPlayers([...players, ...player]);
     setPlayerInput("");
   };
 
-  const saveResultToURI = (result: Imatch[]) => {
-    const title = "Team Randomizer Result";
-    const url = new URL(window.location.toString());
-
-    url.searchParams.set("result", encodeURI(JSON.stringify(result)));
-
-    // eslint-disable-next-line no-restricted-globals
-    history.pushState({}, title, url.toString());
-  };
-
   const runRandomize = () => {
     try {
-      const result = Randomize([...players], [...teams]);
-      setResult({ matches: result });
-      saveResultToURI(result);
+      const result = Randomize([...players], [...teamNames]);
+
+      // Convert to Team interface format
+      const newTeams = result.map(match => ({
+        id: match.team,
+        name: match.team,
+        members: match.players.map(p => p.name)
+      }));
+
+      setTeams(newTeams);
       setErrorMessage("");
     } catch (error) {
       if (error instanceof Error) {
@@ -83,14 +63,45 @@ function App() {
     }
   };
 
+  // Convert teams to match format for Result component
+  const convertTeamsToMatches = (): Imatch[] => {
+    return teams.map((team, i) => ({
+      team: team.name,
+      players: team.members.map((name, order) => ({ name, order: order }))
+    }));
+  };
+
+  const handleResultChange = (matches: Imatch[]) => {
+
+    const updatedTeams: Team[] = matches.map(match => ({
+      id: match.team,
+      name: match.team,
+      members: match.players.map(p => p.name)
+    }));
+
+    setTeams(updatedTeams);
+
+
+  }
+
   const theme = useTheme();
   const { mode } = useThemeMode();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isDarkMode = mode === 'dark';
 
+  if (loading) {
+    return (
+      <ResponsiveLayout>
+        <Box sx={{ textAlign: 'center', padding: 4 }}>
+          <Typography variant="h5">Loading...</Typography>
+        </Box>
+      </ResponsiveLayout>
+    );
+  }
+
   return (
     <ResponsiveLayout>
-      <Box sx={{ 
+      <Box sx={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -98,11 +109,11 @@ function App() {
         textAlign: 'center',
         transition: 'all 0.3s ease'
       }}>
-        <Typography 
-          variant={isMobile ? "h4" : "h2"} 
-          component="h1" 
+        <Typography
+          variant={isMobile ? "h4" : "h2"}
+          component="h1"
           color="primary"
-          sx={{ 
+          sx={{
             mb: 2,
             fontWeight: 'bold',
             transition: 'color 0.3s ease'
@@ -110,8 +121,8 @@ function App() {
         >
           Team Randomizer
         </Typography>
-        
-        <Paper 
+
+        <Paper
           elevation={isDarkMode ? 2 : 0}
           sx={{
             width: '100%',
@@ -125,83 +136,78 @@ function App() {
           <div className="errorMessage">
             {errorMessage && <h3>{errorMessage}</h3>}
           </div>
-          <Grid container className="container" columns={1}>
-            <Grid
-              item
-              xs={1}
-              className="cell"
-              justifyContent="center"
-              alignItems="center"
+          <Grid2 container className="container" columns={1}>
+            <Typography
+              variant="h6"
+              component="h4"
+              color="textPrimary"
+              sx={{ mb: 2 }}
             >
-              <Typography 
-                variant="h6" 
-                component="h4" 
-                color="textPrimary"
-                sx={{ mb: 2 }}
-              >
-                Players
-              </Typography>
-              <TextField
-                id="outlined-basic"
-                variant="outlined"
-                autoFocus
-                helperText="Insert players above"
-                fullWidth={true}
-                value={playerInput}
-                onChange={(e) => setPlayerInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handlePlayersChange(playerInput);
-                }}
-                onPaste={(event) => {
-                  const clipboardText: string = event.clipboardData.getData("Text");
-                  event.preventDefault();
+              Players
+            </Typography>
+            <TextField
+              id="outlined-basic"
+              variant="outlined"
+              autoFocus
+              helperText="Insert players above"
+              fullWidth={true}
+              value={playerInput}
+              onChange={(e) => setPlayerInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handlePlayersChange(playerInput);
+              }}
+              onPaste={(event) => {
+                const clipboardText: string = event.clipboardData.getData("Text");
+                event.preventDefault();
 
-                  const players = clipboardText
-                    .split("\n")
-                    .filter((t) => t.length > 0);
+                const players = clipboardText
+                  .split("\n")
+                  .filter((t) => t.length > 0);
 
-                  handlePlayersPasteChange(players);
-                }}
-              />
-              <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {players.map((player) => {
-                  return (
-                    <Chip
-                      key={player}
-                      label={player}
-                      variant="outlined"
-                      color="primary"
-                      onDelete={() => handlePlayerDelete(player)}
-                      sx={{ margin: '4px' }}
-                    />
-                  );
-                })}
-              </Box>
-            </Grid>
-          </Grid>
-          <Button 
-            id="randomizeBtn" 
-            variant="contained" 
+                handlePlayersPasteChange(players);
+              }}
+            />
+            <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {players.map((player) => {
+                return (
+                  <Chip
+                    key={player}
+                    label={player}
+                    variant="outlined"
+                    color="primary"
+                    onDelete={() => handlePlayerDelete(player)}
+                    sx={{ margin: '4px' }}
+                  />
+                );
+              })}
+            </Box>
+          </Grid2>
+          <Button
+            id="randomizeBtn"
+            variant="contained"
             color="primary"
             size="large"
             onClick={runRandomize}
-            sx={{ 
-              mt: 3, 
+            sx={{
+              mt: 3,
               mb: 2,
               px: 4,
               py: 1.5,
-              borderRadius: theme.shape.borderRadius * 1.5 
+              borderRadius: theme.shape.borderRadius * 1.5
             }}
           >
             <Typography variant="h6">Distribute by teams</Typography>
           </Button>
-          
-          {result.matches.length > 0 && (
+
+          {teams.length > 0 && (
             <Box sx={{ mt: 4 }}>
               <Typography variant="h5" component="h3" sx={{ mb: 2 }}>
                 Result
               </Typography>
-              <Result matches={result.matches!} setResult={setResult} />
+              <Result
+                matches={convertTeamsToMatches()}
+                setResult={handleResultChange}
+              />
             </Box>
           )}
         </Paper>

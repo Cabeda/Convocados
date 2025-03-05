@@ -6,5 +6,5 @@ export interface IResult {
 
 export interface IResultMatch {
   matches: Imatch[];
-  setResult: Function;
+  setResult: (matches: Imatch[]) => void;
 }

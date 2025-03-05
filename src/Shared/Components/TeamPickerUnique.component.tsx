@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { IResultMatch } from "../result.interface";
 import { makeStyles } from "tss-react/mui";
-import { Box, Chip, Grid } from "@mui/material";
+import { Box, Chip, Grid2 } from "@mui/material";
 import Divider from "@mui/material/Divider";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
@@ -67,28 +67,28 @@ function TeamPickerUnique(props: IResultMatch) {
     setActiveDropZone(null);
 
     if (!draggedPlayer) return;
-    
+
     const { name: playerName, team: sourceTeam } = draggedPlayer;
-    
+
     if (sourceTeam === destinationTeam) return;
-    
+
     const newMatches = props.matches.map(match => {
       if (match.team === sourceTeam) {
         match.players = match.players.filter(p => p.name !== playerName);
       }
-      
+
       if (match.team === destinationTeam) {
         const newPlayers = [...match.players, { name: playerName, order: match.players.length }];
-        match.players = newPlayers.map((player, index) => ({ 
-          name: player.name, 
-          order: index 
+        match.players = newPlayers.map((player, index) => ({
+          name: player.name,
+          order: index
         }));
       }
-      
+
       return match;
     });
-    
-    props.setResult({ matches: newMatches });
+
+    props.setResult(newMatches);
     setDraggedPlayer(null);
   };
 
@@ -98,18 +98,18 @@ function TeamPickerUnique(props: IResultMatch) {
   };
 
   return (
-    <Grid container spacing={3}>
+    <Grid2 container spacing={3}>
       {props.matches.map((team) => {
         const isActive = activeDropZone === team.team;
         return (
-          <Grid key={team.team} className={classes.item} item xs>
+          <Grid2 key={team.team} className={classes.item}>
             <Paper elevation={3}>
               <div className={classes.section1}>
                 <Typography gutterBottom variant="h4">
                   {team.team}
                 </Typography>
               </div>
-              <div 
+              <div
                 className={`${classes.section2} ${classes.dropArea} ${isActive ? classes.dropAreaActive : ''}`}
                 onDragOver={(e) => handleDragOver(e, team.team)}
                 onDragLeave={handleDragLeave}
@@ -117,7 +117,7 @@ function TeamPickerUnique(props: IResultMatch) {
               >
                 <Divider variant="middle" />
                 {team.players.map((player) => (
-                  <Box 
+                  <Box
                     key={player.name}
                     className={classes.playerItem}
                     draggable
@@ -136,10 +136,10 @@ function TeamPickerUnique(props: IResultMatch) {
                 ))}
               </div>
             </Paper>
-          </Grid>
+          </Grid2>
         );
       })}
-    </Grid>
+    </Grid2>
   );
 }
 
