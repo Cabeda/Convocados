@@ -1,17 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { IResultMatch } from "../result.interface";
 import { makeStyles } from "tss-react/mui";
 import { Box, Chip, Grid } from "@mui/material";
 import Divider from "@mui/material/Divider";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
-import {
-  DragDropContext,
-  DropResult,
-  ResponderProvided,
-  Droppable,
-  Draggable,
-} from "react-beautiful-dnd";
 
 const useStyles = makeStyles()((theme) => {
   return {
@@ -32,108 +25,121 @@ const useStyles = makeStyles()((theme) => {
     section2: {
       margin: theme.spacing(2),
     },
+    dropArea: {
+      minHeight: '50px',
+      padding: theme.spacing(1),
+      border: '2px dashed transparent',
+    },
+    dropAreaActive: {
+      border: `2px dashed ${theme.palette.primary.main}`,
+      backgroundColor: theme.palette.action.hover,
+    },
+    playerItem: {
+      cursor: 'grab',
+      display: 'inline-block',
+    }
   };
 });
 
 function TeamPickerUnique(props: IResultMatch) {
   const { classes } = useStyles();
+  const [draggedPlayer, setDraggedPlayer] = useState<{ name: string, team: string } | null>(null);
+  const [activeDropZone, setActiveDropZone] = useState<string | null>(null);
 
-  function updateResults(
-    result: DropResult,
-    provided: ResponderProvided
-  ): void {
-    const { destination, source, draggableId } = result;
-    if (!destination) {
-      return;
-    }
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, playerName: string, teamName: string) => {
+    setDraggedPlayer({ name: playerName, team: teamName });
+    e.dataTransfer.setData('text/plain', playerName);
+    e.dataTransfer.effectAllowed = 'move';
+  };
 
-    if (
-      destination.droppableId === source.droppableId &&
-      destination.index === source.index
-    ) {
-      return;
-    }
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, teamName: string) => {
+    e.preventDefault();
+    setActiveDropZone(teamName);
+    e.dataTransfer.dropEffect = 'move';
+  };
 
-    let start = props.matches.find((x) => x.team === source.droppableId);
-    let finish = props.matches.find((x) => x.team === destination.droppableId);
+  const handleDragLeave = () => {
+    setActiveDropZone(null);
+  };
 
-    if (!start || !finish)
-      throw new Error(
-        `No list with these ID's ${source.droppableId} and ${destination.droppableId}`
-      );
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, destinationTeam: string) => {
+    e.preventDefault();
+    setActiveDropZone(null);
 
-    const newMatches = props.matches.map((match) => {
-      if (match.team === source.droppableId) {
-        match.players = match.players.filter((x) => x.name !== draggableId);
+    if (!draggedPlayer) return;
+    
+    const { name: playerName, team: sourceTeam } = draggedPlayer;
+    
+    if (sourceTeam === destinationTeam) return;
+    
+    const newMatches = props.matches.map(match => {
+      if (match.team === sourceTeam) {
+        match.players = match.players.filter(p => p.name !== playerName);
       }
-
-      if (match.team === destination.droppableId) {
-        const newPlayers = match.players.map((x) => x.name);
-        newPlayers.splice(destination.index, 0, draggableId);
-        match.players = newPlayers.map((x, i) => {
-          return { name: x, order: i };
-        });
+      
+      if (match.team === destinationTeam) {
+        const newPlayers = [...match.players, { name: playerName, order: match.players.length }];
+        match.players = newPlayers.map((player, index) => ({ 
+          name: player.name, 
+          order: index 
+        }));
       }
+      
       return match;
     });
-
+    
     props.setResult({ matches: newMatches });
-  }
+    setDraggedPlayer(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedPlayer(null);
+    setActiveDropZone(null);
+  };
 
   return (
-    <DragDropContext onDragEnd={updateResults}>
-      <Grid container spacing={3}>
-        {props.matches.map((team) => {
-          return (
-            <Grid key={classes.item} className={classes.item} item xs>
-              <Paper elevation={3}>
-                <div className={classes.section1}>
-                  <Typography gutterBottom variant="h4">
-                    {team.team}
-                  </Typography>
-                </div>
-                <Droppable droppableId={team.team}>
-                  {(provided) => (
-                    <div
-                      className={classes.section2}
-                      ref={provided.innerRef as any}
-                      {...provided.droppableProps}
-                    >
-                      <Divider variant="middle" />
-                      {team.players.map((player) => (
-                        <Draggable
-                          draggableId={player.name}
-                          index={player.order}
-                          key={player.name}
-                        >
-                          {(dragProvided) => (
-                            <Box
-                              {...dragProvided.draggableProps}
-                              {...dragProvided.dragHandleProps}
-                              ref={dragProvided.innerRef}
-                            >
-                              <Chip
-                                key={player.name}
-                                className={classes.chip}
-                                label={player.name}
-                                sx={{
-                                  minWidth: "50%",
-                                }}
-                              />
-                            </Box>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </Paper>
-            </Grid>
-          );
-        })}
-      </Grid>
-    </DragDropContext>
+    <Grid container spacing={3}>
+      {props.matches.map((team) => {
+        const isActive = activeDropZone === team.team;
+        return (
+          <Grid key={team.team} className={classes.item} item xs>
+            <Paper elevation={3}>
+              <div className={classes.section1}>
+                <Typography gutterBottom variant="h4">
+                  {team.team}
+                </Typography>
+              </div>
+              <div 
+                className={`${classes.section2} ${classes.dropArea} ${isActive ? classes.dropAreaActive : ''}`}
+                onDragOver={(e) => handleDragOver(e, team.team)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, team.team)}
+              >
+                <Divider variant="middle" />
+                {team.players.map((player) => (
+                  <Box 
+                    key={player.name}
+                    className={classes.playerItem}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, player.name, team.team)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <Chip
+                      key={player.name}
+                      className={classes.chip}
+                      label={player.name}
+                      sx={{
+                        minWidth: "50%",
+                      }}
+                    />
+                  </Box>
+                ))}
+              </div>
+            </Paper>
+          </Grid>
+        );
+      })}
+    </Grid>
   );
 }
 
