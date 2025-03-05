@@ -24,7 +24,6 @@
     "start": "vite",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "node server",
     "build": "vite build",
     "preview": "cross-env NODE_ENV=production node server"
   },
