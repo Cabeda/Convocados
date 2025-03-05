@@ -1,15 +1,24 @@
 import React, { useState, useEffect } from "react";
 import { Randomize } from "./Shared/random";
 import "./App.css";
-import { Chip, Grid2, TextField, Button } from "@mui/material";
-import {
+import { 
+  Chip, 
+  TextField, 
+  Button,
   Typography,
   Paper,
   Box,
   useTheme,
   useMediaQuery,
-  alpha
+  alpha,
+  Container,
+  Stack,
+  Divider,
+  IconButton,
+  InputAdornment
 } from '@mui/material';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import ShuffleIcon from '@mui/icons-material/Shuffle';
 import ResponsiveLayout from './components/ResponsiveLayout';
 import { useThemeMode } from './components/ThemeModeProvider';
 import { Team, useTeamState } from './hooks/useTeamState';
@@ -72,7 +81,6 @@ function App() {
   };
 
   const handleResultChange = (matches: Imatch[]) => {
-
     const updatedTeams: Team[] = matches.map(match => ({
       id: match.team,
       name: match.team,
@@ -80,8 +88,6 @@ function App() {
     }));
 
     setTeams(updatedTeams);
-
-
   }
 
   const theme = useTheme();
@@ -92,7 +98,12 @@ function App() {
   if (loading) {
     return (
       <ResponsiveLayout>
-        <Box sx={{ textAlign: 'center', padding: 4 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '100vh' 
+        }}>
           <Typography variant="h5">Loading...</Typography>
         </Box>
       </ResponsiveLayout>
@@ -101,117 +112,160 @@ function App() {
 
   return (
     <ResponsiveLayout>
-      <Box sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 4,
-        textAlign: 'center',
-        transition: 'all 0.3s ease'
-      }}>
-        <Typography
-          variant={isMobile ? "h4" : "h2"}
-          component="h1"
-          color="primary"
-          sx={{
-            mb: 2,
-            fontWeight: 'bold',
-            transition: 'color 0.3s ease'
-          }}
-        >
-          Team Randomizer
-        </Typography>
-
-        <Paper
-          elevation={isDarkMode ? 2 : 0}
-          sx={{
-            width: '100%',
-            padding: isMobile ? theme.spacing(3) : theme.spacing(5),
-            borderRadius: theme.shape.borderRadius * 1.5,
-            backgroundColor: theme.palette.background.paper,
-            transition: 'all 0.3s ease',
-            border: isDarkMode ? `1px solid ${alpha(theme.palette.divider, 0.1)}` : 'none'
-          }}
-        >
-          <div className="errorMessage">
-            {errorMessage && <h3>{errorMessage}</h3>}
-          </div>
-          <Grid2 container className="container" columns={1}>
-            <Typography
-              variant="h6"
-              component="h4"
-              color="textPrimary"
-              sx={{ mb: 2 }}
-            >
-              Players
-            </Typography>
-            <TextField
-              id="outlined-basic"
-              variant="outlined"
-              autoFocus
-              helperText="Insert players above"
-              fullWidth={true}
-              value={playerInput}
-              onChange={(e) => setPlayerInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handlePlayersChange(playerInput);
-              }}
-              onPaste={(event) => {
-                const clipboardText: string = event.clipboardData.getData("Text");
-                event.preventDefault();
-
-                const players = clipboardText
-                  .split("\n")
-                  .filter((t) => t.length > 0);
-
-                handlePlayersPasteChange(players);
-              }}
-            />
-            <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {players.map((player) => {
-                return (
-                  <Chip
-                    key={player}
-                    label={player}
-                    variant="outlined"
-                    color="primary"
-                    onDelete={() => handlePlayerDelete(player)}
-                    sx={{ margin: '4px' }}
-                  />
-                );
-              })}
-            </Box>
-          </Grid2>
-          <Button
-            id="randomizeBtn"
-            variant="contained"
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Stack spacing={4}>
+          <Typography
+            variant={isMobile ? "h4" : "h2"}
+            component="h1"
             color="primary"
-            size="large"
-            onClick={runRandomize}
+            align="center"
             sx={{
-              mt: 3,
-              mb: 2,
-              px: 4,
-              py: 1.5,
-              borderRadius: theme.shape.borderRadius * 1.5
+              fontWeight: 700,
+              letterSpacing: -0.5,
             }}
           >
-            <Typography variant="h6">Distribute by teams</Typography>
-          </Button>
+            Team Randomizer
+          </Typography>
 
-          {teams.length > 0 && (
-            <Box sx={{ mt: 4 }}>
-              <Typography variant="h5" component="h3" sx={{ mb: 2 }}>
-                Result
+          <Paper
+            elevation={isDarkMode ? 3 : 1}
+            sx={{
+              borderRadius: 2,
+              overflow: 'hidden',
+              backgroundColor: theme.palette.background.paper,
+              transition: theme.transitions.create(['box-shadow', 'background-color']),
+              border: isDarkMode ? `1px solid ${alpha(theme.palette.divider, 0.1)}` : 'none'
+            }}
+          >
+            <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+              {errorMessage && (
+                <Box 
+                  sx={{ 
+                    p: 2, 
+                    mb: 3, 
+                    borderRadius: 1, 
+                    backgroundColor: alpha(theme.palette.error.main, 0.1),
+                    border: `1px solid ${alpha(theme.palette.error.main, 0.2)}` 
+                  }}
+                >
+                  <Typography color="error" variant="body1">{errorMessage}</Typography>
+                </Box>
+              )}
+              
+              <Typography
+                variant="h5"
+                component="h2"
+                color="textPrimary"
+                sx={{ mb: 2, fontWeight: 500 }}
+              >
+                Players
               </Typography>
-              <Result
-                matches={convertTeamsToMatches()}
-                setResult={handleResultChange}
+              
+              <TextField
+                variant="outlined"
+                autoFocus
+                placeholder="Add player name"
+                helperText="Press Enter to add or paste a list of names"
+                fullWidth
+                value={playerInput}
+                onChange={(e) => setPlayerInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handlePlayersChange(playerInput);
+                }}
+                onPaste={(event) => {
+                  const clipboardText: string = event.clipboardData.getData("Text");
+                  event.preventDefault();
+                  const players = clipboardText
+                    .split("\n")
+                    .filter((t) => t.length > 0);
+                  handlePlayersPasteChange(players);
+                }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton 
+                        edge="end"
+                        color="primary"
+                        onClick={() => handlePlayersChange(playerInput)}
+                        disabled={!playerInput.trim()}
+                      >
+                        <PersonAddIcon />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ mb: 2 }}
               />
+              
+              {players.length > 0 && (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    mt: 2,
+                    mb: 3,
+                    borderRadius: 1,
+                    backgroundColor: alpha(theme.palette.background.default, 0.6),
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 1
+                  }}
+                >
+                  {players.map((player) => (
+                    <Chip
+                      key={player}
+                      label={player}
+                      variant="filled"
+                      color="primary"
+                      onDelete={() => handlePlayerDelete(player)}
+                      sx={{ m: 0.5 }}
+                    />
+                  ))}
+                </Paper>
+              )}
+              
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                <Button
+                  id="randomizeBtn"
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  onClick={runRandomize}
+                  disabled={players.length < 2}
+                  startIcon={<ShuffleIcon />}
+                  sx={{
+                    px: 4,
+                    py: 1.5,
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    boxShadow: theme.shadows[3],
+                  }}
+                >
+                  Distribute by teams
+                </Button>
+              </Box>
+
+              {teams.length > 0 && (
+                <>
+                  <Divider sx={{ my: 4 }} />
+                  <Typography 
+                    variant="h5" 
+                    component="h2" 
+                    sx={{ mb: 3, fontWeight: 500 }}
+                  >
+                    Teams
+                  </Typography>
+                  <Result
+                    matches={convertTeamsToMatches()}
+                    setResult={handleResultChange}
+                  />
+                </>
+              )}
             </Box>
-          )}
-        </Paper>
-      </Box>
+          </Paper>
+        </Stack>
+      </Container>
     </ResponsiveLayout>
   );
 }
