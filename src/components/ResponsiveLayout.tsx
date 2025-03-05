@@ -9,6 +9,7 @@ import {
   Tooltip,
   Container,
   useScrollTrigger,
+  Link,
 } from '@mui/material';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
@@ -37,6 +38,10 @@ const ResponsiveLayout: React.FC<Props> = ({ children }) => {
   const { mode, toggleMode } = useThemeMode();
   const isDarkMode = mode === 'dark';
 
+  const navigateToHome = () => {
+    window.location.href = window.location.origin;
+  };
+
   return (
     <Box sx={{ 
       display: 'flex', 
@@ -61,7 +66,15 @@ const ResponsiveLayout: React.FC<Props> = ({ children }) => {
             <Typography 
               variant="h6" 
               component="div" 
-              sx={{ flexGrow: 1, fontWeight: 600 }}
+              sx={{ 
+                flexGrow: 1, 
+                fontWeight: 600,
+                cursor: 'pointer',
+                '&:hover': {
+                  color: theme.palette.primary.main,
+                }
+              }}
+              onClick={navigateToHome}
             >
               Team Randomizer
             </Typography>
