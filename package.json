@@ -25,9 +25,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "node server",
-    "build": "npm run build:client && npm run build:server",
-    "build:client": "vite build --outDir dist/client",
-    "build:server": "vite build --ssr src/index.tsx --outDir dist/server",
+    "build": "vite build",
     "preview": "cross-env NODE_ENV=production node server"
   },
   "eslintConfig": {
