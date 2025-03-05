@@ -114,18 +114,6 @@ function App() {
     <ResponsiveLayout>
       <Container maxWidth="md" sx={{ py: 4 }}>
         <Stack spacing={4}>
-          <Typography
-            variant={isMobile ? "h4" : "h2"}
-            component="h1"
-            color="primary"
-            align="center"
-            sx={{
-              fontWeight: 700,
-              letterSpacing: -0.5,
-            }}
-          >
-            Team Randomizer
-          </Typography>
 
           <Paper
             elevation={isDarkMode ? 3 : 1}
