@@ -15,40 +15,52 @@ export const GET: APIRoute = async ({ params }) => {
 
   let wasReset = false;
 
-  // Lazy recurrence reset
+  // Lazy recurrence reset — optimistic lock via compare-and-swap on nextResetAt.
+  // Only the request that wins the updateMany (count=1) proceeds; concurrent
+  // requests get count=0 and skip, preventing double-snapshots.
   if (event.isRecurring && event.nextResetAt && event.nextResetAt <= new Date()) {
     const rule = parseRecurrenceRule(event.recurrenceRule);
     if (rule) {
+      const currentNextResetAt = event.nextResetAt;
       const newDateTime = nextOccurrence(event.dateTime, rule, new Date());
       const newNextResetAt = new Date(newDateTime.getTime() + 60 * 60 * 1000);
-      const editableUntil = new Date(event.dateTime.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-      // Snapshot current game into history before clearing
-      const teamsSnapshot = event.teamResults.length > 0
-        ? JSON.stringify(event.teamResults.map((tr) => ({
-            team: tr.name,
-            players: tr.members.map((m) => ({ name: m.name, order: m.order })),
-          })))
-        : null;
+      // Atomically claim the reset — only one concurrent request will get count=1
+      const claimed = await prisma.event.updateMany({
+        where: { id: event.id, nextResetAt: currentNextResetAt },
+        data: { nextResetAt: newNextResetAt },
+      });
 
-      await prisma.$transaction([
-        prisma.gameHistory.create({
-          data: {
-            eventId: event.id,
-            dateTime: event.dateTime,
-            teamOneName: event.teamOneName,
-            teamTwoName: event.teamTwoName,
-            teamsSnapshot,
-            editableUntil,
-          },
-        }),
-        prisma.player.deleteMany({ where: { eventId: event.id } }),
-        prisma.teamResult.deleteMany({ where: { eventId: event.id } }),
-        prisma.event.update({
-          where: { id: event.id },
-          data: { dateTime: newDateTime, nextResetAt: newNextResetAt },
-        }),
-      ]);
+      if (claimed.count === 1) {
+        const editableUntil = new Date(event.dateTime.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const teamsSnapshot = event.teamResults.length > 0
+          ? JSON.stringify(event.teamResults.map((tr) => ({
+              team: tr.name,
+              players: tr.members.map((m) => ({ name: m.name, order: m.order })),
+            })))
+          : null;
+
+        await prisma.$transaction([
+          prisma.gameHistory.create({
+            data: {
+              eventId: event.id,
+              dateTime: event.dateTime,
+              teamOneName: event.teamOneName,
+              teamTwoName: event.teamTwoName,
+              teamsSnapshot,
+              editableUntil,
+            },
+          }),
+          prisma.player.deleteMany({ where: { eventId: event.id } }),
+          prisma.teamResult.deleteMany({ where: { eventId: event.id } }),
+          prisma.event.update({
+            where: { id: event.id },
+            data: { dateTime: newDateTime },
+          }),
+        ]);
+
+        wasReset = true;
+      }
 
       const fresh = await prisma.event.findUnique({
         where: { id: event.id },
@@ -57,9 +69,7 @@ export const GET: APIRoute = async ({ params }) => {
           teamResults: { include: { members: { orderBy: { order: "asc" } } } },
         },
       });
-
       if (fresh) Object.assign(event, fresh);
-      wasReset = true;
     }
   }
 
