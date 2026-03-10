@@ -1,0 +1,226 @@
+import React, { useState } from "react";
+import {
+  Container, Paper, Typography, TextField, Button, Box, Stack,
+  FormControlLabel, Switch, Select, MenuItem, FormControl, InputLabel,
+  Grid2, Alert, Divider, Chip, Accordion, AccordionSummary, AccordionDetails,
+  InputAdornment,
+} from "@mui/material";
+import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import PeopleIcon from "@mui/icons-material/People";
+import { ThemeModeProvider } from "./ThemeModeProvider";
+import { ResponsiveLayout } from "./ResponsiveLayout";
+import { useT } from "~/lib/useT";
+
+const DAYS = [
+  { value: "MO", key: "monday" },
+  { value: "TU", key: "tuesday" },
+  { value: "WE", key: "wednesday" },
+  { value: "TH", key: "thursday" },
+  { value: "FR", key: "friday" },
+  { value: "SA", key: "saturday" },
+  { value: "SU", key: "sunday" },
+] as const;
+
+function nextHour() {
+  const d = new Date();
+  d.setHours(d.getHours() + 1, 0, 0, 0);
+  // toISOString gives UTC; we need local datetime-local format
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
+}
+
+function minDateTime() {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export default function CreateEventForm() {
+  const t = useT();
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceFreq, setRecurrenceFreq] = useState<"weekly" | "monthly">("weekly");
+  const [recurrenceInterval, setRecurrenceInterval] = useState(1);
+  const [recurrenceByDay, setRecurrenceByDay] = useState("");
+  const [maxPlayers, setMaxPlayers] = useState(10);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+
+    const body = {
+      title: fd.get("title"),
+      location: fd.get("location") || "",
+      dateTime: fd.get("dateTime"),
+      teamOneName: fd.get("teamOneName"),
+      teamTwoName: fd.get("teamTwoName"),
+      maxPlayers,
+      isRecurring,
+      recurrenceFreq: isRecurring ? recurrenceFreq : null,
+      recurrenceInterval: isRecurring ? recurrenceInterval : null,
+      recurrenceByDay: isRecurring && recurrenceFreq === "weekly" ? recurrenceByDay || null : null,
+    };
+
+    const res = await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+
+    if (!res.ok) {
+      setError(json.error ?? t("somethingWentWrong"));
+      setSubmitting(false);
+      return;
+    }
+
+    window.location.href = `/events/${json.id}`;
+  };
+
+  return (
+    <ThemeModeProvider>
+      <ResponsiveLayout>
+        <Container maxWidth="sm" sx={{ py: 6 }}>
+          <Stack spacing={4}>
+            <Box textAlign="center">
+              <SportsSoccerIcon sx={{ fontSize: 56, color: "primary.main", mb: 1 }} />
+              <Typography variant="h4" fontWeight={700}>{t("createGame")}</Typography>
+              <Typography variant="body1" color="text.secondary" mt={1}>
+                {t("createGameSubtitle")}
+              </Typography>
+            </Box>
+
+            <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 3, sm: 4 } }}>
+              <form onSubmit={handleSubmit}>
+                <Stack spacing={3}>
+                  {error && <Alert severity="error">{error}</Alert>}
+
+                  <TextField name="title" label={t("gameTitle")}
+                    placeholder={t("gameTitlePlaceholder")} required fullWidth
+                    autoFocus inputProps={{ maxLength: 100 }} />
+
+                  <TextField name="dateTime" label={t("dateTime")} type="datetime-local"
+                    required fullWidth defaultValue={nextHour()}
+                    inputProps={{ min: minDateTime() }}
+                    InputLabelProps={{ shrink: true }} />
+
+                  {/* Advanced options */}
+                  <Accordion disableGutters elevation={0} sx={{
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: "8px !important",
+                    "&:before": { display: "none" },
+                  }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="body2" color="text.secondary">{t("advancedOptions")}</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Stack spacing={3}>
+                        <TextField name="location" label={t("locationOptional")}
+                          placeholder={t("locationPlaceholder")} fullWidth
+                          inputProps={{ maxLength: 200 }} />
+
+                        <TextField
+                          label={t("maxPlayers")}
+                          type="number"
+                          value={maxPlayers}
+                          onChange={(e) => setMaxPlayers(Math.max(2, Math.min(30, parseInt(e.target.value) || 10)))}
+                          inputProps={{ min: 2, max: 30 }}
+                          helperText={t("maxPlayersHelper")}
+                          fullWidth
+                          InputProps={{
+                            startAdornment: (
+                              <InputAdornment position="start"><PeopleIcon fontSize="small" /></InputAdornment>
+                            ),
+                          }}
+                        />
+
+                        <Divider><Chip label={t("teamNames")} size="small" /></Divider>
+
+                        <Grid2 container spacing={2}>
+                          <Grid2 size={{ xs: 12, sm: 6 }}>
+                            <TextField name="teamOneName" label={t("team1Name")}
+                              defaultValue="Ninjas" fullWidth inputProps={{ maxLength: 50 }} />
+                          </Grid2>
+                          <Grid2 size={{ xs: 12, sm: 6 }}>
+                            <TextField name="teamTwoName" label={t("team2Name")}
+                              defaultValue="Gunas" fullWidth inputProps={{ maxLength: 50 }} />
+                          </Grid2>
+                        </Grid2>
+
+                        <Divider><Chip label={t("recurrence")} size="small" /></Divider>
+
+                        <FormControlLabel
+                          control={
+                            <Switch name="isRecurring" checked={isRecurring}
+                              onChange={(e) => setIsRecurring(e.target.checked)} />
+                          }
+                          label={t("recurringGame")}
+                        />
+
+                        {isRecurring && (
+                          <Stack spacing={2}>
+                            <Grid2 container spacing={2} alignItems="center">
+                              <Grid2 size={{ xs: 4 }}>
+                                <TextField label={t("every")} type="number" name="recurrenceInterval"
+                                  value={recurrenceInterval}
+                                  onChange={(e) => setRecurrenceInterval(Math.max(1, parseInt(e.target.value) || 1))}
+                                  inputProps={{ min: 1, max: 52 }} fullWidth />
+                              </Grid2>
+                              <Grid2 size={{ xs: 8 }}>
+                                <FormControl fullWidth>
+                                  <InputLabel>{t("frequency")}</InputLabel>
+                                  <Select name="recurrenceFreq" value={recurrenceFreq} label={t("frequency")}
+                                    onChange={(e) => setRecurrenceFreq(e.target.value as "weekly" | "monthly")}>
+                                    <MenuItem value="weekly">{t("weeks")}</MenuItem>
+                                    <MenuItem value="monthly">{t("months")}</MenuItem>
+                                  </Select>
+                                </FormControl>
+                              </Grid2>
+                            </Grid2>
+
+                            {recurrenceFreq === "weekly" && (
+                              <FormControl fullWidth>
+                                <InputLabel>{t("onDay")}</InputLabel>
+                                <Select name="recurrenceByDay" value={recurrenceByDay}
+                                  label={t("onDay")}
+                                  onChange={(e) => setRecurrenceByDay(e.target.value)}>
+                                  <MenuItem value="">{t("sameDayAsEvent")}</MenuItem>
+                                  {DAYS.map((d) => (
+                                    <MenuItem key={d.value} value={d.value}>{t(d.key)}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            )}
+
+                            <Alert severity="info" sx={{ fontSize: "0.85rem" }}>
+                              {t("recurrenceInfo")}
+                            </Alert>
+                          </Stack>
+                        )}
+                      </Stack>
+                    </AccordionDetails>
+                  </Accordion>
+
+                  <Button type="submit" variant="contained" size="large" fullWidth
+                    disabled={submitting} startIcon={<AddCircleOutlineIcon />}
+                    sx={{ py: 1.5, mt: 1 }}>
+                    {submitting ? t("creating") : t("createGameBtn")}
+                  </Button>
+                </Stack>
+              </form>
+            </Paper>
+          </Stack>
+        </Container>
+      </ResponsiveLayout>
+    </ThemeModeProvider>
+  );
+}

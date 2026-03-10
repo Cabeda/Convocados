@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Event {
+  id             String        @id @default(cuid())
+  title          String
+  location       String
+  dateTime       DateTime
+  maxPlayers     Int           @default(10)
+  teamOneName    String        @default("Ninjas")
+  teamTwoName    String        @default("Gunas")
+  isRecurring    Boolean       @default(false)
+  recurrenceRule String?
+  nextResetAt    DateTime?
+  players        Player[]
+  teamResults    TeamResult[]
+  history        GameHistory[]
+  pushSubs       PushSubscription[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model GameHistory {
+  id            String   @id @default(cuid())
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  dateTime      DateTime
+  status        String   @default("played") // "played" | "cancelled"
+  scoreOne      Int?
+  scoreTwo      Int?
+  teamOneName   String
+  teamTwoName   String
+  teamsSnapshot String?  // JSON: [{team, players:[{name,order}]}]
+  editableUntil DateTime
+  createdAt     DateTime @default(now())
+}
+
+model Player {
+  id        String   @id @default(cuid())
+  name      String
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, name])
+}
+
+model TeamResult {
+  id      String       @id @default(cuid())
+  name    String
+  eventId String
+  event   Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  members TeamMember[]
+}
+
+model TeamMember {
+  id           String     @id @default(cuid())
+  name         String
+  order        Int
+  teamResultId String
+  team         TeamResult @relation(fields: [teamResultId], references: [id], onDelete: Cascade)
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  endpoint  String
+  p256dh    String
+  auth      String
+  locale    String   @default("en")
+  clientId  String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, endpoint])
+}
