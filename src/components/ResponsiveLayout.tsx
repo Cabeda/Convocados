@@ -112,7 +112,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
             </Tooltip>
             <Tooltip title={t("viewOnGithub")}>
               <IconButton color="inherit" aria-label={t("viewOnGithub")}
-                href="https://github.com/Cabeda/team-Randomizer"
+                href="https://github.com/Cabeda/Convocados"
                 target="_blank" rel="noopener noreferrer">
                 <GitHubIcon />
               </IconButton>
