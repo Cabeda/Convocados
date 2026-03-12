@@ -1,6 +1,6 @@
-# Team Randomizer
+# Convocados
 
-![Unit test - Jest](https://github.com/Cabeda/team-Randomizer/workflows/Unit%20test%20-%20Jest/badge.svg)
+![Unit test - Jest](https://github.com/Cabeda/Convocados/workflows/Unit%20test%20-%20Jest/badge.svg)
 
 ![Screenshot](./public/screenshot.png)
 
