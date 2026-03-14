@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import useSWR from "swr";
 import {
   Container, Paper, Typography, TextField, Button, Box, Stack, Chip,
   Alert, IconButton, Tooltip, InputAdornment, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, Snackbar, alpha, useTheme, Grid2,
-  CircularProgress, Divider,
+  CircularProgress, Divider, Autocomplete,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import HistoryIcon from "@mui/icons-material/History";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ShareIcon from "@mui/icons-material/Share";
@@ -18,7 +19,6 @@ import LocationOnIcon from "@mui/icons-material/LocationOn";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatReclineNormal";
-import HistoryIcon from "@mui/icons-material/History";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 import { ThemeModeProvider } from "./ThemeModeProvider";
@@ -28,6 +28,8 @@ import type { Imatch } from "~/lib/random";
 import { describeRecurrenceRule, parseRecurrenceRule } from "~/lib/recurrence";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
+import { matchesWithName } from "~/lib/stringMatch";
+import { getKnownNames, addKnownName, getQjName, setQjName } from "~/lib/knownNames";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -250,12 +252,19 @@ function ShareBar({ title }: { title: string }) {
 
 // ── Quick join ────────────────────────────────────────────────────────────────
 
+interface KnownPlayer {
+  name: string;
+  gamesPlayed?: number;
+}
+
 function QuickJoin({
+  eventId,
   players,
   maxPlayers,
   onJoin,
   onLeave,
 }: {
+  eventId: string;
   players: Player[];
   maxPlayers: number;
   onJoin: (name: string) => Promise<void>;
@@ -263,31 +272,73 @@ function QuickJoin({
 }) {
   const t = useT();
   const theme = useTheme();
-  const [name, setName] = useState(() => {
-    if (typeof localStorage !== "undefined") return localStorage.getItem("qj_name") ?? "";
-    return "";
-  });
+  const [name, setName] = useState(() => getQjName());
   const [joining, setJoining] = useState(false);
-
+  const [showAll, setShowAll] = useState(false);
+  
+  const { data: knownPlayers } = useSWR<{ players: KnownPlayer[] }>(
+    `/api/events/${eventId}/known-players`,
+    (url) => fetch(url).then((r) => r.json()),
+    { revalidateOnFocus: false }
+  );
+  
+  const localKnownNames = useMemo(() => getKnownNames(), []);
+  
+  const mergedSuggestions = useMemo(() => {
+    const serverNames = new Map<string, number>();
+    for (const p of knownPlayers?.players ?? []) {
+      serverNames.set(p.name, p.gamesPlayed ?? 1);
+    }
+    for (const n of localKnownNames) {
+      if (!serverNames.has(n)) {
+        serverNames.set(n, 0);
+      }
+    }
+    const qjName = getQjName().trim();
+    const result = Array.from(serverNames.entries())
+      .map(([name, gamesPlayed]) => ({ name, gamesPlayed }))
+      .sort((a, b) => {
+        if (qjName && a.name.toLowerCase() === qjName.toLowerCase()) return -1;
+        if (qjName && b.name.toLowerCase() === qjName.toLowerCase()) return 1;
+        return b.gamesPlayed - a.gamesPlayed;
+      });
+    return result;
+  }, [knownPlayers, localKnownNames]);
+  
+  const currentPlayerNames = useMemo(
+    () => new Set(players.map((p) => p.name.toLowerCase())),
+    [players]
+  );
+  
+  const availableSuggestions = useMemo(
+    () => mergedSuggestions.filter((s) => !currentPlayerNames.has(s.name.toLowerCase())),
+    [mergedSuggestions, currentPlayerNames]
+  );
+  
+  const visibleSuggestions = showAll
+    ? availableSuggestions
+    : availableSuggestions.slice(0, 8);
+  
   const joined = players.find((p) => p.name.toLowerCase() === name.trim().toLowerCase());
   const isOnBench = joined ? players.indexOf(joined) >= maxPlayers : false;
-
-  const handleJoin = async () => {
-    const trimmed = name.trim();
+  
+  const handleJoin = async (joinName?: string) => {
+    const trimmed = (joinName ?? name).trim();
     if (!trimmed) return;
     setJoining(true);
     await onJoin(trimmed);
-    if (typeof localStorage !== "undefined") localStorage.setItem("qj_name", trimmed);
+    setQjName(trimmed);
+    addKnownName(trimmed);
     setJoining(false);
   };
-
+  
   const handleLeave = async () => {
     if (!joined) return;
     setJoining(true);
     await onLeave(joined.id);
     setJoining(false);
   };
-
+  
   return (
     <Paper elevation={3} sx={{
       borderRadius: 3, p: { xs: 2, sm: 3 },
@@ -299,7 +350,7 @@ function QuickJoin({
           <EmojiPeopleIcon color="primary" />
           <Typography variant="h6" fontWeight={700}>{t("quickJoinTitle")}</Typography>
         </Box>
-
+        
         {joined ? (
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
             <Chip
@@ -313,21 +364,90 @@ function QuickJoin({
             </Button>
           </Box>
         ) : (
-          <Box sx={{ display: "flex", gap: 1 }}>
-            <TextField
-              size="small"
-              placeholder={t("quickJoinPlaceholder")}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleJoin(); }}
-              inputProps={{ maxLength: 50 }}
-              sx={{ flexGrow: 1 }}
-            />
-            <Button variant="contained" onClick={handleJoin} disabled={!name.trim() || joining}
-              sx={{ flexShrink: 0 }}>
-              {t("quickJoinBtn")}
-            </Button>
-          </Box>
+          <>
+            {availableSuggestions.length > 0 && (
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  {t("recentPlayers")}:
+                </Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, alignItems: "center" }}>
+                  {visibleSuggestions.map((s) => {
+                    const isQjName = getQjName().trim().toLowerCase() === s.name.toLowerCase();
+                    return (
+                      <Chip
+                        key={s.name}
+                        label={s.name}
+                        variant={isQjName ? "filled" : "outlined"}
+                        color={isQjName ? "primary" : "default"}
+                        onClick={() => handleJoin(s.name)}
+                        disabled={joining}
+                        sx={{
+                          cursor: "pointer",
+                          minHeight: 44,
+                          "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
+                        }}
+                      />
+                    );
+                  })}
+                  {availableSuggestions.length > 8 && !showAll && (
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => setShowAll(true)}
+                      sx={{ textTransform: "none" }}
+                    >
+                      {t("showAllPlayers")}
+                    </Button>
+                  )}
+                </Box>
+              </Box>
+            )}
+            
+            <Box sx={{ display: "flex", gap: 1, position: "relative" }}>
+              <Autocomplete
+                freeSolo
+                autoSelect
+                options={availableSuggestions.map((s) => s.name)}
+                filterOptions={(options, { inputValue }) =>
+                  options.filter((opt) => matchesWithName(opt, inputValue))
+                }
+                inputValue={name}
+                onInputChange={(_, newInputValue) => setName(newInputValue)}
+                onChange={(_, newValue) => {
+                  if (typeof newValue === "string" && newValue.trim()) {
+                    handleJoin(newValue);
+                  }
+                }}
+                disabled={joining}
+                sx={{ flexGrow: 1 }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    size="small"
+                    placeholder={t("quickJoinPlaceholder")}
+                    inputProps={{ ...params.inputProps, maxLength: 50 }}
+                  />
+                )}
+                renderOption={(props, option) => {
+                  const { key, ...otherProps } = props as any;
+                  return (
+                    <li key={key} {...otherProps} style={{ minHeight: 44 }}>
+                      {option}
+                    </li>
+                  );
+                }}
+                noOptionsText={t("noSuggestions")}
+              />
+              <Button
+                variant="contained"
+                onClick={() => handleJoin()}
+                disabled={!name.trim() || joining}
+                sx={{ flexShrink: 0 }}
+              >
+                {t("quickJoinBtn")}
+              </Button>
+            </Box>
+          </>
         )}
       </Stack>
     </Paper>
@@ -368,6 +488,45 @@ export default function EventPage({ eventId }: { eventId: string }) {
     fetcher,
     { refreshInterval: 5000, revalidateOnFocus: true },
   );
+  
+  const { data: knownPlayersData } = useSWR<{ players: KnownPlayer[] }>(
+    `/api/events/${eventId}/known-players`,
+    (url) => fetch(url).then((r) => r.json()),
+    { revalidateOnFocus: false }
+  );
+  
+  const localKnownNames = useMemo(() => getKnownNames(), []);
+  
+  const mergedSuggestions = useMemo(() => {
+    const serverNames = new Map<string, number>();
+    for (const p of knownPlayersData?.players ?? []) {
+      serverNames.set(p.name, p.gamesPlayed ?? 1);
+    }
+    for (const n of localKnownNames) {
+      if (!serverNames.has(n)) {
+        serverNames.set(n, 0);
+      }
+    }
+    const qjName = getQjName().trim();
+    const result = Array.from(serverNames.entries())
+      .map(([name, gamesPlayed]) => ({ name, gamesPlayed }))
+      .sort((a, b) => {
+        if (qjName && a.name.toLowerCase() === qjName.toLowerCase()) return -1;
+        if (qjName && b.name.toLowerCase() === qjName.toLowerCase()) return 1;
+        return b.gamesPlayed - a.gamesPlayed;
+      });
+    return result;
+  }, [knownPlayersData, localKnownNames]);
+  
+  const currentPlayerNames = useMemo(
+    () => new Set((event?.players ?? []).map((p) => p.name.toLowerCase())),
+    [event?.players]
+  );
+  
+  const availableSuggestions = useMemo(
+    () => mergedSuggestions.filter((s) => !currentPlayerNames.has(s.name.toLowerCase())),
+    [mergedSuggestions, currentPlayerNames]
+  );
 
   const notFound = error?.status === 404;
 
@@ -402,6 +561,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     });
     const json = await res.json();
     if (!res.ok) { setPlayerError(json.error); return; }
+    addKnownName(name.trim());
     mutate();
   };
 
@@ -554,7 +714,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             </Paper>
 
             {/* Quick join */}
-            <QuickJoin players={event.players} maxPlayers={event.maxPlayers} onJoin={addPlayer} onLeave={removePlayer} />
+            <QuickJoin eventId={eventId} players={event.players} maxPlayers={event.maxPlayers} onJoin={addPlayer} onLeave={removePlayer} />
 
             {/* Players */}
             <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
@@ -573,34 +733,68 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       </Box>
 
                       {playerError && <Alert severity="error" onClose={() => setPlayerError(null)}>{playerError}</Alert>}
-
-                      <TextField
-                        variant="outlined"
-                        placeholder={t("addPlayerPlaceholder")}
-                        helperText={t("addPlayerHelper")}
-                        fullWidth
-                        value={playerInput}
-                        onChange={(e) => { setPlayerInput(e.target.value); setPlayerError(null); }}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPlayer(playerInput); setPlayerInput(""); } }}
-                        onPaste={(e) => {
-                          const text = e.clipboardData.getData("Text");
-                          const names = text.split("\n").map((n) => n.trim()).filter(Boolean);
-                          if (names.length > 1) {
-                            e.preventDefault();
-                            Promise.all(names.map((n) => addPlayer(n))).then(() => setPlayerInput(""));
+                      
+                      <Autocomplete
+                        freeSolo
+                        autoSelect
+                        options={availableSuggestions.map((s) => s.name)}
+                        filterOptions={(options, { inputValue }) =>
+                          options.filter((opt) => matchesWithName(opt, inputValue))
+                        }
+                        inputValue={playerInput}
+                        onInputChange={(_, newInputValue) => { setPlayerInput(newInputValue); setPlayerError(null); }}
+                        onChange={(_, newValue) => {
+                          if (typeof newValue === "string" && newValue.trim()) {
+                            addPlayer(newValue);
+                            setPlayerInput("");
                           }
                         }}
-                        InputProps={{
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              <IconButton color="primary" edge="end"
-                                disabled={!playerInput.trim()}
-                                onClick={() => { addPlayer(playerInput); setPlayerInput(""); }}>
-                                <PersonAddIcon />
-                              </IconButton>
-                            </InputAdornment>
-                          ),
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            variant="outlined"
+                            placeholder={t("addPlayerPlaceholder")}
+                            helperText={t("addPlayerHelper")}
+                            fullWidth
+                            inputProps={{ ...params.inputProps, maxLength: 50 }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && playerInput.trim()) {
+                                e.preventDefault();
+                                addPlayer(playerInput);
+                                setPlayerInput("");
+                              }
+                            }}
+                            onPaste={(e) => {
+                              const text = e.clipboardData.getData("Text");
+                              const names = text.split("\n").map((n) => n.trim()).filter(Boolean);
+                              if (names.length > 1) {
+                                e.preventDefault();
+                                Promise.all(names.map((n) => addPlayer(n))).then(() => setPlayerInput(""));
+                              }
+                            }}
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <InputAdornment position="end">
+                                  <IconButton color="primary" edge="end"
+                                    disabled={!playerInput.trim()}
+                                    onClick={() => { addPlayer(playerInput); setPlayerInput(""); }}>
+                                    <PersonAddIcon />
+                                  </IconButton>
+                                </InputAdornment>
+                              ),
+                            }}
+                          />
+                        )}
+                        renderOption={(props, option) => {
+                          const { key, ...otherProps } = props as any;
+                          return (
+                            <li key={key} {...otherProps} style={{ minHeight: 44 }}>
+                              {option}
+                            </li>
+                          );
                         }}
+                        noOptionsText={t("noSuggestions")}
                       />
 
                       {active.length > 0 && (
