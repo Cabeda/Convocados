@@ -1,10 +1,9 @@
-name: Unit test - Jest
+name: Test
 
 on: [push]
 
 jobs:
-  build:
-
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -12,4 +11,4 @@ jobs:
     - name: npm install
       run: npm install --include=dev
     - name: Run tests
-      run: npm test -- --watchAll=false
+      run: npm test
