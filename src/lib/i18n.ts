@@ -81,6 +81,9 @@ export const translations = {
     quickJoinBtn: "Join",
     quickJoinedAs: "You joined as {name}",
     quickJoinLeave: "Leave",
+    recentPlayers: "Recent players",
+    showAllPlayers: "Show all",
+    noSuggestions: "Type a new name",
 
     // History
     history: "History",
@@ -224,6 +227,9 @@ export const translations = {
     quickJoinBtn: "Entrar",
     quickJoinedAs: "Entraste como {name}",
     quickJoinLeave: "Sair",
+    recentPlayers: "Jogadores recentes",
+    showAllPlayers: "Ver todos",
+    noSuggestions: "Escreve um novo nome",
 
     // History
     history: "Histórico",
