@@ -32,6 +32,7 @@ interface HistoryEntry {
   teamsSnapshot: string | null;
   editableUntil: string;
   editable: boolean;
+  eloUpdates?: { name: string; delta: number }[] | null;
 }
 
 function HistoryCardFull({
@@ -174,9 +175,19 @@ function HistoryCardFull({
                   <Grid2 key={team.team} size={{ xs: 12, sm: 6 }}>
                     <Typography variant="body2" fontWeight={700} gutterBottom>{team.team}</Typography>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {team.players.map((p) => (
-                        <Chip key={p.name} label={p.name} size="small" variant="outlined" />
-                      ))}
+                      {team.players.map((p) => {
+                        const elo = entry.eloUpdates?.find((e) => e.name === p.name);
+                        const deltaLabel = elo ? (elo.delta >= 0 ? `+${elo.delta}` : `${elo.delta}`) : null;
+                        return (
+                          <Chip
+                            key={p.name} size="small" variant="outlined"
+                            label={deltaLabel ? `${p.name} (${deltaLabel})` : p.name}
+                            sx={elo ? {
+                              borderColor: elo.delta > 0 ? "success.main" : elo.delta < 0 ? "error.main" : undefined,
+                            } : undefined}
+                          />
+                        );
+                      })}
                     </Box>
                   </Grid2>
                 ))}
