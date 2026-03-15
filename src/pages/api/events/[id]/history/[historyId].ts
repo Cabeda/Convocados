@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
+import { processGame } from "../../../../../lib/elo.server";
 
 // PATCH /api/events/[id]/history/[historyId]
 export const PATCH: APIRoute = async ({ params, request }) => {
@@ -27,11 +28,29 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     },
   });
 
+  // Trigger ELO recalculation when scores are saved on a played game
+  let eloUpdates = null;
+  const finalScoreOne = updated.scoreOne;
+  const finalScoreTwo = updated.scoreTwo;
+  if (
+    updated.status === "played" &&
+    finalScoreOne != null &&
+    finalScoreTwo != null &&
+    updated.teamsSnapshot &&
+    !updated.eloProcessed
+  ) {
+    try {
+      const snapshot = JSON.parse(updated.teamsSnapshot);
+      eloUpdates = await processGame(params.id!, updated.id, snapshot, finalScoreOne, finalScoreTwo);
+    } catch { /* ELO processing is best-effort */ }
+  }
+
   return Response.json({
     ...updated,
     dateTime: updated.dateTime.toISOString(),
     editableUntil: updated.editableUntil.toISOString(),
     createdAt: updated.createdAt.toISOString(),
     editable: updated.editableUntil > new Date(),
+    eloUpdates,
   });
 };
