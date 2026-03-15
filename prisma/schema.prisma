@@ -22,6 +22,7 @@ model Event {
   teamResults    TeamResult[]
   history        GameHistory[]
   pushSubs       PushSubscription[]
+  webhookSubs    WebhookSubscription[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 }
@@ -79,4 +80,31 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   @@unique([eventId, endpoint])
+}
+
+model WebhookSubscription {
+  id         String            @id @default(cuid())
+  eventId    String
+  event      Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  url        String
+  secret     String?
+  events     String            @default("[]") // JSON array of event types
+  createdAt  DateTime          @default(now())
+  deliveries WebhookDelivery[]
+
+  @@unique([eventId, url])
+}
+
+model WebhookDelivery {
+  id          String              @id @default(cuid())
+  webhookId   String
+  webhook     WebhookSubscription @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  eventType   String
+  payload     String              // JSON
+  status      String              @default("pending") // "pending" | "success" | "failed"
+  attempts    Int                 @default(0)
+  lastAttempt DateTime?
+  deliveredAt DateTime?
+  error       String?
+  createdAt   DateTime            @default(now())
 }
