@@ -1,0 +1,75 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Tutorial" description="End-to-end walkthrough: create a game, add players, randomize teams.">
+  <h1>Tutorial</h1>
+  <p class="subtitle">Walk through the complete flow — from creating a game to viewing history.</p>
+
+  <h2>Step 1: Create an event</h2>
+  <p>Go to the home page and fill in the form:</p>
+  <ul>
+    <li><strong>Game title</strong> — e.g. "Friday Footy"</li>
+    <li><strong>Date &amp; time</strong> — when the game starts</li>
+  </ul>
+  <p>Optionally expand <strong>Advanced options</strong> to set:</p>
+  <ul>
+    <li><strong>Location</strong> — a text address or Google Maps link (becomes clickable)</li>
+    <li><strong>Max players</strong> — players beyond this go to the bench (default: 10)</li>
+    <li><strong>Team names</strong> — defaults to "Ninjas" vs "Gunas"</li>
+    <li><strong>Recurrence</strong> — auto-reset the player list weekly or monthly</li>
+  </ul>
+  <p>Click <strong>Create game</strong>. You'll be redirected to the event page with a unique URL.</p>
+
+  <h2>Step 2: Share the link</h2>
+  <p>
+    The event page shows a <strong>Share</strong> button. On mobile, it uses the native share sheet.
+    On desktop, it copies the URL to your clipboard. Send this link to your group chat.
+  </p>
+  <p>No accounts are needed — anyone with the link can join.</p>
+
+  <h2>Step 3: Players join</h2>
+  <p>Players can join in two ways:</p>
+  <ul>
+    <li><strong>Quick Join</strong> — tap a name from the recent players list, or type a new name</li>
+    <li><strong>Add Player</strong> — type a name in the player list section and press Enter</li>
+  </ul>
+  <p>
+    Players are added in order. Once the max is reached, additional players go to the <strong>bench</strong>.
+    If an active player leaves, the first bench player is automatically promoted.
+  </p>
+
+  <h2>Step 4: Randomize teams</h2>
+  <p>
+    When you have at least 2 active players, click <strong>Randomize teams</strong>.
+    The app splits players into two balanced teams randomly.
+  </p>
+  <p>After randomizing, you can:</p>
+  <ul>
+    <li><strong>Drag and drop</strong> players between teams to adjust</li>
+    <li><strong>Rename teams</strong> by clicking the edit icon next to each team name</li>
+    <li><strong>Re-randomize</strong> — click the button again (you'll be asked to confirm)</li>
+  </ul>
+
+  <h2>Step 5: Get notified</h2>
+  <p>
+    Click <strong>Get notified</strong> to receive push notifications when players join or leave.
+    This uses browser push notifications — no app install needed.
+  </p>
+
+  <h2>Step 6: Recurring games</h2>
+  <p>
+    If you enabled recurrence, the player list automatically resets 1 hour after the game time.
+    The event URL stays the same — just share it once and reuse it every week.
+  </p>
+  <p>
+    Past games are saved in <strong>History</strong>, where you can record scores and mark games as played or cancelled.
+  </p>
+
+  <h2>Step 7: Integrate (optional)</h2>
+  <p>
+    Expand the <strong>Integrations</strong> section at the bottom of the event header to find the webhook API URL.
+    Use this to connect external systems. See the <a href="/docs/api/webhooks">Webhooks API</a> and
+    <a href="/docs/guides/webhook-openclaw">OpenClaw guide</a> for details.
+  </p>
+</DocsLayout>

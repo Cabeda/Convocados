@@ -1,0 +1,138 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Webhooks API" description="Subscribe to event notifications via HTTP callbacks.">
+  <h1>Webhooks API</h1>
+  <p class="subtitle">Receive HTTP POST callbacks when events happen — player joins, leaves, game full, or game reset.</p>
+
+  <h2>Event types</h2>
+  <table>
+    <thead><tr><th>Type</th><th>Triggered when</th></tr></thead>
+    <tbody>
+      <tr><td><code>player_joined</code></td><td>A player is added to the event</td></tr>
+      <tr><td><code>player_left</code></td><td>A player is removed from the event</td></tr>
+      <tr><td><code>game_full</code></td><td>The last active spot is filled (spotsLeft = 0)</td></tr>
+      <tr><td><code>game_reset</code></td><td>A recurring event resets its player list</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="endpoint method-post">POST</span> /api/events/[id]/webhooks</h2>
+  <p>Subscribe a webhook URL to receive event notifications.</p>
+
+  <h3>Request body</h3>
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>url</code></td><td>string</td><td>Yes</td><td>The URL to receive POST callbacks</td></tr>
+      <tr><td><code>events</code></td><td>string[]</td><td>No</td><td>Event types to subscribe to. Empty array = all events</td></tr>
+      <tr><td><code>secret</code></td><td>string</td><td>No</td><td>Shared secret for HMAC-SHA256 signature verification</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Example</h3>
+  <pre><code>{`curl -X POST https://convocados.fly.dev/api/events/EVENT_ID/webhooks \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "url": "https://example.com/webhook",
+    "events": ["player_joined", "game_full"],
+    "secret": "my-shared-secret"
+  }'`}</code></pre>
+
+  <h3>Response</h3>
+  <pre><code>{`{
+  "id": "cmm...",
+  "url": "https://example.com/webhook",
+  "events": ["player_joined", "game_full"],
+  "createdAt": "2026-03-15T13:00:00.000Z"
+}`}</code></pre>
+
+  <h3>Limits</h3>
+  <ul>
+    <li>Maximum <strong>10 webhooks per event</strong></li>
+    <li>Duplicate URLs on the same event return <code>409</code></li>
+  </ul>
+
+  <h2><span class="endpoint method-get">GET</span> /api/events/[id]/webhooks</h2>
+  <p>List all webhook subscriptions for an event.</p>
+
+  <h3>Response</h3>
+  <pre><code>{`{
+  "webhooks": [
+    {
+      "id": "cmm...",
+      "url": "https://example.com/webhook",
+      "events": ["player_joined", "game_full"],
+      "createdAt": "2026-03-15T13:00:00.000Z"
+    }
+  ]
+}`}</code></pre>
+
+  <h2><span class="endpoint method-delete">DELETE</span> /api/events/[id]/webhooks/[webhookId]</h2>
+  <p>Unsubscribe a webhook.</p>
+
+  <h3>Example</h3>
+  <pre><code>{`curl -X DELETE https://convocados.fly.dev/api/events/EVENT_ID/webhooks/WEBHOOK_ID`}</code></pre>
+
+  <h3>Response</h3>
+  <pre><code>{`{ "ok": true }`}</code></pre>
+
+  <h2>Webhook payload</h2>
+  <p>When an event occurs, Convocados sends a POST request to your URL with this JSON body:</p>
+  <pre><code>{`{
+  "event": "player_joined",
+  "eventId": "clx...",
+  "deliveryId": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-03-15T13:30:00.000Z",
+  "data": {
+    "playerName": "Carlos",
+    "isActive": true,
+    "spotsLeft": 3
+  }
+}`}</code></pre>
+
+  <h3>Payload fields by event type</h3>
+  <table>
+    <thead><tr><th>Event type</th><th>data fields</th></tr></thead>
+    <tbody>
+      <tr><td><code>player_joined</code></td><td><code>playerName</code>, <code>isActive</code>, <code>spotsLeft</code></td></tr>
+      <tr><td><code>player_left</code></td><td><code>playerName</code>, <code>spotsLeft</code></td></tr>
+      <tr><td><code>game_full</code></td><td><code>playerName</code>, <code>isActive</code>, <code>spotsLeft</code> (always 0)</td></tr>
+      <tr><td><code>game_reset</code></td><td><code>newDateTime</code> (ISO 8601)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Signature verification</h2>
+  <p>
+    If you provided a <code>secret</code> when subscribing, each delivery includes an
+    <code>X-Webhook-Signature</code> header with an HMAC-SHA256 signature:
+  </p>
+  <pre><code>X-Webhook-Signature: sha256=a1b2c3d4e5f6...</code></pre>
+  <p>To verify in Node.js:</p>
+  <pre><code>{`import { createHmac } from "crypto";
+
+function verify(payload, signature, secret) {
+  const expected = "sha256=" + createHmac("sha256", secret)
+    .update(payload)
+    .digest("hex");
+  return expected === signature;
+}`}</code></pre>
+
+  <h2>Delivery &amp; retry</h2>
+  <ul>
+    <li><strong>Timeout:</strong> 5 seconds per request</li>
+    <li><strong>Retries:</strong> up to 5 attempts with exponential backoff (1s, 2s, 4s, 8s, 16s)</li>
+    <li><strong>Success:</strong> any 2xx response</li>
+    <li><strong>Failure:</strong> after 5 failed attempts, the delivery is marked as failed</li>
+  </ul>
+
+  <h2>Headers sent</h2>
+  <table>
+    <thead><tr><th>Header</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td><code>Content-Type</code></td><td><code>application/json</code></td></tr>
+      <tr><td><code>User-Agent</code></td><td><code>Convocados-Webhook/1.0</code></td></tr>
+      <tr><td><code>X-Webhook-Signature</code></td><td>HMAC-SHA256 (only if secret configured)</td></tr>
+    </tbody>
+  </table>
+</DocsLayout>

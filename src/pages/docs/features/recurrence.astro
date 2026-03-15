@@ -1,0 +1,46 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Recurring Games" description="Auto-resetting player lists on a schedule.">
+  <h1>Recurring Games</h1>
+  <p class="subtitle">Set it once, reuse the same link every week.</p>
+
+  <h2>How it works</h2>
+  <p>
+    When you create an event with <strong>Recurring game</strong> enabled, the player list
+    automatically resets after each game. The event URL stays the same — share it once
+    and players can rejoin each week.
+  </p>
+
+  <h2>Configuration</h2>
+  <table>
+    <thead><tr><th>Setting</th><th>Options</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>Frequency</td><td>Weekly, Monthly</td><td>How often the game repeats</td></tr>
+      <tr><td>Interval</td><td>1–52</td><td>e.g. "every 2 weeks"</td></tr>
+      <tr><td>Day (weekly only)</td><td>Mon–Sun</td><td>Optional — defaults to the same day as the event</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Reset behavior</h2>
+  <p>The reset happens <strong>1 hour after the scheduled game time</strong>. When triggered:</p>
+  <ol>
+    <li>Current teams and players are saved as a <strong>history snapshot</strong></li>
+    <li>All players are removed from the event</li>
+    <li>All team assignments are cleared</li>
+    <li>The event date advances to the next occurrence</li>
+  </ol>
+
+  <div class="callout callout-info">
+    <strong>Lazy reset:</strong> The reset is triggered by the first person who opens the event page
+    after the reset time. It uses an optimistic lock to prevent duplicate resets from concurrent requests.
+  </div>
+
+  <h2>History</h2>
+  <p>
+    Each reset creates a history entry with the team snapshot. Click <strong>History</strong>
+    on the event page to view past games, record scores, and mark games as played or cancelled.
+    See <a href="/docs/features/history">History &amp; Scores</a>.
+  </p>
+</DocsLayout>

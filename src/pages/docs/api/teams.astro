@@ -1,0 +1,62 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Teams API" description="Randomize teams, save assignments, rename teams.">
+  <h1>Teams API</h1>
+
+  <h2><span class="endpoint method-post">POST</span> /api/events/[id]/randomize</h2>
+  <p>Randomly assign active players to two teams.</p>
+
+  <h3>Example</h3>
+  <pre><code>{`curl -X POST https://convocados.fly.dev/api/events/EVENT_ID/randomize`}</code></pre>
+
+  <h3>Response</h3>
+  <pre><code>{`{ "ok": true }`}</code></pre>
+
+  <h3>Errors</h3>
+  <table>
+    <thead><tr><th>Code</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td><code>400</code></td><td>Fewer than 2 active players</td></tr>
+      <tr><td><code>404</code></td><td>Event not found</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="endpoint method-put">PUT</span> /api/events/[id]/teams</h2>
+  <p>Save team assignments (e.g. after drag-and-drop reordering).</p>
+
+  <h3>Request body</h3>
+  <pre><code>{`{
+  "matches": [
+    {
+      "team": "Ninjas",
+      "players": [
+        { "name": "Alice", "order": 0 },
+        { "name": "Bob", "order": 1 }
+      ]
+    },
+    {
+      "team": "Gunas",
+      "players": [
+        { "name": "Carol", "order": 0 }
+      ]
+    }
+  ]
+}`}</code></pre>
+
+  <h3>Response</h3>
+  <pre><code>{`{ "ok": true }`}</code></pre>
+
+  <h2><span class="endpoint method-put">PUT</span> /api/events/[id]/team-names</h2>
+  <p>Update team names. Empty strings fall back to defaults ("Ninjas" / "Gunas").</p>
+
+  <h3>Request body</h3>
+  <pre><code>{`{
+  "teamOneName": "Eagles",
+  "teamTwoName": "Lions"
+}`}</code></pre>
+
+  <h3>Response</h3>
+  <pre><code>{`{ "ok": true }`}</code></pre>
+</DocsLayout>

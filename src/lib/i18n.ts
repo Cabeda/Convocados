@@ -150,6 +150,9 @@ export const translations = {
     webhookEndpoint: "Webhook endpoint",
     webhookCopied: "Copied!",
     webhookHelp: "POST to this URL to register a webhook. See docs for payload format.",
+
+    // Docs
+    docs: "Docs",
   },
   pt: {
     // App
@@ -302,6 +305,9 @@ export const translations = {
     webhookEndpoint: "Endpoint do webhook",
     webhookCopied: "Copiado!",
     webhookHelp: "Faz POST para este URL para registar um webhook. Consulta a documentação para o formato do payload.",
+
+    // Docs
+    docs: "Docs",
   },
 } as const;
 

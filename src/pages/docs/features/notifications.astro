@@ -1,0 +1,65 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Notifications" description="Push notifications for player join/leave events.">
+  <h1>Notifications</h1>
+  <p class="subtitle">Get notified when players join or leave your game.</p>
+
+  <h2>How it works</h2>
+  <p>
+    Convocados uses <strong>Web Push Notifications</strong> (via the Push API and Service Workers).
+    No app install is needed — notifications work directly in the browser.
+  </p>
+
+  <h2>Subscribing</h2>
+  <ol>
+    <li>Open an event page</li>
+    <li>Click <strong>Get notified</strong></li>
+    <li>Allow notifications when the browser prompts you</li>
+  </ol>
+  <p>
+    The button changes to <strong>Notifications on</strong> (green). Click it again to unsubscribe.
+  </p>
+
+  <h2>What you'll receive</h2>
+  <table>
+    <thead><tr><th>Event</th><th>Notification</th></tr></thead>
+    <tbody>
+      <tr><td>Player joins (active)</td><td>"Alice joined the game · 3 spot(s) left"</td></tr>
+      <tr><td>Player joins (bench)</td><td>"Alice joined the bench · Game is full"</td></tr>
+      <tr><td>Player leaves</td><td>"Alice left the game · 1 spot(s) left"</td></tr>
+      <tr><td>Player leaves + promotion</td><td>"Alice left · Bob is now playing"</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-info">
+    <strong>Self-suppression:</strong> You won't receive notifications for your own actions.
+    This is tracked via a client ID stored in localStorage.
+  </div>
+
+  <h2>Browser support</h2>
+  <p>
+    Push notifications work in Chrome, Edge, Firefox, and Safari 16.4+.
+    If the browser doesn't support push, the notification button is hidden.
+    If the user has blocked notifications, the button shows "Notifications blocked".
+  </p>
+
+  <h2>VAPID keys (self-hosting)</h2>
+  <p>
+    Push notifications require VAPID keys. Generate them with:
+  </p>
+  <pre><code>npx web-push generate-vapid-keys</code></pre>
+  <p>Set the output as environment variables:</p>
+  <pre><code>VAPID_PUBLIC_KEY="BPx..."
+VAPID_PRIVATE_KEY="abc..."</code></pre>
+  <p>
+    Without these keys, push notifications are silently disabled — the rest of the app works fine.
+  </p>
+
+  <h2>Localization</h2>
+  <p>
+    Notification text is sent in the subscriber's language (detected from <code>navigator.language</code>).
+    Currently English and Portuguese are supported.
+  </p>
+</DocsLayout>
