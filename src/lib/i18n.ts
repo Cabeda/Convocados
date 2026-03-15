@@ -144,6 +144,12 @@ export const translations = {
     // Update banner
     updateAvailable: "A new version is available",
     updateNow: "Update",
+
+    // Webhooks / Integrations
+    integrations: "Integrations",
+    webhookEndpoint: "Webhook endpoint",
+    webhookCopied: "Copied!",
+    webhookHelp: "POST to this URL to register a webhook. See docs for payload format.",
   },
   pt: {
     // App
@@ -290,6 +296,12 @@ export const translations = {
     // Update banner
     updateAvailable: "Nova versão disponível",
     updateNow: "Atualizar",
+
+    // Webhooks / Integrations
+    integrations: "Integrações",
+    webhookEndpoint: "Endpoint do webhook",
+    webhookCopied: "Copiado!",
+    webhookHelp: "Faz POST para este URL para registar um webhook. Consulta a documentação para o formato do payload.",
   },
 } as const;
 
