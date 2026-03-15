@@ -8,6 +8,7 @@ import { POST as addPlayer, DELETE as deletePlayer } from "~/pages/api/events/[i
 import { POST as randomize } from "~/pages/api/events/[id]/randomize";
 import { PUT as saveTeams } from "~/pages/api/events/[id]/teams";
 import { PUT as saveTeamNames } from "~/pages/api/events/[id]/team-names";
+import { GET as getKnownPlayers } from "~/pages/api/events/[id]/known-players";
 
 // Minimal Astro APIContext factory
 function ctx(params: Record<string, string>, body?: unknown) {
@@ -46,6 +47,7 @@ async function seedEvent(overrides: Partial<{
 }
 
 beforeEach(async () => {
+  await prisma.gameHistory.deleteMany();
   await prisma.teamResult.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
@@ -352,5 +354,149 @@ describe("POST /api/events/[id]/players branch coverage", () => {
     vi.spyOn(prisma.player, "create").mockRejectedValueOnce(new Error("DB connection lost"));
     await expect(addPlayer(ctx({ id }, { name: "Alice" }))).rejects.toThrow("DB connection lost");
     vi.restoreAllMocks();
+  });
+});
+
+// ─── GET /api/events/[id]/known-players ─────────────────────────────────────
+
+describe("GET /api/events/[id]/known-players", () => {
+  async function seedHistory(eventId: string, teamsSnapshot: string) {
+    await prisma.gameHistory.create({
+      data: {
+        eventId,
+        dateTime: new Date(),
+        status: "played",
+        teamOneName: "A",
+        teamTwoName: "B",
+        teamsSnapshot,
+        editableUntil: new Date(Date.now() + 86400_000),
+      },
+    });
+  }
+
+  it("returns 404 for unknown event", async () => {
+    const res = await getKnownPlayers(ctx({ id: "nonexistent" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns empty array when no history exists", async () => {
+    const id = await seedEvent();
+    const res = await getKnownPlayers(ctx({ id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.players).toEqual([]);
+  });
+
+  it("extracts player names from history snapshots", async () => {
+    const id = await seedEvent();
+    const snapshot = JSON.stringify([
+      { team: "A", players: [{ name: "Alice", order: 0 }, { name: "Bob", order: 1 }] },
+      { team: "B", players: [{ name: "Carol", order: 0 }] },
+    ]);
+    await seedHistory(id, snapshot);
+    const res = await getKnownPlayers(ctx({ id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.players).toHaveLength(3);
+    expect(body.players.map((p: any) => p.name).sort()).toEqual(["Alice", "Bob", "Carol"]);
+  });
+
+  it("sorts by frequency (most games first)", async () => {
+    const id = await seedEvent();
+    const snap1 = JSON.stringify([
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ]);
+    const snap2 = JSON.stringify([
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Carol", order: 0 }] },
+    ]);
+    await seedHistory(id, snap1);
+    await seedHistory(id, snap2);
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    expect(body.players[0].name).toBe("Alice");
+    expect(body.players[0].gamesPlayed).toBe(2);
+  });
+
+  it("excludes current players from suggestions", async () => {
+    const id = await seedEvent();
+    await prisma.player.createMany({ data: [{ name: "Alice", eventId: id }] });
+    const snapshot = JSON.stringify([
+      { team: "A", players: [{ name: "Alice", order: 0 }, { name: "Bob", order: 1 }] },
+      { team: "B", players: [{ name: "Carol", order: 0 }] },
+    ]);
+    await seedHistory(id, snapshot);
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    const names = body.players.map((p: any) => p.name);
+    expect(names).not.toContain("Alice");
+    expect(names).toContain("Bob");
+    expect(names).toContain("Carol");
+  });
+
+  it("skips malformed JSON in teamsSnapshot", async () => {
+    const id = await seedEvent();
+    await seedHistory(id, "not-valid-json");
+    const goodSnapshot = JSON.stringify([
+      { team: "A", players: [{ name: "Bob", order: 0 }] },
+      { team: "B", players: [{ name: "Carol", order: 0 }] },
+    ]);
+    await seedHistory(id, goodSnapshot);
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    expect(body.players).toHaveLength(2);
+  });
+
+  it("skips cancelled history entries", async () => {
+    const id = await seedEvent();
+    await prisma.gameHistory.create({
+      data: {
+        eventId: id,
+        dateTime: new Date(),
+        status: "cancelled",
+        teamOneName: "A",
+        teamTwoName: "B",
+        teamsSnapshot: JSON.stringify([
+          { team: "A", players: [{ name: "Ghost", order: 0 }] },
+          { team: "B", players: [{ name: "Phantom", order: 0 }] },
+        ]),
+        editableUntil: new Date(Date.now() + 86400_000),
+      },
+    });
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    expect(body.players).toEqual([]);
+  });
+
+  it("skips entries with null teamsSnapshot", async () => {
+    const id = await seedEvent();
+    await prisma.gameHistory.create({
+      data: {
+        eventId: id,
+        dateTime: new Date(),
+        status: "played",
+        teamOneName: "A",
+        teamTwoName: "B",
+        teamsSnapshot: null,
+        editableUntil: new Date(Date.now() + 86400_000),
+      },
+    });
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    expect(body.players).toEqual([]);
+  });
+
+  it("skips empty player names", async () => {
+    const id = await seedEvent();
+    const snapshot = JSON.stringify([
+      { team: "A", players: [{ name: "  ", order: 0 }, { name: "Bob", order: 1 }] },
+      { team: "B", players: [{ name: "", order: 0 }] },
+    ]);
+    await seedHistory(id, snapshot);
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    expect(body.players).toHaveLength(1);
+    expect(body.players[0].name).toBe("Bob");
   });
 });

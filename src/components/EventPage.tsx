@@ -329,6 +329,7 @@ function QuickJoin({
     await onJoin(trimmed);
     setQjName(trimmed);
     addKnownName(trimmed);
+    setName("");
     setJoining(false);
   };
   
@@ -406,13 +407,16 @@ function QuickJoin({
             <Box sx={{ display: "flex", gap: 1, position: "relative" }}>
               <Autocomplete
                 freeSolo
-                autoSelect
                 options={availableSuggestions.map((s) => s.name)}
                 filterOptions={(options, { inputValue }) =>
                   options.filter((opt) => matchesWithName(opt, inputValue))
                 }
+                value={null}
                 inputValue={name}
-                onInputChange={(_, newInputValue) => setName(newInputValue)}
+                onInputChange={(_, newInputValue, reason) => {
+                  if (reason === "reset") return;
+                  setName(newInputValue);
+                }}
                 onChange={(_, newValue) => {
                   if (typeof newValue === "string" && newValue.trim()) {
                     handleJoin(newValue);
@@ -736,13 +740,17 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       
                       <Autocomplete
                         freeSolo
-                        autoSelect
                         options={availableSuggestions.map((s) => s.name)}
                         filterOptions={(options, { inputValue }) =>
                           options.filter((opt) => matchesWithName(opt, inputValue))
                         }
+                        value={null}
                         inputValue={playerInput}
-                        onInputChange={(_, newInputValue) => { setPlayerInput(newInputValue); setPlayerError(null); }}
+                        onInputChange={(_, newInputValue, reason) => {
+                          if (reason === "reset") return;
+                          setPlayerInput(newInputValue);
+                          setPlayerError(null);
+                        }}
                         onChange={(_, newValue) => {
                           if (typeof newValue === "string" && newValue.trim()) {
                             addPlayer(newValue);
@@ -760,6 +768,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && playerInput.trim()) {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 addPlayer(playerInput);
                                 setPlayerInput("");
                               }
