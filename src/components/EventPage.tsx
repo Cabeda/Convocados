@@ -4,7 +4,7 @@ import {
   Container, Paper, Typography, TextField, Button, Box, Stack, Chip,
   Alert, IconButton, Tooltip, InputAdornment, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, Snackbar, alpha, useTheme, Grid2,
-  CircularProgress, Divider, Autocomplete,
+  CircularProgress, Divider, Autocomplete, Accordion, AccordionSummary, AccordionDetails,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import HistoryIcon from "@mui/icons-material/History";
@@ -21,6 +21,8 @@ import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatReclineNormal";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -247,6 +249,71 @@ function ShareBar({ title }: { title: string }) {
         {copied ? t("linkCopied") : t("shareGame")}
       </Button>
     </Paper>
+  );
+}
+
+// ── Webhook info (developer integration) ──────────────────────────────────────
+
+function WebhookInfo({ eventId }: { eventId: string }) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
+  const url = typeof window !== "undefined"
+    ? `${window.location.origin}/api/events/${eventId}/webhooks`
+    : "";
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  return (
+    <Accordion
+      disableGutters
+      elevation={0}
+      sx={{
+        "&:before": { display: "none" },
+        backgroundColor: "transparent",
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon />}
+        sx={{ px: 0, minHeight: 0, "& .MuiAccordionSummary-content": { my: 0.5 } }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <IntegrationInstructionsIcon fontSize="small" color="action" />
+          <Typography variant="body2" color="text.secondary">
+            {t("integrations")}
+          </Typography>
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ px: 0, pt: 0 }}>
+        <Stack spacing={1}>
+          <Typography variant="caption" color="text.secondary">
+            {t("webhookHelp")}
+          </Typography>
+          <Paper variant="outlined" sx={{
+            borderRadius: 2, p: 1, display: "flex", alignItems: "center", gap: 1,
+          }}>
+            <Typography variant="body2" sx={{
+              flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              fontFamily: "monospace", fontSize: "0.75rem", minWidth: 0,
+            }}>
+              {url}
+            </Typography>
+            <Tooltip title={copied ? t("webhookCopied") : t("webhookEndpoint")}>
+              <IconButton
+                size="small"
+                color={copied ? "success" : "default"}
+                onClick={handleCopy}
+              >
+                {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          </Paper>
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
   );
 }
 
@@ -714,6 +781,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
                     <NotifyButton eventId={eventId} />
                   </Box>
                 </Stack>
+
+                {/* Integrations — hidden by default, for developers */}
+                <WebhookInfo eventId={eventId} />
               </Stack>
             </Paper>
 

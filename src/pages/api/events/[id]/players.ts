@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { sendPushToEvent } from "../../../../lib/push.server";
+import { fireWebhooks } from "../../../../lib/webhook.server";
 
 export const POST: APIRoute = async ({ params, request }) => {
   const eventId = params.id!;
@@ -37,6 +38,13 @@ export const POST: APIRoute = async ({ params, request }) => {
     await sendPushToEvent(eventId, event.title, "notifyPlayerJoinedBench", { name: trimmed }, url, spotsLeft, senderClientId);
   } else {
     await sendPushToEvent(eventId, event.title, "notifyPlayerJoined", { name: trimmed }, url, spotsLeft, senderClientId);
+  }
+
+  // Fire webhooks (non-blocking)
+  const webhookData = { playerName: trimmed, isActive: !isOnBench, spotsLeft };
+  fireWebhooks(eventId, "player_joined", webhookData).catch(() => {});
+  if (spotsLeft === 0) {
+    fireWebhooks(eventId, "game_full", webhookData).catch(() => {});
   }
 
   return Response.json({ ok: true });
@@ -79,6 +87,9 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   } else {
     await sendPushToEvent(eventId, event.title, "notifyPlayerLeft", { name: player.name }, url, spotsLeft, senderClientId);
   }
+
+  // Fire webhooks (non-blocking)
+  fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft }).catch(() => {});
 
   return Response.json({ ok: true });
 };
