@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { parseRecurrenceRule, nextOccurrence } from "../../../../lib/recurrence";
+import { fireWebhooks } from "../../../../lib/webhook.server";
 
 export const GET: APIRoute = async ({ params }) => {
   const event = await prisma.event.findUnique({
@@ -60,6 +61,11 @@ export const GET: APIRoute = async ({ params }) => {
         ]);
 
         wasReset = true;
+
+        // Fire game_reset webhook (non-blocking)
+        fireWebhooks(event.id, "game_reset", {
+          newDateTime: newDateTime.toISOString(),
+        }).catch(() => {});
       }
 
       const fresh = await prisma.event.findUnique({
