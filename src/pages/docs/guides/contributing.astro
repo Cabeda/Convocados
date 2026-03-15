@@ -1,0 +1,88 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Contributing" description="Set up the development environment and contribute to Convocados.">
+  <h1>Contributing</h1>
+  <p class="subtitle">Development setup, project structure, and contribution guidelines.</p>
+
+  <h2>Getting started</h2>
+  <pre><code>{`git clone https://github.com/Cabeda/Convocados.git
+cd Convocados
+npm ci
+npx prisma generate
+npx prisma db push        # create local SQLite DB
+npm run dev                # start dev server on http://localhost:4321`}</code></pre>
+
+  <h2>Project structure</h2>
+  <pre><code>{`Convocados/
+├── prisma/
+│   └── schema.prisma       # Database schema
+├── public/                 # Static assets
+├── src/
+│   ├── components/         # React components (MUI)
+│   ├── layouts/            # Astro layouts (DocsLayout, etc.)
+│   ├── lib/                # Server utilities (db, webhook, push, i18n)
+│   ├── pages/
+│   │   ├── api/            # API routes (Astro endpoints)
+│   │   ├── docs/           # Documentation pages
+│   │   ├── events/         # Event UI pages
+│   │   └── index.astro     # Home page
+│   └── test/               # Vitest test files
+├── Dockerfile
+├── fly.toml
+└── package.json`}</code></pre>
+
+  <h2>Tech stack</h2>
+  <table>
+    <thead><tr><th>Layer</th><th>Technology</th></tr></thead>
+    <tbody>
+      <tr><td>Framework</td><td>Astro 5 (SSR with Node adapter)</td></tr>
+      <tr><td>UI</td><td>React 19 + MUI 6</td></tr>
+      <tr><td>Database</td><td>SQLite via Prisma 6</td></tr>
+      <tr><td>Testing</td><td>Vitest + Supertest</td></tr>
+      <tr><td>Deployment</td><td>Docker on Fly.io</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Scripts</h2>
+  <table>
+    <thead><tr><th>Command</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>npm run dev</code></td><td>Start Astro dev server</td></tr>
+      <tr><td><code>npm run build</code></td><td>Production build</td></tr>
+      <tr><td><code>npm run test</code></td><td>Run tests with Vitest</td></tr>
+      <tr><td><code>npm run typecheck</code></td><td>TypeScript type checking</td></tr>
+      <tr><td><code>npm run db:generate</code></td><td>Regenerate Prisma client</td></tr>
+      <tr><td><code>npm run db:migrate</code></td><td>Create and apply migrations</td></tr>
+      <tr><td><code>npm run db:studio</code></td><td>Open Prisma Studio GUI</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Running tests</h2>
+  <pre><code>{`npm run test`}</code></pre>
+  <p>
+    Tests use Vitest with Supertest for API endpoint testing. The test suite uses an in-memory SQLite database,
+    so no external setup is needed.
+  </p>
+
+  <h2>Code style</h2>
+  <ul>
+    <li>TypeScript strict mode</li>
+    <li>Astro pages use <code>.astro</code> files; interactive components use React <code>.tsx</code></li>
+    <li>API routes export named HTTP method handlers (<code>GET</code>, <code>POST</code>, <code>PATCH</code>, <code>DELETE</code>)</li>
+    <li>Server-only code lives in <code>*.server.ts</code> files</li>
+  </ul>
+
+  <h2>Making changes</h2>
+  <ol>
+    <li>Fork the repository and create a feature branch</li>
+    <li>Make your changes</li>
+    <li>Run <code>npm run typecheck</code> and <code>npm run test</code> to verify</li>
+    <li>Open a pull request against <code>main</code></li>
+  </ol>
+
+  <div class="callout callout-info">
+    <strong>Database changes:</strong> If you modify <code>prisma/schema.prisma</code>, run <code>npm run db:migrate</code> to create a migration file, then commit it with your PR.
+  </div>
+</DocsLayout>

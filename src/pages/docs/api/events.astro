@@ -1,0 +1,79 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Events API" description="Create and retrieve events.">
+  <h1>Events API</h1>
+
+  <h2><span class="endpoint method-post">POST</span> /api/events</h2>
+  <p>Create a new event.</p>
+
+  <h3>Request body</h3>
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>title</code></td><td>string</td><td>Yes</td><td>Game title (max 100 chars)</td></tr>
+      <tr><td><code>dateTime</code></td><td>string</td><td>Yes</td><td>ISO 8601 date, must be in the future</td></tr>
+      <tr><td><code>location</code></td><td>string</td><td>No</td><td>Location text or URL (max 200 chars)</td></tr>
+      <tr><td><code>maxPlayers</code></td><td>number</td><td>No</td><td>2–30, defaults to 10</td></tr>
+      <tr><td><code>teamOneName</code></td><td>string</td><td>No</td><td>Defaults to "Ninjas"</td></tr>
+      <tr><td><code>teamTwoName</code></td><td>string</td><td>No</td><td>Defaults to "Gunas"</td></tr>
+      <tr><td><code>isRecurring</code></td><td>boolean</td><td>No</td><td>Enable recurrence</td></tr>
+      <tr><td><code>recurrenceFreq</code></td><td>string</td><td>No</td><td>"weekly" or "monthly"</td></tr>
+      <tr><td><code>recurrenceInterval</code></td><td>number</td><td>No</td><td>Repeat interval (default 1)</td></tr>
+      <tr><td><code>recurrenceByDay</code></td><td>string</td><td>No</td><td>Day code: MO, TU, WE, TH, FR, SA, SU</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Example</h3>
+  <pre><code>{`curl -X POST https://convocados.fly.dev/api/events \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "Friday Footy",
+    "dateTime": "2026-03-20T19:00:00Z",
+    "location": "Riverside Astro",
+    "maxPlayers": 10
+  }'`}</code></pre>
+
+  <h3>Response</h3>
+  <pre><code>{`{ "id": "clx1abc2d..." }`}</code></pre>
+
+  <h2><span class="endpoint method-get">GET</span> /api/events/[id]</h2>
+  <p>Get full event details including players and team results. Also triggers lazy recurrence reset if applicable.</p>
+
+  <h3>Response</h3>
+  <pre><code>{`{
+  "id": "clx1abc2d...",
+  "title": "Friday Footy",
+  "location": "Riverside Astro",
+  "dateTime": "2026-03-20T19:00:00.000Z",
+  "maxPlayers": 10,
+  "teamOneName": "Ninjas",
+  "teamTwoName": "Gunas",
+  "isRecurring": false,
+  "nextResetAt": null,
+  "wasReset": false,
+  "players": [...],
+  "teamResults": [...]
+}`}</code></pre>
+
+  <h2><span class="endpoint method-get">GET</span> /api/events/[id]/status</h2>
+  <p>Compact event status with player counts and team assignments. Useful for polling.</p>
+
+  <h3>Response</h3>
+  <pre><code>{`{
+  "id": "clx1abc2d...",
+  "title": "Friday Footy",
+  "maxPlayers": 10,
+  "players": {
+    "active": [{ "id": "...", "name": "Alice" }],
+    "bench": [],
+    "total": 1,
+    "spotsLeft": 9
+  },
+  "teams": [
+    { "name": "Ninjas", "players": ["Alice", "Bob"] },
+    { "name": "Gunas", "players": ["Carol", "Dave"] }
+  ]
+}`}</code></pre>
+</DocsLayout>

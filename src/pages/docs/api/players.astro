@@ -1,0 +1,79 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Players API" description="Add and remove players from events.">
+  <h1>Players API</h1>
+
+  <h2><span class="endpoint method-post">POST</span> /api/events/[id]/players</h2>
+  <p>Add a player to the event.</p>
+
+  <h3>Request body</h3>
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>name</code></td><td>string</td><td>Yes</td><td>Player name (max 50 chars, trimmed)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Headers (optional)</h3>
+  <table>
+    <thead><tr><th>Header</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>X-Client-Id</code></td><td>Client identifier — used to suppress self-notifications</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Example</h3>
+  <pre><code>{`curl -X POST https://convocados.fly.dev/api/events/EVENT_ID/players \\
+  -H "Content-Type: application/json" \\
+  -d '{ "name": "Alice" }'`}</code></pre>
+
+  <h3>Response</h3>
+  <pre><code>{`{ "ok": true }`}</code></pre>
+
+  <h3>Errors</h3>
+  <table>
+    <thead><tr><th>Code</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td><code>400</code></td><td>Name is empty</td></tr>
+      <tr><td><code>404</code></td><td>Event not found</td></tr>
+      <tr><td><code>409</code></td><td>Player name already exists in this event</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="endpoint method-delete">DELETE</span> /api/events/[id]/players</h2>
+  <p>Remove a player from the event.</p>
+
+  <h3>Request body</h3>
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>playerId</code></td><td>string</td><td>Yes</td><td>The player's ID</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Example</h3>
+  <pre><code>{`curl -X DELETE https://convocados.fly.dev/api/events/EVENT_ID/players \\
+  -H "Content-Type: application/json" \\
+  -d '{ "playerId": "clx..." }'`}</code></pre>
+
+  <h3>Side effects</h3>
+  <ul>
+    <li>If the removed player was active and there's a bench player, the first bench player is promoted</li>
+    <li>Push notifications are sent to subscribers</li>
+    <li>Webhooks are fired (<code>player_left</code>)</li>
+  </ul>
+
+  <h2><span class="endpoint method-get">GET</span> /api/events/[id]/known-players</h2>
+  <p>Get player name suggestions from game history. Returns names sorted by frequency, excluding current players.</p>
+
+  <h3>Response</h3>
+  <pre><code>{`{
+  "players": [
+    { "name": "Alice", "gamesPlayed": 5 },
+    { "name": "Bob", "gamesPlayed": 3 }
+  ]
+}`}</code></pre>
+  <p>Returns up to 30 suggestions. Only includes names from "played" (not cancelled) history entries.</p>
+</DocsLayout>

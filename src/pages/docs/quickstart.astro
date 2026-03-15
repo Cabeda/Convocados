@@ -1,0 +1,72 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Quickstart" description="Get Convocados running locally in 5 minutes.">
+  <h1>Quickstart</h1>
+  <p class="subtitle">Get Convocados running on your machine in 5 minutes.</p>
+
+  <h2>Prerequisites</h2>
+  <ul>
+    <li><a href="https://nodejs.org/">Node.js</a> 20 or later</li>
+    <li>npm (comes with Node.js)</li>
+  </ul>
+
+  <h2>1. Clone the repository</h2>
+  <pre><code>git clone https://github.com/Cabeda/Convocados.git
+cd Convocados</code></pre>
+
+  <h2>2. Install dependencies</h2>
+  <pre><code>npm install</code></pre>
+
+  <h2>3. Set up the database</h2>
+  <p>Convocados uses SQLite, so no external database is needed. Create the database and run migrations:</p>
+  <pre><code>npx prisma migrate dev</code></pre>
+
+  <h2>4. Configure environment variables</h2>
+  <p>Create a <code>.env</code> file in the project root:</p>
+  <pre><code># Required
+DATABASE_URL="file:./prisma/dev.db"
+
+# Optional — needed for push notifications
+VAPID_PUBLIC_KEY="your-vapid-public-key"
+VAPID_PRIVATE_KEY="your-vapid-private-key"</code></pre>
+
+  <div class="callout callout-info">
+    <strong>Tip:</strong> You can generate VAPID keys with <code>npx web-push generate-vapid-keys</code>.
+    Push notifications are optional — the app works fine without them.
+  </div>
+
+  <h2>5. Start the dev server</h2>
+  <pre><code>npm run dev</code></pre>
+  <p>Open <a href="http://localhost:4321">http://localhost:4321</a> in your browser. You should see the "Create a Game" form.</p>
+
+  <h2>6. Create your first game</h2>
+  <ol>
+    <li>Enter a game title (e.g. "Tuesday 5-a-side")</li>
+    <li>Pick a date and time</li>
+    <li>Click <strong>Create game</strong></li>
+    <li>Share the generated link with your players</li>
+  </ol>
+
+  <h2>Available scripts</h2>
+  <table>
+    <thead>
+      <tr><th>Command</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>npm run dev</code></td><td>Start development server</td></tr>
+      <tr><td><code>npm run build</code></td><td>Build for production</td></tr>
+      <tr><td><code>npm run preview</code></td><td>Preview production build</td></tr>
+      <tr><td><code>npm test</code></td><td>Run tests</td></tr>
+      <tr><td><code>npm run db:studio</code></td><td>Open Prisma Studio (DB browser)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Next steps</h2>
+  <ul>
+    <li><a href="/docs/tutorial">Tutorial</a> — walk through the full game flow</li>
+    <li><a href="/docs/guides/self-hosting">Self-Hosting</a> — deploy to production</li>
+    <li><a href="/docs/api">API Reference</a> — integrate programmatically</li>
+  </ul>
+</DocsLayout>

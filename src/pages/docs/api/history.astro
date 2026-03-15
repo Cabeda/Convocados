@@ -1,0 +1,74 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="History API" description="Record and update game results.">
+  <h1>History API</h1>
+  <p class="subtitle">Endpoints for listing past game results and editing scores while they are still editable.</p>
+
+  <h2><span class="endpoint method-get">GET</span> /api/events/[id]/history</h2>
+  <p>List all history entries for an event, ordered by date descending.</p>
+
+  <h3>Response</h3>
+  <pre><code>{`[
+  {
+    "id": "clx9abc...",
+    "eventId": "clx1abc...",
+    "dateTime": "2026-03-13T19:00:00.000Z",
+    "status": "played",
+    "scoreOne": 3,
+    "scoreTwo": 2,
+    "teamsSnapshot": "{\\"teamOne\\":[...],\\"teamTwo\\":[...]}",
+    "editableUntil": "2026-03-14T19:00:00.000Z",
+    "createdAt": "2026-03-13T21:00:00.000Z",
+    "editable": true
+  }
+]`}</code></pre>
+
+  <h3>Fields</h3>
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>string</td><td>History entry ID</td></tr>
+      <tr><td><code>eventId</code></td><td>string</td><td>Parent event ID</td></tr>
+      <tr><td><code>dateTime</code></td><td>string</td><td>When the game was played (ISO 8601)</td></tr>
+      <tr><td><code>status</code></td><td>string</td><td><code>"played"</code> or <code>"cancelled"</code></td></tr>
+      <tr><td><code>scoreOne</code></td><td>number | null</td><td>Team one score</td></tr>
+      <tr><td><code>scoreTwo</code></td><td>number | null</td><td>Team two score</td></tr>
+      <tr><td><code>teamsSnapshot</code></td><td>string</td><td>JSON snapshot of team assignments at game time</td></tr>
+      <tr><td><code>editableUntil</code></td><td>string</td><td>Deadline for editing this entry (ISO 8601)</td></tr>
+      <tr><td><code>editable</code></td><td>boolean</td><td>Whether the entry can still be modified</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="endpoint method-patch">PATCH</span> /api/events/[id]/history/[historyId]</h2>
+  <p>Update a history entry. Only works while <code>editable</code> is <code>true</code> (before <code>editableUntil</code>). Returns <code>403</code> if the edit window has closed.</p>
+
+  <h3>Request body</h3>
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>status</code></td><td>string</td><td>No</td><td><code>"played"</code> or <code>"cancelled"</code></td></tr>
+      <tr><td><code>scoreOne</code></td><td>number | null</td><td>No</td><td>Team one score (null to clear)</td></tr>
+      <tr><td><code>scoreTwo</code></td><td>number | null</td><td>No</td><td>Team two score (null to clear)</td></tr>
+      <tr><td><code>teamsSnapshot</code></td><td>object</td><td>No</td><td>Updated team assignments</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Example</h3>
+  <pre><code>{`curl -X PATCH https://convocados.fly.dev/api/events/EVENT_ID/history/HISTORY_ID \\
+  -H "Content-Type: application/json" \\
+  -d '{ "scoreOne": 4, "scoreTwo": 3 }'`}</code></pre>
+
+  <h3>Response</h3>
+  <p>Returns the updated history entry in the same format as the GET response.</p>
+
+  <h3>Error responses</h3>
+  <table>
+    <thead><tr><th>Status</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td><code>404</code></td><td>History entry not found</td></tr>
+      <tr><td><code>403</code></td><td>Edit window has expired</td></tr>
+    </tbody>
+  </table>
+</DocsLayout>

@@ -1,0 +1,48 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Players & Bench" description="Adding and removing players, bench system, auto-promotion.">
+  <h1>Players &amp; Bench</h1>
+  <p class="subtitle">Manage who's playing and who's waiting.</p>
+
+  <h2>Adding players</h2>
+  <p>There are two ways to add players:</p>
+  <ul>
+    <li><strong>Quick Join</strong> — the top section shows recent players as tappable chips. Tap a name or type a new one.</li>
+    <li><strong>Player list input</strong> — type a name and press Enter, or paste a newline-separated list to add multiple at once.</li>
+  </ul>
+  <p>Player names must be unique within an event (case-sensitive) and are limited to 50 characters.</p>
+
+  <h2>Autocomplete</h2>
+  <p>
+    The input shows suggestions from two sources:
+  </p>
+  <ul>
+    <li><strong>Server history</strong> — names from past games (for recurring events)</li>
+    <li><strong>Local storage</strong> — names you've used before on this device</li>
+  </ul>
+  <p>Suggestions are sorted by frequency, with your last-used name at the top.</p>
+
+  <h2>Bench system</h2>
+  <p>
+    When the number of players exceeds <code>maxPlayers</code>, additional players go to the <strong>bench</strong>.
+    Bench players are shown separately with a numbered order.
+  </p>
+  <ul>
+    <li>Active players: included in team randomization</li>
+    <li>Bench players: waiting for a spot to open</li>
+  </ul>
+
+  <h2>Auto-promotion</h2>
+  <p>
+    When an active player leaves, the <strong>first bench player</strong> is automatically promoted to active status.
+    Push notifications inform everyone about the change.
+  </p>
+
+  <h2>Removing players</h2>
+  <p>
+    Click the <strong>X</strong> on any player chip to remove them. If you joined via Quick Join,
+    you'll see a "Leave" button instead.
+  </p>
+</DocsLayout>

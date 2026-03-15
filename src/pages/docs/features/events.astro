@@ -1,0 +1,48 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Events" description="Creating and managing events in Convocados.">
+  <h1>Events</h1>
+  <p class="subtitle">Events are the core of Convocados — each one represents a game session.</p>
+
+  <h2>Creating an event</h2>
+  <p>From the home page, fill in the create form:</p>
+  <table>
+    <thead><tr><th>Field</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>title</code></td><td>Yes</td><td>Game name, up to 100 characters</td></tr>
+      <tr><td><code>dateTime</code></td><td>Yes</td><td>Must be in the future</td></tr>
+      <tr><td><code>location</code></td><td>No</td><td>Text or URL — URLs become clickable links, plain text links to Google Maps</td></tr>
+      <tr><td><code>maxPlayers</code></td><td>No</td><td>2–30, defaults to 10. Players beyond this go to the bench</td></tr>
+      <tr><td><code>teamOneName</code></td><td>No</td><td>Defaults to "Ninjas"</td></tr>
+      <tr><td><code>teamTwoName</code></td><td>No</td><td>Defaults to "Gunas"</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Event URL</h2>
+  <p>
+    Each event gets a unique URL like <code>/events/clx1abc2d...</code>. This is the only way to access the event —
+    there's no login or account system. Share this link with your group.
+  </p>
+
+  <h2>Event lifecycle</h2>
+  <ol>
+    <li><strong>Created</strong> — event is live, players can join</li>
+    <li><strong>Players join</strong> — via the shared link</li>
+    <li><strong>Teams randomized</strong> — when enough players are in</li>
+    <li><strong>Game played</strong> — at the scheduled date/time</li>
+    <li><strong>Reset</strong> (recurring only) — player list clears, event advances to next date</li>
+  </ol>
+
+  <h2>Recurring events</h2>
+  <p>
+    Enable <strong>Recurring game</strong> in advanced options to auto-reset the player list.
+    See <a href="/docs/features/recurrence">Recurring Games</a> for details.
+  </p>
+
+  <h2>Rate limiting</h2>
+  <p>
+    Event creation is rate-limited to <strong>10 events per hour per IP</strong> to prevent abuse.
+  </p>
+</DocsLayout>
