@@ -1,0 +1,95 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Self-Hosting" description="Deploy Convocados with Docker or Fly.io.">
+  <h1>Self-Hosting</h1>
+  <p class="subtitle">Run your own Convocados instance using Docker, Fly.io, or any Node.js host.</p>
+
+  <h2>Prerequisites</h2>
+  <ul>
+    <li>Node.js 22+ (or Docker)</li>
+    <li>A persistent volume or directory for the SQLite database</li>
+  </ul>
+
+  <h2>Option A — Docker</h2>
+  <p>The project includes a production-ready <code>Dockerfile</code>.</p>
+
+  <h3>Build the image</h3>
+  <pre><code>{`docker build -t convocados .`}</code></pre>
+
+  <h3>Run the container</h3>
+  <pre><code>{`docker run -d \\
+  --name convocados \\
+  -p 3000:3000 \\
+  -v convocados-data:/data \\
+  -e DATABASE_URL="file:/data/convocados.db" \\
+  -e NODE_ENV=production \\
+  convocados`}</code></pre>
+
+  <p>The app will be available at <code>http://localhost:3000</code>. The <code>-v</code> flag mounts a named volume so your database persists across restarts.</p>
+
+  <h2>Option B — Fly.io</h2>
+  <p>Convocados is deployed on Fly.io by default. To deploy your own instance:</p>
+
+  <h3>1. Install the Fly CLI</h3>
+  <pre><code>{`curl -L https://fly.io/install.sh | sh
+fly auth login`}</code></pre>
+
+  <h3>2. Launch the app</h3>
+  <pre><code>{`fly launch`}</code></pre>
+  <p>This reads the existing <code>fly.toml</code> and creates your app. Accept the defaults or customize the region.</p>
+
+  <h3>3. Create a persistent volume</h3>
+  <pre><code>{`fly volumes create football_data --region cdg --size 1`}</code></pre>
+
+  <h3>4. Set secrets</h3>
+  <pre><code>{`fly secrets set DATABASE_URL="file:/data/convocados.db"
+fly secrets set VAPID_PUBLIC_KEY="your-vapid-public-key"
+fly secrets set VAPID_PRIVATE_KEY="your-vapid-private-key"
+fly secrets set VAPID_SUBJECT="mailto:you@example.com"`}</code></pre>
+
+  <h3>5. Deploy</h3>
+  <pre><code>{`fly deploy`}</code></pre>
+
+  <h2>Option C — Bare Node.js</h2>
+  <pre><code>{`git clone https://github.com/Cabeda/Convocados.git
+cd Convocados
+npm ci
+npx prisma generate
+npm run build
+DATABASE_URL="file:./convocados.db" npm run start`}</code></pre>
+
+  <p>The <code>start</code> script runs <code>prisma migrate deploy</code> automatically before starting the server.</p>
+
+  <h2>Environment variables</h2>
+  <table>
+    <thead><tr><th>Variable</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>DATABASE_URL</code></td><td>Yes</td><td>SQLite connection string, e.g. <code>file:/data/convocados.db</code></td></tr>
+      <tr><td><code>PORT</code></td><td>No</td><td>Server port (default <code>3000</code>)</td></tr>
+      <tr><td><code>NODE_ENV</code></td><td>No</td><td>Set to <code>production</code> for production builds</td></tr>
+      <tr><td><code>VAPID_PUBLIC_KEY</code></td><td>No*</td><td>VAPID public key for push notifications</td></tr>
+      <tr><td><code>VAPID_PRIVATE_KEY</code></td><td>No*</td><td>VAPID private key for push notifications</td></tr>
+      <tr><td><code>VAPID_SUBJECT</code></td><td>No*</td><td>VAPID subject (mailto: or URL)</td></tr>
+    </tbody>
+  </table>
+  <p><em>* Required only if you want push notifications.</em></p>
+
+  <div class="callout callout-info">
+    <strong>Generating VAPID keys:</strong> Run <code>npx web-push generate-vapid-keys</code> to create a new key pair.
+  </div>
+
+  <h2>Database</h2>
+  <p>
+    Convocados uses SQLite via Prisma. The database file is created automatically on first run.
+    Migrations are applied by <code>prisma migrate deploy</code> which runs as part of the <code>start</code> script.
+  </p>
+
+  <div class="callout callout-warn">
+    <strong>Important:</strong> Always mount a persistent volume for the database directory. Without it, your data will be lost on container restarts.
+  </div>
+
+  <h2>Health check</h2>
+  <p>The app exposes <code>GET /api/health</code> which returns <code>200 OK</code> when the server is running. Use this for load balancer or orchestrator health checks.</p>
+</DocsLayout>

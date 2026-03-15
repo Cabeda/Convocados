@@ -1,0 +1,93 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Webhook + OpenClaw Integration" description="Use webhooks to connect Convocados with OpenClaw or any external service.">
+  <h1>Webhook + OpenClaw Integration</h1>
+  <p class="subtitle">Push real-time event updates to OpenClaw or any HTTP endpoint using Convocados webhooks.</p>
+
+  <h2>Overview</h2>
+  <p>
+    Convocados fires webhooks whenever key actions happen on an event — players joining, teams being randomized, or scores being recorded.
+    You can subscribe any URL to receive these payloads, making it easy to integrate with tools like
+    <a href="https://openclaw.com" target="_blank" rel="noopener">OpenClaw</a> or your own services.
+  </p>
+
+  <h2>Step 1 — Create a webhook subscription</h2>
+  <p>Register a webhook URL for your event:</p>
+  <pre><code>{`curl -X POST https://convocados.fly.dev/api/events/EVENT_ID/webhooks \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "url": "https://your-openclaw-instance.com/hooks/convocados",
+    "events": ["player.added", "player.removed", "teams.randomized"]
+  }'`}</code></pre>
+
+  <p>The response includes the subscription ID and a <code>secret</code> you can use to verify payloads.</p>
+
+  <h2>Step 2 — Receive payloads</h2>
+  <p>When a subscribed action occurs, Convocados sends a POST request to your URL with a JSON body:</p>
+  <pre><code>{`{
+  "event": "player.added",
+  "eventId": "clx1abc...",
+  "timestamp": "2026-03-15T18:30:00.000Z",
+  "data": {
+    "player": { "id": "...", "name": "Alice", "isBench": false }
+  }
+}`}</code></pre>
+
+  <h3>Available event types</h3>
+  <table>
+    <thead><tr><th>Event</th><th>Fired when</th></tr></thead>
+    <tbody>
+      <tr><td><code>player.added</code></td><td>A player joins the event</td></tr>
+      <tr><td><code>player.removed</code></td><td>A player is removed</td></tr>
+      <tr><td><code>teams.randomized</code></td><td>Teams are randomized</td></tr>
+      <tr><td><code>event.updated</code></td><td>Event details change</td></tr>
+      <tr><td><code>history.created</code></td><td>A game result is recorded</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Step 3 — Verify the signature</h2>
+  <p>
+    Each delivery includes an <code>X-Webhook-Signature</code> header containing an HMAC-SHA256 hex digest of the request body,
+    signed with the <code>secret</code> returned when you created the subscription.
+  </p>
+  <pre><code>{`import crypto from 'crypto';
+
+function verifySignature(body: string, signature: string, secret: string) {
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(body)
+    .digest('hex');
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expected)
+  );
+}`}</code></pre>
+
+  <h2>Step 4 — OpenClaw configuration</h2>
+  <p>In your OpenClaw dashboard:</p>
+  <ol>
+    <li>Go to <strong>Integrations &rarr; Incoming Webhooks</strong></li>
+    <li>Create a new webhook receiver and copy the endpoint URL</li>
+    <li>Use that URL when creating the Convocados webhook subscription (Step 1)</li>
+    <li>Map the incoming fields to your OpenClaw data model</li>
+  </ol>
+
+  <div class="callout callout-info">
+    <strong>Tip:</strong> You can subscribe multiple URLs to the same event. Each will receive its own independent delivery with retry logic.
+  </div>
+
+  <h2>Monitoring deliveries</h2>
+  <p>
+    Check delivery status in the Convocados UI under the <strong>Integrations</strong> accordion on the event page,
+    or query the API directly. Failed deliveries are retried automatically with exponential backoff.
+  </p>
+
+  <h2>Troubleshooting</h2>
+  <ul>
+    <li><strong>Not receiving payloads?</strong> Ensure your endpoint is publicly reachable and returns a 2xx status code.</li>
+    <li><strong>Signature mismatch?</strong> Make sure you're comparing against the raw request body (not a parsed/re-serialized version).</li>
+    <li><strong>Duplicate deliveries?</strong> Implement idempotency using the delivery ID in the payload headers.</li>
+  </ul>
+</DocsLayout>

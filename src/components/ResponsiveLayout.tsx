@@ -8,6 +8,7 @@ import Brightness7Icon from "@mui/icons-material/Brightness7";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import SportsIcon from "@mui/icons-material/Sports";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 import { useThemeMode } from "./ThemeModeProvider";
 import { useT } from "~/lib/useT";
 
@@ -105,6 +106,13 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
             >
               {t("appName")}
             </Typography>
+            <Tooltip title={t("docs")}>
+              <IconButton color="inherit" aria-label={t("docs")}
+                href="/docs"
+                component="a">
+                <MenuBookIcon />
+              </IconButton>
+            </Tooltip>
             <Tooltip title={t("toggleDarkMode")}>
               <IconButton onClick={toggleMode} color="inherit" aria-label={t("toggleDarkMode")}>
                 {isDark ? <Brightness7Icon /> : <Brightness4Icon />}

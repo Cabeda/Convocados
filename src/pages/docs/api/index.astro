@@ -1,0 +1,63 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="API Overview" description="Convocados REST API reference.">
+  <h1>API Reference</h1>
+  <p class="subtitle">All endpoints accept and return JSON. The base URL is your deployment origin.</p>
+
+  <h2>Base URL</h2>
+  <pre><code>https://convocados.fly.dev</code></pre>
+  <p>For local development: <code>http://localhost:4321</code></p>
+
+  <h2>Content Type</h2>
+  <p>All requests with a body must include:</p>
+  <pre><code>Content-Type: application/json</code></pre>
+
+  <h2>Error format</h2>
+  <p>Errors return a JSON object with an <code>error</code> field:</p>
+  <pre><code>{`{ "error": "Not found." }`}</code></pre>
+
+  <h2>Common status codes</h2>
+  <table>
+    <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>200</code></td><td>Success</td></tr>
+      <tr><td><code>400</code></td><td>Bad request (missing/invalid fields)</td></tr>
+      <tr><td><code>403</code></td><td>Forbidden (e.g. editing locked history)</td></tr>
+      <tr><td><code>404</code></td><td>Resource not found</td></tr>
+      <tr><td><code>409</code></td><td>Conflict (duplicate player name, duplicate webhook URL)</td></tr>
+      <tr><td><code>429</code></td><td>Rate limited</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Rate limiting</h2>
+  <p>
+    Event creation is limited to <strong>10 per hour per IP</strong>.
+    The IP is read from <code>fly-client-ip</code> or <code>x-forwarded-for</code> headers.
+  </p>
+
+  <h2>Endpoints</h2>
+  <table>
+    <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><span class="endpoint method-post">POST</span></td><td><code>/api/events</code></td><td>Create an event</td></tr>
+      <tr><td><span class="endpoint method-get">GET</span></td><td><code>/api/events/[id]</code></td><td>Get event details</td></tr>
+      <tr><td><span class="endpoint method-get">GET</span></td><td><code>/api/events/[id]/status</code></td><td>Get event status (compact)</td></tr>
+      <tr><td><span class="endpoint method-post">POST</span></td><td><code>/api/events/[id]/players</code></td><td>Add a player</td></tr>
+      <tr><td><span class="endpoint method-delete">DELETE</span></td><td><code>/api/events/[id]/players</code></td><td>Remove a player</td></tr>
+      <tr><td><span class="endpoint method-post">POST</span></td><td><code>/api/events/[id]/randomize</code></td><td>Randomize teams</td></tr>
+      <tr><td><span class="endpoint method-put">PUT</span></td><td><code>/api/events/[id]/teams</code></td><td>Save team assignments</td></tr>
+      <tr><td><span class="endpoint method-put">PUT</span></td><td><code>/api/events/[id]/team-names</code></td><td>Update team names</td></tr>
+      <tr><td><span class="endpoint method-get">GET</span></td><td><code>/api/events/[id]/known-players</code></td><td>Get player suggestions</td></tr>
+      <tr><td><span class="endpoint method-post">POST</span></td><td><code>/api/events/[id]/webhooks</code></td><td>Subscribe a webhook</td></tr>
+      <tr><td><span class="endpoint method-get">GET</span></td><td><code>/api/events/[id]/webhooks</code></td><td>List webhooks</td></tr>
+      <tr><td><span class="endpoint method-delete">DELETE</span></td><td><code>/api/events/[id]/webhooks/[webhookId]</code></td><td>Unsubscribe a webhook</td></tr>
+      <tr><td><span class="endpoint method-post">POST</span></td><td><code>/api/events/[id]/push</code></td><td>Subscribe to push notifications</td></tr>
+      <tr><td><span class="endpoint method-delete">DELETE</span></td><td><code>/api/events/[id]/push</code></td><td>Unsubscribe from push</td></tr>
+      <tr><td><span class="endpoint method-get">GET</span></td><td><code>/api/push/vapid-public-key</code></td><td>Get VAPID public key</td></tr>
+      <tr><td><span class="endpoint method-get">GET</span></td><td><code>/api/events/[id]/history</code></td><td>List game history</td></tr>
+      <tr><td><span class="endpoint method-patch">PATCH</span></td><td><code>/api/events/[id]/history/[historyId]</code></td><td>Update history entry</td></tr>
+    </tbody>
+  </table>
+</DocsLayout>
