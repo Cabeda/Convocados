@@ -37,21 +37,110 @@ export const ThemeModeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       createTheme({
         palette: {
           mode,
-          primary: { main: mode === "light" ? "#1976d2" : "#90caf9" },
-          secondary: { main: mode === "light" ? "#9c27b0" : "#ce93d8" },
-          background: {
-            default: mode === "light" ? "#f5f5f5" : "#121212",
-            paper: mode === "light" ? "#ffffff" : "#1e1e1e",
+          // M3-inspired tonal palette
+          primary: {
+            main: mode === "light" ? "#1b6b4a" : "#7edcab",
+            light: mode === "light" ? "#4e9d7a" : "#a8ecc8",
+            dark: mode === "light" ? "#004d2e" : "#4faa80",
+            contrastText: mode === "light" ? "#ffffff" : "#003822",
           },
+          secondary: {
+            main: mode === "light" ? "#4a6358" : "#b2ccbf",
+            light: mode === "light" ? "#7b9489" : "#cee8da",
+            dark: mode === "light" ? "#1d3a2e" : "#8aab9c",
+          },
+          error: {
+            main: mode === "light" ? "#ba1a1a" : "#ffb4ab",
+          },
+          warning: {
+            main: mode === "light" ? "#7d5700" : "#f5bf48",
+          },
+          success: {
+            main: mode === "light" ? "#1b6b4a" : "#7edcab",
+          },
+          background: {
+            default: mode === "light" ? "#f8faf6" : "#111412",
+            paper: mode === "light" ? "#ffffff" : "#1a1d1b",
+          },
+          divider: mode === "light" ? "#c2c9c1" : "#3a3f3b",
         },
         typography: {
-          fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-          button: { textTransform: "none", fontWeight: 600 },
+          fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+          h4: { fontWeight: 700, letterSpacing: "-0.02em" },
+          h5: { fontWeight: 700, letterSpacing: "-0.01em" },
+          h6: { fontWeight: 600 },
+          button: { textTransform: "none", fontWeight: 600, letterSpacing: "0.01em" },
         },
-        shape: { borderRadius: 8 },
+        shape: { borderRadius: 12 },
         components: {
-          MuiButton: { styleOverrides: { root: { textTransform: "none", fontWeight: 600 } } },
-          MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
+          MuiButton: {
+            styleOverrides: {
+              root: {
+                textTransform: "none",
+                fontWeight: 600,
+                borderRadius: 20,
+                paddingInline: 20,
+              },
+              contained: {
+                boxShadow: "none",
+                "&:hover": { boxShadow: "none" },
+              },
+              outlined: {
+                borderWidth: 1.5,
+              },
+            },
+          },
+          MuiChip: {
+            styleOverrides: {
+              root: {
+                borderRadius: 8,
+                fontWeight: 500,
+              },
+              outlined: {
+                borderWidth: 1.5,
+              },
+            },
+          },
+          MuiPaper: {
+            styleOverrides: {
+              root: {
+                backgroundImage: "none",
+              },
+            },
+            defaultProps: {
+              elevation: 0,
+            },
+          },
+          MuiAppBar: {
+            styleOverrides: {
+              root: {
+                boxShadow: "none",
+              },
+            },
+          },
+          MuiTextField: {
+            styleOverrides: {
+              root: {
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 12,
+                },
+              },
+            },
+          },
+          MuiDialog: {
+            styleOverrides: {
+              paper: {
+                borderRadius: 20,
+              },
+            },
+          },
+          MuiAlert: {
+            styleOverrides: {
+              root: {
+                borderRadius: 12,
+              },
+            },
+          },
         },
       }),
     [mode]
