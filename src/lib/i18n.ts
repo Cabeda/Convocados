@@ -151,6 +151,21 @@ export const translations = {
     webhookCopied: "Copied!",
     webhookHelp: "POST to this URL to register a webhook. See docs for payload format.",
 
+    // ELO / Ratings
+    balancedTeams: "Balanced",
+    balancedTeamsTooltip: "Use ELO ratings to balance teams",
+    ratings: "Ratings",
+    rating: "Rating",
+    gamesPlayed: "Games",
+    wins: "W",
+    draws: "D",
+    losses: "L",
+    eloChange: "{delta}",
+    noRatings: "No ratings yet. Play some games and record scores to build rankings.",
+    recalculateRatings: "Recalculate",
+    recalculating: "Recalculating…",
+    ratingsRecalculated: "Ratings recalculated ({n} games processed)",
+
     // Docs
     docs: "Docs",
   },
@@ -305,6 +320,21 @@ export const translations = {
     webhookEndpoint: "Endpoint do webhook",
     webhookCopied: "Copiado!",
     webhookHelp: "Faz POST para este URL para registar um webhook. Consulta a documentação para o formato do payload.",
+
+    // ELO / Ratings
+    balancedTeams: "Equilibrado",
+    balancedTeamsTooltip: "Usar classificações ELO para equilibrar equipas",
+    ratings: "Classificações",
+    rating: "Rating",
+    gamesPlayed: "Jogos",
+    wins: "V",
+    draws: "E",
+    losses: "D",
+    eloChange: "{delta}",
+    noRatings: "Ainda sem classificações. Joga alguns jogos e regista resultados para criar rankings.",
+    recalculateRatings: "Recalcular",
+    recalculating: "A recalcular…",
+    ratingsRecalculated: "Classificações recalculadas ({n} jogos processados)",
 
     // Docs
     docs: "Docs",

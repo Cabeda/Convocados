@@ -150,7 +150,7 @@ export function balanceTeams(
   // Sort by rating descending
   const sorted = [...players].sort((a, b) => b.rating - a.rating);
 
-  const teams: { name: string; players: { name: string; order: number }[] }[] = [
+  const teams: { team: string; players: { name: string; order: number }[] }[] = [
     { team: teamNames[0], players: [] },
     { team: teamNames[1], players: [] },
   ];

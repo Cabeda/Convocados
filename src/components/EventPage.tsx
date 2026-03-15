@@ -5,6 +5,7 @@ import {
   Alert, IconButton, Tooltip, InputAdornment, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, Snackbar, alpha, useTheme, Grid2,
   CircularProgress, Divider, Autocomplete, Accordion, AccordionSummary, AccordionDetails,
+  FormControlLabel, Switch,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import HistoryIcon from "@mui/icons-material/History";
@@ -534,6 +535,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  const [balanced, setBalanced] = useState(false);
 
   // Stable client ID — used to suppress self-notifications
   const clientId = useRef<string>("");
@@ -647,7 +649,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const doRandomize = async () => {
     setConfirmOpen(false);
-    const res = await fetch(`/api/events/${eventId}/randomize`, { method: "POST" });
+    const qs = balanced ? "?balanced=true" : "";
+    const res = await fetch(`/api/events/${eventId}/randomize${qs}`, { method: "POST" });
     const json = await res.json();
     if (!res.ok) { setPlayerError(json.error); return; }
     mutate();
@@ -914,7 +917,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         <Alert severity="warning">{t("teamsOutOfSync")}</Alert>
                       )}
 
-                      <Box sx={{ display: "flex", justifyContent: "center" }}>
+                      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2 }}>
+                        <Tooltip title={t("balancedTeamsTooltip")}>
+                          <FormControlLabel
+                            control={<Switch size="small" checked={balanced} onChange={(e) => setBalanced(e.target.checked)} />}
+                            label={t("balancedTeams")}
+                          />
+                        </Tooltip>
                         <Button variant="contained" size="large" startIcon={<ShuffleIcon />}
                           disabled={active.length < 2} sx={{ px: 4, py: 1.5 }}
                           onClick={() => localMatches && localMatches.length > 0 ? setConfirmOpen(true) : doRandomize()}>

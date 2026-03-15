@@ -1,8 +1,9 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { Randomize } from "../../../../lib/random";
+import { balanceTeams } from "../../../../lib/elo.server";
 
-export const POST: APIRoute = async ({ params }) => {
+export const POST: APIRoute = async ({ params, url }) => {
   const eventId = params.id!;
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
@@ -14,7 +15,20 @@ export const POST: APIRoute = async ({ params }) => {
   });
   if (players.length < 2) return Response.json({ error: "Need at least 2 players." }, { status: 400 });
 
-  const matches = Randomize(players.map((p) => p.name), [event.teamOneName, event.teamTwoName]);
+  const balanced = url.searchParams.get("balanced") === "true";
+  let matches;
+
+  if (balanced) {
+    const ratings = await prisma.playerRating.findMany({ where: { eventId } });
+    const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
+    const playersWithRatings = players.map((p) => ({
+      name: p.name,
+      rating: ratingMap.get(p.name) ?? 1000,
+    }));
+    matches = balanceTeams(playersWithRatings, [event.teamOneName, event.teamTwoName]);
+  } else {
+    matches = Randomize(players.map((p) => p.name), [event.teamOneName, event.teamTwoName]);
+  }
 
   await prisma.$transaction([
     prisma.teamResult.deleteMany({ where: { eventId } }),
@@ -29,5 +43,5 @@ export const POST: APIRoute = async ({ params }) => {
     ),
   ]);
 
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, balanced });
 };
