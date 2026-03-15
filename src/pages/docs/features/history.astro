@@ -1,0 +1,40 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="History & Scores" description="Track past games and record scores.">
+  <h1>History &amp; Scores</h1>
+  <p class="subtitle">Review past games and keep score for recurring events.</p>
+
+  <h2>How history works</h2>
+  <p>
+    History is only available for <strong>recurring events</strong>. Each time the player list resets,
+    a history entry is automatically created with:
+  </p>
+  <ul>
+    <li>The game date</li>
+    <li>Team names</li>
+    <li>A snapshot of team assignments (players and their order)</li>
+    <li>Status: "played" (default) or "cancelled"</li>
+  </ul>
+
+  <h2>Viewing history</h2>
+  <p>
+    Click the <strong>History</strong> button on the event page (only visible for recurring events).
+    Past games are listed in reverse chronological order.
+  </p>
+
+  <h2>Editing results</h2>
+  <p>History entries are editable for <strong>7 days</strong> after the game date. You can:</p>
+  <ul>
+    <li><strong>Record scores</strong> — enter the score for each team</li>
+    <li><strong>Change status</strong> — mark as "played" or "cancelled"</li>
+  </ul>
+  <p>After 7 days, the entry is locked and shows "Result locked".</p>
+
+  <h2>Cancelled games</h2>
+  <p>
+    Games marked as cancelled are excluded from the <strong>known players</strong> suggestions.
+    Only "played" games contribute to the player frequency ranking.
+  </p>
+</DocsLayout>

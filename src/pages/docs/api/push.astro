@@ -1,0 +1,50 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Push Notifications API" description="Subscribe to browser push notifications.">
+  <h1>Push Notifications API</h1>
+
+  <h2><span class="endpoint method-get">GET</span> /api/push/vapid-public-key</h2>
+  <p>Get the server's VAPID public key for push subscription.</p>
+
+  <h3>Response</h3>
+  <pre><code>{`{ "publicKey": "BPx..." }`}</code></pre>
+
+  <h2><span class="endpoint method-post">POST</span> /api/events/[id]/push</h2>
+  <p>Subscribe to push notifications for an event.</p>
+
+  <h3>Request body</h3>
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>endpoint</code></td><td>string</td><td>Yes</td><td>Push subscription endpoint URL</td></tr>
+      <tr><td><code>keys.p256dh</code></td><td>string</td><td>Yes</td><td>P-256 Diffie-Hellman public key</td></tr>
+      <tr><td><code>keys.auth</code></td><td>string</td><td>Yes</td><td>Authentication secret</td></tr>
+      <tr><td><code>locale</code></td><td>string</td><td>No</td><td>Language for notifications (e.g. "pt-PT"). Defaults to "en"</td></tr>
+      <tr><td><code>clientId</code></td><td>string</td><td>No</td><td>Client ID for self-notification suppression</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Response</h3>
+  <pre><code>{`{ "ok": true }`}</code></pre>
+
+  <div class="callout callout-info">
+    <strong>Upsert behavior:</strong> If a subscription with the same endpoint already exists for this event,
+    it is updated with the new keys and locale.
+  </div>
+
+  <h2><span class="endpoint method-delete">DELETE</span> /api/events/[id]/push</h2>
+  <p>Unsubscribe from push notifications.</p>
+
+  <h3>Request body</h3>
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>endpoint</code></td><td>string</td><td>Yes</td><td>The push subscription endpoint to remove</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Response</h3>
+  <pre><code>{`{ "ok": true }`}</code></pre>
+</DocsLayout>

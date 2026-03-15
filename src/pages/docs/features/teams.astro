@@ -1,0 +1,42 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Teams" description="Randomizing teams, drag-and-drop editing, renaming.">
+  <h1>Teams</h1>
+  <p class="subtitle">Randomize fair teams and adjust as needed.</p>
+
+  <h2>Randomizing</h2>
+  <p>
+    Click <strong>Randomize teams</strong> when you have at least 2 active players.
+    The algorithm randomly assigns players to two teams, balancing the count.
+  </p>
+  <p>
+    Only <strong>active players</strong> (not bench) are included in the randomization.
+  </p>
+
+  <h2>Re-randomizing</h2>
+  <p>
+    If teams have already been set, clicking the button again shows a confirmation dialog.
+    Re-randomizing replaces the current team assignment entirely.
+  </p>
+
+  <h2>Drag and drop</h2>
+  <p>
+    After randomizing, you can drag players between teams to make manual adjustments.
+    Changes are saved automatically to the server.
+  </p>
+
+  <h2>Renaming teams</h2>
+  <p>
+    Click the <strong>edit icon</strong> next to a team name to rename it.
+    Press Enter to save or Escape to cancel. Names are limited to 50 characters
+    and default to "Ninjas" and "Gunas" if left empty.
+  </p>
+
+  <h2>Out-of-sync warning</h2>
+  <p>
+    If players are added or removed after teams were randomized, a warning banner appears
+    suggesting you re-randomize to include the new players.
+  </p>
+</DocsLayout>

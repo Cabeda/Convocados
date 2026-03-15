@@ -1,0 +1,45 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Overview" description="Convocados — organise football games, manage players, randomize teams.">
+  <h1>Convocados</h1>
+  <p class="subtitle">Organise your football game, manage players, and randomize fair teams — all from a single shareable link.</p>
+
+  <h2>What is Convocados?</h2>
+  <p>
+    Convocados is a web app for organising pickup football (soccer) games. Create an event, share the link with your group,
+    and let players add themselves. When everyone's in, randomize teams with one click.
+  </p>
+
+  <h2>Key Features</h2>
+  <ul>
+    <li><strong>Create events</strong> — set a title, date, location, and max players</li>
+    <li><strong>Share a link</strong> — no accounts needed, anyone with the link can join</li>
+    <li><strong>Player management</strong> — add/remove players, automatic bench when full</li>
+    <li><strong>Team randomizer</strong> — fair random team assignment with drag-and-drop editing</li>
+    <li><strong>Recurring games</strong> — auto-reset player lists on a weekly/monthly schedule</li>
+    <li><strong>Push notifications</strong> — get notified when players join or leave</li>
+    <li><strong>Game history</strong> — track past games with scores for recurring events</li>
+    <li><strong>Webhooks</strong> — integrate with external systems via HTTP callbacks</li>
+    <li><strong>Bilingual</strong> — English and Portuguese UI</li>
+  </ul>
+
+  <h2>Tech Stack</h2>
+  <ul>
+    <li><strong>Frontend</strong> — Astro + React + Material UI</li>
+    <li><strong>Backend</strong> — Astro SSR with Node.js adapter</li>
+    <li><strong>Database</strong> — SQLite via Prisma ORM</li>
+    <li><strong>Hosting</strong> — Fly.io (Docker)</li>
+    <li><strong>Tests</strong> — Vitest with 95% coverage thresholds</li>
+  </ul>
+
+  <h2>Quick Links</h2>
+  <ul>
+    <li><a href="/docs/quickstart">Quickstart</a> — get running in 5 minutes</li>
+    <li><a href="/docs/tutorial">Tutorial</a> — create your first game end-to-end</li>
+    <li><a href="/docs/api">API Reference</a> — integrate programmatically</li>
+    <li><a href="/docs/guides/webhook-openclaw">Webhook Guide</a> — connect to OpenClaw or other systems</li>
+    <li><a href="/docs/guides/self-hosting">Self-Hosting</a> — deploy your own instance</li>
+  </ul>
+</DocsLayout>
