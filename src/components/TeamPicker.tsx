@@ -1,11 +1,20 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { Box, Chip, Grid2, Paper, Typography, Divider, alpha, useTheme } from "@mui/material";
+import {
+  Box, Chip, Paper, Typography, alpha, useTheme, Stack, Avatar,
+  List, ListItem, ListItemAvatar, ListItemText, IconButton, TextField, Tooltip,
+} from "@mui/material";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import EditIcon from "@mui/icons-material/Edit";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
 import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
 
 interface Props {
   matches: Imatch[];
   onResultChange: (matches: Imatch[]) => void;
+  onTeamNameSave?: (teamIndex: number, newName: string) => void;
+  ratingsMap?: Record<string, number>;
 }
 
 interface DragState {
@@ -15,14 +24,22 @@ interface DragState {
   ghostY: number;
 }
 
-export function TeamPicker({ matches, onResultChange }: Props) {
+export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap }: Props) {
   const theme = useTheme();
   const t = useT();
+  const isDark = theme.palette.mode === "dark";
+
+  const TEAM_COLORS = [
+    theme.palette.primary,
+    theme.palette.secondary,
+  ];
+
   const [drag, setDrag] = useState<DragState | null>(null);
   const [activeDropZone, setActiveDropZone] = useState<string | null>(null);
+  const [editingTeam, setEditingTeam] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const teamRefs = useRef<Record<string, HTMLElement | null>>({});
 
-  // Find which team zone the pointer is currently over
   const teamAtPoint = useCallback((x: number, y: number): string | null => {
     for (const [teamName, el] of Object.entries(teamRefs.current)) {
       if (!el) continue;
@@ -52,7 +69,6 @@ export function TeamPicker({ matches, onResultChange }: Props) {
   }, [matches, onResultChange]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent, playerName: string, teamName: string) => {
-    // Only primary button / first touch
     if (e.button !== undefined && e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
@@ -75,7 +91,6 @@ export function TeamPicker({ matches, onResultChange }: Props) {
     setActiveDropZone(null);
   }, [drag, teamAtPoint, commitMove]);
 
-  // Cancel on Escape
   useEffect(() => {
     if (!drag) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setDrag(null); setActiveDropZone(null); } };
@@ -85,7 +100,6 @@ export function TeamPicker({ matches, onResultChange }: Props) {
 
   return (
     <>
-      {/* Floating ghost chip while dragging */}
       {drag && (
         <Box sx={{
           position: "fixed",
@@ -94,80 +108,215 @@ export function TeamPicker({ matches, onResultChange }: Props) {
           transform: "translate(-50%, -50%)",
           pointerEvents: "none",
           zIndex: 9999,
-          opacity: 0.85,
-          rotate: "4deg",
         }}>
-          <Chip label={drag.name} color="primary" sx={{ fontWeight: 600, boxShadow: 4 }} />
+          <Chip
+            label={drag.name}
+            sx={{
+              fontWeight: 600,
+              boxShadow: 6,
+              bgcolor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
+              transform: "scale(1.1) rotate(3deg)",
+            }}
+          />
         </Box>
       )}
 
-      <Grid2
-        container spacing={3} justifyContent="center"
+      <Stack
+        spacing={2}
         onPointerMove={drag ? handlePointerMove : undefined}
         onPointerUp={drag ? handlePointerUp : undefined}
         onPointerCancel={() => { setDrag(null); setActiveDropZone(null); }}
       >
-        {matches.map((team) => {
+        {matches.map((team, teamIdx) => {
+          const colors = TEAM_COLORS[teamIdx % TEAM_COLORS.length];
           const isActive = activeDropZone === team.team;
           const n = team.players.length;
+          const headerBg = alpha(colors.main, isDark ? 0.15 : 0.08);
+          const headerColor = theme.palette.text.primary;
+          const accentColor = colors.main;
+
+          // Compute team average ELO if ratings are available
+          const teamAvgElo = ratingsMap && n > 0
+            ? Math.round(team.players.reduce((sum, p) => sum + (ratingsMap[p.name] ?? 1000), 0) / n)
+            : null;
+
           return (
-            <Grid2 key={team.team} size={{ xs: 12, sm: 6 }}>
-              <Paper elevation={3} sx={{
-                borderRadius: 2, overflow: "hidden",
+            <Paper
+              key={team.team}
+              ref={(el: HTMLElement | null) => { teamRefs.current[team.team] = el; }}
+              elevation={isActive ? 6 : 1}
+              sx={{
+                borderRadius: 3,
+                overflow: "hidden",
                 border: isActive
-                  ? `2px solid ${theme.palette.primary.main}`
+                  ? `2px solid ${colors.main}`
                   : drag
-                    ? `2px dashed ${alpha(theme.palette.primary.main, 0.3)}`
-                    : "2px solid transparent",
-                transition: "border-color 0.15s, background-color 0.15s",
+                    ? `2px dashed ${alpha(colors.main, 0.35)}`
+                    : `1px solid ${theme.palette.divider}`,
+                transition: "border-color 0.2s, box-shadow 0.2s",
+                touchAction: "none",
+              }}
+            >
+              {/* Team header */}
+              <Box sx={{
+                px: 2, py: 1.5,
+                background: headerBg,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1,
               }}>
-                <Box sx={{ px: 3, pt: 2, pb: 1 }}>
-                  <Typography variant="h5" fontWeight={700}>{team.team}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {n === 1 ? t("playerCount", { n }) : t("playerCountPlural", { n })}
-                  </Typography>
-                </Box>
-                <Divider />
-                <Box
-                  ref={(el: HTMLElement | null) => { teamRefs.current[team.team] = el; }}
-                  sx={{
-                    minHeight: 80, p: 2, display: "flex", flexWrap: "wrap", gap: 1,
-                    backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.08) : "transparent",
-                    transition: "background-color 0.15s",
-                    touchAction: "none", // prevent scroll interference during drag
-                  }}
-                >
-                  {team.players.map((player) => {
+                {editingTeam === teamIdx ? (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flex: 1 }}>
+                    <TextField
+                      size="small"
+                      value={editDraft}
+                      autoFocus
+                      onChange={(e) => setEditDraft(e.target.value.slice(0, 50))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const val = editDraft.trim() || team.team;
+                          onTeamNameSave?.(teamIdx, val);
+                          setEditingTeam(null);
+                        }
+                        if (e.key === "Escape") setEditingTeam(null);
+                      }}
+                      inputProps={{ maxLength: 50 }}
+                      sx={{
+                        flex: 1,
+                        "& .MuiInputBase-root": { bgcolor: "background.paper", borderRadius: 1.5 },
+                        "& .MuiInputBase-input": { py: 0.5, px: 1, fontSize: "0.9rem", fontWeight: 700 },
+                      }}
+                    />
+                    <IconButton size="small" onClick={() => {
+                      const val = editDraft.trim() || team.team;
+                      onTeamNameSave?.(teamIdx, val);
+                      setEditingTeam(null);
+                    }} sx={{ color: headerColor }}>
+                      <CheckIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => setEditingTeam(null)} sx={{ color: headerColor }}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                ) : (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    {onTeamNameSave && (
+                      <IconButton
+                        size="small"
+                        onClick={() => { setEditDraft(team.team); setEditingTeam(teamIdx); }}
+                        sx={{ color: headerColor, p: 0.5 }}
+                      >
+                        <EditIcon sx={{ fontSize: "1rem" }} />
+                      </IconButton>
+                    )}
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: headerColor }}>
+                      {team.team}
+                    </Typography>
+                  </Box>
+                )}
+                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                  <Chip
+                    label={n === 1 ? t("playerCount", { n }) : t("playerCountPlural", { n })}
+                    size="small"
+                    sx={{
+                      bgcolor: alpha(accentColor, isDark ? 0.2 : 0.12),
+                      color: headerColor,
+                      fontWeight: 600,
+                      fontSize: "0.75rem",
+                    }}
+                  />
+                  {teamAvgElo !== null && (
+                    <Chip
+                      label={`Elo ${teamAvgElo}`}
+                      size="small"
+                      sx={{
+                        bgcolor: alpha(accentColor, isDark ? 0.2 : 0.12),
+                        color: headerColor,
+                        fontWeight: 700,
+                        fontSize: "0.75rem",
+                      }}
+                    />
+                  )}
+                </Stack>
+              </Box>
+
+              {/* Player list */}
+              {n > 0 ? (
+                <List dense disablePadding sx={{
+                  py: 0.5,
+                  bgcolor: isActive ? alpha(accentColor, 0.04) : "transparent",
+                  transition: "background-color 0.15s",
+                }}>
+                  {team.players.map((player, i) => {
                     const isBeingDragged = drag?.name === player.name && drag?.team === team.team;
                     return (
-                      <Box
+                      <ListItem
                         key={player.name}
                         onPointerDown={(e) => handlePointerDown(e, player.name, team.team)}
-                        sx={{ cursor: drag ? "grabbing" : "grab", userSelect: "none", touchAction: "none" }}
+                        sx={{
+                          cursor: drag ? "grabbing" : "grab",
+                          userSelect: "none",
+                          touchAction: "none",
+                          opacity: isBeingDragged ? 0.3 : 1,
+                          transition: "opacity 0.15s, background-color 0.1s",
+                          borderRadius: 2,
+                          mx: 0.5,
+                          px: 1.5,
+                          "&:hover": {
+                            bgcolor: alpha(accentColor, 0.06),
+                          },
+                        }}
                       >
-                        <Chip
-                          label={player.name}
-                          sx={{
+                        <ListItemAvatar sx={{ minWidth: 40 }}>
+                          <Avatar
+                            sx={{
+                              width: 28, height: 28,
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              bgcolor: alpha(accentColor, isDark ? 0.2 : 0.12),
+                              color: theme.palette.text.primary,
+                            }}
+                          >
+                            {i + 1}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={player.name}
+                          secondary={ratingsMap ? `${Math.round(ratingsMap[player.name] ?? 1000)}` : undefined}
+                          primaryTypographyProps={{
                             fontWeight: 500,
-                            opacity: isBeingDragged ? 0.3 : 1,
-                            transition: "opacity 0.15s",
-                            pointerEvents: "none",
+                            fontSize: "0.9rem",
+                          }}
+                          secondaryTypographyProps={{
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            color: "text.secondary",
                           }}
                         />
-                      </Box>
+                        <DragIndicatorIcon
+                          fontSize="small"
+                          sx={{ color: "text.disabled", flexShrink: 0 }}
+                        />
+                      </ListItem>
                     );
                   })}
-                  {n === 0 && (
-                    <Typography variant="body2" color="text.disabled" sx={{ m: "auto" }}>
-                      {t("dropPlayersHere")}
-                    </Typography>
-                  )}
+                </List>
+              ) : (
+                <Box sx={{
+                  py: 4, display: "flex", justifyContent: "center",
+                  bgcolor: isActive ? alpha(accentColor, 0.04) : "transparent",
+                }}>
+                  <Typography variant="body2" color="text.disabled">
+                    {t("dropPlayersHere")}
+                  </Typography>
                 </Box>
-              </Paper>
-            </Grid2>
+              )}
+            </Paper>
           );
         })}
-      </Grid2>
+      </Stack>
     </>
   );
 }

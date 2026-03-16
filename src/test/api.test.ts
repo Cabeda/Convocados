@@ -11,13 +11,14 @@ import { PUT as saveTeamNames } from "~/pages/api/events/[id]/team-names";
 import { GET as getKnownPlayers } from "~/pages/api/events/[id]/known-players";
 
 // Minimal Astro APIContext factory
-function ctx(params: Record<string, string>, body?: unknown) {
-  const request = new Request("http://localhost/api/test", {
+function ctx(params: Record<string, string>, body?: unknown, queryString?: string) {
+  const urlStr = `http://localhost/api/test${queryString ? `?${queryString}` : ""}`;
+  const request = new Request(urlStr, {
     method: body !== undefined ? "POST" : "GET",
     headers: { "content-type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  return { request, params } as any;
+  return { request, params, url: new URL(urlStr) } as any;
 }
 
 function putCtx(params: Record<string, string>, body: unknown) {
