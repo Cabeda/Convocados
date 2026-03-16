@@ -24,6 +24,7 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
+import PublicIcon from "@mui/icons-material/Public";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -49,6 +50,7 @@ interface EventData {
   teamOneName: string;
   teamTwoName: string;
   isRecurring: boolean;
+  isPublic: boolean;
   recurrenceRule: string | null;
   players: Player[];
   teamResults: TeamResult[];
@@ -536,6 +538,20 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [balanced, setBalanced] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+
+  // Fetch ELO ratings when balanced mode is on
+  const { data: ratingsData } = useSWR<{ name: string; rating: number }[]>(
+    balanced ? `/api/events/${eventId}/ratings` : null,
+    (url) => fetch(url).then((r) => r.json()),
+    { revalidateOnFocus: false },
+  );
+  const ratingsMap = useMemo(() => {
+    if (!ratingsData) return undefined;
+    const map: Record<string, number> = {};
+    for (const r of ratingsData) map[r.name] = r.rating;
+    return map;
+  }, [ratingsData]);
 
   // Stable client ID — used to suppress self-notifications
   const clientId = useRef<string>("");
@@ -622,6 +638,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     }
     setTeamOneName(event.teamOneName);
     setTeamTwoName(event.teamTwoName);
+    setIsPublic(event.isPublic);
   }, [event]);
 
   const addPlayer = async (name: string) => {
@@ -677,6 +694,16 @@ export default function EventPage({ eventId }: { eventId: string }) {
     mutate();
   };
 
+  const handleTogglePublic = async (newValue: boolean) => {
+    setIsPublic(newValue);
+    await fetch(`/api/events/${eventId}/visibility`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isPublic: newValue }),
+    });
+    mutate();
+  };
+
   const gameDate = event ? new Date(event.dateTime) : new Date();
   const countdown = useCountdown(gameDate, t("gameTime"));
 
@@ -704,9 +731,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const rule = parseRecurrenceRule(event.recurrenceRule);
   const wasReset = event.wasReset ?? false;
-
-  const teamsOutOfSync = localMatches &&
-    event.players.some((p) => !localMatches.flatMap((m) => m.players).find((mp) => mp.name === p.name));
 
   return (
     <ThemeModeProvider>
@@ -775,13 +799,28 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 <Stack spacing={1}>
                   <ShareBar title={event.title} />
                   <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                    {event.isRecurring && (
+                    {(gameDate <= new Date() || event.isRecurring) && (
                       <Button variant="outlined" size="small" startIcon={<HistoryIcon />}
                         href={`/events/${eventId}/history`} sx={{ flexShrink: 0 }}>
                         {t("history")}
                       </Button>
                     )}
                     <NotifyButton eventId={eventId} />
+                    <Tooltip title={t("makePublicTooltip")}>
+                      <FormControlLabel
+                        control={
+                          <Switch size="small" checked={isPublic}
+                            onChange={(e) => handleTogglePublic(e.target.checked)} />
+                        }
+                        label={
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                            <PublicIcon fontSize="small" />
+                            <Typography variant="body2">{t("makePublic")}</Typography>
+                          </Box>
+                        }
+                        sx={{ ml: 0 }}
+                      />
+                    </Tooltip>
                   </Box>
                 </Stack>
 
@@ -913,10 +952,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         </>
                       )}
 
-                      {teamsOutOfSync && (
-                        <Alert severity="warning">{t("teamsOutOfSync")}</Alert>
-                      )}
-
                       <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2 }}>
                         <Tooltip title={t("balancedTeamsTooltip")}>
                           <FormControlLabel
@@ -940,16 +975,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {localMatches && localMatches.length > 0 && (
               <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
                 <Stack spacing={3}>
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
-                    <Typography variant="h6" fontWeight={600}>{t("teams")}</Typography>
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <InlineEdit value={teamOneName} label="Team 1"
-                        onSave={(v) => { setTeamOneName(v); handleTeamNameSave(v, teamTwoName); }} />
-                      <Typography variant="h5" color="text.disabled">{t("vs")}</Typography>
-                      <InlineEdit value={teamTwoName} label="Team 2"
-                        onSave={(v) => { setTeamTwoName(v); handleTeamNameSave(teamOneName, v); }} />
-                    </Stack>
-                  </Box>
+                  <Typography variant="h6" fontWeight={600}>{t("teams")}</Typography>
                   <TeamPicker
                     matches={localMatches.map((m) => ({
                       ...m,
@@ -957,6 +983,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         : m.team === event.teamTwoName ? teamTwoName : m.team,
                     }))}
                     onResultChange={handleTeamChange}
+                    onTeamNameSave={(teamIdx, newName) => {
+                      if (teamIdx === 0) {
+                        setTeamOneName(newName);
+                        handleTeamNameSave(newName, teamTwoName);
+                      } else {
+                        setTeamTwoName(newName);
+                        handleTeamNameSave(teamOneName, newName);
+                      }
+                    }}
                   />
                 </Stack>
               </Paper>

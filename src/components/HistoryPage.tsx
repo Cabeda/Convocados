@@ -11,6 +11,8 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import LockIcon from "@mui/icons-material/Lock";
 import SaveIcon from "@mui/icons-material/Save";
 import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -53,6 +55,9 @@ function HistoryCardFull({
   const [error, setError] = useState<string | null>(null);
 
   const teams: TeamSnapshot[] = entry.teamsSnapshot ? JSON.parse(entry.teamsSnapshot) : [];
+  const [editableTeams, setEditableTeams] = useState<TeamSnapshot[]>(teams);
+  const [newPlayerInputs, setNewPlayerInputs] = useState<Record<number, string>>({});
+  const [teamsDirty, setTeamsDirty] = useState(false);
   const date = new Date(entry.dateTime);
   const editableUntil = new Date(entry.editableUntil);
   const isCancelled = entry.status === "cancelled";
@@ -75,6 +80,34 @@ function HistoryCardFull({
     const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
     const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
     patch({ scoreOne: isNaN(s1 as number) ? null : s1, scoreTwo: isNaN(s2 as number) ? null : s2 });
+  };
+
+  const removePlayerFromTeam = (teamIdx: number, playerName: string) => {
+    setEditableTeams((prev) => prev.map((t, i) => {
+      if (i !== teamIdx) return t;
+      const filtered = t.players.filter((p) => p.name !== playerName);
+      return { ...t, players: filtered.map((p, j) => ({ ...p, order: j })) };
+    }));
+    setTeamsDirty(true);
+  };
+
+  const addPlayerToTeam = (teamIdx: number) => {
+    const name = (newPlayerInputs[teamIdx] ?? "").trim();
+    if (!name) return;
+    // Check for duplicates across all teams
+    const allNames = editableTeams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
+    if (allNames.includes(name.toLowerCase())) return;
+    setEditableTeams((prev) => prev.map((t, i) => {
+      if (i !== teamIdx) return t;
+      return { ...t, players: [...t.players, { name, order: t.players.length }] };
+    }));
+    setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+    setTeamsDirty(true);
+  };
+
+  const handleSaveTeams = () => {
+    patch({ teamsSnapshot: editableTeams });
+    setTeamsDirty(false);
   };
 
   const statusColor = isCancelled ? "error" : "success";
@@ -171,7 +204,7 @@ function HistoryCardFull({
             <>
               <Divider />
               <Grid2 container spacing={2}>
-                {teams.map((team) => (
+                {(entry.editable ? editableTeams : teams).map((team, teamIdx) => (
                   <Grid2 key={team.team} size={{ xs: 12, sm: 6 }}>
                     <Typography variant="body2" fontWeight={700} gutterBottom>{team.team}</Typography>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
@@ -182,6 +215,7 @@ function HistoryCardFull({
                           <Chip
                             key={p.name} size="small" variant="outlined"
                             label={deltaLabel ? `${p.name} (${deltaLabel})` : p.name}
+                            onDelete={entry.editable ? () => removePlayerFromTeam(teamIdx, p.name) : undefined}
                             sx={elo ? {
                               borderColor: elo.delta > 0 ? "success.main" : elo.delta < 0 ? "error.main" : undefined,
                             } : undefined}
@@ -189,9 +223,35 @@ function HistoryCardFull({
                         );
                       })}
                     </Box>
+                    {entry.editable && (
+                      <Box sx={{ display: "flex", gap: 0.5, mt: 1, alignItems: "center" }}>
+                        <TextField
+                          size="small"
+                          placeholder={t("addPlayerToTeam")}
+                          value={newPlayerInputs[teamIdx] ?? ""}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: e.target.value.slice(0, 50) }))}
+                          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter") { e.preventDefault(); addPlayerToTeam(teamIdx); } }}
+                          inputProps={{ maxLength: 50 }}
+                          sx={{ flex: 1 }}
+                        />
+                        <IconButton
+                          size="small" color="primary"
+                          disabled={!(newPlayerInputs[teamIdx] ?? "").trim()}
+                          onClick={() => addPlayerToTeam(teamIdx)}
+                        >
+                          <PersonAddIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    )}
                   </Grid2>
                 ))}
               </Grid2>
+              {entry.editable && teamsDirty && (
+                <Button variant="outlined" size="small" startIcon={<SaveIcon />}
+                  onClick={handleSaveTeams} disabled={saving}>
+                  {t("saveTeams")}
+                </Button>
+              )}
             </>
           )}
 
@@ -229,6 +289,8 @@ function HistoryCardFull({
     </Paper>
   );
 }
+
+// ── History page ──────────────────────────────────────────────────────────────
 
 export default function HistoryPage({ eventId }: { eventId: string }) {
   const t = useT();
@@ -294,6 +356,11 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
                 </Typography>
               </Box>
             </Box>
+
+            <Button variant="outlined" startIcon={<EmojiEventsIcon />}
+              href={`/events/${eventId}/rankings`} size="small" sx={{ alignSelf: "flex-start" }}>
+              {t("ratings")}
+            </Button>
 
             {history.length === 0 ? (
               <Paper elevation={2} sx={{ borderRadius: 3, p: 4, textAlign: "center" }}>
