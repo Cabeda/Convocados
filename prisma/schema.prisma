@@ -15,6 +15,7 @@ model Event {
   maxPlayers     Int           @default(10)
   teamOneName    String        @default("Ninjas")
   teamTwoName    String        @default("Gunas")
+  isPublic       Boolean       @default(false)
   isRecurring    Boolean       @default(false)
   recurrenceRule String?
   nextResetAt    DateTime?

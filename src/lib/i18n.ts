@@ -98,6 +98,8 @@ export const translations = {
     saveScore: "Save score",
     editableUntil: "Editable until {date}",
     notEditable: "Result locked",
+    addPlayerToTeam: "Add player",
+    saveTeams: "Save teams",
     backToGame: "Back to game",
     historyTitle: "{title} — History",
 
@@ -165,6 +167,15 @@ export const translations = {
     recalculateRatings: "Recalculate",
     recalculating: "Recalculating…",
     ratingsRecalculated: "Ratings recalculated ({n} games processed)",
+
+    // Public events
+    publicGames: "Public Games",
+    publicGamesSubtitle: "Open games looking for players. Join one or create your own!",
+    noPublicGames: "No public games available right now.",
+    noPublicGamesDesc: "Create a game and make it public so others can find it.",
+    makePublic: "Public",
+    makePublicTooltip: "Make this game visible on the public games page",
+    joinGame: "Join",
 
     // Docs
     docs: "Docs",
@@ -268,6 +279,8 @@ export const translations = {
     saveScore: "Guardar resultado",
     editableUntil: "Editável até {date}",
     notEditable: "Resultado bloqueado",
+    addPlayerToTeam: "Adicionar jogador",
+    saveTeams: "Guardar equipas",
     backToGame: "Voltar ao jogo",
     historyTitle: "{title} — Histórico",
 
@@ -335,6 +348,15 @@ export const translations = {
     recalculateRatings: "Recalcular",
     recalculating: "A recalcular…",
     ratingsRecalculated: "Classificações recalculadas ({n} jogos processados)",
+
+    // Public events
+    publicGames: "Jogos Públicos",
+    publicGamesSubtitle: "Jogos abertos à procura de jogadores. Entra num ou cria o teu!",
+    noPublicGames: "Não há jogos públicos de momento.",
+    noPublicGamesDesc: "Cria um jogo e torna-o público para que outros o encontrem.",
+    makePublic: "Público",
+    makePublicTooltip: "Tornar este jogo visível na página de jogos públicos",
+    joinGame: "Entrar",
 
     // Docs
     docs: "Docs",
