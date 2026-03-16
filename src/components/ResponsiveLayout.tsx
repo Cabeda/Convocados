@@ -9,6 +9,7 @@ import GitHubIcon from "@mui/icons-material/GitHub";
 import SportsIcon from "@mui/icons-material/Sports";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
+import PublicIcon from "@mui/icons-material/Public";
 import { useThemeMode } from "./ThemeModeProvider";
 import { useT } from "~/lib/useT";
 
@@ -106,6 +107,13 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
             >
               {t("appName")}
             </Typography>
+            <Tooltip title={t("publicGames")}>
+              <IconButton color="inherit" aria-label={t("publicGames")}
+                href="/public"
+                component="a">
+                <PublicIcon />
+              </IconButton>
+            </Tooltip>
             <Tooltip title={t("docs")}>
               <IconButton color="inherit" aria-label={t("docs")}
                 href="/docs"

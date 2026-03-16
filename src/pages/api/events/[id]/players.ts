@@ -3,6 +3,72 @@ import { prisma } from "../../../../lib/db.server";
 import { sendPushToEvent } from "../../../../lib/push.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 
+/**
+ * If teams have been generated, add a player to the team with fewer members.
+ */
+async function addPlayerToTeams(eventId: string, playerName: string) {
+  const teams = await prisma.teamResult.findMany({
+    where: { eventId },
+    include: { members: true },
+  });
+  if (teams.length === 0) return; // no teams generated yet
+
+  // Pick the team with fewer players
+  const sorted = [...teams].sort((a, b) => a.members.length - b.members.length);
+  const target = sorted[0];
+
+  await prisma.teamMember.create({
+    data: {
+      name: playerName,
+      order: target.members.length,
+      teamResultId: target.id,
+    },
+  });
+}
+
+/**
+ * If teams have been generated, remove a player from their team.
+ * If a promoted bench player name is given, slot them into the same team.
+ */
+async function removePlayerFromTeams(eventId: string, playerName: string, promotedName?: string) {
+  const teams = await prisma.teamResult.findMany({
+    where: { eventId },
+    include: { members: true },
+  });
+  if (teams.length === 0) return;
+
+  for (const team of teams) {
+    const member = team.members.find((m) => m.name === playerName);
+    if (!member) continue;
+
+    // Remove the player
+    await prisma.teamMember.delete({ where: { id: member.id } });
+
+    // Re-index remaining members
+    const remaining = team.members
+      .filter((m) => m.id !== member.id)
+      .sort((a, b) => a.order - b.order);
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i].order !== i) {
+        await prisma.teamMember.update({ where: { id: remaining[i].id }, data: { order: i } });
+      }
+    }
+
+    // If a bench player was promoted, add them to this same team
+    if (promotedName) {
+      await prisma.teamMember.create({
+        data: {
+          name: promotedName,
+          order: remaining.length,
+          teamResultId: team.id,
+        },
+      });
+    }
+
+    break;
+  }
+}
+
 export const POST: APIRoute = async ({ params, request }) => {
   const eventId = params.id!;
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.fly.dev";
@@ -33,6 +99,11 @@ export const POST: APIRoute = async ({ params, request }) => {
   const isOnBench = event.players.length >= event.maxPlayers;
   const spotsLeft = isOnBench ? 0 : Math.max(0, event.maxPlayers - activeBefore - 1);
   const url = `${origin}/events/${eventId}`;
+
+  // Auto-sync teams: if player is active (not bench), add to smaller team
+  if (!isOnBench) {
+    await addPlayerToTeams(eventId, trimmed);
+  }
 
   if (isOnBench) {
     await sendPushToEvent(eventId, event.title, "notifyPlayerJoinedBench", { name: trimmed }, url, spotsLeft, senderClientId);
@@ -72,6 +143,11 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const firstBench = event.players[event.maxPlayers];
 
   await prisma.player.delete({ where: { id: playerId, eventId } });
+
+  // Auto-sync teams: remove player, optionally promote bench player into their team
+  if (wasActive) {
+    await removePlayerFromTeams(eventId, player.name, firstBench?.name);
+  }
 
   // spotsLeft after removal
   const activeAfter = wasActive
