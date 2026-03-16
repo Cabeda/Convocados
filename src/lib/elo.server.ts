@@ -1,28 +1,11 @@
 import { prisma } from "./db.server";
+import { expectedScore, kFactor, computeGameUpdates, type EloUpdate } from "./elo";
 
 const DEFAULT_RATING = 1000;
-const K_STANDARD = 32;
-const K_PROVISIONAL = 40;
-const PROVISIONAL_THRESHOLD = 10;
-
-function expectedScore(ratingA: number, ratingB: number): number {
-  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
-}
-
-function kFactor(gamesPlayed: number): number {
-  return gamesPlayed < PROVISIONAL_THRESHOLD ? K_PROVISIONAL : K_STANDARD;
-}
 
 interface TeamSnapshot {
   team: string;
   players: { name: string; order: number }[];
-}
-
-interface EloUpdate {
-  name: string;
-  oldRating: number;
-  newRating: number;
-  delta: number;
 }
 
 /**
