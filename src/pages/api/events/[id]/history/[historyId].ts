@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { processGame } from "../../../../../lib/elo.server";
+import { computeGameUpdates } from "../../../../../lib/elo";
 
 // PATCH /api/events/[id]/history/[historyId]
 export const PATCH: APIRoute = async ({ params, request }) => {
@@ -28,8 +29,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     },
   });
 
-  // Trigger ELO recalculation when scores are saved on a played game
-  let eloUpdates = null;
+  // Trigger ELO DB update when scores are saved for the first time
   const finalScoreOne = updated.scoreOne;
   const finalScoreTwo = updated.scoreTwo;
   if (
@@ -40,9 +40,25 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     !updated.eloProcessed
   ) {
     try {
-      const snapshot = JSON.parse(updated.teamsSnapshot);
-      eloUpdates = await processGame(params.id!, updated.id, snapshot, finalScoreOne, finalScoreTwo);
+      await processGame(params.id!, updated.id, JSON.parse(updated.teamsSnapshot), finalScoreOne, finalScoreTwo);
     } catch { /* ELO processing is best-effort */ }
+  }
+
+  // Always compute ELO deltas for display (even if already processed)
+  let eloUpdates = null;
+  if (
+    updated.status === "played" &&
+    finalScoreOne != null &&
+    finalScoreTwo != null &&
+    updated.teamsSnapshot
+  ) {
+    try {
+      const snapshot = JSON.parse(updated.teamsSnapshot);
+      const ratings = await prisma.playerRating.findMany({ where: { eventId: params.id } });
+      const playerInfos = ratings.map((r) => ({ name: r.name, rating: r.rating, gamesPlayed: r.gamesPlayed }));
+      eloUpdates = computeGameUpdates(playerInfos, snapshot, finalScoreOne, finalScoreTwo)
+        .map((u) => ({ name: u.name, delta: u.delta }));
+    } catch { /* best-effort */ }
   }
 
   return Response.json({
