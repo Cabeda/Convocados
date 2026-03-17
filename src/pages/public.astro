@@ -1,5 +1,9 @@
 ---
 import PublicGamesPage from "../components/PublicGamesPage";
+
+const host = Astro.request.headers.get("x-forwarded-host") ?? Astro.request.headers.get("host") ?? "convocados.fly.dev";
+const proto = Astro.request.headers.get("x-forwarded-proto") ?? "https";
+const canonicalUrl = `${proto}://${host}/public`;
 ---
 
 <!doctype html>
@@ -8,10 +12,20 @@ import PublicGamesPage from "../components/PublicGamesPage";
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Convocados — Public Games</title>
-    <meta name="description" content="Browse public sports games looking for players." />
+    <meta name="description" content="Browse public sports games looking for players. Join one or create your own!" />
+    <link rel="canonical" href={canonicalUrl} />
     <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#1b6b4a" />
+    <meta property="og:title" content="Public Games — Convocados" />
+    <meta property="og:description" content="Browse public sports games looking for players. Join one or create your own!" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Convocados" />
+    <meta property="twitter:card" content="summary" />
+    <meta property="twitter:title" content="Public Games — Convocados" />
+    <meta property="twitter:description" content="Browse public sports games looking for players." />
   </head>
   <body>
     <PublicGamesPage client:only="react" />

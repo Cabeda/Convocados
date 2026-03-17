@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /public
+Allow: /events/
+Allow: /docs/
+
+Disallow: /api/
+Disallow: /auth/
+Disallow: /dashboard
+
+Sitemap: https://convocados.fly.dev/sitemap.xml
