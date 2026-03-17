@@ -32,6 +32,12 @@ interface PublicEvent {
   spotsLeft: number;
 }
 
+interface PaginatedPublicEvents {
+  data: PublicEvent[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 type ViewMode = "cards" | "table" | "map";
 
 // ── Card view ─────────────────────────────────────────────────────────────────
@@ -347,22 +353,47 @@ export default function PublicGamesPage() {
     window.history.replaceState(null, "", newUrl);
   }, [viewMode, filterSport, filterHasSpots]);
 
-  const { data: events, isLoading } = useSWR<PublicEvent[]>(
-    "/api/events/public",
-    (url) => fetch(url).then((r) => r.json()),
-    { refreshInterval: 15000 },
-  );
+  const [events, setEvents] = useState<PublicEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const fetchPage = useCallback(async (cursor?: string | null) => {
+    const params = new URLSearchParams();
+    if (cursor) params.set("cursor", cursor);
+    const res = await fetch(`/api/events/public?${params.toString()}`);
+    return (await res.json()) as PaginatedPublicEvents;
+  }, []);
+
+  useEffect(() => {
+    fetchPage().then((page) => {
+      setEvents(page.data);
+      setNextCursor(page.nextCursor);
+      setHasMore(page.hasMore);
+      setIsLoading(false);
+    });
+  }, [fetchPage]);
+
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    const page = await fetchPage(nextCursor);
+    setEvents((prev) => [...prev, ...page.data]);
+    setNextCursor(page.nextCursor);
+    setHasMore(page.hasMore);
+    setLoadingMore(false);
+  };
 
   // Unique sports from data for the filter dropdown
   const availableSports = useMemo(() => {
-    if (!events) return [];
+    if (events.length === 0) return [];
     const ids = [...new Set(events.map((e) => e.sport))];
     return ids.map((id) => getSportPreset(id));
   }, [events]);
 
   // Apply filters
   const filtered = useMemo(() => {
-    if (!events) return [];
     return events.filter((ev) => {
       if (filterSport && ev.sport !== filterSport) return false;
       if (filterHasSpots && ev.spotsLeft === 0) return false;
@@ -441,7 +472,7 @@ export default function PublicGamesPage() {
               </Box>
             )}
 
-            {!isLoading && (!events || events.length === 0) && (
+            {!isLoading && events.length === 0 && (
               <Paper elevation={2} sx={{ borderRadius: 3, p: 4, textAlign: "center" }}>
                 <Typography variant="h6" color="text.secondary" gutterBottom>
                   {t("noPublicGames")}
@@ -453,7 +484,7 @@ export default function PublicGamesPage() {
               </Paper>
             )}
 
-            {!isLoading && events && events.length > 0 && filtered.length === 0 && (
+            {!isLoading && events.length > 0 && filtered.length === 0 && (
               <Paper elevation={2} sx={{ borderRadius: 3, p: 4, textAlign: "center" }}>
                 <Typography variant="body1" color="text.secondary">
                   {t("noMatchingGames")}
@@ -471,6 +502,18 @@ export default function PublicGamesPage() {
 
             {!isLoading && filtered.length > 0 && viewMode === "map" && (
               <MapView events={filtered} t={t} locale={locale} />
+            )}
+
+            {!isLoading && hasMore && (
+              <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
+                <Button
+                  variant="outlined"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? t("loading") : t("loadMore")}
+                </Button>
+              </Box>
             )}
           </Stack>
         </Container>

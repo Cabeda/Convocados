@@ -476,17 +476,17 @@ export default function EventPage({ eventId }: { eventId: string }) {
   };
 
   // Fetch ELO ratings when balanced mode is on
-  const { data: ratingsData } = useSWR<{ name: string; rating: number }[]>(
-    balanced ? `/api/events/${eventId}/ratings` : null,
+  const { data: ratingsResponse } = useSWR<{ data: { name: string; rating: number }[] }>(
+    balanced ? `/api/events/${eventId}/ratings?limit=100` : null,
     (url) => fetch(url).then((r) => r.json()),
     { revalidateOnFocus: false },
   );
   const ratingsMap = useMemo(() => {
-    if (!ratingsData) return undefined;
+    if (!ratingsResponse?.data) return undefined;
     const map: Record<string, number> = {};
-    for (const r of ratingsData) map[r.name] = r.rating;
+    for (const r of ratingsResponse.data) map[r.name] = r.rating;
     return map;
-  }, [ratingsData]);
+  }, [ratingsResponse]);
 
   // Stable client ID — used to suppress self-notifications
   const clientId = useRef<string>("");
@@ -1130,6 +1130,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         : m.team === event.teamTwoName ? teamTwoName : m.team,
                     }))}
                     onResultChange={handleTeamChange}
+                    ratingsMap={balanced && canEditSettings ? ratingsMap : undefined}
                     onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
                       if (teamIdx === 0) {
                         setTeamOneName(newName);
