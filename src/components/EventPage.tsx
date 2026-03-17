@@ -869,6 +869,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         location: event.location,
                         dateTime: new Date(event.dateTime),
                         url: typeof window !== "undefined" ? window.location.href : undefined,
+                        recurrence: event.isRecurring && event.recurrenceRule
+                          ? JSON.parse(event.recurrenceRule)
+                          : undefined,
                       })}
                       target="_blank" rel="noopener noreferrer" sx={{ flexShrink: 0 }}>
                       {t("addToGoogleCalendar")}

@@ -39,6 +39,28 @@ describe("generateIcs", () => {
     const ics = generateIcs({ ...event, title: "Game; with, special\\chars\nnewline" });
     expect(ics).toContain("SUMMARY:Game\\; with\\, special\\\\chars\\nnewline");
   });
+
+  it("includes RRULE for weekly recurrence", () => {
+    const ics = generateIcs({
+      ...event,
+      recurrence: { freq: "weekly", interval: 1, byDay: "TU" },
+    });
+    expect(ics).toContain("RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=TU");
+  });
+
+  it("includes RRULE for monthly recurrence", () => {
+    const ics = generateIcs({
+      ...event,
+      recurrence: { freq: "monthly", interval: 2 },
+    });
+    expect(ics).toContain("RRULE:FREQ=MONTHLY;INTERVAL=2");
+    expect(ics).not.toContain("BYDAY");
+  });
+
+  it("omits RRULE when no recurrence", () => {
+    const ics = generateIcs(event);
+    expect(ics).not.toContain("RRULE");
+  });
 });
 
 describe("googleCalendarUrl", () => {
@@ -62,5 +84,20 @@ describe("googleCalendarUrl", () => {
     const url = googleCalendarUrl(event);
     expect(url).toContain("details=");
     expect(url).toContain("convocados.fly.dev");
+  });
+
+  it("includes recur param for recurring events", () => {
+    const url = googleCalendarUrl({
+      ...event,
+      recurrence: { freq: "weekly", interval: 1, byDay: "TU" },
+    });
+    expect(url).toContain("recur=");
+    expect(url).toContain("FREQ%3DWEEKLY");
+    expect(url).toContain("BYDAY%3DTU");
+  });
+
+  it("omits recur param for non-recurring events", () => {
+    const url = googleCalendarUrl(event);
+    expect(url).not.toContain("recur=");
   });
 });

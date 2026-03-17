@@ -3,6 +3,12 @@
  * RFC 5545 compliant.
  */
 
+interface RecurrenceInfo {
+  freq: "weekly" | "monthly";
+  interval: number;
+  byDay?: string; // "MO" | "TU" etc.
+}
+
 interface CalendarEvent {
   id: string;
   title: string;
@@ -10,6 +16,7 @@ interface CalendarEvent {
   dateTime: Date;
   description?: string;
   url?: string;
+  recurrence?: RecurrenceInfo | null;
 }
 
 function formatIcsDate(date: Date): string {
@@ -18,6 +25,14 @@ function formatIcsDate(date: Date): string {
 
 function escapeIcs(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+
+function buildRrule(r: RecurrenceInfo): string {
+  const parts = [`FREQ=${r.freq.toUpperCase()}`, `INTERVAL=${r.interval}`];
+  if (r.freq === "weekly" && r.byDay) {
+    parts.push(`BYDAY=${r.byDay}`);
+  }
+  return parts.join(";");
 }
 
 export function generateIcs(event: CalendarEvent): string {
@@ -49,6 +64,9 @@ export function generateIcs(event: CalendarEvent): string {
   if (event.url) {
     lines.push(`URL:${event.url}`);
   }
+  if (event.recurrence) {
+    lines.push(`RRULE:${buildRrule(event.recurrence)}`);
+  }
 
   lines.push("END:VEVENT", "END:VCALENDAR");
 
@@ -70,6 +88,7 @@ export function googleCalendarUrl(event: CalendarEvent): string {
 
   if (event.location) params.set("location", event.location);
   if (event.url) params.set("details", `Join: ${event.url}`);
+  if (event.recurrence) params.set("recur", `RRULE:${buildRrule(event.recurrence)}`);
 
   return `https://www.google.com/calendar/render?${params.toString()}`;
 }

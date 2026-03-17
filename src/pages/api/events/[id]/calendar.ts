@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { generateIcs } from "../../../../lib/calendar";
+import { parseRecurrenceRule } from "../../../../lib/recurrence";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
@@ -10,6 +11,8 @@ export const GET: APIRoute = async ({ params, request }) => {
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const url = `${proto}://${host}/events/${event.id}`;
 
+  const recurrence = event.isRecurring ? parseRecurrenceRule(event.recurrenceRule) : null;
+
   const ics = generateIcs({
     id: event.id,
     title: event.title,
@@ -17,6 +20,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     dateTime: event.dateTime,
     url,
     description: `Convocados game — ${event.title}`,
+    recurrence,
   });
 
   return new Response(ics, {
