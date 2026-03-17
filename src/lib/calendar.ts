@@ -74,6 +74,60 @@ export function generateIcs(event: CalendarEvent): string {
 }
 
 /**
+ * Generate a multi-event .ics feed (VCALENDAR with multiple VEVENTs).
+ * Suitable for calendar subscription feeds.
+ */
+export function generateIcsFeed(
+  events: CalendarEvent[],
+  feedName: string,
+): string {
+  const now = formatIcsDate(new Date());
+
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Convocados//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${escapeIcs(feedName)}`,
+    `X-WR-TIMEZONE:UTC`,
+  ];
+
+  for (const event of events) {
+    const start = formatIcsDate(event.dateTime);
+    const end = formatIcsDate(new Date(event.dateTime.getTime() + 90 * 60 * 1000));
+
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${event.id}@convocados`,
+      `DTSTAMP:${now}`,
+      `DTSTART:${start}`,
+      `DTEND:${end}`,
+      `SUMMARY:${escapeIcs(event.title)}`,
+    );
+
+    if (event.location) {
+      lines.push(`LOCATION:${escapeIcs(event.location)}`);
+    }
+    if (event.description) {
+      lines.push(`DESCRIPTION:${escapeIcs(event.description)}`);
+    }
+    if (event.url) {
+      lines.push(`URL:${event.url}`);
+    }
+    if (event.recurrence) {
+      lines.push(`RRULE:${buildRrule(event.recurrence)}`);
+    }
+
+    lines.push("END:VEVENT");
+  }
+
+  lines.push("END:VCALENDAR");
+
+  return lines.join("\r\n") + "\r\n";
+}
+
+/**
  * Build a Google Calendar "Add Event" URL.
  */
 export function googleCalendarUrl(event: CalendarEvent): string {

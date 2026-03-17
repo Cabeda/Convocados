@@ -10,17 +10,18 @@ datasource db {
 // ── better-auth tables ────────────────────────────────────────────────────────
 
 model User {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  ownedEvents   Event[]   @relation("EventOwner")
-  players       Player[]  @relation("PlayerUser")
+  id             String          @id
+  name           String
+  email          String          @unique
+  emailVerified  Boolean         @default(false)
+  image          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  sessions       Session[]
+  accounts       Account[]
+  ownedEvents    Event[]         @relation("EventOwner")
+  players        Player[]        @relation("PlayerUser")
+  calendarTokens CalendarToken[]
 }
 
 model Session {
@@ -196,4 +197,17 @@ model WebhookDelivery {
   deliveredAt DateTime?
   error       String?
   createdAt   DateTime            @default(now())
+}
+
+model CalendarToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope     String   @default("user") // "user" | "event"
+  scopeId   String?  // eventId when scope is "event"
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
 }
