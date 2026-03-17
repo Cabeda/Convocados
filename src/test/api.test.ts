@@ -9,6 +9,8 @@ import { POST as randomize } from "~/pages/api/events/[id]/randomize";
 import { PUT as saveTeams } from "~/pages/api/events/[id]/teams";
 import { PUT as saveTeamNames } from "~/pages/api/events/[id]/team-names";
 import { GET as getKnownPlayers } from "~/pages/api/events/[id]/known-players";
+import { PUT as updateSport } from "~/pages/api/events/[id]/sport";
+import { GET as getPublicEvents } from "~/pages/api/events/public";
 
 // Minimal Astro APIContext factory
 function ctx(params: Record<string, string>, body?: unknown, queryString?: string) {
@@ -499,5 +501,185 @@ describe("GET /api/events/[id]/known-players", () => {
     const body = await res.json();
     expect(body.players).toHaveLength(1);
     expect(body.players[0].name).toBe("Bob");
+  });
+});
+
+// ─── POST /api/events — sport field ─────────────────────────────────────────
+
+describe("POST /api/events — sport field", () => {
+  const future = new Date(Date.now() + 86400_000).toISOString();
+
+  function sportCtx(body: unknown) {
+    const request = new Request("http://localhost/api/test", {
+      method: "POST",
+      headers: { "content-type": "application/json", "fly-client-ip": `sport-test-${Date.now()}` },
+      body: JSON.stringify(body),
+    });
+    return { request, params: {}, url: new URL("http://localhost/api/test") } as any;
+  }
+
+  it("creates event with default sport when not provided", async () => {
+    const res = await createEvent(sportCtx({ title: "X", dateTime: future }));
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    expect(id).toBeTruthy();
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event?.sport).toBe("football-5v5");
+  });
+
+  it("creates event with custom sport", async () => {
+    const res = await createEvent(sportCtx({ title: "Padel Game", dateTime: future, sport: "padel" }));
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    expect(id).toBeTruthy();
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event?.sport).toBe("padel");
+  });
+
+  it("truncates sport to 50 chars", async () => {
+    const longSport = "a".repeat(100);
+    const res = await createEvent(sportCtx({ title: "X", dateTime: future, sport: longSport }));
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    expect(id).toBeTruthy();
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event?.sport.length).toBeLessThanOrEqual(50);
+  });
+});
+
+// ─── PUT /api/events/[id]/sport ─────────────────────────────────────────────
+
+describe("PUT /api/events/[id]/sport", () => {
+  it("updates sport and resets maxPlayers to sport default", async () => {
+    const id = await seedEvent();
+    const res = await updateSport(putCtx({ id }, { sport: "padel" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.sport).toBe("padel");
+    expect(body.maxPlayers).toBe(4);
+
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event?.sport).toBe("padel");
+    expect(event?.maxPlayers).toBe(4);
+  });
+
+  it("updates to football-7v7 and sets maxPlayers to 14", async () => {
+    const id = await seedEvent();
+    const res = await updateSport(putCtx({ id }, { sport: "football-7v7" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.sport).toBe("football-7v7");
+    expect(body.maxPlayers).toBe(14);
+  });
+
+  it("returns 404 for unknown event", async () => {
+    const res = await updateSport(putCtx({ id: "nonexistent" }, { sport: "padel" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 when sport is empty", async () => {
+    const id = await seedEvent();
+    const res = await updateSport(putCtx({ id }, { sport: "" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when sport is missing", async () => {
+    const id = await seedEvent();
+    const res = await updateSport(putCtx({ id }, {}));
+    expect(res.status).toBe(400);
+  });
+
+  it("uses default maxPlayers for unknown sport id", async () => {
+    const id = await seedEvent();
+    const res = await updateSport(putCtx({ id }, { sport: "unknown-sport" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.maxPlayers).toBe(10); // falls back to first preset default
+  });
+});
+
+// ─── GET /api/events/public ─────────────────────────────────────────────────
+
+describe("GET /api/events/public", () => {
+  it("returns empty array when no public events exist", async () => {
+    const res = await getPublicEvents(ctx({}));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([]);
+  });
+
+  it("returns only public events", async () => {
+    await prisma.event.create({
+      data: {
+        title: "Public Game", location: "Pitch A",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true,
+      },
+    });
+    await prisma.event.create({
+      data: {
+        title: "Private Game", location: "Pitch B",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: false,
+      },
+    });
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    expect(body).toHaveLength(1);
+    expect(body[0].title).toBe("Public Game");
+  });
+
+  it("includes sport field in response", async () => {
+    await prisma.event.create({
+      data: {
+        title: "Padel Match", location: "Court 1",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true, sport: "padel",
+      },
+    });
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    expect(body).toHaveLength(1);
+    expect(body[0].sport).toBe("padel");
+  });
+
+  it("includes playerCount and spotsLeft", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Game", location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true, maxPlayers: 4,
+      },
+    });
+    await prisma.player.createMany({
+      data: [
+        { name: "Alice", eventId: event.id },
+        { name: "Bob", eventId: event.id },
+      ],
+    });
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    expect(body[0].playerCount).toBe(2);
+    expect(body[0].spotsLeft).toBe(2);
+  });
+
+  it("returns spotsLeft as 0 when full", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Full Game", location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true, maxPlayers: 2,
+      },
+    });
+    await prisma.player.createMany({
+      data: [
+        { name: "Alice", eventId: event.id },
+        { name: "Bob", eventId: event.id },
+        { name: "Carol", eventId: event.id },
+      ],
+    });
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    expect(body[0].spotsLeft).toBe(0);
   });
 });
