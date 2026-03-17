@@ -28,6 +28,9 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const [ratings, setRatings] = useState<PlayerRating[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const load = useCallback(async () => {
     const [evRes, ratRes] = await Promise.all([
@@ -36,13 +39,26 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     ]);
     if (evRes.status === 404) { setNotFound(true); setLoading(false); return; }
     const ev = await evRes.json();
-    const rat = ratRes.ok ? await ratRes.json() : [];
+    const rat = ratRes.ok ? await ratRes.json() : { data: [], nextCursor: null, hasMore: false };
     setTitle(ev.title);
-    setRatings(rat);
+    setRatings(rat.data);
+    setNextCursor(rat.nextCursor);
+    setHasMore(rat.hasMore);
     setLoading(false);
   }, [eventId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    const res = await fetch(`/api/events/${eventId}/ratings?cursor=${nextCursor}`);
+    const page = await res.json();
+    setRatings((prev) => [...prev, ...page.data]);
+    setNextCursor(page.nextCursor);
+    setHasMore(page.hasMore);
+    setLoadingMore(false);
+  };
 
   if (loading) return (
     <ThemeModeProvider>
@@ -164,6 +180,14 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                   </Table>
                 </TableContainer>
               </Paper>
+            )}
+
+            {hasMore && (
+              <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
+                <Button variant="outlined" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore ? t("loading") : t("loadMore")}
+                </Button>
+              </Box>
             )}
           </Stack>
         </Container>

@@ -299,6 +299,9 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const load = useCallback(async () => {
     const [evRes, histRes] = await Promise.all([
@@ -309,11 +312,24 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     const ev = await evRes.json();
     const hist = await histRes.json();
     setTitle(ev.title);
-    setHistory(hist);
+    setHistory(hist.data);
+    setNextCursor(hist.nextCursor);
+    setHasMore(hist.hasMore);
     setLoading(false);
   }, [eventId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    const res = await fetch(`/api/events/${eventId}/history?cursor=${nextCursor}`);
+    const page = await res.json();
+    setHistory((prev) => [...prev, ...page.data]);
+    setNextCursor(page.nextCursor);
+    setHasMore(page.hasMore);
+    setLoadingMore(false);
+  };
 
   const handleUpdate = (updated: HistoryEntry) => {
     setHistory((prev) => prev.map((h) => h.id === updated.id ? updated : h));
@@ -369,9 +385,18 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
                 <Typography variant="body2" color="text.disabled" mt={1}>{t("noHistoryDesc")}</Typography>
               </Paper>
             ) : (
-              history.map((entry) => (
-                <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} onUpdate={handleUpdate} />
-              ))
+              <>
+                {history.map((entry) => (
+                  <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} onUpdate={handleUpdate} />
+                ))}
+                {hasMore && (
+                  <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
+                    <Button variant="outlined" onClick={loadMore} disabled={loadingMore}>
+                      {loadingMore ? t("loading") : t("loadMore")}
+                    </Button>
+                  </Box>
+                )}
+              </>
             )}
           </Stack>
         </Container>

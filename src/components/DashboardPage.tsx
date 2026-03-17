@@ -1,5 +1,4 @@
-import React from "react";
-import useSWR from "swr";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Container, Typography, Stack, Box, Button,
   CircularProgress, Alert, Divider,
@@ -13,16 +12,66 @@ import { GameCard, type GameSummary } from "./GameCard";
 interface DashboardData {
   owned: GameSummary[];
   joined: GameSummary[];
+  ownedNextCursor: string | null;
+  ownedHasMore: boolean;
+  joinedNextCursor: string | null;
+  joinedHasMore: boolean;
 }
 
 export default function DashboardPage() {
   const t = useT();
   const { data: session, isPending: sessionLoading } = useSession();
 
-  const { data, isLoading } = useSWR<DashboardData>(
-    session?.user ? "/api/me/games" : null,
-    (url: string) => fetch(url).then((r) => r.json()),
-  );
+  const [owned, setOwned] = useState<GameSummary[]>([]);
+  const [joined, setJoined] = useState<GameSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [ownedCursor, setOwnedCursor] = useState<string | null>(null);
+  const [ownedHasMore, setOwnedHasMore] = useState(false);
+  const [joinedCursor, setJoinedCursor] = useState<string | null>(null);
+  const [joinedHasMore, setJoinedHasMore] = useState(false);
+  const [loadingOwned, setLoadingOwned] = useState(false);
+  const [loadingJoined, setLoadingJoined] = useState(false);
+
+  const fetchGames = useCallback(async (oc?: string | null, jc?: string | null) => {
+    const params = new URLSearchParams();
+    if (oc) params.set("ownedCursor", oc);
+    if (jc) params.set("joinedCursor", jc);
+    const res = await fetch(`/api/me/games?${params.toString()}`);
+    return (await res.json()) as DashboardData;
+  }, []);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    fetchGames().then((data) => {
+      setOwned(data.owned);
+      setJoined(data.joined);
+      setOwnedCursor(data.ownedNextCursor);
+      setOwnedHasMore(data.ownedHasMore);
+      setJoinedCursor(data.joinedNextCursor);
+      setJoinedHasMore(data.joinedHasMore);
+      setIsLoading(false);
+    });
+  }, [session?.user, fetchGames]);
+
+  const loadMoreOwned = async () => {
+    if (!ownedCursor || loadingOwned) return;
+    setLoadingOwned(true);
+    const data = await fetchGames(ownedCursor, null);
+    setOwned((prev) => [...prev, ...data.owned]);
+    setOwnedCursor(data.ownedNextCursor);
+    setOwnedHasMore(data.ownedHasMore);
+    setLoadingOwned(false);
+  };
+
+  const loadMoreJoined = async () => {
+    if (!joinedCursor || loadingJoined) return;
+    setLoadingJoined(true);
+    const data = await fetchGames(null, joinedCursor);
+    setJoined((prev) => [...prev, ...data.joined]);
+    setJoinedCursor(data.joinedNextCursor);
+    setJoinedHasMore(data.joinedHasMore);
+    setLoadingJoined(false);
+  };
 
   if (sessionLoading) {
     return (
@@ -74,9 +123,16 @@ export default function DashboardPage() {
                   <Typography variant="h6" fontWeight={600} gutterBottom>
                     {t("ownedGames")}
                   </Typography>
-                  {data?.owned && data.owned.length > 0 ? (
+                  {owned.length > 0 ? (
                     <Stack spacing={1.5}>
-                      {data.owned.map((g) => <GameCard key={g.id} game={g} />)}
+                      {owned.map((g) => <GameCard key={g.id} game={g} />)}
+                      {ownedHasMore && (
+                        <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
+                          <Button variant="outlined" size="small" onClick={loadMoreOwned} disabled={loadingOwned}>
+                            {loadingOwned ? t("loading") : t("loadMore")}
+                          </Button>
+                        </Box>
+                      )}
                     </Stack>
                   ) : (
                     <Alert severity="info">{t("noOwnedGames")}</Alert>
@@ -90,9 +146,16 @@ export default function DashboardPage() {
                   <Typography variant="h6" fontWeight={600} gutterBottom>
                     {t("joinedGames")}
                   </Typography>
-                  {data?.joined && data.joined.length > 0 ? (
+                  {joined.length > 0 ? (
                     <Stack spacing={1.5}>
-                      {data.joined.map((g) => <GameCard key={g.id} game={g} />)}
+                      {joined.map((g) => <GameCard key={g.id} game={g} />)}
+                      {joinedHasMore && (
+                        <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
+                          <Button variant="outlined" size="small" onClick={loadMoreJoined} disabled={loadingJoined}>
+                            {loadingJoined ? t("loading") : t("loadMore")}
+                          </Button>
+                        </Box>
+                      )}
                     </Stack>
                   ) : (
                     <Alert severity="info">{t("noJoinedGames")}</Alert>

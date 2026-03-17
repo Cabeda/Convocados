@@ -605,7 +605,9 @@ describe("GET /api/events/public", () => {
     const res = await getPublicEvents(ctx({}));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual([]);
+    expect(body.data).toEqual([]);
+    expect(body.hasMore).toBe(false);
+    expect(body.nextCursor).toBeNull();
   });
 
   it("returns only public events", async () => {
@@ -625,8 +627,8 @@ describe("GET /api/events/public", () => {
     });
     const res = await getPublicEvents(ctx({}));
     const body = await res.json();
-    expect(body).toHaveLength(1);
-    expect(body[0].title).toBe("Public Game");
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].title).toBe("Public Game");
   });
 
   it("includes sport field in response", async () => {
@@ -639,8 +641,8 @@ describe("GET /api/events/public", () => {
     });
     const res = await getPublicEvents(ctx({}));
     const body = await res.json();
-    expect(body).toHaveLength(1);
-    expect(body[0].sport).toBe("padel");
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].sport).toBe("padel");
   });
 
   it("includes playerCount and spotsLeft", async () => {
@@ -659,8 +661,8 @@ describe("GET /api/events/public", () => {
     });
     const res = await getPublicEvents(ctx({}));
     const body = await res.json();
-    expect(body[0].playerCount).toBe(2);
-    expect(body[0].spotsLeft).toBe(2);
+    expect(body.data[0].playerCount).toBe(2);
+    expect(body.data[0].spotsLeft).toBe(2);
   });
 
   it("returns spotsLeft as 0 when full", async () => {
@@ -680,6 +682,32 @@ describe("GET /api/events/public", () => {
     });
     const res = await getPublicEvents(ctx({}));
     const body = await res.json();
-    expect(body[0].spotsLeft).toBe(0);
+    expect(body.data[0].spotsLeft).toBe(0);
+  });
+
+  it("supports cursor-based pagination", async () => {
+    // Create 3 public events
+    for (let i = 0; i < 3; i++) {
+      await prisma.event.create({
+        data: {
+          title: `Game ${i}`, location: "Pitch",
+          dateTime: new Date(Date.now() + (i + 1) * 86400_000),
+          isPublic: true,
+        },
+      });
+    }
+    // Fetch first page with limit=2
+    const res1 = await getPublicEvents(ctx({}, undefined, "limit=2"));
+    const page1 = await res1.json();
+    expect(page1.data).toHaveLength(2);
+    expect(page1.hasMore).toBe(true);
+    expect(page1.nextCursor).toBeTruthy();
+
+    // Fetch second page using cursor
+    const res2 = await getPublicEvents(ctx({}, undefined, `limit=2&cursor=${page1.nextCursor}`));
+    const page2 = await res2.json();
+    expect(page2.data).toHaveLength(1);
+    expect(page2.hasMore).toBe(false);
+    expect(page2.nextCursor).toBeNull();
   });
 });

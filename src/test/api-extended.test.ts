@@ -19,19 +19,21 @@ import { GET as getHistory } from "~/pages/api/events/[id]/history/index";
 import { PATCH as patchHistory } from "~/pages/api/events/[id]/history/[historyId]";
 import { GET as getRatings } from "~/pages/api/events/[id]/ratings/index";
 import { POST as recalculateRatings } from "~/pages/api/events/[id]/ratings/recalculate";
+import { GET as getCalendar } from "~/pages/api/events/[id]/calendar";
 import { GET as getVapidKey } from "~/pages/api/push/vapid-public-key";
 import { GET as getUserProfile, PATCH as patchUserProfile } from "~/pages/api/users/[id]";
 import { GET as getMyGames } from "~/pages/api/me/games";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function ctx(params: Record<string, string>, body?: unknown, method = "GET") {
-  const request = new Request("http://localhost/api/test", {
+function ctx(params: Record<string, string>, body?: unknown, method = "GET", queryString?: string) {
+  const urlStr = `http://localhost/api/test${queryString ? `?${queryString}` : ""}`;
+  const request = new Request(urlStr, {
     method: body !== undefined ? (method === "GET" ? "POST" : method) : method,
     headers: { "content-type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  return { request, params } as any;
+  return { request, params, url: new URL(urlStr) } as any;
 }
 
 function putCtx(params: Record<string, string>, body: unknown) {
@@ -372,8 +374,8 @@ describe("GET /api/events/[id]/history", () => {
     const res = await getHistory(ctx({ id }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toHaveLength(1);
-    expect(body[0].editable).toBe(true);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].editable).toBe(true);
   });
 
   it("returns 404 for unknown event", async () => {
@@ -389,8 +391,8 @@ describe("GET /api/events/[id]/history", () => {
     });
     const res = await getHistory(ctx({ id }));
     const body = await res.json();
-    expect(body).toHaveLength(1);
-    expect(body[0].editable).toBe(false);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].editable).toBe(false);
   });
 });
 
@@ -470,14 +472,48 @@ describe("GET /api/events/[id]/ratings", () => {
     const res = await getRatings(ctx({ id }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toHaveLength(1);
-    expect(body[0].name).toBe("Alice");
-    expect(body[0].rating).toBe(1050);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].name).toBe("Alice");
+    expect(body.data[0].rating).toBe(1050);
   });
 
   it("returns 404 for unknown event", async () => {
     const res = await getRatings(ctx({ id: "nonexistent" }));
     expect(res.status).toBe(404);
+  });
+});
+
+// ─── GET /api/events/[id]/calendar ───────────────────────────────────────────
+
+describe("GET /api/events/[id]/calendar", () => {
+  it("returns .ics file for event", async () => {
+    const id = await seedEvent();
+    const res = await getCalendar(ctx({ id }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/calendar");
+    const body = await res.text();
+    expect(body).toContain("BEGIN:VCALENDAR");
+    expect(body).toContain("BEGIN:VEVENT");
+    expect(body).toContain("END:VCALENDAR");
+  });
+
+  it("returns 404 for unknown event", async () => {
+    const res = await getCalendar(ctx({ id: "nonexistent" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("includes recurrence rule for recurring events", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly Game", location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "TU" }),
+      },
+    });
+    const res = await getCalendar(ctx({ id: event.id }));
+    const body = await res.text();
+    expect(body).toContain("RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=TU");
   });
 });
 

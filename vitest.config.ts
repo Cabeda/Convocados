@@ -17,6 +17,7 @@ export default defineConfig({
         "src/lib/db.server.ts",
         "src/lib/useT.ts",
         "src/lib/auth.client.ts",
+        "src/lib/auth.server.ts",
         "src/lib/push.server.ts",
         "src/pages/api/auth/**",
         "src/test/**",
