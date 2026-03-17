@@ -52,25 +52,5 @@ jobs:
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: file:./ci-test.db
-      - name: Start server
-        run: node dist/server/entry.mjs &
-        env:
-          HOST: 0.0.0.0
-          PORT: "3000"
-          DATABASE_URL: file:./ci-test.db
-          BETTER_AUTH_SECRET: ci-test-secret
-          BETTER_AUTH_URL: http://localhost:3000
-      - name: Wait for server
-        run: |
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
-              echo "Server is ready"
-              exit 0
-            fi
-            echo "Waiting for server... ($i)"
-            sleep 1
-          done
-          echo "Server failed to start"
-          exit 1
       - name: Run Lighthouse CI
-        run: npx @lhci/cli autorun
+        run: npx lhci autorun

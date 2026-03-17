@@ -2,6 +2,10 @@
 export default {
   ci: {
     collect: {
+      startServerCommand:
+        "DATABASE_URL=file:./ci-test.db BETTER_AUTH_SECRET=ci-test-secret BETTER_AUTH_URL=http://localhost:3000 HOST=0.0.0.0 PORT=3000 node dist/server/entry.mjs",
+      startServerReadyPattern: "Server listening on",
+      startServerReadyTimeout: 30000,
       url: [
         "http://localhost:3000/",
         "http://localhost:3000/public",
@@ -10,7 +14,6 @@ export default {
       numberOfRuns: 1,
       settings: {
         preset: "desktop",
-        // CI runners are slow — extend timeouts
         maxWaitForLoad: 45000,
         throttlingMethod: "simulate",
       },
