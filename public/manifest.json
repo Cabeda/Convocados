@@ -4,8 +4,8 @@
   "description": "Organize pickup sports games — manage events, randomize teams, track scores.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1976d2",
+  "background_color": "#111412",
+  "theme_color": "#1b6b4a",
   "icons": [
     {
       "src": "/icons/icon-192.png",
