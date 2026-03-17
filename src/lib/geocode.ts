@@ -17,6 +17,8 @@ export interface GeoResult {
 const MAPS_AT_REGEX = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
 const MAPS_Q_REGEX = /[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/;
 const MAPS_LL_REGEX = /[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/;
+// Google Maps encodes the actual place location as !3d<lat>!4d<lng> in the data parameter
+const MAPS_3D4D_REGEX = /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/;
 const RAW_COORDS_REGEX = /^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/;
 
 function parseCoords(lat: string, lng: string): GeoResult | null {
@@ -27,9 +29,17 @@ function parseCoords(lat: string, lng: string): GeoResult | null {
   return { latitude, longitude };
 }
 
-/** Try to extract coordinates from a Google Maps URL. */
+/** Try to extract coordinates from a Google Maps URL. Prefers the actual place pin (!3d/!4d) over the viewport center (@). */
 export function parseMapsUrl(url: string): GeoResult | null {
-  for (const regex of [MAPS_AT_REGEX, MAPS_Q_REGEX, MAPS_LL_REGEX]) {
+  // 1. Prefer !3d/!4d — these are the actual place coordinates
+  const placeMatch = url.match(MAPS_3D4D_REGEX);
+  if (placeMatch) {
+    const result = parseCoords(placeMatch[1], placeMatch[2]);
+    if (result) return result;
+  }
+
+  // 2. Fall back to other patterns (q=, ll=, @)
+  for (const regex of [MAPS_Q_REGEX, MAPS_LL_REGEX, MAPS_AT_REGEX]) {
     const match = url.match(regex);
     if (match) return parseCoords(match[1], match[2]);
   }

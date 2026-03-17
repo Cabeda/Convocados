@@ -17,6 +17,12 @@ describe("parseMapsUrl", () => {
     expect(result).toEqual({ latitude: 51.5074, longitude: -0.1278 });
   });
 
+  it("prefers !3d/!4d place coords over @viewport coords", () => {
+    const url = "https://www.google.com/maps/place/Campo+futebol/@41.1772491,-8.6252575,3773m/data=!3m1!1e3!4m6!3m5!1s0xd2465820053beb1:0x10038bef150a8c06!8m2!3d41.1731144!4d-8.6197766!16s%2Fg%2F11jclfdxbl";
+    const result = parseMapsUrl(url);
+    expect(result).toEqual({ latitude: 41.1731144, longitude: -8.6197766 });
+  });
+
   it("returns null for non-maps URL", () => {
     expect(parseMapsUrl("https://example.com")).toBeNull();
   });
