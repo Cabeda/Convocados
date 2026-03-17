@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import {
-  Container, Paper, Typography, TextField, Button, Stack, Alert, Link,
+  Container, Paper, Typography, TextField, Button, Stack, Alert, Link, Divider,
 } from "@mui/material";
+import GoogleIcon from "@mui/icons-material/Google";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
-import { signUp } from "~/lib/auth.client";
+import { signIn, signUp } from "~/lib/auth.client";
 
 export default function SignUpPage() {
   const t = useT();
@@ -46,6 +47,10 @@ export default function SignUpPage() {
     }
   };
 
+  const handleGoogleSignUp = async () => {
+    await signIn.social({ provider: "google", callbackURL: "/" });
+  };
+
   return (
     <ThemeModeProvider>
       <ResponsiveLayout>
@@ -57,6 +62,19 @@ export default function SignUpPage() {
               </Typography>
 
               {error && <Alert severity="error">{error}</Alert>}
+
+              <Button
+                variant="outlined"
+                size="large"
+                fullWidth
+                startIcon={<GoogleIcon />}
+                onClick={handleGoogleSignUp}
+                type="button"
+              >
+                {t("signUpWithGoogle")}
+              </Button>
+
+              <Divider>{t("or")}</Divider>
 
               <TextField
                 label={t("name")}
