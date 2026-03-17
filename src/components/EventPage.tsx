@@ -672,6 +672,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
     }
   };
 
+  // Determine if the current viewer can remove a given player
+  const canRemovePlayer = (player: Player) => {
+    // Owner can remove anyone
+    if (isOwner) return true;
+    // Authenticated user can remove themselves
+    if (session?.user && player.userId === session.user.id) return true;
+    // Anyone can remove anonymous (non-linked) players
+    if (!player.userId) return true;
+    // Cannot remove other authenticated players
+    return false;
+  };
+
   return (
     <ThemeModeProvider>
       <ResponsiveLayout>
@@ -961,7 +973,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                                 </a>
                               ) : player.name}
                               color="primary" variant="filled"
-                              onDelete={() => removePlayer(player.id)} />
+                              onDelete={canRemovePlayer(player) ? () => removePlayer(player.id) : undefined} />
                           ))}
                         </Paper>
                       )}
@@ -989,7 +1001,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                                   </a>
                                 ) : `${i + 1}. ${player.name}`}
                                 color="warning" variant="outlined"
-                                onDelete={() => removePlayer(player.id)} />
+                                onDelete={canRemovePlayer(player) ? () => removePlayer(player.id) : undefined} />
                             ))}
                           </Paper>
                         </>
