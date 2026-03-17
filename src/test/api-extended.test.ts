@@ -25,13 +25,14 @@ import { GET as getMyGames } from "~/pages/api/me/games";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function ctx(params: Record<string, string>, body?: unknown, method = "GET") {
-  const request = new Request("http://localhost/api/test", {
+function ctx(params: Record<string, string>, body?: unknown, method = "GET", queryString?: string) {
+  const urlStr = `http://localhost/api/test${queryString ? `?${queryString}` : ""}`;
+  const request = new Request(urlStr, {
     method: body !== undefined ? (method === "GET" ? "POST" : method) : method,
     headers: { "content-type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  return { request, params } as any;
+  return { request, params, url: new URL(urlStr) } as any;
 }
 
 function putCtx(params: Record<string, string>, body: unknown) {
