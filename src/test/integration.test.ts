@@ -155,7 +155,7 @@ describe("Player management", () => {
     await addPlayer(eventId, "Anna");
     const players = await prisma.player.findMany({
       where: { eventId },
-      orderBy: { createdAt: "asc" },
+      orderBy: { order: "asc" },
     });
     expect(players.map((p) => p.name).sort()).toEqual(["Anna", "Zara"]);
   });
