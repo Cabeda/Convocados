@@ -1,9 +1,19 @@
-name: Test
+name: CI
 
-on: [pull_request]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  ci:
+    name: CI
     runs-on: ubuntu-latest
 
     steps:
