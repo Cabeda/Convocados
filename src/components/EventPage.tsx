@@ -569,11 +569,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const handleSaveLocation = async () => {
     setEditingLocation(false);
-    await fetch(`/api/events/${eventId}/location`, {
+    const res = await fetch(`/api/events/${eventId}/location`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ location: locationDraft }),
     });
+    const data = await res.json();
+    if (locationDraft && !data.geocoded) {
+      setSnackbar(t("locationNotGeocoded"));
+    }
     mutate();
   };
 

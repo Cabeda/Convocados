@@ -25,5 +25,6 @@ export const PUT: APIRoute = async ({ params, request }) => {
     location,
     latitude: geo?.latitude ?? null,
     longitude: geo?.longitude ?? null,
+    geocoded: geo !== null,
   });
 };

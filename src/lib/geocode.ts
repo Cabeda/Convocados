@@ -45,12 +45,30 @@ export function parseRawCoords(text: string): GeoResult | null {
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 
-/** Geocode a free-text address via Nominatim. Returns null if not found. */
+/** Geocode a free-text address via Nominatim. Tries the full query first, then progressively simpler versions. */
 export async function geocodeAddress(address: string): Promise<GeoResult | null> {
   if (!address.trim()) return null;
+
+  // Try the full address first, then progressively drop leading words
+  // e.g. "Matosinhos Sports and Events Center" → "Sports and Events Center" → "Events Center"
+  const words = address.trim().split(/\s+/);
+  const attempts = [address.trim()];
+  // Add progressively shorter versions (drop from the start, keep at least 2 words)
+  for (let i = 1; i < words.length - 1; i++) {
+    attempts.push(words.slice(i).join(" "));
+  }
+
+  for (const query of attempts) {
+    const result = await nominatimSearch(query);
+    if (result) return result;
+  }
+  return null;
+}
+
+async function nominatimSearch(query: string): Promise<GeoResult | null> {
   try {
     const res = await fetch(
-      `${NOMINATIM_URL}?q=${encodeURIComponent(address)}&format=json&limit=1`,
+      `${NOMINATIM_URL}?q=${encodeURIComponent(query)}&format=json&limit=1`,
       {
         headers: {
           "User-Agent": "Convocados/1.0",
