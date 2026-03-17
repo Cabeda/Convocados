@@ -1,28 +1,45 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
+import { parsePaginationParams, buildPaginatedResponse } from "../../../../../lib/pagination";
 
-// GET /api/events/[id]/history — list all history entries
-export const GET: APIRoute = async ({ params }) => {
+// GET /api/events/[id]/history — paginated history entries
+export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const url = new URL(request.url);
+  const { limit, cursor } = parsePaginationParams(url);
 
   const history = await prisma.gameHistory.findMany({
     where: { eventId: params.id },
     orderBy: { dateTime: "desc" },
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
-  // Fetch all ratings to compute deltas per game via replay
-  // For simplicity, we replay chronologically and record deltas per game
-  const eloMap = await computeHistoryDeltas(params.id!, history);
+  // Fetch ALL history for ELO replay (needed for accurate deltas)
+  const allHistory = await prisma.gameHistory.findMany({
+    where: { eventId: params.id },
+    orderBy: { dateTime: "asc" },
+  });
+  const eloMap = computeHistoryDeltas(params.id!, allHistory);
 
-  return Response.json(history.map((h) => ({
-    ...h,
+  const mapped = history.map((h) => ({
+    id: h.id,
     dateTime: h.dateTime.toISOString(),
+    status: h.status,
+    scoreOne: h.scoreOne,
+    scoreTwo: h.scoreTwo,
+    teamOneName: h.teamOneName,
+    teamTwoName: h.teamTwoName,
+    teamsSnapshot: h.teamsSnapshot,
     editableUntil: h.editableUntil.toISOString(),
     createdAt: h.createdAt.toISOString(),
     editable: h.editableUntil > new Date(),
     eloUpdates: eloMap.get(h.id) ?? null,
-  })));
+  }));
+
+  return Response.json(buildPaginatedResponse(mapped, limit));
 };
 
 /** Replay ELO from scratch in memory to get per-game deltas without touching the DB */
@@ -60,7 +77,6 @@ function computeHistoryDeltas(
     const deltas: { name: string; delta: number }[] = [];
     for (const name of all) {
       const r = ratings.get(name)!;
-      const gp = all.filter(() => true).length; // simplified — use fixed K for replay
       const isT1 = t1.includes(name);
       const pOutcome = isT1 ? outcome : 1 - outcome;
       const oppElo = isT1 ? teamTwoElo : teamOneElo;

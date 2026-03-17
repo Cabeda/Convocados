@@ -258,6 +258,10 @@ export const translations = {
     downloadIcs: "Download .ics",
     addToGoogleCalendar: "Google Calendar",
 
+    // Pagination
+    loadMore: "Load more",
+    loading: "Loading…",
+
     // Docs
     docs: "Docs",
 
@@ -531,6 +535,10 @@ export const translations = {
     addToCalendar: "Adicionar ao calendário",
     downloadIcs: "Descarregar .ics",
     addToGoogleCalendar: "Google Calendar",
+
+    // Pagination
+    loadMore: "Carregar mais",
+    loading: "A carregar…",
 
     // Docs
     docs: "Docs",
