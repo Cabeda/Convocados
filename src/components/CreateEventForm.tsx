@@ -3,16 +3,19 @@ import {
   Container, Paper, Typography, TextField, Button, Box, Stack,
   FormControlLabel, Switch, Select, MenuItem, FormControl, InputLabel,
   Grid2, Alert, Divider, Chip, Accordion, AccordionSummary, AccordionDetails,
-  InputAdornment,
+  InputAdornment, IconButton, Tooltip,
 } from "@mui/material";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import SportsIcon from "@mui/icons-material/Sports";
+import CasinoIcon from "@mui/icons-material/Casino";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PeopleIcon from "@mui/icons-material/People";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { detectLocale } from "~/lib/i18n";
 import { SPORT_PRESETS, getDefaultMaxPlayers } from "~/lib/sports";
+import { getRandomTitle } from "~/lib/randomTitles";
 
 const DAYS = [
   { value: "MO", key: "monday" },
@@ -41,6 +44,8 @@ function minDateTime() {
 
 export default function CreateEventForm() {
   const t = useT();
+  const locale = detectLocale();
+  const [title, setTitle] = useState(() => getRandomTitle(locale === "pt" ? "pt" : "en"));
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceFreq, setRecurrenceFreq] = useState<"weekly" | "monthly">("weekly");
   const [recurrenceInterval, setRecurrenceInterval] = useState(1);
@@ -113,7 +118,28 @@ export default function CreateEventForm() {
 
                   <TextField name="title" label={t("gameTitle")}
                     placeholder={t("gameTitlePlaceholder")} required fullWidth
-                    autoFocus inputProps={{ maxLength: 100 }} />
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    inputProps={{ maxLength: 100 }}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <Tooltip title={t("randomizeTitle")}>
+                            <IconButton
+                              size="small"
+                              onClick={() => setTitle(getRandomTitle(locale === "pt" ? "pt" : "en"))}
+                              sx={{
+                                transition: "transform 0.2s",
+                                "&:hover": { transform: "rotate(180deg)" },
+                              }}
+                            >
+                              <CasinoIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
 
                   <FormControl fullWidth>
                     <InputLabel>{t("sport")}</InputLabel>
