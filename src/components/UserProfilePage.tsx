@@ -1,12 +1,14 @@
-import React from "react";
+import React, { useState } from "react";
 import useSWR from "swr";
 import {
   Container, Paper, Typography, Stack, Box, Chip, Avatar,
-  CircularProgress, Alert, Divider, Tabs, Tab,
+  CircularProgress, Alert, Tabs, Tab, TextField, Button,
+  IconButton, Snackbar,
 } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import SportsIcon from "@mui/icons-material/Sports";
+import EditIcon from "@mui/icons-material/Edit";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -26,6 +28,7 @@ interface UserProfile {
   user: {
     id: string;
     name: string;
+    email?: string;
     image: string | null;
     createdAt: string;
   };
@@ -36,6 +39,7 @@ interface UserProfile {
     ownedGames: number;
     joinedGames: number;
   };
+  isOwnProfile: boolean;
 }
 
 function GameCard({ game }: { game: GameSummary }) {
@@ -78,12 +82,85 @@ function GameCard({ game }: { game: GameSummary }) {
   );
 }
 
+function ProfileEditForm({ user, onSaved }: { user: UserProfile["user"]; onSaved: () => void }) {
+  const t = useT();
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState(false);
+
+  const handleSave = async () => {
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+      });
+      if (!res.ok) {
+        const json = await res.json();
+        setError(json.error || t("profileUpdateError"));
+      } else {
+        setSnackbar(true);
+        onSaved();
+      }
+    } catch {
+      setError(t("profileUpdateError"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+      <Stack spacing={2}>
+        <Typography variant="h6" fontWeight={600}>{t("editProfile")}</Typography>
+        {error && <Alert severity="error">{error}</Alert>}
+        <TextField
+          label={t("name")}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          fullWidth
+          size="small"
+          inputProps={{ maxLength: 50 }}
+        />
+        <TextField
+          label={t("email")}
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          fullWidth
+          size="small"
+        />
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={saving || !name.trim() || !email.trim()}
+          >
+            {t("saveProfile")}
+          </Button>
+        </Stack>
+      </Stack>
+      <Snackbar
+        open={snackbar}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar(false)}
+        message={t("profileUpdated")}
+      />
+    </Paper>
+  );
+}
+
 export default function UserProfilePage({ userId }: { userId: string }) {
   const t = useT();
   const locale = detectLocale();
   const [tab, setTab] = React.useState(0);
+  const [editing, setEditing] = useState(false);
 
-  const { data, isLoading, error } = useSWR<UserProfile>(
+  const { data, isLoading, error, mutate } = useSWR<UserProfile>(
     `/api/users/${userId}`,
     (url: string) => fetch(url).then((r) => {
       if (!r.ok) throw new Error("Not found");
@@ -117,7 +194,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
     );
   }
 
-  const { user, owned, joined, stats } = data;
+  const { user, owned, joined, stats, isOwnProfile } = data;
   const memberSince = new Date(user.createdAt);
   const allGames = tab === 0 ? [...owned, ...joined].sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime()) : tab === 1 ? owned : joined;
 
@@ -136,18 +213,36 @@ export default function UserProfilePage({ userId }: { userId: string }) {
                   {user.name[0]?.toUpperCase()}
                 </Avatar>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="h5" fontWeight={700}>{user.name}</Typography>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Typography variant="h5" fontWeight={700}>{user.name}</Typography>
+                    {isOwnProfile && !editing && (
+                      <IconButton size="small" onClick={() => setEditing(true)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Stack>
                   <Typography variant="body2" color="text.secondary">
                     {t("playerSince", { date: memberSince.toLocaleDateString(locale === "pt" ? "pt-PT" : "en-GB", { month: "long", year: "numeric" }) })}
                   </Typography>
+                  {isOwnProfile && user.email && !editing && (
+                    <Typography variant="body2" color="text.secondary">{user.email}</Typography>
+                  )}
                 </Box>
               </Stack>
-              <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+              <Stack direction="row" spacing={2} sx={{ mt: 2, flexWrap: "wrap" }}>
                 <Chip icon={<SportsIcon />} label={`${stats.totalGames} ${t("gamesPlayed").toLowerCase()}`} variant="outlined" />
                 <Chip label={`${stats.ownedGames} ${t("ownedGames").toLowerCase()}`} variant="outlined" size="small" />
                 <Chip label={`${stats.joinedGames} ${t("joinedGames").toLowerCase()}`} variant="outlined" size="small" />
               </Stack>
             </Paper>
+
+            {/* Edit form */}
+            {editing && isOwnProfile && (
+              <ProfileEditForm
+                user={user}
+                onSaved={() => { setEditing(false); mutate(); }}
+              />
+            )}
 
             {/* Game tabs */}
             <Paper elevation={2} sx={{ borderRadius: 3, overflow: "hidden" }}>
