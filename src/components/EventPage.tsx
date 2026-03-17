@@ -544,6 +544,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [balanced, setBalanced] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [sport, setSport] = useState("football-5v5");
+  const [editingLocation, setEditingLocation] = useState(false);
+  const [locationDraft, setLocationDraft] = useState("");
 
   const handleToggleBalanced = async (newValue: boolean) => {
     setBalanced(newValue);
@@ -562,6 +564,20 @@ export default function EventPage({ eventId }: { eventId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sport: newSport }),
     });
+    mutate();
+  };
+
+  const handleSaveLocation = async () => {
+    setEditingLocation(false);
+    const res = await fetch(`/api/events/${eventId}/location`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ location: locationDraft }),
+    });
+    const data = await res.json();
+    if (locationDraft && !data.geocoded) {
+      setSnackbar(t("locationNotGeocoded"));
+    }
     mutate();
   };
 
@@ -796,20 +812,54 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 </Box>
 
                 <Stack direction="row" spacing={2} flexWrap="wrap">
-                {event.location && (
+                {editingLocation ? (
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flex: 1 }}>
+                      <LocationOnIcon fontSize="small" color="action" />
+                      <TextField
+                        size="small"
+                        value={locationDraft}
+                        onChange={(e) => setLocationDraft(e.target.value)}
+                        placeholder={t("locationPlaceholder")}
+                        inputProps={{ maxLength: 200 }}
+                        sx={{ flex: 1 }}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveLocation();
+                          if (e.key === "Escape") setEditingLocation(false);
+                        }}
+                      />
+                      <IconButton size="small" onClick={handleSaveLocation} color="primary">
+                        <CheckIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" onClick={() => setEditingLocation(false)}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ) : (
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                       <LocationOnIcon fontSize="small" color="action" />
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        component="a"
-                        href={/^https?:\/\//i.test(event.location) ? event.location : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        sx={{ textDecoration: "none", "&:hover": { textDecoration: "underline", color: "primary.main" } }}
-                      >
-                        {event.location}
-                      </Typography>
+                      {event.location ? (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          component="a"
+                          href={/^https?:\/\//i.test(event.location) ? event.location : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          sx={{ textDecoration: "none", "&:hover": { textDecoration: "underline", color: "primary.main" } }}
+                        >
+                          {event.location}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.disabled">
+                          {t("locationOptional")}
+                        </Typography>
+                      )}
+                      <Tooltip title={t("editLocation")}>
+                        <IconButton size="small" onClick={() => { setLocationDraft(event.location || ""); setEditingLocation(true); }}>
+                          <EditIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Tooltip>
                     </Box>
                   )}
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
