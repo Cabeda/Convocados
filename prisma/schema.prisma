@@ -179,6 +179,7 @@ model WebhookSubscription {
   url        String
   secret     String?
   events     String            @default("[]") // JSON array of event types
+  disabled   Boolean           @default(false)
   createdAt  DateTime          @default(now())
   deliveries WebhookDelivery[]
 
