@@ -3,7 +3,7 @@ import { prisma } from "../../../lib/db.server";
 import { checkRateLimit } from "../../../lib/rateLimit.server";
 import { serializeRecurrenceRule, type RecurrenceRule } from "../../../lib/recurrence";
 import { resolveLocation } from "../../../lib/geocode";
-import { getSession } from "../../../lib/auth.helpers";
+import { getSession } from "../../../lib/auth.helpers.server";
 
 export const POST: APIRoute = async ({ request }) => {
   const ip =

@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
-import { getSession } from "../../../lib/auth.helpers";
+import { getSession } from "../../../lib/auth.helpers.server";
 
 export const GET: APIRoute = async ({ request }) => {
   const session = await getSession(request);

@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { sendPushToEvent } from "../../../../lib/push.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
-import { getSession, checkOwnership } from "../../../../lib/auth.helpers";
+import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 
 /**
  * If teams have been generated, add a player to the team with fewer members.
@@ -83,19 +83,18 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { name } = await request.json();
+  const { name, linkToAccount } = await request.json();
   const trimmed = String(name ?? "").trim().slice(0, 50);
   if (!trimmed) return Response.json({ error: "Player name is required." }, { status: 400 });
 
   try {
-    // Only link userId when the player name matches the authenticated user's name
-    const isOwnName = session?.user?.name &&
-      trimmed.toLowerCase() === session.user.name.toLowerCase();
+    // Only link userId when the client explicitly requests it and user is authenticated
+    const shouldLink = linkToAccount === true && !!session?.user;
     await prisma.player.create({
       data: {
         name: trimmed,
         eventId,
-        userId: isOwnName ? session.user.id : null,
+        userId: shouldLink ? session.user.id : null,
       },
     });
   } catch (e: any) {
@@ -154,7 +153,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   if (player.userId) {
     const session = await getSession(request);
     const isSelf = session?.user?.id === player.userId;
-    const { isOwner } = await checkOwnership(request, event.ownerId);
+    const { isOwner } = await checkOwnership(request, event.ownerId, session);
     if (!isSelf && !isOwner) {
       return Response.json({ error: "This player is account-linked and can only be removed by themselves or the event owner." }, { status: 403 });
     }

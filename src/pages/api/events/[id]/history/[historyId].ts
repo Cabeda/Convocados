@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { processGame } from "../../../../../lib/elo.server";
 import { computeGameUpdates } from "../../../../../lib/elo";
-import { checkOwnership } from "../../../../../lib/auth.helpers";
+import { checkOwnership } from "../../../../../lib/auth.helpers.server";
 
 // PATCH /api/events/[id]/history/[historyId]
 export const PATCH: APIRoute = async ({ params, request }) => {

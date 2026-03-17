@@ -346,7 +346,7 @@ function QuickJoin({
   userName: string;
   players: Player[];
   maxPlayers: number;
-  onJoin: (name: string) => Promise<void>;
+  onJoin: (name: string, linkToAccount?: boolean) => Promise<void>;
   onLeave: (id: string) => Promise<void>;
 }) {
   const t = useT();
@@ -358,7 +358,7 @@ function QuickJoin({
 
   const handleJoin = async () => {
     setJoining(true);
-    await onJoin(userName);
+    await onJoin(userName, true);
     setJoining(false);
   };
 
@@ -424,6 +424,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [locationDraft, setLocationDraft] = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+  const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
   const { data: session } = useSession();
 
   const handleToggleBalanced = async (newValue: boolean) => {
@@ -575,13 +576,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
     setSport(event.sport);
   }, [event]);
 
-  const addPlayer = async (name: string) => {
+  const addPlayer = async (name: string, linkToAccount = false) => {
     if (!name.trim()) return;
     setPlayerError(null);
     const res = await fetch(`/api/events/${eventId}/players`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Client-Id": clientId.current },
-      body: JSON.stringify({ name: name.trim().slice(0, 50) }),
+      body: JSON.stringify({ name: name.trim().slice(0, 50), linkToAccount }),
     });
     const json = await res.json();
     if (!res.ok) { setPlayerError(json.error); return; }
@@ -680,6 +681,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   };
 
   const handleRelinquishOwnership = async () => {
+    setRelinquishConfirmOpen(false);
     const res = await fetch(`/api/events/${eventId}/claim`, { method: "DELETE" });
     if (res.ok) {
       mutate();
@@ -892,7 +894,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       <>
                         <Chip icon={<StarIcon />} label={t("ownerBadge")} size="small" color="success" variant="outlined" />
                         <Tooltip title={t("relinquishOwnershipDesc")}>
-                          <Button variant="text" size="small" color="warning" onClick={handleRelinquishOwnership}>
+                          <Button variant="text" size="small" color="warning" onClick={() => setRelinquishConfirmOpen(true)}>
                             {t("relinquishOwnership")}
                           </Button>
                         </Tooltip>
@@ -1133,6 +1135,20 @@ export default function EventPage({ eventId }: { eventId: string }) {
           <DialogActions>
             <Button onClick={() => setConfirmOpen(false)}>{t("cancel")}</Button>
             <Button onClick={doRandomize} variant="contained">{t("randomize")}</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Relinquish ownership confirmation */}
+        <Dialog open={relinquishConfirmOpen} onClose={() => setRelinquishConfirmOpen(false)}>
+          <DialogTitle>{t("relinquishOwnership")}</DialogTitle>
+          <DialogContent>
+            <DialogContentText>{t("relinquishOwnershipDesc")}</DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setRelinquishConfirmOpen(false)}>{t("cancelEdit")}</Button>
+            <Button onClick={handleRelinquishOwnership} color="warning" variant="contained">
+              {t("relinquishOwnership")}
+            </Button>
           </DialogActions>
         </Dialog>
 
