@@ -14,7 +14,7 @@ export const POST: APIRoute = async ({ params, url, request }) => {
 
   const players = await prisma.player.findMany({
     where: { eventId },
-    orderBy: { createdAt: "asc" },
+    orderBy: { order: "asc" },
     take: event.maxPlayers,
   });
   if (players.length < 2) return Response.json({ error: "Need at least 2 players." }, { status: 400 });

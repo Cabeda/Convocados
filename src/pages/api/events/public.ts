@@ -9,7 +9,7 @@ export const GET: APIRoute = async ({ request }) => {
   const events = await prisma.event.findMany({
     where: { isPublic: true },
     include: {
-      players: { orderBy: { createdAt: "asc" } },
+      players: { orderBy: { order: "asc" } },
     },
     orderBy: { dateTime: "asc" },
     take: limit + 1,

@@ -112,6 +112,7 @@ model GameHistory {
 model Player {
   id        String   @id @default(cuid())
   name      String
+  order     Int      @default(0)
   eventId   String
   event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   userId    String?

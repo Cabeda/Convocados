@@ -8,7 +8,7 @@ import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 /**
  * If teams have been generated, add a player to the team with fewer members.
  */
-async function addPlayerToTeams(eventId: string, playerName: string) {
+export async function addPlayerToTeams(eventId: string, playerName: string) {
   const teams = await prisma.teamResult.findMany({
     where: { eventId },
     include: { members: true },
@@ -32,7 +32,7 @@ async function addPlayerToTeams(eventId: string, playerName: string) {
  * If teams have been generated, remove a player from their team.
  * If a promoted bench player name is given, slot them into the same team.
  */
-async function removePlayerFromTeams(eventId: string, playerName: string, promotedName?: string) {
+export async function removePlayerFromTeams(eventId: string, playerName: string, promotedName?: string) {
   const teams = await prisma.teamResult.findMany({
     where: { eventId },
     include: { members: true },
@@ -83,7 +83,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const session = await getSession(request);
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    include: { players: { orderBy: { createdAt: "asc" } } },
+    include: { players: { orderBy: { order: "asc" } } },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -94,10 +94,12 @@ export const POST: APIRoute = async ({ params, request }) => {
   try {
     // Only link userId when the client explicitly requests it and user is authenticated
     const shouldLink = linkToAccount === true && !!session?.user;
+    const nextOrder = event.players.length;
     await prisma.player.create({
       data: {
         name: trimmed,
         eventId,
+        order: nextOrder,
         userId: shouldLink ? session.user.id : null,
       },
     });
@@ -148,7 +150,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    include: { players: { orderBy: { createdAt: "asc" } } },
+    include: { players: { orderBy: { order: "asc" } } },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -170,6 +172,14 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const firstBench = event.players[event.maxPlayers];
 
   await prisma.player.delete({ where: { id: playerId, eventId } });
+
+  // Re-index remaining player orders
+  const remaining = event.players.filter((p) => p.id !== playerId);
+  for (let i = 0; i < remaining.length; i++) {
+    if (remaining[i].order !== i) {
+      await prisma.player.update({ where: { id: remaining[i].id }, data: { order: i } });
+    }
+  }
 
   // Auto-sync teams: remove player, optionally promote bench player into their team
   if (wasActive) {
@@ -194,5 +204,14 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   // Fire webhooks (non-blocking)
   fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft }).catch(() => {});
 
-  return Response.json({ ok: true });
+  // Return undo data so the client can restore the player within a time window
+  return Response.json({
+    ok: true,
+    undo: {
+      name: player.name,
+      order: playerIndex,
+      userId: player.userId ?? null,
+      removedAt: Date.now(),
+    },
+  });
 };
