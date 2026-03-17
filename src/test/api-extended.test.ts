@@ -372,8 +372,8 @@ describe("GET /api/events/[id]/history", () => {
     const res = await getHistory(ctx({ id }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toHaveLength(1);
-    expect(body[0].editable).toBe(true);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].editable).toBe(true);
   });
 
   it("returns 404 for unknown event", async () => {
@@ -389,8 +389,8 @@ describe("GET /api/events/[id]/history", () => {
     });
     const res = await getHistory(ctx({ id }));
     const body = await res.json();
-    expect(body).toHaveLength(1);
-    expect(body[0].editable).toBe(false);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].editable).toBe(false);
   });
 });
 
@@ -470,9 +470,9 @@ describe("GET /api/events/[id]/ratings", () => {
     const res = await getRatings(ctx({ id }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toHaveLength(1);
-    expect(body[0].name).toBe("Alice");
-    expect(body[0].rating).toBe(1050);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].name).toBe("Alice");
+    expect(body.data[0].rating).toBe(1050);
   });
 
   it("returns 404 for unknown event", async () => {

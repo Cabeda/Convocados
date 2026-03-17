@@ -605,7 +605,9 @@ describe("GET /api/events/public", () => {
     const res = await getPublicEvents(ctx({}));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual([]);
+    expect(body.data).toEqual([]);
+    expect(body.hasMore).toBe(false);
+    expect(body.nextCursor).toBeNull();
   });
 
   it("returns only public events", async () => {
@@ -625,8 +627,8 @@ describe("GET /api/events/public", () => {
     });
     const res = await getPublicEvents(ctx({}));
     const body = await res.json();
-    expect(body).toHaveLength(1);
-    expect(body[0].title).toBe("Public Game");
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].title).toBe("Public Game");
   });
 
   it("includes sport field in response", async () => {
@@ -639,8 +641,8 @@ describe("GET /api/events/public", () => {
     });
     const res = await getPublicEvents(ctx({}));
     const body = await res.json();
-    expect(body).toHaveLength(1);
-    expect(body[0].sport).toBe("padel");
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].sport).toBe("padel");
   });
 
   it("includes playerCount and spotsLeft", async () => {
@@ -659,8 +661,8 @@ describe("GET /api/events/public", () => {
     });
     const res = await getPublicEvents(ctx({}));
     const body = await res.json();
-    expect(body[0].playerCount).toBe(2);
-    expect(body[0].spotsLeft).toBe(2);
+    expect(body.data[0].playerCount).toBe(2);
+    expect(body.data[0].spotsLeft).toBe(2);
   });
 
   it("returns spotsLeft as 0 when full", async () => {
@@ -680,6 +682,6 @@ describe("GET /api/events/public", () => {
     });
     const res = await getPublicEvents(ctx({}));
     const body = await res.json();
-    expect(body[0].spotsLeft).toBe(0);
+    expect(body.data[0].spotsLeft).toBe(0);
   });
 });
