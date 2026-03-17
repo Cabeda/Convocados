@@ -7,6 +7,62 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ── better-auth tables ────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  ownedEvents   Event[]   @relation("EventOwner")
+  players       Player[]  @relation("PlayerUser")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ── App tables ────────────────────────────────────────────────────────────────
+
 model Event {
   id             String        @id @default(cuid())
   title          String
@@ -23,6 +79,8 @@ model Event {
   isRecurring    Boolean       @default(false)
   recurrenceRule String?
   nextResetAt    DateTime?
+  ownerId        String?
+  owner          User?         @relation("EventOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   players        Player[]
   teamResults    TeamResult[]
   history        GameHistory[]
@@ -31,6 +89,8 @@ model Event {
   webhookSubs    WebhookSubscription[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+
+  @@index([ownerId])
 }
 
 model GameHistory {
@@ -54,9 +114,12 @@ model Player {
   name      String
   eventId   String
   event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation("PlayerUser", fields: [userId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
 
   @@unique([eventId, name])
+  @@index([userId])
 }
 
 model PlayerRating {

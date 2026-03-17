@@ -2,19 +2,24 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   AppBar, Toolbar, IconButton, Typography, Box, useTheme,
   Tooltip, Container, useScrollTrigger, Paper, Button, Slide,
-  Menu, MenuItem, ListItemText,
+  Menu, MenuItem, ListItemText, ListItemIcon, Avatar, Divider,
+  CircularProgress, Stack,
 } from "@mui/material";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import SportsIcon from "@mui/icons-material/Sports";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
-import MenuBookIcon from "@mui/icons-material/MenuBook";
 import PublicIcon from "@mui/icons-material/Public";
 import TranslateIcon from "@mui/icons-material/Translate";
+import LoginIcon from "@mui/icons-material/Login";
+import LogoutIcon from "@mui/icons-material/Logout";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import PersonIcon from "@mui/icons-material/Person";
 import { useThemeMode } from "./ThemeModeProvider";
 import { useLocale } from "~/lib/useT";
 import type { Locale } from "~/lib/i18n";
+import { useSession, signOut } from "~/lib/auth.client";
 
 const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
   { code: "en", label: "English" },
@@ -89,6 +94,8 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
   const isDark = mode === "dark";
   const { locale, setLocale, t } = useLocale();
   const [langAnchor, setLangAnchor] = useState<null | HTMLElement>(null);
+  const [userAnchor, setUserAnchor] = useState<null | HTMLElement>(null);
+  const { data: session, isPending: sessionLoading } = useSession();
 
   const handleLangSelect = (code: Locale) => {
     setLangAnchor(null);
@@ -96,6 +103,12 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
       setLocale(code);
       window.location.reload();
     }
+  };
+
+  const handleSignOut = async () => {
+    setUserAnchor(null);
+    await signOut();
+    window.location.reload();
   };
 
   return (
@@ -131,13 +144,6 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                 <PublicIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title={t("docs")}>
-              <IconButton color="inherit" aria-label={t("docs")}
-                href="/docs"
-                component="a">
-                <MenuBookIcon />
-              </IconButton>
-            </Tooltip>
             <Tooltip title={LOCALE_OPTIONS.find((o) => o.code === locale)?.label ?? "Language"}>
               <IconButton onClick={(e) => setLangAnchor(e.currentTarget)} color="inherit" aria-label="Change language">
                 <TranslateIcon />
@@ -158,16 +164,54 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                 </MenuItem>
               ))}
             </Menu>
+            {/* Auth: user menu or sign-in button */}
+            {sessionLoading ? (
+              <CircularProgress size={20} sx={{ mx: 1 }} />
+            ) : session?.user ? (
+              <>
+                <Tooltip title={session.user.name || session.user.email}>
+                  <IconButton onClick={(e) => setUserAnchor(e.currentTarget)} sx={{ ml: 0.5 }}>
+                    <Avatar sx={{ width: 28, height: 28, fontSize: "0.85rem", bgcolor: theme.palette.primary.main }}>
+                      {(session.user.name || session.user.email || "?")[0].toUpperCase()}
+                    </Avatar>
+                  </IconButton>
+                </Tooltip>
+                <Menu
+                  anchorEl={userAnchor}
+                  open={Boolean(userAnchor)}
+                  onClose={() => setUserAnchor(null)}
+                >
+                  <MenuItem disabled>
+                    <ListItemText
+                      primary={session.user.name}
+                      secondary={session.user.email}
+                    />
+                  </MenuItem>
+                  <Divider />
+                  <MenuItem component="a" href={`/users/${session.user.id}`} onClick={() => setUserAnchor(null)}>
+                    <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("editProfile")}</ListItemText>
+                  </MenuItem>
+                  <MenuItem component="a" href="/dashboard" onClick={() => setUserAnchor(null)}>
+                    <ListItemIcon><DashboardIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("myGames")}</ListItemText>
+                  </MenuItem>
+                  <MenuItem onClick={handleSignOut}>
+                    <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("signOut")}</ListItemText>
+                  </MenuItem>
+                </Menu>
+              </>
+            ) : (
+              <Tooltip title={t("signIn")}>
+                <IconButton color="inherit" component="a" href="/auth/signin" aria-label={t("signIn")}>
+                  <LoginIcon />
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title={t("toggleDarkMode")}>
               <IconButton onClick={toggleMode} color="inherit" aria-label={t("toggleDarkMode")}>
                 {isDark ? <Brightness7Icon /> : <Brightness4Icon />}
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={t("viewOnGithub")}>
-              <IconButton color="inherit" aria-label={t("viewOnGithub")}
-                href="https://github.com/Cabeda/Convocados"
-                target="_blank" rel="noopener noreferrer">
-                <GitHubIcon />
               </IconButton>
             </Tooltip>
           </Toolbar>
@@ -184,6 +228,30 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
         borderTop: `1px solid ${theme.palette.divider}`,
       }}>
         <Container maxWidth="sm">
+          <Stack direction="row" spacing={2} justifyContent="center" alignItems="center" sx={{ mb: 1 }}>
+            <Typography
+              variant="body2"
+              component="a"
+              href="/docs"
+              color="text.secondary"
+              sx={{ textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
+            >
+              {t("docs")}
+            </Typography>
+            <Typography variant="body2" color="text.disabled">·</Typography>
+            <Typography
+              variant="body2"
+              component="a"
+              href="https://github.com/Cabeda/Convocados"
+              target="_blank"
+              rel="noopener noreferrer"
+              color="text.secondary"
+              sx={{ display: "flex", alignItems: "center", gap: 0.5, textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
+            >
+              <GitHubIcon sx={{ fontSize: 16 }} />
+              GitHub
+            </Typography>
+          </Stack>
           <Typography variant="body2" color="text.secondary" align="center">
             © {new Date().getFullYear()} {t("appName")}
           </Typography>

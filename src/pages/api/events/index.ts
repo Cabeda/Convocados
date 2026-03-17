@@ -3,6 +3,7 @@ import { prisma } from "../../../lib/db.server";
 import { checkRateLimit } from "../../../lib/rateLimit.server";
 import { serializeRecurrenceRule, type RecurrenceRule } from "../../../lib/recurrence";
 import { resolveLocation } from "../../../lib/geocode";
+import { getSession } from "../../../lib/auth.helpers.server";
 
 export const POST: APIRoute = async ({ request }) => {
   const ip =
@@ -14,6 +15,8 @@ export const POST: APIRoute = async ({ request }) => {
   if (!allowed) {
     return Response.json({ error: "Too many events created. Try again in an hour." }, { status: 429 });
   }
+
+  const session = await getSession(request);
 
   const body = await request.json();
   const title = String(body.title ?? "").trim().slice(0, 100);
@@ -58,6 +61,7 @@ export const POST: APIRoute = async ({ request }) => {
       title, location, dateTime, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
       latitude: geo?.latitude ?? null,
       longitude: geo?.longitude ?? null,
+      ownerId: session?.user?.id ?? null,
     },
   });
 
