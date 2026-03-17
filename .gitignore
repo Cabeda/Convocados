@@ -33,3 +33,6 @@ yarn-error.log*
 
 # astro
 .astro/
+
+# lighthouse ci
+.lighthouseci/
