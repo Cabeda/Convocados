@@ -10,10 +10,11 @@ function getResend(): Resend {
   return _resend;
 }
 
-const EMAIL_FROM = import.meta.env.EMAIL_FROM ?? process.env.EMAIL_FROM ?? "Convocados <noreply@convocados.fly.dev>";
+const EMAIL_FROM = import.meta.env.EMAIL_FROM ?? process.env.EMAIL_FROM ?? "Convocados <noreply@cabeda.dev>";
 
 export async function sendVerificationEmail(to: string, url: string) {
-  await getResend().emails.send({
+  console.log(`[email] Sending verification email to ${to}`);
+  const result = await getResend().emails.send({
     from: EMAIL_FROM,
     to,
     subject: "Verify your email — Convocados",
@@ -30,6 +31,11 @@ export async function sendVerificationEmail(to: string, url: string) {
       </div>
     `,
   });
+  if (result.error) {
+    console.error(`[email] Failed to send verification email:`, result.error);
+  } else {
+    console.log(`[email] Verification email sent successfully (id: ${result.data?.id})`);
+  }
 }
 
 export async function sendChangeEmailVerification(to: string, url: string) {
