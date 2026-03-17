@@ -254,6 +254,7 @@ function MapView({ events, t, locale }: {
           width="100%"
           height="100%"
           style={{ border: 0 }}
+          sandbox="allow-scripts allow-top-navigation"
           src={buildMapUrl(center, geoEvents, t, locale)}
         />
       </Paper>
@@ -272,6 +273,8 @@ function buildMapUrl(
   t: any,
   locale: string,
 ): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
   const markers = events.map((ev) => {
     const sportPreset = getSportPreset(ev.sport);
     const label = `${ev.title} — ${t(sportPreset.labelKey as any)} (${ev.playerCount}/${ev.maxPlayers})`;
@@ -295,7 +298,11 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
 }).addTo(map);
 ${events.map((ev) => {
     const sportPreset = getSportPreset(ev.sport);
-    const popupContent = `<b>${ev.title.replace(/'/g, "\\'")}</b><br/>${t(sportPreset.labelKey as any)} — ${ev.playerCount}/${ev.maxPlayers}<br/><a href="/events/${ev.id}" target="_top">${t("joinGame")}</a>`;
+    const title = ev.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    const sportLabel = t(sportPreset.labelKey as any);
+    const joinLabel = t("joinGame");
+    const eventUrl = `${origin}/events/${ev.id}`;
+    const popupContent = `<b>${title}</b><br/>${sportLabel} — ${ev.playerCount}/${ev.maxPlayers}<br/><a href="#" onclick="window.top.location.href='${eventUrl}';return false;">${joinLabel}</a>`;
     return `L.marker([${ev.lat},${ev.lng}]).addTo(map).bindPopup('${popupContent.replace(/'/g, "\\'")}');`;
   }).join("\n")}
 ${events.length > 1 ? `map.fitBounds([${events.map((e) => `[${e.lat},${e.lng}]`).join(",")}],{padding:[30,30]});` : ""}
