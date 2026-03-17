@@ -255,7 +255,7 @@ function MapView({ events, t, locale }: {
           height="100%"
           style={{ border: 0 }}
           sandbox="allow-scripts allow-top-navigation"
-          src={buildMapUrl(center, geoEvents, t, locale)}
+          srcDoc={buildMapHtml(center, geoEvents, t, locale)}
         />
       </Paper>
       {geoEvents.length === 0 && (
@@ -267,7 +267,7 @@ function MapView({ events, t, locale }: {
   );
 }
 
-function buildMapUrl(
+function buildMapHtml(
   center: [number, number],
   events: GeoEvent[],
   t: any,
@@ -309,7 +309,7 @@ ${events.length > 1 ? `map.fitBounds([${events.map((e) => `[${e.lat},${e.lng}]`)
 <\/script>
 </body></html>`;
 
-  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+  return html;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
