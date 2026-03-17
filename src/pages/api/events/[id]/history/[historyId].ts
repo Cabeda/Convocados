@@ -2,9 +2,18 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { processGame } from "../../../../../lib/elo.server";
 import { computeGameUpdates } from "../../../../../lib/elo";
+import { checkOwnership } from "../../../../../lib/auth.helpers";
 
 // PATCH /api/events/[id]/history/[historyId]
 export const PATCH: APIRoute = async ({ params, request }) => {
+  const event = await prisma.event.findUnique({ where: { id: params.id } });
+  if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const { isOwner } = await checkOwnership(request, event.ownerId);
+  if (event.ownerId && !isOwner) {
+    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+  }
+
   const entry = await prisma.gameHistory.findUnique({
     where: { id: params.historyId, eventId: params.id },
   });
