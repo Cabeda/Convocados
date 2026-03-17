@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { checkOwnership } from "../../../../lib/auth.helpers";
+import { checkOwnership } from "../../../../lib/auth.helpers.server";
 
 /** POST — transfer ownership to another authenticated player */
 export const POST: APIRoute = async ({ params, request }) => {

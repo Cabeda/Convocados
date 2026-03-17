@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
-import { getSession } from "../../../lib/auth.helpers";
+import { getSession } from "../../../lib/auth.helpers.server";
 
 /** GET — user profile with game history, filtered by viewer permissions */
 export const GET: APIRoute = async ({ params, request }) => {
@@ -114,7 +114,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   });
 };
 
-/** PATCH — update own profile (name, email) */
+/** PATCH — update own profile (name only; email changes should go through better-auth) */
 export const PATCH: APIRoute = async ({ params, request }) => {
   const userId = params.id!;
   const session = await getSession(request);
@@ -124,34 +124,16 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   }
 
   const body = await request.json();
-  const updates: Record<string, string> = {};
 
-  if (typeof body.name === "string") {
-    const name = body.name.trim().slice(0, 50);
-    if (!name) return Response.json({ error: "Name is required." }, { status: 400 });
-    updates.name = name;
+  if (typeof body.name !== "string" || !body.name.trim()) {
+    return Response.json({ error: "Name is required." }, { status: 400 });
   }
 
-  if (typeof body.email === "string") {
-    const email = body.email.trim().toLowerCase();
-    if (!email || !email.includes("@")) {
-      return Response.json({ error: "Valid email is required." }, { status: 400 });
-    }
-    // Check uniqueness
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing && existing.id !== userId) {
-      return Response.json({ error: "Email already in use." }, { status: 409 });
-    }
-    updates.email = email;
-  }
-
-  if (Object.keys(updates).length === 0) {
-    return Response.json({ error: "No fields to update." }, { status: 400 });
-  }
+  const name = body.name.trim().slice(0, 50);
 
   const updated = await prisma.user.update({
     where: { id: userId },
-    data: updates,
+    data: { name },
     select: { id: true, name: true, email: true, image: true },
   });
 

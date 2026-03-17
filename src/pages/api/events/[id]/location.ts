@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { resolveLocation } from "../../../../lib/geocode";
-import { checkOwnership } from "../../../../lib/auth.helpers";
+import { checkOwnership } from "../../../../lib/auth.helpers.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });

@@ -9,12 +9,19 @@ export async function getSession(request: Request) {
   return session;
 }
 
+type SessionResult = Awaited<ReturnType<typeof getSession>>;
+
 /**
  * Checks if the authenticated user is the owner of the given event.
+ * Accepts an optional pre-fetched session to avoid duplicate lookups.
  * Returns { isOwner, session } — session may be null for anonymous users.
  */
-export async function checkOwnership(request: Request, eventOwnerId: string | null) {
-  const session = await getSession(request);
+export async function checkOwnership(
+  request: Request,
+  eventOwnerId: string | null,
+  existingSession?: SessionResult,
+) {
+  const session = existingSession ?? await getSession(request);
   const isOwner = !!(session?.user && eventOwnerId && session.user.id === eventOwnerId);
   return { isOwner, session };
 }

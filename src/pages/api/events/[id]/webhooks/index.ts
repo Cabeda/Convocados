@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
-import { checkOwnership } from "../../../../../lib/auth.helpers";
+import { checkOwnership } from "../../../../../lib/auth.helpers.server";
 
 const MAX_WEBHOOKS_PER_EVENT = 10;
 

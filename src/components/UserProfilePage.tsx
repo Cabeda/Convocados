@@ -5,24 +5,13 @@ import {
   CircularProgress, Alert, Tabs, Tab, TextField, Button,
   IconButton, Snackbar,
 } from "@mui/material";
-import LocationOnIcon from "@mui/icons-material/LocationOn";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import SportsIcon from "@mui/icons-material/Sports";
 import EditIcon from "@mui/icons-material/Edit";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
-
-interface GameSummary {
-  id: string;
-  title: string;
-  location: string;
-  dateTime: string;
-  sport: string;
-  maxPlayers: number;
-  playerCount: number;
-}
+import { GameCard, type GameSummary } from "./GameCard";
 
 interface UserProfile {
   user: {
@@ -42,50 +31,9 @@ interface UserProfile {
   isOwnProfile: boolean;
 }
 
-function GameCard({ game }: { game: GameSummary }) {
-  const locale = detectLocale();
-  const date = new Date(game.dateTime);
-  const isPast = date < new Date();
-  return (
-    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, opacity: isPast ? 0.7 : 1 }}>
-      <Stack spacing={1}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <Typography variant="subtitle1" fontWeight={600}>
-            <a href={`/events/${game.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-              {game.title}
-            </a>
-          </Typography>
-          <Chip
-            label={`${game.playerCount}/${game.maxPlayers}`}
-            size="small"
-            color={game.playerCount >= game.maxPlayers ? "warning" : "primary"}
-          />
-        </Box>
-        <Stack direction="row" spacing={2} sx={{ flexWrap: "wrap" }}>
-          {game.location && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              <LocationOnIcon fontSize="small" color="action" />
-              <Typography variant="body2" color="text.secondary">{game.location}</Typography>
-            </Box>
-          )}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <AccessTimeIcon fontSize="small" color="action" />
-            <Typography variant="body2" color="text.secondary">
-              {date.toLocaleString(locale === "pt" ? "pt-PT" : "en-GB", {
-                weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-              })}
-            </Typography>
-          </Box>
-        </Stack>
-      </Stack>
-    </Paper>
-  );
-}
-
 function ProfileEditForm({ user, onSaved }: { user: UserProfile["user"]; onSaved: () => void }) {
   const t = useT();
   const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState(false);
@@ -97,7 +45,7 @@ function ProfileEditForm({ user, onSaved }: { user: UserProfile["user"]; onSaved
       const res = await fetch(`/api/users/${user.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+        body: JSON.stringify({ name: name.trim() }),
       });
       if (!res.ok) {
         const json = await res.json();
@@ -126,19 +74,11 @@ function ProfileEditForm({ user, onSaved }: { user: UserProfile["user"]; onSaved
           size="small"
           inputProps={{ maxLength: 50 }}
         />
-        <TextField
-          label={t("email")}
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          fullWidth
-          size="small"
-        />
         <Stack direction="row" spacing={1}>
           <Button
             variant="contained"
             onClick={handleSave}
-            disabled={saving || !name.trim() || !email.trim()}
+            disabled={saving || !name.trim()}
           >
             {t("saveProfile")}
           </Button>
@@ -254,7 +194,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
               <Box sx={{ p: { xs: 2, sm: 3 } }}>
                 {allGames.length > 0 ? (
                   <Stack spacing={1.5}>
-                    {allGames.map((g) => <GameCard key={g.id} game={g} />)}
+                    {allGames.map((g) => <GameCard key={g.id} game={g} dimPast />)}
                   </Stack>
                 ) : (
                   <Alert severity="info">
