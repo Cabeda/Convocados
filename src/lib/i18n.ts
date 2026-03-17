@@ -265,6 +265,11 @@ export const translations = {
     // Docs
     docs: "Docs",
 
+    // Social auth
+    signInWithGoogle: "Sign in with Google",
+    signUpWithGoogle: "Sign up with Google",
+    or: "or",
+
     // Email verification
     checkYourEmail: "Check your email",
     checkYourEmailDesc: "We sent a verification link to {email}. Click it to activate your account.",
@@ -542,6 +547,11 @@ export const translations = {
 
     // Docs
     docs: "Docs",
+
+    // Social auth
+    signInWithGoogle: "Entrar com Google",
+    signUpWithGoogle: "Registar com Google",
+    or: "ou",
 
     // Email verification
     checkYourEmail: "Verifica o teu email",

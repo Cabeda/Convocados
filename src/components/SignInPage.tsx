@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import {
-  Container, Paper, Typography, TextField, Button, Stack, Alert, Link,
+  Container, Paper, Typography, TextField, Button, Stack, Alert, Link, Divider,
 } from "@mui/material";
+import GoogleIcon from "@mui/icons-material/Google";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -40,6 +41,10 @@ export default function SignInPage() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    await signIn.social({ provider: "google", callbackURL: "/" });
+  };
+
   return (
     <ThemeModeProvider>
       <ResponsiveLayout>
@@ -58,6 +63,19 @@ export default function SignInPage() {
                   </Link>
                 </Alert>
               )}
+
+              <Button
+                variant="outlined"
+                size="large"
+                fullWidth
+                startIcon={<GoogleIcon />}
+                onClick={handleGoogleSignIn}
+                type="button"
+              >
+                {t("signInWithGoogle")}
+              </Button>
+
+              <Divider>{t("or")}</Divider>
 
               <TextField
                 label={t("email")}
