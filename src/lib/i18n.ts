@@ -449,7 +449,19 @@ export function createT(locale: Locale): TFunction {
   };
 }
 
+const LOCALE_KEY = "convocados-locale";
+
 export function detectLocale(): Locale {
+  try {
+    const stored = localStorage.getItem(LOCALE_KEY);
+    if (stored === "pt" || stored === "en") return stored;
+  } catch { /* localStorage unavailable (SSR / Node) */ }
   if (typeof navigator === "undefined") return "en";
   return navigator.language.toLowerCase().startsWith("pt") ? "pt" : "en";
+}
+
+export function setStoredLocale(locale: Locale): void {
+  try {
+    localStorage.setItem(LOCALE_KEY, locale);
+  } catch { /* localStorage unavailable (SSR / Node) */ }
 }

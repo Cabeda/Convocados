@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   AppBar, Toolbar, IconButton, Typography, Box, useTheme,
   Tooltip, Container, useScrollTrigger, Paper, Button, Slide,
+  Menu, MenuItem, ListItemText,
 } from "@mui/material";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
@@ -10,8 +11,15 @@ import SportsIcon from "@mui/icons-material/Sports";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import PublicIcon from "@mui/icons-material/Public";
+import TranslateIcon from "@mui/icons-material/Translate";
 import { useThemeMode } from "./ThemeModeProvider";
-import { useT } from "~/lib/useT";
+import { useLocale } from "~/lib/useT";
+import type { Locale } from "~/lib/i18n";
+
+const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
+  { code: "en", label: "English" },
+  { code: "pt", label: "Português" },
+];
 
 function ElevationScroll({ children }: { children: React.ReactElement<{ elevation?: number }> }) {
   const trigger = useScrollTrigger({ disableHysteresis: true, threshold: 0 });
@@ -19,7 +27,7 @@ function ElevationScroll({ children }: { children: React.ReactElement<{ elevatio
 }
 
 function UpdateBanner() {
-  const t = useT();
+  const { t } = useLocale();
   const theme = useTheme();
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
 
@@ -79,7 +87,16 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
   const theme = useTheme();
   const { mode, toggleMode } = useThemeMode();
   const isDark = mode === "dark";
-  const t = useT();
+  const { locale, setLocale, t } = useLocale();
+  const [langAnchor, setLangAnchor] = useState<null | HTMLElement>(null);
+
+  const handleLangSelect = (code: Locale) => {
+    setLangAnchor(null);
+    if (code !== locale) {
+      setLocale(code);
+      window.location.reload();
+    }
+  };
 
   return (
     <Box sx={{
@@ -121,6 +138,26 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                 <MenuBookIcon />
               </IconButton>
             </Tooltip>
+            <Tooltip title={LOCALE_OPTIONS.find((o) => o.code === locale)?.label ?? "Language"}>
+              <IconButton onClick={(e) => setLangAnchor(e.currentTarget)} color="inherit" aria-label="Change language">
+                <TranslateIcon />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={langAnchor}
+              open={Boolean(langAnchor)}
+              onClose={() => setLangAnchor(null)}
+            >
+              {LOCALE_OPTIONS.map((opt) => (
+                <MenuItem
+                  key={opt.code}
+                  selected={opt.code === locale}
+                  onClick={() => handleLangSelect(opt.code)}
+                >
+                  <ListItemText>{opt.label}</ListItemText>
+                </MenuItem>
+              ))}
+            </Menu>
             <Tooltip title={t("toggleDarkMode")}>
               <IconButton onClick={toggleMode} color="inherit" aria-label={t("toggleDarkMode")}>
                 {isDark ? <Brightness7Icon /> : <Brightness4Icon />}
