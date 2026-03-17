@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
-import { prisma } from "../../../lib/db.server";
-import { getSession } from "../../../lib/auth.helpers.server";
+import { prisma } from "../../../../lib/db.server";
+import { getSession } from "../../../../lib/auth.helpers.server";
 
 /** GET — user profile with game history, filtered by viewer permissions */
 export const GET: APIRoute = async ({ params, request }) => {
