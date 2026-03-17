@@ -10,6 +10,11 @@ function getResend(): Resend {
   return _resend;
 }
 
+/** Visible for testing — resets the cached Resend client */
+export function _resetResendClient() {
+  _resend = null;
+}
+
 const EMAIL_FROM = import.meta.env.EMAIL_FROM ?? process.env.EMAIL_FROM ?? "Convocados <noreply@cabeda.dev>";
 
 export async function sendVerificationEmail(to: string, url: string) {
@@ -33,13 +38,14 @@ export async function sendVerificationEmail(to: string, url: string) {
   });
   if (result.error) {
     console.error(`[email] Failed to send verification email:`, result.error);
-  } else {
-    console.log(`[email] Verification email sent successfully (id: ${result.data?.id})`);
+    throw new Error(`Failed to send verification email: ${result.error.message}`);
   }
+  console.log(`[email] Verification email sent successfully (id: ${result.data?.id})`);
 }
 
 export async function sendChangeEmailVerification(to: string, url: string) {
-  await getResend().emails.send({
+  console.log(`[email] Sending change-email verification to ${to}`);
+  const result = await getResend().emails.send({
     from: EMAIL_FROM,
     to,
     subject: "Confirm your new email — Convocados",
@@ -56,4 +62,9 @@ export async function sendChangeEmailVerification(to: string, url: string) {
       </div>
     `,
   });
+  if (result.error) {
+    console.error(`[email] Failed to send change-email verification:`, result.error);
+    throw new Error(`Failed to send change-email verification: ${result.error.message}`);
+  }
+  console.log(`[email] Change-email verification sent successfully (id: ${result.data?.id})`);
 }
