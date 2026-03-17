@@ -422,6 +422,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [sport, setSport] = useState("football-5v5");
   const [editingLocation, setEditingLocation] = useState(false);
   const [locationDraft, setLocationDraft] = useState("");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
   const { data: session } = useSession();
 
   const handleToggleBalanced = async (newValue: boolean) => {
@@ -455,6 +457,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
     if (locationDraft && !data.geocoded) {
       setSnackbar(t("locationNotGeocoded"));
     }
+    mutate();
+  };
+
+  const handleSaveTitle = async () => {
+    const trimmed = titleDraft.trim();
+    if (!trimmed) return;
+    setEditingTitle(false);
+    await fetch(`/api/events/${eventId}/title`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: trimmed }),
+    });
     mutate();
   };
 
@@ -704,7 +718,37 @@ export default function EventPage({ eventId }: { eventId: string }) {
             <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
               <Stack spacing={2}>
                 <Box>
-                  <Typography variant="h4" fontWeight={700}>{event.title}</Typography>
+                  {editingTitle && canEditSettings ? (
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <TextField
+                        size="small"
+                        value={titleDraft}
+                        onChange={(e) => setTitleDraft(e.target.value)}
+                        inputProps={{ maxLength: 100 }}
+                        sx={{ flex: 1 }}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveTitle();
+                          if (e.key === "Escape") setEditingTitle(false);
+                        }}
+                      />
+                      <IconButton size="small" onClick={handleSaveTitle} color="primary">
+                        <CheckIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" onClick={() => setEditingTitle(false)}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ) : (
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      <Typography variant="h4" fontWeight={700}>{event.title}</Typography>
+                      {canEditSettings && (
+                        <IconButton size="small" onClick={() => { setTitleDraft(event.title); setEditingTitle(true); }}>
+                          <EditIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      )}
+                    </Box>
+                  )}
                   <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: "wrap", alignItems: "center" }}>
                     {rule && (
                       <Chip icon={<EventRepeatIcon />} label={describeRecurrenceRule(rule, locale)}
