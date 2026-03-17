@@ -263,6 +263,10 @@ export const translations = {
     verificationSent: "Verification email sent!",
     emailNotVerified: "Please verify your email before signing in. Check your inbox for the verification link.",
     resendingVerification: "Sending...",
+    changeEmail: "Change email",
+    newEmail: "New email",
+    changeEmailBtn: "Send verification",
+    changeEmailSent: "Verification email sent to your new address. Check your inbox.",
   },
   pt: {
     // App
@@ -528,6 +532,10 @@ export const translations = {
     verificationSent: "Email de verificação enviado!",
     emailNotVerified: "Verifica o teu email antes de entrar. Procura o link de verificação na tua caixa de entrada.",
     resendingVerification: "A enviar...",
+    changeEmail: "Alterar email",
+    newEmail: "Novo email",
+    changeEmailBtn: "Enviar verificação",
+    changeEmailSent: "Email de verificação enviado para o novo endereço. Verifica a tua caixa de entrada.",
   },
 } as const;
 
