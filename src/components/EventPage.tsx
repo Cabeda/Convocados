@@ -959,6 +959,30 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         noOptionsText={t("noSuggestions")}
                       />
 
+                      {/* Recent players — quick-add chips */}
+                      {availableSuggestions.length > 0 && (
+                        <Box>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+                            {t("recentPlayers")}:
+                          </Typography>
+                          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                            {availableSuggestions.slice(0, 12).map((s) => (
+                              <Chip
+                                key={s.name}
+                                label={s.name}
+                                variant="outlined"
+                                size="small"
+                                onClick={() => { addPlayer(s.name); }}
+                                sx={{
+                                  cursor: "pointer",
+                                  "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
+                                }}
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+
                       {active.length > 0 && (
                         <Paper variant="outlined" sx={{
                           p: 2, display: "flex", flexWrap: "wrap", gap: 1,
