@@ -10,6 +10,8 @@ const { id } = Astro.params;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Player Profile — Convocados</title>
     <link rel="icon" href="/favicon.ico" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1b6b4a" />
   </head>
   <body>
     <UserProfilePage client:only="react" userId={id!} />
