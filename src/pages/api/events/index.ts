@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
 import { checkRateLimit } from "../../../lib/rateLimit.server";
 import { serializeRecurrenceRule, type RecurrenceRule } from "../../../lib/recurrence";
+import { resolveLocation } from "../../../lib/geocode";
 
 export const POST: APIRoute = async ({ request }) => {
   const ip =
@@ -49,8 +50,15 @@ export const POST: APIRoute = async ({ request }) => {
     nextResetAt = new Date(dateTime.getTime() + 60 * 60 * 1000);
   }
 
+  // Geocode location (non-blocking failure — coordinates are optional)
+  const geo = location ? await resolveLocation(location) : null;
+
   const event = await prisma.event.create({
-    data: { title, location, dateTime, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt },
+    data: {
+      title, location, dateTime, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
+      latitude: geo?.latitude ?? null,
+      longitude: geo?.longitude ?? null,
+    },
   });
 
   return Response.json({ id: event.id });

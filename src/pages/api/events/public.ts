@@ -15,6 +15,8 @@ export const GET: APIRoute = async () => {
       id: e.id,
       title: e.title,
       location: e.location,
+      latitude: e.latitude,
+      longitude: e.longitude,
       sport: e.sport,
       dateTime: e.dateTime.toISOString(),
       maxPlayers: e.maxPlayers,
