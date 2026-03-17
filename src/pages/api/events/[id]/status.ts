@@ -5,7 +5,7 @@ export const GET: APIRoute = async ({ params }) => {
   const event = await prisma.event.findUnique({
     where: { id: params.id },
     include: {
-      players: { orderBy: { createdAt: "asc" } },
+      players: { orderBy: { order: "asc" } },
       teamResults: { include: { members: { orderBy: { order: "asc" } } } },
     },
   });

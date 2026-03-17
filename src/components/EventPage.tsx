@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import useSWR from "swr";
 import {
   Container, Paper, Typography, TextField, Button, Box, Stack, Chip,
   Alert, IconButton, Tooltip, InputAdornment, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, Snackbar, alpha, useTheme, Grid2,
   CircularProgress, Divider, Autocomplete, Accordion, AccordionSummary, AccordionDetails,
-  FormControlLabel, Switch, FormControl, Select, MenuItem,
+  FormControlLabel, Switch, FormControl, Select, MenuItem, List, ListItem, ListItemText,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import HistoryIcon from "@mui/icons-material/History";
@@ -27,6 +27,8 @@ import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstruct
 import PublicIcon from "@mui/icons-material/Public";
 import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
 import ShieldIcon from "@mui/icons-material/Shield";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import StarIcon from "@mui/icons-material/Star";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import { ThemeModeProvider } from "./ThemeModeProvider";
@@ -593,13 +595,101 @@ export default function EventPage({ eventId }: { eventId: string }) {
   };
 
   const removePlayer = async (playerId: string) => {
-    await fetch(`/api/events/${eventId}/players`, {
+    const res = await fetch(`/api/events/${eventId}/players`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json", "X-Client-Id": clientId.current },
       body: JSON.stringify({ playerId }),
     });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.undo) {
+        setUndoData({ eventId, ...data.undo });
+      }
+    }
     mutate();
   };
+
+  // ── Undo remove state ──────────────────────────────────────────────────────
+  const [undoData, setUndoData] = useState<{ eventId: string; name: string; order: number; userId: string | null; removedAt: number } | null>(null);
+
+  const handleUndo = useCallback(async () => {
+    if (!undoData) return;
+    const res = await fetch(`/api/events/${undoData.eventId}/undo-remove`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(undoData),
+    });
+    if (res.ok) {
+      mutate();
+    } else {
+      const json = await res.json();
+      setPlayerError(json.error);
+    }
+    setUndoData(null);
+  }, [undoData, mutate]);
+
+  // Auto-expire undo after 60 seconds
+  useEffect(() => {
+    if (!undoData) return;
+    const timer = setTimeout(() => setUndoData(null), 60_000);
+    return () => clearTimeout(timer);
+  }, [undoData]);
+
+  const claimPlayer = async (playerId: string) => {
+    const res = await fetch(`/api/events/${eventId}/claim-player`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId }),
+    });
+    if (res.ok) {
+      setSnackbar(t("claimPlayerSuccess"));
+      mutate();
+    } else {
+      const json = await res.json();
+      setPlayerError(json.error);
+    }
+  };
+
+  // ── Player reorder drag state ──────────────────────────────────────────────
+  const [dragPlayer, setDragPlayer] = useState<{ id: string; index: number } | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const reorderPlayers = useCallback(async (reorderedIds: string[]) => {
+    await fetch(`/api/events/${eventId}/reorder-players`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerIds: reorderedIds }),
+    });
+    mutate();
+  }, [eventId, mutate]);
+
+  const handlePlayerDragStart = useCallback((playerId: string, index: number) => {
+    setDragPlayer({ id: playerId, index });
+  }, []);
+
+  const handlePlayerDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  }, []);
+
+  const handlePlayerDrop = useCallback((players: Player[]) => {
+    if (!dragPlayer || dragOverIndex === null || dragPlayer.index === dragOverIndex) {
+      setDragPlayer(null);
+      setDragOverIndex(null);
+      return;
+    }
+    const ids = players.map((p) => p.id);
+    const [moved] = ids.splice(dragPlayer.index, 1);
+    ids.splice(dragOverIndex, 0, moved);
+    setDragPlayer(null);
+    setDragOverIndex(null);
+    reorderPlayers(ids);
+  }, [dragPlayer, dragOverIndex, reorderPlayers]);
+
+  const handlePlayerDragEnd = useCallback(() => {
+    setDragPlayer(null);
+    setDragOverIndex(null);
+  }, []);
 
   const doRandomize = async () => {
     setConfirmOpen(false);
@@ -673,6 +763,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const isOwnerless = !event.ownerId;
   // Owner-only controls are shown if: no owner (legacy behavior) or current user is owner
   const canEditSettings = isOwnerless || isOwner;
+  // User can only claim an anonymous player if they don't already have a linked player in this event
+  const userHasLinkedPlayer = isAuthenticated && event.players.some((p: any) => p.userId === session.user.id);
+  const canClaimPlayer = isAuthenticated && !userHasLinkedPlayer;
 
   const handleClaimOwnership = async () => {
     const res = await fetch(`/api/events/${eventId}/claim`, { method: "POST" });
@@ -1051,20 +1144,56 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
                       {active.length > 0 && (
                         <Paper variant="outlined" sx={{
-                          p: 2, display: "flex", flexWrap: "wrap", gap: 1,
-                          backgroundColor: alpha(theme.palette.background.default, 0.5),
+                          p: 1, backgroundColor: alpha(theme.palette.background.default, 0.5),
                         }}>
-                          {active.map((player) => (
-                            <Chip key={player.id}
-                              icon={player.userId ? <Tooltip title={t("protectedPlayer")}><ShieldIcon fontSize="small" /></Tooltip> : undefined}
-                              label={player.userId ? (
-                                <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit" }}>
-                                  {player.name}
-                                </a>
-                              ) : player.name}
-                              color="primary" variant="filled"
-                              onDelete={canRemovePlayer(player) ? () => removePlayer(player.id) : undefined} />
-                          ))}
+                          <List dense disablePadding>
+                            {active.map((player, i) => (
+                              <ListItem
+                                key={player.id}
+                                draggable={isOwner}
+                                onDragStart={() => handlePlayerDragStart(player.id, i)}
+                                onDragOver={(e) => handlePlayerDragOver(e, i)}
+                                onDrop={() => handlePlayerDrop(event.players)}
+                                onDragEnd={handlePlayerDragEnd}
+                                sx={{
+                                  borderRadius: 2, px: 1, py: 0.5,
+                                  cursor: isOwner ? "grab" : "default",
+                                  opacity: dragPlayer?.id === player.id ? 0.3 : 1,
+                                  borderTop: dragOverIndex === i && dragPlayer ? `2px solid ${theme.palette.primary.main}` : "2px solid transparent",
+                                  transition: "opacity 0.15s",
+                                  "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.04) },
+                                }}
+                                secondaryAction={
+                                  canRemovePlayer(player) ? (
+                                    <IconButton edge="end" size="small" onClick={() => removePlayer(player.id)}>
+                                      <CloseIcon fontSize="small" />
+                                    </IconButton>
+                                  ) : undefined
+                                }
+                              >
+                                {isOwner && (
+                                  <DragIndicatorIcon fontSize="small" sx={{ color: "text.disabled", mr: 0.5, flexShrink: 0 }} />
+                                )}
+                                {player.userId ? (
+                                  <Tooltip title={t("protectedPlayer")}>
+                                    <ShieldIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5, flexShrink: 0 }} />
+                                  </Tooltip>
+                                ) : canClaimPlayer ? (
+                                  <Tooltip title={t("claimPlayerDesc")}>
+                                    <SwapHorizIcon fontSize="small" sx={{ cursor: "pointer", mr: 0.5, flexShrink: 0 }} onClick={() => claimPlayer(player.id)} />
+                                  </Tooltip>
+                                ) : null}
+                                <ListItemText
+                                  primary={player.userId ? (
+                                    <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>
+                                      {player.name}
+                                    </a>
+                                  ) : player.name}
+                                  primaryTypographyProps={{ fontWeight: 500, fontSize: "0.9rem" }}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
                         </Paper>
                       )}
 
@@ -1078,21 +1207,61 @@ export default function EventPage({ eventId }: { eventId: string }) {
                           </Box>
                           <Alert severity="info" sx={{ py: 0.5 }}>{t("benchInfo")}</Alert>
                           <Paper variant="outlined" sx={{
-                            p: 2, display: "flex", flexWrap: "wrap", gap: 1,
+                            p: 1,
                             backgroundColor: alpha(theme.palette.warning.main, 0.04),
                             borderColor: alpha(theme.palette.warning.main, 0.3),
                           }}>
-                            {bench.map((player, i) => (
-                              <Chip key={player.id}
-                                icon={player.userId ? <Tooltip title={t("protectedPlayer")}><ShieldIcon fontSize="small" /></Tooltip> : undefined}
-                                label={player.userId ? (
-                                  <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit" }}>
-                                    {`${i + 1}. ${player.name}`}
-                                  </a>
-                                ) : `${i + 1}. ${player.name}`}
-                                color="warning" variant="outlined"
-                                onDelete={canRemovePlayer(player) ? () => removePlayer(player.id) : undefined} />
-                            ))}
+                            <List dense disablePadding>
+                              {bench.map((player, i) => {
+                                const globalIndex = event.maxPlayers + i;
+                                return (
+                                  <ListItem
+                                    key={player.id}
+                                    draggable={isOwner}
+                                    onDragStart={() => handlePlayerDragStart(player.id, globalIndex)}
+                                    onDragOver={(e) => handlePlayerDragOver(e, globalIndex)}
+                                    onDrop={() => handlePlayerDrop(event.players)}
+                                    onDragEnd={handlePlayerDragEnd}
+                                    sx={{
+                                      borderRadius: 2, px: 1, py: 0.5,
+                                      cursor: isOwner ? "grab" : "default",
+                                      opacity: dragPlayer?.id === player.id ? 0.3 : 1,
+                                      borderTop: dragOverIndex === globalIndex && dragPlayer ? `2px solid ${theme.palette.warning.main}` : "2px solid transparent",
+                                      transition: "opacity 0.15s",
+                                      "&:hover": { bgcolor: alpha(theme.palette.warning.main, 0.04) },
+                                    }}
+                                    secondaryAction={
+                                      canRemovePlayer(player) ? (
+                                        <IconButton edge="end" size="small" onClick={() => removePlayer(player.id)}>
+                                          <CloseIcon fontSize="small" />
+                                        </IconButton>
+                                      ) : undefined
+                                    }
+                                  >
+                                    {isOwner && (
+                                      <DragIndicatorIcon fontSize="small" sx={{ color: "text.disabled", mr: 0.5, flexShrink: 0 }} />
+                                    )}
+                                    {player.userId ? (
+                                      <Tooltip title={t("protectedPlayer")}>
+                                        <ShieldIcon fontSize="small" sx={{ color: "warning.main", mr: 0.5, flexShrink: 0 }} />
+                                      </Tooltip>
+                                    ) : canClaimPlayer ? (
+                                      <Tooltip title={t("claimPlayerDesc")}>
+                                        <SwapHorizIcon fontSize="small" sx={{ cursor: "pointer", mr: 0.5, flexShrink: 0 }} onClick={() => claimPlayer(player.id)} />
+                                      </Tooltip>
+                                    ) : null}
+                                    <ListItemText
+                                      primary={player.userId ? (
+                                        <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>
+                                          {`${i + 1}. ${player.name}`}
+                                        </a>
+                                      ) : `${i + 1}. ${player.name}`}
+                                      primaryTypographyProps={{ fontWeight: 500, fontSize: "0.9rem" }}
+                                    />
+                                  </ListItem>
+                                );
+                              })}
+                            </List>
                           </Paper>
                         </>
                       )}
@@ -1175,6 +1344,19 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
         <Snackbar open={!!snackbar} autoHideDuration={3000} onClose={() => setSnackbar(null)}
           message={snackbar} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} />
+
+        <Snackbar
+          open={!!undoData}
+          autoHideDuration={60000}
+          onClose={() => setUndoData(null)}
+          message={undoData ? t("undoRemoveDesc", { name: undoData.name }) : ""}
+          anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+          action={
+            <Button color="inherit" size="small" onClick={handleUndo}>
+              {t("undoRemove")}
+            </Button>
+          }
+        />
       </ResponsiveLayout>
     </ThemeModeProvider>
   );
