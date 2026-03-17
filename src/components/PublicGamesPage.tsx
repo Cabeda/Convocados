@@ -23,6 +23,8 @@ interface PublicEvent {
   id: string;
   title: string;
   location: string;
+  latitude: number | null;
+  longitude: number | null;
   sport: string;
   dateTime: string;
   maxPlayers: number;
@@ -203,8 +205,6 @@ function TableView({ events, locale, t }: {
 
 // ── Map view ──────────────────────────────────────────────────────────────────
 
-const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
-
 interface GeoEvent extends PublicEvent {
   lat: number;
   lng: number;
@@ -215,10 +215,8 @@ function MapView({ events, t, locale }: {
   t: any;
   locale: string;
 }) {
-  const [geoEvents, setGeoEvents] = useState<GeoEvent[]>([]);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   // Request user location
   useEffect(() => {
@@ -233,47 +231,15 @@ function MapView({ events, t, locale }: {
     );
   }, []);
 
-  // Geocode event locations
-  useEffect(() => {
-    let cancelled = false;
-    const geocode = async () => {
-      const results: GeoEvent[] = [];
-      for (const ev of events) {
-        if (!ev.location) continue;
-        try {
-          const res = await fetch(
-            `${NOMINATIM_URL}?q=${encodeURIComponent(ev.location)}&format=json&limit=1`,
-            { headers: { "Accept-Language": locale } },
-          );
-          const data = await res.json();
-          if (data.length > 0 && !cancelled) {
-            results.push({ ...ev, lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) });
-          }
-        } catch {
-          // skip events that fail to geocode
-        }
-      }
-      if (!cancelled) {
-        setGeoEvents(results);
-        setLoading(false);
-      }
-    };
-    geocode();
-    return () => { cancelled = true; };
-  }, [events, locale]);
+  // Use stored coordinates — no client-side geocoding needed
+  const geoEvents: GeoEvent[] = useMemo(() =>
+    events
+      .filter((ev) => ev.latitude != null && ev.longitude != null)
+      .map((ev) => ({ ...ev, lat: ev.latitude!, lng: ev.longitude! })),
+    [events],
+  );
 
   const center = userPos ?? (geoEvents.length > 0 ? [geoEvents[0].lat, geoEvents[0].lng] as [number, number] : [39.5, -8.0] as [number, number]);
-
-  if (loading && geoEvents.length === 0) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-        <CircularProgress />
-        <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-          {t("mapLoading")}
-        </Typography>
-      </Box>
-    );
-  }
 
   return (
     <Stack spacing={1}>

@@ -11,6 +11,8 @@ model Event {
   id             String        @id @default(cuid())
   title          String
   location       String
+  latitude       Float?
+  longitude      Float?
   dateTime       DateTime
   maxPlayers     Int           @default(10)
   teamOneName    String        @default("Ninjas")
