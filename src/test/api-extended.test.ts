@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { prisma } from "~/lib/db.server";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient({
+  datasources: { db: { url: process.env.DATABASE_URL } },
+});
 
 // Import route handlers
 import { GET as getHealth } from "~/pages/api/health";
