@@ -51,6 +51,7 @@ interface EventData {
   teamTwoName: string;
   isRecurring: boolean;
   isPublic: boolean;
+  balanced: boolean;
   recurrenceRule: string | null;
   players: Player[];
   teamResults: TeamResult[];
@@ -540,6 +541,16 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [balanced, setBalanced] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
 
+  const handleToggleBalanced = async (newValue: boolean) => {
+    setBalanced(newValue);
+    await fetch(`/api/events/${eventId}/balanced`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ balanced: newValue }),
+    });
+    mutate();
+  };
+
   // Fetch ELO ratings when balanced mode is on
   const { data: ratingsData } = useSWR<{ name: string; rating: number }[]>(
     balanced ? `/api/events/${eventId}/ratings` : null,
@@ -639,6 +650,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     setTeamOneName(event.teamOneName);
     setTeamTwoName(event.teamTwoName);
     setIsPublic(event.isPublic);
+    setBalanced(event.balanced);
   }, [event]);
 
   const addPlayer = async (name: string) => {
@@ -955,7 +967,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2 }}>
                         <Tooltip title={t("balancedTeamsTooltip")}>
                           <FormControlLabel
-                            control={<Switch size="small" checked={balanced} onChange={(e) => setBalanced(e.target.checked)} />}
+                            control={<Switch size="small" checked={balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} />}
                             label={t("balancedTeams")}
                           />
                         </Tooltip>
