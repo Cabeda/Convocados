@@ -253,6 +253,11 @@ export const translations = {
     ownedGames: "My Games",
     joinedGames: "Joined Games",
 
+    // Calendar
+    addToCalendar: "Add to calendar",
+    downloadIcs: "Download .ics",
+    addToGoogleCalendar: "Google Calendar",
+
     // Docs
     docs: "Docs",
 
@@ -521,6 +526,11 @@ export const translations = {
     noJoinedGames: "Ainda não entraste em nenhum jogo.",
     ownedGames: "Os Meus Jogos",
     joinedGames: "Jogos em que Participei",
+
+    // Calendar
+    addToCalendar: "Adicionar ao calendário",
+    downloadIcs: "Descarregar .ics",
+    addToGoogleCalendar: "Google Calendar",
 
     // Docs
     docs: "Docs",

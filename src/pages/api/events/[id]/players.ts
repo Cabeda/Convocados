@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { sendPushToEvent } from "../../../../lib/push.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
+import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
 /**
  * If teams have been generated, add a player to the team with fewer members.
@@ -71,6 +72,9 @@ async function removePlayerFromTeams(eventId: string, playerName: string, promot
 }
 
 export const POST: APIRoute = async ({ params, request }) => {
+  const limited = rateLimitResponse(request, "write");
+  if (limited) return limited;
+
   const eventId = params.id!;
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.fly.dev";
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
@@ -132,6 +136,9 @@ export const POST: APIRoute = async ({ params, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, request }) => {
+  const limited = rateLimitResponse(request, "write");
+  if (limited) return limited;
+
   const eventId = params.id!;
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.fly.dev";
   const proto = request.headers.get("x-forwarded-proto") ?? "https";

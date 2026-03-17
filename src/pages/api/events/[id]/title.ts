@@ -1,8 +1,12 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
+import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
+  const limited = rateLimitResponse(request, "write");
+  if (limited) return limited;
+
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
