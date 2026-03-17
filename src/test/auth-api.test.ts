@@ -26,6 +26,9 @@ vi.mock("~/lib/db.server", () => {
 import { POST as claimOwnership, DELETE as relinquishOwnership } from "~/pages/api/events/[id]/claim";
 import { POST as transferOwnership } from "~/pages/api/events/[id]/transfer";
 import { POST as addPlayer, DELETE as deletePlayer } from "~/pages/api/events/[id]/players";
+import { POST as claimPlayerEndpoint } from "~/pages/api/events/[id]/claim-player";
+import { PUT as reorderPlayers } from "~/pages/api/events/[id]/reorder-players";
+import { POST as undoRemove } from "~/pages/api/events/[id]/undo-remove";
 import { GET as getMyGames } from "~/pages/api/me/games";
 import { GET as getUserProfile, PATCH as patchUserProfile } from "~/pages/api/users/[id]";
 
@@ -376,5 +379,204 @@ describe("PATCH /api/users/[id] (authenticated)", () => {
     mockAuth(user.id);
     const res = await patchUserProfile(patchCtx({ id: other.id }, { name: "Hacked" }));
     expect(res.status).toBe(403);
+  });
+});
+
+// ─── POST /api/events/[id]/claim-player (authenticated) ─────────────────────
+
+describe("POST /api/events/[id]/claim-player", () => {
+  it("claims an anonymous player: renames to user name and links userId", async () => {
+    const user = await seedUser({ name: "José" });
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
+    const res = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.claimedPlayerId).toBe(p.id);
+    // Verify: player is renamed and linked
+    const player = await testPrisma.player.findUnique({ where: { id: p.id } });
+    expect((player as any)?.userId).toBe(user.id);
+    expect(player?.name).toBe("José");
+  });
+
+  it("returns 409 when user already has a linked player in the event", async () => {
+    const user = await seedUser({ name: "José" });
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    // User already has a linked player
+    await testPrisma.player.create({ data: { name: "José", eventId: id, userId: user.id } as any });
+    // Anonymous player to claim
+    const anon = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
+    const res = await claimPlayerEndpoint(ctx({ id }, { playerId: anon.id }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toContain("already have a linked player");
+    // Verify: anon is still anonymous, both players still exist
+    const anonPlayer = await testPrisma.player.findUnique({ where: { id: anon.id } });
+    expect((anonPlayer as any)?.userId).toBeNull();
+    const allPlayers = await testPrisma.player.findMany({ where: { eventId: id } });
+    expect(allPlayers).toHaveLength(2);
+  });
+
+  it("returns 409 when target player is already linked", async () => {
+    const user = await seedUser();
+    const other = await seedUser({ name: "Other", email: "other@test.com" });
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const p = await testPrisma.player.create({ data: { name: other.name, eventId: id, userId: other.id } as any });
+    const res = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
+    expect(res.status).toBe(409);
+  });
+
+  it("returns 401 for anonymous users", async () => {
+    mockAnonymous();
+    const id = await seedEvent();
+    const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
+    const res = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 404 for nonexistent event", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const res = await claimPlayerEndpoint(ctx({ id: "nonexistent" }, { playerId: "abc" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for nonexistent player", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const res = await claimPlayerEndpoint(ctx({ id }, { playerId: "nonexistent" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("renames PlayerRating to user name when claiming", async () => {
+    const user = await seedUser({ name: "José" });
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
+    await testPrisma.playerRating.create({ data: { eventId: id, name: "Anon", rating: 1200 } });
+    const res = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
+    expect(res.status).toBe(200);
+    // Old name rating should be gone
+    const oldRating = await testPrisma.playerRating.findUnique({ where: { eventId_name: { eventId: id, name: "Anon" } } });
+    expect(oldRating).toBeNull();
+    // New name rating should exist with the ELO carried over
+    const newRating = await testPrisma.playerRating.findUnique({ where: { eventId_name: { eventId: id, name: "José" } } });
+    expect(newRating?.userId).toBe(user.id);
+    expect(newRating?.rating).toBe(1200);
+  });
+});
+
+// ─── PUT /api/events/[id]/reorder-players ───────────────────────────────────
+
+function putCtx(params: Record<string, string>, body: unknown) {
+  const request = new Request("http://localhost/api/test", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { request, params } as any;
+}
+
+describe("PUT /api/events/[id]/reorder-players", () => {
+  it("returns 403 on ownerless events (owner required)", async () => {
+    mockAnonymous();
+    const id = await seedEvent(); // no owner
+    const p1 = await testPrisma.player.create({ data: { name: "Alice", eventId: id, order: 0 } });
+    const p2 = await testPrisma.player.create({ data: { name: "Bob", eventId: id, order: 1 } });
+    const p3 = await testPrisma.player.create({ data: { name: "Charlie", eventId: id, order: 2 } });
+    const res = await reorderPlayers(putCtx({ id }, { playerIds: [p3.id, p2.id, p1.id] }));
+    expect(res.status).toBe(403);
+  });
+
+  it("allows owner to reorder on owned events", async () => {
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    const p1 = await testPrisma.player.create({ data: { name: "Alice", eventId: id, order: 0 } });
+    const p2 = await testPrisma.player.create({ data: { name: "Bob", eventId: id, order: 1 } });
+    const res = await reorderPlayers(putCtx({ id }, { playerIds: [p2.id, p1.id] }));
+    expect(res.status).toBe(200);
+    const players = await testPrisma.player.findMany({ where: { eventId: id }, orderBy: { order: "asc" } });
+    expect(players.map((p) => p.name)).toEqual(["Bob", "Alice"]);
+  });
+
+  it("returns 403 when non-owner tries to reorder on owned event", async () => {
+    const owner = await seedUser();
+    const other = await seedUser({ name: "Other", email: "other@test.com" });
+    mockAuth(other.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    const p1 = await testPrisma.player.create({ data: { name: "Alice", eventId: id, order: 0 } });
+    const p2 = await testPrisma.player.create({ data: { name: "Bob", eventId: id, order: 1 } });
+    const res = await reorderPlayers(putCtx({ id }, { playerIds: [p2.id, p1.id] }));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 400 when playerIds don't match current players", async () => {
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    await testPrisma.player.create({ data: { name: "Alice", eventId: id, order: 0 } });
+    const res = await reorderPlayers(putCtx({ id }, { playerIds: ["fake-id"] }));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 for nonexistent event", async () => {
+    mockAnonymous();
+    const res = await reorderPlayers(putCtx({ id: "nonexistent" }, { playerIds: [] }));
+    expect(res.status).toBe(404);
+  });
+});
+
+// ─── POST /api/events/[id]/undo-remove ──────────────────────────────────────
+
+describe("POST /api/events/[id]/undo-remove", () => {
+  it("restores a removed player at their original position", async () => {
+    mockAnonymous();
+    const id = await seedEvent();
+    await testPrisma.player.create({ data: { name: "Alice", eventId: id, order: 0 } });
+    await testPrisma.player.create({ data: { name: "Bob", eventId: id, order: 1 } });
+    await testPrisma.player.create({ data: { name: "Charlie", eventId: id, order: 2 } });
+    // Simulate removing Bob (order 1) and then undoing
+    await testPrisma.player.deleteMany({ where: { eventId: id, name: "Bob" } });
+    // Re-index: Alice=0, Charlie=1
+    await testPrisma.player.updateMany({ where: { eventId: id, name: "Charlie" }, data: { order: 1 } });
+
+    const res = await undoRemove(ctx({ id }, { name: "Bob", order: 1, userId: null, removedAt: Date.now() }));
+    expect(res.status).toBe(200);
+    const players = await testPrisma.player.findMany({ where: { eventId: id }, orderBy: { order: "asc" } });
+    expect(players.map((p) => p.name)).toEqual(["Alice", "Bob", "Charlie"]);
+  });
+
+  it("returns 410 when undo window has expired", async () => {
+    mockAnonymous();
+    const id = await seedEvent();
+    const res = await undoRemove(ctx({ id }, { name: "Bob", order: 0, userId: null, removedAt: Date.now() - 120_000 }));
+    expect(res.status).toBe(410);
+  });
+
+  it("returns 409 when player name already exists", async () => {
+    mockAnonymous();
+    const id = await seedEvent();
+    await testPrisma.player.create({ data: { name: "Alice", eventId: id, order: 0 } });
+    const res = await undoRemove(ctx({ id }, { name: "Alice", order: 0, userId: null, removedAt: Date.now() }));
+    expect(res.status).toBe(409);
+  });
+
+  it("returns 404 for nonexistent event", async () => {
+    mockAnonymous();
+    const res = await undoRemove(ctx({ id: "nonexistent" }, { name: "Bob", order: 0, userId: null, removedAt: Date.now() }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 for invalid undo data", async () => {
+    mockAnonymous();
+    const id = await seedEvent();
+    const res = await undoRemove(ctx({ id }, { name: "", order: "bad" }));
+    expect(res.status).toBe(400);
   });
 });
