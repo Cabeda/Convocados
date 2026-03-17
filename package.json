@@ -14,7 +14,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "lhci": "lhci autorun"
+    "lhci": "lhci autorun --config=lighthouserc.cjs"
   },
   "dependencies": {
     "@astrojs/node": "^10.0.2",

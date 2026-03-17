@@ -1,5 +1,5 @@
 /** @type {import('@lhci/cli').Config} */
-export default {
+module.exports = {
   ci: {
     collect: {
       startServerCommand:
