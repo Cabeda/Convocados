@@ -6,12 +6,13 @@ import {
   InputAdornment,
 } from "@mui/material";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
-import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
+import SportsIcon from "@mui/icons-material/Sports";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PeopleIcon from "@mui/icons-material/People";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { SPORT_PRESETS, getDefaultMaxPlayers } from "~/lib/sports";
 
 const DAYS = [
   { value: "MO", key: "monday" },
@@ -44,9 +45,15 @@ export default function CreateEventForm() {
   const [recurrenceFreq, setRecurrenceFreq] = useState<"weekly" | "monthly">("weekly");
   const [recurrenceInterval, setRecurrenceInterval] = useState(1);
   const [recurrenceByDay, setRecurrenceByDay] = useState("");
+  const [sport, setSport] = useState("football-5v5");
   const [maxPlayers, setMaxPlayers] = useState(10);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleSportChange = (newSport: string) => {
+    setSport(newSport);
+    setMaxPlayers(getDefaultMaxPlayers(newSport));
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -63,6 +70,7 @@ export default function CreateEventForm() {
       teamOneName: fd.get("teamOneName"),
       teamTwoName: fd.get("teamTwoName"),
       maxPlayers,
+      sport,
       isRecurring,
       recurrenceFreq: isRecurring ? recurrenceFreq : null,
       recurrenceInterval: isRecurring ? recurrenceInterval : null,
@@ -91,7 +99,7 @@ export default function CreateEventForm() {
         <Container maxWidth="sm" sx={{ py: 6 }}>
           <Stack spacing={4}>
             <Box textAlign="center">
-              <SportsSoccerIcon sx={{ fontSize: 56, color: "primary.main", mb: 1 }} />
+              <SportsIcon sx={{ fontSize: 56, color: "primary.main", mb: 1 }} />
               <Typography variant="h4" fontWeight={700}>{t("createGame")}</Typography>
               <Typography variant="body1" color="text.secondary" mt={1}>
                 {t("createGameSubtitle")}
@@ -106,6 +114,18 @@ export default function CreateEventForm() {
                   <TextField name="title" label={t("gameTitle")}
                     placeholder={t("gameTitlePlaceholder")} required fullWidth
                     autoFocus inputProps={{ maxLength: 100 }} />
+
+                  <FormControl fullWidth>
+                    <InputLabel>{t("sport")}</InputLabel>
+                    <Select value={sport} label={t("sport")}
+                      onChange={(e) => handleSportChange(e.target.value)}>
+                      {SPORT_PRESETS.map((s) => (
+                        <MenuItem key={s.id} value={s.id}>
+                          {t(s.labelKey as any)} ({s.defaultMaxPlayers})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
                   <TextField name="dateTime" label={t("dateTime")} type="datetime-local"
                     required fullWidth defaultValue={nextHour()}

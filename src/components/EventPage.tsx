@@ -5,7 +5,7 @@ import {
   Alert, IconButton, Tooltip, InputAdornment, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, Snackbar, alpha, useTheme, Grid2,
   CircularProgress, Divider, Autocomplete, Accordion, AccordionSummary, AccordionDetails,
-  FormControlLabel, Switch,
+  FormControlLabel, Switch, FormControl, Select, MenuItem,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import HistoryIcon from "@mui/icons-material/History";
@@ -25,6 +25,7 @@ import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
 import PublicIcon from "@mui/icons-material/Public";
+import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -34,6 +35,7 @@ import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { matchesWithName } from "~/lib/stringMatch";
 import { getKnownNames, addKnownName, getQjName, setQjName } from "~/lib/knownNames";
+import { SPORT_PRESETS, getSportPreset, getDefaultMaxPlayers } from "~/lib/sports";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -52,6 +54,7 @@ interface EventData {
   isRecurring: boolean;
   isPublic: boolean;
   balanced: boolean;
+  sport: string;
   recurrenceRule: string | null;
   players: Player[];
   teamResults: TeamResult[];
@@ -540,6 +543,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [balanced, setBalanced] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  const [sport, setSport] = useState("football-5v5");
 
   const handleToggleBalanced = async (newValue: boolean) => {
     setBalanced(newValue);
@@ -547,6 +551,16 @@ export default function EventPage({ eventId }: { eventId: string }) {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ balanced: newValue }),
+    });
+    mutate();
+  };
+
+  const handleSportChange = async (newSport: string) => {
+    setSport(newSport);
+    await fetch(`/api/events/${eventId}/sport`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sport: newSport }),
     });
     mutate();
   };
@@ -651,6 +665,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     setTeamTwoName(event.teamTwoName);
     setIsPublic(event.isPublic);
     setBalanced(event.balanced);
+    setSport(event.sport);
   }, [event]);
 
   const addPlayer = async (name: string) => {
@@ -765,10 +780,19 @@ export default function EventPage({ eventId }: { eventId: string }) {
               <Stack spacing={2}>
                 <Box>
                   <Typography variant="h4" fontWeight={700}>{event.title}</Typography>
-                  {rule && (
-                    <Chip icon={<EventRepeatIcon />} label={describeRecurrenceRule(rule, locale)}
-                      size="small" color="secondary" sx={{ mt: 0.5 }} />
-                  )}
+                  <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: "wrap" }}>
+                    {rule && (
+                      <Chip icon={<EventRepeatIcon />} label={describeRecurrenceRule(rule, locale)}
+                        size="small" color="secondary" />
+                    )}
+                    <Chip
+                      icon={<SportsSoccerIcon />}
+                      label={t(getSportPreset(sport).labelKey as any)}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                    />
+                  </Stack>
                 </Box>
 
                 <Stack direction="row" spacing={2} flexWrap="wrap">
@@ -810,7 +834,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 <Divider />
                 <Stack spacing={1}>
                   <ShareBar title={event.title} />
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
                     {(gameDate <= new Date() || event.isRecurring) && (
                       <Button variant="outlined" size="small" startIcon={<HistoryIcon />}
                         href={`/events/${eventId}/history`} sx={{ flexShrink: 0 }}>
@@ -833,6 +857,19 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         sx={{ ml: 0 }}
                       />
                     </Tooltip>
+                    <FormControl size="small" sx={{ minWidth: 140 }}>
+                      <Select
+                        value={sport}
+                        onChange={(e) => handleSportChange(e.target.value)}
+                        sx={{ fontSize: "0.85rem" }}
+                      >
+                        {SPORT_PRESETS.map((s) => (
+                          <MenuItem key={s.id} value={s.id} sx={{ fontSize: "0.85rem" }}>
+                            {t(s.labelKey as any)}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Box>
                 </Stack>
 

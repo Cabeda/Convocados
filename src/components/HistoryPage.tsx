@@ -10,7 +10,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import LockIcon from "@mui/icons-material/Lock";
 import SaveIcon from "@mui/icons-material/Save";
-import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
+import SportsIcon from "@mui/icons-material/Sports";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import { ThemeModeProvider } from "./ThemeModeProvider";
@@ -364,7 +364,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
 
             {history.length === 0 ? (
               <Paper elevation={2} sx={{ borderRadius: 3, p: 4, textAlign: "center" }}>
-                <SportsSoccerIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
+                <SportsIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
                 <Typography variant="h6" color="text.secondary">{t("noHistory")}</Typography>
                 <Typography variant="body2" color="text.disabled" mt={1}>{t("noHistoryDesc")}</Typography>
               </Paper>

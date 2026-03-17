@@ -7,7 +7,7 @@ export const translations = {
 
     // CreateEventForm
     createGame: "Create a Game",
-    createGameSubtitle: "Set up your football game and share the link with your players.",
+    createGameSubtitle: "Set up your game and share the link with your players.",
     gameTitle: "Game title",
     gameTitlePlaceholder: "e.g. Tuesday 5-a-side",
     location: "Location",
@@ -177,6 +177,39 @@ export const translations = {
     makePublicTooltip: "Make this game visible on the public games page",
     joinGame: "Join",
 
+    // Sports
+    sport: "Sport",
+    sportFootball5v5: "Football 5v5",
+    sportFootball7v7: "Football 7v7",
+    sportFootball11v11: "Football 11v11",
+    sportFutsal: "Futsal",
+    sportBasketball: "Basketball",
+    sportVolleyball: "Volleyball",
+    sportTennisSingles: "Tennis (singles)",
+    sportTennisDoubles: "Tennis (doubles)",
+    sportPadel: "Padel",
+    sportOther: "Other",
+
+    // Public events filters & views
+    filterSport: "Sport",
+    filterHasSpots: "Has spots",
+    viewCards: "Cards",
+    viewTable: "Table",
+    viewMap: "Map",
+    allSports: "All sports",
+    tableTitle: "Title",
+    tableSport: "Sport",
+    tableLocation: "Location",
+    tableDateTime: "Date / Time",
+    tablePlayers: "Players",
+    tableStatus: "Status",
+    full: "Full",
+    spotsLeft: "{n} spot(s) left",
+    mapLoading: "Loading map…",
+    mapNoLocation: "No location set",
+    mapPermissionDenied: "Location access denied — showing all events",
+    noMatchingGames: "No games match your filters.",
+
     // Docs
     docs: "Docs",
   },
@@ -188,7 +221,7 @@ export const translations = {
 
     // CreateEventForm
     createGame: "Criar um Jogo",
-    createGameSubtitle: "Configura o teu jogo de futebol e partilha o link com os teus jogadores.",
+    createGameSubtitle: "Configura o teu jogo e partilha o link com os teus jogadores.",
     gameTitle: "Título do jogo",
     gameTitlePlaceholder: "ex: Futebol 5 de terça",
     location: "Local",
@@ -357,6 +390,39 @@ export const translations = {
     makePublic: "Público",
     makePublicTooltip: "Tornar este jogo visível na página de jogos públicos",
     joinGame: "Entrar",
+
+    // Sports
+    sport: "Desporto",
+    sportFootball5v5: "Futebol 5v5",
+    sportFootball7v7: "Futebol 7v7",
+    sportFootball11v11: "Futebol 11v11",
+    sportFutsal: "Futsal",
+    sportBasketball: "Basquetebol",
+    sportVolleyball: "Voleibol",
+    sportTennisSingles: "Ténis (singulares)",
+    sportTennisDoubles: "Ténis (pares)",
+    sportPadel: "Padel",
+    sportOther: "Outro",
+
+    // Public events filters & views
+    filterSport: "Desporto",
+    filterHasSpots: "Com vagas",
+    viewCards: "Cartões",
+    viewTable: "Tabela",
+    viewMap: "Mapa",
+    allSports: "Todos os desportos",
+    tableTitle: "Título",
+    tableSport: "Desporto",
+    tableLocation: "Local",
+    tableDateTime: "Data / Hora",
+    tablePlayers: "Jogadores",
+    tableStatus: "Estado",
+    full: "Completo",
+    spotsLeft: "{n} vaga(s)",
+    mapLoading: "A carregar mapa…",
+    mapNoLocation: "Sem local definido",
+    mapPermissionDenied: "Acesso à localização negado — a mostrar todos os eventos",
+    noMatchingGames: "Nenhum jogo corresponde aos filtros.",
 
     // Docs
     docs: "Docs",
