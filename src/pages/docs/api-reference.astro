@@ -1,0 +1,22 @@
+---
+const host = Astro.request.headers.get("x-forwarded-host") ?? Astro.request.headers.get("host") ?? "localhost:4321";
+const proto = Astro.request.headers.get("x-forwarded-proto") ?? "https";
+const specUrl = `${proto}://${host}/api/openapi.json`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>API Reference — Convocados</title>
+    <link rel="icon" href="/favicon.ico" />
+    <style>
+      body { margin: 0; padding: 0; }
+    </style>
+  </head>
+  <body>
+    <script id="api-reference" data-url={specUrl}></script>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  </body>
+</html>
