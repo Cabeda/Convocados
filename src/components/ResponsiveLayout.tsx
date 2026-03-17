@@ -15,6 +15,7 @@ import TranslateIcon from "@mui/icons-material/Translate";
 import LoginIcon from "@mui/icons-material/Login";
 import LogoutIcon from "@mui/icons-material/Logout";
 import DashboardIcon from "@mui/icons-material/Dashboard";
+import PersonIcon from "@mui/icons-material/Person";
 import { useThemeMode } from "./ThemeModeProvider";
 import { useLocale } from "~/lib/useT";
 import type { Locale } from "~/lib/i18n";
@@ -187,6 +188,10 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                     />
                   </MenuItem>
                   <Divider />
+                  <MenuItem component="a" href={`/users/${session.user.id}`} onClick={() => setUserAnchor(null)}>
+                    <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("editProfile")}</ListItemText>
+                  </MenuItem>
                   <MenuItem component="a" href="/dashboard" onClick={() => setUserAnchor(null)}>
                     <ListItemIcon><DashboardIcon fontSize="small" /></ListItemIcon>
                     <ListItemText>{t("myGames")}</ListItemText>

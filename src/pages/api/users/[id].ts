@@ -7,10 +7,11 @@ export const GET: APIRoute = async ({ params, request }) => {
   const userId = params.id!;
   const session = await getSession(request);
   const viewerId = session?.user?.id ?? null;
+  const isOwnProfile = viewerId === userId;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, image: true, createdAt: true },
+    select: { id: true, name: true, email: true, image: true, createdAt: true },
   });
 
   if (!user) return Response.json({ error: "User not found." }, { status: 404 });
@@ -98,6 +99,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     user: {
       id: user.id,
       name: user.name,
+      email: isOwnProfile ? user.email : undefined,
       image: user.image,
       createdAt: user.createdAt.toISOString(),
     },
@@ -108,5 +110,50 @@ export const GET: APIRoute = async ({ params, request }) => {
       ownedGames: visibleOwned.length,
       joinedGames: visibleJoined.length,
     },
+    isOwnProfile,
   });
+};
+
+/** PATCH — update own profile (name, email) */
+export const PATCH: APIRoute = async ({ params, request }) => {
+  const userId = params.id!;
+  const session = await getSession(request);
+
+  if (!session?.user || session.user.id !== userId) {
+    return Response.json({ error: "Unauthorized." }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const updates: Record<string, string> = {};
+
+  if (typeof body.name === "string") {
+    const name = body.name.trim().slice(0, 50);
+    if (!name) return Response.json({ error: "Name is required." }, { status: 400 });
+    updates.name = name;
+  }
+
+  if (typeof body.email === "string") {
+    const email = body.email.trim().toLowerCase();
+    if (!email || !email.includes("@")) {
+      return Response.json({ error: "Valid email is required." }, { status: 400 });
+    }
+    // Check uniqueness
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing && existing.id !== userId) {
+      return Response.json({ error: "Email already in use." }, { status: 409 });
+    }
+    updates.email = email;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return Response.json({ error: "No fields to update." }, { status: 400 });
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: updates,
+    select: { id: true, name: true, email: true, image: true },
+  });
+
+  return Response.json({ user: updated });
 };
