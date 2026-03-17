@@ -12,16 +12,24 @@ export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [unverified, setUnverified] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setUnverified(false);
     setLoading(true);
     try {
       const result = await signIn.email({ email, password });
       if (result.error) {
-        setError(t("authError"));
+        const code = (result.error.code ?? "").toUpperCase();
+        if (code === "EMAIL_NOT_VERIFIED") {
+          setUnverified(true);
+          setError(t("emailNotVerified"));
+        } else {
+          setError(t("authError"));
+        }
       } else {
         window.location.href = "/";
       }
@@ -43,6 +51,13 @@ export default function SignInPage() {
               </Typography>
 
               {error && <Alert severity="error">{error}</Alert>}
+              {unverified && email && (
+                <Alert severity="info">
+                  <Link href={`/auth/verify-email?email=${encodeURIComponent(email)}`} underline="hover">
+                    {t("resendVerification")}
+                  </Link>
+                </Alert>
+              )}
 
               <TextField
                 label={t("email")}
