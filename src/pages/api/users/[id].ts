@@ -1,9 +1,12 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
+import { getSession } from "../../../lib/auth.helpers";
 
-/** GET — public user profile with game history */
-export const GET: APIRoute = async ({ params }) => {
+/** GET — user profile with game history, filtered by viewer permissions */
+export const GET: APIRoute = async ({ params, request }) => {
   const userId = params.id!;
+  const session = await getSession(request);
+  const viewerId = session?.user?.id ?? null;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -12,7 +15,7 @@ export const GET: APIRoute = async ({ params }) => {
 
   if (!user) return Response.json({ error: "User not found." }, { status: 404 });
 
-  // Games the user owns
+  // Get all events the profile user owns or joined, including visibility + players
   const ownedEvents = await prisma.event.findMany({
     where: { ownerId: userId },
     select: {
@@ -22,13 +25,15 @@ export const GET: APIRoute = async ({ params }) => {
       dateTime: true,
       sport: true,
       maxPlayers: true,
+      isPublic: true,
+      ownerId: true,
       _count: { select: { players: true } },
+      players: { select: { userId: true } },
     },
     orderBy: { dateTime: "desc" },
     take: 50,
   });
 
-  // Games the user joined as a player
   const playerEntries = await prisma.player.findMany({
     where: { userId },
     select: {
@@ -40,7 +45,10 @@ export const GET: APIRoute = async ({ params }) => {
           dateTime: true,
           sport: true,
           maxPlayers: true,
+          isPublic: true,
+          ownerId: true,
           _count: { select: { players: true } },
+          players: { select: { userId: true } },
         },
       },
     },
@@ -48,7 +56,7 @@ export const GET: APIRoute = async ({ params }) => {
     take: 100,
   });
 
-  // Deduplicate joined events
+  // Deduplicate joined events (exclude owned)
   const ownedIds = new Set(ownedEvents.map((e) => e.id));
   const seen = new Set<string>();
   const joinedEvents = playerEntries
@@ -59,6 +67,33 @@ export const GET: APIRoute = async ({ params }) => {
       return true;
     });
 
+  // Filter based on viewer permissions:
+  // - Anonymous: only public events
+  // - Authenticated: public events + private events where viewer is also a player or owner
+  const canView = (event: { isPublic: boolean; ownerId: string | null; players: { userId: string | null }[] }) => {
+    if (event.isPublic) return true;
+    if (!viewerId) return false;
+    // Viewer is the profile user themselves
+    if (viewerId === userId) return true;
+    // Viewer is the event owner
+    if (event.ownerId === viewerId) return true;
+    // Viewer is also a player in this event
+    return event.players.some((p) => p.userId === viewerId);
+  };
+
+  const visibleOwned = ownedEvents.filter(canView);
+  const visibleJoined = joinedEvents.filter(canView);
+
+  const serialize = (e: typeof ownedEvents[number]) => ({
+    id: e.id,
+    title: e.title,
+    location: e.location,
+    dateTime: e.dateTime.toISOString(),
+    sport: e.sport,
+    maxPlayers: e.maxPlayers,
+    playerCount: e._count.players,
+  });
+
   return Response.json({
     user: {
       id: user.id,
@@ -66,28 +101,12 @@ export const GET: APIRoute = async ({ params }) => {
       image: user.image,
       createdAt: user.createdAt.toISOString(),
     },
-    owned: ownedEvents.map((e) => ({
-      id: e.id,
-      title: e.title,
-      location: e.location,
-      dateTime: e.dateTime.toISOString(),
-      sport: e.sport,
-      maxPlayers: e.maxPlayers,
-      playerCount: e._count.players,
-    })),
-    joined: joinedEvents.map((e) => ({
-      id: e.id,
-      title: e.title,
-      location: e.location,
-      dateTime: e.dateTime.toISOString(),
-      sport: e.sport,
-      maxPlayers: e.maxPlayers,
-      playerCount: e._count.players,
-    })),
+    owned: visibleOwned.map(serialize),
+    joined: visibleJoined.map(serialize),
     stats: {
-      totalGames: ownedEvents.length + joinedEvents.length,
-      ownedGames: ownedEvents.length,
-      joinedGames: joinedEvents.length,
+      totalGames: visibleOwned.length + visibleJoined.length,
+      ownedGames: visibleOwned.length,
+      joinedGames: visibleJoined.length,
     },
   });
 };
