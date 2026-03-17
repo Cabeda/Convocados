@@ -12,12 +12,13 @@ export const PUT: APIRoute = async ({ params, request }) => {
   }
 
   const body = await request.json();
-  const isPublic = Boolean(body.isPublic);
+  const title = String(body.title ?? "").trim().slice(0, 100);
+  if (!title) return Response.json({ error: "Title is required." }, { status: 400 });
 
   await prisma.event.update({
     where: { id: params.id },
-    data: { isPublic },
+    data: { title },
   });
 
-  return Response.json({ isPublic });
+  return Response.json({ title });
 };

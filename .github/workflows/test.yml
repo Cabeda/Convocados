@@ -1,14 +1,22 @@
 name: Test
 
-on: [push]
+on: [pull_request]
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: npm install
-      run: npm install --include=dev
-    - name: Run tests
-      run: npm test
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Run tests with coverage
+        run: npx vitest run --coverage
+      - name: Build
+        run: npm run build
