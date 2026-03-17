@@ -67,24 +67,44 @@ export async function geocodeAddress(address: string): Promise<GeoResult | null>
   }
 }
 
+/** Follow a short URL redirect (e.g. goo.gl/maps, maps.app.goo.gl) to get the full URL. */
+async function resolveShortUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { method: "HEAD", redirect: "manual" });
+    const location = res.headers.get("location");
+    return location || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolve location text to coordinates.
- * Tries in order: Google Maps URL → raw coords → Nominatim geocoding.
+ * Tries in order: Google Maps short URL → Google Maps URL → raw coords → Nominatim geocoding.
  * Returns null if nothing works.
  */
 export async function resolveLocation(location: string): Promise<GeoResult | null> {
   if (!location.trim()) return null;
 
-  // 1. Google Maps URL
-  if (/google\.com\/maps|maps\.google|goo\.gl\/maps|maps\.app\.goo/i.test(location)) {
+  // 1. Short Google Maps links — resolve redirect first
+  if (/goo\.gl\/maps|maps\.app\.goo/i.test(location)) {
+    const fullUrl = await resolveShortUrl(location);
+    if (fullUrl) {
+      const result = parseMapsUrl(fullUrl);
+      if (result) return result;
+    }
+  }
+
+  // 2. Full Google Maps URL
+  if (/google\.com\/maps|maps\.google/i.test(location)) {
     const result = parseMapsUrl(location);
     if (result) return result;
   }
 
-  // 2. Raw coordinates
+  // 3. Raw coordinates
   const raw = parseRawCoords(location);
   if (raw) return raw;
 
-  // 3. Nominatim fallback
+  // 4. Nominatim fallback
   return geocodeAddress(location);
 }
