@@ -6,7 +6,7 @@ import {
   InputAdornment,
 } from "@mui/material";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
-import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
+import SportsIcon from "@mui/icons-material/Sports";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PeopleIcon from "@mui/icons-material/People";
 import { ThemeModeProvider } from "./ThemeModeProvider";
@@ -99,7 +99,7 @@ export default function CreateEventForm() {
         <Container maxWidth="sm" sx={{ py: 6 }}>
           <Stack spacing={4}>
             <Box textAlign="center">
-              <SportsSoccerIcon sx={{ fontSize: 56, color: "primary.main", mb: 1 }} />
+              <SportsIcon sx={{ fontSize: 56, color: "primary.main", mb: 1 }} />
               <Typography variant="h4" fontWeight={700}>{t("createGame")}</Typography>
               <Typography variant="body1" color="text.secondary" mt={1}>
                 {t("createGameSubtitle")}

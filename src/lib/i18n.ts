@@ -7,7 +7,7 @@ export const translations = {
 
     // CreateEventForm
     createGame: "Create a Game",
-    createGameSubtitle: "Set up your football game and share the link with your players.",
+    createGameSubtitle: "Set up your game and share the link with your players.",
     gameTitle: "Game title",
     gameTitlePlaceholder: "e.g. Tuesday 5-a-side",
     location: "Location",
@@ -221,7 +221,7 @@ export const translations = {
 
     // CreateEventForm
     createGame: "Criar um Jogo",
-    createGameSubtitle: "Configura o teu jogo de futebol e partilha o link com os teus jogadores.",
+    createGameSubtitle: "Configura o teu jogo e partilha o link com os teus jogadores.",
     gameTitle: "Título do jogo",
     gameTitlePlaceholder: "ex: Futebol 5 de terça",
     location: "Local",

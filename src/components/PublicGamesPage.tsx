@@ -6,7 +6,7 @@ import {
   FormControlLabel, Switch, FormControl, Select, MenuItem, InputLabel,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert,
 } from "@mui/material";
-import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
+import SportsIcon from "@mui/icons-material/Sports";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import PeopleIcon from "@mui/icons-material/People";
@@ -403,7 +403,7 @@ export default function PublicGamesPage() {
         <Container maxWidth="md" sx={{ py: 6 }}>
           <Stack spacing={3}>
             <Box textAlign="center">
-              <SportsSoccerIcon sx={{ fontSize: 56, color: "primary.main", mb: 1 }} />
+              <SportsIcon sx={{ fontSize: 56, color: "primary.main", mb: 1 }} />
               <Typography variant="h4" fontWeight={700}>{t("publicGames")}</Typography>
               <Typography variant="body1" color="text.secondary" mt={1}>
                 {t("publicGamesSubtitle")}
