@@ -88,11 +88,14 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!trimmed) return Response.json({ error: "Player name is required." }, { status: 400 });
 
   try {
+    // Only link userId when the player name matches the authenticated user's name
+    const isOwnName = session?.user?.name &&
+      trimmed.toLowerCase() === session.user.name.toLowerCase();
     await prisma.player.create({
       data: {
         name: trimmed,
         eventId,
-        userId: session?.user?.id ?? null,
+        userId: isOwnName ? session.user.id : null,
       },
     });
   } catch (e: any) {
