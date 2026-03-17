@@ -26,6 +26,8 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
 import PublicIcon from "@mui/icons-material/Public";
 import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
+import ShieldIcon from "@mui/icons-material/Shield";
+import StarIcon from "@mui/icons-material/Star";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -36,10 +38,11 @@ import { detectLocale } from "~/lib/i18n";
 import { matchesWithName } from "~/lib/stringMatch";
 import { getKnownNames, addKnownName, getQjName, setQjName } from "~/lib/knownNames";
 import { SPORT_PRESETS, getSportPreset, getDefaultMaxPlayers } from "~/lib/sports";
+import { useSession } from "~/lib/auth.client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface Player { id: string; name: string; }
+interface Player { id: string; name: string; userId?: string | null; }
 interface TeamMember { name: string; order: number; }
 interface TeamResult { id: string; name: string; members: TeamMember[]; }
 
@@ -56,6 +59,8 @@ interface EventData {
   balanced: boolean;
   sport: string;
   recurrenceRule: string | null;
+  ownerId: string | null;
+  ownerName: string | null;
   players: Player[];
   teamResults: TeamResult[];
   wasReset?: boolean;
@@ -332,13 +337,13 @@ interface KnownPlayer {
 }
 
 function QuickJoin({
-  eventId,
+  userName,
   players,
   maxPlayers,
   onJoin,
   onLeave,
 }: {
-  eventId: string;
+  userName: string;
   players: Player[];
   maxPlayers: number;
   onJoin: (name: string) => Promise<void>;
@@ -346,74 +351,24 @@ function QuickJoin({
 }) {
   const t = useT();
   const theme = useTheme();
-  const [name, setName] = useState(() => getQjName());
   const [joining, setJoining] = useState(false);
-  const [showAll, setShowAll] = useState(false);
-  
-  const { data: knownPlayers } = useSWR<{ players: KnownPlayer[] }>(
-    `/api/events/${eventId}/known-players`,
-    (url) => fetch(url).then((r) => r.json()),
-    { revalidateOnFocus: false }
-  );
-  
-  const localKnownNames = useMemo(() => getKnownNames(), []);
-  
-  const mergedSuggestions = useMemo(() => {
-    const serverNames = new Map<string, number>();
-    for (const p of knownPlayers?.players ?? []) {
-      serverNames.set(p.name, p.gamesPlayed ?? 1);
-    }
-    for (const n of localKnownNames) {
-      if (!serverNames.has(n)) {
-        serverNames.set(n, 0);
-      }
-    }
-    const qjName = getQjName().trim();
-    const result = Array.from(serverNames.entries())
-      .map(([name, gamesPlayed]) => ({ name, gamesPlayed }))
-      .sort((a, b) => {
-        if (qjName && a.name.toLowerCase() === qjName.toLowerCase()) return -1;
-        if (qjName && b.name.toLowerCase() === qjName.toLowerCase()) return 1;
-        return b.gamesPlayed - a.gamesPlayed;
-      });
-    return result;
-  }, [knownPlayers, localKnownNames]);
-  
-  const currentPlayerNames = useMemo(
-    () => new Set(players.map((p) => p.name.toLowerCase())),
-    [players]
-  );
-  
-  const availableSuggestions = useMemo(
-    () => mergedSuggestions.filter((s) => !currentPlayerNames.has(s.name.toLowerCase())),
-    [mergedSuggestions, currentPlayerNames]
-  );
-  
-  const visibleSuggestions = showAll
-    ? availableSuggestions
-    : availableSuggestions.slice(0, 8);
-  
-  const joined = players.find((p) => p.name.toLowerCase() === name.trim().toLowerCase());
+
+  const joined = players.find((p) => p.name.toLowerCase() === userName.toLowerCase());
   const isOnBench = joined ? players.indexOf(joined) >= maxPlayers : false;
-  
-  const handleJoin = async (joinName?: string) => {
-    const trimmed = (joinName ?? name).trim();
-    if (!trimmed) return;
+
+  const handleJoin = async () => {
     setJoining(true);
-    await onJoin(trimmed);
-    setQjName(trimmed);
-    addKnownName(trimmed);
-    setName("");
+    await onJoin(userName);
     setJoining(false);
   };
-  
+
   const handleLeave = async () => {
     if (!joined) return;
     setJoining(true);
     await onLeave(joined.id);
     setJoining(false);
   };
-  
+
   return (
     <Paper elevation={3} sx={{
       borderRadius: 3, p: { xs: 2, sm: 3 },
@@ -425,7 +380,7 @@ function QuickJoin({
           <EmojiPeopleIcon color="primary" />
           <Typography variant="h6" fontWeight={700}>{t("quickJoinTitle")}</Typography>
         </Box>
-        
+
         {joined ? (
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
             <Chip
@@ -439,93 +394,14 @@ function QuickJoin({
             </Button>
           </Box>
         ) : (
-          <>
-            {availableSuggestions.length > 0 && (
-              <Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  {t("recentPlayers")}:
-                </Typography>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, alignItems: "center" }}>
-                  {visibleSuggestions.map((s) => {
-                    const isQjName = getQjName().trim().toLowerCase() === s.name.toLowerCase();
-                    return (
-                      <Chip
-                        key={s.name}
-                        label={s.name}
-                        variant={isQjName ? "filled" : "outlined"}
-                        color={isQjName ? "primary" : "default"}
-                        onClick={() => handleJoin(s.name)}
-                        disabled={joining}
-                        sx={{
-                          cursor: "pointer",
-                          minHeight: 44,
-                          "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
-                        }}
-                      />
-                    );
-                  })}
-                  {availableSuggestions.length > 8 && !showAll && (
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={() => setShowAll(true)}
-                      sx={{ textTransform: "none" }}
-                    >
-                      {t("showAllPlayers")}
-                    </Button>
-                  )}
-                </Box>
-              </Box>
-            )}
-            
-            <Box sx={{ display: "flex", gap: 1, position: "relative" }}>
-              <Autocomplete
-                freeSolo
-                options={availableSuggestions.map((s) => s.name)}
-                filterOptions={(options, { inputValue }) =>
-                  options.filter((opt) => matchesWithName(opt, inputValue))
-                }
-                value={null}
-                inputValue={name}
-                onInputChange={(_, newInputValue, reason) => {
-                  if (reason === "reset") return;
-                  setName(newInputValue);
-                }}
-                onChange={(_, newValue) => {
-                  if (typeof newValue === "string" && newValue.trim()) {
-                    handleJoin(newValue);
-                  }
-                }}
-                disabled={joining}
-                sx={{ flexGrow: 1 }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    size="small"
-                    placeholder={t("quickJoinPlaceholder")}
-                    inputProps={{ ...params.inputProps, maxLength: 50 }}
-                  />
-                )}
-                renderOption={(props, option) => {
-                  const { key, ...otherProps } = props as any;
-                  return (
-                    <li key={key} {...otherProps} style={{ minHeight: 44 }}>
-                      {option}
-                    </li>
-                  );
-                }}
-                noOptionsText={t("noSuggestions")}
-              />
-              <Button
-                variant="contained"
-                onClick={() => handleJoin()}
-                disabled={!name.trim() || joining}
-                sx={{ flexShrink: 0 }}
-              >
-                {t("quickJoinBtn")}
-              </Button>
-            </Box>
-          </>
+          <Button
+            variant="contained"
+            onClick={handleJoin}
+            disabled={joining}
+            startIcon={<PersonAddIcon />}
+          >
+            {t("quickJoinBtn")} ({userName})
+          </Button>
         )}
       </Stack>
     </Paper>
@@ -546,6 +422,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [sport, setSport] = useState("football-5v5");
   const [editingLocation, setEditingLocation] = useState(false);
   const [locationDraft, setLocationDraft] = useState("");
+  const { data: session } = useSession();
 
   const handleToggleBalanced = async (newValue: boolean) => {
     setBalanced(newValue);
@@ -774,6 +651,26 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const rule = parseRecurrenceRule(event.recurrenceRule);
   const wasReset = event.wasReset ?? false;
+  const isAuthenticated = !!session?.user;
+  const isOwner = !!(session?.user && event.ownerId && session.user.id === event.ownerId);
+  const isOwnerless = !event.ownerId;
+  // Owner-only controls are shown if: no owner (legacy behavior) or current user is owner
+  const canEditSettings = isOwnerless || isOwner;
+
+  const handleClaimOwnership = async () => {
+    const res = await fetch(`/api/events/${eventId}/claim`, { method: "POST" });
+    if (res.ok) {
+      mutate();
+      setSnackbar(t("claimOwnership"));
+    }
+  };
+
+  const handleRelinquishOwnership = async () => {
+    const res = await fetch(`/api/events/${eventId}/claim`, { method: "DELETE" });
+    if (res.ok) {
+      mutate();
+    }
+  };
 
   return (
     <ThemeModeProvider>
@@ -796,7 +693,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               <Stack spacing={2}>
                 <Box>
                   <Typography variant="h4" fontWeight={700}>{event.title}</Typography>
-                  <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: "wrap" }}>
+                  <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: "wrap", alignItems: "center" }}>
                     {rule && (
                       <Chip icon={<EventRepeatIcon />} label={describeRecurrenceRule(rule, locale)}
                         size="small" color="secondary" />
@@ -808,11 +705,19 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       color="primary"
                       variant="outlined"
                     />
+                    {event.ownerName && (
+                      <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+                        {t("managedBy", { name: "" })}
+                        <a href={`/users/${event.ownerId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 600 }}>
+                          {event.ownerName}
+                        </a>
+                      </Typography>
+                    )}
                   </Stack>
                 </Box>
 
                 <Stack direction="row" spacing={2} flexWrap="wrap">
-                {editingLocation ? (
+                {editingLocation && canEditSettings ? (
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flex: 1 }}>
                       <LocationOnIcon fontSize="small" color="action" />
                       <TextField
@@ -855,11 +760,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
                           {t("locationOptional")}
                         </Typography>
                       )}
-                      <Tooltip title={t("editLocation")}>
-                        <IconButton size="small" onClick={() => { setLocationDraft(event.location || ""); setEditingLocation(true); }}>
-                          <EditIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
+                      {canEditSettings && (
+                        <Tooltip title={t("editLocation")}>
+                          <IconButton size="small" onClick={() => { setLocationDraft(event.location || ""); setEditingLocation(true); }}>
+                            <EditIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </Box>
                   )}
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -892,44 +799,67 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       </Button>
                     )}
                     <NotifyButton eventId={eventId} />
-                    <Tooltip title={t("makePublicTooltip")}>
-                      <FormControlLabel
-                        control={
-                          <Switch size="small" checked={isPublic}
-                            onChange={(e) => handleTogglePublic(e.target.checked)} />
-                        }
-                        label={
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                            <PublicIcon fontSize="small" />
-                            <Typography variant="body2">{t("makePublic")}</Typography>
-                          </Box>
-                        }
-                        sx={{ ml: 0 }}
-                      />
-                    </Tooltip>
-                    <FormControl size="small" sx={{ minWidth: 140 }}>
-                      <Select
-                        value={sport}
-                        onChange={(e) => handleSportChange(e.target.value)}
-                        sx={{ fontSize: "0.85rem" }}
-                      >
-                        {SPORT_PRESETS.map((s) => (
-                          <MenuItem key={s.id} value={s.id} sx={{ fontSize: "0.85rem" }}>
-                            {t(s.labelKey as any)}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    {canEditSettings && (
+                      <Tooltip title={t("makePublicTooltip")}>
+                        <FormControlLabel
+                          control={
+                            <Switch size="small" checked={isPublic}
+                              onChange={(e) => handleTogglePublic(e.target.checked)} />
+                          }
+                          label={
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <PublicIcon fontSize="small" />
+                              <Typography variant="body2">{t("makePublic")}</Typography>
+                            </Box>
+                          }
+                          sx={{ ml: 0 }}
+                        />
+                      </Tooltip>
+                    )}
+                    {canEditSettings && (
+                      <FormControl size="small" sx={{ minWidth: 140 }}>
+                        <Select
+                          value={sport}
+                          onChange={(e) => handleSportChange(e.target.value)}
+                          sx={{ fontSize: "0.85rem" }}
+                        >
+                          {SPORT_PRESETS.map((s) => (
+                            <MenuItem key={s.id} value={s.id} sx={{ fontSize: "0.85rem" }}>
+                              {t(s.labelKey as any)}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    )}
+                    {/* Owner badge + relinquish */}
+                    {isOwner && (
+                      <>
+                        <Chip icon={<StarIcon />} label={t("ownerBadge")} size="small" color="success" variant="outlined" />
+                        <Tooltip title={t("relinquishOwnershipDesc")}>
+                          <Button variant="text" size="small" color="warning" onClick={handleRelinquishOwnership}>
+                            {t("relinquishOwnership")}
+                          </Button>
+                        </Tooltip>
+                      </>
+                    )}
+                    {/* Claim ownership for authenticated users on ownerless events */}
+                    {isAuthenticated && isOwnerless && (
+                      <Button variant="outlined" size="small" color="secondary" onClick={handleClaimOwnership}>
+                        {t("claimOwnership")}
+                      </Button>
+                    )}
                   </Box>
                 </Stack>
 
                 {/* Integrations — hidden by default, for developers */}
-                <WebhookInfo eventId={eventId} />
+                {canEditSettings && <WebhookInfo eventId={eventId} />}
               </Stack>
             </Paper>
 
-            {/* Quick join */}
-            <QuickJoin eventId={eventId} players={event.players} maxPlayers={event.maxPlayers} onJoin={addPlayer} onLeave={removePlayer} />
+            {/* Quick join — authenticated users only */}
+            {isAuthenticated && session?.user?.name && (
+              <QuickJoin userName={session.user.name} players={event.players} maxPlayers={event.maxPlayers} onJoin={addPlayer} onLeave={removePlayer} />
+            )}
 
             {/* Players */}
             <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
@@ -1023,7 +953,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
                           backgroundColor: alpha(theme.palette.background.default, 0.5),
                         }}>
                           {active.map((player) => (
-                            <Chip key={player.id} label={player.name} color="primary" variant="filled"
+                            <Chip key={player.id}
+                              icon={player.userId ? <Tooltip title={t("protectedPlayer")}><ShieldIcon fontSize="small" /></Tooltip> : undefined}
+                              label={player.userId ? (
+                                <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit" }}>
+                                  {player.name}
+                                </a>
+                              ) : player.name}
+                              color="primary" variant="filled"
                               onDelete={() => removePlayer(player.id)} />
                           ))}
                         </Paper>
@@ -1044,7 +981,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
                             borderColor: alpha(theme.palette.warning.main, 0.3),
                           }}>
                             {bench.map((player, i) => (
-                              <Chip key={player.id} label={`${i + 1}. ${player.name}`} color="warning" variant="outlined"
+                              <Chip key={player.id}
+                                icon={player.userId ? <Tooltip title={t("protectedPlayer")}><ShieldIcon fontSize="small" /></Tooltip> : undefined}
+                                label={player.userId ? (
+                                  <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit" }}>
+                                    {`${i + 1}. ${player.name}`}
+                                  </a>
+                                ) : `${i + 1}. ${player.name}`}
+                                color="warning" variant="outlined"
                                 onDelete={() => removePlayer(player.id)} />
                             ))}
                           </Paper>
@@ -1052,12 +996,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       )}
 
                       <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2 }}>
-                        <Tooltip title={t("balancedTeamsTooltip")}>
-                          <FormControlLabel
-                            control={<Switch size="small" checked={balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} />}
-                            label={t("balancedTeams")}
-                          />
-                        </Tooltip>
+                        {canEditSettings && (
+                          <Tooltip title={t("balancedTeamsTooltip")}>
+                            <FormControlLabel
+                              control={<Switch size="small" checked={balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} />}
+                              label={t("balancedTeams")}
+                            />
+                          </Tooltip>
+                        )}
                         <Button variant="contained" size="large" startIcon={<ShuffleIcon />}
                           disabled={active.length < 2} sx={{ px: 4, py: 1.5 }}
                           onClick={() => localMatches && localMatches.length > 0 ? setConfirmOpen(true) : doRandomize()}>
@@ -1082,7 +1028,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         : m.team === event.teamTwoName ? teamTwoName : m.team,
                     }))}
                     onResultChange={handleTeamChange}
-                    onTeamNameSave={(teamIdx, newName) => {
+                    onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
                       if (teamIdx === 0) {
                         setTeamOneName(newName);
                         handleTeamNameSave(newName, teamTwoName);
@@ -1090,7 +1036,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         setTeamTwoName(newName);
                         handleTeamNameSave(teamOneName, newName);
                       }
-                    }}
+                    } : undefined}
                   />
                 </Stack>
               </Paper>

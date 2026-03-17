@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { sendPushToEvent } from "../../../../lib/push.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
+import { getSession, checkOwnership } from "../../../../lib/auth.helpers";
 
 /**
  * If teams have been generated, add a player to the team with fewer members.
@@ -75,6 +76,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const origin = `${proto}://${host}`;
   const senderClientId = request.headers.get("x-client-id") ?? undefined;
+  const session = await getSession(request);
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     include: { players: { orderBy: { createdAt: "asc" } } },
@@ -86,7 +88,13 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!trimmed) return Response.json({ error: "Player name is required." }, { status: 400 });
 
   try {
-    await prisma.player.create({ data: { name: trimmed, eventId } });
+    await prisma.player.create({
+      data: {
+        name: trimmed,
+        eventId,
+        userId: session?.user?.id ?? null,
+      },
+    });
   } catch (e: any) {
     if (e?.code === "P2002") {
       return Response.json({ error: `"${trimmed}" is already in the list.` }, { status: 409 });
@@ -138,6 +146,16 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const playerIndex = event.players.findIndex((p) => p.id === playerId);
   const player = event.players[playerIndex];
   if (!player) return Response.json({ error: "Not found." }, { status: 404 });
+
+  // Protected player check: players with userId can only be removed by themselves or the event owner
+  if (player.userId) {
+    const session = await getSession(request);
+    const isSelf = session?.user?.id === player.userId;
+    const { isOwner } = await checkOwnership(request, event.ownerId);
+    if (!isSelf && !isOwner) {
+      return Response.json({ error: "This player is account-linked and can only be removed by themselves or the event owner." }, { status: 403 });
+    }
+  }
 
   const wasActive = playerIndex < event.maxPlayers;
   const firstBench = event.players[event.maxPlayers];

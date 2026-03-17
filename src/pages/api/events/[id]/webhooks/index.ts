@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
+import { checkOwnership } from "../../../../../lib/auth.helpers";
 
 const MAX_WEBHOOKS_PER_EVENT = 10;
 
@@ -8,6 +9,11 @@ export const POST: APIRoute = async ({ params, request }) => {
   const eventId = params.id!;
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const { isOwner } = await checkOwnership(request, event.ownerId);
+  if (event.ownerId && !isOwner) {
+    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+  }
 
   const body = await request.json();
   const url = String(body.url ?? "").trim();

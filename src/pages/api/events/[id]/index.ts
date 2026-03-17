@@ -9,6 +9,7 @@ export const GET: APIRoute = async ({ params }) => {
     include: {
       players: { orderBy: { createdAt: "asc" } },
       teamResults: { include: { members: { orderBy: { order: "asc" } } } },
+      owner: { select: { id: true, name: true } },
     },
   });
 
@@ -82,10 +83,12 @@ export const GET: APIRoute = async ({ params }) => {
   return Response.json({
     wasReset,
     ...event,
+    ownerId: event.ownerId ?? null,
+    ownerName: event.owner?.name ?? null,
     dateTime: event.dateTime.toISOString(),
     createdAt: event.createdAt.toISOString(),
     updatedAt: event.updatedAt.toISOString(),
     nextResetAt: event.nextResetAt?.toISOString() ?? null,
-    players: event.players.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() })),
+    players: event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() })),
   });
 };
