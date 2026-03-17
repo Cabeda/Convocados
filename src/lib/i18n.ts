@@ -255,6 +255,14 @@ export const translations = {
 
     // Docs
     docs: "Docs",
+
+    // Email verification
+    checkYourEmail: "Check your email",
+    checkYourEmailDesc: "We sent a verification link to {email}. Click it to activate your account.",
+    resendVerification: "Resend verification email",
+    verificationSent: "Verification email sent!",
+    emailNotVerified: "Please verify your email before signing in. Check your inbox for the verification link.",
+    resendingVerification: "Sending...",
   },
   pt: {
     // App
@@ -512,6 +520,14 @@ export const translations = {
 
     // Docs
     docs: "Docs",
+
+    // Email verification
+    checkYourEmail: "Verifica o teu email",
+    checkYourEmailDesc: "Enviámos um link de verificação para {email}. Clica nele para ativar a tua conta.",
+    resendVerification: "Reenviar email de verificação",
+    verificationSent: "Email de verificação enviado!",
+    emailNotVerified: "Verifica o teu email antes de entrar. Procura o link de verificação na tua caixa de entrada.",
+    resendingVerification: "A enviar...",
   },
 } as const;
 

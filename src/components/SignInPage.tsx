@@ -21,7 +21,12 @@ export default function SignInPage() {
     try {
       const result = await signIn.email({ email, password });
       if (result.error) {
-        setError(t("authError"));
+        const code = result.error.code ?? result.error.message ?? "";
+        if (code.includes("email_not_verified") || code.includes("EMAIL_NOT_VERIFIED") || code.includes("verify")) {
+          setError(t("emailNotVerified"));
+        } else {
+          setError(t("authError"));
+        }
       } else {
         window.location.href = "/";
       }
