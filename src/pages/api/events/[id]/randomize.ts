@@ -2,8 +2,12 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { Randomize } from "../../../../lib/random";
 import { balanceTeams } from "../../../../lib/elo.server";
+import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
-export const POST: APIRoute = async ({ params, url }) => {
+export const POST: APIRoute = async ({ params, url, request }) => {
+  const limited = rateLimitResponse(request, "write");
+  if (limited) return limited;
+
   const eventId = params.id!;
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });

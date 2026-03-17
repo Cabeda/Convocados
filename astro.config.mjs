@@ -6,5 +6,5 @@ export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
   integrations: [react()],
-  security: { checkOrigin: false },
+  security: { checkOrigin: true },
 });

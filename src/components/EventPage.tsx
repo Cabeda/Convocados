@@ -28,6 +28,7 @@ import PublicIcon from "@mui/icons-material/Public";
 import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
 import ShieldIcon from "@mui/icons-material/Shield";
 import StarIcon from "@mui/icons-material/Star";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -39,6 +40,7 @@ import { matchesWithName } from "~/lib/stringMatch";
 import { getKnownNames, addKnownName, getQjName, setQjName } from "~/lib/knownNames";
 import { SPORT_PRESETS, getSportPreset, getDefaultMaxPlayers } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
+import { googleCalendarUrl } from "~/lib/calendar";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -856,6 +858,21 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         {t("history")}
                       </Button>
                     )}
+                    <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />}
+                      href={`/api/events/${eventId}/calendar`} sx={{ flexShrink: 0 }}>
+                      {t("downloadIcs")}
+                    </Button>
+                    <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />}
+                      href={googleCalendarUrl({
+                        id: eventId,
+                        title: event.title,
+                        location: event.location,
+                        dateTime: new Date(event.dateTime),
+                        url: typeof window !== "undefined" ? window.location.href : undefined,
+                      })}
+                      target="_blank" rel="noopener noreferrer" sx={{ flexShrink: 0 }}>
+                      {t("addToGoogleCalendar")}
+                    </Button>
                     <NotifyButton eventId={eventId} />
                     {canEditSettings && (
                       <Tooltip title={t("makePublicTooltip")}>

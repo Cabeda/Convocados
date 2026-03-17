@@ -4,8 +4,12 @@ import { checkRateLimit } from "../../../lib/rateLimit.server";
 import { serializeRecurrenceRule, type RecurrenceRule } from "../../../lib/recurrence";
 import { resolveLocation } from "../../../lib/geocode";
 import { getSession } from "../../../lib/auth.helpers.server";
+import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
 
 export const POST: APIRoute = async ({ request }) => {
+  const limited = rateLimitResponse(request, "write");
+  if (limited) return limited;
+
   const ip =
     request.headers.get("fly-client-ip") ??
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??

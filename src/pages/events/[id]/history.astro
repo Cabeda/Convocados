@@ -11,8 +11,10 @@ const { id } = Astro.params;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Game History</title>
     <link rel="icon" href="/favicon.ico" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1976d2" />
   </head>
   <body>
-    <HistoryPage client:only="react" eventId={id} />
+    <HistoryPage client:only="react" eventId={id!} />
   </body>
 </html>
