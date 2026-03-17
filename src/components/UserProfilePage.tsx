@@ -12,6 +12,7 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { GameCard, type GameSummary } from "./GameCard";
+import { authClient } from "~/lib/auth.client";
 
 interface UserProfile {
   user: {
@@ -34,9 +35,12 @@ interface UserProfile {
 function ProfileEditForm({ user, onSaved }: { user: UserProfile["user"]; onSaved: () => void }) {
   const t = useT();
   const [name, setName] = useState(user.name);
+  const [newEmail, setNewEmail] = useState("");
   const [saving, setSaving] = useState(false);
+  const [changingEmail, setChangingEmail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState(false);
+  const [emailSnackbar, setEmailSnackbar] = useState(false);
 
   const handleSave = async () => {
     setError(null);
@@ -58,6 +62,25 @@ function ProfileEditForm({ user, onSaved }: { user: UserProfile["user"]; onSaved
       setError(t("profileUpdateError"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleChangeEmail = async () => {
+    if (!newEmail.trim()) return;
+    setError(null);
+    setChangingEmail(true);
+    try {
+      const result = await authClient.changeEmail({ newEmail: newEmail.trim() });
+      if (result.error) {
+        setError(result.error.message || t("profileUpdateError"));
+      } else {
+        setEmailSnackbar(true);
+        setNewEmail("");
+      }
+    } catch {
+      setError(t("profileUpdateError"));
+    } finally {
+      setChangingEmail(false);
     }
   };
 
@@ -83,12 +106,39 @@ function ProfileEditForm({ user, onSaved }: { user: UserProfile["user"]; onSaved
             {t("saveProfile")}
           </Button>
         </Stack>
+
+        <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2 }}>{t("changeEmail")}</Typography>
+        <Typography variant="body2" color="text.secondary">{user.email}</Typography>
+        <TextField
+          label={t("newEmail")}
+          type="email"
+          value={newEmail}
+          onChange={(e) => setNewEmail(e.target.value)}
+          fullWidth
+          size="small"
+          autoComplete="email"
+        />
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="outlined"
+            onClick={handleChangeEmail}
+            disabled={changingEmail || !newEmail.trim()}
+          >
+            {changingEmail ? t("resendingVerification") : t("changeEmailBtn")}
+          </Button>
+        </Stack>
       </Stack>
       <Snackbar
         open={snackbar}
         autoHideDuration={3000}
         onClose={() => setSnackbar(false)}
         message={t("profileUpdated")}
+      />
+      <Snackbar
+        open={emailSnackbar}
+        autoHideDuration={5000}
+        onClose={() => setEmailSnackbar(false)}
+        message={t("changeEmailSent")}
       />
     </Paper>
   );

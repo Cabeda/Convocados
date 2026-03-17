@@ -36,7 +36,7 @@ export default function SignUpPage() {
         console.error("Sign-up error:", result.error);
         setError(result.error.message || t("authSignupError"));
       } else {
-        window.location.href = "/";
+        window.location.href = "/auth/verify-email?email=" + encodeURIComponent(email);
       }
     } catch (err) {
       console.error("Sign-up exception:", err);
