@@ -84,3 +84,31 @@ describe("setQjName", () => {
     expect(store["qj_name"]).toBe("Bob");
   });
 });
+
+describe("no localStorage", () => {
+  beforeEach(() => {
+    Object.defineProperty(globalThis, "localStorage", {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it("getKnownNames returns empty array", () => {
+    expect(getKnownNames()).toEqual([]);
+  });
+
+  it("addKnownName is a no-op", () => {
+    addKnownName("Alice");
+    // No error thrown
+  });
+
+  it("getQjName returns empty string", () => {
+    expect(getQjName()).toBe("");
+  });
+
+  it("setQjName is a no-op", () => {
+    setQjName("Bob");
+    // No error thrown
+  });
+});
