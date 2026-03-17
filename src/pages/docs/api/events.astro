@@ -14,8 +14,9 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
     <tbody>
       <tr><td><code>title</code></td><td>string</td><td>Yes</td><td>Game title (max 100 chars)</td></tr>
       <tr><td><code>dateTime</code></td><td>string</td><td>Yes</td><td>ISO 8601 date, must be in the future</td></tr>
+      <tr><td><code>sport</code></td><td>string</td><td>No</td><td>Sport preset ID (e.g. "football-5v5", "padel", "basketball"). Defaults to "football-5v5"</td></tr>
       <tr><td><code>location</code></td><td>string</td><td>No</td><td>Location text or URL (max 200 chars)</td></tr>
-      <tr><td><code>maxPlayers</code></td><td>number</td><td>No</td><td>2–30, defaults to 10</td></tr>
+      <tr><td><code>maxPlayers</code></td><td>number</td><td>No</td><td>2–30, defaults based on sport preset</td></tr>
       <tr><td><code>teamOneName</code></td><td>string</td><td>No</td><td>Defaults to "Ninjas"</td></tr>
       <tr><td><code>teamTwoName</code></td><td>string</td><td>No</td><td>Defaults to "Gunas"</td></tr>
       <tr><td><code>isRecurring</code></td><td>boolean</td><td>No</td><td>Enable recurrence</td></tr>
@@ -29,9 +30,10 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
   <pre><code>{`curl -X POST https://convocados.fly.dev/api/events \\
   -H "Content-Type: application/json" \\
   -d '{
-    "title": "Friday Footy",
+    "title": "Friday Game Night",
     "dateTime": "2026-03-20T19:00:00Z",
-    "location": "Riverside Astro",
+    "sport": "basketball",
+    "location": "Community Center",
     "maxPlayers": 10
   }'`}</code></pre>
 
@@ -44,8 +46,9 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
   <h3>Response</h3>
   <pre><code>{`{
   "id": "clx1abc2d...",
-  "title": "Friday Footy",
-  "location": "Riverside Astro",
+  "title": "Friday Game Night",
+  "location": "Community Center",
+  "sport": "basketball",
   "dateTime": "2026-03-20T19:00:00.000Z",
   "maxPlayers": 10,
   "teamOneName": "Ninjas",
@@ -63,7 +66,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
   <h3>Response</h3>
   <pre><code>{`{
   "id": "clx1abc2d...",
-  "title": "Friday Footy",
+  "title": "Friday Game Night",
   "maxPlayers": 10,
   "players": {
     "active": [{ "id": "...", "name": "Alice" }],

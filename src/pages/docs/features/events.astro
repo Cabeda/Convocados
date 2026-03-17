@@ -12,9 +12,10 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
     <thead><tr><th>Field</th><th>Required</th><th>Description</th></tr></thead>
     <tbody>
       <tr><td><code>title</code></td><td>Yes</td><td>Game name, up to 100 characters</td></tr>
+      <tr><td><code>sport</code></td><td>No</td><td>Sport type — defaults to Football 5v5. Changing the sport auto-sets max players to the sport default</td></tr>
       <tr><td><code>dateTime</code></td><td>Yes</td><td>Must be in the future</td></tr>
       <tr><td><code>location</code></td><td>No</td><td>Text or URL — URLs become clickable links, plain text links to Google Maps</td></tr>
-      <tr><td><code>maxPlayers</code></td><td>No</td><td>2–30, defaults to 10. Players beyond this go to the bench</td></tr>
+      <tr><td><code>maxPlayers</code></td><td>No</td><td>2–30, auto-set by sport. Players beyond this go to the bench</td></tr>
       <tr><td><code>teamOneName</code></td><td>No</td><td>Defaults to "Ninjas"</td></tr>
       <tr><td><code>teamTwoName</code></td><td>No</td><td>Defaults to "Gunas"</td></tr>
     </tbody>

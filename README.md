@@ -1,16 +1,18 @@
 # Convocados
 
-Web app for organizing pickup football games — manage events, randomize teams, track scores, and notify players.
+Web app for organizing pickup sports games — manage events, randomize teams, track scores, and notify players.
 
 ![Screenshot](./public/screenshot.png)
 
 ## Features
 
 - Create and share game events via link
+- Multiple sport presets (football, futsal, basketball, volleyball, tennis, padel, and more)
 - Player sign-up with automatic bench when full
-- Random team generation
+- Random team generation (with optional ELO-balanced mode)
 - Recurring events (weekly/monthly)
 - Game history with editable scores
+- Public events page with filters and map view
 - Push notifications (Web Push)
 - Webhook integrations
 - Full REST API

@@ -22,6 +22,7 @@ export const POST: APIRoute = async ({ request }) => {
   const teamTwoName = String(body.teamTwoName ?? "Gunas").trim().slice(0, 50) || "Gunas";
   const maxPlayersRaw = parseInt(String(body.maxPlayers ?? "10"), 10);
   const maxPlayers = isNaN(maxPlayersRaw) || maxPlayersRaw < 2 ? 10 : Math.min(maxPlayersRaw, 30);
+  const sport = String(body.sport ?? "football-5v5").trim().slice(0, 50) || "football-5v5";
   const isPublic = Boolean(body.isPublic);
   const isRecurring = Boolean(body.isRecurring);
   const recurrenceFreq = (body.recurrenceFreq ?? null) as "weekly" | "monthly" | null;
@@ -49,7 +50,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   const event = await prisma.event.create({
-    data: { title, location, dateTime, maxPlayers, teamOneName, teamTwoName, isPublic, isRecurring, recurrenceRule, nextResetAt },
+    data: { title, location, dateTime, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt },
   });
 
   return Response.json({ id: event.id });
