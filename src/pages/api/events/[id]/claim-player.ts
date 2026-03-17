@@ -72,6 +72,33 @@ export const POST: APIRoute = async ({ params, request }) => {
           data: { name: userName, userId: session.user.id },
         });
       }
+
+      // Update GameHistory teamsSnapshot: rename old anonymous name in all snapshots
+      const histories = await tx.gameHistory.findMany({
+        where: { eventId },
+        select: { id: true, teamsSnapshot: true },
+      });
+      for (const h of histories) {
+        if (!h.teamsSnapshot || !h.teamsSnapshot.includes(oldName)) continue;
+        try {
+          const teams: { team: string; players: { name: string; order: number }[] }[] = JSON.parse(h.teamsSnapshot);
+          let changed = false;
+          for (const team of teams) {
+            for (const p of team.players) {
+              if (p.name === oldName) {
+                p.name = userName;
+                changed = true;
+              }
+            }
+          }
+          if (changed) {
+            await tx.gameHistory.update({
+              where: { id: h.id },
+              data: { teamsSnapshot: JSON.stringify(teams) },
+            });
+          }
+        } catch { /* malformed JSON — skip */ }
+      }
     });
   } catch (err: any) {
     if (err?.message === "CLAIM_RACE") {

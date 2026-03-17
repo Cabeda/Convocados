@@ -469,6 +469,94 @@ describe("POST /api/events/[id]/claim-player", () => {
     expect(newRating?.userId).toBe(user.id);
     expect(newRating?.rating).toBe(1200);
   });
+
+  it("updates GameHistory teamsSnapshot when claiming anonymous player", async () => {
+    const user = await seedUser({ name: "José" });
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
+
+    // Create game history with the anonymous name in the snapshot
+    const snapshot = JSON.stringify([
+      { team: "Ninjas", players: [{ name: "Anon", order: 0 }, { name: "Alice", order: 1 }] },
+      { team: "Gunas", players: [{ name: "Bob", order: 0 }, { name: "Charlie", order: 1 }] },
+    ]);
+    const h = await testPrisma.gameHistory.create({
+      data: {
+        eventId: id,
+        dateTime: new Date(),
+        teamOneName: "Ninjas",
+        teamTwoName: "Gunas",
+        teamsSnapshot: snapshot,
+        editableUntil: new Date(Date.now() + 86400_000),
+        scoreOne: 3,
+        scoreTwo: 1,
+        eloProcessed: true,
+      },
+    });
+
+    const res = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
+    expect(res.status).toBe(200);
+
+    // Verify: snapshot should now contain the user's name instead of "Anon"
+    const updated = await testPrisma.gameHistory.findUnique({ where: { id: h.id } });
+    const parsed = JSON.parse(updated!.teamsSnapshot!);
+    const allNames = parsed.flatMap((t: any) => t.players.map((p: any) => p.name));
+    expect(allNames).toContain("José");
+    expect(allNames).not.toContain("Anon");
+  });
+
+  it("preserves ELO rating after recalculateAllRatings following a claim", async () => {
+    const user = await seedUser({ name: "José" });
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
+
+    // Create a played game with scores and snapshot
+    const snapshot = JSON.stringify([
+      { team: "Ninjas", players: [{ name: "Anon", order: 0 }] },
+      { team: "Gunas", players: [{ name: "Bob", order: 0 }] },
+    ]);
+    await testPrisma.gameHistory.create({
+      data: {
+        eventId: id,
+        dateTime: new Date(),
+        teamOneName: "Ninjas",
+        teamTwoName: "Gunas",
+        teamsSnapshot: snapshot,
+        editableUntil: new Date(Date.now() + 86400_000),
+        scoreOne: 3,
+        scoreTwo: 1,
+        eloProcessed: true,
+      },
+    });
+
+    // Create the rating that would exist from the processed game
+    await testPrisma.playerRating.create({ data: { eventId: id, name: "Anon", rating: 1020, gamesPlayed: 1, wins: 1 } });
+    await testPrisma.playerRating.create({ data: { eventId: id, name: "Bob", rating: 980, gamesPlayed: 1, losses: 1 } });
+
+    // Claim the anonymous player
+    const res = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
+    expect(res.status).toBe(200);
+
+    // Now recalculate all ratings from scratch (replays from snapshots)
+    const { recalculateAllRatings } = await import("~/lib/elo.server");
+    await recalculateAllRatings(id);
+
+    // After recalculation, the rating should be under "José", not "Anon"
+    const joseRating = await testPrisma.playerRating.findUnique({
+      where: { eventId_name: { eventId: id, name: "José" } },
+    });
+    expect(joseRating).not.toBeNull();
+    expect(joseRating!.gamesPlayed).toBe(1);
+    expect(joseRating!.wins).toBe(1);
+
+    // "Anon" should not exist
+    const anonRating = await testPrisma.playerRating.findUnique({
+      where: { eventId_name: { eventId: id, name: "Anon" } },
+    });
+    expect(anonRating).toBeNull();
+  });
 });
 
 // ─── PUT /api/events/[id]/reorder-players ───────────────────────────────────
