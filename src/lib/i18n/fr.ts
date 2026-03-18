@@ -35,6 +35,7 @@ const fr: TranslationKeys = {
   advancedOptions: "Options avancées",
   maxPlayers: "Joueurs max",
   maxPlayersHelper: "Les joueurs au-delà de cette limite vont sur le banc",
+  maxPlayersError: "Le nombre de joueurs doit être entre 2 et 100",
   activePlayers: "En jeu ({n}/{max})",
   benchPlayers: "Banc ({n})",
   benchInfo: "Les joueurs sur le banc sont promus automatiquement quand une place se libère.",
