@@ -1,6 +1,60 @@
 ---
 import EventPageComponent from "../../components/EventPage";
+import { prisma } from "../../lib/db.server";
+import { generateEventJsonLd, generateEventMetaTags } from "../../lib/seo";
+
 const { id } = Astro.params;
+
+const host = Astro.request.headers.get("x-forwarded-host") ?? Astro.request.headers.get("host") ?? "convocados.fly.dev";
+const proto = Astro.request.headers.get("x-forwarded-proto") ?? "https";
+const canonicalUrl = `${proto}://${host}/events/${id}`;
+
+// Fetch event data for SSR meta tags (non-blocking — page still works if DB fails)
+let title = "Convocados";
+let description = "Organize pickup sports games — manage events, randomize teams, track scores.";
+let jsonLd = "";
+let metaTags: { property: string; content: string }[] = [];
+
+try {
+  const event = await prisma.event.findUnique({
+    where: { id },
+    select: {
+      id: true, title: true, location: true, dateTime: true,
+      sport: true, maxPlayers: true, isPublic: true,
+      _count: { select: { players: true } },
+    },
+  });
+
+  if (event) {
+    const playerCount = event._count.players;
+    const spotsLeft = Math.max(0, event.maxPlayers - playerCount);
+    title = `${event.title} — Convocados`;
+    description = `${event.location || "Game"} · ${playerCount}/${event.maxPlayers} players · ${spotsLeft} spot(s) left`;
+
+    if (event.isPublic) {
+      jsonLd = generateEventJsonLd({
+        id: event.id,
+        title: event.title,
+        location: event.location,
+        dateTime: event.dateTime,
+        sport: event.sport,
+        maxPlayers: event.maxPlayers,
+        playerCount,
+        url: canonicalUrl,
+      });
+    }
+
+    metaTags = generateEventMetaTags({
+      title: event.title,
+      description,
+      url: canonicalUrl,
+      dateTime: event.dateTime,
+      location: event.location,
+      playerCount,
+      maxPlayers: event.maxPlayers,
+    });
+  }
+} catch { /* SSR meta is best-effort */ }
 ---
 
 <!doctype html>
@@ -8,11 +62,19 @@ const { id } = Astro.params;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Convocados</title>
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#1b6b4a" />
+    {metaTags.map((tag) => (
+      <meta property={tag.property} content={tag.content} />
+    ))}
+    {jsonLd && (
+      <script type="application/ld+json" set:html={jsonLd} />
+    )}
   </head>
   <body>
     <EventPageComponent client:only="react" eventId={id!} />
