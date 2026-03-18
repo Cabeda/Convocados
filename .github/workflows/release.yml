@@ -16,6 +16,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    outputs:
+      released: ${{ steps.bump_version.outputs.new_version != '' }}
+      version: ${{ steps.bump_version.outputs.new_version }}
 
     steps:
       - name: Checkout repository
@@ -50,7 +53,6 @@ jobs:
           echo "Commits since $LATEST_TAG:"
           echo "$COMMITS"
 
-          # Save to file for multi-line handling
           echo "$COMMITS" > /tmp/commits.txt
 
       - name: Determine version bump type
@@ -58,21 +60,14 @@ jobs:
         run: |
           COMMITS=$(cat /tmp/commits.txt)
 
-          # Check for breaking changes (BREAKING CHANGE: or ! in commit type)
           if echo "$COMMITS" | grep -qE "(BREAKING CHANGE:|^[a-z]+!:)"; then
             echo "bump_type=major" >> $GITHUB_OUTPUT
-            echo "Version bump: MAJOR (breaking changes detected)"
-          # Check for new features (feat:)
           elif echo "$COMMITS" | grep -qE "^feat(\(.*\))?:"; then
             echo "bump_type=minor" >> $GITHUB_OUTPUT
-            echo "Version bump: MINOR (new features detected)"
-          # Check for any conventional commits (fix:, docs:, etc.)
           elif echo "$COMMITS" | grep -qE "^(fix|perf|refactor|style|test|build|ci|chore|docs)(\(.*\))?:"; then
             echo "bump_type=patch" >> $GITHUB_OUTPUT
-            echo "Version bump: PATCH (fixes or other changes detected)"
           else
             echo "bump_type=none" >> $GITHUB_OUTPUT
-            echo "Version bump: NONE (no conventional commits detected)"
           fi
 
       - name: Compute next version
@@ -104,8 +99,6 @@ jobs:
           NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
           LATEST_TAG="${{ steps.get_tag.outputs.latest_tag }}"
 
-          echo "Generating changelog from $LATEST_TAG to v$NEW_VERSION"
-
           if [ "$LATEST_TAG" = "v0.0.0" ]; then
             COMMITS=$(git log --pretty=format:"- %s (%h)" "v$NEW_VERSION")
           else
@@ -119,7 +112,6 @@ jobs:
             echo ""
             echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LATEST_TAG}...v${NEW_VERSION}"
           } > /tmp/changelog.md
-          echo "Changelog generated"
 
       - name: Create GitHub Release
         if: steps.version_bump.outputs.bump_type != 'none'
@@ -145,5 +137,34 @@ jobs:
 
       - name: No release needed
         if: steps.version_bump.outputs.bump_type == 'none'
-        run: |
-          echo "No conventional commits found since last release. Skipping version bump."
+        run: echo "No conventional commits found since last release. Skipping."
+
+  deploy:
+    name: Deploy
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run tests
+        run: npx vitest run
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
