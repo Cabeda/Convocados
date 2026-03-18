@@ -5,7 +5,10 @@ Allow: /events/
 Allow: /docs/
 
 Disallow: /api/
-Disallow: /auth/
+Disallow: /auth/signup
+Disallow: /auth/verify-email
+Disallow: /auth/forgot-password
+Disallow: /auth/reset-password
 Disallow: /dashboard
 
 Sitemap: https://convocados.fly.dev/sitemap.xml
