@@ -28,6 +28,7 @@ import PublicIcon from "@mui/icons-material/Public";
 import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
 import ShieldIcon from "@mui/icons-material/Shield";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import StarIcon from "@mui/icons-material/Star";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
@@ -663,6 +664,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
     mutate();
   }, [eventId, mutate]);
 
+  const resetPlayerOrder = useCallback(async () => {
+    const res = await fetch(`/api/events/${eventId}/reset-player-order`, { method: "POST" });
+    if (res.ok) mutate();
+  }, [eventId, mutate]);
+
   const handlePlayerDragStart = useCallback((playerId: string, index: number) => {
     setDragPlayer({ id: playerId, index });
   }, []);
@@ -1046,6 +1052,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         {bench.length > 0 && (
                           <Chip icon={<AirlineSeatReclineNormalIcon />} label={t("benchPlayers", { n: bench.length })} size="small" color="warning" />
                         )}
+                        {isOwner && (
+                          <Tooltip title={t("resetPlayerOrder")}>
+                            <IconButton size="small" onClick={resetPlayerOrder}><RestartAltIcon fontSize="small" /></IconButton>
+                          </Tooltip>
+                        )}
                       </Box>
 
                       {playerError && <Alert severity="error" onClose={() => setPlayerError(null)}>{playerError}</Alert>}
@@ -1144,7 +1155,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
                       {active.length > 0 && (
                         <Paper variant="outlined" sx={{
-                          p: 1, backgroundColor: alpha(theme.palette.background.default, 0.5),
+                          p: 1, backgroundColor: alpha(theme.palette.primary.main, 0.06),
                         }}>
                           <List dense disablePadding>
                             {active.map((player, i) => (
