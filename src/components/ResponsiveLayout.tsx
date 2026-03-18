@@ -204,7 +204,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
               </>
             ) : (
               <Tooltip title={t("signIn")}>
-                <IconButton color="inherit" component="a" href="/auth/signin" aria-label={t("signIn")}>
+                <IconButton color="inherit" component="a" href={`/auth/signin?callbackURL=${encodeURIComponent(window.location.pathname + window.location.search)}`} aria-label={t("signIn")}>
                   <LoginIcon />
                 </IconButton>
               </Tooltip>

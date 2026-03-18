@@ -16,6 +16,10 @@ export default function SignInPage() {
   const [unverified, setUnverified] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const callbackURL = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("callbackURL") || "/"
+    : "/";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -32,7 +36,7 @@ export default function SignInPage() {
           setError(t("authError"));
         }
       } else {
-        window.location.href = "/";
+        window.location.href = callbackURL;
       }
     } catch {
       setError(t("authError"));
@@ -42,7 +46,7 @@ export default function SignInPage() {
   };
 
   const handleGoogleSignIn = async () => {
-    await signIn.social({ provider: "google", callbackURL: "/" });
+    await signIn.social({ provider: "google", callbackURL });
   };
 
   return (
@@ -109,7 +113,7 @@ export default function SignInPage() {
 
               <Typography variant="body2" textAlign="center" color="text.secondary">
                 {t("noAccount")}{" "}
-                <Link href="/auth/signup" underline="hover">
+                <Link href={`/auth/signup?callbackURL=${encodeURIComponent(callbackURL)}`} underline="hover">
                   {t("signUp")}
                 </Link>
               </Typography>
