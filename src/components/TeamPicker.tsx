@@ -155,7 +155,6 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
                     ? `2px dashed ${alpha(colors.main, 0.35)}`
                     : `1px solid ${theme.palette.divider}`,
                 transition: "border-color 0.2s, box-shadow 0.2s",
-                touchAction: "none",
               }}
             >
               {/* Team header */}
@@ -254,11 +253,8 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
                     return (
                       <ListItem
                         key={player.name}
-                        onPointerDown={(e) => handlePointerDown(e, player.name, team.team)}
                         sx={{
-                          cursor: drag ? "grabbing" : "grab",
                           userSelect: "none",
-                          touchAction: "none",
                           opacity: isBeingDragged ? 0.3 : 1,
                           transition: "opacity 0.15s, background-color 0.1s",
                           borderRadius: 2,
@@ -295,10 +291,25 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
                             color: "text.secondary",
                           }}
                         />
-                        <DragIndicatorIcon
-                          fontSize="small"
-                          sx={{ color: "text.disabled", flexShrink: 0 }}
-                        />
+                        <Box
+                          onPointerDown={(e) => handlePointerDown(e, player.name, team.team)}
+                          sx={{
+                            cursor: drag ? "grabbing" : "grab",
+                            touchAction: "none",
+                            display: "flex",
+                            alignItems: "center",
+                            p: 0.5,
+                            borderRadius: 1,
+                            "&:hover": {
+                              bgcolor: alpha(theme.palette.text.primary, 0.08),
+                            },
+                          }}
+                        >
+                          <DragIndicatorIcon
+                            fontSize="small"
+                            sx={{ color: "text.disabled" }}
+                          />
+                        </Box>
                       </ListItem>
                     );
                   })}
