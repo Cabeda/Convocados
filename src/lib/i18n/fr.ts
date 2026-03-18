@@ -243,6 +243,7 @@ const fr: TranslationKeys = {
   newEmail: "Nouvel email",
   changeEmailBtn: "Envoyer la vérification",
   changeEmailSent: "Email de vérification envoyé à ta nouvelle adresse. Vérifie ta boîte de réception.",
+  resetPlayerOrder: "Réinitialiser l'ordre d'inscription",
 };
 
 export default fr;

@@ -289,6 +289,7 @@ const en = {
   newEmail: "New email",
   changeEmailBtn: "Send verification",
   changeEmailSent: "Verification email sent to your new address. Check your inbox.",
+  resetPlayerOrder: "Reset order to sign-up order",
 } as const;
 
 export default en;

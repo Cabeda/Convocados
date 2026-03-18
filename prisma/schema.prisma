@@ -67,23 +67,23 @@ model Verification {
 // ── App tables ────────────────────────────────────────────────────────────────
 
 model Event {
-  id             String        @id @default(cuid())
+  id             String                @id @default(cuid())
   title          String
   location       String
   latitude       Float?
   longitude      Float?
   dateTime       DateTime
-  maxPlayers     Int           @default(10)
-  teamOneName    String        @default("Ninjas")
-  teamTwoName    String        @default("Gunas")
-  sport          String        @default("football-5v5")
-  isPublic       Boolean       @default(false)
-  balanced       Boolean       @default(false)
-  isRecurring    Boolean       @default(false)
+  maxPlayers     Int                   @default(10)
+  teamOneName    String                @default("Ninjas")
+  teamTwoName    String                @default("Gunas")
+  sport          String                @default("football-5v5")
+  isPublic       Boolean               @default(false)
+  balanced       Boolean               @default(false)
+  isRecurring    Boolean               @default(false)
   recurrenceRule String?
   nextResetAt    DateTime?
   ownerId        String?
-  owner          User?         @relation("EventOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  owner          User?                 @relation("EventOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   players        Player[]
   teamResults    TeamResult[]
   history        GameHistory[]
@@ -91,8 +91,8 @@ model Event {
   pushSubs       PushSubscription[]
   webhookSubs    WebhookSubscription[]
   reminderLogs   ReminderLog[]
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
   @@index([ownerId])
 }
@@ -107,7 +107,7 @@ model GameHistory {
   scoreTwo      Int?
   teamOneName   String
   teamTwoName   String
-  teamsSnapshot String?  // JSON: [{team, players:[{name,order}]}]
+  teamsSnapshot String? // JSON: [{team, players:[{name,order}]}]
   editableUntil DateTime
   eloProcessed  Boolean  @default(false)
   createdAt     DateTime @default(now())
@@ -194,7 +194,7 @@ model WebhookDelivery {
   webhookId   String
   webhook     WebhookSubscription @relation(fields: [webhookId], references: [id], onDelete: Cascade)
   eventType   String
-  payload     String              // JSON
+  payload     String // JSON
   status      String              @default("pending") // "pending" | "success" | "failed"
   attempts    Int                 @default(0)
   lastAttempt DateTime?
@@ -204,11 +204,11 @@ model WebhookDelivery {
 }
 
 model ReminderLog {
-  id        String   @id @default(cuid())
-  eventId   String
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  type      String   // "24h" | "2h" | "1h"
-  sentAt    DateTime @default(now())
+  id      String   @id @default(cuid())
+  eventId String
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type    String // "24h" | "2h" | "1h"
+  sentAt  DateTime @default(now())
 
   @@unique([eventId, type])
 }
@@ -219,7 +219,7 @@ model CalendarToken {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   scope     String   @default("user") // "user" | "event"
-  scopeId   String?  // eventId when scope is "event"
+  scopeId   String? // eventId when scope is "event"
   createdAt DateTime @default(now())
 
   @@index([userId])
@@ -229,7 +229,7 @@ model CalendarToken {
 model ApiKey {
   id         String    @id @default(cuid())
   name       String
-  prefix     String    // first 8 chars of the raw key for identification
+  prefix     String // first 8 chars of the raw key for identification
   hashedKey  String    @unique
   userId     String
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)

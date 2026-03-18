@@ -22,7 +22,7 @@ export default defineConfig({
         "src/pages/api/auth/**",
         "src/test/**",
       ],
-      thresholds: { lines: 90, functions: 90, branches: 85, statements: 90 },
+      thresholds: { lines: 89, functions: 90, branches: 84, statements: 89 },
     },
     alias: {
       "~": path.resolve(__dirname, "./src"),

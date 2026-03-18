@@ -243,6 +243,7 @@ const de: TranslationKeys = {
   newEmail: "Neue E-Mail",
   changeEmailBtn: "Bestätigung senden",
   changeEmailSent: "Bestätigungs-E-Mail an deine neue Adresse gesendet. Prüfe deinen Posteingang.",
+  resetPlayerOrder: "Reihenfolge auf Anmeldereihenfolge zurücksetzen",
 };
 
 export default de;
