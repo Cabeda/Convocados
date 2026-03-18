@@ -37,6 +37,7 @@ const en = {
   advancedOptions: "Advanced options",
   maxPlayers: "Max players",
   maxPlayersHelper: "Players beyond this limit go to the bench",
+  maxPlayersError: "Max players must be between 2 and 100",
 
   // Bench
   activePlayers: "Playing ({n}/{max})",

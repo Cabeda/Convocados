@@ -24,6 +24,10 @@ import { useSession, signOut } from "~/lib/auth.client";
 const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
   { code: "en", label: "English" },
   { code: "pt", label: "Português" },
+  { code: "es", label: "Español" },
+  { code: "fr", label: "Français" },
+  { code: "de", label: "Deutsch" },
+  { code: "it", label: "Italiano" },
 ];
 
 function ElevationScroll({ children }: { children: React.ReactElement<{ elevation?: number }> }) {

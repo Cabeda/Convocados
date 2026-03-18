@@ -35,6 +35,7 @@ const it: TranslationKeys = {
   advancedOptions: "Opzioni avanzate",
   maxPlayers: "Max giocatori",
   maxPlayersHelper: "I giocatori oltre questo limite vanno in panchina",
+  maxPlayersError: "Il numero massimo di giocatori deve essere tra 2 e 100",
   activePlayers: "In campo ({n}/{max})",
   benchPlayers: "Panchina ({n})",
   benchInfo: "I giocatori in panchina vengono promossi automaticamente quando si libera un posto.",

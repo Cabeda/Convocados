@@ -248,6 +248,42 @@ describe("POST /api/events/[id]/randomize", () => {
     const res = await randomize(ctx({ id }));
     expect(res.status).toBe(400);
   });
+
+  it("excludes bench players from team randomization", async () => {
+    const id = await seedEvent();
+    await prisma.event.update({ where: { id }, data: { maxPlayers: 4 } });
+
+    await prisma.player.createMany({
+      data: [
+        { name: "Alice", eventId: id, order: 0 },
+        { name: "Bob", eventId: id, order: 1 },
+        { name: "Carol", eventId: id, order: 2 },
+        { name: "Dave", eventId: id, order: 3 },
+        { name: "Eve", eventId: id, order: 4 },
+        { name: "Frank", eventId: id, order: 5 },
+      ],
+    });
+
+    const res = await randomize(ctx({ id }));
+    expect(res.status).toBe(200);
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: id },
+      include: { members: true },
+    });
+
+    const totalMembers = teams.reduce((s, t) => s + t.members.length, 0);
+
+    expect(totalMembers).toBe(4);
+
+    const allNames = teams.flatMap((t) => t.members.map((m) => m.name));
+    expect(allNames).toContain("Alice");
+    expect(allNames).toContain("Bob");
+    expect(allNames).toContain("Carol");
+    expect(allNames).toContain("Dave");
+    expect(allNames).not.toContain("Eve");
+    expect(allNames).not.toContain("Frank");
+  });
 });
 
 // ─── PUT /api/events/[id]/teams ──────────────────────────────────────────────

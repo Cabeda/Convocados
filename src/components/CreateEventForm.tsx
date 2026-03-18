@@ -51,19 +51,26 @@ export default function CreateEventForm() {
   const [recurrenceInterval, setRecurrenceInterval] = useState(1);
   const [recurrenceByDay, setRecurrenceByDay] = useState("");
   const [sport, setSport] = useState("football-5v5");
-  const [maxPlayers, setMaxPlayers] = useState(10);
+  const [maxPlayers, setMaxPlayers] = useState("10");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSportChange = (newSport: string) => {
     setSport(newSport);
-    setMaxPlayers(getDefaultMaxPlayers(newSport));
+    setMaxPlayers(String(getDefaultMaxPlayers(newSport)));
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+
+    const parsedMaxPlayers = parseInt(maxPlayers, 10);
+    if (isNaN(parsedMaxPlayers) || parsedMaxPlayers < 2 || parsedMaxPlayers > 100) {
+      setError(t("maxPlayersError"));
+      setSubmitting(false);
+      return;
+    }
 
     const form = e.currentTarget;
     const fd = new FormData(form);
@@ -74,7 +81,7 @@ export default function CreateEventForm() {
       dateTime: fd.get("dateTime"),
       teamOneName: fd.get("teamOneName"),
       teamTwoName: fd.get("teamTwoName"),
-      maxPlayers,
+      maxPlayers: parsedMaxPlayers,
       sport,
       isRecurring,
       recurrenceFreq: isRecurring ? recurrenceFreq : null,
@@ -178,10 +185,11 @@ export default function CreateEventForm() {
                           label={t("maxPlayers")}
                           type="number"
                           value={maxPlayers}
-                          onChange={(e) => setMaxPlayers(Math.max(2, Math.min(30, parseInt(e.target.value) || 10)))}
-                          inputProps={{ min: 2, max: 30 }}
+                          onChange={(e) => setMaxPlayers(e.target.value)}
+                          inputProps={{ min: 2, max: 100 }}
                           helperText={t("maxPlayersHelper")}
                           fullWidth
+                          error={maxPlayers !== "" && (isNaN(parseInt(maxPlayers)) || parseInt(maxPlayers) < 2 || parseInt(maxPlayers) > 100)}
                           InputProps={{
                             startAdornment: (
                               <InputAdornment position="start"><PeopleIcon fontSize="small" /></InputAdornment>
