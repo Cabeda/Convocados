@@ -88,6 +88,7 @@ model Event {
   playerRatings  PlayerRating[]
   pushSubs       PushSubscription[]
   webhookSubs    WebhookSubscription[]
+  reminderLogs   ReminderLog[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -197,6 +198,16 @@ model WebhookDelivery {
   deliveredAt DateTime?
   error       String?
   createdAt   DateTime            @default(now())
+}
+
+model ReminderLog {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type      String   // "24h" | "2h" | "1h"
+  sentAt    DateTime @default(now())
+
+  @@unique([eventId, type])
 }
 
 model CalendarToken {
