@@ -22,6 +22,7 @@ model User {
   ownedEvents    Event[]         @relation("EventOwner")
   players        Player[]        @relation("PlayerUser")
   calendarTokens CalendarToken[]
+  apiKeys        ApiKey[]
 }
 
 model Session {
@@ -211,4 +212,19 @@ model CalendarToken {
 
   @@index([userId])
   @@index([token])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  prefix     String    // first 8 chars of the raw key for identification
+  hashedKey  String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopes     String    @default("[]") // JSON array of scope strings
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([hashedKey])
 }
