@@ -107,6 +107,87 @@ export async function sendVerificationEmail(to: string, url: string) {
   console.log(`[email] Verification email sent successfully (id: ${result.data?.id})`);
 }
 
+// ── Notification emails ───────────────────────────────────────────────────────
+
+export interface GameInviteData {
+  eventTitle: string;
+  dateTime: string;
+  location: string;
+  eventUrl: string;
+}
+
+export async function sendGameInvite(to: string, data: GameInviteData) {
+  const result = await getResend().emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: `You're invited: ${data.eventTitle} — Convocados`,
+    html: emailTemplate({
+      heading: `You're invited to ${data.eventTitle}`,
+      body: `📍 ${data.location}<br/>🕐 ${new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}`,
+      buttonText: "View game",
+      buttonUrl: data.eventUrl,
+      footnote: `Don't want these emails? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+    }),
+  });
+  if (result.error) throw new Error(`Failed to send game invite: ${result.error.message}`);
+}
+
+export interface ReminderData {
+  eventTitle: string;
+  dateTime: string;
+  location: string;
+  spotsLeft: number;
+  eventUrl: string;
+  reminderType: "24h" | "2h" | "1h";
+}
+
+export async function sendReminder(to: string, data: ReminderData) {
+  const spotsText = data.spotsLeft > 0 ? `${data.spotsLeft} spots left` : "Game is full";
+  const result = await getResend().emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: `Reminder: ${data.eventTitle} — Convocados`,
+    html: emailTemplate({
+      heading: `${data.eventTitle} is coming up`,
+      body: `📍 ${data.location}<br/>🕐 ${new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}<br/>👥 ${spotsText}`,
+      buttonText: "View game",
+      buttonUrl: data.eventUrl,
+      footnote: `Don't want reminders? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+    }),
+  });
+  if (result.error) throw new Error(`Failed to send reminder: ${result.error.message}`);
+}
+
+export interface WeeklySummaryData {
+  userName: string;
+  upcoming: { title: string; dateTime: string; location: string }[];
+  results: { title: string; scoreOne: number; scoreTwo: number }[];
+  dashboardUrl: string;
+}
+
+export async function sendWeeklySummary(to: string, data: WeeklySummaryData) {
+  const upcomingHtml = data.upcoming.length
+    ? data.upcoming.map((g) => `• <strong>${g.title}</strong> — ${new Date(g.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}`).join("<br/>")
+    : "No upcoming games this week.";
+  const resultsHtml = data.results.length
+    ? data.results.map((g) => `• ${g.title}: ${g.scoreOne} – ${g.scoreTwo}`).join("<br/>")
+    : "";
+  const body = `Hey ${data.userName}!<br/><br/><strong>Upcoming</strong><br/>${upcomingHtml}${resultsHtml ? `<br/><br/><strong>Recent results</strong><br/>${resultsHtml}` : ""}`;
+  const result = await getResend().emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: "Your Weekly Summary — Convocados",
+    html: emailTemplate({
+      heading: "Weekly Summary",
+      body,
+      buttonText: "Go to dashboard",
+      buttonUrl: data.dashboardUrl,
+      footnote: `Don't want weekly summaries? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+    }),
+  });
+  if (result.error) throw new Error(`Failed to send weekly summary: ${result.error.message}`);
+}
+
 export async function sendChangeEmailVerification(to: string, url: string) {
   console.log(`[email] Sending change-email verification to ${to}`);
   const result = await getResend().emails.send({
