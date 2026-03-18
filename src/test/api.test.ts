@@ -353,10 +353,13 @@ describe("POST /api/events/[id]/players branch coverage", () => {
   it("rethrows non-P2002 errors", async () => {
     const id = await seedEvent();
     // Mock prisma.player.create to throw a generic error
-    const original = prisma.player.create.bind(prisma.player);
-    vi.spyOn(prisma.player, "create").mockRejectedValueOnce(new Error("DB connection lost"));
-    await expect(addPlayer(ctx({ id }, { name: "Alice" }))).rejects.toThrow("DB connection lost");
-    vi.restoreAllMocks();
+    const original = prisma.player.create;
+    (prisma.player as any).create = vi.fn().mockRejectedValueOnce(new Error("DB connection lost"));
+    try {
+      await expect(addPlayer(ctx({ id }, { name: "Alice" }))).rejects.toThrow("DB connection lost");
+    } finally {
+      (prisma.player as any).create = original;
+    }
   });
 });
 
