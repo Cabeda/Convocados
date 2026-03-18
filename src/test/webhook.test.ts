@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { prisma } from "~/lib/db.server";
 
 import { POST as createWebhook, GET as listWebhooks } from "~/pages/api/events/[id]/webhooks/index";
-import { DELETE as deleteWebhook } from "~/pages/api/events/[id]/webhooks/[webhookId]";
+import { DELETE as deleteWebhook } from "~/pages/api/events/[id]/webhooks/[webhookId]/index";
 import { signPayload, fireWebhooks } from "~/lib/webhook.server";
 
 // Helpers

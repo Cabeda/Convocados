@@ -32,6 +32,7 @@ export async function fireWebhooks(
   });
 
   const matching = subs.filter((sub) => {
+    if (sub.disabled) return false;
     const subscribedEvents: string[] = JSON.parse(sub.events);
     return subscribedEvents.length === 0 || subscribedEvents.includes(eventType);
   });
@@ -132,4 +133,32 @@ async function deliverWebhook(
     data: { status: "failed" },
   });
   console.error(`[webhook] gave up on ${url.slice(0, 60)} after ${MAX_ATTEMPTS} attempts`);
+
+  // Check health after failure
+  await checkWebhookHealth(webhookId);
+}
+
+const CONSECUTIVE_FAILURES_THRESHOLD = 10;
+
+/**
+ * Auto-disable a webhook after N consecutive failed deliveries.
+ */
+export async function checkWebhookHealth(webhookId: string): Promise<void> {
+  const recentDeliveries = await prisma.webhookDelivery.findMany({
+    where: { webhookId },
+    orderBy: { createdAt: "desc" },
+    take: CONSECUTIVE_FAILURES_THRESHOLD,
+    select: { status: true },
+  });
+
+  if (recentDeliveries.length < CONSECUTIVE_FAILURES_THRESHOLD) return;
+
+  const allFailed = recentDeliveries.every((d) => d.status === "failed");
+  if (allFailed) {
+    await prisma.webhookSubscription.update({
+      where: { id: webhookId },
+      data: { disabled: true },
+    });
+    console.warn(`[webhook] auto-disabled webhook ${webhookId} after ${CONSECUTIVE_FAILURES_THRESHOLD} consecutive failures`);
+  }
 }

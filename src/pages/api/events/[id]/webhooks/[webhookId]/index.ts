@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
-import { prisma } from "../../../../../lib/db.server";
-import { checkOwnership } from "../../../../../lib/auth.helpers.server";
+import { prisma } from "../../../../../../lib/db.server";
+import { checkOwnership } from "../../../../../../lib/auth.helpers.server";
 
 /** DELETE — unsubscribe a webhook */
 export const DELETE: APIRoute = async ({ params, request }) => {
