@@ -17,6 +17,10 @@ export default function SignUpPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const callbackURL = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("callbackURL") || "/"
+    : "/";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -37,7 +41,7 @@ export default function SignUpPage() {
         console.error("Sign-up error:", result.error);
         setError(result.error.message || t("authSignupError"));
       } else {
-        window.location.href = "/auth/verify-email?email=" + encodeURIComponent(email);
+        window.location.href = "/auth/verify-email?email=" + encodeURIComponent(email) + "&callbackURL=" + encodeURIComponent(callbackURL);
       }
     } catch (err) {
       console.error("Sign-up exception:", err);
@@ -48,7 +52,7 @@ export default function SignUpPage() {
   };
 
   const handleGoogleSignUp = async () => {
-    await signIn.social({ provider: "google", callbackURL: "/" });
+    await signIn.social({ provider: "google", callbackURL });
   };
 
   return (
@@ -127,7 +131,7 @@ export default function SignUpPage() {
 
               <Typography variant="body2" textAlign="center" color="text.secondary">
                 {t("hasAccount")}{" "}
-                <Link href="/auth/signin" underline="hover">
+                <Link href={`/auth/signin?callbackURL=${encodeURIComponent(callbackURL)}`} underline="hover">
                   {t("signIn")}
                 </Link>
               </Typography>
