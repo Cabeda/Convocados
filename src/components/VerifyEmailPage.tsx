@@ -14,6 +14,7 @@ export default function VerifyEmailPage() {
   const t = useT();
   const params = new URLSearchParams(window.location.search);
   const email = params.get("email") ?? "";
+  const callbackURL = params.get("callbackURL") || "/";
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +72,7 @@ export default function VerifyEmailPage() {
               </Button>
 
               <Typography variant="body2" textAlign="center" color="text.secondary">
-                <Link href="/auth/signin" underline="hover">
+                <Link href={`/auth/signin?callbackURL=${encodeURIComponent(callbackURL)}`} underline="hover">
                   {t("signIn")}
                 </Link>
               </Typography>
