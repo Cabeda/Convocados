@@ -290,6 +290,7 @@ const pt: TranslationKeys = {
   newEmail: "Novo email",
   changeEmailBtn: "Enviar verificação",
   changeEmailSent: "Email de verificação enviado para o novo endereço. Verifica a tua caixa de entrada.",
+  resetPlayerOrder: "Repor ordem de inscrição",
 };
 
 export default pt;
