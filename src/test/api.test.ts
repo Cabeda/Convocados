@@ -291,6 +291,13 @@ describe("POST /api/events/[id]/randomize", () => {
 describe("PUT /api/events/[id]/teams", () => {
   it("saves team assignments", async () => {
     const id = await seedEvent();
+    await prisma.player.createMany({
+      data: [
+        { name: "Alice", eventId: id, order: 0 },
+        { name: "Bob", eventId: id, order: 1 },
+        { name: "Carol", eventId: id, order: 2 },
+      ],
+    });
     const matches = [
       { team: "Ninjas", players: [{ name: "Alice", order: 0 }, { name: "Bob", order: 1 }] },
       { team: "Gunas", players: [{ name: "Carol", order: 0 }] },
@@ -299,6 +306,28 @@ describe("PUT /api/events/[id]/teams", () => {
     expect(res.status).toBe(200);
     const teams = await prisma.teamResult.findMany({ where: { eventId: id }, include: { members: true } });
     expect(teams).toHaveLength(2);
+  });
+
+  it("rejects bench players in team assignments", async () => {
+    const id = await seedEvent();
+    await prisma.event.update({ where: { id }, data: { maxPlayers: 2 } });
+    await prisma.player.createMany({
+      data: [
+        { name: "Alice", eventId: id, order: 0 },
+        { name: "Bob", eventId: id, order: 1 },
+        { name: "Carol", eventId: id, order: 2 },
+      ],
+    });
+
+    const matches = [
+      { team: "Ninjas", players: [{ name: "Alice", order: 0 }] },
+      { team: "Gunas", players: [{ name: "Carol", order: 0 }] },
+    ];
+
+    const res = await saveTeams(putCtx({ id }, { matches }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("Carol");
   });
 });
 
