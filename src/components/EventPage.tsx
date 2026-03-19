@@ -430,6 +430,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
+  const [claimPlayerConfirmOpen, setClaimPlayerConfirmOpen] = useState(false);
+  const [playerToClaim, setPlayerToClaim] = useState<{ id: string; name: string } | null>(null);
   const { data: session } = useSession();
 
   const handleToggleBalanced = async (newValue: boolean) => {
@@ -635,6 +637,29 @@ export default function EventPage({ eventId }: { eventId: string }) {
     const timer = setTimeout(() => setUndoData(null), 60_000);
     return () => clearTimeout(timer);
   }, [undoData]);
+
+  const handleClaimPlayerConfirm = async () => {
+    if (!playerToClaim) return;
+    setClaimPlayerConfirmOpen(false);
+    const res = await fetch(`/api/events/${eventId}/claim-player`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId: playerToClaim.id }),
+    });
+    if (res.ok) {
+      setSnackbar(t("claimPlayerSuccess"));
+      mutate();
+    } else {
+      const json = await res.json();
+      setPlayerError(json.error);
+    }
+    setPlayerToClaim(null);
+  };
+
+  const openClaimPlayerDialog = (playerId: string, playerName: string) => {
+    setPlayerToClaim({ id: playerId, name: playerName });
+    setClaimPlayerConfirmOpen(true);
+  };
 
   const claimPlayer = async (playerId: string) => {
     const res = await fetch(`/api/events/${eventId}/claim-player`, {
@@ -1183,15 +1208,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
                                 }
                               >
                                 {isOwner && (
-                                  <DragIndicatorIcon fontSize="small" sx={{ color: "text.disabled", mr: 0.5, flexShrink: 0 }} />
-                                )}
+                                    <DragIndicatorIcon fontSize="small" sx={{ color: "text.disabled", mr: 0.5, flexShrink: 0 }} />
+                                  )}
                                 {player.userId ? (
                                   <Tooltip title={t("protectedPlayer")}>
                                     <ShieldIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5, flexShrink: 0 }} />
                                   </Tooltip>
                                 ) : canClaimPlayer ? (
                                   <Tooltip title={t("claimPlayerDesc")}>
-                                    <SwapHorizIcon fontSize="small" sx={{ cursor: "pointer", mr: 0.5, flexShrink: 0 }} onClick={() => claimPlayer(player.id)} />
+                                    <SwapHorizIcon fontSize="small" sx={{ cursor: "pointer", mr: 0.5, flexShrink: 0 }} onClick={() => openClaimPlayerDialog(player.id, player.name)} />
                                   </Tooltip>
                                 ) : null}
                                 <ListItemText
@@ -1258,7 +1283,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                                       </Tooltip>
                                     ) : canClaimPlayer ? (
                                       <Tooltip title={t("claimPlayerDesc")}>
-                                        <SwapHorizIcon fontSize="small" sx={{ cursor: "pointer", mr: 0.5, flexShrink: 0 }} onClick={() => claimPlayer(player.id)} />
+                                        <SwapHorizIcon fontSize="small" sx={{ cursor: "pointer", mr: 0.5, flexShrink: 0 }} onClick={() => openClaimPlayerDialog(player.id, player.name)} />
                                       </Tooltip>
                                     ) : null}
                                     <ListItemText
@@ -1349,6 +1374,22 @@ export default function EventPage({ eventId }: { eventId: string }) {
             <Button onClick={() => setRelinquishConfirmOpen(false)}>{t("cancelEdit")}</Button>
             <Button onClick={handleRelinquishOwnership} color="warning" variant="contained">
               {t("relinquishOwnership")}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Claim player confirmation */}
+        <Dialog open={claimPlayerConfirmOpen} onClose={() => setClaimPlayerConfirmOpen(false)}>
+          <DialogTitle>{t("claimPlayerTitle")}</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              {t("claimPlayerConfirmDesc", { name: playerToClaim?.name || "" })}
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => { setClaimPlayerConfirmOpen(false); setPlayerToClaim(null); }}>{t("cancel")}</Button>
+            <Button onClick={handleClaimPlayerConfirm} variant="contained">
+              {t("claimPlayer")}
             </Button>
           </DialogActions>
         </Dialog>
