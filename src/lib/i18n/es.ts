@@ -252,6 +252,29 @@ const es: TranslationKeys = {
   quickActions: "Acciones Rápidas",
   eventSettings: "Configuración del Evento",
   eventSettingsDesc: "Visibilidad, deporte, equipos equilibrados e integraciones",
+
+  // Payment tracking
+  splitTheCost: "Dividir el coste",
+  totalCost: "Coste total",
+  currency: "Moneda",
+  perPlayer: "{amount} por jugador",
+  paymentDetails: "Datos de pago",
+  paymentDetailsPlaceholder: "ej: Revolut @jose / Bizum 612345678",
+  paymentSummary: "{paid}/{total} pagados ({amount} {currency})",
+  paymentStatusPaid: "Pagado",
+  paymentStatusPending: "Pendiente",
+  paymentStatusExempt: "Exento",
+  paymentMethod: "Método",
+  setCost: "Establecer coste",
+  updateCost: "Actualizar",
+  removeCost: "Eliminar coste",
+  removeCostConfirm: "¿Eliminar el seguimiento de costes? Se borrarán todos los registros de pago.",
+  noCostSet: "No hay coste definido para este evento.",
+  costSaved: "Coste actualizado.",
+  costRemoved: "Coste eliminado.",
+  copyPaymentDetails: "Copiar datos de pago",
+  paymentDetailsCopied: "¡Datos de pago copiados!",
+  paymentsHistory: "Pagos",
 };
 
 export default es;

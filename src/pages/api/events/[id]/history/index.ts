@@ -33,6 +33,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     teamOneName: h.teamOneName,
     teamTwoName: h.teamTwoName,
     teamsSnapshot: h.teamsSnapshot,
+    paymentsSnapshot: h.paymentsSnapshot,
     editableUntil: h.editableUntil.toISOString(),
     createdAt: h.createdAt.toISOString(),
     editable: h.editableUntil > new Date(),
