@@ -298,6 +298,29 @@ const en = {
   quickActions: "Quick Actions",
   eventSettings: "Event Settings",
   eventSettingsDesc: "Visibility, sport, balanced teams, and integrations",
+
+  // Payment tracking
+  splitTheCost: "Split the cost",
+  totalCost: "Total cost",
+  currency: "Currency",
+  perPlayer: "{amount} per player",
+  paymentDetails: "Payment details",
+  paymentDetailsPlaceholder: "e.g. Revolut @jose / MB Way 912345678",
+  paymentSummary: "{paid}/{total} paid ({amount} {currency})",
+  paymentStatusPaid: "Paid",
+  paymentStatusPending: "Pending",
+  paymentStatusExempt: "Exempt",
+  paymentMethod: "Method",
+  setCost: "Set cost",
+  updateCost: "Update",
+  removeCost: "Remove cost",
+  removeCostConfirm: "Remove cost tracking? All payment records will be deleted.",
+  noCostSet: "No cost set for this event.",
+  costSaved: "Cost updated.",
+  costRemoved: "Cost removed.",
+  copyPaymentDetails: "Copy payment details",
+  paymentDetailsCopied: "Payment details copied!",
+  paymentsHistory: "Payments",
 } as const;
 
 export default en;

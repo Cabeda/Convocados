@@ -252,6 +252,29 @@ const de: TranslationKeys = {
   quickActions: "Schnellaktionen",
   eventSettings: "Event-Einstellungen",
   eventSettingsDesc: "Sichtbarkeit, Sportart, ausgeglichene Teams und Integrationen",
+
+  // Payment tracking
+  splitTheCost: "Kosten aufteilen",
+  totalCost: "Gesamtkosten",
+  currency: "Währung",
+  perPlayer: "{amount} pro Spieler",
+  paymentDetails: "Zahlungsdetails",
+  paymentDetailsPlaceholder: "z.B. Revolut @jose / PayPal jose@mail.com",
+  paymentSummary: "{paid}/{total} bezahlt ({amount} {currency})",
+  paymentStatusPaid: "Bezahlt",
+  paymentStatusPending: "Ausstehend",
+  paymentStatusExempt: "Befreit",
+  paymentMethod: "Methode",
+  setCost: "Kosten festlegen",
+  updateCost: "Aktualisieren",
+  removeCost: "Kosten entfernen",
+  removeCostConfirm: "Kostenverfolgung entfernen? Alle Zahlungseinträge werden gelöscht.",
+  noCostSet: "Keine Kosten für dieses Event festgelegt.",
+  costSaved: "Kosten aktualisiert.",
+  costRemoved: "Kosten entfernt.",
+  copyPaymentDetails: "Zahlungsdetails kopieren",
+  paymentDetailsCopied: "Zahlungsdetails kopiert!",
+  paymentsHistory: "Zahlungen",
 };
 
 export default de;

@@ -36,6 +36,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
+import { PaymentSection } from "./PaymentSection";
 import type { Imatch } from "~/lib/random";
 import { describeRecurrenceRule, parseRecurrenceRule } from "~/lib/recurrence";
 import { useT } from "~/lib/useT";
@@ -1369,6 +1370,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   );
                 })()}
               </Stack>
+            </Paper>
+
+            {/* Payment tracking */}
+            <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+              <PaymentSection
+                eventId={eventId}
+                canEdit={canEditSettings}
+                activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
+              />
             </Paper>
 
             {/* Teams */}

@@ -42,6 +42,20 @@ export const GET: APIRoute = async ({ params }) => {
             })))
           : null;
 
+        // Snapshot payments before reset
+        const eventCost = await prisma.eventCost.findUnique({
+          where: { eventId: event.id },
+          include: { payments: true },
+        });
+        const paymentsSnapshot = eventCost && eventCost.payments.length > 0
+          ? JSON.stringify(eventCost.payments.map((p) => ({
+              playerName: p.playerName,
+              amount: p.amount,
+              status: p.status,
+              method: p.method,
+            })))
+          : null;
+
         await prisma.$transaction([
           prisma.gameHistory.create({
             data: {
@@ -50,11 +64,14 @@ export const GET: APIRoute = async ({ params }) => {
               teamOneName: event.teamOneName,
               teamTwoName: event.teamTwoName,
               teamsSnapshot,
+              paymentsSnapshot,
               editableUntil,
             },
           }),
           prisma.player.deleteMany({ where: { eventId: event.id } }),
           prisma.teamResult.deleteMany({ where: { eventId: event.id } }),
+          // Clear payments for the new occurrence (keep EventCost settings)
+          ...(eventCost ? [prisma.playerPayment.deleteMany({ where: { eventCostId: eventCost.id } })] : []),
           prisma.event.update({
             where: { id: event.id },
             data: { dateTime: newDateTime },
