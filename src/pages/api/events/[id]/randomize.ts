@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { Randomize } from "../../../../lib/random";
 import { balanceTeams } from "../../../../lib/elo.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { sseManager } from "../../../../lib/sse.server";
 
 export const POST: APIRoute = async ({ params, url, request }) => {
   const limited = rateLimitResponse(request, "write");
@@ -64,6 +65,8 @@ export const POST: APIRoute = async ({ params, url, request }) => {
       })
     ),
   ]);
+
+  sseManager.broadcast(eventId, "update", { action: "teams_randomized" });
 
   return Response.json({ ok: true, balanced });
 };

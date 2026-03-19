@@ -4,6 +4,7 @@ import { sendPushToEvent } from "../../../../lib/push.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { sseManager } from "../../../../lib/sse.server";
 
 /**
  * If teams have been generated, add a player to the team with fewer members.
@@ -134,6 +135,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     fireWebhooks(eventId, "game_full", webhookData).catch(() => {});
   }
 
+  sseManager.broadcast(eventId, "update", { action: "player_added" });
+
   return Response.json({ ok: true });
 };
 
@@ -203,6 +206,8 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   // Fire webhooks (non-blocking)
   fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft }).catch(() => {});
+
+  sseManager.broadcast(eventId, "update", { action: "player_removed" });
 
   // Return undo data so the client can restore the player within a time window
   return Response.json({

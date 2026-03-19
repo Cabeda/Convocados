@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
+import { sseManager } from "../../../../lib/sse.server";
 
 /** POST — transfer ownership to another authenticated player */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -32,6 +33,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     where: { id: eventId },
     data: { ownerId: targetUserId },
   });
+
+  sseManager.broadcast(eventId, "update", { action: "ownership_transferred" });
 
   return Response.json({ ok: true, ownerId: targetUserId });
 };
