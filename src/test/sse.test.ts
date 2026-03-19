@@ -63,4 +63,84 @@ describe("createSSEManager", () => {
     const manager = createSSEManager();
     expect(() => manager.broadcast("nonexistent", "test", {})).not.toThrow();
   });
+
+  it("broadcasts update events to multiple clients", () => {
+    const manager = createSSEManager();
+    const messages1: string[] = [];
+    const messages2: string[] = [];
+    const c1 = { enqueue: (s: string) => messages1.push(s), close: () => {} } as any;
+    const c2 = { enqueue: (s: string) => messages2.push(s), close: () => {} } as any;
+
+    manager.add("evt-1", c1);
+    manager.add("evt-1", c2);
+    manager.broadcast("evt-1", "update", { action: "player_added" });
+
+    expect(messages1).toHaveLength(1);
+    expect(messages2).toHaveLength(1);
+    expect(messages1[0]).toBe('event: update\ndata: {"action":"player_added"}\n\n');
+    expect(messages2[0]).toBe(messages1[0]);
+  });
+
+  it("does not broadcast to other events", () => {
+    const manager = createSSEManager();
+    const messages1: string[] = [];
+    const messages2: string[] = [];
+    const c1 = { enqueue: (s: string) => messages1.push(s), close: () => {} } as any;
+    const c2 = { enqueue: (s: string) => messages2.push(s), close: () => {} } as any;
+
+    manager.add("evt-1", c1);
+    manager.add("evt-2", c2);
+    manager.broadcast("evt-1", "update", { action: "player_added" });
+
+    expect(messages1).toHaveLength(1);
+    expect(messages2).toHaveLength(0);
+  });
+
+  it("handles disconnected client gracefully during broadcast", () => {
+    const manager = createSSEManager();
+    const messages: string[] = [];
+    const goodController = { enqueue: (s: string) => messages.push(s), close: () => {} } as any;
+    const badController = {
+      enqueue: () => { throw new Error("client disconnected"); },
+      close: () => {},
+    } as any;
+
+    manager.add("evt-1", goodController);
+    manager.add("evt-1", badController);
+
+    // Should not throw, and the good client should still receive the message
+    expect(() => manager.broadcast("evt-1", "update", { action: "player_removed" })).not.toThrow();
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain("player_removed");
+  });
+
+  it("cleans up event entry when last connection is removed", () => {
+    const manager = createSSEManager();
+    const c = { enqueue: () => {}, close: () => {} } as any;
+
+    manager.add("evt-1", c);
+    expect(manager.getConnectionCount("evt-1")).toBe(1);
+
+    manager.remove("evt-1", c);
+    expect(manager.getConnectionCount("evt-1")).toBe(0);
+
+    // Broadcast to cleaned-up event should be a no-op
+    expect(() => manager.broadcast("evt-1", "update", {})).not.toThrow();
+  });
+
+  it("supports multiple sequential broadcasts", () => {
+    const manager = createSSEManager();
+    const messages: string[] = [];
+    const c = { enqueue: (s: string) => messages.push(s), close: () => {} } as any;
+
+    manager.add("evt-1", c);
+    manager.broadcast("evt-1", "update", { action: "player_added" });
+    manager.broadcast("evt-1", "update", { action: "teams_randomized" });
+    manager.broadcast("evt-1", "update", { action: "title_updated" });
+
+    expect(messages).toHaveLength(3);
+    expect(messages[0]).toContain("player_added");
+    expect(messages[1]).toContain("teams_randomized");
+    expect(messages[2]).toContain("title_updated");
+  });
 });
