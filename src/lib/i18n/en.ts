@@ -293,6 +293,11 @@ const en = {
   changeEmailBtn: "Send verification",
   changeEmailSent: "Verification email sent to your new address. Check your inbox.",
   resetPlayerOrder: "Reset order to sign-up order",
+
+  // Event management sections
+  quickActions: "Quick Actions",
+  eventSettings: "Event Settings",
+  eventSettingsDesc: "Visibility, sport, balanced teams, and integrations",
 } as const;
 
 export default en;

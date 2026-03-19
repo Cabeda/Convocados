@@ -294,6 +294,11 @@ const pt: TranslationKeys = {
   changeEmailBtn: "Enviar verificação",
   changeEmailSent: "Email de verificação enviado para o novo endereço. Verifica a tua caixa de entrada.",
   resetPlayerOrder: "Repor ordem de inscrição",
+
+  // Event management sections
+  quickActions: "Ações Rápidas",
+  eventSettings: "Definições do Evento",
+  eventSettingsDesc: "Visibilidade, desporto, equipas equilibradas e integrações",
 };
 
 export default pt;
