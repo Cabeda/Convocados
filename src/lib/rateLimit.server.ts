@@ -24,3 +24,7 @@ export function checkRateLimit(ip: string): { allowed: boolean; remaining: numbe
   entry.count += 1;
   return { allowed: true, remaining: MAX_REQUESTS - entry.count };
 }
+
+export function resetRateLimitStore(): void {
+  store.clear();
+}

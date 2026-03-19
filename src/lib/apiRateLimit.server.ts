@@ -103,3 +103,9 @@ export function rateLimitResponse(
 
   return null;
 }
+
+export function resetApiRateLimitStore(): void {
+  for (const store of stores.values()) {
+    store.clear();
+  }
+}

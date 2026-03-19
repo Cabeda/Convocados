@@ -201,6 +201,7 @@ describe("signPayload", () => {
 describe("fireWebhooks", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("delivers to matching webhook and records success", async () => {

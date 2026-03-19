@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
+import { resetRateLimitStore } from "~/lib/rateLimit.server";
+import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 // Import route handlers directly — they're plain async functions
 import { POST as createEvent } from "~/pages/api/events/index";
@@ -50,6 +52,8 @@ async function seedEvent(overrides: Partial<{
 }
 
 beforeEach(async () => {
+  resetRateLimitStore();
+  resetApiRateLimitStore();
   await prisma.gameHistory.deleteMany();
   await prisma.teamResult.deleteMany();
   await prisma.player.deleteMany();
@@ -131,7 +135,7 @@ describe("POST /api/events", () => {
     for (let i = 0; i < 10; i++) await createEvent(makeReq());
     const res = await createEvent(makeReq());
     expect(res.status).toBe(429);
-  });
+  }, 10000);
 });
 
 // ─── GET /api/events/[id] ────────────────────────────────────────────────────

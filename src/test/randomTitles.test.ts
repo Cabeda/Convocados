@@ -15,9 +15,33 @@ describe("getRandomTitle", () => {
     expect(title.length).toBeGreaterThan(0);
   });
 
+  it("returns a non-empty string for 'es'", () => {
+    const title = getRandomTitle("es");
+    expect(title).toBeTruthy();
+    expect(title.length).toBeGreaterThan(0);
+  });
+
+  it("returns a non-empty string for 'fr'", () => {
+    const title = getRandomTitle("fr");
+    expect(title).toBeTruthy();
+    expect(title.length).toBeGreaterThan(0);
+  });
+
+  it("returns a non-empty string for 'de'", () => {
+    const title = getRandomTitle("de");
+    expect(title).toBeTruthy();
+    expect(title.length).toBeGreaterThan(0);
+  });
+
+  it("returns a non-empty string for 'it'", () => {
+    const title = getRandomTitle("it");
+    expect(title).toBeTruthy();
+    expect(title.length).toBeGreaterThan(0);
+  });
+
   it("falls back to English for unknown locale", () => {
     // @ts-expect-error testing unknown locale
-    const title = getRandomTitle("fr");
+    const title = getRandomTitle("unknown");
     expect(title).toBeTruthy();
   });
 
@@ -46,9 +70,12 @@ describe("getRandomTitles", () => {
     expect(new Set(titles).size).toBe(titles.length);
   });
 
-  it("works for Portuguese locale", () => {
-    const titles = getRandomTitles("pt", 3);
-    expect(titles).toHaveLength(3);
-    titles.forEach((t) => expect(t.length).toBeGreaterThan(0));
+  it("works for all supported locales", () => {
+    const locales = ["en", "pt", "es", "fr", "de", "it"] as const;
+    locales.forEach((locale) => {
+      const titles = getRandomTitles(locale, 3);
+      expect(titles).toHaveLength(3);
+      titles.forEach((t) => expect(t.length).toBeGreaterThan(0));
+    });
   });
 });
