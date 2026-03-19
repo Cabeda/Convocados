@@ -32,6 +32,7 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import StarIcon from "@mui/icons-material/Star";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -982,6 +983,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 </Box>
 
                 <Divider />
+
+                {/* ── Quick Actions — always visible ── */}
                 <Stack spacing={1}>
                   <ShareBar title={event.title} />
                   <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
@@ -1010,48 +1013,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       {t("addToGoogleCalendar")}
                     </Button>
                     <NotifyButton eventId={eventId} />
-                    {canEditSettings && (
-                      <Tooltip title={t("makePublicTooltip")}>
-                        <FormControlLabel
-                          control={
-                            <Switch size="small" checked={isPublic}
-                              onChange={(e) => handleTogglePublic(e.target.checked)} />
-                          }
-                          label={
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                              <PublicIcon fontSize="small" />
-                              <Typography variant="body2">{t("makePublic")}</Typography>
-                            </Box>
-                          }
-                          sx={{ ml: 0 }}
-                        />
-                      </Tooltip>
-                    )}
-                    {canEditSettings && (
-                      <FormControl size="small" sx={{ minWidth: 140 }}>
-                        <Select
-                          value={sport}
-                          onChange={(e) => handleSportChange(e.target.value)}
-                          sx={{ fontSize: "0.85rem" }}
-                        >
-                          {SPORT_PRESETS.map((s) => (
-                            <MenuItem key={s.id} value={s.id} sx={{ fontSize: "0.85rem" }}>
-                              {t(s.labelKey as any)}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    )}
-                    {/* Owner badge + relinquish */}
+                    {/* Owner badge — always visible for owners */}
                     {isOwner && (
-                      <>
-                        <Chip icon={<StarIcon />} label={t("ownerBadge")} size="small" color="success" variant="outlined" />
-                        <Tooltip title={t("relinquishOwnershipDesc")}>
-                          <Button variant="text" size="small" color="warning" onClick={() => setRelinquishConfirmOpen(true)}>
-                            {t("relinquishOwnership")}
-                          </Button>
-                        </Tooltip>
-                      </>
+                      <Chip icon={<StarIcon />} label={t("ownerBadge")} size="small" color="success" variant="outlined" />
                     )}
                     {/* Claim ownership for authenticated users on ownerless events */}
                     {isAuthenticated && isOwnerless && (
@@ -1062,8 +1026,82 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   </Box>
                 </Stack>
 
-                {/* Integrations — hidden by default, for developers */}
-                {canEditSettings && <WebhookInfo eventId={eventId} />}
+                {/* ── Event Settings — collapsed accordion for owner/advanced controls ── */}
+                {canEditSettings && (
+                  <Accordion
+                    disableGutters
+                    elevation={0}
+                    sx={{
+                      "&:before": { display: "none" },
+                      backgroundColor: "transparent",
+                    }}
+                  >
+                    <AccordionSummary
+                      expandIcon={<ExpandMoreIcon />}
+                      sx={{ px: 0, minHeight: 0, "& .MuiAccordionSummary-content": { my: 0.5 } }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <SettingsIcon fontSize="small" color="action" />
+                        <Typography variant="body2" color="text.secondary">
+                          {t("eventSettings")}
+                        </Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails sx={{ px: 0, pt: 0 }}>
+                      <Stack spacing={2}>
+                        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                          <Tooltip title={t("makePublicTooltip")}>
+                            <FormControlLabel
+                              control={
+                                <Switch size="small" checked={isPublic}
+                                  onChange={(e) => handleTogglePublic(e.target.checked)} />
+                              }
+                              label={
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                                  <PublicIcon fontSize="small" />
+                                  <Typography variant="body2">{t("makePublic")}</Typography>
+                                </Box>
+                              }
+                              sx={{ ml: 0 }}
+                            />
+                          </Tooltip>
+                          <FormControl size="small" sx={{ minWidth: 140 }}>
+                            <Select
+                              value={sport}
+                              onChange={(e) => handleSportChange(e.target.value)}
+                              sx={{ fontSize: "0.85rem" }}
+                            >
+                              {SPORT_PRESETS.map((s) => (
+                                <MenuItem key={s.id} value={s.id} sx={{ fontSize: "0.85rem" }}>
+                                  {t(s.labelKey as any)}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Box>
+                        {/* Balanced teams toggle */}
+                        <Tooltip title={t("balancedTeamsTooltip")}>
+                          <FormControlLabel
+                            control={<Switch size="small" checked={balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} />}
+                            label={t("balancedTeams")}
+                          />
+                        </Tooltip>
+                        {/* Owner controls — relinquish */}
+                        {isOwner && (
+                          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                            <Tooltip title={t("relinquishOwnershipDesc")}>
+                              <Button variant="text" size="small" color="warning" onClick={() => setRelinquishConfirmOpen(true)}>
+                                {t("relinquishOwnership")}
+                              </Button>
+                            </Tooltip>
+                          </Box>
+                        )}
+                        {/* Integrations */}
+                        <WebhookInfo eventId={eventId} />
+                      </Stack>
+                    </AccordionDetails>
+                  </Accordion>
+                )}
               </Stack>
             </Paper>
 
@@ -1312,14 +1350,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       )}
 
                       <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2 }}>
-                        {canEditSettings && (
-                          <Tooltip title={t("balancedTeamsTooltip")}>
-                            <FormControlLabel
-                              control={<Switch size="small" checked={balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} />}
-                              label={t("balancedTeams")}
-                            />
-                          </Tooltip>
-                        )}
                         <Button variant="contained" size="large" startIcon={<ShuffleIcon />}
                           disabled={active.length < 2} sx={{ px: 4, py: 1.5 }}
                           onClick={() => localMatches && localMatches.length > 0 ? setConfirmOpen(true) : doRandomize()}>
