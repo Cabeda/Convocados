@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import useSWR from "swr";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Accordion, AccordionSummary, AccordionDetails, Box, Typography, TextField,
   Button, Stack, Chip, IconButton, Tooltip, Paper, alpha, useTheme,
@@ -56,12 +55,16 @@ export function PaymentSection({
   const [copied, setCopied] = useState(false);
   const [snackMsg, setSnackMsg] = useState<string | null>(null);
 
-  const fetcher = (url: string) => fetch(url).then((r) => r.json());
-  const { data: costData, mutate } = useSWR<CostData | null>(
-    `/api/events/${eventId}/cost`,
-    fetcher,
-    { revalidateOnFocus: true },
-  );
+  const [costData, setCostData] = useState<CostData | null>(null);
+
+  const fetchCost = useCallback(async () => {
+    const r = await fetch(`/api/events/${eventId}/cost`);
+    const data = await r.json();
+    setCostData(data);
+  }, [eventId]);
+
+  // Initial fetch + re-fetch when activePlayerCount changes (player added/removed)
+  useEffect(() => { fetchCost(); }, [fetchCost, activePlayerCount]);
 
   const hasCost = costData && costData.totalAmount > 0;
   const perPlayer = hasCost && activePlayerCount > 0
@@ -81,13 +84,13 @@ export function PaymentSection({
         paymentDetails: detailsDraft || null,
       }),
     });
-    mutate();
+    fetchCost();
   };
 
   const handleRemoveCost = async () => {
     setConfirmRemoveOpen(false);
     await fetch(`/api/events/${eventId}/cost`, { method: "DELETE" });
-    mutate();
+    fetchCost();
   };
 
   const handleTogglePayment = async (playerName: string, currentStatus: string) => {
@@ -97,7 +100,7 @@ export function PaymentSection({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ playerName, status: nextStatus }),
     });
-    mutate();
+    fetchCost();
   };
 
   const handleCopyDetails = async () => {
