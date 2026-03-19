@@ -70,12 +70,20 @@ jobs:
             echo "bump_type=none" >> $GITHUB_OUTPUT
           fi
 
-      - name: Compute next version
+      - name: Compute next version from tag
         id: bump_version
         if: steps.version_bump.outputs.bump_type != 'none'
         run: |
           BUMP_TYPE="${{ steps.version_bump.outputs.bump_type }}"
-          CURRENT=$(node -p "require('./package.json').version")
+          LATEST_TAG="${{ steps.get_tag.outputs.latest_tag }}"
+          
+          # Extract version from tag (remove 'v' prefix)
+          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+            CURRENT="0.0.0"
+          else
+            CURRENT="${LATEST_TAG#v}"
+          fi
+          
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
           case "$BUMP_TYPE" in
             major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
@@ -84,7 +92,24 @@ jobs:
           esac
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "New version: $NEW_VERSION (bump: $BUMP_TYPE from $CURRENT)"
+          echo "New version: $NEW_VERSION (bump: $BUMP_TYPE from tag $LATEST_TAG)"
+
+      - name: Update package.json version
+        if: steps.version_bump.outputs.bump_type != 'none'
+        run: |
+          NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
+          npm pkg set version="$NEW_VERSION"
+          echo "Updated package.json to version $NEW_VERSION"
+
+      - name: Commit version bump
+        if: steps.version_bump.outputs.bump_type != 'none'
+        run: |
+          NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+          git push origin HEAD:main
 
       - name: Create tag
         if: steps.version_bump.outputs.bump_type != 'none'
@@ -100,9 +125,9 @@ jobs:
           LATEST_TAG="${{ steps.get_tag.outputs.latest_tag }}"
 
           if [ "$LATEST_TAG" = "v0.0.0" ]; then
-            COMMITS=$(git log --pretty=format:"- %s (%h)" "v$NEW_VERSION")
+            COMMITS=$(git log --pretty=format:"- %s (%h)" HEAD~1..HEAD)
           else
-            COMMITS=$(git log --pretty=format:"- %s (%h)" "${LATEST_TAG}..v$NEW_VERSION")
+            COMMITS=$(git log --pretty=format:"- %s (%h)" "${LATEST_TAG}..HEAD~1")
           fi
 
           {
