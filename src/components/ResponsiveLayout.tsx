@@ -259,6 +259,17 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
           <Typography variant="body2" color="text.secondary" align="center">
             © {new Date().getFullYear()} {t("appName")}
           </Typography>
+          <Typography variant="caption" color="text.disabled" align="center" component="div">
+            <Typography
+              component="a"
+              href="https://github.com/Cabeda/Convocados/releases"
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ color: "inherit", textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
+            >
+              v{__APP_VERSION__}
+            </Typography>
+          </Typography>
         </Container>
       </Box>
     </Box>
