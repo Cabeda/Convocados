@@ -5,9 +5,15 @@
  *
  * Each event gets a random sport, 4-12 players, a location, and a date
  * spread across the next 30 days (some in the past for history testing).
+ *
+ * Past events also get:
+ * - Game history with scores and team snapshots
+ * - ELO player ratings (accumulated across games)
+ * - Event costs with payment records (some paid, some pending)
  */
 
 import { PrismaClient } from "@prisma/client";
+import { computeGameUpdates } from "../src/lib/elo";
 
 const prisma = new PrismaClient();
 
@@ -118,6 +124,20 @@ async function main() {
 
   const now = Date.now();
 
+  // Track cumulative ELO ratings across all past games per event
+  // Map<eventId, Map<playerName, {rating, gamesPlayed, wins, draws, losses}>>
+  const eloByEvent = new Map<string, Map<string, { rating: number; gamesPlayed: number; wins: number; draws: number; losses: number }>>();
+
+  const COST_AMOUNTS = [30, 40, 50, 60, 75, 80, 100, 120];
+  const PAYMENT_METHODS = ["revolut", "mbway", "cash", "transfer", null];
+  const PAYMENT_DETAILS = [
+    "Revolut @jose / MB Way 912345678",
+    "IBAN PT50 0035 1234 5678 9012 345",
+    "Cash on arrival",
+    "Bizum +34 612 345 678",
+    null,
+  ];
+
   for (let i = 0; i < 100; i++) {
     const sport = pick(SPORTS);
     const location = pick(LOCATIONS);
@@ -160,13 +180,193 @@ async function main() {
       },
     });
 
-    const status = offsetDays < 0 ? "(past)" : offsetDays === 0 ? "(today)" : "(upcoming)";
-    console.log(
-      `  [${String(i + 1).padStart(3)}] ${event.id}  ${title.padEnd(40)} ${playerCount}/${maxPlayers} players  ${status}`
-    );
+    const isPast = offsetDays < 0;
+    const status = isPast ? "(past)" : offsetDays === 0 ? "(today)" : "(upcoming)";
+
+    // ── Past events: add game history, teams, elo, and payments ──────────
+    if (isPast && playerNames.length >= 4) {
+      const activePlayers = playerNames.slice(0, maxPlayers);
+      const half = Math.floor(activePlayers.length / 2);
+      const teamOnePlayers = activePlayers.slice(0, half);
+      const teamTwoPlayers = activePlayers.slice(half);
+
+      const teamsSnapshot = JSON.stringify([
+        { team: "Ninjas", players: teamOnePlayers.map((name, order) => ({ name, order })) },
+        { team: "Gunas", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
+      ]);
+
+      const scoreOne = randInt(0, 8);
+      const scoreTwo = randInt(0, 8);
+
+      // Create team results
+      const teamOne = await prisma.teamResult.create({
+        data: {
+          name: "Ninjas",
+          eventId: event.id,
+          members: {
+            create: teamOnePlayers.map((name, order) => ({ name, order })),
+          },
+        },
+      });
+      const teamTwo = await prisma.teamResult.create({
+        data: {
+          name: "Gunas",
+          eventId: event.id,
+          members: {
+            create: teamTwoPlayers.map((name, order) => ({ name, order })),
+          },
+        },
+      });
+
+      // Payment data for history snapshot
+      const hasCost = Math.random() < 0.6;
+      let paymentsSnapshot: string | null = null;
+      if (hasCost) {
+        const totalAmount = pick(COST_AMOUNTS);
+        const share = totalAmount / activePlayers.length;
+        const paymentSnapshotData = activePlayers.map((name) => {
+          const roll = Math.random();
+          const pStatus = roll < 0.5 ? "paid" : roll < 0.7 ? "exempt" : "pending";
+          return {
+            playerName: name,
+            amount: Math.round(share * 100) / 100,
+            status: pStatus,
+            method: pStatus === "paid" ? pick(PAYMENT_METHODS) : null,
+          };
+        });
+        paymentsSnapshot = JSON.stringify(paymentSnapshotData);
+      }
+
+      // Game history (editable for 7 days)
+      const editableUntil = new Date(dateTime.getTime() + 7 * 86400000);
+      await prisma.gameHistory.create({
+        data: {
+          eventId: event.id,
+          dateTime,
+          status: "played",
+          scoreOne,
+          scoreTwo,
+          teamOneName: "Ninjas",
+          teamTwoName: "Gunas",
+          teamsSnapshot,
+          paymentsSnapshot,
+          editableUntil,
+          eloProcessed: true,
+        },
+      });
+
+      // ELO ratings — accumulate across games for this event
+      if (!eloByEvent.has(event.id)) {
+        eloByEvent.set(event.id, new Map());
+      }
+      const eventRatings = eloByEvent.get(event.id)!;
+
+      // Build player info for elo computation
+      const playerInfos = activePlayers.map((name) => {
+        const existing = eventRatings.get(name);
+        return {
+          name,
+          rating: existing?.rating ?? 1000,
+          gamesPlayed: existing?.gamesPlayed ?? 0,
+        };
+      });
+
+      const teams = [
+        { team: "Ninjas", players: teamOnePlayers.map((name, order) => ({ name, order })) },
+        { team: "Gunas", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
+      ];
+
+      const eloUpdates = computeGameUpdates(playerInfos, teams, scoreOne, scoreTwo);
+
+      for (const update of eloUpdates) {
+        const isTeamOne = teamOnePlayers.includes(update.name);
+        const won = isTeamOne ? scoreOne > scoreTwo : scoreTwo > scoreOne;
+        const drew = scoreOne === scoreTwo;
+
+        const prev = eventRatings.get(update.name) ?? {
+          rating: 1000, gamesPlayed: 0, wins: 0, draws: 0, losses: 0,
+        };
+
+        eventRatings.set(update.name, {
+          rating: update.newRating,
+          gamesPlayed: prev.gamesPlayed + 1,
+          wins: prev.wins + (won ? 1 : 0),
+          draws: prev.draws + (drew ? 1 : 0),
+          losses: prev.losses + (!won && !drew ? 1 : 0),
+        });
+      }
+
+      // Write player ratings to DB
+      for (const [name, stats] of eventRatings) {
+        await prisma.playerRating.upsert({
+          where: { eventId_name: { eventId: event.id, name } },
+          create: {
+            eventId: event.id,
+            name,
+            rating: stats.rating,
+            gamesPlayed: stats.gamesPlayed,
+            wins: stats.wins,
+            draws: stats.draws,
+            losses: stats.losses,
+          },
+          update: {
+            rating: stats.rating,
+            gamesPlayed: stats.gamesPlayed,
+            wins: stats.wins,
+            draws: stats.draws,
+            losses: stats.losses,
+          },
+        });
+      }
+
+      // Live event cost + payments (for events still within editable window)
+      if (hasCost) {
+        const totalAmount = pick(COST_AMOUNTS);
+        const share = totalAmount / activePlayers.length;
+        const paymentDetail = pick(PAYMENT_DETAILS);
+
+        const eventCost = await prisma.eventCost.create({
+          data: {
+            eventId: event.id,
+            totalAmount,
+            currency: "EUR",
+            paymentDetails: paymentDetail,
+          },
+        });
+
+        for (const name of activePlayers) {
+          const roll = Math.random();
+          const pStatus = roll < 0.5 ? "paid" : roll < 0.7 ? "exempt" : "pending";
+          await prisma.playerPayment.create({
+            data: {
+              eventCostId: eventCost.id,
+              playerName: name,
+              amount: Math.round(share * 100) / 100,
+              status: pStatus,
+              method: pStatus === "paid" ? pick(PAYMENT_METHODS) : null,
+              paidAt: pStatus === "paid" ? dateTime : null,
+            },
+          });
+        }
+      }
+
+      console.log(
+        `  [${String(i + 1).padStart(3)}] ${event.id}  ${title.padEnd(40)} ${playerCount}/${maxPlayers} players  ${status}  score=${scoreOne}-${scoreTwo}${hasCost ? "  $" : ""}`
+      );
+    } else {
+      console.log(
+        `  [${String(i + 1).padStart(3)}] ${event.id}  ${title.padEnd(40)} ${playerCount}/${maxPlayers} players  ${status}`
+      );
+    }
   }
 
-  console.log("\nDone — 100 events created.");
+  const pastCount = await prisma.gameHistory.count();
+  const ratingCount = await prisma.playerRating.count();
+  const costCount = await prisma.eventCost.count();
+  console.log(`\nDone — 100 events created.`);
+  console.log(`  ${pastCount} game history entries`);
+  console.log(`  ${ratingCount} player ratings`);
+  console.log(`  ${costCount} events with costs/payments`);
 }
 
 main()

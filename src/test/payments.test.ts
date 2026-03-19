@@ -5,6 +5,7 @@ import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 // Import route handlers
 import { PUT as setCost, GET as getCost, DELETE as deleteCost } from "~/pages/api/events/[id]/cost";
 import { GET as getPayments, PUT as updatePayment } from "~/pages/api/events/[id]/payments";
+import { POST as addPlayer, DELETE as removePlayer } from "~/pages/api/events/[id]/players";
 
 function ctx(params: Record<string, string>, body?: unknown) {
   const request = new Request("http://localhost/api/test", {
@@ -15,10 +16,20 @@ function ctx(params: Record<string, string>, body?: unknown) {
   return { request, params } as any;
 }
 
-function deleteCtx(params: Record<string, string>) {
+function postCtx(params: Record<string, string>, body: unknown) {
+  const request = new Request("http://localhost/api/test", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { request, params } as any;
+}
+
+function deleteCtx(params: Record<string, string>, body?: unknown) {
   const request = new Request("http://localhost/api/test", {
     method: "DELETE",
     headers: { "content-type": "application/json" },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return { request, params } as any;
 }
@@ -295,5 +306,140 @@ describe("GET /api/events/[id]/payments", () => {
     const body = await res.json();
     expect(body.payments).toHaveLength(0);
     expect(body.summary.totalCount).toBe(0);
+  });
+});
+
+// ─── Auto-recalculate shares on player changes ──────────────────────────────
+
+describe("Auto-recalculate payment shares on player changes", () => {
+  it("recalculates shares when a player is added", async () => {
+    const eventId = await seedEvent(["Alice", "Bob"]);
+    await setCost(ctx({ id: eventId }, { totalAmount: 60 }));
+
+    // 60 / 2 = 30 each
+    let costRes = await getCost(ctx({ id: eventId }));
+    let cost = await costRes.json();
+    expect(cost.payments).toHaveLength(2);
+    expect(cost.payments[0].amount).toBeCloseTo(30);
+
+    // Add a third player
+    await addPlayer(postCtx({ id: eventId }, { name: "Charlie" }));
+
+    // 60 / 3 = 20 each
+    costRes = await getCost(ctx({ id: eventId }));
+    cost = await costRes.json();
+    expect(cost.payments).toHaveLength(3);
+    expect(cost.payments[0].amount).toBeCloseTo(20);
+    expect(cost.payments.find((p: any) => p.playerName === "Charlie")).toBeTruthy();
+  });
+
+  it("recalculates shares when a player is removed", async () => {
+    const eventId = await seedEvent(["Alice", "Bob", "Charlie"]);
+    await setCost(ctx({ id: eventId }, { totalAmount: 60 }));
+
+    // 60 / 3 = 20 each
+    let costRes = await getCost(ctx({ id: eventId }));
+    let cost = await costRes.json();
+    expect(cost.payments).toHaveLength(3);
+    expect(cost.payments[0].amount).toBeCloseTo(20);
+
+    // Remove Charlie
+    const players = await prisma.player.findMany({ where: { eventId } });
+    const charlie = players.find((p) => p.name === "Charlie")!;
+    await removePlayer(deleteCtx({ id: eventId }, { playerId: charlie.id }));
+
+    // 60 / 2 = 30 each
+    costRes = await getCost(ctx({ id: eventId }));
+    cost = await costRes.json();
+    expect(cost.payments).toHaveLength(2);
+    expect(cost.payments[0].amount).toBeCloseTo(30);
+    expect(cost.payments.find((p: any) => p.playerName === "Charlie")).toBeFalsy();
+  });
+
+  it("preserves payment statuses when recalculating after player added", async () => {
+    const eventId = await seedEvent(["Alice", "Bob"]);
+    await setCost(ctx({ id: eventId }, { totalAmount: 60 }));
+    await updatePayment(ctx({ id: eventId }, { playerName: "Alice", status: "paid" }));
+
+    // Add Charlie
+    await addPlayer(postCtx({ id: eventId }, { name: "Charlie" }));
+
+    const costRes = await getCost(ctx({ id: eventId }));
+    const cost = await costRes.json();
+    const alice = cost.payments.find((p: any) => p.playerName === "Alice");
+    expect(alice.status).toBe("paid");
+    expect(alice.amount).toBeCloseTo(20);
+  });
+
+  it("does nothing when no cost is set and player is added", async () => {
+    const eventId = await seedEvent(["Alice"]);
+
+    // No cost set — adding a player should not fail
+    const res = await addPlayer(postCtx({ id: eventId }, { name: "Bob" }));
+    expect(res.status).toBe(200);
+
+    const costRes = await getCost(ctx({ id: eventId }));
+    const cost = await costRes.json();
+    expect(cost).toBeNull();
+  });
+
+  it("does not add bench player to payments", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Small Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        maxPlayers: 2,
+      },
+    });
+    for (let i = 0; i < 2; i++) {
+      await prisma.player.create({
+        data: { name: `Player${i}`, eventId: event.id, order: i },
+      });
+    }
+    await setCost(ctx({ id: event.id }, { totalAmount: 40 }));
+
+    // Add a 3rd player — goes to bench
+    await addPlayer(postCtx({ id: event.id }, { name: "BenchPlayer" }));
+
+    const costRes = await getCost(ctx({ id: event.id }));
+    const cost = await costRes.json();
+    // Still only 2 active players
+    expect(cost.payments).toHaveLength(2);
+    expect(cost.payments[0].amount).toBeCloseTo(20);
+    expect(cost.payments.find((p: any) => p.playerName === "BenchPlayer")).toBeFalsy();
+  });
+
+  it("promotes bench player to payments when active player is removed", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Small Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        maxPlayers: 2,
+      },
+    });
+    for (const name of ["Alice", "Bob", "Charlie"]) {
+      await prisma.player.create({
+        data: { name, eventId: event.id, order: ["Alice", "Bob", "Charlie"].indexOf(name) },
+      });
+    }
+    await setCost(ctx({ id: event.id }, { totalAmount: 40 }));
+
+    // Charlie is on bench, payments should be Alice + Bob
+    let costRes = await getCost(ctx({ id: event.id }));
+    let cost = await costRes.json();
+    expect(cost.payments).toHaveLength(2);
+
+    // Remove Alice — Charlie gets promoted
+    const alice = await prisma.player.findFirst({ where: { eventId: event.id, name: "Alice" } });
+    await removePlayer(deleteCtx({ id: event.id }, { playerId: alice!.id }));
+
+    costRes = await getCost(ctx({ id: event.id }));
+    cost = await costRes.json();
+    expect(cost.payments).toHaveLength(2);
+    expect(cost.payments.find((p: any) => p.playerName === "Alice")).toBeFalsy();
+    expect(cost.payments.find((p: any) => p.playerName === "Charlie")).toBeTruthy();
+    expect(cost.payments[0].amount).toBeCloseTo(20);
   });
 });

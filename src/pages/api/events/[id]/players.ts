@@ -5,6 +5,7 @@ import { fireWebhooks } from "../../../../lib/webhook.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { sseManager } from "../../../../lib/sse.server";
+import { syncPaymentsForEvent } from "../../../../lib/payments.server";
 
 /**
  * If teams have been generated, add a player to the team with fewer members.
@@ -135,6 +136,9 @@ export const POST: APIRoute = async ({ params, request }) => {
     fireWebhooks(eventId, "game_full", webhookData).catch(() => {});
   }
 
+  // Recalculate payment shares if a cost is set
+  await syncPaymentsForEvent(eventId);
+
   sseManager.broadcast(eventId, "update", { action: "player_added" });
 
   return Response.json({ ok: true });
@@ -206,6 +210,9 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   // Fire webhooks (non-blocking)
   fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft }).catch(() => {});
+
+  // Recalculate payment shares if a cost is set
+  await syncPaymentsForEvent(eventId);
 
   sseManager.broadcast(eventId, "update", { action: "player_removed" });
 
