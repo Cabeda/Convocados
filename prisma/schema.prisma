@@ -91,6 +91,7 @@ model Event {
   pushSubs       PushSubscription[]
   webhookSubs    WebhookSubscription[]
   reminderLogs   ReminderLog[]
+  eventCost      EventCost?
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
 
@@ -98,19 +99,20 @@ model Event {
 }
 
 model GameHistory {
-  id            String   @id @default(cuid())
-  eventId       String
-  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  dateTime      DateTime
-  status        String   @default("played") // "played" | "cancelled"
-  scoreOne      Int?
-  scoreTwo      Int?
-  teamOneName   String
-  teamTwoName   String
-  teamsSnapshot String? // JSON: [{team, players:[{name,order}]}]
-  editableUntil DateTime
-  eloProcessed  Boolean  @default(false)
-  createdAt     DateTime @default(now())
+  id               String   @id @default(cuid())
+  eventId          String
+  event            Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  dateTime         DateTime
+  status           String   @default("played") // "played" | "cancelled"
+  scoreOne         Int?
+  scoreTwo         Int?
+  teamOneName      String
+  teamTwoName      String
+  teamsSnapshot    String? // JSON: [{team, players:[{name,order}]}]
+  paymentsSnapshot String? // JSON: [{playerName, amount, status, method}]
+  editableUntil    DateTime
+  eloProcessed     Boolean  @default(false)
+  createdAt        DateTime @default(now())
 }
 
 model Player {
@@ -239,4 +241,32 @@ model ApiKey {
 
   @@index([userId])
   @@index([hashedKey])
+}
+
+model EventCost {
+  id             String          @id @default(cuid())
+  eventId        String          @unique
+  event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  totalAmount    Float
+  currency       String          @default("EUR")
+  paymentDetails String? // free text: "Revolut @jose / MB Way 912345678"
+  payments       PlayerPayment[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model PlayerPayment {
+  id          String    @id @default(cuid())
+  eventCostId String
+  eventCost   EventCost @relation(fields: [eventCostId], references: [id], onDelete: Cascade)
+  playerName  String
+  amount      Float
+  status      String    @default("pending") // "pending" | "paid" | "exempt"
+  method      String? // free text: cash, revolut, mbway, transfer, etc.
+  paidAt      DateTime?
+  markedBy    String? // userId who marked it
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([eventCostId, playerName])
 }

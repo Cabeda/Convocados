@@ -252,6 +252,29 @@ const it: TranslationKeys = {
   quickActions: "Azioni Rapide",
   eventSettings: "Impostazioni Evento",
   eventSettingsDesc: "Visibilità, sport, squadre equilibrate e integrazioni",
+
+  // Payment tracking
+  splitTheCost: "Dividi il costo",
+  totalCost: "Costo totale",
+  currency: "Valuta",
+  perPlayer: "{amount} a giocatore",
+  paymentDetails: "Dettagli pagamento",
+  paymentDetailsPlaceholder: "es: Revolut @jose / Satispay 3331234567",
+  paymentSummary: "{paid}/{total} pagati ({amount} {currency})",
+  paymentStatusPaid: "Pagato",
+  paymentStatusPending: "In attesa",
+  paymentStatusExempt: "Esente",
+  paymentMethod: "Metodo",
+  setCost: "Imposta costo",
+  updateCost: "Aggiorna",
+  removeCost: "Rimuovi costo",
+  removeCostConfirm: "Rimuovere il monitoraggio dei costi? Tutti i record di pagamento verranno eliminati.",
+  noCostSet: "Nessun costo impostato per questo evento.",
+  costSaved: "Costo aggiornato.",
+  costRemoved: "Costo rimosso.",
+  copyPaymentDetails: "Copia dettagli pagamento",
+  paymentDetailsCopied: "Dettagli pagamento copiati!",
+  paymentsHistory: "Pagamenti",
 };
 
 export default it;
