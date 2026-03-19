@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import useSWR from "swr";
 import {
   Container, Paper, Typography, TextField, Button, Box, Stack, Chip,
   Alert, IconButton, Tooltip, InputAdornment, Dialog, DialogTitle,
@@ -443,7 +442,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ balanced: newValue }),
     });
-    mutate();
+    fetchEvent();
   };
 
   const handleSportChange = async (newSport: string) => {
@@ -453,7 +452,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sport: newSport }),
     });
-    mutate();
+    fetchEvent();
   };
 
   const handleSaveLocation = async () => {
@@ -467,7 +466,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     if (locationDraft && !data.geocoded) {
       setSnackbar(t("locationNotGeocoded"));
     }
-    mutate();
+    fetchEvent();
   };
 
   const handleSaveTitle = async () => {
@@ -479,15 +478,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: trimmed }),
     });
-    mutate();
+    fetchEvent();
   };
 
   // Fetch ELO ratings when balanced mode is on
-  const { data: ratingsResponse } = useSWR<{ data: { name: string; rating: number }[] }>(
-    balanced ? `/api/events/${eventId}/ratings?limit=100` : null,
-    (url) => fetch(url).then((r) => r.json()),
-    { revalidateOnFocus: false },
-  );
+  const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
+  useEffect(() => {
+    if (!balanced) { setRatingsResponse(null); return; }
+    fetch(`/api/events/${eventId}/ratings?limit=100`).then((r) => r.json()).then(setRatingsResponse);
+  }, [balanced, eventId]);
   const ratingsMap = useMemo(() => {
     if (!ratingsResponse?.data) return undefined;
     const map: Record<string, number> = {};
@@ -509,31 +508,45 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [teamTwoName, setTeamTwoName] = useState("");
   const theme = useTheme();
 
-  const fetcher = (url: string) => fetch(url).then((r) => {
-    if (r.status === 404) throw { status: 404 };
-    return r.json();
-  });
+  const [event, setEvent] = useState<EventData | null>(null);
+  const [error, setFetchError] = useState<{ status?: number } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const { data: event, error, isLoading, mutate } = useSWR<EventData>(
-    `/api/events/${eventId}`,
-    fetcher,
-    { revalidateOnFocus: true },
-  );
+  const fetchEvent = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/events/${eventId}`);
+      if (r.status === 404) { setFetchError({ status: 404 }); return; }
+      const data = await r.json();
+      setEvent(data);
+      setFetchError(null);
+    } catch (e) {
+      setFetchError({});
+    } finally {
+      setIsLoading(false);
+    }
+  }, [eventId]);
 
-  // SSE: subscribe to real-time updates and trigger SWR revalidation
+  // Initial fetch
+  useEffect(() => { fetchEvent(); }, [fetchEvent]);
+
+  // SSE: subscribe to real-time updates and re-fetch
   useEffect(() => {
     const es = new EventSource(`/api/events/${eventId}/stream`);
-    es.addEventListener("update", () => {
-      mutate();
-    });
+    es.addEventListener("update", () => { fetchEvent(); });
     return () => es.close();
-  }, [eventId, mutate]);
+  }, [eventId, fetchEvent]);
+
+  // Re-fetch on window focus
+  useEffect(() => {
+    const onFocus = () => fetchEvent();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchEvent]);
   
-  const { data: knownPlayersData } = useSWR<{ players: KnownPlayer[] }>(
-    `/api/events/${eventId}/known-players`,
-    (url) => fetch(url).then((r) => r.json()),
-    { revalidateOnFocus: false }
-  );
+  const [knownPlayersData, setKnownPlayersData] = useState<{ players: KnownPlayer[] } | null>(null);
+  useEffect(() => {
+    fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).then(setKnownPlayersData);
+  }, [eventId]);
   
   const localKnownNames = useMemo(() => getKnownNames(), []);
   
@@ -597,18 +610,37 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const addPlayer = async (name: string, linkToAccount = false) => {
     if (!name.trim()) return;
     setPlayerError(null);
+    const trimmed = name.trim().slice(0, 50);
+
+    // Optimistic update — add player to local state immediately
+    setEvent((current) => {
+      if (!current) return current;
+      const optimisticPlayer: Player = { id: `temp-${Date.now()}`, name: trimmed, userId: null };
+      return { ...current, players: [...current.players, optimisticPlayer] };
+    });
+
     const res = await fetch(`/api/events/${eventId}/players`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Client-Id": clientId.current },
-      body: JSON.stringify({ name: name.trim().slice(0, 50), linkToAccount }),
+      body: JSON.stringify({ name: trimmed, linkToAccount }),
     });
     const json = await res.json();
-    if (!res.ok) { setPlayerError(json.error); return; }
-    addKnownName(name.trim());
-    mutate();
+    if (!res.ok) {
+      setPlayerError(json.error);
+      fetchEvent(); // revert optimistic update
+      return;
+    }
+    addKnownName(trimmed);
+    fetchEvent(); // revalidate with server data
   };
 
   const removePlayer = async (playerId: string) => {
+    // Optimistic update — remove player from local state immediately
+    setEvent((current) => {
+      if (!current) return current;
+      return { ...current, players: current.players.filter((p) => p.id !== playerId) };
+    });
+
     const res = await fetch(`/api/events/${eventId}/players`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json", "X-Client-Id": clientId.current },
@@ -619,8 +651,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
       if (data.undo) {
         setUndoData({ eventId, ...data.undo });
       }
+    } else {
+      fetchEvent(); // revert optimistic update on error
+      return;
     }
-    mutate();
+    fetchEvent(); // revalidate with server data
   };
 
   // ── Undo remove state ──────────────────────────────────────────────────────
@@ -634,13 +669,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
       body: JSON.stringify(undoData),
     });
     if (res.ok) {
-      mutate();
+      fetchEvent();
     } else {
       const json = await res.json();
       setPlayerError(json.error);
     }
     setUndoData(null);
-  }, [undoData, mutate]);
+  }, [undoData, fetchEvent]);
 
   // Auto-expire undo after 60 seconds
   useEffect(() => {
@@ -659,7 +694,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     });
     if (res.ok) {
       setSnackbar(t("claimPlayerSuccess"));
-      mutate();
+      fetchEvent();
     } else {
       const json = await res.json();
       setPlayerError(json.error);
@@ -680,7 +715,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     });
     if (res.ok) {
       setSnackbar(t("claimPlayerSuccess"));
-      mutate();
+      fetchEvent();
     } else {
       const json = await res.json();
       setPlayerError(json.error);
@@ -697,16 +732,16 @@ export default function EventPage({ eventId }: { eventId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ playerIds: reorderedIds }),
     });
-    mutate();
-  }, [eventId, mutate]);
+    fetchEvent();
+  }, [eventId, fetchEvent]);
 
   const resetPlayerOrder = useCallback(async () => {
     const res = await fetch(`/api/events/${eventId}/reset-player-order`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
-    if (res.ok) mutate();
-  }, [eventId, mutate]);
+    if (res.ok) fetchEvent();
+  }, [eventId, fetchEvent]);
 
   const handlePlayerDragStart = useCallback((playerId: string, index: number) => {
     setDragPlayer({ id: playerId, index });
@@ -745,7 +780,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     });
     const json = await res.json();
     if (!res.ok) { setPlayerError(json.error); return; }
-    mutate();
+    fetchEvent();
   };
 
   const handleTeamChange = async (matches: Imatch[]) => {
@@ -757,7 +792,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
       body: JSON.stringify({ matches }),
     });
     isDragging.current = false;
-    mutate();
+    fetchEvent();
   };
 
   const handleTeamNameSave = async (one: string, two: string) => {
@@ -766,7 +801,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ teamOneName: one, teamTwoName: two }),
     });
-    mutate();
+    fetchEvent();
   };
 
   const handleTogglePublic = async (newValue: boolean) => {
@@ -776,7 +811,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isPublic: newValue }),
     });
-    mutate();
+    fetchEvent();
   };
 
   const gameDate = event ? new Date(event.dateTime) : new Date();
@@ -821,7 +856,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
       headers: { "Content-Type": "application/json" },
     });
     if (res.ok) {
-      mutate();
+      fetchEvent();
       setSnackbar(t("claimOwnership"));
     }
   };
@@ -830,7 +865,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     setRelinquishConfirmOpen(false);
     const res = await fetch(`/api/events/${eventId}/claim`, { method: "DELETE" });
     if (res.ok) {
-      mutate();
+      fetchEvent();
     }
   };
 
