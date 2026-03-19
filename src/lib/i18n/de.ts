@@ -247,6 +247,11 @@ const de: TranslationKeys = {
   changeEmailBtn: "Bestätigung senden",
   changeEmailSent: "Bestätigungs-E-Mail an deine neue Adresse gesendet. Prüfe deinen Posteingang.",
   resetPlayerOrder: "Reihenfolge auf Anmeldereihenfolge zurücksetzen",
+
+  // Event management sections
+  quickActions: "Schnellaktionen",
+  eventSettings: "Event-Einstellungen",
+  eventSettingsDesc: "Sichtbarkeit, Sportart, ausgeglichene Teams und Integrationen",
 };
 
 export default de;

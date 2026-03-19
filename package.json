@@ -14,6 +14,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
+    "db:seed": "npx tsx prisma/seed.ts",
     "lhci": "lhci autorun --config=lighthouserc.cjs"
   },
   "dependencies": {
