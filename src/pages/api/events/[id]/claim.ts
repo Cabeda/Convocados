@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
+import { sseManager } from "../../../../lib/sse.server";
 
 /** POST — claim ownership of an ownerless event (atomic) */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -22,6 +23,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     if (!event) return Response.json({ error: "Not found." }, { status: 404 });
     return Response.json({ error: "This event already has an owner." }, { status: 409 });
   }
+
+  sseManager.broadcast(eventId, "update", { action: "ownership_claimed" });
 
   return Response.json({ ok: true, ownerId: session.user.id });
 };
@@ -45,6 +48,8 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     where: { id: eventId },
     data: { ownerId: null },
   });
+
+  sseManager.broadcast(eventId, "update", { action: "ownership_relinquished" });
 
   return Response.json({ ok: true, ownerId: null });
 };

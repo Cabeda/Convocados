@@ -516,8 +516,17 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const { data: event, error, isLoading, mutate } = useSWR<EventData>(
     `/api/events/${eventId}`,
     fetcher,
-    { refreshInterval: 5000, revalidateOnFocus: true },
+    { revalidateOnFocus: true },
   );
+
+  // SSE: subscribe to real-time updates and trigger SWR revalidation
+  useEffect(() => {
+    const es = new EventSource(`/api/events/${eventId}/stream`);
+    es.addEventListener("update", () => {
+      mutate();
+    });
+    return () => es.close();
+  }, [eventId, mutate]);
   
   const { data: knownPlayersData } = useSWR<{ players: KnownPlayer[] }>(
     `/api/events/${eventId}/known-players`,

@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { resolveLocation } from "../../../../lib/geocode";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { sseManager } from "../../../../lib/sse.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = rateLimitResponse(request, "write");
@@ -30,6 +31,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
       longitude: geo?.longitude ?? null,
     },
   });
+
+  sseManager.broadcast(params.id!, "update", { action: "location_updated" });
 
   return Response.json({
     location,
