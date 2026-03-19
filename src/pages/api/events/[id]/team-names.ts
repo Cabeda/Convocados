@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { sseManager } from "../../../../lib/sse.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = rateLimitResponse(request, "write");
@@ -22,5 +23,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const two = String(teamTwoName ?? "").trim().slice(0, 50) || "Gunas";
 
   await prisma.event.update({ where: { id: eventId }, data: { teamOneName: one, teamTwoName: two } });
+
+  sseManager.broadcast(eventId, "update", { action: "team_names_updated" });
+
   return Response.json({ ok: true });
 };
