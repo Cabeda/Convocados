@@ -690,7 +690,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
   }, [eventId, mutate]);
 
   const resetPlayerOrder = useCallback(async () => {
-    const res = await fetch(`/api/events/${eventId}/reset-player-order`, { method: "POST" });
+    const res = await fetch(`/api/events/${eventId}/reset-player-order`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
     if (res.ok) mutate();
   }, [eventId, mutate]);
 
@@ -725,7 +728,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const doRandomize = async () => {
     setConfirmOpen(false);
     const qs = balanced ? "?balanced=true" : "";
-    const res = await fetch(`/api/events/${eventId}/randomize${qs}`, { method: "POST" });
+    const res = await fetch(`/api/events/${eventId}/randomize${qs}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
     const json = await res.json();
     if (!res.ok) { setPlayerError(json.error); return; }
     mutate();
@@ -799,7 +805,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const canClaimPlayer = isAuthenticated && !userHasLinkedPlayer;
 
   const handleClaimOwnership = async () => {
-    const res = await fetch(`/api/events/${eventId}/claim`, { method: "POST" });
+    const res = await fetch(`/api/events/${eventId}/claim`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
     if (res.ok) {
       mutate();
       setSnackbar(t("claimOwnership"));
