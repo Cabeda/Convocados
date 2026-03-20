@@ -12,7 +12,6 @@ import SportsIcon from "@mui/icons-material/Sports";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
 import PublicIcon from "@mui/icons-material/Public";
 import TranslateIcon from "@mui/icons-material/Translate";
-import LoginIcon from "@mui/icons-material/Login";
 import LogoutIcon from "@mui/icons-material/Logout";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import PersonIcon from "@mui/icons-material/Person";
@@ -212,11 +211,15 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                 </Menu>
               </>
             ) : (
-              <Tooltip title={t("signIn")}>
-                <IconButton color="inherit" component="a" href={`/auth/signin?callbackURL=${encodeURIComponent(window.location.pathname + window.location.search)}`} aria-label={t("signIn")}>
-                  <LoginIcon />
-                </IconButton>
-              </Tooltip>
+              <Button
+                color="inherit"
+                component="a"
+                href={`/auth/signin?callbackURL=${encodeURIComponent(window.location.pathname + window.location.search)}`}
+                size="small"
+                sx={{ ml: 0.5, textTransform: "none", fontWeight: 600 }}
+              >
+                {t("signIn")}
+              </Button>
             )}
           </Toolbar>
         </AppBar>
