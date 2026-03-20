@@ -373,6 +373,14 @@ const en = {
   dangerZone: "Danger zone",
   accountSecurity: "Security",
   noPasswordSet: "No password set. You signed in with a social provider.",
+
+  // PWA install prompt (#135)
+  installApp: "Install Convocados",
+  installAppDesc: "Add to your home screen for quick access — no app store needed.",
+  installBtn: "Install",
+  installDismiss: "Not now",
+  installIosHint: "Tap the share button, then \"Add to Home Screen\"",
+  versionAvailable: "Version {version} available",
 } as const;
 
 export default en;

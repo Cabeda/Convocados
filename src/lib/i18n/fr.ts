@@ -327,6 +327,14 @@ const fr: TranslationKeys = {
   dangerZone: "Zone de danger",
   accountSecurity: "Sécurité",
   noPasswordSet: "Aucun mot de passe défini. Tu t'es connecté avec un fournisseur social.",
+
+  // PWA install prompt (#135)
+  installApp: "Installer Convocados",
+  installAppDesc: "Ajoute à ton écran d'accueil pour un accès rapide — pas besoin d'app store.",
+  installBtn: "Installer",
+  installDismiss: "Pas maintenant",
+  installIosHint: "Appuie sur le bouton de partage, puis \"Sur l'écran d'accueil\"",
+  versionAvailable: "Version {version} disponible",
 };
 
 export default fr;
