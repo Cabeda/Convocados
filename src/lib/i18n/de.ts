@@ -253,6 +253,7 @@ const de: TranslationKeys = {
   eventSettings: "Event-Einstellungen",
   eventSettingsDesc: "Sichtbarkeit, Sportart, ausgeglichene Teams und Integrationen",
   eventSettingsGeneral: "Allgemein",
+  settingsOwnerOnly: "Nur der Event-Besitzer kann auf die Einstellungen zugreifen.",
 
   // Payment tracking
   splitTheCost: "Kosten aufteilen",

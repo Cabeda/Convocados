@@ -254,6 +254,22 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   if (!event) return null;
 
+  // Only the owner can access settings; ownerless events are open to everyone
+  if (event.ownerId && (!session?.user || session.user.id !== event.ownerId)) {
+    return (
+      <ThemeModeProvider>
+        <ResponsiveLayout>
+          <Stack spacing={2} sx={{ maxWidth: 640, mx: "auto", p: 2, alignItems: "center", pt: 8 }}>
+            <Alert severity="warning">{t("settingsOwnerOnly")}</Alert>
+            <Button href={`/events/${eventId}`} variant="outlined" size="small" startIcon={<ArrowBackIcon />}>
+              {t("backToGame")}
+            </Button>
+          </Stack>
+        </ResponsiveLayout>
+      </ThemeModeProvider>
+    );
+  }
+
   const myEnrollment = priorityData?.enrollments.find((e) => e.userId === userId);
 
   return (
