@@ -327,6 +327,16 @@ const fr: TranslationKeys = {
   dangerZone: "Zone de danger",
   accountSecurity: "Sécurité",
   noPasswordSet: "Aucun mot de passe défini. Tu t'es connecté avec un fournisseur social.",
+
+  // Magic link (#44)
+  magicLinkTitle: "Se connecter par lien email",
+  magicLinkDesc: "On t'envoie un lien pour te connecter — pas besoin de mot de passe.",
+  magicLinkBtn: "Envoyer le lien magique",
+  sendingMagicLink: "Envoi...",
+  magicLinkSent: "Vérifie ta boîte de réception ! On a envoyé un lien de connexion à {email}.",
+  magicLinkError: "Impossible d'envoyer le lien. Réessaie.",
+  signInWithEmail: "Lien par email",
+  signInWithPassword: "Mot de passe",
 };
 
 export default fr;
