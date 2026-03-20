@@ -328,6 +328,24 @@ const de: TranslationKeys = {
   accountSecurity: "Sicherheit",
   noPasswordSet: "Kein Passwort festgelegt. Du hast dich mit einem sozialen Anbieter angemeldet.",
 
+  // Magic link (#44)
+  magicLinkTitle: "Per E-Mail-Link anmelden",
+  magicLinkDesc: "Wir senden dir einen Link zum Anmelden — kein Passwort nötig.",
+  magicLinkBtn: "Magic Link senden",
+  sendingMagicLink: "Wird gesendet...",
+  magicLinkSent: "Prüfe deinen Posteingang! Wir haben einen Anmeldelink an {email} gesendet.",
+  magicLinkError: "Link konnte nicht gesendet werden. Versuche es erneut.",
+  signInWithEmail: "E-Mail-Link",
+  signInWithPassword: "Passwort",
+
+  // PWA install prompt (#135)
+  installApp: "Convocados installieren",
+  installAppDesc: "Zum Startbildschirm hinzufügen für schnellen Zugriff — kein App Store nötig.",
+  installBtn: "Installieren",
+  installDismiss: "Nicht jetzt",
+  installIosHint: "Tippe auf den Teilen-Button und dann auf \"Zum Home-Bildschirm\"",
+  versionAvailable: "Version {version} verfügbar",
+
   // Notification settings (#112)
   notificationSettings: "Benachrichtigungseinstellungen",
   notificationSettingsDesc: "Wähle, wie und wann du benachrichtigt werden möchtest.",
