@@ -4,6 +4,7 @@ import { Randomize } from "../../../../lib/random";
 import { balanceTeams } from "../../../../lib/elo.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { sseManager } from "../../../../lib/sse.server";
+import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 
 const log = createLogger("randomize");
@@ -70,6 +71,8 @@ export const POST: APIRoute = async ({ params, url, request }) => {
   ]);
 
   sseManager.broadcast(eventId, "update", { action: "teams_randomized" });
+
+  logEvent(eventId, "teams_randomized", null, null, { balanced, playerCount: players.length }).catch(() => {});
 
   return Response.json({ ok: true, balanced });
 };

@@ -92,6 +92,7 @@ model Event {
   webhookSubs    WebhookSubscription[]
   reminderLogs   ReminderLog[]
   eventCost      EventCost?
+  eventLogs      EventLog[]
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
 
@@ -270,6 +271,21 @@ model PlayerPayment {
   updatedAt   DateTime  @updatedAt
 
   @@unique([eventCostId, playerName])
+}
+
+// ── Event activity log ────────────────────────────────────────────────────────
+
+model EventLog {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  action    String   // e.g. "player_added", "player_removed", "cost_set", "teams_randomized"
+  actor     String?  // user name or null for anonymous
+  actorId   String?  // userId if authenticated
+  details   String   @default("{}") // JSON with action-specific data
+  createdAt DateTime @default(now())
+
+  @@index([eventId, createdAt])
 }
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────

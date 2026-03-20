@@ -373,6 +373,29 @@ const en = {
   dangerZone: "Danger zone",
   accountSecurity: "Security",
   noPasswordSet: "No password set. You signed in with a social provider.",
+
+  // Event activity log (#122)
+  activityLog: "Activity",
+  activityLogTitle: "Activity Log",
+  activityLogDesc: "All actions recorded for this event.",
+  noActivityLog: "No activity recorded yet.",
+  logPlayerAdded: "{actor} added {player}",
+  logPlayerRemoved: "{actor} removed {player}",
+  logPlayerClaimed: "{actor} claimed {player}",
+  logTeamsRandomized: "Teams were randomized",
+  logTeamsEdited: "Teams were edited",
+  logTeamNamesChanged: "Team names were changed",
+  logPlayerOrderChanged: "Player order was changed",
+  logPlayerOrderReset: "Player order was reset",
+  logEventUpdated: "Event settings were updated",
+  logOwnershipClaimed: "{actor} claimed ownership",
+  logOwnershipRelinquished: "{actor} relinquished ownership",
+  logOwnershipTransferred: "Ownership transferred",
+  logCostSet: "Cost was set",
+  logCostRemoved: "Cost was removed",
+  logPaymentUpdated: "Payment status was updated",
+  logRecurrenceReset: "Recurring game was reset",
+  logAnonymous: "Someone",
 } as const;
 
 export default en;

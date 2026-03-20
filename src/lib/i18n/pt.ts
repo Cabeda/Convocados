@@ -374,6 +374,29 @@ const pt: TranslationKeys = {
   dangerZone: "Zona de perigo",
   accountSecurity: "Segurança",
   noPasswordSet: "Sem palavra-passe definida. Entraste com um fornecedor social.",
+
+  // Event activity log (#122)
+  activityLog: "Atividade",
+  activityLogTitle: "Registo de Atividade",
+  activityLogDesc: "Todas as ações registadas para este evento.",
+  noActivityLog: "Sem atividade registada.",
+  logPlayerAdded: "{actor} adicionou {player}",
+  logPlayerRemoved: "{actor} removeu {player}",
+  logPlayerClaimed: "{actor} reivindicou {player}",
+  logTeamsRandomized: "As equipas foram sorteadas",
+  logTeamsEdited: "As equipas foram editadas",
+  logTeamNamesChanged: "Os nomes das equipas foram alterados",
+  logPlayerOrderChanged: "A ordem dos jogadores foi alterada",
+  logPlayerOrderReset: "A ordem dos jogadores foi reposta",
+  logEventUpdated: "As definições do evento foram atualizadas",
+  logOwnershipClaimed: "{actor} reivindicou a propriedade",
+  logOwnershipRelinquished: "{actor} abandonou a propriedade",
+  logOwnershipTransferred: "A propriedade foi transferida",
+  logCostSet: "O custo foi definido",
+  logCostRemoved: "O custo foi removido",
+  logPaymentUpdated: "O estado do pagamento foi atualizado",
+  logRecurrenceReset: "O jogo recorrente foi reposto",
+  logAnonymous: "Alguém",
 };
 
 export default pt;

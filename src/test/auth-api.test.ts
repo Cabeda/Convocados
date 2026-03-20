@@ -109,6 +109,7 @@ beforeEach(async () => {
   await testPrisma.player.deleteMany();
   await testPrisma.session.deleteMany();
   await testPrisma.account.deleteMany();
+  await testPrisma.eventLog.deleteMany();
   await testPrisma.event.deleteMany();
   await testPrisma.user.deleteMany();
 });

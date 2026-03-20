@@ -6,6 +6,7 @@ import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server"
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { sseManager } from "../../../../lib/sse.server";
 import { syncPaymentsForEvent } from "../../../../lib/payments.server";
+import { logEvent } from "../../../../lib/eventLog.server";
 
 /**
  * If teams have been generated, add a player to the team with fewer members.
@@ -141,6 +142,8 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   sseManager.broadcast(eventId, "update", { action: "player_added" });
 
+  logEvent(eventId, "player_added", session?.user?.name ?? trimmed, session?.user?.id ?? null, { playerName: trimmed }).catch(() => {});
+
   return Response.json({ ok: true });
 };
 
@@ -154,6 +157,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const origin = `${proto}://${host}`;
   const senderClientId = request.headers.get("x-client-id") ?? undefined;
   const { playerId } = await request.json();
+  const session = await getSession(request);
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
@@ -167,7 +171,6 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   // Protected player check: players with userId can only be removed by themselves or the event owner
   if (player.userId) {
-    const session = await getSession(request);
     const isSelf = session?.user?.id === player.userId;
     const { isOwner } = await checkOwnership(request, event.ownerId, session);
     if (!isSelf && !isOwner) {
@@ -215,6 +218,8 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   await syncPaymentsForEvent(eventId);
 
   sseManager.broadcast(eventId, "update", { action: "player_removed" });
+
+  logEvent(eventId, "player_removed", session?.user?.name ?? null, session?.user?.id ?? null, { playerName: player.name }).catch(() => {});
 
   // Return undo data so the client can restore the player within a time window
   return Response.json({

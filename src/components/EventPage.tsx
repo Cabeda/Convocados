@@ -1045,6 +1045,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         {t("history")}
                       </Button>
                     )}
+                    <Button variant="outlined" size="small" startIcon={<HistoryIcon />}
+                      href={`/events/${eventId}/log`} sx={{ flexShrink: 0 }}>
+                      {t("activityLog")}
+                    </Button>
                     <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />}
                       href={`/api/events/${eventId}/calendar`} sx={{ flexShrink: 0 }}>
                       {t("downloadIcs")}
