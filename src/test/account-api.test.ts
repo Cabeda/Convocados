@@ -85,6 +85,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   mockAnonymous();
   // Clean up in correct order (respect FK constraints)
+  await testPrisma.notificationPreferences.deleteMany();
   await testPrisma.playerRating.deleteMany();
   await testPrisma.gameHistory.deleteMany();
   await testPrisma.teamResult.deleteMany();

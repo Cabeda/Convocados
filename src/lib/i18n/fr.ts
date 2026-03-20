@@ -327,6 +327,22 @@ const fr: TranslationKeys = {
   dangerZone: "Zone de danger",
   accountSecurity: "Sécurité",
   noPasswordSet: "Aucun mot de passe défini. Tu t'es connecté avec un fournisseur social.",
+
+  // Notification settings (#112)
+  notificationSettings: "Paramètres de notifications",
+  notificationSettingsDesc: "Choisis comment et quand tu veux être notifié.",
+  emailNotifications: "Notifications par email",
+  pushNotifications: "Notifications push",
+  gameInvites: "Invitations aux matchs",
+  gameReminders: "Rappels de matchs",
+  weeklySummary: "Résumé hebdomadaire",
+  reminder24hLabel: "24 heures avant",
+  reminder2hLabel: "2 heures avant",
+  reminder1hLabel: "1 heure avant",
+  reminderTiming: "Horaire des rappels",
+  notificationsSaved: "Paramètres de notifications enregistrés.",
+  notificationsSaveError: "Impossible d'enregistrer les paramètres de notifications.",
+  savingNotifications: "Enregistrement...",
 };
 
 export default fr;
