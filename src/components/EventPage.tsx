@@ -1045,6 +1045,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         {t("history")}
                       </Button>
                     )}
+                    <Button variant="outlined" size="small" startIcon={<HistoryIcon />}
+                      href={`/events/${eventId}/log`} sx={{ flexShrink: 0 }}>
+                      {t("activityLog")}
+                    </Button>
                     {(gameDate <= new Date() || event.isRecurring) && (
                       <Button variant="outlined" size="small" startIcon={<EmojiPeopleIcon />}
                         href={`/events/${eventId}/attendance`} sx={{ flexShrink: 0 }}>
