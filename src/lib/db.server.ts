@@ -1,4 +1,7 @@
 import { PrismaClient } from "@prisma/client";
+import { createLogger } from "./logger.server";
+
+const log = createLogger("db");
 
 let prisma: PrismaClient;
 
@@ -29,7 +32,7 @@ function createClient(): PrismaClient {
   const client = new PrismaClient();
   // Apply PRAGMAs on first use — Prisma lazy-connects, so we trigger it
   applyPragmas(client).catch((err) => {
-    console.error("[db] Failed to apply SQLite PRAGMAs:", err);
+    log.error({ err }, "Failed to apply SQLite PRAGMAs");
   });
   return client;
 }
