@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getRandomTitle, getRandomTitles } from "~/lib/randomTitles";
+import { getRandomTitle, getRandomTitles, titles, type TitleLocale } from "~/lib/randomTitles";
 
 describe("getRandomTitle", () => {
   it("returns a non-empty string for 'en'", () => {
@@ -39,10 +39,40 @@ describe("getRandomTitle", () => {
     expect(title.length).toBeGreaterThan(0);
   });
 
+  it("returns a title from the correct locale pool for each locale", () => {
+    const locales: TitleLocale[] = ["en", "pt", "es", "fr", "de", "it"];
+    for (const locale of locales) {
+      const pool = titles[locale] as readonly string[];
+      // Run multiple times to reduce flakiness
+      for (let i = 0; i < 20; i++) {
+        const title = getRandomTitle(locale);
+        expect(pool).toContain(title);
+      }
+    }
+  });
+
+  it("returns titles from the locale pool, not the English pool, for non-en locales", () => {
+    const nonEnLocales: TitleLocale[] = ["pt", "es", "fr", "de", "it"];
+    const enPool = new Set<string>(titles.en);
+    for (const locale of nonEnLocales) {
+      const localePool = titles[locale] as readonly string[];
+      // Collect many samples — at least some should NOT be in the English pool
+      const samples = Array.from({ length: 50 }, () => getRandomTitle(locale));
+      const allInEnPool = samples.every((t) => enPool.has(t));
+      // The locale pools are distinct from English, so not all titles should match English
+      expect(allInEnPool).toBe(false);
+      // And every sample must be in the locale's own pool
+      for (const s of samples) {
+        expect(localePool).toContain(s);
+      }
+    }
+  });
+
   it("falls back to English for unknown locale", () => {
     // @ts-expect-error testing unknown locale
     const title = getRandomTitle("unknown");
     expect(title).toBeTruthy();
+    expect(titles.en as readonly string[]).toContain(title);
   });
 
   it("returns different titles across multiple calls (not always the same)", () => {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { createT, detectLocale, setStoredLocale, translations } from "~/lib/i18n";
+import { titles, type TitleLocale } from "~/lib/randomTitles";
 
 describe("createT", () => {
   it("returns English string for 'en'", () => {
@@ -189,5 +190,28 @@ describe("setStoredLocale", () => {
     setStoredLocale("pt");
     setStoredLocale("en");
     expect(localStorage.getItem("convocados-locale")).toBe("en");
+  });
+});
+
+describe("random titles i18n coverage", () => {
+  const supportedLocales: TitleLocale[] = ["en", "pt", "es", "fr", "de", "it"];
+
+  it("every supported locale has a random titles pool", () => {
+    for (const locale of supportedLocales) {
+      expect(titles[locale]).toBeDefined();
+      expect(titles[locale].length).toBeGreaterThan(0);
+    }
+  });
+
+  it("no non-English locale has a title pool identical to English", () => {
+    const enSet = new Set<string>(titles.en);
+    for (const locale of supportedLocales.filter((l) => l !== "en")) {
+      const localeSet = new Set<string>(titles[locale]);
+      // Pools should not be identical — that would mean missing translations
+      const identical =
+        enSet.size === localeSet.size &&
+        [...enSet].every((t) => localeSet.has(t));
+      expect(identical).toBe(false);
+    }
   });
 });
