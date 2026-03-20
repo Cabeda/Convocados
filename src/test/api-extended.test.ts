@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { PrismaClient } from "@prisma/client";
+import { resetRateLimitStore } from "~/lib/rateLimit.server";
+import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
@@ -96,6 +98,8 @@ async function seedHistory(eventId: string, overrides: Record<string, unknown> =
 }
 
 beforeEach(async () => {
+  await resetRateLimitStore();
+  await resetApiRateLimitStore();
   await prisma.pushSubscription.deleteMany();
   await prisma.webhookSubscription.deleteMany();
   await prisma.playerRating.deleteMany();
@@ -106,6 +110,7 @@ beforeEach(async () => {
   await prisma.account.deleteMany();
   await prisma.event.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.rateLimit.deleteMany();
 });
 
 // ─── GET /api/health ─────────────────────────────────────────────────────────
