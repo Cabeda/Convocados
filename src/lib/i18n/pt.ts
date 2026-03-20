@@ -375,6 +375,24 @@ const pt: TranslationKeys = {
   accountSecurity: "Segurança",
   noPasswordSet: "Sem palavra-passe definida. Entraste com um fornecedor social.",
 
+  // Magic link (#44)
+  magicLinkTitle: "Entrar com link por email",
+  magicLinkDesc: "Enviamos-te um link para entrar — sem precisar de palavra-passe.",
+  magicLinkBtn: "Enviar link mágico",
+  sendingMagicLink: "A enviar...",
+  magicLinkSent: "Verifica a tua caixa de entrada! Enviámos um link de acesso para {email}.",
+  magicLinkError: "Não foi possível enviar o link. Tenta novamente.",
+  signInWithEmail: "Link por email",
+  signInWithPassword: "Palavra-passe",
+
+  // PWA install prompt (#135)
+  installApp: "Instalar Convocados",
+  installAppDesc: "Adiciona ao ecrã inicial para acesso rápido — sem app store.",
+  installBtn: "Instalar",
+  installDismiss: "Agora não",
+  installIosHint: "Toca no botão de partilha e depois em \"Adicionar ao ecrã inicial\"",
+  versionAvailable: "Versão {version} disponível",
+
   // Notification settings (#112)
   notificationSettings: "Definições de notificações",
   notificationSettingsDesc: "Escolhe como e quando queres ser notificado.",
