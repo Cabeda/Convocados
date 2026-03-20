@@ -7,7 +7,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "start": "./node_modules/.bin/prisma migrate deploy && node dist/server/entry.mjs",
+    "start": "sh ./scripts/start.sh",
     "typecheck": "tsc",
     "test": "vitest run",
     "db:generate": "prisma generate",

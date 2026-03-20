@@ -16,16 +16,27 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
+# ── litestream ────────────────────────────────────────────────────────────────
+FROM base AS litestream
+ARG LITESTREAM_VERSION=v0.3.13
+RUN wget -q "https://github.com/benbjohnson/litestream/releases/download/${LITESTREAM_VERSION}/litestream-${LITESTREAM_VERSION}-linux-amd64-static.tar.gz" \
+      -O /tmp/litestream.tar.gz \
+    && tar -xzf /tmp/litestream.tar.gz -C /usr/local/bin \
+    && rm /tmp/litestream.tar.gz
+
 # ── production ────────────────────────────────────────────────────────────────
 FROM base AS production
 ENV NODE_ENV=production
 
+COPY --from=litestream /usr/local/bin/litestream /usr/local/bin/litestream
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY package.json ./
 COPY prisma ./prisma
 COPY public ./public
+COPY litestream.yml ./litestream.yml
+COPY scripts/start.sh ./scripts/start.sh
 
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+CMD ["sh", "./scripts/start.sh"]

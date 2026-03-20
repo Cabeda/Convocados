@@ -5,9 +5,11 @@ import fs from "fs";
 const TEST_DB_PATH = path.resolve(__dirname, "../../test.db");
 
 export function setup() {
-  // Clean any leftover DB from a previous run
-  if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
-  if (fs.existsSync(`${TEST_DB_PATH}-journal`)) fs.unlinkSync(`${TEST_DB_PATH}-journal`);
+  // Clean any leftover DB from a previous run (including WAL files)
+  for (const suffix of ["", "-journal", "-wal", "-shm"]) {
+    const file = `${TEST_DB_PATH}${suffix}`;
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
 
   process.env.DATABASE_URL = `file:${TEST_DB_PATH}`;
 
@@ -18,6 +20,8 @@ export function setup() {
 }
 
 export function teardown() {
-  if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
-  if (fs.existsSync(`${TEST_DB_PATH}-journal`)) fs.unlinkSync(`${TEST_DB_PATH}-journal`);
+  for (const suffix of ["", "-journal", "-wal", "-shm"]) {
+    const file = `${TEST_DB_PATH}${suffix}`;
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
 }
