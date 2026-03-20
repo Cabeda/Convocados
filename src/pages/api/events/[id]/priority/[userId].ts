@@ -15,8 +15,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner } = await checkOwnership(request, event.ownerId);
-  if (!isOwner) return Response.json({ error: "Only the event owner can manage priority players." }, { status: 403 });
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, event.id);
+  if (!isOwner && !isAdmin) return Response.json({ error: "Only the event owner can manage priority players." }, { status: 403 });
 
   if (!event.priorityEnabled) {
     return Response.json({ error: "Priority enrollment is not enabled." }, { status: 400 });
@@ -44,8 +44,8 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner } = await checkOwnership(request, event.ownerId);
-  if (!isOwner) return Response.json({ error: "Only the event owner can manage priority players." }, { status: 403 });
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, event.id);
+  if (!isOwner && !isAdmin) return Response.json({ error: "Only the event owner can manage priority players." }, { status: 403 });
 
   const userId = params.userId;
   if (!userId) return Response.json({ error: "User ID is required." }, { status: 400 });
