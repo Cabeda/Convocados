@@ -184,116 +184,139 @@ async function main() {
     const status = isPast ? "(past)" : offsetDays === 0 ? "(today)" : "(upcoming)";
 
     // ── Past events: add game history, teams, elo, and payments ──────────
-    if (isPast && playerNames.length >= 4) {
-      const activePlayers = playerNames.slice(0, maxPlayers);
-      const half = Math.floor(activePlayers.length / 2);
-      const teamOnePlayers = activePlayers.slice(0, half);
-      const teamTwoPlayers = activePlayers.slice(half);
+    // Recurring events get multiple game history entries (simulating weeks of play)
+    const gameCount = isPast && playerNames.length >= 4
+      ? isRecurring ? randInt(4, 12) : 1
+      : 0;
 
-      const teamsSnapshot = JSON.stringify([
-        { team: "Ninjas", players: teamOnePlayers.map((name, order) => ({ name, order })) },
-        { team: "Gunas", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
-      ]);
-
-      const scoreOne = randInt(0, 8);
-      const scoreTwo = randInt(0, 8);
-
-      // Create team results
-      const teamOne = await prisma.teamResult.create({
-        data: {
-          name: "Ninjas",
-          eventId: event.id,
-          members: {
-            create: teamOnePlayers.map((name, order) => ({ name, order })),
-          },
-        },
-      });
-      const teamTwo = await prisma.teamResult.create({
-        data: {
-          name: "Gunas",
-          eventId: event.id,
-          members: {
-            create: teamTwoPlayers.map((name, order) => ({ name, order })),
-          },
-        },
-      });
-
-      // Payment data for history snapshot
-      const hasCost = Math.random() < 0.6;
-      let paymentsSnapshot: string | null = null;
-      if (hasCost) {
-        const totalAmount = pick(COST_AMOUNTS);
-        const share = totalAmount / activePlayers.length;
-        const paymentSnapshotData = activePlayers.map((name) => {
-          const roll = Math.random();
-          const pStatus = roll < 0.5 ? "paid" : roll < 0.7 ? "exempt" : "pending";
-          return {
-            playerName: name,
-            amount: Math.round(share * 100) / 100,
-            status: pStatus,
-            method: pStatus === "paid" ? pick(PAYMENT_METHODS) : null,
-          };
-        });
-        paymentsSnapshot = JSON.stringify(paymentSnapshotData);
-      }
-
-      // Game history (editable for 7 days)
-      const editableUntil = new Date(dateTime.getTime() + 7 * 86400000);
-      await prisma.gameHistory.create({
-        data: {
-          eventId: event.id,
-          dateTime,
-          status: "played",
-          scoreOne,
-          scoreTwo,
-          teamOneName: "Ninjas",
-          teamTwoName: "Gunas",
-          teamsSnapshot,
-          paymentsSnapshot,
-          editableUntil,
-          eloProcessed: true,
-        },
-      });
-
+    if (gameCount > 0) {
       // ELO ratings — accumulate across games for this event
       if (!eloByEvent.has(event.id)) {
         eloByEvent.set(event.id, new Map());
       }
       const eventRatings = eloByEvent.get(event.id)!;
 
-      // Build player info for elo computation
-      const playerInfos = activePlayers.map((name) => {
-        const existing = eventRatings.get(name);
-        return {
-          name,
-          rating: existing?.rating ?? 1000,
-          gamesPlayed: existing?.gamesPlayed ?? 0,
-        };
-      });
+      // Payment data for the live event cost (only once, not per game)
+      const hasCost = Math.random() < 0.6;
 
-      const teams = [
-        { team: "Ninjas", players: teamOnePlayers.map((name, order) => ({ name, order })) },
-        { team: "Gunas", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
-      ];
+      for (let g = 0; g < gameCount; g++) {
+        // Each game is 7 days apart going back in time
+        const gameDateTime = new Date(dateTime.getTime() - g * 7 * 86400000);
 
-      const eloUpdates = computeGameUpdates(playerInfos, teams, scoreOne, scoreTwo);
+        // Vary the roster per game: some players may miss some games (70-100% attendance)
+        const allPlayers = playerNames.slice(0, maxPlayers);
+        const gamePlayers = allPlayers.filter(() => Math.random() < (0.7 + Math.random() * 0.3));
+        // Ensure at least 4 players
+        while (gamePlayers.length < 4 && gamePlayers.length < allPlayers.length) {
+          const missing = allPlayers.find((p) => !gamePlayers.includes(p));
+          if (missing) gamePlayers.push(missing);
+          else break;
+        }
 
-      for (const update of eloUpdates) {
-        const isTeamOne = teamOnePlayers.includes(update.name);
-        const won = isTeamOne ? scoreOne > scoreTwo : scoreTwo > scoreOne;
-        const drew = scoreOne === scoreTwo;
+        const half = Math.floor(gamePlayers.length / 2);
+        const teamOnePlayers = gamePlayers.slice(0, half);
+        const teamTwoPlayers = gamePlayers.slice(half);
 
-        const prev = eventRatings.get(update.name) ?? {
-          rating: 1000, gamesPlayed: 0, wins: 0, draws: 0, losses: 0,
-        };
+        const teamsSnapshot = JSON.stringify([
+          { team: "Ninjas", players: teamOnePlayers.map((name, order) => ({ name, order })) },
+          { team: "Gunas", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
+        ]);
 
-        eventRatings.set(update.name, {
-          rating: update.newRating,
-          gamesPlayed: prev.gamesPlayed + 1,
-          wins: prev.wins + (won ? 1 : 0),
-          draws: prev.draws + (drew ? 1 : 0),
-          losses: prev.losses + (!won && !drew ? 1 : 0),
+        const scoreOne = randInt(0, 8);
+        const scoreTwo = randInt(0, 8);
+
+        // Create team results (only for the most recent game)
+        if (g === 0) {
+          await prisma.teamResult.create({
+            data: {
+              name: "Ninjas",
+              eventId: event.id,
+              members: {
+                create: teamOnePlayers.map((name, order) => ({ name, order })),
+              },
+            },
+          });
+          await prisma.teamResult.create({
+            data: {
+              name: "Gunas",
+              eventId: event.id,
+              members: {
+                create: teamTwoPlayers.map((name, order) => ({ name, order })),
+              },
+            },
+          });
+        }
+
+        // Payment snapshot for history
+        let paymentsSnapshot: string | null = null;
+        if (hasCost) {
+          const totalAmount = pick(COST_AMOUNTS);
+          const share = totalAmount / gamePlayers.length;
+          const paymentSnapshotData = gamePlayers.map((name) => {
+            const roll = Math.random();
+            const pStatus = roll < 0.5 ? "paid" : roll < 0.7 ? "exempt" : "pending";
+            return {
+              playerName: name,
+              amount: Math.round(share * 100) / 100,
+              status: pStatus,
+              method: pStatus === "paid" ? pick(PAYMENT_METHODS) : null,
+            };
+          });
+          paymentsSnapshot = JSON.stringify(paymentSnapshotData);
+        }
+
+        // Game history
+        const editableUntil = new Date(gameDateTime.getTime() + 7 * 86400000);
+        await prisma.gameHistory.create({
+          data: {
+            eventId: event.id,
+            dateTime: gameDateTime,
+            status: "played",
+            scoreOne,
+            scoreTwo,
+            teamOneName: "Ninjas",
+            teamTwoName: "Gunas",
+            teamsSnapshot,
+            paymentsSnapshot,
+            editableUntil,
+            eloProcessed: true,
+          },
         });
+
+        // Build player info for elo computation
+        const playerInfos = gamePlayers.map((name) => {
+          const existing = eventRatings.get(name);
+          return {
+            name,
+            rating: existing?.rating ?? 1000,
+            gamesPlayed: existing?.gamesPlayed ?? 0,
+          };
+        });
+
+        const teams = [
+          { team: "Ninjas", players: teamOnePlayers.map((name, order) => ({ name, order })) },
+          { team: "Gunas", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
+        ];
+
+        const eloUpdates = computeGameUpdates(playerInfos, teams, scoreOne, scoreTwo);
+
+        for (const update of eloUpdates) {
+          const isTeamOne = teamOnePlayers.includes(update.name);
+          const won = isTeamOne ? scoreOne > scoreTwo : scoreTwo > scoreOne;
+          const drew = scoreOne === scoreTwo;
+
+          const prev = eventRatings.get(update.name) ?? {
+            rating: 1000, gamesPlayed: 0, wins: 0, draws: 0, losses: 0,
+          };
+
+          eventRatings.set(update.name, {
+            rating: update.newRating,
+            gamesPlayed: prev.gamesPlayed + 1,
+            wins: prev.wins + (won ? 1 : 0),
+            draws: prev.draws + (drew ? 1 : 0),
+            losses: prev.losses + (!won && !drew ? 1 : 0),
+          });
+        }
       }
 
       // Write player ratings to DB
@@ -319,8 +342,9 @@ async function main() {
         });
       }
 
-      // Live event cost + payments (for events still within editable window)
+      // Live event cost + payments (once per event)
       if (hasCost) {
+        const activePlayers = playerNames.slice(0, maxPlayers);
         const totalAmount = pick(COST_AMOUNTS);
         const share = totalAmount / activePlayers.length;
         const paymentDetail = pick(PAYMENT_DETAILS);
@@ -351,7 +375,7 @@ async function main() {
       }
 
       console.log(
-        `  [${String(i + 1).padStart(3)}] ${event.id}  ${title.padEnd(40)} ${playerCount}/${maxPlayers} players  ${status}  score=${scoreOne}-${scoreTwo}${hasCost ? "  $" : ""}`
+        `  [${String(i + 1).padStart(3)}] ${event.id}  ${title.padEnd(40)} ${playerCount}/${maxPlayers} players  ${status}  ${gameCount} games${hasCost ? "  $" : ""}`
       );
     } else {
       console.log(
