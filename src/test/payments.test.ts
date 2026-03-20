@@ -550,3 +550,156 @@ describe("Cost persistence across recurring event resets", () => {
     expect(alice.amount).toBeCloseTo(20);
   });
 });
+
+// ─── Structured payment methods ─────────────────────────────────────────────
+
+describe("Structured payment methods on EventCost", () => {
+  it("saves structured paymentMethods via PUT /cost", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    const res = await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [
+        { type: "mbway", value: "912345678" },
+        { type: "revolut_tag", value: "@jose" },
+      ],
+    }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.paymentMethods).toBeTruthy();
+    const methods = JSON.parse(body.paymentMethods);
+    expect(methods).toHaveLength(2);
+    expect(methods[0]).toEqual({ type: "mbway", value: "912345678" });
+    expect(methods[1]).toEqual({ type: "revolut_tag", value: "jose" }); // normalized: @ stripped
+  });
+
+  it("returns paymentMethods in GET /cost", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "revolut_link", value: "https://revolut.me/jose123" }],
+    }));
+    const res = await getCost(ctx({ id: eventId }));
+    const body = await res.json();
+    const methods = JSON.parse(body.paymentMethods);
+    expect(methods).toHaveLength(1);
+    expect(methods[0].type).toBe("revolut_link");
+  });
+
+  it("rejects invalid payment method type", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    const res = await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "bitcoin", value: "abc" }],
+    }));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects invalid revolut link domain", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    const res = await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "revolut_link", value: "https://example.com/pay" }],
+    }));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects phone number with too few digits", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    const res = await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "phone", value: "123" }],
+    }));
+    expect(res.status).toBe(400);
+  });
+
+  it("clears paymentMethods when set to null", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "mbway", value: "912345678" }],
+    }));
+    const res = await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: null,
+    }));
+    const body = await res.json();
+    expect(body.paymentMethods).toBeNull();
+  });
+
+  it("clears paymentMethods when set to empty array", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "mbway", value: "912345678" }],
+    }));
+    const res = await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [],
+    }));
+    const body = await res.json();
+    expect(body.paymentMethods).toBeNull();
+  });
+
+  it("preserves paymentMethods when not sent in update", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "mbway", value: "912345678" }],
+    }));
+    // Update only totalAmount, don't send paymentMethods
+    const res = await setCost(ctx({ id: eventId }, { totalAmount: 60 }));
+    const body = await res.json();
+    expect(body.paymentMethods).toBeTruthy();
+    const methods = JSON.parse(body.paymentMethods);
+    expect(methods[0].type).toBe("mbway");
+  });
+
+  it("works alongside legacy paymentDetails", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    const res = await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentDetails: "Legacy text info",
+      paymentMethods: [{ type: "revolut_tag", value: "jose" }],
+    }));
+    const body = await res.json();
+    expect(body.paymentDetails).toBe("Legacy text info");
+    const methods = JSON.parse(body.paymentMethods);
+    expect(methods[0].type).toBe("revolut_tag");
+  });
+
+  it("persists paymentMethods across recurrence reset", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly Futsal",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 7200_000),
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
+        nextResetAt: new Date(Date.now() - 3600_000),
+      },
+    });
+    for (const name of ["Alice", "Bob"]) {
+      await prisma.player.create({
+        data: { name, eventId: event.id, order: ["Alice", "Bob"].indexOf(name) },
+      });
+    }
+    await setCost(ctx({ id: event.id }, {
+      totalAmount: 50,
+      paymentMethods: [
+        { type: "mbway", value: "912345678" },
+        { type: "revolut_tag", value: "jose" },
+      ],
+    }));
+
+    // Trigger recurrence reset
+    await getEvent({ params: { id: event.id } } as any);
+
+    // EventCost should still have paymentMethods
+    const costRes = await getCost(ctx({ id: event.id }));
+    const cost = await costRes.json();
+    const methods = JSON.parse(cost.paymentMethods);
+    expect(methods).toHaveLength(2);
+    expect(methods[0].type).toBe("mbway");
+    expect(methods[1].type).toBe("revolut_tag");
+  });
+});

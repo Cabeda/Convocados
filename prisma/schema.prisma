@@ -249,7 +249,8 @@ model EventCost {
   event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
   totalAmount    Float
   currency       String          @default("EUR")
-  paymentDetails String? // free text: "Revolut @jose / MB Way 912345678"
+  paymentDetails String? // deprecated: free text, kept for backward compat
+  paymentMethods String? // JSON: [{ type: "mbway"|"revolut_tag"|"revolut_link"|"phone", value: "...", label?: "..." }]
   payments       PlayerPayment[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
