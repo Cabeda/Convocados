@@ -1,7 +1,7 @@
 // Funny, engaging random game titles per locale.
 // Each title works as a standalone event name that makes people smile.
 
-const titles = {
+export const titles = {
   en: [
     // Epic & dramatic
     "The Battle of the Legends",
