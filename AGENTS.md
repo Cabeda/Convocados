@@ -57,6 +57,7 @@ docs: update AGENTS.md
 5. Run type checking (`npm run typecheck`)
 6. Create PR with descriptive title and summary
 7. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
+8. **Before merging**, always run the full test suite (`npm run test`) and type checking (`npm run typecheck`) to ensure the build will succeed in CI/CD
 
 ## Testing Guidelines
 

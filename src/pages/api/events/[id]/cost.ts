@@ -3,6 +3,8 @@ import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { sseManager } from "../../../../lib/sse.server";
+import { validatePaymentMethods, normalizePaymentMethod } from "../../../../lib/paymentMethods";
+import type { PaymentMethod } from "../../../../lib/paymentMethods";
 
 /** PUT — set or update event cost. Creates/recalculates player payment records. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -31,6 +33,19 @@ export const PUT: APIRoute = async ({ params, request }) => {
     ? String(body.paymentDetails).trim().slice(0, 500) || null
     : undefined;
 
+  // Validate structured payment methods (if provided)
+  let paymentMethodsJson: string | undefined;
+  if (body.paymentMethods !== undefined) {
+    if (body.paymentMethods === null || (Array.isArray(body.paymentMethods) && body.paymentMethods.length === 0)) {
+      paymentMethodsJson = null as unknown as string;
+    } else {
+      const err = validatePaymentMethods(body.paymentMethods);
+      if (err) return Response.json({ error: err }, { status: 400 });
+      const normalized = (body.paymentMethods as PaymentMethod[]).map(normalizePaymentMethod);
+      paymentMethodsJson = JSON.stringify(normalized);
+    }
+  }
+
   // Active players only (not bench)
   const activePlayers = event.players.slice(0, event.maxPlayers);
   const share = activePlayers.length > 0 ? totalAmount / activePlayers.length : 0;
@@ -46,6 +61,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
         totalAmount,
         currency,
         ...(paymentDetails !== undefined && { paymentDetails }),
+        ...(paymentMethodsJson !== undefined && { paymentMethods: paymentMethodsJson }),
       },
     });
   } else {
@@ -55,6 +71,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
         totalAmount,
         currency,
         paymentDetails: paymentDetails ?? null,
+        paymentMethods: paymentMethodsJson ?? null,
       },
     });
   }
