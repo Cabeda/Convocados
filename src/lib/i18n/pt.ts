@@ -299,6 +299,7 @@ const pt: TranslationKeys = {
   quickActions: "Ações Rápidas",
   eventSettings: "Definições do Evento",
   eventSettingsDesc: "Visibilidade, desporto, equipas equilibradas e integrações",
+  eventSettingsGeneral: "Geral",
 
   // Payment tracking
   splitTheCost: "Dividir o custo",
