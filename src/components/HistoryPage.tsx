@@ -13,6 +13,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import SportsIcon from "@mui/icons-material/Sports";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import PaymentIcon from "@mui/icons-material/Payment";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -21,6 +22,13 @@ import { detectLocale } from "~/lib/i18n";
 interface TeamSnapshot {
   team: string;
   players: { name: string; order: number }[];
+}
+
+interface PaymentSnapshotEntry {
+  playerName: string;
+  amount: number;
+  status: "paid" | "pending" | "exempt";
+  method?: string | null;
 }
 
 interface HistoryEntry {
@@ -32,6 +40,7 @@ interface HistoryEntry {
   teamOneName: string;
   teamTwoName: string;
   teamsSnapshot: string | null;
+  paymentsSnapshot: string | null;
   editableUntil: string;
   editable: boolean;
   eloUpdates?: { name: string; delta: number }[] | null;
@@ -58,6 +67,10 @@ function HistoryCardFull({
   const [editableTeams, setEditableTeams] = useState<TeamSnapshot[]>(teams);
   const [newPlayerInputs, setNewPlayerInputs] = useState<Record<number, string>>({});
   const [teamsDirty, setTeamsDirty] = useState(false);
+
+  const payments: PaymentSnapshotEntry[] = entry.paymentsSnapshot ? JSON.parse(entry.paymentsSnapshot) : [];
+  const [editablePayments, setEditablePayments] = useState<PaymentSnapshotEntry[]>(payments);
+  const [paymentsDirty, setPaymentsDirty] = useState(false);
   const date = new Date(entry.dateTime);
   const editableUntil = new Date(entry.editableUntil);
   const isCancelled = entry.status === "cancelled";
@@ -108,6 +121,23 @@ function HistoryCardFull({
   const handleSaveTeams = () => {
     patch({ teamsSnapshot: editableTeams });
     setTeamsDirty(false);
+  };
+
+  const cyclePaymentStatus = (idx: number) => {
+    const order: Array<"paid" | "pending" | "exempt"> = ["pending", "paid", "exempt"];
+    setEditablePayments((prev) =>
+      prev.map((p, i) => {
+        if (i !== idx) return p;
+        const next = order[(order.indexOf(p.status) + 1) % order.length];
+        return { ...p, status: next };
+      }),
+    );
+    setPaymentsDirty(true);
+  };
+
+  const handleSavePayments = () => {
+    patch({ paymentsSnapshot: editablePayments });
+    setPaymentsDirty(false);
   };
 
   const statusColor = isCancelled ? "error" : "success";
@@ -252,6 +282,56 @@ function HistoryCardFull({
                   {t("saveTeams")}
                 </Button>
               )}
+            </>
+          )}
+
+          {/* Payments snapshot */}
+          {payments.length > 0 && !isCancelled && (
+            <>
+              <Divider />
+              <Box>
+                <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                  <PaymentIcon fontSize="small" color="primary" />
+                  <Typography variant="body2" fontWeight={700}>{t("historyPayments")}</Typography>
+                </Stack>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                  {(entry.editable ? editablePayments : payments).map((p, idx) => {
+                    const statusColor = p.status === "paid" ? "success" : p.status === "exempt" ? "default" : "warning";
+                    const label = `${p.playerName} — ${p.amount.toFixed(2)}`;
+                    return (
+                      <Chip
+                        key={p.playerName}
+                        size="small"
+                        variant={p.status === "paid" ? "filled" : "outlined"}
+                        color={statusColor}
+                        label={label}
+                        onClick={entry.editable ? () => cyclePaymentStatus(idx) : undefined}
+                        sx={entry.editable ? { cursor: "pointer" } : undefined}
+                      />
+                    );
+                  })}
+                </Box>
+                {payments.some((p) => p.method) && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+                    {payments
+                      .filter((p) => p.method)
+                      .map((p) => t("historyPaymentRef", { ref: `${p.playerName}: ${p.method}` }))
+                      .join(" | ")}
+                  </Typography>
+                )}
+                {entry.editable && paymentsDirty && (
+                  <Button variant="outlined" size="small" startIcon={<SaveIcon />}
+                    onClick={handleSavePayments} disabled={saving} sx={{ mt: 1 }}>
+                    {t("savePayments")}
+                  </Button>
+                )}
+              </Box>
+            </>
+          )}
+          {payments.length === 0 && entry.paymentsSnapshot !== null && !isCancelled && (
+            <>
+              <Divider />
+              <Typography variant="body2" color="text.secondary">{t("historyNoPayments")}</Typography>
             </>
           )}
 

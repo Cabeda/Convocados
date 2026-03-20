@@ -40,10 +40,12 @@ export function PaymentSection({
   eventId,
   canEdit,
   activePlayerCount,
+  refreshKey,
 }: {
   eventId: string;
   canEdit: boolean;
   activePlayerCount: number;
+  refreshKey: number;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -63,8 +65,8 @@ export function PaymentSection({
     setCostData(data);
   }, [eventId]);
 
-  // Initial fetch + re-fetch when activePlayerCount changes (player added/removed)
-  useEffect(() => { fetchCost(); }, [fetchCost, activePlayerCount]);
+  // Initial fetch + re-fetch when activePlayerCount or SSE refreshKey changes
+  useEffect(() => { fetchCost(); }, [fetchCost, activePlayerCount, refreshKey]);
 
   const hasCost = costData && costData.totalAmount > 0;
   const perPlayer = hasCost && activePlayerCount > 0
