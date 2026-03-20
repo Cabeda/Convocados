@@ -327,6 +327,14 @@ const es: TranslationKeys = {
   dangerZone: "Zona de peligro",
   accountSecurity: "Seguridad",
   noPasswordSet: "Sin contraseña establecida. Iniciaste sesión con un proveedor social.",
+
+  // PWA install prompt (#135)
+  installApp: "Instalar Convocados",
+  installAppDesc: "Añade a tu pantalla de inicio para acceso rápido — sin app store.",
+  installBtn: "Instalar",
+  installDismiss: "Ahora no",
+  installIosHint: "Toca el botón de compartir y luego \"Añadir a pantalla de inicio\"",
+  versionAvailable: "Versión {version} disponible",
 };
 
 export default es;

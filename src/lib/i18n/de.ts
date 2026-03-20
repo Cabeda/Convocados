@@ -327,6 +327,14 @@ const de: TranslationKeys = {
   dangerZone: "Gefahrenzone",
   accountSecurity: "Sicherheit",
   noPasswordSet: "Kein Passwort festgelegt. Du hast dich mit einem sozialen Anbieter angemeldet.",
+
+  // PWA install prompt (#135)
+  installApp: "Convocados installieren",
+  installAppDesc: "Zum Startbildschirm hinzufügen für schnellen Zugriff — kein App Store nötig.",
+  installBtn: "Installieren",
+  installDismiss: "Nicht jetzt",
+  installIosHint: "Tippe auf den Teilen-Button und dann auf \"Zum Home-Bildschirm\"",
+  versionAvailable: "Version {version} verfügbar",
 };
 
 export default de;
