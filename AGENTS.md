@@ -4,7 +4,7 @@
 
 **Convocados** is a sports event management application built with:
 - **Framework**: Astro 6.x with React 19
-- **Database**: Prisma with SQLite (test) / PostgreSQL (production)
+- **Database**: Prisma with SQLite (WAL mode, Litestream backups in production)
 - **Styling**: Material-UI (MUI)
 - **Testing**: Vitest
 - **Language**: TypeScript
