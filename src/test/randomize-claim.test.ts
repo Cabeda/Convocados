@@ -43,7 +43,7 @@ describe("Team Randomization with Claimed Players", () => {
     await prisma.teamResult.deleteMany();
     await prisma.event.deleteMany();
     await prisma.user.deleteMany();
-    resetApiRateLimitStore();
+    await resetApiRateLimitStore();
   });
 
   it("should include claimed player when randomizing teams (10 players,1 claimed)", async () => {

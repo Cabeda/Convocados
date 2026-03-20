@@ -51,7 +51,7 @@ export const GET: APIRoute = async ({ params }) => {
 
 /** PUT — update a player's payment status. */
 export const PUT: APIRoute = async ({ params, request }) => {
-  const limited = rateLimitResponse(request, "write");
+  const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
   const eventId = params.id!;

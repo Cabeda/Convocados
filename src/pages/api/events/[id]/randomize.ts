@@ -9,7 +9,7 @@ import { createLogger } from "../../../../lib/logger.server";
 const log = createLogger("randomize");
 
 export const POST: APIRoute = async ({ params, url, request }) => {
-  const limited = rateLimitResponse(request, "write");
+  const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
   const eventId = params.id!;

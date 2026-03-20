@@ -5,7 +5,7 @@ import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { sseManager } from "../../../../lib/sse.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
-  const limited = rateLimitResponse(request, "write");
+  const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
   const eventId = params.id!;
