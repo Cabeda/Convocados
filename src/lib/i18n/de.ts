@@ -327,6 +327,16 @@ const de: TranslationKeys = {
   dangerZone: "Gefahrenzone",
   accountSecurity: "Sicherheit",
   noPasswordSet: "Kein Passwort festgelegt. Du hast dich mit einem sozialen Anbieter angemeldet.",
+
+  // Magic link (#44)
+  magicLinkTitle: "Per E-Mail-Link anmelden",
+  magicLinkDesc: "Wir senden dir einen Link zum Anmelden — kein Passwort nötig.",
+  magicLinkBtn: "Magic Link senden",
+  sendingMagicLink: "Wird gesendet...",
+  magicLinkSent: "Prüfe deinen Posteingang! Wir haben einen Anmeldelink an {email} gesendet.",
+  magicLinkError: "Link konnte nicht gesendet werden. Versuche es erneut.",
+  signInWithEmail: "E-Mail-Link",
+  signInWithPassword: "Passwort",
 };
 
 export default de;
