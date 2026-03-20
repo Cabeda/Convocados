@@ -4,6 +4,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Alert, CircularProgress, IconButton, Tooltip, Divider,
   FormControl, Select, MenuItem, Card, CardContent, CardHeader,
+  TextField, List, ListItem, ListItemText, ListItemSecondaryAction,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PublicIcon from "@mui/icons-material/Public";
@@ -17,6 +18,9 @@ import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstruct
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import LogoutIcon from "@mui/icons-material/Logout";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import LockIcon from "@mui/icons-material/Lock";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useT } from "~/lib/useT";
 import { SPORT_PRESETS, getSportPreset } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
@@ -99,6 +103,13 @@ export default function EventSettingsPage({ eventId }: Props) {
   // Webhook copy
   const [webhookCopied, setWebhookCopied] = useState(false);
 
+  // Access control
+  const [hasPassword, setHasPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [invites, setInvites] = useState<{ id: string; userId: string; name: string; email: string }[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
   const fetchEvent = useCallback(async () => {
     try {
       const res = await fetch(`/api/events/${eventId}`);
@@ -118,10 +129,27 @@ export default function EventSettingsPage({ eventId }: Props) {
     } catch { /* ignore */ }
   }, [eventId]);
 
+  const fetchAccessInfo = useCallback(async () => {
+    try {
+      const [accessRes, invitesRes] = await Promise.all([
+        fetch(`/api/events/${eventId}/access`),
+        fetch(`/api/events/${eventId}/access/invites`),
+      ]);
+      if (accessRes.ok) {
+        const data = await accessRes.json();
+        setHasPassword(data.hasPassword);
+      }
+      if (invitesRes.ok) {
+        setInvites(await invitesRes.json());
+      }
+    } catch { /* ignore */ }
+  }, [eventId]);
+
   useEffect(() => {
     fetchEvent();
     fetchPriority();
-  }, [fetchEvent, fetchPriority]);
+    fetchAccessInfo();
+  }, [fetchEvent, fetchPriority, fetchAccessInfo]);
 
   // Derived state
   const isAuthenticated = !!session?.user;
@@ -240,6 +268,72 @@ export default function EventSettingsPage({ eventId }: Props) {
     await navigator.clipboard.writeText(url);
     setWebhookCopied(true);
     setTimeout(() => setWebhookCopied(false), 2500);
+  };
+
+  // ── Access control handlers ───────────────────────────────────────────────
+
+  const handleSetPassword = async () => {
+    if (newPassword.length < 4) {
+      setMessage({ type: "error", text: t("passwordMinLength") });
+      return;
+    }
+    const res = await fetch(`/api/events/${eventId}/access`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: newPassword }),
+    });
+    if (res.ok) {
+      setHasPassword(true);
+      setNewPassword("");
+      setMessage({ type: "success", text: t("passwordSet") });
+    } else {
+      setMessage({ type: "error", text: t("prioritySettingsError") });
+    }
+  };
+
+  const handleRemovePassword = async () => {
+    const res = await fetch(`/api/events/${eventId}/access`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: null }),
+    });
+    if (res.ok) {
+      setHasPassword(false);
+      setMessage({ type: "success", text: t("passwordRemoved") });
+    }
+  };
+
+  const handleAddInvite = async () => {
+    setInviteError(null);
+    if (!inviteEmail.trim()) return;
+    const res = await fetch(`/api/events/${eventId}/access/invites`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: inviteEmail.trim() }),
+    });
+    if (res.ok) {
+      const invite = await res.json();
+      setInvites((prev) => [...prev, invite]);
+      setInviteEmail("");
+      setMessage({ type: "success", text: t("inviteAdded") });
+    } else {
+      const data = await res.json();
+      if (res.status === 404) setInviteError(t("userNotFound"));
+      else if (res.status === 400) setInviteError(t("cannotInviteOwner"));
+      else setInviteError(data.error || t("prioritySettingsError"));
+    }
+  };
+
+  const handleRemoveInvite = async (userId: string) => {
+    const res = await fetch(`/api/events/${eventId}/access/invites`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    if (res.ok) {
+      setInvites((prev) => prev.filter((i) => i.userId !== userId));
+      setMessage({ type: "success", text: t("inviteRemoved") });
+    }
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -507,6 +601,100 @@ export default function EventSettingsPage({ eventId }: Props) {
                   </Box>
                 ))}
               </>
+            )}
+          </Stack>
+        </SectionCard>
+      )}
+
+      {/* ── Access Control ── */}
+      {isOwner && (
+        <SectionCard title={t("accessControl")} icon={<LockIcon color="action" />}>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              {t("accessControlDesc")}
+            </Typography>
+
+            {/* Password */}
+            <Divider />
+            <Typography variant="subtitle2" fontWeight={600}>{t("eventPassword")}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t("eventPasswordHint")}
+            </Typography>
+            {hasPassword ? (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Chip label={t("eventPassword")} icon={<LockIcon />} color="warning" size="small" />
+                <Button size="small" color="error" variant="outlined" onClick={handleRemovePassword}>
+                  {t("removePassword")}
+                </Button>
+              </Stack>
+            ) : (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <TextField
+                  size="small"
+                  type="password"
+                  placeholder={t("eventPassword")}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  sx={{ flexGrow: 1 }}
+                />
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={handleSetPassword}
+                  disabled={newPassword.length < 4}
+                >
+                  {t("setPassword")}
+                </Button>
+              </Stack>
+            )}
+
+            {/* Invite list */}
+            <Divider />
+            <Typography variant="subtitle2" fontWeight={600}>{t("inviteList")}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t("inviteListDesc")}
+            </Typography>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <TextField
+                size="small"
+                type="email"
+                placeholder={t("inviteByEmail")}
+                value={inviteEmail}
+                onChange={(e) => { setInviteEmail(e.target.value); setInviteError(null); }}
+                error={!!inviteError}
+                helperText={inviteError}
+                sx={{ flexGrow: 1 }}
+              />
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<PersonAddIcon />}
+                onClick={handleAddInvite}
+                disabled={!inviteEmail.trim()}
+              >
+                {t("addInvite")}
+              </Button>
+            </Stack>
+            {invites.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                {t("noInvites")}
+              </Typography>
+            ) : (
+              <List dense disablePadding>
+                {invites.map((inv) => (
+                  <ListItem key={inv.id} disableGutters>
+                    <ListItemText
+                      primary={inv.name}
+                      secondary={inv.email}
+                    />
+                    <ListItemSecondaryAction>
+                      <IconButton edge="end" size="small" onClick={() => handleRemoveInvite(inv.userId)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))}
+              </List>
             )}
           </Stack>
         </SectionCard>
