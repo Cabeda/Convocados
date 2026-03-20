@@ -374,6 +374,20 @@ const pt: TranslationKeys = {
   dangerZone: "Zona de perigo",
   accountSecurity: "Segurança",
   noPasswordSet: "Sem palavra-passe definida. Entraste com um fornecedor social.",
+
+  // Attendance stats (#134)
+  attendance: "Presenças",
+  attendanceRate: "Taxa de presença",
+  attendanceStats: "Estatísticas de Presença",
+  attendanceStatsDesc: "Fiabilidade dos jogadores com base no histórico de jogos.",
+  totalGamesPlayed: "Total de jogos",
+  currentStreak: "Sequência",
+  lastPlayed: "Último jogo",
+  noAttendanceData: "Sem dados de presença.",
+  noAttendanceDataDesc: "Joga alguns jogos e regista resultados para ver as estatísticas de presença.",
+  attendanceHigh: "Fiável",
+  attendanceMedium: "Moderado",
+  attendanceLow: "Irregular",
 };
 
 export default pt;
