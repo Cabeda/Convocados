@@ -5,6 +5,7 @@ import {
   normalizePaymentMethod,
   parsePaymentMethods,
   getDeepLink,
+  getMbwayAppLink,
   getDisplayValue,
   type PaymentMethod,
 } from "~/lib/paymentMethods";
@@ -135,7 +136,7 @@ describe("getDeepLink", () => {
     expect(getDeepLink({ type: "phone", value: "+351912345678" })).toBe("tel:+351912345678");
   });
 
-  it("returns null for mbway (no deep link)", () => {
+  it("returns null for mbway (no direct deep link)", () => {
     expect(getDeepLink({ type: "mbway", value: "912345678" })).toBeNull();
   });
 
@@ -170,5 +171,27 @@ describe("getDisplayValue", () => {
   it("returns value as-is for phone and mbway", () => {
     expect(getDisplayValue({ type: "phone", value: "+351912345678" })).toBe("+351912345678");
     expect(getDisplayValue({ type: "mbway", value: "912345678" })).toBe("912345678");
+  });
+});
+
+describe("getMbwayAppLink", () => {
+  it("returns Android intent URI for Android user agent", () => {
+    const link = getMbwayAppLink("Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36");
+    expect(link).toBe("intent://#Intent;package=pt.sibs.android.mbway;end");
+  });
+
+  it("returns App Store link for iOS user agent", () => {
+    const link = getMbwayAppLink("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)");
+    expect(link).toBe("https://apps.apple.com/pt/app/mb-way/id918126133");
+  });
+
+  it("returns null for desktop user agent", () => {
+    const link = getMbwayAppLink("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)");
+    expect(link).toBeNull();
+  });
+
+  it("returns null for empty user agent", () => {
+    expect(getMbwayAppLink("")).toBeNull();
+    expect(getMbwayAppLink(undefined)).toBeNull();
   });
 });

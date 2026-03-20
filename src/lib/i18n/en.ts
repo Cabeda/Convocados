@@ -343,6 +343,7 @@ const en = {
   paymentMethodCopy: "Copy",
   paymentMethodCallPhone: "Call",
   paymentMethodMbwayInstructions: "Open MB Way and send to this number",
+  paymentMethodOpenMbway: "Open MB Way app",
 
   // Account management (#106, #107, #108)
   changePassword: "Change password",
