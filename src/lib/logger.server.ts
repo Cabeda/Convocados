@@ -11,8 +11,8 @@ const isTest = process.env.NODE_ENV === "test";
  */
 export const logger = pino({
   level: isTest ? "silent" : (process.env.LOG_LEVEL ?? (isProduction ? "info" : "debug")),
-  ...(isProduction
-    ? {} // JSON output in production (pino default)
+  ...(isProduction || isTest
+    ? {} // JSON output in production, silent in test (no transport needed)
     : {
         transport: {
           target: "pino-pretty",

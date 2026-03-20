@@ -27,8 +27,8 @@
 - [x] All PRs merged to main
 
 ## Infrastructure hardening (in progress)
-- [ ] #123 — SQLite production hardening (WAL, Litestream, busy_timeout)
-- [ ] #124 — Structured logging, error tracking, APM observability
-- [ ] #125 — E2E tests with Playwright
+- [x] #123 — SQLite production hardening (PR #128 ✅ merged)
+- [x] #124 — Structured logging (PR #129 ✅ merged)
+- [x] #125 — E2E tests with Playwright
 - [ ] #126 — React component tests with Vitest + Testing Library
 - [ ] #127 — Persistent rate limiting backed by SQLite
