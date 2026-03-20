@@ -168,7 +168,12 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                 </MenuItem>
               ))}
             </Menu>
-            {/* Auth: user menu or sign-in button */}
+            <Tooltip title={t("toggleDarkMode")}>
+              <IconButton onClick={toggleMode} color="inherit" aria-label={t("toggleDarkMode")}>
+                {isDark ? <Brightness7Icon /> : <Brightness4Icon />}
+              </IconButton>
+            </Tooltip>
+            {/* Auth: user menu or sign-in button (rightmost) */}
             {sessionLoading ? (
               <CircularProgress size={20} sx={{ mx: 1 }} />
             ) : session?.user ? (
@@ -213,11 +218,6 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                 </IconButton>
               </Tooltip>
             )}
-            <Tooltip title={t("toggleDarkMode")}>
-              <IconButton onClick={toggleMode} color="inherit" aria-label={t("toggleDarkMode")}>
-                {isDark ? <Brightness7Icon /> : <Brightness4Icon />}
-              </IconButton>
-            </Tooltip>
           </Toolbar>
         </AppBar>
       </ElevationScroll>
