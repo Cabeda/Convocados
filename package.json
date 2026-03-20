@@ -16,7 +16,12 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "npx tsx prisma/seed.ts",
-    "lhci": "lhci autorun --config=lighthouserc.cjs"
+    "lhci": "lhci autorun --config=lighthouserc.cjs",
+    "k6:smoke": "k6 run k6/scripts/smoke.js",
+    "k6:load": "k6 run k6/scripts/load.js",
+    "k6:stress": "k6 run k6/scripts/stress.js",
+    "k6:spike": "k6 run k6/scripts/spike.js",
+    "k6:sse": "k6 run k6/scripts/sse.js"
   },
   "dependencies": {
     "@astrojs/node": "^10.0.2",

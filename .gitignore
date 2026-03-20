@@ -40,3 +40,6 @@ yarn-error.log*
 
 # lighthouse ci
 .lighthouseci/
+
+# k6 load testing
+/k6-results
