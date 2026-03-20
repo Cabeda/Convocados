@@ -374,6 +374,40 @@ const en = {
   accountSecurity: "Security",
   noPasswordSet: "No password set. You signed in with a social provider.",
 
+  // Magic link (#44)
+  magicLinkTitle: "Sign in with email link",
+  magicLinkDesc: "We'll send you a link to sign in — no password needed.",
+  magicLinkBtn: "Send magic link",
+  sendingMagicLink: "Sending...",
+  magicLinkSent: "Check your inbox! We sent a sign-in link to {email}.",
+  magicLinkError: "Could not send magic link. Try again.",
+  signInWithEmail: "Email link",
+  signInWithPassword: "Password",
+
+  // PWA install prompt (#135)
+  installApp: "Install Convocados",
+  installAppDesc: "Add to your home screen for quick access — no app store needed.",
+  installBtn: "Install",
+  installDismiss: "Not now",
+  installIosHint: "Tap the share button, then \"Add to Home Screen\"",
+  versionAvailable: "Version {version} available",
+
+  // Notification settings (#112)
+  notificationSettings: "Notification settings",
+  notificationSettingsDesc: "Choose how and when you want to be notified.",
+  emailNotifications: "Email notifications",
+  pushNotifications: "Push notifications",
+  gameInvites: "Game invites",
+  gameReminders: "Game reminders",
+  weeklySummary: "Weekly summary",
+  reminder24hLabel: "24 hours before",
+  reminder2hLabel: "2 hours before",
+  reminder1hLabel: "1 hour before",
+  reminderTiming: "Reminder timing",
+  notificationsSaved: "Notification settings saved.",
+  notificationsSaveError: "Could not save notification settings.",
+  savingNotifications: "Saving...",
+
   // Attendance stats (#134)
   attendance: "Attendance",
   attendanceRate: "Attendance rate",

@@ -328,6 +328,40 @@ const it: TranslationKeys = {
   accountSecurity: "Sicurezza",
   noPasswordSet: "Nessuna password impostata. Hai effettuato l'accesso con un provider social.",
 
+  // Magic link (#44)
+  magicLinkTitle: "Accedi con link via email",
+  magicLinkDesc: "Ti invieremo un link per accedere — senza bisogno di password.",
+  magicLinkBtn: "Invia link magico",
+  sendingMagicLink: "Invio...",
+  magicLinkSent: "Controlla la tua casella di posta! Abbiamo inviato un link di accesso a {email}.",
+  magicLinkError: "Impossibile inviare il link. Riprova.",
+  signInWithEmail: "Link via email",
+  signInWithPassword: "Password",
+
+  // PWA install prompt (#135)
+  installApp: "Installa Convocados",
+  installAppDesc: "Aggiungi alla schermata iniziale per un accesso rapido — senza app store.",
+  installBtn: "Installa",
+  installDismiss: "Non ora",
+  installIosHint: "Tocca il pulsante di condivisione, poi \"Aggiungi alla schermata Home\"",
+  versionAvailable: "Versione {version} disponibile",
+
+  // Notification settings (#112)
+  notificationSettings: "Impostazioni notifiche",
+  notificationSettingsDesc: "Scegli come e quando vuoi essere notificato.",
+  emailNotifications: "Notifiche via email",
+  pushNotifications: "Notifiche push",
+  gameInvites: "Inviti alle partite",
+  gameReminders: "Promemoria partite",
+  weeklySummary: "Riepilogo settimanale",
+  reminder24hLabel: "24 ore prima",
+  reminder2hLabel: "2 ore prima",
+  reminder1hLabel: "1 ora prima",
+  reminderTiming: "Orario promemoria",
+  notificationsSaved: "Impostazioni notifiche salvate.",
+  notificationsSaveError: "Impossibile salvare le impostazioni notifiche.",
+  savingNotifications: "Salvataggio...",
+
   // Attendance stats (#134)
   attendance: "Presenze",
   attendanceRate: "Tasso di presenza",
