@@ -299,6 +299,7 @@ const en = {
   eventSettings: "Event Settings",
   eventSettingsDesc: "Visibility, sport, balanced teams, and integrations",
   eventSettingsGeneral: "General",
+  settingsOwnerOnly: "Only the event owner can access settings.",
 
   // Payment tracking
   splitTheCost: "Split the cost",

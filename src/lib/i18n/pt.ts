@@ -300,6 +300,7 @@ const pt: TranslationKeys = {
   eventSettings: "Definições do Evento",
   eventSettingsDesc: "Visibilidade, desporto, equipas equilibradas e integrações",
   eventSettingsGeneral: "Geral",
+  settingsOwnerOnly: "Apenas o dono do evento pode aceder às definições.",
 
   // Payment tracking
   splitTheCost: "Dividir o custo",
