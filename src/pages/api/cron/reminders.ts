@@ -4,6 +4,7 @@ import { sendPushToEvent } from "~/lib/push.server";
 import { sendReminder } from "~/lib/email.server";
 import { getNotificationPrefs, wantsEmailReminder, wantsPushReminder } from "~/lib/notificationPrefs.server";
 import { cleanupExpiredRateLimits } from "~/lib/apiRateLimit.server";
+import { expireUnconfirmed } from "~/lib/priority.server";
 import { createLogger } from "~/lib/logger.server";
 
 const log = createLogger("cron");
@@ -63,7 +64,15 @@ export const POST: APIRoute = async ({ request }) => {
     log.error({ err }, "Failed to cleanup expired rate limits");
   }
 
-  return new Response(JSON.stringify({ ok: true, sent, emailsSent, rateLimitsCleaned }), {
+  // Expire unconfirmed priority spots past deadline
+  let priorityExpired = 0;
+  try {
+    priorityExpired = await expireUnconfirmed();
+  } catch (err) {
+    log.error({ err }, "Failed to expire unconfirmed priority spots");
+  }
+
+  return new Response(JSON.stringify({ ok: true, sent, emailsSent, rateLimitsCleaned, priorityExpired }), {
     headers: { "Content-Type": "application/json" },
   });
 };

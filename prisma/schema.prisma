@@ -25,6 +25,8 @@ model User {
   calendarTokens CalendarToken[]
   apiKeys        ApiKey[]
   notificationPreferences NotificationPreferences?
+  priorityEnrollments     PriorityEnrollment[]
+  priorityConfirmations   PriorityConfirmation[]
 }
 
 model Session {
@@ -94,6 +96,17 @@ model Event {
   reminderLogs   ReminderLog[]
   eventCost      EventCost?
   eventLogs      EventLog[]
+  priorityEnrollments PriorityEnrollment[]
+  priorityConfirmations PriorityConfirmation[]
+
+  // Priority enrollment settings
+  priorityEnabled       Boolean @default(false)
+  priorityThreshold     Int     @default(3)   // min games attended in window
+  priorityWindow        Int     @default(4)   // last N games to evaluate
+  priorityMaxPercent    Int     @default(70)  // max % of maxPlayers reserved
+  priorityDeadlineHours Int     @default(48)  // hours before game to close confirmations
+  priorityMinGames      Int     @default(3)   // min total games before eligible
+
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
 
@@ -314,6 +327,43 @@ model EventLog {
   createdAt DateTime @default(now())
 
   @@index([eventId, createdAt])
+}
+
+// ── Priority enrollment ───────────────────────────────────────────────────────
+
+model PriorityEnrollment {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source    String   @default("auto")  // "auto" (earned) | "manual" (owner added)
+  optedIn   Boolean  @default(true)    // player can opt out
+  declineStreak Int  @default(0)       // consecutive declines — pauses at 3
+  noShowStreak  Int  @default(0)       // consecutive no-shows — loses priority at 2
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+}
+
+model PriorityConfirmation {
+  id          String    @id @default(cuid())
+  eventId     String
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameDate    DateTime
+  status      String    @default("pending")  // "pending" | "confirmed" | "declined" | "expired"
+  notifiedAt  DateTime
+  respondedAt DateTime?
+  deadline    DateTime
+  createdAt   DateTime  @default(now())
+
+  @@unique([eventId, userId, gameDate])
+  @@index([eventId, gameDate])
+  @@index([deadline])
 }
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────

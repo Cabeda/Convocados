@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { parseRecurrenceRule, nextOccurrence } from "../../../../lib/recurrence";
 import { fireWebhooks } from "../../../../lib/webhook.server";
+import { autoPriorityEnroll } from "../../../../lib/priority.server";
 
 export const GET: APIRoute = async ({ params }) => {
   const event = await prisma.event.findUnique({
@@ -84,6 +85,9 @@ export const GET: APIRoute = async ({ params }) => {
         fireWebhooks(event.id, "game_reset", {
           newDateTime: newDateTime.toISOString(),
         }).catch(() => {});
+
+        // Auto-enroll priority players for the new occurrence (non-blocking)
+        autoPriorityEnroll(event.id).catch(() => {});
       }
 
       const fresh = await prisma.event.findUnique({

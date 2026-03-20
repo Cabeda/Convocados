@@ -1055,6 +1055,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         {t("attendance")}
                       </Button>
                     )}
+                    {event.isRecurring && (
+                      <Button variant="outlined" size="small" startIcon={<StarIcon />}
+                        href={`/events/${eventId}/priority`} sx={{ flexShrink: 0 }}>
+                        {t("priorityEnrollment")}
+                      </Button>
+                    )}
                     <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />}
                       href={`/api/events/${eventId}/calendar`} sx={{ flexShrink: 0 }}>
                       {t("downloadIcs")}
