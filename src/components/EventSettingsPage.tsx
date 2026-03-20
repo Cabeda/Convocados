@@ -20,6 +20,8 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import { useT } from "~/lib/useT";
 import { SPORT_PRESETS, getSportPreset } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
+import { ThemeModeProvider } from "./ThemeModeProvider";
+import { ResponsiveLayout } from "./ResponsiveLayout";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -255,7 +257,9 @@ export default function EventSettingsPage({ eventId }: Props) {
   const myEnrollment = priorityData?.enrollments.find((e) => e.userId === userId);
 
   return (
-    <Stack spacing={3} sx={{ maxWidth: 640, mx: "auto", p: 2 }}>
+    <ThemeModeProvider>
+      <ResponsiveLayout>
+        <Stack spacing={3} sx={{ maxWidth: 640, mx: "auto", p: 2 }}>
       {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <IconButton href={`/events/${eventId}`} size="small" aria-label={t("backToGame")}>
@@ -535,5 +539,7 @@ export default function EventSettingsPage({ eventId }: Props) {
         </SectionCard>
       )}
     </Stack>
+      </ResponsiveLayout>
+    </ThemeModeProvider>
   );
 }
