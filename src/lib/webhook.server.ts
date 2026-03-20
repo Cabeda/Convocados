@@ -1,5 +1,8 @@
 import { createHmac, randomUUID } from "crypto";
 import { prisma } from "./db.server";
+import { createLogger } from "./logger.server";
+
+const log = createLogger("webhook");
 
 export type WebhookEventType =
   | "player_joined"
@@ -98,7 +101,7 @@ async function deliverWebhook(
           where: { id: delivery.id },
           data: { status: "success", deliveredAt: new Date() },
         });
-        console.log(`[webhook] delivered to ${url.slice(0, 60)} (attempt ${attempt})`);
+        log.info({ url: url.slice(0, 60), attempt }, "Webhook delivered");
         return;
       }
 
@@ -107,7 +110,7 @@ async function deliverWebhook(
         where: { id: delivery.id },
         data: { error: errText },
       });
-      console.warn(`[webhook] ${url.slice(0, 60)} returned ${res.status} (attempt ${attempt})`);
+      log.warn({ url: url.slice(0, 60), status: res.status, attempt }, "Webhook delivery failed with HTTP error");
     } catch (err: any) {
       const errMsg = err?.name === "AbortError" ? "Timeout" : (err?.message ?? "Unknown error");
       await prisma.webhookDelivery.update({
@@ -118,7 +121,7 @@ async function deliverWebhook(
           error: errMsg,
         },
       });
-      console.warn(`[webhook] failed ${url.slice(0, 60)}: ${errMsg} (attempt ${attempt})`);
+      log.warn({ url: url.slice(0, 60), error: errMsg, attempt }, "Webhook delivery failed");
     }
 
     // Exponential backoff before retry
@@ -132,7 +135,7 @@ async function deliverWebhook(
     where: { id: delivery.id },
     data: { status: "failed" },
   });
-  console.error(`[webhook] gave up on ${url.slice(0, 60)} after ${MAX_ATTEMPTS} attempts`);
+  log.error({ url: url.slice(0, 60), maxAttempts: MAX_ATTEMPTS }, "Webhook delivery exhausted all attempts");
 
   // Check health after failure
   await checkWebhookHealth(webhookId);
@@ -159,6 +162,6 @@ export async function checkWebhookHealth(webhookId: string): Promise<void> {
       where: { id: webhookId },
       data: { disabled: true },
     });
-    console.warn(`[webhook] auto-disabled webhook ${webhookId} after ${CONSECUTIVE_FAILURES_THRESHOLD} consecutive failures`);
+    log.warn({ webhookId, threshold: CONSECUTIVE_FAILURES_THRESHOLD }, "Auto-disabled webhook after consecutive failures");
   }
 }
