@@ -1,4 +1,7 @@
 import { Resend } from "resend";
+import { createLogger } from "./logger.server";
+
+const log = createLogger("email");
 
 let _resend: Resend | null = null;
 
@@ -87,7 +90,7 @@ function emailTemplate({ heading, body, buttonText, buttonUrl, footnote }: {
 }
 
 export async function sendVerificationEmail(to: string, url: string) {
-  console.log(`[email] Sending verification email to ${to}`);
+  log.info({ to }, "Sending verification email");
   const result = await getResend().emails.send({
     from: EMAIL_FROM,
     to,
@@ -101,10 +104,10 @@ export async function sendVerificationEmail(to: string, url: string) {
     }),
   });
   if (result.error) {
-    console.error(`[email] Failed to send verification email:`, result.error);
+    log.error({ err: result.error }, "Failed to send verification email");
     throw new Error(`Failed to send verification email: ${result.error.message}`);
   }
-  console.log(`[email] Verification email sent successfully (id: ${result.data?.id})`);
+  log.info({ to, id: result.data?.id }, "Verification email sent");
 }
 
 // ── Notification emails ───────────────────────────────────────────────────────
@@ -189,7 +192,7 @@ export async function sendWeeklySummary(to: string, data: WeeklySummaryData) {
 }
 
 export async function sendChangeEmailVerification(to: string, url: string) {
-  console.log(`[email] Sending change-email verification to ${to}`);
+  log.info({ to }, "Sending change-email verification");
   const result = await getResend().emails.send({
     from: EMAIL_FROM,
     to,
@@ -203,8 +206,8 @@ export async function sendChangeEmailVerification(to: string, url: string) {
     }),
   });
   if (result.error) {
-    console.error(`[email] Failed to send change-email verification:`, result.error);
+    log.error({ err: result.error }, "Failed to send change-email verification");
     throw new Error(`Failed to send change-email verification: ${result.error.message}`);
   }
-  console.log(`[email] Change-email verification sent successfully (id: ${result.data?.id})`);
+  log.info({ to, id: result.data?.id }, "Change-email verification sent");
 }

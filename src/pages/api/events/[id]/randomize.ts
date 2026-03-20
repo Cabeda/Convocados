@@ -4,6 +4,9 @@ import { Randomize } from "../../../../lib/random";
 import { balanceTeams } from "../../../../lib/elo.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { sseManager } from "../../../../lib/sse.server";
+import { createLogger } from "../../../../lib/logger.server";
+
+const log = createLogger("randomize");
 
 export const POST: APIRoute = async ({ params, url, request }) => {
   const limited = rateLimitResponse(request, "write");
@@ -44,7 +47,7 @@ export const POST: APIRoute = async ({ params, url, request }) => {
   for (const match of matches) {
     for (const player of match.players) {
       if (!activePlayerNames.has(player.name)) {
-        console.error(`Invalid player "${player.name}" in teams (not in active players list)`);
+        log.error({ eventId, playerName: player.name }, "Invalid player in teams — not in active players list");
         return Response.json(
           { error: `Player "${player.name}" cannot be in teams. Only active players (order < ${event.maxPlayers}) can participate.` },
           { status: 400 }
