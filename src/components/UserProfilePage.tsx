@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import useSWR from "swr";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Container, Paper, Typography, Stack, Box, Chip, Avatar,
   CircularProgress, Alert, Tabs, Tab, TextField, Button,
@@ -150,13 +149,25 @@ export default function UserProfilePage({ userId }: { userId: string }) {
   const [tab, setTab] = React.useState(0);
   const [editing, setEditing] = useState(false);
 
-  const { data, isLoading, error, mutate } = useSWR<UserProfile>(
-    `/api/users/${userId}`,
-    (url: string) => fetch(url).then((r) => {
+  const [data, setData] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchProfile = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/users/${userId}`);
       if (!r.ok) throw new Error("Not found");
-      return r.json();
-    }),
-  );
+      const json = await r.json();
+      setData(json);
+      setError(null);
+    } catch (e) {
+      setError(e as Error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => { fetchProfile(); }, [fetchProfile]);
 
   if (isLoading) {
     return (
@@ -230,7 +241,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
             {editing && isOwnProfile && (
               <ProfileEditForm
                 user={user}
-                onSaved={() => { setEditing(false); mutate(); }}
+                onSaved={() => { setEditing(false); fetchProfile(); }}
               />
             )}
 

@@ -27,6 +27,9 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   const scoreOne = body.scoreOne !== undefined ? (body.scoreOne === null ? null : parseInt(String(body.scoreOne), 10)) : undefined;
   const scoreTwo = body.scoreTwo !== undefined ? (body.scoreTwo === null ? null : parseInt(String(body.scoreTwo), 10)) : undefined;
   const teamsSnapshot = body.teamsSnapshot !== undefined ? JSON.stringify(body.teamsSnapshot) : undefined;
+  const paymentsSnapshot = body.paymentsSnapshot !== undefined
+    ? (body.paymentsSnapshot === null ? null : JSON.stringify(body.paymentsSnapshot))
+    : undefined;
 
   const updated = await prisma.gameHistory.update({
     where: { id: params.historyId },
@@ -35,6 +38,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       ...(scoreOne !== undefined && { scoreOne: isNaN(scoreOne as number) ? null : scoreOne }),
       ...(scoreTwo !== undefined && { scoreTwo: isNaN(scoreTwo as number) ? null : scoreTwo }),
       ...(teamsSnapshot !== undefined && { teamsSnapshot }),
+      ...(paymentsSnapshot !== undefined && { paymentsSnapshot }),
     },
   });
 

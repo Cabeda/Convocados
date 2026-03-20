@@ -32,7 +32,6 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "resend": "^6.9.4",
-    "swr": "^2.4.1",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

@@ -321,6 +321,10 @@ const en = {
   copyPaymentDetails: "Copy payment details",
   paymentDetailsCopied: "Payment details copied!",
   paymentsHistory: "Payments",
+  historyPayments: "Payments",
+  historyPaymentRef: "Ref: {ref}",
+  historyNoPayments: "No payment data recorded.",
+  savePayments: "Save payments",
 } as const;
 
 export default en;
