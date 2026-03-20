@@ -11,8 +11,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner } = await checkOwnership(request, event.ownerId);
-  if (event.ownerId && !isOwner) {
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, params.id);
+  if (event.ownerId && !isOwner && !isAdmin) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 

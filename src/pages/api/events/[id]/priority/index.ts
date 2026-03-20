@@ -89,8 +89,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner } = await checkOwnership(request, event.ownerId);
-  if (!isOwner) return Response.json({ error: "Only the event owner can change priority settings." }, { status: 403 });
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, event.id);
+  if (!isOwner && !isAdmin) return Response.json({ error: "Only the event owner can change priority settings." }, { status: 403 });
 
   const body = await request.json();
   const updates: Record<string, unknown> = {};

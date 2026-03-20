@@ -470,6 +470,18 @@ const de: TranslationKeys = {
   priorityDeclinedMsg: "Platz abgelehnt.",
   priorityOptedInMsg: "Prioritätsanmeldung aktiviert.",
   priorityOptedOutMsg: "Prioritätsanmeldung deaktiviert.",
+
+  // Event admins (#143)
+  eventAdmins: "Administratoren",
+  eventAdminsDesc: "Teile Verwaltungsrechte mit anderen Nutzern. Admins können Spieler, Einstellungen und Kosten verwalten — aber keine anderen Admins hinzufügen oder die Eigentümerschaft übertragen.",
+  adminByEmail: "Admin per E-Mail hinzufügen",
+  addAdmin: "Hinzufügen",
+  removeAdmin: "Entfernen",
+  noAdmins: "Noch keine Admins hinzugefügt.",
+  adminAdded: "Admin hinzugefügt.",
+  adminRemoved: "Admin entfernt.",
+  cannotAddOwnerAsAdmin: "Der Eventbesitzer kann nicht als Admin hinzugefügt werden.",
+  adminBadge: "Admin",
 };
 
 export default de;

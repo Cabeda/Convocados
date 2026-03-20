@@ -172,8 +172,8 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   // Protected player check: players with userId can only be removed by themselves or the event owner
   if (player.userId) {
     const isSelf = session?.user?.id === player.userId;
-    const { isOwner } = await checkOwnership(request, event.ownerId, session);
-    if (!isSelf && !isOwner) {
+    const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
+    if (!isSelf && !isOwner && !isAdmin) {
       return Response.json({ error: "This player is account-linked and can only be removed by themselves or the event owner." }, { status: 403 });
     }
   }

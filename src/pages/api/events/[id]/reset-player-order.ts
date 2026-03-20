@@ -13,8 +13,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner } = await checkOwnership(request, event.ownerId);
-  if (!isOwner) return Response.json({ error: "Only the event owner can reset player order." }, { status: 403 });
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+  if (!isOwner && !isAdmin) return Response.json({ error: "Only the event owner can reset player order." }, { status: 403 });
 
   const players = await prisma.player.findMany({ where: { eventId }, orderBy: { createdAt: "asc" } });
 
