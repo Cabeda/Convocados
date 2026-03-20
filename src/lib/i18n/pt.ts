@@ -384,6 +384,14 @@ const pt: TranslationKeys = {
   magicLinkError: "Não foi possível enviar o link. Tenta novamente.",
   signInWithEmail: "Link por email",
   signInWithPassword: "Palavra-passe",
+
+  // PWA install prompt (#135)
+  installApp: "Instalar Convocados",
+  installAppDesc: "Adiciona ao ecrã inicial para acesso rápido — sem app store.",
+  installBtn: "Instalar",
+  installDismiss: "Agora não",
+  installIosHint: "Toca no botão de partilha e depois em \"Adicionar ao ecrã inicial\"",
+  versionAvailable: "Versão {version} disponível",
 };
 
 export default pt;

@@ -337,6 +337,14 @@ const it: TranslationKeys = {
   magicLinkError: "Impossibile inviare il link. Riprova.",
   signInWithEmail: "Link via email",
   signInWithPassword: "Password",
+
+  // PWA install prompt (#135)
+  installApp: "Installa Convocados",
+  installAppDesc: "Aggiungi alla schermata iniziale per un accesso rapido — senza app store.",
+  installBtn: "Installa",
+  installDismiss: "Non ora",
+  installIosHint: "Tocca il pulsante di condivisione, poi \"Aggiungi alla schermata Home\"",
+  versionAvailable: "Versione {version} disponibile",
 };
 
 export default it;
