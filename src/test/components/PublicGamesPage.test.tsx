@@ -50,6 +50,8 @@ afterEach(() => cleanup());
 describe("PublicGamesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset URL params so filters from previous tests don't leak
+    window.history.replaceState(null, "", window.location.pathname);
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({ data: mockEvents, nextCursor: null, hasMore: false }),
@@ -148,7 +150,7 @@ describe("PublicGamesPage", () => {
   });
 
   it("shows no matching games when filter excludes all", async () => {
-    mockFetch.mockResolvedValueOnce({
+    mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
         data: [mockEvents[1]], // Only the full game
