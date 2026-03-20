@@ -6,6 +6,7 @@ import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { PUT as setCost, GET as getCost, DELETE as deleteCost } from "~/pages/api/events/[id]/cost";
 import { GET as getPayments, PUT as updatePayment } from "~/pages/api/events/[id]/payments";
 import { POST as addPlayer, DELETE as removePlayer } from "~/pages/api/events/[id]/players";
+import { GET as getEvent } from "~/pages/api/events/[id]/index";
 
 function ctx(params: Record<string, string>, body?: unknown) {
   const request = new Request("http://localhost/api/test", {
@@ -441,5 +442,111 @@ describe("Auto-recalculate payment shares on player changes", () => {
     expect(cost.payments.find((p: any) => p.playerName === "Alice")).toBeFalsy();
     expect(cost.payments.find((p: any) => p.playerName === "Charlie")).toBeTruthy();
     expect(cost.payments[0].amount).toBeCloseTo(20);
+  });
+});
+
+// ─── Cost persistence across recurrence resets ──────────────────────────────
+
+describe("Cost persistence across recurring event resets", () => {
+  it("preserves EventCost settings after recurrence reset and applies to new players", async () => {
+    // Create a recurring event with nextResetAt in the past so GET triggers a reset
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly Futsal",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 7200_000), // 2 hours ago
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
+        nextResetAt: new Date(Date.now() - 3600_000), // 1 hour ago
+      },
+    });
+
+    // Add players and set cost with payment details
+    for (const name of ["Alice", "Bob"]) {
+      await prisma.player.create({
+        data: { name, eventId: event.id, order: ["Alice", "Bob"].indexOf(name) },
+      });
+    }
+    await setCost(ctx({ id: event.id }, {
+      totalAmount: 50,
+      currency: "USD",
+      paymentDetails: "Revolut @jose",
+    }));
+
+    // Verify cost is set
+    let costRes = await getCost(ctx({ id: event.id }));
+    let cost = await costRes.json();
+    expect(cost.totalAmount).toBe(50);
+    expect(cost.currency).toBe("USD");
+    expect(cost.paymentDetails).toBe("Revolut @jose");
+    expect(cost.payments).toHaveLength(2);
+
+    // Trigger recurrence reset via GET
+    const eventRes = await getEvent({ params: { id: event.id } } as any);
+    const eventBody = await eventRes.json();
+    expect(eventBody.wasReset).toBe(true);
+    // Players should be cleared
+    expect(eventBody.players).toHaveLength(0);
+
+    // EventCost should still exist with same settings, but no payments
+    costRes = await getCost(ctx({ id: event.id }));
+    cost = await costRes.json();
+    expect(cost.totalAmount).toBe(50);
+    expect(cost.currency).toBe("USD");
+    expect(cost.paymentDetails).toBe("Revolut @jose");
+    expect(cost.payments).toHaveLength(0);
+
+    // Add new players to the next occurrence
+    await addPlayer(postCtx({ id: event.id }, { name: "Charlie" }));
+    await addPlayer(postCtx({ id: event.id }, { name: "Diana" }));
+    await addPlayer(postCtx({ id: event.id }, { name: "Eve" }));
+
+    // syncPaymentsForEvent should have created payments using the persisted EventCost
+    costRes = await getCost(ctx({ id: event.id }));
+    cost = await costRes.json();
+    expect(cost.totalAmount).toBe(50);
+    expect(cost.currency).toBe("USD");
+    expect(cost.paymentDetails).toBe("Revolut @jose");
+    expect(cost.payments).toHaveLength(3);
+    // 50 / 3 ≈ 16.67 each
+    expect(cost.payments[0].amount).toBeCloseTo(50 / 3);
+    expect(cost.payments.every((p: any) => p.status === "pending")).toBe(true);
+  });
+
+  it("snapshots payments into GameHistory during recurrence reset", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly Futsal",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 7200_000),
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
+        nextResetAt: new Date(Date.now() - 3600_000),
+      },
+    });
+
+    for (const name of ["Alice", "Bob"]) {
+      await prisma.player.create({
+        data: { name, eventId: event.id, order: ["Alice", "Bob"].indexOf(name) },
+      });
+    }
+    await setCost(ctx({ id: event.id }, { totalAmount: 40, currency: "EUR" }));
+    await updatePayment(ctx({ id: event.id }, { playerName: "Alice", status: "paid", method: "revolut" }));
+
+    // Trigger reset
+    await getEvent({ params: { id: event.id } } as any);
+
+    // Check that GameHistory has the payments snapshot
+    const history = await prisma.gameHistory.findFirst({
+      where: { eventId: event.id },
+    });
+    expect(history).toBeTruthy();
+    expect(history!.paymentsSnapshot).toBeTruthy();
+    const snapshot = JSON.parse(history!.paymentsSnapshot!);
+    expect(snapshot).toHaveLength(2);
+    const alice = snapshot.find((p: any) => p.playerName === "Alice");
+    expect(alice.status).toBe("paid");
+    expect(alice.method).toBe("revolut");
+    expect(alice.amount).toBeCloseTo(20);
   });
 });
