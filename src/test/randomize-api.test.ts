@@ -35,7 +35,7 @@ describe("POST /api/events/[id]/randomize - with claimed players", () => {
     await prisma.player.deleteMany();
     await prisma.event.deleteMany();
     await prisma.user.deleteMany();
-    resetApiRateLimitStore();
+    await resetApiRateLimitStore();
   });
 
   it("includes claimed players in randomization", async () => {

@@ -8,7 +8,7 @@ const UNDO_WINDOW_MS = 60_000; // 60 seconds
 
 /** POST — undo a player removal by re-inserting them at their original position */
 export const POST: APIRoute = async ({ params, request }) => {
-  const limited = rateLimitResponse(request, "write");
+  const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
   const eventId = params.id!;

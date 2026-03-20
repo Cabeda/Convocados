@@ -6,7 +6,7 @@ import { sseManager } from "../../../../lib/sse.server";
 
 /** PUT — set or update event cost. Creates/recalculates player payment records. */
 export const PUT: APIRoute = async ({ params, request }) => {
-  const limited = rateLimitResponse(request, "write");
+  const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
   const eventId = params.id!;
@@ -143,7 +143,7 @@ export const GET: APIRoute = async ({ params }) => {
 
 /** DELETE — remove event cost and all payments. */
 export const DELETE: APIRoute = async ({ params, request }) => {
-  const limited = rateLimitResponse(request, "write");
+  const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
   const eventId = params.id!;

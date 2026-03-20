@@ -6,7 +6,7 @@ import { sseManager } from "../../../../lib/sse.server";
 
 /** POST — claim an anonymous player: replace it with the authenticated user's identity */
 export const POST: APIRoute = async ({ params, request }) => {
-  const limited = rateLimitResponse(request, "write");
+  const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
   const eventId = params.id!;
