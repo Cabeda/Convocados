@@ -1,0 +1,228 @@
+name: Performance Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "k6/**"
+      - "src/pages/api/**"
+      - ".github/workflows/performance.yml"
+  schedule:
+    - cron: "0 2 * * 0" # Weekly on Sunday at 2am
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: "Test type to run"
+        required: true
+        default: "smoke"
+        type: choice
+        options:
+          - smoke
+          - load
+          - stress
+          - spike
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'smoke')
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build
+        run: npm run build
+
+      - name: Prepare database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: file:./k6-test.db
+
+      - name: Start server
+        run: |
+          node dist/server/entry.mjs &
+          sleep 5
+        env:
+          HOST: 0.0.0.0
+          PORT: 4321
+          DATABASE_URL: file:./k6-test.db
+
+      - uses: grafana/k6-action@v1
+        with:
+          filename: k6/scripts/smoke.js
+        env:
+          K6_BASE_URL: http://localhost:4321
+
+      - name: Upload k6 results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-smoke-results
+          path: k6-results/
+          retention-days: 14
+
+  load-test:
+    name: Load Test
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'load')
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build
+        run: npm run build
+
+      - name: Prepare database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: file:./k6-test.db
+
+      - name: Start server
+        run: |
+          node dist/server/entry.mjs &
+          sleep 5
+        env:
+          HOST: 0.0.0.0
+          PORT: 4321
+          DATABASE_URL: file:./k6-test.db
+
+      - uses: grafana/k6-action@v1
+        with:
+          filename: k6/scripts/load.js
+        env:
+          K6_BASE_URL: http://localhost:4321
+
+      - name: Upload k6 results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-load-results
+          path: k6-results/
+          retention-days: 30
+
+  stress-test:
+    name: Stress Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'stress'
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build
+        run: npm run build
+
+      - name: Prepare database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: file:./k6-test.db
+
+      - name: Start server
+        run: |
+          node dist/server/entry.mjs &
+          sleep 5
+        env:
+          HOST: 0.0.0.0
+          PORT: 4321
+          DATABASE_URL: file:./k6-test.db
+
+      - uses: grafana/k6-action@v1
+        with:
+          filename: k6/scripts/stress.js
+        env:
+          K6_BASE_URL: http://localhost:4321
+
+      - name: Upload k6 results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-stress-results
+          path: k6-results/
+          retention-days: 30
+
+  spike-test:
+    name: Spike Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'spike'
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build
+        run: npm run build
+
+      - name: Prepare database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: file:./k6-test.db
+
+      - name: Start server
+        run: |
+          node dist/server/entry.mjs &
+          sleep 5
+        env:
+          HOST: 0.0.0.0
+          PORT: 4321
+          DATABASE_URL: file:./k6-test.db
+
+      - uses: grafana/k6-action@v1
+        with:
+          filename: k6/scripts/spike.js
+        env:
+          K6_BASE_URL: http://localhost:4321
+
+      - name: Upload k6 results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-spike-results
+          path: k6-results/
+          retention-days: 30
