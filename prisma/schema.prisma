@@ -24,6 +24,7 @@ model User {
   players        Player[]        @relation("PlayerUser")
   calendarTokens CalendarToken[]
   apiKeys        ApiKey[]
+  notificationPreferences NotificationPreferences?
 }
 
 model Session {
@@ -270,6 +271,33 @@ model PlayerPayment {
   updatedAt   DateTime  @updatedAt
 
   @@unique([eventCostId, playerName])
+}
+
+// ── Notification preferences ──────────────────────────────────────────────────
+
+model NotificationPreferences {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Global toggles
+  emailEnabled         Boolean  @default(true)
+  pushEnabled          Boolean  @default(true)
+
+  // Per-type toggles
+  gameInviteEmail      Boolean  @default(true)
+  gameInvitePush       Boolean  @default(true)
+  gameReminderEmail    Boolean  @default(true)
+  gameReminderPush     Boolean  @default(true)
+  weeklySummaryEmail   Boolean  @default(false)
+
+  // Reminder time preferences
+  reminder24h          Boolean  @default(true)
+  reminder2h           Boolean  @default(true)
+  reminder1h           Boolean  @default(false)
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────

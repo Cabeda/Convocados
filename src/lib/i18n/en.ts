@@ -391,6 +391,22 @@ const en = {
   installDismiss: "Not now",
   installIosHint: "Tap the share button, then \"Add to Home Screen\"",
   versionAvailable: "Version {version} available",
+
+  // Notification settings (#112)
+  notificationSettings: "Notification settings",
+  notificationSettingsDesc: "Choose how and when you want to be notified.",
+  emailNotifications: "Email notifications",
+  pushNotifications: "Push notifications",
+  gameInvites: "Game invites",
+  gameReminders: "Game reminders",
+  weeklySummary: "Weekly summary",
+  reminder24hLabel: "24 hours before",
+  reminder2hLabel: "2 hours before",
+  reminder1hLabel: "1 hour before",
+  reminderTiming: "Reminder timing",
+  notificationsSaved: "Notification settings saved.",
+  notificationsSaveError: "Could not save notification settings.",
+  savingNotifications: "Saving...",
 } as const;
 
 export default en;

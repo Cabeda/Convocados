@@ -345,6 +345,22 @@ const it: TranslationKeys = {
   installDismiss: "Non ora",
   installIosHint: "Tocca il pulsante di condivisione, poi \"Aggiungi alla schermata Home\"",
   versionAvailable: "Versione {version} disponibile",
+
+  // Notification settings (#112)
+  notificationSettings: "Impostazioni notifiche",
+  notificationSettingsDesc: "Scegli come e quando vuoi essere notificato.",
+  emailNotifications: "Notifiche via email",
+  pushNotifications: "Notifiche push",
+  gameInvites: "Inviti alle partite",
+  gameReminders: "Promemoria partite",
+  weeklySummary: "Riepilogo settimanale",
+  reminder24hLabel: "24 ore prima",
+  reminder2hLabel: "2 ore prima",
+  reminder1hLabel: "1 ora prima",
+  reminderTiming: "Orario promemoria",
+  notificationsSaved: "Impostazioni notifiche salvate.",
+  notificationsSaveError: "Impossibile salvare le impostazioni notifiche.",
+  savingNotifications: "Salvataggio...",
 };
 
 export default it;
