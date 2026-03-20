@@ -375,6 +375,29 @@ const it: TranslationKeys = {
   attendanceHigh: "Affidabile",
   attendanceMedium: "Moderato",
   attendanceLow: "Irregolare",
+
+  // Event activity log (#122)
+  activityLog: "Attività",
+  activityLogTitle: "Registro Attività",
+  activityLogDesc: "Tutte le azioni registrate per questo evento.",
+  noActivityLog: "Nessuna attività registrata.",
+  logPlayerAdded: "{actor} ha aggiunto {player}",
+  logPlayerRemoved: "{actor} ha rimosso {player}",
+  logPlayerClaimed: "{actor} ha rivendicato {player}",
+  logTeamsRandomized: "Le squadre sono state sorteggiate",
+  logTeamsEdited: "Le squadre sono state modificate",
+  logTeamNamesChanged: "I nomi delle squadre sono stati cambiati",
+  logPlayerOrderChanged: "L'ordine dei giocatori è stato modificato",
+  logPlayerOrderReset: "L'ordine dei giocatori è stato ripristinato",
+  logEventUpdated: "Le impostazioni dell'evento sono state aggiornate",
+  logOwnershipClaimed: "{actor} ha rivendicato la proprietà",
+  logOwnershipRelinquished: "{actor} ha rinunciato alla proprietà",
+  logOwnershipTransferred: "La proprietà è stata trasferita",
+  logCostSet: "Il costo è stato impostato",
+  logCostRemoved: "Il costo è stato rimosso",
+  logPaymentUpdated: "Lo stato del pagamento è stato aggiornato",
+  logRecurrenceReset: "La partita ricorrente è stata ripristinata",
+  logAnonymous: "Qualcuno",
 };
 
 export default it;
