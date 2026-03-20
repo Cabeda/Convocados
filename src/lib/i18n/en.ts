@@ -516,6 +516,18 @@ const en = {
   priorityDeclinedMsg: "Spot declined.",
   priorityOptedInMsg: "Opted in to priority enrollment.",
   priorityOptedOutMsg: "Opted out of priority enrollment.",
+
+  // Event admins (#143)
+  eventAdmins: "Event Admins",
+  eventAdminsDesc: "Share management rights with other users. Admins can manage players, settings, and costs — but cannot add other admins or transfer ownership.",
+  adminByEmail: "Add admin by email",
+  addAdmin: "Add",
+  removeAdmin: "Remove",
+  noAdmins: "No admins added yet.",
+  adminAdded: "Admin added.",
+  adminRemoved: "Admin removed.",
+  cannotAddOwnerAsAdmin: "Cannot add the event owner as admin.",
+  adminBadge: "Admin",
 } as const;
 
 export default en;
