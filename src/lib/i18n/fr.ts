@@ -275,6 +275,10 @@ const fr: TranslationKeys = {
   copyPaymentDetails: "Copier les détails de paiement",
   paymentDetailsCopied: "Détails de paiement copiés !",
   paymentsHistory: "Paiements",
+  historyPayments: "Paiements",
+  historyPaymentRef: "Réf : {ref}",
+  historyNoPayments: "Aucune donnée de paiement enregistrée.",
+  savePayments: "Enregistrer les paiements",
 };
 
 export default fr;

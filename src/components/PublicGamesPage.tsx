@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import useSWR from "swr";
 import {
   Container, Paper, Typography, Box, Stack, Chip, Button,
   CircularProgress, alpha, useTheme, Grid2, ToggleButtonGroup, ToggleButton,
