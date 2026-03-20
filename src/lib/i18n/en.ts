@@ -374,6 +374,16 @@ const en = {
   accountSecurity: "Security",
   noPasswordSet: "No password set. You signed in with a social provider.",
 
+  // Magic link (#44)
+  magicLinkTitle: "Sign in with email link",
+  magicLinkDesc: "We'll send you a link to sign in — no password needed.",
+  magicLinkBtn: "Send magic link",
+  sendingMagicLink: "Sending...",
+  magicLinkSent: "Check your inbox! We sent a sign-in link to {email}.",
+  magicLinkError: "Could not send magic link. Try again.",
+  signInWithEmail: "Email link",
+  signInWithPassword: "Password",
+
   // PWA install prompt (#135)
   installApp: "Install Convocados",
   installAppDesc: "Add to your home screen for quick access — no app store needed.",
