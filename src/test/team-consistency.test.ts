@@ -31,7 +31,7 @@ describe("Team Consistency: Preventing Bench Players in Active Teams", () => {
     await prisma.player.deleteMany();
     await prisma.event.deleteMany();
     await prisma.user.deleteMany();
-    resetApiRateLimitStore();
+    await resetApiRateLimitStore();
   });
 
   it("should only include active players (first maxPlayers) in randomization", async () => {

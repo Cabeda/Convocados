@@ -52,12 +52,13 @@ async function seedEvent(overrides: Partial<{
 }
 
 beforeEach(async () => {
-  resetRateLimitStore();
-  resetApiRateLimitStore();
+  await resetRateLimitStore();
+  await resetApiRateLimitStore();
   await prisma.gameHistory.deleteMany();
   await prisma.teamResult.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
+  await prisma.rateLimit.deleteMany();
 });
 
 // ─── POST /api/events ────────────────────────────────────────────────────────

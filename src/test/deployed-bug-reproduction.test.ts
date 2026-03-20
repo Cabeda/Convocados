@@ -35,7 +35,7 @@ describe("EXACT DEPLOYED BUG REPRODUCTION", () => {
     await prisma.event.deleteMany();
     await prisma.playerRating.deleteMany();
     await prisma.user.deleteMany();
-    resetApiRateLimitStore();
+    await resetApiRateLimitStore();
   });
 
   it("reproduces exact deployed data and verifies randomization logic", async () => {
