@@ -1,40 +1,13 @@
 /**
- * General-purpose API rate limiter.
- * Separate from the event-creation limiter — this covers all endpoints.
+ * General-purpose API rate limiter backed by SQLite.
+ * Persists across deploys and machine suspends.
  *
- * Uses a sliding window counter per IP with configurable limits.
+ * Uses Prisma upsert for atomic increment-or-create.
  */
+import { prisma } from "./db.server";
+import { createLogger } from "./logger.server";
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
-
-interface RateLimitConfig {
-  windowMs: number;
-  maxRequests: number;
-}
-
-const stores = new Map<string, Map<string, RateLimitEntry>>();
-
-function getStore(name: string): Map<string, RateLimitEntry> {
-  let store = stores.get(name);
-  if (!store) {
-    store = new Map();
-    stores.set(name, store);
-  }
-  return store;
-}
-
-// Periodic cleanup to prevent memory leaks (every 5 minutes)
-setInterval(() => {
-  const now = Date.now();
-  for (const store of stores.values()) {
-    for (const [key, entry] of store) {
-      if (entry.resetAt < now) store.delete(key);
-    }
-  }
-}, 5 * 60 * 1000);
+const log = createLogger("api-rate-limit");
 
 const PRESETS = {
   /** Standard API reads: 120 req/min */
@@ -55,38 +28,57 @@ export function extractIp(request: Request): string {
   );
 }
 
-export function checkApiRateLimit(
+export async function checkApiRateLimit(
   ip: string,
   preset: RateLimitPreset = "read",
-): { allowed: boolean; remaining: number; retryAfterMs: number } {
+): Promise<{ allowed: boolean; remaining: number; retryAfterMs: number }> {
   const config = PRESETS[preset];
-  const store = getStore(preset);
-  const now = Date.now();
-  const entry = store.get(ip);
+  const key = `${preset}:${ip}`;
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + config.windowMs);
 
-  if (!entry || entry.resetAt < now) {
-    store.set(ip, { count: 1, resetAt: now + config.windowMs });
+  try {
+    const entry = await prisma.rateLimit.findUnique({ where: { key } });
+
+    if (!entry || entry.expiresAt < now) {
+      // Window expired or first request — create/reset
+      await prisma.rateLimit.upsert({
+        where: { key },
+        create: { key, count: 1, windowStart: now, expiresAt },
+        update: { count: 1, windowStart: now, expiresAt },
+      });
+      return { allowed: true, remaining: config.maxRequests - 1, retryAfterMs: 0 };
+    }
+
+    if (entry.count >= config.maxRequests) {
+      const retryAfterMs = entry.expiresAt.getTime() - now.getTime();
+      log.warn({ ip, preset, count: entry.count, retryAfterMs }, "API rate limit exceeded");
+      return { allowed: false, remaining: 0, retryAfterMs };
+    }
+
+    // Increment
+    await prisma.rateLimit.update({
+      where: { key },
+      data: { count: entry.count + 1 },
+    });
+    return { allowed: true, remaining: config.maxRequests - (entry.count + 1), retryAfterMs: 0 };
+  } catch (err) {
+    // On DB error, fail open to avoid blocking legitimate users
+    log.error({ err, ip, preset }, "API rate limit check failed, allowing request");
     return { allowed: true, remaining: config.maxRequests - 1, retryAfterMs: 0 };
   }
-
-  if (entry.count >= config.maxRequests) {
-    return { allowed: false, remaining: 0, retryAfterMs: entry.resetAt - now };
-  }
-
-  entry.count += 1;
-  return { allowed: true, remaining: config.maxRequests - entry.count, retryAfterMs: 0 };
 }
 
 /**
  * Helper that returns a 429 Response if rate limited, or null if allowed.
  * Use at the top of API route handlers.
  */
-export function rateLimitResponse(
+export async function rateLimitResponse(
   request: Request,
   preset: RateLimitPreset = "read",
-): Response | null {
+): Promise<Response | null> {
   const ip = extractIp(request);
-  const { allowed, remaining, retryAfterMs } = checkApiRateLimit(ip, preset);
+  const { allowed, remaining, retryAfterMs } = await checkApiRateLimit(ip, preset);
 
   if (!allowed) {
     return Response.json(
@@ -104,8 +96,26 @@ export function rateLimitResponse(
   return null;
 }
 
-export function resetApiRateLimitStore(): void {
-  for (const store of stores.values()) {
-    store.clear();
+/** Clear all API rate limit entries. Used in tests. */
+export async function resetApiRateLimitStore(): Promise<void> {
+  await prisma.rateLimit.deleteMany({
+    where: {
+      OR: [
+        { key: { startsWith: "read:" } },
+        { key: { startsWith: "write:" } },
+        { key: { startsWith: "auth:" } },
+      ],
+    },
+  });
+}
+
+/** Delete all expired rate limit entries. Called from cron. */
+export async function cleanupExpiredRateLimits(): Promise<number> {
+  const result = await prisma.rateLimit.deleteMany({
+    where: { expiresAt: { lt: new Date() } },
+  });
+  if (result.count > 0) {
+    log.info({ deleted: result.count }, "Cleaned up expired rate limit entries");
   }
+  return result.count;
 }

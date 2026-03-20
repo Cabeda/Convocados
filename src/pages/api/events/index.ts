@@ -7,7 +7,7 @@ import { getSession } from "../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
 
 export const POST: APIRoute = async ({ request }) => {
-  const limited = rateLimitResponse(request, "write");
+  const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
   const ip =
@@ -15,7 +15,7 @@ export const POST: APIRoute = async ({ request }) => {
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
     "unknown";
 
-  const { allowed } = checkRateLimit(ip);
+  const { allowed } = await checkRateLimit(ip);
   if (!allowed) {
     return Response.json({ error: "Too many events created. Try again in an hour." }, { status: 429 });
   }

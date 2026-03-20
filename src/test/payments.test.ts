@@ -52,7 +52,7 @@ async function seedEvent(playerNames: string[] = []) {
 }
 
 beforeEach(async () => {
-  resetApiRateLimitStore();
+  await resetApiRateLimitStore();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.gameHistory.deleteMany();
