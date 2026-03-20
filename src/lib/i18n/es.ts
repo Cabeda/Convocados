@@ -297,6 +297,7 @@ const es: TranslationKeys = {
   paymentMethodCopy: "Copiar",
   paymentMethodCallPhone: "Llamar",
   paymentMethodMbwayInstructions: "Abre MB Way y envía a este número",
+  paymentMethodOpenMbway: "Abrir app MB Way",
 
   // Account management (#106, #107, #108)
   changePassword: "Cambiar contraseña",

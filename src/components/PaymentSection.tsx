@@ -22,6 +22,7 @@ import {
   parsePaymentMethods,
   getDeepLink,
   getDisplayValue,
+  getMbwayAppLink,
 } from "~/lib/paymentMethods";
 
 interface PaymentData {
@@ -354,9 +355,28 @@ export function PaymentSection({
                               {display}
                             </Typography>
                             {m.type === "mbway" && (
-                              <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
-                                {t("paymentMethodMbwayInstructions")}
-                              </Typography>
+                              <>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                                  {t("paymentMethodMbwayInstructions")}
+                                </Typography>
+                                {(() => {
+                                  const mbLink = getMbwayAppLink(typeof navigator !== "undefined" ? navigator.userAgent : undefined);
+                                  return mbLink ? (
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      color="primary"
+                                      component="a"
+                                      href={mbLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      sx={{ mt: 0.5, textTransform: "none", fontSize: "0.75rem" }}
+                                    >
+                                      {t("paymentMethodOpenMbway")}
+                                    </Button>
+                                  ) : null;
+                                })()}
+                              </>
                             )}
                           </Box>
                           {deepLink && (

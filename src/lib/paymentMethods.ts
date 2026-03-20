@@ -150,3 +150,21 @@ export function getDisplayValue(method: PaymentMethod): string {
       return method.value;
   }
 }
+
+/**
+ * Get a link to open the MB Way app based on the user's platform.
+ * - Android: intent URI that opens the app or falls back to Play Store
+ * - iOS: App Store link (opens the app if installed via universal links)
+ * - Desktop/unknown: null (no app to open)
+ */
+export function getMbwayAppLink(userAgent: string | undefined): string | null {
+  if (!userAgent) return null;
+  const ua = userAgent.toLowerCase();
+  if (/android/i.test(ua)) {
+    return "intent://#Intent;package=pt.sibs.android.mbway;end";
+  }
+  if (/iphone|ipad|ipod/i.test(ua)) {
+    return "https://apps.apple.com/pt/app/mb-way/id918126133";
+  }
+  return null;
+}
