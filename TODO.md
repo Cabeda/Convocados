@@ -25,3 +25,10 @@
 ## Final verification
 - [x] All 463 tests pass on merged main
 - [x] All PRs merged to main
+
+## Infrastructure hardening (in progress)
+- [ ] #123 — SQLite production hardening (WAL, Litestream, busy_timeout)
+- [ ] #124 — Structured logging, error tracking, APM observability
+- [ ] #125 — E2E tests with Playwright
+- [ ] #126 — React component tests with Vitest + Testing Library
+- [ ] #127 — Persistent rate limiting backed by SQLite
