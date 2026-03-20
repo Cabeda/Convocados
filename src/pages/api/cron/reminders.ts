@@ -1,6 +1,9 @@
 import type { APIRoute } from "astro";
 import { getUpcomingReminders, markReminderSent } from "~/lib/reminders.server";
 import { sendPushToEvent } from "~/lib/push.server";
+import { createLogger } from "~/lib/logger.server";
+
+const log = createLogger("cron");
 
 const CRON_SECRET = import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET;
 
@@ -18,7 +21,7 @@ export const POST: APIRoute = async ({ request }) => {
         await markReminderSent(r.eventId, type);
         sent.push(`${r.eventId}:${type}`);
       } catch (err) {
-        console.error(`[cron] Failed to send ${type} reminder for ${r.eventId}:`, err);
+        log.error({ eventId: r.eventId, type, err }, "Failed to send reminder");
       }
     }
   }

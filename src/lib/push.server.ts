@@ -1,6 +1,9 @@
 import webpush from "web-push";
 import { prisma } from "./db.server";
 import { createT, type Locale, type TranslationKey } from "./i18n";
+import { createLogger } from "./logger.server";
+
+const log = createLogger("push");
 
 let initialized = false;
 function init() {
@@ -38,9 +41,9 @@ export async function sendPushToEvent(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           payload,
         );
-        console.log("[push] sent ok to", sub.endpoint.slice(0, 50));
+        log.info({ endpoint: sub.endpoint.slice(0, 50) }, "Push notification sent");
       } catch (err: any) {
-        console.error("[push] failed to send to", sub.endpoint.slice(0, 60), err?.statusCode, err?.message, err?.body);
+        log.error({ endpoint: sub.endpoint.slice(0, 60), statusCode: err?.statusCode, err: err?.message }, "Push notification failed");
         if (err?.statusCode === 410 || err?.statusCode === 404) {
           await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
         }
