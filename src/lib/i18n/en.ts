@@ -383,6 +383,14 @@ const en = {
   magicLinkError: "Could not send magic link. Try again.",
   signInWithEmail: "Email link",
   signInWithPassword: "Password",
+
+  // PWA install prompt (#135)
+  installApp: "Install Convocados",
+  installAppDesc: "Add to your home screen for quick access — no app store needed.",
+  installBtn: "Install",
+  installDismiss: "Not now",
+  installIosHint: "Tap the share button, then \"Add to Home Screen\"",
+  versionAvailable: "Version {version} available",
 } as const;
 
 export default en;

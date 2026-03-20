@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   AppBar, Toolbar, IconButton, Typography, Box, useTheme,
   Tooltip, Container, useScrollTrigger, Paper, Button, Slide,
@@ -10,6 +10,9 @@ import Brightness7Icon from "@mui/icons-material/Brightness7";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import SportsIcon from "@mui/icons-material/Sports";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
+import GetAppIcon from "@mui/icons-material/GetApp";
+import IosShareIcon from "@mui/icons-material/IosShare";
+import CloseIcon from "@mui/icons-material/Close";
 import PublicIcon from "@mui/icons-material/Public";
 import TranslateIcon from "@mui/icons-material/Translate";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -30,6 +33,43 @@ const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
   { code: "it", label: "Italiano" },
 ];
 
+const INSTALL_DISMISS_KEY = "pwa-install-dismissed";
+const INSTALL_DISMISS_DAYS = 7;
+
+function isStandalone(): boolean {
+  return typeof window !== "undefined" && (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as any).standalone === true
+  );
+}
+
+function isIos(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+}
+
+function isDismissed(): boolean {
+  try {
+    const raw = localStorage.getItem(INSTALL_DISMISS_KEY);
+    if (!raw) return false;
+    const dismissed = parseInt(raw, 10);
+    return Date.now() - dismissed < INSTALL_DISMISS_DAYS * 24 * 60 * 60 * 1000;
+  } catch {
+    return false;
+  }
+}
+
+function setDismissed(): void {
+  try {
+    localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now()));
+  } catch { /* ignore */ }
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
 function ElevationScroll({ children }: { children: React.ReactElement<{ elevation?: number }> }) {
   const trigger = useScrollTrigger({ disableHysteresis: true, threshold: 0 });
   return React.cloneElement(children, { elevation: trigger ? 4 : 0 });
@@ -43,7 +83,6 @@ function UpdateBanner() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw.js").then((reg) => {
-      // Already waiting on load (e.g. hard refresh)
       if (reg.waiting) { setWaiting(reg.waiting); return; }
       reg.addEventListener("updatefound", () => {
         const newSW = reg.installing;
@@ -66,6 +105,10 @@ function UpdateBanner() {
     });
   };
 
+  const versionText = typeof __APP_VERSION__ !== "undefined"
+    ? t("versionAvailable").replace("{version}", __APP_VERSION__)
+    : t("updateAvailable");
+
   return (
     <Slide in direction="down">
       <Paper elevation={4} sx={{
@@ -78,7 +121,7 @@ function UpdateBanner() {
         whiteSpace: "nowrap",
       }}>
         <SystemUpdateAltIcon fontSize="small" />
-        <Typography variant="body2" fontWeight={600}>{t("updateAvailable")}</Typography>
+        <Typography variant="body2" fontWeight={600}>{versionText}</Typography>
         <Button size="small" variant="contained" onClick={handleUpdate} sx={{
           backgroundColor: theme.palette.primary.contrastText,
           color: theme.palette.primary.main,
@@ -87,6 +130,114 @@ function UpdateBanner() {
         }}>
           {t("updateNow")}
         </Button>
+      </Paper>
+    </Slide>
+  );
+}
+
+function InstallBanner() {
+  const { t } = useLocale();
+  const theme = useTheme();
+  const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
+  const [showBanner, setShowBanner] = useState(false);
+  const [showIos, setShowIos] = useState(false);
+
+  useEffect(() => {
+    // Don't show if already installed or recently dismissed
+    if (isStandalone() || isDismissed()) return;
+
+    // iOS: show manual instructions
+    if (isIos()) {
+      setShowIos(true);
+      return;
+    }
+
+    // Chrome/Edge/etc: listen for beforeinstallprompt
+    const handler = (e: Event) => {
+      e.preventDefault();
+      deferredPrompt.current = e as BeforeInstallPromptEvent;
+      setShowBanner(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handler);
+
+    // Detect successful install
+    const installHandler = () => {
+      setShowBanner(false);
+      deferredPrompt.current = null;
+    };
+    window.addEventListener("appinstalled", installHandler);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", installHandler);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt.current) return;
+    await deferredPrompt.current.prompt();
+    const { outcome } = await deferredPrompt.current.userChoice;
+    if (outcome === "accepted") {
+      setShowBanner(false);
+    }
+    deferredPrompt.current = null;
+  };
+
+  const handleDismiss = () => {
+    setShowBanner(false);
+    setShowIos(false);
+    setDismissed();
+  };
+
+  if (!showBanner && !showIos) return null;
+
+  return (
+    <Slide in direction="up">
+      <Paper elevation={6} sx={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: theme.zIndex.snackbar,
+        display: "flex",
+        alignItems: "center",
+        gap: 2,
+        px: 3,
+        py: 2,
+        borderRadius: "16px 16px 0 0",
+        backgroundColor: theme.palette.background.paper,
+        borderTop: `1px solid ${theme.palette.divider}`,
+      }}>
+        <GetAppIcon sx={{ color: theme.palette.primary.main, fontSize: 32 }} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="body2" fontWeight={700}>
+            {t("installApp")}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {showIos ? t("installIosHint") : t("installAppDesc")}
+          </Typography>
+        </Box>
+        {showIos ? (
+          <IosShareIcon sx={{ color: theme.palette.text.secondary, fontSize: 20, flexShrink: 0 }} />
+        ) : (
+          <Button
+            size="small"
+            variant="contained"
+            onClick={handleInstall}
+            sx={{ fontWeight: 700, flexShrink: 0 }}
+          >
+            {t("installBtn")}
+          </Button>
+        )}
+        <IconButton
+          size="small"
+          onClick={handleDismiss}
+          aria-label={t("installDismiss")}
+          sx={{ flexShrink: 0 }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
       </Paper>
     </Slide>
   );
@@ -127,6 +278,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
       transition: theme.transitions.create("background-color"),
     }}>
       <UpdateBanner />
+      <InstallBanner />
       <ElevationScroll>
         <AppBar position="sticky" color="default" sx={{
           borderBottom: `1px solid ${theme.palette.divider}`,

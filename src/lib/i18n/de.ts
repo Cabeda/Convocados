@@ -337,6 +337,14 @@ const de: TranslationKeys = {
   magicLinkError: "Link konnte nicht gesendet werden. Versuche es erneut.",
   signInWithEmail: "E-Mail-Link",
   signInWithPassword: "Passwort",
+
+  // PWA install prompt (#135)
+  installApp: "Convocados installieren",
+  installAppDesc: "Zum Startbildschirm hinzufügen für schnellen Zugriff — kein App Store nötig.",
+  installBtn: "Installieren",
+  installDismiss: "Nicht jetzt",
+  installIosHint: "Tippe auf den Teilen-Button und dann auf \"Zum Home-Bildschirm\"",
+  versionAvailable: "Version {version} verfügbar",
 };
 
 export default de;
