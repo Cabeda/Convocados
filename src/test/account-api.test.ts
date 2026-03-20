@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "better-auth/crypto";
 
 const testPrisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
@@ -64,6 +65,20 @@ function mockAuth(userId: string) {
 
 function mockAnonymous() {
   mockGetSession.mockResolvedValue(null);
+}
+
+/** Seed a credential (email+password) account for a user */
+async function seedCredentialAccount(userId: string, plainPassword: string) {
+  const hashed = await hashPassword(plainPassword);
+  return testPrisma.account.create({
+    data: {
+      id: `acc-${userId}`,
+      accountId: userId,
+      providerId: "credential",
+      userId,
+      password: hashed,
+    },
+  });
 }
 
 beforeEach(async () => {
@@ -153,9 +168,38 @@ describe("DELETE /api/me/account", () => {
     expect(res.status).toBe(401);
   });
 
-  it("deletes the user and all associated data", async () => {
+  it("returns 403 when password is wrong", async () => {
     const user = await seedUser();
     mockAuth(user.id);
+    await seedCredentialAccount(user.id, "correctPassword1");
+
+    const res = await deleteAccount(deleteCtx({ password: "wrongPassword" }));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toContain("Invalid password");
+
+    // Verify user still exists
+    const existing = await testPrisma.user.findUnique({ where: { id: user.id } });
+    expect(existing).not.toBeNull();
+  });
+
+  it("returns 400 when password is missing for credential user", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    await seedCredentialAccount(user.id, "myPassword123");
+
+    const res = await deleteAccount(deleteCtx({}));
+    expect(res.status).toBe(400);
+
+    // Verify user still exists
+    const existing = await testPrisma.user.findUnique({ where: { id: user.id } });
+    expect(existing).not.toBeNull();
+  });
+
+  it("deletes the user with correct password and cleans up all data", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    await seedCredentialAccount(user.id, "correctPassword1");
 
     // Seed related data
     const event = await testPrisma.event.create({
@@ -176,7 +220,7 @@ describe("DELETE /api/me/account", () => {
       data: { eventId: event.id, name: user.name, userId: user.id, rating: 1000 },
     });
 
-    const res = await deleteAccount(deleteCtx());
+    const res = await deleteAccount(deleteCtx({ password: "correctPassword1" }));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
@@ -205,9 +249,22 @@ describe("DELETE /api/me/account", () => {
     expect(rating!.userId).toBeNull();
   });
 
+  it("allows social-only user to delete without password", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    // No credential account — social-only user
+
+    const res = await deleteAccount(deleteCtx({}));
+    expect(res.status).toBe(200);
+
+    const deletedUser = await testPrisma.user.findUnique({ where: { id: user.id } });
+    expect(deletedUser).toBeNull();
+  });
+
   it("nullifies ownership of multiple events", async () => {
     const user = await seedUser();
     mockAuth(user.id);
+    // Social-only user (no password needed)
 
     const event1 = await testPrisma.event.create({
       data: { title: "Event 1", location: "A", dateTime: new Date(Date.now() + 86400_000), ownerId: user.id },

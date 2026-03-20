@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
 import { getSession } from "../../../lib/auth.helpers.server";
+import { verifyPassword } from "better-auth/crypto";
 import { logger } from "../../../lib/logger.server";
 
 /** DELETE /api/me/account — delete the authenticated user's account and clean up app data */
@@ -11,6 +12,31 @@ export const DELETE: APIRoute = async ({ request }) => {
   }
 
   const userId = session.user.id;
+
+  // Parse body for password
+  const body = await request.json().catch(() => ({}));
+  const password = typeof body.password === "string" ? body.password : "";
+
+  // Look up the credential account to verify password
+  const credentialAccount = await prisma.account.findFirst({
+    where: { userId, providerId: "credential" },
+    select: { password: true },
+  });
+
+  if (credentialAccount?.password) {
+    // User has a password-based account — verify it
+    if (!password) {
+      return Response.json({ error: "Password is required." }, { status: 400 });
+    }
+    const valid = await verifyPassword({
+      hash: credentialAccount.password,
+      password,
+    });
+    if (!valid) {
+      return Response.json({ error: "Invalid password." }, { status: 403 });
+    }
+  }
+  // If no credential account (social-only), skip password check
 
   try {
     // Clean up app-specific data in a transaction
