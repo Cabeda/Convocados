@@ -15,7 +15,7 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { SPORT_PRESETS, getDefaultMaxPlayers } from "~/lib/sports";
-import { getRandomTitle } from "~/lib/randomTitles";
+import { getRandomTitle, type TitleLocale } from "~/lib/randomTitles";
 
 const DAYS = [
   { value: "MO", key: "monday" },
@@ -45,7 +45,7 @@ function minDateTime() {
 export default function CreateEventForm() {
   const t = useT();
   const locale = detectLocale();
-  const [title, setTitle] = useState(() => getRandomTitle(locale === "pt" ? "pt" : "en"));
+  const [title, setTitle] = useState(() => getRandomTitle(locale as TitleLocale));
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceFreq, setRecurrenceFreq] = useState<"weekly" | "monthly">("weekly");
   const [recurrenceInterval, setRecurrenceInterval] = useState(1);
@@ -134,7 +134,7 @@ export default function CreateEventForm() {
                           <Tooltip title={t("randomizeTitle")}>
                             <IconButton
                               size="small"
-                              onClick={() => setTitle(getRandomTitle(locale === "pt" ? "pt" : "en"))}
+                              onClick={() => setTitle(getRandomTitle(locale as TitleLocale))}
                               sx={{
                                 transition: "transform 0.2s",
                                 "&:hover": { transform: "rotate(180deg)" },
