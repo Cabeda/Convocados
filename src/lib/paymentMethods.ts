@@ -161,10 +161,13 @@ export function getMbwayAppLink(userAgent: string | undefined): string | null {
   if (!userAgent) return null;
   const ua = userAgent.toLowerCase();
   if (/android/i.test(ua)) {
-    return "intent://#Intent;package=pt.sibs.android.mbway;end";
+    // Intent URI that opens the MB Way app directly; falls back to Play Store if not installed
+    const fallback = encodeURIComponent("https://play.google.com/store/apps/details?id=pt.sibs.android.mbway");
+    return `intent://#Intent;package=pt.sibs.android.mbway;S.browser_fallback_url=${fallback};end`;
   }
   if (/iphone|ipad|ipod/i.test(ua)) {
-    return "https://apps.apple.com/pt/app/mb-way/id918126133";
+    // Custom URL scheme to open the MB Way app directly on iOS
+    return "mbway://";
   }
   return null;
 }

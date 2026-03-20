@@ -175,14 +175,16 @@ describe("getDisplayValue", () => {
 });
 
 describe("getMbwayAppLink", () => {
-  it("returns Android intent URI for Android user agent", () => {
+  it("returns Android intent URI that opens app with Play Store fallback", () => {
     const link = getMbwayAppLink("Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36");
-    expect(link).toBe("intent://#Intent;package=pt.sibs.android.mbway;end");
+    expect(link).toBe(
+      "intent://#Intent;package=pt.sibs.android.mbway;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dpt.sibs.android.mbway;end"
+    );
   });
 
-  it("returns App Store link for iOS user agent", () => {
+  it("returns mbway:// custom scheme for iOS to open app directly", () => {
     const link = getMbwayAppLink("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)");
-    expect(link).toBe("https://apps.apple.com/pt/app/mb-way/id918126133");
+    expect(link).toBe("mbway://");
   });
 
   it("returns null for desktop user agent", () => {
