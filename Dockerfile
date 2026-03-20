@@ -19,7 +19,7 @@ RUN npm run build
 # ── litestream ────────────────────────────────────────────────────────────────
 FROM base AS litestream
 ARG LITESTREAM_VERSION=v0.3.13
-RUN wget -q "https://github.com/benbjohnson/litestream/releases/download/${LITESTREAM_VERSION}/litestream-${LITESTREAM_VERSION}-linux-amd64-static.tar.gz" \
+RUN wget -q "https://github.com/benbjohnson/litestream/releases/download/${LITESTREAM_VERSION}/litestream-${LITESTREAM_VERSION}-linux-amd64.tar.gz" \
       -O /tmp/litestream.tar.gz \
     && tar -xzf /tmp/litestream.tar.gz -C /usr/local/bin \
     && rm /tmp/litestream.tar.gz
