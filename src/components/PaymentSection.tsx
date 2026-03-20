@@ -3,14 +3,25 @@ import {
   Accordion, AccordionSummary, AccordionDetails, Box, Typography, TextField,
   Button, Stack, Chip, IconButton, Tooltip, Paper, alpha, useTheme,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
-  InputAdornment, Select, MenuItem, FormControl,
+  Select, MenuItem, FormControl, InputAdornment,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
+import PhoneIcon from "@mui/icons-material/Phone";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { useT } from "~/lib/useT";
+import {
+  type PaymentMethod,
+  type PaymentMethodType,
+  PAYMENT_METHOD_TYPES,
+  parsePaymentMethods,
+  getDeepLink,
+  getDisplayValue,
+} from "~/lib/paymentMethods";
 
 interface PaymentData {
   id: string;
@@ -26,6 +37,7 @@ interface CostData {
   totalAmount: number;
   currency: string;
   paymentDetails: string | null;
+  paymentMethods: string | null;
   payments: PaymentData[];
   summary: {
     paidCount: number;
@@ -35,6 +47,22 @@ interface CostData {
 }
 
 const CURRENCIES = ["EUR", "USD", "GBP", "BRL", "CHF"];
+
+/** Map method type to i18n key for the placeholder */
+const PLACEHOLDER_KEYS: Record<PaymentMethodType, string> = {
+  phone: "paymentMethodPhonePlaceholder",
+  mbway: "paymentMethodMbwayPlaceholder",
+  revolut_tag: "paymentMethodRevolutTagPlaceholder",
+  revolut_link: "paymentMethodRevolutLinkPlaceholder",
+};
+
+/** Map method type to i18n key for the label */
+const LABEL_KEYS: Record<PaymentMethodType, string> = {
+  phone: "paymentMethodPhone",
+  mbway: "paymentMethodMbway",
+  revolut_tag: "paymentMethodRevolutTag",
+  revolut_link: "paymentMethodRevolutLink",
+};
 
 export function PaymentSection({
   eventId,
@@ -52,10 +80,10 @@ export function PaymentSection({
   const [costDraft, setCostDraft] = useState("");
   const [currencyDraft, setCurrencyDraft] = useState("EUR");
   const [detailsDraft, setDetailsDraft] = useState("");
+  const [methodsDraft, setMethodsDraft] = useState<PaymentMethod[]>([]);
   const [editing, setEditing] = useState(false);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [snackMsg, setSnackMsg] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const [costData, setCostData] = useState<CostData | null>(null);
 
@@ -65,13 +93,13 @@ export function PaymentSection({
     setCostData(data);
   }, [eventId]);
 
-  // Initial fetch + re-fetch when activePlayerCount or SSE refreshKey changes
   useEffect(() => { fetchCost(); }, [fetchCost, activePlayerCount, refreshKey]);
 
   const hasCost = costData && costData.totalAmount > 0;
   const perPlayer = hasCost && activePlayerCount > 0
     ? costData.totalAmount / activePlayerCount
     : 0;
+  const methods = hasCost ? parsePaymentMethods(costData.paymentMethods) : [];
 
   const handleSaveCost = async () => {
     const amount = parseFloat(costDraft);
@@ -84,6 +112,7 @@ export function PaymentSection({
         totalAmount: amount,
         currency: currencyDraft,
         paymentDetails: detailsDraft || null,
+        paymentMethods: methodsDraft.length > 0 ? methodsDraft : null,
       }),
     });
     fetchCost();
@@ -105,31 +134,36 @@ export function PaymentSection({
     fetchCost();
   };
 
-  const handleCopyDetails = async () => {
-    if (costData?.paymentDetails) {
-      await navigator.clipboard.writeText(costData.paymentDetails);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    }
+  const handleCopy = async (text: string, id: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2500);
   };
 
   const startEditing = () => {
     setCostDraft(hasCost ? String(costData.totalAmount) : "");
     setCurrencyDraft(hasCost ? costData.currency : "EUR");
     setDetailsDraft(hasCost ? costData.paymentDetails ?? "" : "");
+    setMethodsDraft(hasCost ? parsePaymentMethods(costData.paymentMethods) : []);
     setEditing(true);
+  };
+
+  const addMethod = () => {
+    setMethodsDraft((prev) => [...prev, { type: "mbway", value: "" }]);
+  };
+
+  const updateMethod = (idx: number, field: keyof PaymentMethod, val: string) => {
+    setMethodsDraft((prev) => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m));
+  };
+
+  const removeMethod = (idx: number) => {
+    setMethodsDraft((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const statusColor = (status: string) => {
     if (status === "paid") return "success";
     if (status === "exempt") return "info";
     return "default";
-  };
-
-  const statusLabel = (status: string) => {
-    if (status === "paid") return t("paymentStatusPaid");
-    if (status === "exempt") return t("paymentStatusExempt");
-    return t("paymentStatusPending");
   };
 
   return (
@@ -194,6 +228,53 @@ export function PaymentSection({
                       </Select>
                     </FormControl>
                   </Box>
+
+                  {/* Structured payment methods editor */}
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block" }}>
+                      {t("paymentMethods")}
+                    </Typography>
+                    <Stack spacing={1}>
+                      {methodsDraft.map((m, idx) => (
+                        <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                          <FormControl size="small" sx={{ minWidth: 130 }}>
+                            <Select
+                              value={m.type}
+                              onChange={(e) => updateMethod(idx, "type", e.target.value)}
+                            >
+                              {PAYMENT_METHOD_TYPES.map((pt) => (
+                                <MenuItem key={pt} value={pt}>{t(LABEL_KEYS[pt])}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <TextField
+                            size="small"
+                            placeholder={t(PLACEHOLDER_KEYS[m.type])}
+                            value={m.value}
+                            onChange={(e) => updateMethod(idx, "value", e.target.value)}
+                            sx={{ flex: 1 }}
+                            InputProps={m.type === "revolut_tag" ? {
+                              startAdornment: <InputAdornment position="start">@</InputAdornment>,
+                            } : undefined}
+                          />
+                          <IconButton size="small" color="error" onClick={() => removeMethod(idx)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ))}
+                      <Button
+                        size="small"
+                        variant="text"
+                        startIcon={<AddIcon />}
+                        onClick={addMethod}
+                        sx={{ alignSelf: "flex-start" }}
+                      >
+                        {t("addPaymentMethod")}
+                      </Button>
+                    </Stack>
+                  </Box>
+
+                  {/* Legacy free-text field (collapsed, for backward compat) */}
                   <TextField
                     label={t("paymentDetails")}
                     placeholder={t("paymentDetailsPlaceholder")}
@@ -204,6 +285,7 @@ export function PaymentSection({
                     maxRows={3}
                     inputProps={{ maxLength: 500 }}
                   />
+
                   {activePlayerCount > 0 && costDraft && parseFloat(costDraft) > 0 && (
                     <Typography variant="body2" color="text.secondary">
                       {t("perPlayer", { amount: (parseFloat(costDraft) / activePlayerCount).toFixed(2) })}
@@ -247,8 +329,66 @@ export function PaymentSection({
                   )}
                 </Box>
 
-                {/* Payment details */}
-                {costData.paymentDetails && (
+                {/* Structured payment method buttons */}
+                {methods.length > 0 && (
+                  <Stack spacing={0.75}>
+                    {methods.map((m, idx) => {
+                      const deepLink = getDeepLink(m, perPlayer, costData.currency);
+                      const display = getDisplayValue(m);
+                      const isCopied = copiedId === `method-${idx}`;
+                      const label = t(LABEL_KEYS[m.type]);
+
+                      return (
+                        <Paper key={idx} variant="outlined" sx={{
+                          borderRadius: 2, px: 1.5, py: 0.75,
+                          display: "flex", alignItems: "center", gap: 1,
+                        }}>
+                          <MethodIcon type={m.type} />
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="caption" color="text.secondary">{label}</Typography>
+                            <Typography variant="body2" sx={{
+                              fontFamily: "monospace", fontSize: "0.85rem",
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            }}>
+                              {display}
+                            </Typography>
+                            {m.type === "mbway" && (
+                              <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                                {t("paymentMethodMbwayInstructions")}
+                              </Typography>
+                            )}
+                          </Box>
+                          {deepLink && (
+                            <Tooltip title={m.type === "phone" ? t("paymentMethodCallPhone") : t("paymentMethodOpen")}>
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                component="a"
+                                href={deepLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {m.type === "phone" ? <PhoneIcon fontSize="small" /> : <OpenInNewIcon fontSize="small" />}
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          <Tooltip title={isCopied ? t("paymentMethodCopied") : t("paymentMethodCopy")}>
+                            <IconButton
+                              size="small"
+                              color={isCopied ? "success" : "default"}
+                              onClick={() => handleCopy(m.type === "revolut_tag" ? `@${m.value}` : m.value, `method-${idx}`)}
+                            >
+                              {isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+                            </IconButton>
+                          </Tooltip>
+                        </Paper>
+                      );
+                    })}
+                  </Stack>
+                )}
+
+                {/* Legacy payment details (fallback for old data) */}
+                {costData.paymentDetails && methods.length === 0 && (
                   <Paper variant="outlined" sx={{
                     borderRadius: 2, p: 1, display: "flex", alignItems: "center", gap: 1,
                   }}>
@@ -258,9 +398,13 @@ export function PaymentSection({
                     }}>
                       {costData.paymentDetails}
                     </Typography>
-                    <Tooltip title={copied ? t("paymentDetailsCopied") : t("copyPaymentDetails")}>
-                      <IconButton size="small" color={copied ? "success" : "default"} onClick={handleCopyDetails}>
-                        {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+                    <Tooltip title={copiedId === "legacy" ? t("paymentDetailsCopied") : t("copyPaymentDetails")}>
+                      <IconButton
+                        size="small"
+                        color={copiedId === "legacy" ? "success" : "default"}
+                        onClick={() => handleCopy(costData.paymentDetails!, "legacy")}
+                      >
+                        {copiedId === "legacy" ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
                       </IconButton>
                     </Tooltip>
                   </Paper>
@@ -328,4 +472,18 @@ export function PaymentSection({
       </Dialog>
     </>
   );
+}
+
+/** Small icon for each payment method type */
+function MethodIcon({ type }: { type: PaymentMethodType }) {
+  const sx = { width: 20, height: 20, borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 700 };
+  switch (type) {
+    case "phone":
+      return <PhoneIcon fontSize="small" color="action" />;
+    case "mbway":
+      return <Box sx={{ ...sx, bgcolor: "#cc0000", color: "#fff" }}>MB</Box>;
+    case "revolut_tag":
+    case "revolut_link":
+      return <Box sx={{ ...sx, bgcolor: "#0075EB", color: "#fff" }}>R</Box>;
+  }
 }
