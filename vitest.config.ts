@@ -9,6 +9,7 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     pool: "forks",
     poolOptions: { forks: { singleFork: true } },
+    exclude: ["node_modules", "dist", "e2e"],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "html"],
