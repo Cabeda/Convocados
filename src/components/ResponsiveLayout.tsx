@@ -156,12 +156,12 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
 
             {/* Auth: user menu (signed in) or preferences gear + sign-in (signed out) */}
             {sessionLoading ? (
-              <CircularProgress size={20} sx={{ mx: 1 }} />
+              <CircularProgress size={20} sx={{ ml: 1 }} />
             ) : session?.user ? (
               <>
                 {/* Signed in: avatar dropdown with profile, games, preferences, sign out */}
                 <Tooltip title={session.user.name || session.user.email}>
-                  <IconButton onClick={(e) => setUserAnchor(e.currentTarget)} sx={{ ml: 0.5 }}>
+                  <IconButton onClick={(e) => setUserAnchor(e.currentTarget)}>
                     <Avatar sx={{ width: 28, height: 28, fontSize: "0.85rem", bgcolor: theme.palette.primary.main }}>
                       {(session.user.name || session.user.email || "?")[0].toUpperCase()}
                     </Avatar>
@@ -238,7 +238,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                   component="a"
                   href={`/auth/signin?callbackURL=${encodeURIComponent(window.location.pathname + window.location.search)}`}
                   size="small"
-                  sx={{ ml: 0.5, textTransform: "none", fontWeight: 600 }}
+                  sx={{ textTransform: "none", fontWeight: 600 }}
                 >
                   {t("signIn")}
                 </Button>
