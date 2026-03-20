@@ -232,3 +232,65 @@ export async function sendChangeEmailVerification(to: string, url: string) {
   }
   log.info({ to, id: result.data?.id }, "Change-email verification sent");
 }
+
+// ── Priority enrollment emails ────────────────────────────────────────────────
+
+export interface PriorityEnrollmentData {
+  eventTitle: string;
+  dateTime: string;
+  location: string;
+  deadline: string;
+  confirmUrl: string;
+  declineUrl: string;
+}
+
+export async function sendPriorityEnrollment(to: string, data: PriorityEnrollmentData) {
+  const deadlineStr = new Date(data.deadline).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  const dateStr = new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  const result = await getResend().emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: `You're in for ${data.eventTitle}! — Convocados`,
+    html: emailTemplate({
+      heading: `You're in for ${data.eventTitle}!`,
+      body: `Your spot is reserved based on your attendance record.<br/><br/>📍 ${data.location}<br/>🕐 ${dateStr}<br/><br/>Confirm by <strong>${deadlineStr}</strong> or your spot opens up for others.<br/><br/><a href="${data.declineUrl}" style="color:#1b6b4a;">Can't make it? Decline here</a>`,
+      buttonText: "Confirm my spot",
+      buttonUrl: data.confirmUrl,
+      footnote: `Don't want auto-enrollment? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">Manage your settings</a>`,
+    }),
+  });
+  if (result.error) throw new Error(`Failed to send priority enrollment email: ${result.error.message}`);
+}
+
+export async function sendPriorityDeadlineReminder(to: string, data: PriorityEnrollmentData) {
+  const deadlineStr = new Date(data.deadline).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  const result = await getResend().emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: `Confirm your spot for ${data.eventTitle} — deadline soon`,
+    html: emailTemplate({
+      heading: `Confirm your spot — deadline soon`,
+      body: `You haven't confirmed yet for <strong>${data.eventTitle}</strong>.<br/><br/>Your spot will be released on <strong>${deadlineStr}</strong>.<br/><br/><a href="${data.declineUrl}" style="color:#1b6b4a;">Can't make it? Decline here</a>`,
+      buttonText: "Confirm my spot",
+      buttonUrl: data.confirmUrl,
+      footnote: `Don't want auto-enrollment? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">Manage your settings</a>`,
+    }),
+  });
+  if (result.error) throw new Error(`Failed to send priority deadline reminder: ${result.error.message}`);
+}
+
+export async function sendPrioritySpotReleased(to: string, data: { eventTitle: string; eventUrl: string }) {
+  const result = await getResend().emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: `Your spot for ${data.eventTitle} was released`,
+    html: emailTemplate({
+      heading: "Your spot was released",
+      body: `The confirmation deadline passed for <strong>${data.eventTitle}</strong>.<br/><br/>You can still join manually if spots are available.`,
+      buttonText: "View game",
+      buttonUrl: data.eventUrl,
+      footnote: `Don't want auto-enrollment? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">Manage your settings</a>`,
+    }),
+  });
+  if (result.error) throw new Error(`Failed to send priority spot released email: ${result.error.message}`);
+}

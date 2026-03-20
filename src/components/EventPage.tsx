@@ -3,8 +3,8 @@ import {
   Container, Paper, Typography, TextField, Button, Box, Stack, Chip,
   Alert, IconButton, Tooltip, InputAdornment, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, Snackbar, alpha, useTheme, Grid2,
-  CircularProgress, Divider, Autocomplete, Accordion, AccordionSummary, AccordionDetails,
-  FormControlLabel, Switch, FormControl, Select, MenuItem, List, ListItem, ListItemText,
+  CircularProgress, Divider, Autocomplete,
+  List, ListItem, ListItemText,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import HistoryIcon from "@mui/icons-material/History";
@@ -21,9 +21,7 @@ import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatReclineNormal";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
-import PublicIcon from "@mui/icons-material/Public";
+import SettingsIcon from "@mui/icons-material/Settings";
 import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
 import ShieldIcon from "@mui/icons-material/Shield";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
@@ -31,7 +29,6 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import StarIcon from "@mui/icons-material/Star";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
-import SettingsIcon from "@mui/icons-material/Settings";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -270,71 +267,6 @@ function ShareBar({ title }: { title: string }) {
   );
 }
 
-// ── Webhook info (developer integration) ──────────────────────────────────────
-
-function WebhookInfo({ eventId }: { eventId: string }) {
-  const t = useT();
-  const [copied, setCopied] = useState(false);
-  const url = typeof window !== "undefined"
-    ? `${window.location.origin}/api/events/${eventId}/webhooks`
-    : "";
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
-  };
-
-  return (
-    <Accordion
-      disableGutters
-      elevation={0}
-      sx={{
-        "&:before": { display: "none" },
-        backgroundColor: "transparent",
-      }}
-    >
-      <AccordionSummary
-        expandIcon={<ExpandMoreIcon />}
-        sx={{ px: 0, minHeight: 0, "& .MuiAccordionSummary-content": { my: 0.5 } }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-          <IntegrationInstructionsIcon fontSize="small" color="action" />
-          <Typography variant="body2" color="text.secondary">
-            {t("integrations")}
-          </Typography>
-        </Box>
-      </AccordionSummary>
-      <AccordionDetails sx={{ px: 0, pt: 0 }}>
-        <Stack spacing={1}>
-          <Typography variant="caption" color="text.secondary">
-            {t("webhookHelp")}
-          </Typography>
-          <Paper variant="outlined" sx={{
-            borderRadius: 2, p: 1, display: "flex", alignItems: "center", gap: 1,
-          }}>
-            <Typography variant="body2" sx={{
-              flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              fontFamily: "monospace", fontSize: "0.75rem", minWidth: 0,
-            }}>
-              {url}
-            </Typography>
-            <Tooltip title={copied ? t("webhookCopied") : t("webhookEndpoint")}>
-              <IconButton
-                size="small"
-                color={copied ? "success" : "default"}
-                onClick={handleCopy}
-              >
-                {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-          </Paper>
-        </Stack>
-      </AccordionDetails>
-    </Accordion>
-  );
-}
-
 // ── Quick join ────────────────────────────────────────────────────────────────
 
 interface KnownPlayer {
@@ -434,26 +366,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [claimPlayerConfirmOpen, setClaimPlayerConfirmOpen] = useState(false);
   const [playerToClaim, setPlayerToClaim] = useState<{ id: string; name: string } | null>(null);
   const { data: session } = useSession();
-
-  const handleToggleBalanced = async (newValue: boolean) => {
-    setBalanced(newValue);
-    await fetch(`/api/events/${eventId}/balanced`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ balanced: newValue }),
-    });
-    fetchEvent();
-  };
-
-  const handleSportChange = async (newSport: string) => {
-    setSport(newSport);
-    await fetch(`/api/events/${eventId}/sport`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sport: newSport }),
-    });
-    fetchEvent();
-  };
 
   const handleSaveLocation = async () => {
     setEditingLocation(false);
@@ -810,16 +722,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
     fetchEvent();
   };
 
-  const handleTogglePublic = async (newValue: boolean) => {
-    setIsPublic(newValue);
-    await fetch(`/api/events/${eventId}/visibility`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isPublic: newValue }),
-    });
-    fetchEvent();
-  };
-
   const gameDate = event ? new Date(event.dateTime) : new Date();
   const countdown = useCountdown(gameDate, t("gameTime"));
 
@@ -1055,6 +957,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         {t("attendance")}
                       </Button>
                     )}
+                    {canEditSettings && (
+                      <Button variant="outlined" size="small" startIcon={<SettingsIcon />}
+                        href={`/events/${eventId}/settings`} sx={{ flexShrink: 0 }}>
+                        {t("eventSettings")}
+                      </Button>
+                    )}
                     <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />}
                       href={`/api/events/${eventId}/calendar`} sx={{ flexShrink: 0 }}>
                       {t("downloadIcs")}
@@ -1087,82 +995,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   </Box>
                 </Stack>
 
-                {/* ── Event Settings — collapsed accordion for owner/advanced controls ── */}
-                {canEditSettings && (
-                  <Accordion
-                    disableGutters
-                    elevation={0}
-                    sx={{
-                      "&:before": { display: "none" },
-                      backgroundColor: "transparent",
-                    }}
-                  >
-                    <AccordionSummary
-                      expandIcon={<ExpandMoreIcon />}
-                      sx={{ px: 0, minHeight: 0, "& .MuiAccordionSummary-content": { my: 0.5 } }}
-                    >
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                        <SettingsIcon fontSize="small" color="action" />
-                        <Typography variant="body2" color="text.secondary">
-                          {t("eventSettings")}
-                        </Typography>
-                      </Box>
-                    </AccordionSummary>
-                    <AccordionDetails sx={{ px: 0, pt: 0 }}>
-                      <Stack spacing={2}>
-                        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
-                          <Tooltip title={t("makePublicTooltip")}>
-                            <FormControlLabel
-                              control={
-                                <Switch size="small" checked={isPublic}
-                                  onChange={(e) => handleTogglePublic(e.target.checked)} />
-                              }
-                              label={
-                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                                  <PublicIcon fontSize="small" />
-                                  <Typography variant="body2">{t("makePublic")}</Typography>
-                                </Box>
-                              }
-                              sx={{ ml: 0 }}
-                            />
-                          </Tooltip>
-                          <FormControl size="small" sx={{ minWidth: 140 }}>
-                            <Select
-                              value={sport}
-                              onChange={(e) => handleSportChange(e.target.value)}
-                              sx={{ fontSize: "0.85rem" }}
-                            >
-                              {SPORT_PRESETS.map((s) => (
-                                <MenuItem key={s.id} value={s.id} sx={{ fontSize: "0.85rem" }}>
-                                  {t(s.labelKey as any)}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </Box>
-                        {/* Balanced teams toggle */}
-                        <Tooltip title={t("balancedTeamsTooltip")}>
-                          <FormControlLabel
-                            control={<Switch size="small" checked={balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} />}
-                            label={t("balancedTeams")}
-                          />
-                        </Tooltip>
-                        {/* Owner controls — relinquish */}
-                        {isOwner && (
-                          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
-                            <Tooltip title={t("relinquishOwnershipDesc")}>
-                              <Button variant="text" size="small" color="warning" onClick={() => setRelinquishConfirmOpen(true)}>
-                                {t("relinquishOwnership")}
-                              </Button>
-                            </Tooltip>
-                          </Box>
-                        )}
-                        {/* Integrations */}
-                        <WebhookInfo eventId={eventId} />
-                      </Stack>
-                    </AccordionDetails>
-                  </Accordion>
-                )}
               </Stack>
             </Paper>
 
