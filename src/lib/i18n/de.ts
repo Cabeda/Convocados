@@ -328,6 +328,54 @@ const de: TranslationKeys = {
   accountSecurity: "Sicherheit",
   noPasswordSet: "Kein Passwort festgelegt. Du hast dich mit einem sozialen Anbieter angemeldet.",
 
+  // Magic link (#44)
+  magicLinkTitle: "Per E-Mail-Link anmelden",
+  magicLinkDesc: "Wir senden dir einen Link zum Anmelden — kein Passwort nötig.",
+  magicLinkBtn: "Magic Link senden",
+  sendingMagicLink: "Wird gesendet...",
+  magicLinkSent: "Prüfe deinen Posteingang! Wir haben einen Anmeldelink an {email} gesendet.",
+  magicLinkError: "Link konnte nicht gesendet werden. Versuche es erneut.",
+  signInWithEmail: "E-Mail-Link",
+  signInWithPassword: "Passwort",
+
+  // PWA install prompt (#135)
+  installApp: "Convocados installieren",
+  installAppDesc: "Zum Startbildschirm hinzufügen für schnellen Zugriff — kein App Store nötig.",
+  installBtn: "Installieren",
+  installDismiss: "Nicht jetzt",
+  installIosHint: "Tippe auf den Teilen-Button und dann auf \"Zum Home-Bildschirm\"",
+  versionAvailable: "Version {version} verfügbar",
+
+  // Notification settings (#112)
+  notificationSettings: "Benachrichtigungseinstellungen",
+  notificationSettingsDesc: "Wähle, wie und wann du benachrichtigt werden möchtest.",
+  emailNotifications: "E-Mail-Benachrichtigungen",
+  pushNotifications: "Push-Benachrichtigungen",
+  gameInvites: "Spieleinladungen",
+  gameReminders: "Spielerinnerungen",
+  weeklySummary: "Wöchentliche Zusammenfassung",
+  reminder24hLabel: "24 Stunden vorher",
+  reminder2hLabel: "2 Stunden vorher",
+  reminder1hLabel: "1 Stunde vorher",
+  reminderTiming: "Erinnerungszeiten",
+  notificationsSaved: "Benachrichtigungseinstellungen gespeichert.",
+  notificationsSaveError: "Benachrichtigungseinstellungen konnten nicht gespeichert werden.",
+  savingNotifications: "Wird gespeichert...",
+
+  // Attendance stats (#134)
+  attendance: "Anwesenheit",
+  attendanceRate: "Anwesenheitsrate",
+  attendanceStats: "Anwesenheitsstatistiken",
+  attendanceStatsDesc: "Zuverlässigkeit der Spieler basierend auf der Spielhistorie.",
+  totalGamesPlayed: "Gesamtspiele",
+  currentStreak: "Serie",
+  lastPlayed: "Letztes Spiel",
+  noAttendanceData: "Noch keine Anwesenheitsdaten.",
+  noAttendanceDataDesc: "Spiele einige Spiele und erfasse Ergebnisse, um Anwesenheitsstatistiken zu sehen.",
+  attendanceHigh: "Zuverlässig",
+  attendanceMedium: "Mäßig",
+  attendanceLow: "Unregelmäßig",
+
   // Event activity log (#122)
   activityLog: "Aktivität",
   activityLogTitle: "Aktivitätsprotokoll",

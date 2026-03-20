@@ -328,6 +328,54 @@ const es: TranslationKeys = {
   accountSecurity: "Seguridad",
   noPasswordSet: "Sin contraseña establecida. Iniciaste sesión con un proveedor social.",
 
+  // Magic link (#44)
+  magicLinkTitle: "Iniciar sesión con enlace por email",
+  magicLinkDesc: "Te enviaremos un enlace para iniciar sesión — sin contraseña.",
+  magicLinkBtn: "Enviar enlace mágico",
+  sendingMagicLink: "Enviando...",
+  magicLinkSent: "¡Revisa tu bandeja de entrada! Enviamos un enlace de acceso a {email}.",
+  magicLinkError: "No se pudo enviar el enlace. Inténtalo de nuevo.",
+  signInWithEmail: "Enlace por email",
+  signInWithPassword: "Contraseña",
+
+  // PWA install prompt (#135)
+  installApp: "Instalar Convocados",
+  installAppDesc: "Añade a tu pantalla de inicio para acceso rápido — sin app store.",
+  installBtn: "Instalar",
+  installDismiss: "Ahora no",
+  installIosHint: "Toca el botón de compartir y luego \"Añadir a pantalla de inicio\"",
+  versionAvailable: "Versión {version} disponible",
+
+  // Notification settings (#112)
+  notificationSettings: "Ajustes de notificaciones",
+  notificationSettingsDesc: "Elige cómo y cuándo quieres recibir notificaciones.",
+  emailNotifications: "Notificaciones por email",
+  pushNotifications: "Notificaciones push",
+  gameInvites: "Invitaciones a partidos",
+  gameReminders: "Recordatorios de partidos",
+  weeklySummary: "Resumen semanal",
+  reminder24hLabel: "24 horas antes",
+  reminder2hLabel: "2 horas antes",
+  reminder1hLabel: "1 hora antes",
+  reminderTiming: "Horario de recordatorios",
+  notificationsSaved: "Ajustes de notificaciones guardados.",
+  notificationsSaveError: "No se pudieron guardar los ajustes de notificaciones.",
+  savingNotifications: "Guardando...",
+
+  // Attendance stats (#134)
+  attendance: "Asistencia",
+  attendanceRate: "Tasa de asistencia",
+  attendanceStats: "Estadísticas de Asistencia",
+  attendanceStatsDesc: "Fiabilidad de los jugadores basada en el historial de partidos.",
+  totalGamesPlayed: "Total de partidos",
+  currentStreak: "Racha",
+  lastPlayed: "Último partido",
+  noAttendanceData: "Sin datos de asistencia.",
+  noAttendanceDataDesc: "Juega algunos partidos y registra resultados para ver las estadísticas de asistencia.",
+  attendanceHigh: "Fiable",
+  attendanceMedium: "Moderado",
+  attendanceLow: "Irregular",
+
   // Event activity log (#122)
   activityLog: "Actividad",
   activityLogTitle: "Registro de Actividad",

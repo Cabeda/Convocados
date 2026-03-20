@@ -1049,6 +1049,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       href={`/events/${eventId}/log`} sx={{ flexShrink: 0 }}>
                       {t("activityLog")}
                     </Button>
+                    {(gameDate <= new Date() || event.isRecurring) && (
+                      <Button variant="outlined" size="small" startIcon={<EmojiPeopleIcon />}
+                        href={`/events/${eventId}/attendance`} sx={{ flexShrink: 0 }}>
+                        {t("attendance")}
+                      </Button>
+                    )}
                     <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />}
                       href={`/api/events/${eventId}/calendar`} sx={{ flexShrink: 0 }}>
                       {t("downloadIcs")}
