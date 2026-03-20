@@ -529,10 +529,16 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // Initial fetch
   useEffect(() => { fetchEvent(); }, [fetchEvent]);
 
+  // SSE refresh counter — passed to child components to trigger re-fetch
+  const [sseRefreshKey, setSseRefreshKey] = useState(0);
+
   // SSE: subscribe to real-time updates and re-fetch
   useEffect(() => {
     const es = new EventSource(`/api/events/${eventId}/stream`);
-    es.addEventListener("update", () => { fetchEvent(); });
+    es.addEventListener("update", () => {
+      fetchEvent();
+      setSseRefreshKey((k) => k + 1);
+    });
     return () => es.close();
   }, [eventId, fetchEvent]);
 
@@ -1413,6 +1419,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 eventId={eventId}
                 canEdit={canEditSettings}
                 activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
+                refreshKey={sseRefreshKey}
               />
             </Paper>
 

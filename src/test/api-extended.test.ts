@@ -459,6 +459,34 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const body = await res.json();
     expect(body.status).toBe("cancelled");
   });
+
+  it("updates paymentsSnapshot", async () => {
+    const id = await seedEvent();
+    const history = await seedHistory(id);
+    const payments = [
+      { playerName: "Alice", amount: 10, status: "paid", method: "revolut" },
+      { playerName: "Bob", amount: 10, status: "pending", method: null },
+    ];
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { paymentsSnapshot: payments }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.paymentsSnapshot).toBeTruthy();
+    const parsed = JSON.parse(body.paymentsSnapshot);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].playerName).toBe("Alice");
+    expect(parsed[0].status).toBe("paid");
+    expect(parsed[1].status).toBe("pending");
+  });
+
+  it("clears paymentsSnapshot when set to null", async () => {
+    const id = await seedEvent();
+    const payments = JSON.stringify([{ playerName: "Alice", amount: 10, status: "paid", method: null }]);
+    const history = await seedHistory(id, { paymentsSnapshot: payments });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { paymentsSnapshot: null }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.paymentsSnapshot).toBeNull();
+  });
 });
 
 // ─── GET /api/events/[id]/ratings ────────────────────────────────────────────
