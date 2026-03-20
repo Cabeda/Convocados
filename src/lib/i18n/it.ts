@@ -328,6 +328,16 @@ const it: TranslationKeys = {
   accountSecurity: "Sicurezza",
   noPasswordSet: "Nessuna password impostata. Hai effettuato l'accesso con un provider social.",
 
+  // Magic link (#44)
+  magicLinkTitle: "Accedi con link via email",
+  magicLinkDesc: "Ti invieremo un link per accedere — senza bisogno di password.",
+  magicLinkBtn: "Invia link magico",
+  sendingMagicLink: "Invio...",
+  magicLinkSent: "Controlla la tua casella di posta! Abbiamo inviato un link di accesso a {email}.",
+  magicLinkError: "Impossibile inviare il link. Riprova.",
+  signInWithEmail: "Link via email",
+  signInWithPassword: "Password",
+
   // PWA install prompt (#135)
   installApp: "Installa Convocados",
   installAppDesc: "Aggiungi alla schermata iniziale per un accesso rapido — senza app store.",
