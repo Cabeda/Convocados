@@ -12,6 +12,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
+import { NotificationSettingsSection } from "./NotificationSettingsSection";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { GameCard, type GameSummary } from "./GameCard";
@@ -523,6 +524,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
             {/* Account management sections (own profile only) */}
             {isOwnProfile && (
               <>
+                <NotificationSettingsSection />
                 <ChangePasswordSection hasPassword={hasPassword ?? false} />
                 <ExportDataSection />
                 <DeleteAccountSection />

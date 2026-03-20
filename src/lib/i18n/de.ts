@@ -345,6 +345,22 @@ const de: TranslationKeys = {
   installDismiss: "Nicht jetzt",
   installIosHint: "Tippe auf den Teilen-Button und dann auf \"Zum Home-Bildschirm\"",
   versionAvailable: "Version {version} verfügbar",
+
+  // Notification settings (#112)
+  notificationSettings: "Benachrichtigungseinstellungen",
+  notificationSettingsDesc: "Wähle, wie und wann du benachrichtigt werden möchtest.",
+  emailNotifications: "E-Mail-Benachrichtigungen",
+  pushNotifications: "Push-Benachrichtigungen",
+  gameInvites: "Spieleinladungen",
+  gameReminders: "Spielerinnerungen",
+  weeklySummary: "Wöchentliche Zusammenfassung",
+  reminder24hLabel: "24 Stunden vorher",
+  reminder2hLabel: "2 Stunden vorher",
+  reminder1hLabel: "1 Stunde vorher",
+  reminderTiming: "Erinnerungszeiten",
+  notificationsSaved: "Benachrichtigungseinstellungen gespeichert.",
+  notificationsSaveError: "Benachrichtigungseinstellungen konnten nicht gespeichert werden.",
+  savingNotifications: "Wird gespeichert...",
 };
 
 export default de;
