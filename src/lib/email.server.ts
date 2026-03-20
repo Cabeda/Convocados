@@ -191,6 +191,27 @@ export async function sendWeeklySummary(to: string, data: WeeklySummaryData) {
   if (result.error) throw new Error(`Failed to send weekly summary: ${result.error.message}`);
 }
 
+export async function sendMagicLinkEmail(to: string, url: string) {
+  log.info({ to }, "Sending magic link email");
+  const result = await getResend().emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: "Sign in to Convocados",
+    html: emailTemplate({
+      heading: "Sign in to Convocados",
+      body: "Click the button below to sign in. This link will expire in 5 minutes.",
+      buttonText: "Sign in",
+      buttonUrl: url,
+      footnote: "If you didn't request this link, you can safely ignore this email.",
+    }),
+  });
+  if (result.error) {
+    log.error({ err: result.error }, "Failed to send magic link email");
+    throw new Error(`Failed to send magic link email: ${result.error.message}`);
+  }
+  log.info({ to, id: result.data?.id }, "Magic link email sent");
+}
+
 export async function sendChangeEmailVerification(to: string, url: string) {
   log.info({ to }, "Sending change-email verification");
   const result = await getResend().emails.send({

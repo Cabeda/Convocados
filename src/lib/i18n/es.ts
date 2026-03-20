@@ -327,6 +327,16 @@ const es: TranslationKeys = {
   dangerZone: "Zona de peligro",
   accountSecurity: "Seguridad",
   noPasswordSet: "Sin contraseña establecida. Iniciaste sesión con un proveedor social.",
+
+  // Magic link (#44)
+  magicLinkTitle: "Iniciar sesión con enlace por email",
+  magicLinkDesc: "Te enviaremos un enlace para iniciar sesión — sin contraseña.",
+  magicLinkBtn: "Enviar enlace mágico",
+  sendingMagicLink: "Enviando...",
+  magicLinkSent: "¡Revisa tu bandeja de entrada! Enviamos un enlace de acceso a {email}.",
+  magicLinkError: "No se pudo enviar el enlace. Inténtalo de nuevo.",
+  signInWithEmail: "Enlace por email",
+  signInWithPassword: "Contraseña",
 };
 
 export default es;
