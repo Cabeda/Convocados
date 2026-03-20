@@ -14,6 +14,7 @@ import AddIcon from "@mui/icons-material/Add";
 import PhoneIcon from "@mui/icons-material/Phone";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { useT } from "~/lib/useT";
+import type { TranslationKey } from "~/lib/i18n";
 import {
   type PaymentMethod,
   type PaymentMethodType,
@@ -49,7 +50,7 @@ interface CostData {
 const CURRENCIES = ["EUR", "USD", "GBP", "BRL", "CHF"];
 
 /** Map method type to i18n key for the placeholder */
-const PLACEHOLDER_KEYS: Record<PaymentMethodType, string> = {
+const PLACEHOLDER_KEYS: Record<PaymentMethodType, TranslationKey> = {
   phone: "paymentMethodPhonePlaceholder",
   mbway: "paymentMethodMbwayPlaceholder",
   revolut_tag: "paymentMethodRevolutTagPlaceholder",
@@ -57,7 +58,7 @@ const PLACEHOLDER_KEYS: Record<PaymentMethodType, string> = {
 };
 
 /** Map method type to i18n key for the label */
-const LABEL_KEYS: Record<PaymentMethodType, string> = {
+const LABEL_KEYS: Record<PaymentMethodType, TranslationKey> = {
   phone: "paymentMethodPhone",
   mbway: "paymentMethodMbway",
   revolut_tag: "paymentMethodRevolutTag",
