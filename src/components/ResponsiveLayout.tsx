@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   AppBar, Toolbar, IconButton, Typography, Box, useTheme,
   Tooltip, Container, useScrollTrigger, Paper, Button, Slide,
@@ -12,8 +12,8 @@ import SportsIcon from "@mui/icons-material/Sports";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
 import PublicIcon from "@mui/icons-material/Public";
 import TranslateIcon from "@mui/icons-material/Translate";
-import LoginIcon from "@mui/icons-material/Login";
 import LogoutIcon from "@mui/icons-material/Logout";
+import SettingsIcon from "@mui/icons-material/Settings";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import PersonIcon from "@mui/icons-material/Person";
 import { useThemeMode } from "./ThemeModeProvider";
@@ -97,12 +97,15 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
   const { mode, toggleMode } = useThemeMode();
   const isDark = mode === "dark";
   const { locale, setLocale, t } = useLocale();
-  const [langAnchor, setLangAnchor] = useState<null | HTMLElement>(null);
   const [userAnchor, setUserAnchor] = useState<null | HTMLElement>(null);
+  const [prefsAnchor, setPrefsAnchor] = useState<null | HTMLElement>(null);
+  const [langAnchor, setLangAnchor] = useState<null | HTMLElement>(null);
   const { data: session, isPending: sessionLoading } = useSession();
 
   const handleLangSelect = (code: Locale) => {
     setLangAnchor(null);
+    setUserAnchor(null);
+    setPrefsAnchor(null);
     if (code !== locale) {
       setLocale(code);
       window.location.reload();
@@ -114,6 +117,8 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
     await signOut();
     window.location.reload();
   };
+
+  const currentLangLabel = LOCALE_OPTIONS.find((o) => o.code === locale)?.label ?? "Language";
 
   return (
     <Box sx={{
@@ -148,33 +153,15 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                 <PublicIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title={LOCALE_OPTIONS.find((o) => o.code === locale)?.label ?? "Language"}>
-              <IconButton onClick={(e) => setLangAnchor(e.currentTarget)} color="inherit" aria-label="Change language">
-                <TranslateIcon />
-              </IconButton>
-            </Tooltip>
-            <Menu
-              anchorEl={langAnchor}
-              open={Boolean(langAnchor)}
-              onClose={() => setLangAnchor(null)}
-            >
-              {LOCALE_OPTIONS.map((opt) => (
-                <MenuItem
-                  key={opt.code}
-                  selected={opt.code === locale}
-                  onClick={() => handleLangSelect(opt.code)}
-                >
-                  <ListItemText>{opt.label}</ListItemText>
-                </MenuItem>
-              ))}
-            </Menu>
-            {/* Auth: user menu or sign-in button */}
+
+            {/* Auth: user menu (signed in) or preferences gear + sign-in (signed out) */}
             {sessionLoading ? (
-              <CircularProgress size={20} sx={{ mx: 1 }} />
+              <CircularProgress size={20} sx={{ ml: 1 }} />
             ) : session?.user ? (
               <>
+                {/* Signed in: avatar dropdown with profile, games, preferences, sign out */}
                 <Tooltip title={session.user.name || session.user.email}>
-                  <IconButton onClick={(e) => setUserAnchor(e.currentTarget)} sx={{ ml: 0.5 }}>
+                  <IconButton onClick={(e) => setUserAnchor(e.currentTarget)}>
                     <Avatar sx={{ width: 28, height: 28, fontSize: "0.85rem", bgcolor: theme.palette.primary.main }}>
                       {(session.user.name || session.user.email || "?")[0].toUpperCase()}
                     </Avatar>
@@ -200,6 +187,18 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                     <ListItemIcon><DashboardIcon fontSize="small" /></ListItemIcon>
                     <ListItemText>{t("myGames")}</ListItemText>
                   </MenuItem>
+                  <Divider />
+                  <MenuItem onClick={(e) => setLangAnchor(e.currentTarget)}>
+                    <ListItemIcon><TranslateIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{currentLangLabel}</ListItemText>
+                  </MenuItem>
+                  <MenuItem onClick={() => { toggleMode(); setUserAnchor(null); }}>
+                    <ListItemIcon>
+                      {isDark ? <Brightness7Icon fontSize="small" /> : <Brightness4Icon fontSize="small" />}
+                    </ListItemIcon>
+                    <ListItemText>{t("toggleDarkMode")}</ListItemText>
+                  </MenuItem>
+                  <Divider />
                   <MenuItem onClick={handleSignOut}>
                     <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
                     <ListItemText>{t("signOut")}</ListItemText>
@@ -207,17 +206,61 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                 </Menu>
               </>
             ) : (
-              <Tooltip title={t("signIn")}>
-                <IconButton color="inherit" component="a" href={`/auth/signin?callbackURL=${encodeURIComponent(window.location.pathname + window.location.search)}`} aria-label={t("signIn")}>
-                  <LoginIcon />
-                </IconButton>
-              </Tooltip>
+              <>
+                {/* Signed out: preferences gear + sign-in text button */}
+                <Tooltip title={t("eventSettings")}>
+                  <IconButton
+                    color="inherit"
+                    onClick={(e) => setPrefsAnchor(e.currentTarget)}
+                    aria-label="Preferences"
+                  >
+                    <SettingsIcon />
+                  </IconButton>
+                </Tooltip>
+                <Menu
+                  anchorEl={prefsAnchor}
+                  open={Boolean(prefsAnchor)}
+                  onClose={() => setPrefsAnchor(null)}
+                >
+                  <MenuItem onClick={(e) => setLangAnchor(e.currentTarget)}>
+                    <ListItemIcon><TranslateIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{currentLangLabel}</ListItemText>
+                  </MenuItem>
+                  <MenuItem onClick={() => { toggleMode(); setPrefsAnchor(null); }}>
+                    <ListItemIcon>
+                      {isDark ? <Brightness7Icon fontSize="small" /> : <Brightness4Icon fontSize="small" />}
+                    </ListItemIcon>
+                    <ListItemText>{t("toggleDarkMode")}</ListItemText>
+                  </MenuItem>
+                </Menu>
+                <Button
+                  color="inherit"
+                  component="a"
+                  href={`/auth/signin?callbackURL=${encodeURIComponent(window.location.pathname + window.location.search)}`}
+                  size="small"
+                  sx={{ textTransform: "none", fontWeight: 600 }}
+                >
+                  {t("signIn")}
+                </Button>
+              </>
             )}
-            <Tooltip title={t("toggleDarkMode")}>
-              <IconButton onClick={toggleMode} color="inherit" aria-label={t("toggleDarkMode")}>
-                {isDark ? <Brightness7Icon /> : <Brightness4Icon />}
-              </IconButton>
-            </Tooltip>
+
+            {/* Shared language sub-menu */}
+            <Menu
+              anchorEl={langAnchor}
+              open={Boolean(langAnchor)}
+              onClose={() => setLangAnchor(null)}
+            >
+              {LOCALE_OPTIONS.map((opt) => (
+                <MenuItem
+                  key={opt.code}
+                  selected={opt.code === locale}
+                  onClick={() => handleLangSelect(opt.code)}
+                >
+                  <ListItemText>{opt.label}</ListItemText>
+                </MenuItem>
+              ))}
+            </Menu>
           </Toolbar>
         </AppBar>
       </ElevationScroll>
