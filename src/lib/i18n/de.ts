@@ -361,6 +361,20 @@ const de: TranslationKeys = {
   notificationsSaved: "Benachrichtigungseinstellungen gespeichert.",
   notificationsSaveError: "Benachrichtigungseinstellungen konnten nicht gespeichert werden.",
   savingNotifications: "Wird gespeichert...",
+
+  // Attendance stats (#134)
+  attendance: "Anwesenheit",
+  attendanceRate: "Anwesenheitsrate",
+  attendanceStats: "Anwesenheitsstatistiken",
+  attendanceStatsDesc: "Zuverlässigkeit der Spieler basierend auf der Spielhistorie.",
+  totalGamesPlayed: "Gesamtspiele",
+  currentStreak: "Serie",
+  lastPlayed: "Letztes Spiel",
+  noAttendanceData: "Noch keine Anwesenheitsdaten.",
+  noAttendanceDataDesc: "Spiele einige Spiele und erfasse Ergebnisse, um Anwesenheitsstatistiken zu sehen.",
+  attendanceHigh: "Zuverlässig",
+  attendanceMedium: "Mäßig",
+  attendanceLow: "Unregelmäßig",
 };
 
 export default de;

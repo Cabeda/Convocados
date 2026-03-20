@@ -361,6 +361,20 @@ const es: TranslationKeys = {
   notificationsSaved: "Ajustes de notificaciones guardados.",
   notificationsSaveError: "No se pudieron guardar los ajustes de notificaciones.",
   savingNotifications: "Guardando...",
+
+  // Attendance stats (#134)
+  attendance: "Asistencia",
+  attendanceRate: "Tasa de asistencia",
+  attendanceStats: "Estadísticas de Asistencia",
+  attendanceStatsDesc: "Fiabilidad de los jugadores basada en el historial de partidos.",
+  totalGamesPlayed: "Total de partidos",
+  currentStreak: "Racha",
+  lastPlayed: "Último partido",
+  noAttendanceData: "Sin datos de asistencia.",
+  noAttendanceDataDesc: "Juega algunos partidos y registra resultados para ver las estadísticas de asistencia.",
+  attendanceHigh: "Fiable",
+  attendanceMedium: "Moderado",
+  attendanceLow: "Irregular",
 };
 
 export default es;
