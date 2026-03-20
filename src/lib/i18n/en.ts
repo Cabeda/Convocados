@@ -373,6 +373,20 @@ const en = {
   dangerZone: "Danger zone",
   accountSecurity: "Security",
   noPasswordSet: "No password set. You signed in with a social provider.",
+
+  // Attendance stats (#134)
+  attendance: "Attendance",
+  attendanceRate: "Attendance rate",
+  attendanceStats: "Attendance Stats",
+  attendanceStatsDesc: "Player reliability based on game history.",
+  totalGamesPlayed: "Total games",
+  currentStreak: "Streak",
+  lastPlayed: "Last played",
+  noAttendanceData: "No attendance data yet.",
+  noAttendanceDataDesc: "Play some games and record results to see attendance stats.",
+  attendanceHigh: "Reliable",
+  attendanceMedium: "Moderate",
+  attendanceLow: "Irregular",
 } as const;
 
 export default en;

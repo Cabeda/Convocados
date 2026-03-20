@@ -327,6 +327,20 @@ const fr: TranslationKeys = {
   dangerZone: "Zone de danger",
   accountSecurity: "Sécurité",
   noPasswordSet: "Aucun mot de passe défini. Tu t'es connecté avec un fournisseur social.",
+
+  // Attendance stats (#134)
+  attendance: "Présence",
+  attendanceRate: "Taux de présence",
+  attendanceStats: "Statistiques de Présence",
+  attendanceStatsDesc: "Fiabilité des joueurs basée sur l'historique des matchs.",
+  totalGamesPlayed: "Total de matchs",
+  currentStreak: "Série",
+  lastPlayed: "Dernier match",
+  noAttendanceData: "Pas encore de données de présence.",
+  noAttendanceDataDesc: "Joue quelques matchs et enregistre les résultats pour voir les statistiques de présence.",
+  attendanceHigh: "Fiable",
+  attendanceMedium: "Modéré",
+  attendanceLow: "Irrégulier",
 };
 
 export default fr;
