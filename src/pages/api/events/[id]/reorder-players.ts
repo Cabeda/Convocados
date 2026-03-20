@@ -16,9 +16,9 @@ export const PUT: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  // Always require owner
-  const { isOwner } = await checkOwnership(request, event.ownerId);
-  if (!isOwner) {
+  // Always require owner or admin
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+  if (!isOwner && !isAdmin) {
     return Response.json({ error: "Only the event owner can reorder players." }, { status: 403 });
   }
 

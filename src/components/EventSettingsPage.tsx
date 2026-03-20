@@ -21,6 +21,7 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import LockIcon from "@mui/icons-material/Lock";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import DeleteIcon from "@mui/icons-material/Delete";
+import GroupIcon from "@mui/icons-material/Group";
 import { useT } from "~/lib/useT";
 import { SPORT_PRESETS, getSportPreset } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
@@ -110,6 +111,11 @@ export default function EventSettingsPage({ eventId }: Props) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
 
+  // Event admins
+  const [admins, setAdmins] = useState<{ id: string; userId: string; name: string; email: string }[]>([]);
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminError, setAdminError] = useState<string | null>(null);
+
   const fetchEvent = useCallback(async () => {
     try {
       const res = await fetch(`/api/events/${eventId}`);
@@ -131,9 +137,10 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   const fetchAccessInfo = useCallback(async () => {
     try {
-      const [accessRes, invitesRes] = await Promise.all([
+      const [accessRes, invitesRes, adminsRes] = await Promise.all([
         fetch(`/api/events/${eventId}/access`),
         fetch(`/api/events/${eventId}/access/invites`),
+        fetch(`/api/events/${eventId}/admins`),
       ]);
       if (accessRes.ok) {
         const data = await accessRes.json();
@@ -141,6 +148,9 @@ export default function EventSettingsPage({ eventId }: Props) {
       }
       if (invitesRes.ok) {
         setInvites(await invitesRes.json());
+      }
+      if (adminsRes.ok) {
+        setAdmins(await adminsRes.json());
       }
     } catch { /* ignore */ }
   }, [eventId]);
@@ -154,8 +164,9 @@ export default function EventSettingsPage({ eventId }: Props) {
   // Derived state
   const isAuthenticated = !!session?.user;
   const isOwner = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
+  const isAdmin = !!event?.isAdmin;
   const isOwnerless = event && !event.ownerId;
-  const canEdit = isOwnerless || isOwner;
+  const canEdit = isOwnerless || isOwner || isAdmin;
   const userId = session?.user?.id;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -336,6 +347,41 @@ export default function EventSettingsPage({ eventId }: Props) {
     }
   };
 
+  // ── Admin handlers ────────────────────────────────────────────────────
+
+  const handleAddAdmin = async () => {
+    setAdminError(null);
+    if (!adminEmail.trim()) return;
+    const res = await fetch(`/api/events/${eventId}/admins`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: adminEmail.trim() }),
+    });
+    if (res.ok) {
+      const admin = await res.json();
+      setAdmins((prev) => [...prev, admin]);
+      setAdminEmail("");
+      setMessage({ type: "success", text: t("adminAdded") });
+    } else {
+      const data = await res.json();
+      if (res.status === 404) setAdminError(t("userNotFound"));
+      else if (res.status === 400) setAdminError(t("cannotAddOwnerAsAdmin"));
+      else setAdminError(data.error || t("prioritySettingsError"));
+    }
+  };
+
+  const handleRemoveAdmin = async (userId: string) => {
+    const res = await fetch(`/api/events/${eventId}/admins`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    if (res.ok) {
+      setAdmins((prev) => prev.filter((a) => a.userId !== userId));
+      setMessage({ type: "success", text: t("adminRemoved") });
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -348,8 +394,8 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   if (!event) return null;
 
-  // Only the owner can access settings; ownerless events are open to everyone
-  if (event.ownerId && (!session?.user || session.user.id !== event.ownerId)) {
+  // Only the owner or admins can access settings; ownerless events are open to everyone
+  if (event.ownerId && (!session?.user || (session.user.id !== event.ownerId && !event.isAdmin))) {
     return (
       <ThemeModeProvider>
         <ResponsiveLayout>
@@ -689,6 +735,59 @@ export default function EventSettingsPage({ eventId }: Props) {
                     />
                     <ListItemSecondaryAction>
                       <IconButton edge="end" size="small" onClick={() => handleRemoveInvite(inv.userId)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </Stack>
+        </SectionCard>
+      )}
+
+      {/* ── Event Admins ── */}
+      {isOwner && (
+        <SectionCard title={t("eventAdmins")} icon={<GroupIcon color="action" />}>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              {t("eventAdminsDesc")}
+            </Typography>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <TextField
+                size="small"
+                type="email"
+                placeholder={t("adminByEmail")}
+                value={adminEmail}
+                onChange={(e) => { setAdminEmail(e.target.value); setAdminError(null); }}
+                error={!!adminError}
+                helperText={adminError}
+                sx={{ flexGrow: 1 }}
+              />
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<PersonAddIcon />}
+                onClick={handleAddAdmin}
+                disabled={!adminEmail.trim()}
+              >
+                {t("addAdmin")}
+              </Button>
+            </Stack>
+            {admins.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                {t("noAdmins")}
+              </Typography>
+            ) : (
+              <List dense disablePadding>
+                {admins.map((adm) => (
+                  <ListItem key={adm.id} disableGutters>
+                    <ListItemText
+                      primary={adm.name}
+                      secondary={adm.email}
+                    />
+                    <ListItemSecondaryAction>
+                      <IconButton edge="end" size="small" onClick={() => handleRemoveAdmin(adm.userId)}>
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     </ListItemSecondaryAction>

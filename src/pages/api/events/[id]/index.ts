@@ -3,7 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { parseRecurrenceRule, nextOccurrence } from "../../../../lib/recurrence";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { autoPriorityEnroll } from "../../../../lib/priority.server";
-import { getSession } from "../../../../lib/auth.helpers.server";
+import { getSession, checkEventAdmin } from "../../../../lib/auth.helpers.server";
 import { checkAccess } from "../../../../lib/eventAccess";
 
 export const GET: APIRoute = async ({ params, request }) => {
@@ -24,6 +24,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     const isInvited = session?.user
       ? (await prisma.eventInvite.count({ where: { eventId: event.id, userId: session.user.id } })) > 0
       : false;
+    const isEventAdmin = session?.user
+      ? await checkEventAdmin(event.id, session.user.id)
+      : false;
 
     const access = checkAccess({
       eventOwnerId: event.ownerId,
@@ -31,7 +34,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       requestUserId: session?.user?.id ?? null,
       cookieHeader: request.headers.get("cookie"),
       eventId: event.id,
-      isInvited,
+      isInvited: isInvited || isEventAdmin,
     });
 
     if (!access.granted) {
@@ -129,6 +132,17 @@ export const GET: APIRoute = async ({ params, request }) => {
     }
   }
 
+  // Check if current user is an admin of this event
+  let isAdmin = false;
+  if (request && event.ownerId) {
+    try {
+      const sessionForAdmin = await getSession(request);
+      if (sessionForAdmin?.user) {
+        isAdmin = await checkEventAdmin(event.id, sessionForAdmin.user.id);
+      }
+    } catch { /* ignore — request may not have valid headers in tests */ }
+  }
+
   return Response.json({
     wasReset,
     ...event,
@@ -136,6 +150,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     hasPassword: !!event.accessPassword,
     ownerId: event.ownerId ?? null,
     ownerName: event.owner?.name ?? null,
+    isAdmin,
     dateTime: event.dateTime.toISOString(),
     createdAt: event.createdAt.toISOString(),
     updatedAt: event.updatedAt.toISOString(),

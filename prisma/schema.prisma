@@ -28,6 +28,7 @@ model User {
   priorityEnrollments     PriorityEnrollment[]
   priorityConfirmations   PriorityConfirmation[]
   eventInvites            EventInvite[]
+  adminEvents             EventAdmin[]  @relation("EventAdmins")
 }
 
 model Session {
@@ -100,6 +101,7 @@ model Event {
   priorityEnrollments PriorityEnrollment[]
   priorityConfirmations PriorityConfirmation[]
   invites         EventInvite[]
+  admins          EventAdmin[]
 
   // Priority enrollment settings
   priorityEnabled       Boolean @default(false)
@@ -383,6 +385,20 @@ model EventInvite {
 
   @@unique([eventId, userId])
   @@index([eventId])
+  @@index([userId])
+}
+
+// ── Event admins (shared management) ──────────────────────────────────
+
+model EventAdmin {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("EventAdmins", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
   @@index([userId])
 }
 

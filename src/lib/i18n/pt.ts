@@ -517,6 +517,18 @@ const pt: TranslationKeys = {
   priorityDeclinedMsg: "Lugar recusado.",
   priorityOptedInMsg: "Inscrição prioritária ativada.",
   priorityOptedOutMsg: "Inscrição prioritária desativada.",
+
+  // Event admins (#143)
+  eventAdmins: "Administradores",
+  eventAdminsDesc: "Partilha direitos de gestão com outros utilizadores. Os admins podem gerir jogadores, definições e custos — mas não podem adicionar outros admins ou transferir a propriedade.",
+  adminByEmail: "Adicionar admin por email",
+  addAdmin: "Adicionar",
+  removeAdmin: "Remover",
+  noAdmins: "Nenhum admin adicionado.",
+  adminAdded: "Admin adicionado.",
+  adminRemoved: "Admin removido.",
+  cannotAddOwnerAsAdmin: "Não é possível adicionar o dono do evento como admin.",
+  adminBadge: "Admin",
 };
 
 export default pt;
