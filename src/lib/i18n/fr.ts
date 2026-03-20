@@ -328,6 +328,40 @@ const fr: TranslationKeys = {
   accountSecurity: "Sécurité",
   noPasswordSet: "Aucun mot de passe défini. Tu t'es connecté avec un fournisseur social.",
 
+  // Magic link (#44)
+  magicLinkTitle: "Se connecter par lien email",
+  magicLinkDesc: "On t'envoie un lien pour te connecter — pas besoin de mot de passe.",
+  magicLinkBtn: "Envoyer le lien magique",
+  sendingMagicLink: "Envoi...",
+  magicLinkSent: "Vérifie ta boîte de réception ! On a envoyé un lien de connexion à {email}.",
+  magicLinkError: "Impossible d'envoyer le lien. Réessaie.",
+  signInWithEmail: "Lien par email",
+  signInWithPassword: "Mot de passe",
+
+  // PWA install prompt (#135)
+  installApp: "Installer Convocados",
+  installAppDesc: "Ajoute à ton écran d'accueil pour un accès rapide — pas besoin d'app store.",
+  installBtn: "Installer",
+  installDismiss: "Pas maintenant",
+  installIosHint: "Appuie sur le bouton de partage, puis \"Sur l'écran d'accueil\"",
+  versionAvailable: "Version {version} disponible",
+
+  // Notification settings (#112)
+  notificationSettings: "Paramètres de notifications",
+  notificationSettingsDesc: "Choisis comment et quand tu veux être notifié.",
+  emailNotifications: "Notifications par email",
+  pushNotifications: "Notifications push",
+  gameInvites: "Invitations aux matchs",
+  gameReminders: "Rappels de matchs",
+  weeklySummary: "Résumé hebdomadaire",
+  reminder24hLabel: "24 heures avant",
+  reminder2hLabel: "2 heures avant",
+  reminder1hLabel: "1 heure avant",
+  reminderTiming: "Horaire des rappels",
+  notificationsSaved: "Paramètres de notifications enregistrés.",
+  notificationsSaveError: "Impossible d'enregistrer les paramètres de notifications.",
+  savingNotifications: "Enregistrement...",
+
   // Attendance stats (#134)
   attendance: "Présence",
   attendanceRate: "Taux de présence",
