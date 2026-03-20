@@ -3,8 +3,10 @@ import { prisma } from "../../../../lib/db.server";
 import { parseRecurrenceRule, nextOccurrence } from "../../../../lib/recurrence";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { autoPriorityEnroll } from "../../../../lib/priority.server";
+import { getSession } from "../../../../lib/auth.helpers.server";
+import { checkAccess } from "../../../../lib/eventAccess";
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
     where: { id: params.id },
     include: {
@@ -15,6 +17,32 @@ export const GET: APIRoute = async ({ params }) => {
   });
 
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  // ── Access control ──────────────────────────────────────────────────────
+  if (event.accessPassword) {
+    const session = await getSession(request);
+    const isInvited = session?.user
+      ? (await prisma.eventInvite.count({ where: { eventId: event.id, userId: session.user.id } })) > 0
+      : false;
+
+    const access = checkAccess({
+      eventOwnerId: event.ownerId,
+      accessPassword: event.accessPassword,
+      requestUserId: session?.user?.id ?? null,
+      cookieHeader: request.headers.get("cookie"),
+      eventId: event.id,
+      isInvited,
+    });
+
+    if (!access.granted) {
+      return Response.json({
+        locked: true,
+        id: event.id,
+        title: event.title,
+        hasPassword: true,
+      });
+    }
+  }
 
   let wasReset = false;
 
@@ -104,6 +132,8 @@ export const GET: APIRoute = async ({ params }) => {
   return Response.json({
     wasReset,
     ...event,
+    accessPassword: undefined, // never expose the hash
+    hasPassword: !!event.accessPassword,
     ownerId: event.ownerId ?? null,
     ownerName: event.owner?.name ?? null,
     dateTime: event.dateTime.toISOString(),

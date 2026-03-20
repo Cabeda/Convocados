@@ -29,6 +29,7 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import StarIcon from "@mui/icons-material/Star";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import LockIcon from "@mui/icons-material/Lock";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -67,6 +68,8 @@ interface EventData {
   players: Player[];
   teamResults: TeamResult[];
   wasReset?: boolean;
+  hasPassword?: boolean;
+  locked?: boolean;
 }
 
 // ── Countdown ─────────────────────────────────────────────────────────────────
@@ -87,6 +90,69 @@ function useCountdown(target: Date, gameTimeLabel: string) {
   if (d > 0) return `${d}d ${h}h ${m}m`;
   if (h > 0) return `${h}h ${m}m ${sec}s`;
   return `${m}m ${sec}s`;
+}
+
+// ── Password prompt (shown when event is locked) ─────────────────────────────
+
+function PasswordPrompt({ eventId, title, onUnlocked }: { eventId: string; title: string; onUnlocked: () => void }) {
+  const t = useT();
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(false);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/access/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        onUnlocked();
+      } else {
+        setError(true);
+      }
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Container maxWidth="xs" sx={{ py: 8, textAlign: "center" }}>
+      <Stack spacing={3} alignItems="center">
+        <LockIcon sx={{ fontSize: 48, color: "text.secondary" }} />
+        <Typography variant="h5" fontWeight={700}>{title}</Typography>
+        <Typography color="text.secondary">{t("eventLocked")}</Typography>
+        <Box component="form" onSubmit={handleSubmit} sx={{ width: "100%" }}>
+          <Stack spacing={2}>
+            <TextField
+              type="password"
+              label={t("enterPassword")}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              fullWidth
+              autoFocus
+              error={error}
+              helperText={error ? t("incorrectPassword") : undefined}
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={loading || !password}
+              startIcon={loading ? <CircularProgress size={16} /> : <LockIcon />}
+            >
+              {t("unlockEvent")}
+            </Button>
+          </Stack>
+        </Box>
+      </Stack>
+    </Container>
+  );
 }
 
 // ── Inline edit ───────────────────────────────────────────────────────────────
@@ -423,14 +489,21 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [event, setEvent] = useState<EventData | null>(null);
   const [error, setFetchError] = useState<{ status?: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [lockedEvent, setLockedEvent] = useState<{ id: string; title: string } | null>(null);
 
   const fetchEvent = useCallback(async () => {
     try {
       const r = await fetch(`/api/events/${eventId}`);
       if (r.status === 404) { setFetchError({ status: 404 }); return; }
       const data = await r.json();
-      setEvent(data);
-      setFetchError(null);
+      if (data.locked) {
+        setLockedEvent({ id: data.id, title: data.title });
+        setEvent(null);
+      } else {
+        setEvent(data);
+        setLockedEvent(null);
+        setFetchError(null);
+      }
     } catch (e) {
       setFetchError({});
     } finally {
@@ -731,6 +804,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
         <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
           <CircularProgress />
         </Box>
+      </ResponsiveLayout>
+    </ThemeModeProvider>
+  );
+
+  if (lockedEvent) return (
+    <ThemeModeProvider>
+      <ResponsiveLayout>
+        <PasswordPrompt eventId={lockedEvent.id} title={lockedEvent.title} onUnlocked={fetchEvent} />
       </ResponsiveLayout>
     </ThemeModeProvider>
   );

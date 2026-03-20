@@ -27,6 +27,7 @@ model User {
   notificationPreferences NotificationPreferences?
   priorityEnrollments     PriorityEnrollment[]
   priorityConfirmations   PriorityConfirmation[]
+  eventInvites            EventInvite[]
 }
 
 model Session {
@@ -98,6 +99,7 @@ model Event {
   eventLogs      EventLog[]
   priorityEnrollments PriorityEnrollment[]
   priorityConfirmations PriorityConfirmation[]
+  invites         EventInvite[]
 
   // Priority enrollment settings
   priorityEnabled       Boolean @default(false)
@@ -106,6 +108,9 @@ model Event {
   priorityMaxPercent    Int     @default(70)  // max % of maxPlayers reserved
   priorityDeadlineHours Int     @default(48)  // hours before game to close confirmations
   priorityMinGames      Int     @default(3)   // min total games before eligible
+
+  // Access control
+  accessPassword        String?               // bcrypt-hashed password (null = no password)
 
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
@@ -364,6 +369,21 @@ model PriorityConfirmation {
   @@unique([eventId, userId, gameDate])
   @@index([eventId, gameDate])
   @@index([deadline])
+}
+
+// ── Event access control ──────────────────────────────────────────────────────
+
+model EventInvite {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
 }
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
