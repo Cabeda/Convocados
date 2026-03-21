@@ -174,6 +174,12 @@ const pt: TranslationKeys = {
   recalculateRatings: "Recalcular",
   recalculating: "A recalcular…",
   ratingsRecalculated: "Classificações recalculadas ({n} jogos processados)",
+  setInitialRating: "Definir rating inicial",
+  initialRating: "Rating inicial",
+  initialRatingHelper: "Define um ELO inicial para este jogador (500–1500). Usa Recalcular para aplicar ao histórico.",
+  initialRatingSaved: "Rating inicial guardado.",
+  initialRatingNeedsRecalculate: "Rating inicial guardado. Recalcula as classificações para aplicar ao histórico.",
+  editRating: "Editar",
 
   // Public events
   publicGames: "Jogos Públicos",

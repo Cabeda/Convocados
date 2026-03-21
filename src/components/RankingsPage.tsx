@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Chip, Button, Avatar,
-  CircularProgress, alpha, useTheme,
+  CircularProgress, alpha, useTheme, IconButton, Tooltip, Snackbar, Alert,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import EditIcon from "@mui/icons-material/Edit";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -13,6 +15,7 @@ import { useT } from "~/lib/useT";
 interface PlayerRating {
   name: string;
   rating: number;
+  initialRating: number | null;
   gamesPlayed: number;
   wins: number;
   draws: number;
@@ -31,6 +34,14 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
+  const [snack, setSnack] = useState<{ msg: string; severity: "success" | "error" } | null>(null);
+
+  // Edit dialog state
+  const [editPlayer, setEditPlayer] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     const [evRes, ratRes] = await Promise.all([
@@ -44,6 +55,9 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     setRatings(rat.data);
     setNextCursor(rat.nextCursor);
     setHasMore(rat.hasMore);
+    // Owner or admin can edit ratings
+    const isOwner = ev.ownerId && ev.ownerId === ev._currentUserId;
+    setCanEdit(isOwner || ev.isAdmin || !ev.ownerId);
     setLoading(false);
   }, [eventId]);
 
@@ -58,6 +72,64 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     setNextCursor(page.nextCursor);
     setHasMore(page.hasMore);
     setLoadingMore(false);
+  };
+
+  const handleRecalculate = async () => {
+    setRecalculating(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/ratings/recalculate`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setSnack({ msg: t("ratingsRecalculated", { n: data.gamesProcessed }), severity: "success" });
+        // Reload ratings
+        const ratRes = await fetch(`/api/events/${eventId}/ratings`);
+        const rat = ratRes.ok ? await ratRes.json() : { data: [], nextCursor: null, hasMore: false };
+        setRatings(rat.data);
+        setNextCursor(rat.nextCursor);
+        setHasMore(rat.hasMore);
+      } else {
+        setSnack({ msg: data.error || "Error", severity: "error" });
+      }
+    } catch {
+      setSnack({ msg: "Error", severity: "error" });
+    }
+    setRecalculating(false);
+  };
+
+  const openEditDialog = (player: PlayerRating) => {
+    setEditPlayer(player.name);
+    setEditValue(String(player.initialRating ?? Math.round(player.rating)));
+  };
+
+  const handleSaveInitialRating = async () => {
+    if (!editPlayer) return;
+    const val = parseInt(editValue, 10);
+    if (isNaN(val) || val < 500 || val > 1500) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/ratings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editPlayer, initialRating: val }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const msg = data.needsRecalculate ? t("initialRatingNeedsRecalculate") : t("initialRatingSaved");
+        setSnack({ msg, severity: "success" });
+        // Update local state
+        setRatings((prev) => prev.map((r) =>
+          r.name === editPlayer
+            ? { ...r, rating: data.rating, initialRating: data.initialRating }
+            : r
+        ));
+        setEditPlayer(null);
+      } else {
+        setSnack({ msg: data.error || "Error", severity: "error" });
+      }
+    } catch {
+      setSnack({ msg: "Error", severity: "error" });
+    }
+    setSaving(false);
   };
 
   if (loading) return (
@@ -81,6 +153,8 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     </ThemeModeProvider>
   );
 
+  const editError = editValue !== "" && (isNaN(parseInt(editValue, 10)) || parseInt(editValue, 10) < 500 || parseInt(editValue, 10) > 1500);
+
   return (
     <ThemeModeProvider>
       <ResponsiveLayout>
@@ -90,12 +164,22 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
               <Button variant="outlined" startIcon={<ArrowBackIcon />} href={`/events/${eventId}/history`} size="small">
                 {t("history")}
               </Button>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
                 <EmojiEventsIcon color="primary" />
                 <Typography variant="h5" fontWeight={700}>
                   {title} — {t("ratings")}
                 </Typography>
               </Box>
+              {canEdit && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleRecalculate}
+                  disabled={recalculating}
+                >
+                  {recalculating ? t("recalculating") : t("recalculateRatings")}
+                </Button>
+              )}
             </Box>
 
             {ratings.length === 0 ? (
@@ -116,12 +200,12 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                         <TableCell align="center" sx={{ fontWeight: 700, color: "success.main" }}>{t("wins")}</TableCell>
                         <TableCell align="center" sx={{ fontWeight: 700, color: "text.secondary" }}>{t("draws")}</TableCell>
                         <TableCell align="center" sx={{ fontWeight: 700, color: "error.main" }}>{t("losses")}</TableCell>
+                        {canEdit && <TableCell sx={{ width: 48 }} />}
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {ratings.map((r, i) => {
                         const podiumColor = i < 3 ? PODIUM_COLORS[i] : undefined;
-                        const winRate = r.gamesPlayed > 0 ? Math.round((r.wins / r.gamesPlayed) * 100) : 0;
                         return (
                           <TableRow
                             key={r.name}
@@ -151,15 +235,24 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                               </Typography>
                             </TableCell>
                             <TableCell align="center">
-                              <Chip
-                                label={Math.round(r.rating)}
-                                size="small"
-                                sx={{
-                                  fontWeight: 700, fontSize: "0.8rem", minWidth: 52,
-                                  bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                  color: theme.palette.text.primary,
-                                }}
-                              />
+                              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5 }}>
+                                <Chip
+                                  label={Math.round(r.rating)}
+                                  size="small"
+                                  sx={{
+                                    fontWeight: 700, fontSize: "0.8rem", minWidth: 52,
+                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                    color: theme.palette.text.primary,
+                                  }}
+                                />
+                                {r.initialRating != null && (
+                                  <Tooltip title={`${t("initialRating")}: ${r.initialRating}`}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>
+                                      ({r.initialRating})
+                                    </Typography>
+                                  </Tooltip>
+                                )}
+                              </Box>
                             </TableCell>
                             <TableCell align="center">
                               <Typography variant="body2">{r.gamesPlayed}</Typography>
@@ -173,6 +266,15 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                             <TableCell align="center">
                               <Typography variant="body2" color="error.main" fontWeight={600}>{r.losses}</Typography>
                             </TableCell>
+                            {canEdit && (
+                              <TableCell align="center" sx={{ px: 0.5 }}>
+                                <Tooltip title={t("setInitialRating")}>
+                                  <IconButton size="small" onClick={() => openEditDialog(r)}>
+                                    <EditIcon sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </TableCell>
+                            )}
                           </TableRow>
                         );
                       })}
@@ -191,6 +293,44 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
             )}
           </Stack>
         </Container>
+
+        {/* Edit initial rating dialog */}
+        <Dialog open={!!editPlayer} onClose={() => setEditPlayer(null)} maxWidth="xs" fullWidth>
+          <DialogTitle>{t("setInitialRating")}</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {editPlayer} — {t("initialRatingHelper")}
+            </Typography>
+            <TextField
+              autoFocus
+              fullWidth
+              type="number"
+              label={t("initialRating")}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              inputProps={{ min: 500, max: 1500, step: 50 }}
+              error={!!editError}
+              helperText={editError ? "500–1500" : undefined}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditPlayer(null)}>{t("cancel")}</Button>
+            <Button
+              variant="contained"
+              onClick={handleSaveInitialRating}
+              disabled={saving || !!editError || editValue === ""}
+            >
+              {saving ? t("loading") : t("saveProfile")}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Snackbar */}
+        <Snackbar open={!!snack} autoHideDuration={4000} onClose={() => setSnack(null)}>
+          <Alert severity={snack?.severity} onClose={() => setSnack(null)} variant="filled">
+            {snack?.msg}
+          </Alert>
+        </Snackbar>
       </ResponsiveLayout>
     </ThemeModeProvider>
   );
