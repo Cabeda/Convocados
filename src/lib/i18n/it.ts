@@ -501,6 +501,31 @@ const it: TranslationKeys = {
   playtomicSearchError: "Impossibile cercare campi. Riprova piu tardi.",
   playtomicAvailabilityError: "Impossibile caricare la disponibilita. Riprova piu tardi.",
   playtomicBookOnPlaytomic: "Prenota su Playtomic",
+
+  // Admin dashboard (#159)
+  adminDashboard: "Pannello di Amministrazione",
+  adminDashboardDesc: "Metriche aggregate della tua istanza Convocados.",
+  adminForbidden: "Non hai accesso come amministratore.",
+  adminTotalUsers: "Utenti Totali",
+  adminTotalEvents: "Eventi Totali",
+  adminGamesPlayed: "Partite Giocate",
+  adminActiveUsers: "Utenti Attivi (30g)",
+  adminActiveEvents: "Eventi in Programma",
+  adminGamesLast7d: "Partite (7g)",
+  adminGamesLast30d: "Partite (30g)",
+  adminAvgPlayers: "Media Max Giocatori",
+  adminRecurringEvents: "Ricorrenti",
+  adminOneOffEvents: "Una tantum",
+  adminEventTypes: "Tipi di Evento",
+  adminSportDistribution: "Distribuzione per Sport",
+  adminUserList: "Utenti",
+  adminSearchUsers: "Cerca utenti...",
+  adminNoUsers: "Nessun utente trovato.",
+  adminGrowthChart: "Crescita nel Tempo",
+  adminRange30d: "30 giorni",
+  adminRange1y: "1 anno",
+  adminRangeAll: "Tutto il periodo",
+  adminNoGrowthData: "Nessun dato di crescita disponibile.",
 };
 
 export default it;
