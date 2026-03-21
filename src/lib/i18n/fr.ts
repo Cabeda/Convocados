@@ -501,6 +501,31 @@ const fr: TranslationKeys = {
   playtomicSearchError: "Impossible de chercher des terrains. Reessayez plus tard.",
   playtomicAvailabilityError: "Impossible de charger la disponibilite. Reessayez plus tard.",
   playtomicBookOnPlaytomic: "Reserver sur Playtomic",
+
+  // Admin dashboard (#159)
+  adminDashboard: "Tableau de bord Admin",
+  adminDashboardDesc: "Métriques agrégées de votre instance Convocados.",
+  adminForbidden: "Vous n'avez pas accès à l'administration.",
+  adminTotalUsers: "Total Utilisateurs",
+  adminTotalEvents: "Total Événements",
+  adminGamesPlayed: "Matchs Joués",
+  adminActiveUsers: "Utilisateurs Actifs (30j)",
+  adminActiveEvents: "Événements à Venir",
+  adminGamesLast7d: "Matchs (7j)",
+  adminGamesLast30d: "Matchs (30j)",
+  adminAvgPlayers: "Moy. Max Joueurs",
+  adminRecurringEvents: "Récurrents",
+  adminOneOffEvents: "Ponctuels",
+  adminEventTypes: "Types d'Événement",
+  adminSportDistribution: "Répartition par Sport",
+  adminUserList: "Utilisateurs",
+  adminSearchUsers: "Rechercher des utilisateurs...",
+  adminNoUsers: "Aucun utilisateur trouvé.",
+  adminGrowthChart: "Croissance au Fil du Temps",
+  adminRange30d: "30 jours",
+  adminRange1y: "1 an",
+  adminRangeAll: "Toute la période",
+  adminNoGrowthData: "Pas encore de données de croissance.",
 };
 
 export default fr;

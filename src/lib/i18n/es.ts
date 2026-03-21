@@ -501,6 +501,31 @@ const es: TranslationKeys = {
   playtomicSearchError: "No se pudieron buscar pistas. Intentalo de nuevo mas tarde.",
   playtomicAvailabilityError: "No se pudo cargar la disponibilidad. Intentalo de nuevo mas tarde.",
   playtomicBookOnPlaytomic: "Reservar en Playtomic",
+
+  // Admin dashboard (#159)
+  adminDashboard: "Panel de Administración",
+  adminDashboardDesc: "Métricas agregadas de tu instancia Convocados.",
+  adminForbidden: "No tienes acceso de administrador.",
+  adminTotalUsers: "Total de Usuarios",
+  adminTotalEvents: "Total de Eventos",
+  adminGamesPlayed: "Partidos Jugados",
+  adminActiveUsers: "Usuarios Activos (30d)",
+  adminActiveEvents: "Eventos Próximos",
+  adminGamesLast7d: "Partidos (7d)",
+  adminGamesLast30d: "Partidos (30d)",
+  adminAvgPlayers: "Media Máx. Jugadores",
+  adminRecurringEvents: "Recurrentes",
+  adminOneOffEvents: "Únicos",
+  adminEventTypes: "Tipos de Evento",
+  adminSportDistribution: "Distribución por Deporte",
+  adminUserList: "Usuarios",
+  adminSearchUsers: "Buscar usuarios...",
+  adminNoUsers: "No se encontraron usuarios.",
+  adminGrowthChart: "Crecimiento a lo Largo del Tiempo",
+  adminRange30d: "30 días",
+  adminRange1y: "1 año",
+  adminRangeAll: "Todo el período",
+  adminNoGrowthData: "Aún no hay datos de crecimiento.",
 };
 
 export default es;

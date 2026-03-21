@@ -547,6 +547,31 @@ const en = {
   playtomicSearchError: "Could not search for courts. Try again later.",
   playtomicAvailabilityError: "Could not load availability. Try again later.",
   playtomicBookOnPlaytomic: "Book on Playtomic",
+
+  // Admin dashboard (#159)
+  adminDashboard: "Admin Dashboard",
+  adminDashboardDesc: "Aggregated metrics for your Convocados instance.",
+  adminForbidden: "You don't have admin access.",
+  adminTotalUsers: "Total Users",
+  adminTotalEvents: "Total Events",
+  adminGamesPlayed: "Games Played",
+  adminActiveUsers: "Active Users (30d)",
+  adminActiveEvents: "Upcoming Events",
+  adminGamesLast7d: "Games (7d)",
+  adminGamesLast30d: "Games (30d)",
+  adminAvgPlayers: "Avg. Max Players",
+  adminRecurringEvents: "Recurring",
+  adminOneOffEvents: "One-off",
+  adminEventTypes: "Event Types",
+  adminSportDistribution: "Sport Distribution",
+  adminUserList: "Users",
+  adminSearchUsers: "Search users...",
+  adminNoUsers: "No users found.",
+  adminGrowthChart: "Growth Over Time",
+  adminRange30d: "30 days",
+  adminRange1y: "1 year",
+  adminRangeAll: "All time",
+  adminNoGrowthData: "No growth data available yet.",
 } as const;
 
 export default en;

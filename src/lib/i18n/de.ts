@@ -501,6 +501,31 @@ const de: TranslationKeys = {
   playtomicSearchError: "Platze konnten nicht gesucht werden. Versuchen Sie es spater erneut.",
   playtomicAvailabilityError: "Verfugbarkeit konnte nicht geladen werden. Versuchen Sie es spater erneut.",
   playtomicBookOnPlaytomic: "Auf Playtomic buchen",
+
+  // Admin dashboard (#159)
+  adminDashboard: "Admin-Dashboard",
+  adminDashboardDesc: "Aggregierte Metriken deiner Convocados-Instanz.",
+  adminForbidden: "Du hast keinen Admin-Zugang.",
+  adminTotalUsers: "Benutzer gesamt",
+  adminTotalEvents: "Events gesamt",
+  adminGamesPlayed: "Gespielte Spiele",
+  adminActiveUsers: "Aktive Benutzer (30T)",
+  adminActiveEvents: "Kommende Events",
+  adminGamesLast7d: "Spiele (7T)",
+  adminGamesLast30d: "Spiele (30T)",
+  adminAvgPlayers: "Durchschn. Max. Spieler",
+  adminRecurringEvents: "Wiederkehrend",
+  adminOneOffEvents: "Einmalig",
+  adminEventTypes: "Event-Typen",
+  adminSportDistribution: "Verteilung nach Sportart",
+  adminUserList: "Benutzer",
+  adminSearchUsers: "Benutzer suchen...",
+  adminNoUsers: "Keine Benutzer gefunden.",
+  adminGrowthChart: "Wachstum im Zeitverlauf",
+  adminRange30d: "30 Tage",
+  adminRange1y: "1 Jahr",
+  adminRangeAll: "Gesamter Zeitraum",
+  adminNoGrowthData: "Noch keine Wachstumsdaten verfügbar.",
 };
 
 export default de;

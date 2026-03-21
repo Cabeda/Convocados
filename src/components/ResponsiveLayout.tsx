@@ -19,6 +19,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import SettingsIcon from "@mui/icons-material/Settings";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import PersonIcon from "@mui/icons-material/Person";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import { useThemeMode } from "./ThemeModeProvider";
 import { useLocale } from "~/lib/useT";
 import type { Locale } from "~/lib/i18n";
@@ -252,6 +253,12 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
   const [prefsAnchor, setPrefsAnchor] = useState<null | HTMLElement>(null);
   const [langAnchor, setLangAnchor] = useState<null | HTMLElement>(null);
   const { data: session, isPending: sessionLoading } = useSession();
+  const [isAdminUser, setIsAdminUser] = useState(false);
+
+  useEffect(() => {
+    if (!session?.user) { setIsAdminUser(false); return; }
+    fetch("/api/admin/check").then((r) => r.json()).then((d) => setIsAdminUser(d.isAdmin)).catch(() => {});
+  }, [session?.user]);
 
   const handleLangSelect = (code: Locale) => {
     setLangAnchor(null);
@@ -339,6 +346,12 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                     <ListItemIcon><DashboardIcon fontSize="small" /></ListItemIcon>
                     <ListItemText>{t("myGames")}</ListItemText>
                   </MenuItem>
+                  {isAdminUser && (
+                    <MenuItem component="a" href="/admin" onClick={() => setUserAnchor(null)}>
+                      <ListItemIcon><AdminPanelSettingsIcon fontSize="small" /></ListItemIcon>
+                      <ListItemText>{t("adminDashboard")}</ListItemText>
+                    </MenuItem>
+                  )}
                   <Divider />
                   <MenuItem onClick={(e) => setLangAnchor(e.currentTarget)}>
                     <ListItemIcon><TranslateIcon fontSize="small" /></ListItemIcon>
