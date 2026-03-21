@@ -173,6 +173,12 @@ const en = {
   recalculateRatings: "Recalculate",
   recalculating: "Recalculating…",
   ratingsRecalculated: "Ratings recalculated ({n} games processed)",
+  setInitialRating: "Set initial rating",
+  initialRating: "Initial rating",
+  initialRatingHelper: "Set a starting ELO for this player (500–1500). Use Recalculate to apply to game history.",
+  initialRatingSaved: "Initial rating saved.",
+  initialRatingNeedsRecalculate: "Initial rating saved. Recalculate ratings to apply to game history.",
+  editRating: "Edit",
 
   // Public events
   publicGames: "Public Games",

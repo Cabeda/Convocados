@@ -38,13 +38,14 @@ describe("expectedScore", () => {
 // ── kFactor ───────────────────────────────────────────────────────────────────
 
 describe("kFactor", () => {
-  it("returns 40 for provisional players (< 10 games)", () => {
-    expect(kFactor(0)).toBe(40);
-    expect(kFactor(5)).toBe(40);
-    expect(kFactor(9)).toBe(40);
+  it("returns 48 for provisional players (< 6 games)", () => {
+    expect(kFactor(0)).toBe(48);
+    expect(kFactor(3)).toBe(48);
+    expect(kFactor(5)).toBe(48);
   });
 
-  it("returns 32 for established players (>= 10 games)", () => {
+  it("returns 32 for established players (>= 6 games)", () => {
+    expect(kFactor(6)).toBe(32);
     expect(kFactor(10)).toBe(32);
     expect(kFactor(50)).toBe(32);
     expect(kFactor(100)).toBe(32);
@@ -79,10 +80,10 @@ describe("computeRatingDelta", () => {
     expect(delta).toBe(-16);
   });
 
-  it("provisional player (K=40) gets larger delta", () => {
+  it("provisional player (K=48) gets larger delta", () => {
     const provisional = computeRatingDelta(1000, 1000, 1, 3);
     const established = computeRatingDelta(1000, 1000, 1, 15);
-    expect(provisional).toBe(20); // 40 * 0.5
+    expect(provisional).toBe(24); // 48 * 0.5
     expect(established).toBe(16); // 32 * 0.5
     expect(provisional).toBeGreaterThan(established);
   });
