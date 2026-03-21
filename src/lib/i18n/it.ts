@@ -488,6 +488,19 @@ const it: TranslationKeys = {
   adminRemoved: "Admin rimosso.",
   cannotAddOwnerAsAdmin: "Non è possibile aggiungere il proprietario dell'evento come admin.",
   adminBadge: "Admin",
+
+  // Playtomic court finder
+  playtomicFindCourt: "Trova un campo",
+  playtomicSearchNearby: "Cerca campi vicini",
+  playtomicSearching: "Ricerca...",
+  playtomicNoClubs: "Nessun club trovato nelle vicinanze per questo sport.",
+  playtomicNoSlots: "Nessun orario disponibile in questa data.",
+  playtomicSelectClub: "Usa questa struttura",
+  playtomicOpenInPlaytomic: "Apri in Playtomic",
+  playtomicLocationDenied: "Accesso alla posizione negato. Consenti la posizione per cercare campi vicini.",
+  playtomicSearchError: "Impossibile cercare campi. Riprova piu tardi.",
+  playtomicAvailabilityError: "Impossibile caricare la disponibilita. Riprova piu tardi.",
+  playtomicBookOnPlaytomic: "Prenota su Playtomic",
 };
 
 export default it;

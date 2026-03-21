@@ -534,6 +534,19 @@ const en = {
   adminRemoved: "Admin removed.",
   cannotAddOwnerAsAdmin: "Cannot add the event owner as admin.",
   adminBadge: "Admin",
+
+  // Playtomic court finder
+  playtomicFindCourt: "Find a court",
+  playtomicSearchNearby: "Search nearby courts",
+  playtomicSearching: "Searching...",
+  playtomicNoClubs: "No clubs found nearby for this sport.",
+  playtomicNoSlots: "No available slots on this date.",
+  playtomicSelectClub: "Use this venue",
+  playtomicOpenInPlaytomic: "Open in Playtomic",
+  playtomicLocationDenied: "Location access denied. Allow location to search nearby courts.",
+  playtomicSearchError: "Could not search for courts. Try again later.",
+  playtomicAvailabilityError: "Could not load availability. Try again later.",
+  playtomicBookOnPlaytomic: "Book on Playtomic",
 } as const;
 
 export default en;
