@@ -488,6 +488,19 @@ const fr: TranslationKeys = {
   adminRemoved: "Admin supprimé.",
   cannotAddOwnerAsAdmin: "Impossible d'ajouter le propriétaire de l'événement comme admin.",
   adminBadge: "Admin",
+
+  // Playtomic court finder
+  playtomicFindCourt: "Trouver un terrain",
+  playtomicSearchNearby: "Chercher des terrains a proximite",
+  playtomicSearching: "Recherche...",
+  playtomicNoClubs: "Aucun club trouve a proximite pour ce sport.",
+  playtomicNoSlots: "Aucun creneau disponible a cette date.",
+  playtomicSelectClub: "Utiliser ce lieu",
+  playtomicOpenInPlaytomic: "Ouvrir dans Playtomic",
+  playtomicLocationDenied: "Acces a la localisation refuse. Autorisez la localisation pour chercher des terrains.",
+  playtomicSearchError: "Impossible de chercher des terrains. Reessayez plus tard.",
+  playtomicAvailabilityError: "Impossible de charger la disponibilite. Reessayez plus tard.",
+  playtomicBookOnPlaytomic: "Reserver sur Playtomic",
 };
 
 export default fr;

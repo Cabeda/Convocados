@@ -10,11 +10,14 @@ import SportsIcon from "@mui/icons-material/Sports";
 import CasinoIcon from "@mui/icons-material/Casino";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PeopleIcon from "@mui/icons-material/People";
+import PlaceIcon from "@mui/icons-material/Place";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
+import PlaytomicCourtFinder from "./PlaytomicCourtFinder";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { SPORT_PRESETS, getDefaultMaxPlayers } from "~/lib/sports";
+import { isPlaytomicSport } from "~/lib/playtomic";
 import { getRandomTitle, type TitleLocale } from "~/lib/randomTitles";
 
 const DAYS = [
@@ -54,6 +57,9 @@ export default function CreateEventForm() {
   const [maxPlayers, setMaxPlayers] = useState("10");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [location, setLocation] = useState("");
+  const [courtFinderOpen, setCourtFinderOpen] = useState(false);
+  const [dateTime, setDateTime] = useState(nextHour);
 
   const handleSportChange = (newSport: string) => {
     setSport(newSport);
@@ -77,8 +83,8 @@ export default function CreateEventForm() {
 
     const body = {
       title: fd.get("title"),
-      location: fd.get("location") || "",
-      dateTime: fd.get("dateTime"),
+      location: location || "",
+      dateTime: dateTime,
       teamOneName: fd.get("teamOneName"),
       teamTwoName: fd.get("teamTwoName"),
       maxPlayers: parsedMaxPlayers,
@@ -161,7 +167,8 @@ export default function CreateEventForm() {
                   </FormControl>
 
                   <TextField name="dateTime" label={t("dateTime")} type="datetime-local"
-                    required fullWidth defaultValue={nextHour()}
+                    required fullWidth value={dateTime}
+                    onChange={(e) => setDateTime(e.target.value)}
                     inputProps={{ min: minDateTime() }}
                     InputLabelProps={{ shrink: true }} />
 
@@ -179,7 +186,20 @@ export default function CreateEventForm() {
                       <Stack spacing={3}>
                         <TextField name="location" label={t("locationOptional")}
                           placeholder={t("locationPlaceholder")} fullWidth
+                          value={location}
+                          onChange={(e) => setLocation(e.target.value)}
                           inputProps={{ maxLength: 200 }} />
+
+                        {isPlaytomicSport(sport) && (
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<PlaceIcon />}
+                            onClick={() => setCourtFinderOpen(true)}
+                          >
+                            {t("playtomicFindCourt")}
+                          </Button>
+                        )}
 
                         <TextField
                           label={t("maxPlayers")}
@@ -274,6 +294,13 @@ export default function CreateEventForm() {
             </Paper>
           </Stack>
         </Container>
+        <PlaytomicCourtFinder
+          open={courtFinderOpen}
+          onClose={() => setCourtFinderOpen(false)}
+          sport={sport}
+          date={dateTime.split("T")[0] || new Date().toISOString().split("T")[0]}
+          onSelect={(loc) => setLocation(loc)}
+        />
       </ResponsiveLayout>
     </ThemeModeProvider>
   );
