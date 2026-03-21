@@ -28,20 +28,20 @@ describe("mapSportToPlaytomic", () => {
     expect(mapSportToPlaytomic("tennis-doubles")).toBe("TENNIS");
   });
 
-  it("maps football-5v5 to FOOTBALL", () => {
-    expect(mapSportToPlaytomic("football-5v5")).toBe("FOOTBALL");
+  it("maps football-5v5 to FUTSAL", () => {
+    expect(mapSportToPlaytomic("football-5v5")).toBe("FUTSAL");
   });
 
-  it("maps football-7v7 to FOOTBALL", () => {
-    expect(mapSportToPlaytomic("football-7v7")).toBe("FOOTBALL");
+  it("maps football-7v7 to FOOTBALL7", () => {
+    expect(mapSportToPlaytomic("football-7v7")).toBe("FOOTBALL7");
   });
 
-  it("maps football-11v11 to FOOTBALL", () => {
-    expect(mapSportToPlaytomic("football-11v11")).toBe("FOOTBALL");
+  it("returns null for football-11v11 (not on Playtomic)", () => {
+    expect(mapSportToPlaytomic("football-11v11")).toBeNull();
   });
 
-  it("maps futsal to FOOTBALL", () => {
-    expect(mapSportToPlaytomic("futsal")).toBe("FOOTBALL");
+  it("maps futsal to FUTSAL", () => {
+    expect(mapSportToPlaytomic("futsal")).toBe("FUTSAL");
   });
 
   it("returns null for basketball", () => {
@@ -253,7 +253,7 @@ describe("getAvailability", () => {
 
     const url = fetchSpy.mock.calls[0][0] as string;
     expect(url).toContain("tenant_id=abc123");
-    expect(url).toContain("sport_id=FOOTBALL");
+    expect(url).toContain("sport_id=FUTSAL");
     expect(url).toContain("local_start_min=2026-04-01T00:00:00");
     expect(url).toContain("local_start_max=2026-04-01T23:59:59");
   });
