@@ -46,6 +46,104 @@ interface GrowthPoint {
 
 type GrowthRange = "30d" | "1y" | "all";
 
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+  const theme = useTheme();
+  if (!active || !payload?.length) return null;
+  const isDark = theme.palette.mode === "dark";
+  return (
+    <div style={{
+      backgroundColor: isDark ? "#1a1d1b" : "#fff",
+      border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"}`,
+      borderRadius: 8,
+      padding: 10,
+      color: isDark ? "#fff" : "rgba(0,0,0,0.87)",
+    }}>
+      <p style={{ margin: 0, marginBottom: 4 }}>{label}</p>
+      {payload.map((entry, i) => (
+        <p key={i} style={{ margin: 0, color: entry.color }}>
+          {entry.name} : {entry.value}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function GrowthChart({ growthData, growthRange, setGrowthRange, loadingGrowth }: {
+  growthData: GrowthPoint[];
+  growthRange: GrowthRange;
+  setGrowthRange: (v: GrowthRange) => void;
+  loadingGrowth: boolean;
+}) {
+  const t = useT();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+  return (
+    <Paper elevation={1} sx={{ p: 3 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Typography variant="h6" fontWeight={600}>{t("adminGrowthChart")}</Typography>
+        <ToggleButtonGroup
+          size="small"
+          value={growthRange}
+          exclusive
+          onChange={(_, v) => { if (v) setGrowthRange(v); }}
+        >
+          <ToggleButton value="30d">{t("adminRange30d")}</ToggleButton>
+          <ToggleButton value="1y">{t("adminRange1y")}</ToggleButton>
+          <ToggleButton value="all">{t("adminRangeAll")}</ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
+      {loadingGrowth ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={24} /></Box>
+      ) : growthData.length === 0 ? (
+        <Alert severity="info">{t("adminNoGrowthData")}</Alert>
+      ) : (
+        <ResponsiveContainer width="100%" height={320}>
+          <LineChart data={growthData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "rgba(255,255,255,0.12)" : theme.palette.divider} />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 11, fill: isDark ? "#fff" : "rgba(0,0,0,0.87)" }}
+              stroke={isDark ? "rgba(255,255,255,0.5)" : theme.palette.text.secondary}
+              tickLine={{ stroke: isDark ? "rgba(255,255,255,0.3)" : theme.palette.text.secondary }}
+              axisLine={{ stroke: isDark ? "rgba(255,255,255,0.3)" : theme.palette.text.secondary }}
+              tickFormatter={(v: string) => {
+                const d = new Date(v);
+                return `${d.getMonth() + 1}/${d.getDate()}`;
+              }}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: isDark ? "#fff" : "rgba(0,0,0,0.87)" }}
+              stroke={isDark ? "rgba(255,255,255,0.5)" : theme.palette.text.secondary}
+              tickLine={{ stroke: isDark ? "rgba(255,255,255,0.3)" : theme.palette.text.secondary }}
+              axisLine={{ stroke: isDark ? "rgba(255,255,255,0.3)" : theme.palette.text.secondary }}
+            />
+            <RechartsTooltip content={<ChartTooltip />} />
+            <Legend wrapperStyle={{ color: isDark ? "#fff" : "rgba(0,0,0,0.87)" }} />
+            <Line
+              type="monotone"
+              dataKey="users"
+              name={t("adminTotalUsers")}
+              stroke={isDark ? "#64b5f6" : theme.palette.primary.main}
+              strokeWidth={2}
+              dot={{ r: 3 }}
+              activeDot={{ r: 5 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="events"
+              name={t("adminTotalEvents")}
+              stroke={isDark ? "#f48fb1" : theme.palette.secondary.main}
+              strokeWidth={2}
+              dot={{ r: 3 }}
+              activeDot={{ r: 5 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </Paper>
+  );
+}
+
 function StatCard({ label, value, icon }: { label: string; value: number | string; icon: React.ReactNode }) {
   return (
     <Paper elevation={1} sx={{ p: 2.5, display: "flex", alignItems: "center", gap: 2 }}>
@@ -60,7 +158,6 @@ function StatCard({ label, value, icon }: { label: string; value: number | strin
 
 export default function AdminDashboardPage() {
   const t = useT();
-  const theme = useTheme();
   const { data: session, isPending: sessionLoading } = useSession();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -209,67 +306,7 @@ export default function AdminDashboardPage() {
                   </Paper>
                 )}
 
-                {/* Growth chart */}
-                <Paper elevation={1} sx={{ p: 3 }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                    <Typography variant="h6" fontWeight={600}>{t("adminGrowthChart")}</Typography>
-                    <ToggleButtonGroup
-                      size="small"
-                      value={growthRange}
-                      exclusive
-                      onChange={(_, v) => { if (v) setGrowthRange(v); }}
-                    >
-                      <ToggleButton value="30d">{t("adminRange30d")}</ToggleButton>
-                      <ToggleButton value="1y">{t("adminRange1y")}</ToggleButton>
-                      <ToggleButton value="all">{t("adminRangeAll")}</ToggleButton>
-                    </ToggleButtonGroup>
-                  </Stack>
-                  {loadingGrowth ? (
-                    <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={24} /></Box>
-                  ) : growthData.length === 0 ? (
-                    <Alert severity="info">{t("adminNoGrowthData")}</Alert>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={320}>
-                      <LineChart data={growthData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-                        <XAxis
-                          dataKey="date"
-                          tick={{ fontSize: 11 }}
-                          stroke={theme.palette.text.secondary}
-                          tickFormatter={(v: string) => {
-                            const d = new Date(v);
-                            return `${d.getMonth() + 1}/${d.getDate()}`;
-                          }}
-                        />
-                        <YAxis tick={{ fontSize: 11 }} stroke={theme.palette.text.secondary} />
-                        <RechartsTooltip
-                          contentStyle={{
-                            backgroundColor: theme.palette.background.paper,
-                            border: `1px solid ${theme.palette.divider}`,
-                            borderRadius: 8,
-                          }}
-                        />
-                        <Legend />
-                        <Line
-                          type="monotone"
-                          dataKey="users"
-                          name={t("adminTotalUsers")}
-                          stroke={theme.palette.primary.main}
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="events"
-                          name={t("adminTotalEvents")}
-                          stroke={theme.palette.secondary.main}
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  )}
-                </Paper>
+                <GrowthChart growthData={growthData} growthRange={growthRange} setGrowthRange={setGrowthRange} loadingGrowth={loadingGrowth} />
 
                 {/* User list */}
                 <Paper elevation={1} sx={{ p: 3 }}>

@@ -14,17 +14,16 @@ const ThemeModeContext = createContext<ThemeModeContextType>({
 
 export const useThemeMode = () => useContext(ThemeModeContext);
 
-export const ThemeModeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [mode, setMode] = useState<PaletteMode>("light");
+function getInitialMode(): PaletteMode {
+  if (typeof window === "undefined") return "light";
+  const stored = localStorage.getItem("themeMode");
+  if (stored === "light" || stored === "dark") return stored;
+  if (window.matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
+  return "light";
+}
 
-  useEffect(() => {
-    const stored = localStorage.getItem("themeMode");
-    if (stored === "light" || stored === "dark") {
-      setMode(stored);
-    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      setMode("dark");
-    }
-  }, []);
+export const ThemeModeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [mode, setMode] = useState<PaletteMode>(getInitialMode);
 
   useEffect(() => {
     localStorage.setItem("themeMode", mode);
