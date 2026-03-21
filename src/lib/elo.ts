@@ -5,8 +5,8 @@
 
 const DEFAULT_RATING = 1000;
 const K_STANDARD = 32;
-const K_PROVISIONAL = 40;
-const PROVISIONAL_THRESHOLD = 10;
+const K_PROVISIONAL = 48;
+const PROVISIONAL_THRESHOLD = 6;
 
 /**
  * Calculate the expected score for a player against an opponent.

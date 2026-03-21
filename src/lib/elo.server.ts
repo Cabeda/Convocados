@@ -89,8 +89,16 @@ export async function processGame(
 /**
  * Recalculate all ratings for an event from scratch.
  * Resets all ratings and reprocesses history in chronological order.
+ * Preserves manually-set initial ratings (initialRating field).
  */
 export async function recalculateAllRatings(eventId: string): Promise<number> {
+  // Capture manually-set initial ratings before wiping
+  const existingRatings = await prisma.playerRating.findMany({
+    where: { eventId, initialRating: { not: null } },
+    select: { name: true, initialRating: true },
+  });
+  const initialRatings = new Map(existingRatings.map((r) => [r.name, r.initialRating!]));
+
   // Reset all ratings and processed flags
   await prisma.$transaction([
     prisma.playerRating.deleteMany({ where: { eventId } }),
@@ -99,6 +107,13 @@ export async function recalculateAllRatings(eventId: string): Promise<number> {
       data: { eloProcessed: false },
     }),
   ]);
+
+  // Re-create ratings for players that had manual initial ratings
+  for (const [name, initial] of initialRatings) {
+    await prisma.playerRating.create({
+      data: { eventId, name, rating: initial, initialRating: initial },
+    });
+  }
 
   // Process all played games with scores in chronological order
   const games = await prisma.gameHistory.findMany({

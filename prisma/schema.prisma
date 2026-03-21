@@ -152,18 +152,19 @@ model Player {
 }
 
 model PlayerRating {
-  id          String   @id @default(cuid())
-  eventId     String
-  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  name        String
-  userId      String?
-  rating      Float    @default(1000)
-  gamesPlayed Int      @default(0)
-  wins        Int      @default(0)
-  draws       Int      @default(0)
-  losses      Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name          String
+  userId        String?
+  rating        Float    @default(1000)
+  initialRating Float?
+  gamesPlayed   Int      @default(0)
+  wins          Int      @default(0)
+  draws         Int      @default(0)
+  losses        Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@unique([eventId, name])
   @@index([userId])
