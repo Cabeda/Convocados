@@ -316,6 +316,8 @@ model NotificationPreferences {
   gameReminderEmail    Boolean  @default(true)
   gameReminderPush     Boolean  @default(true)
   weeklySummaryEmail   Boolean  @default(false)
+  paymentReminderEmail Boolean  @default(true)
+  paymentReminderPush  Boolean  @default(true)
 
   // Reminder time preferences
   reminder24h          Boolean  @default(true)
@@ -405,6 +407,18 @@ model EventAdmin {
 
   @@unique([eventId, userId])
   @@index([userId])
+}
+
+// ── Payment reminder log ──────────────────────────────────────────────────────
+
+model PaymentReminderLog {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  sentAt    DateTime @default(now())
+
+  @@unique([eventId, userId, sentAt])
+  @@index([eventId, userId])
 }
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────

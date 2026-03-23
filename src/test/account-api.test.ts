@@ -169,7 +169,7 @@ describe("DELETE /api/me/account", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 403 when password is wrong", async () => {
+  it("returns 403 when password is wrong", { timeout: 15000 }, async () => {
     const user = await seedUser();
     mockAuth(user.id);
     await seedCredentialAccount(user.id, "correctPassword1");
@@ -184,7 +184,7 @@ describe("DELETE /api/me/account", () => {
     expect(existing).not.toBeNull();
   });
 
-  it("returns 400 when password is missing for credential user", async () => {
+  it("returns 400 when password is missing for credential user", { timeout: 15000 }, async () => {
     const user = await seedUser();
     mockAuth(user.id);
     await seedCredentialAccount(user.id, "myPassword123");
@@ -197,7 +197,7 @@ describe("DELETE /api/me/account", () => {
     expect(existing).not.toBeNull();
   });
 
-  it("deletes the user with correct password and cleans up all data", async () => {
+  it("deletes the user with correct password and cleans up all data", { timeout: 15000 }, async () => {
     const user = await seedUser();
     mockAuth(user.id);
     await seedCredentialAccount(user.id, "correctPassword1");

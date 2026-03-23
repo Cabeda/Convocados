@@ -14,6 +14,8 @@ const DEFAULTS = {
   gameReminderEmail: true,
   gameReminderPush: true,
   weeklySummaryEmail: false,
+  paymentReminderEmail: true,
+  paymentReminderPush: true,
   reminder24h: true,
   reminder2h: true,
   reminder1h: false,

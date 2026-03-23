@@ -562,6 +562,13 @@ const it: TranslationKeys = {
   publicStatsDesc: "Permetti a chiunque di vedere le tue statistiche sulla tua pagina profilo.",
   publicStatsSaved: "Visibilità delle statistiche aggiornata.",
   publicStatsSaveError: "Impossibile aggiornare la visibilità delle statistiche.",
+
+  // Payment reminders (#162)
+  paymentReminders: "Promemoria di pagamento",
+  paymentRemindersDesc: "Ricevi promemoria giornalieri per le partite non pagate fino a quando le segni come pagate.",
+  paymentReminderSubject: "Pagamento in sospeso: {title}",
+  paymentReminderHeading: "Pagamento in sospeso per {title}",
+  paymentReminderBody: "Hai un pagamento in sospeso di {amount} {currency} per questa partita.",
 };
 
 export default it;

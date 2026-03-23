@@ -1,8 +1,9 @@
 import type { APIRoute } from "astro";
 import { getUpcomingReminders, markReminderSent } from "~/lib/reminders.server";
 import { sendPushToEvent } from "~/lib/push.server";
-import { sendReminder } from "~/lib/email.server";
-import { getNotificationPrefs, wantsEmailReminder, wantsPushReminder } from "~/lib/notificationPrefs.server";
+import { sendReminder, sendPaymentReminder } from "~/lib/email.server";
+import { getNotificationPrefs, wantsEmailReminder, wantsPushReminder, wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
+import { getPlayersWithPendingPayments, shouldSendPaymentReminder, markPaymentReminderSent } from "~/lib/paymentReminders.server";
 import { cleanupExpiredRateLimits } from "~/lib/apiRateLimit.server";
 import { expireUnconfirmed } from "~/lib/priority.server";
 import { createLogger } from "~/lib/logger.server";
@@ -56,6 +57,37 @@ export const POST: APIRoute = async ({ request }) => {
     }
   }
 
+  // ── Payment reminders ─────────────────────────────────────────────────────
+  const paymentRemindersSent: string[] = [];
+  try {
+    const pendingPayments = await getPlayersWithPendingPayments();
+    const appUrl = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.fly.dev";
+
+    for (const pp of pendingPayments) {
+      try {
+        const shouldSend = await shouldSendPaymentReminder(pp.eventId, pp.userId);
+        if (!shouldSend) continue;
+
+        const prefs = await getNotificationPrefs(pp.userId);
+        if (!wantsPaymentReminderEmail(prefs)) continue;
+
+        await sendPaymentReminder(pp.email, {
+          eventTitle: pp.eventTitle,
+          amount: pp.amount.toFixed(2),
+          currency: pp.currency,
+          eventUrl: `${appUrl}/events/${pp.eventId}`,
+        });
+
+        await markPaymentReminderSent(pp.eventId, pp.userId);
+        paymentRemindersSent.push(`${pp.email}:${pp.eventId}`);
+      } catch (err) {
+        log.error({ email: pp.email, eventId: pp.eventId, err }, "Failed to send payment reminder");
+      }
+    }
+  } catch (err) {
+    log.error({ err }, "Failed to process payment reminders");
+  }
+
   // Cleanup expired rate limit entries
   let rateLimitsCleaned = 0;
   try {
@@ -72,7 +104,7 @@ export const POST: APIRoute = async ({ request }) => {
     log.error({ err }, "Failed to expire unconfirmed priority spots");
   }
 
-  return new Response(JSON.stringify({ ok: true, sent, emailsSent, rateLimitsCleaned, priorityExpired }), {
+  return new Response(JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, rateLimitsCleaned, priorityExpired }), {
     headers: { "Content-Type": "application/json" },
   });
 };
