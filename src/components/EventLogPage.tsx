@@ -19,6 +19,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { useSession } from "~/lib/auth.client";
 
 interface LogEntry {
   id: string;
@@ -113,7 +114,7 @@ const ACTION_I18N: Record<string, string> = {
   rating_manual_disabled: "logRatingManualDisabled",
 };
 
-function LogEntryRow({ entry }: { entry: LogEntry }) {
+function LogEntryRow({ entry, currentUserId }: { entry: LogEntry; currentUserId?: string }) {
   const t = useT();
   const theme = useTheme();
   const color = ACTION_COLORS[entry.action] ?? "default";
@@ -122,12 +123,30 @@ function LogEntryRow({ entry }: { entry: LogEntry }) {
 
   const actor = entry.actor ?? t("logAnonymous");
   const player = (entry.details.playerName as string) ?? "";
+  const actorIsCurrentUser = !!(currentUserId && entry.actorId && entry.actorId === currentUserId);
 
-  let description: string;
+  // Build description with actor name as a link when it's the current user
+  let descriptionNode: React.ReactNode;
   if (i18nKey) {
-    description = t(i18nKey as any, { actor, player });
+    const ACTOR_PLACEHOLDER = "\x00ACTOR\x00";
+    const raw = t(i18nKey as any, { actor: ACTOR_PLACEHOLDER, player });
+    const parts = raw.split(ACTOR_PLACEHOLDER);
+
+    const actorNode = actorIsCurrentUser ? (
+      <a href={`/users/${entry.actorId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 600 }}>
+        {actor}
+      </a>
+    ) : actor;
+
+    descriptionNode = (
+      <>
+        {parts[0]}
+        {actorNode}
+        {parts[1] ?? ""}
+      </>
+    );
   } else {
-    description = entry.action.replace(/_/g, " ");
+    descriptionNode = entry.action.replace(/_/g, " ");
   }
 
   const timeAgo = formatRelativeTime(entry.createdAt);
@@ -149,7 +168,7 @@ function LogEntryRow({ entry }: { entry: LogEntry }) {
           {icon}
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="body2">{description}</Typography>
+          <Typography variant="body2">{descriptionNode}</Typography>
           <Typography variant="caption" color="text.secondary">{timeAgo}</Typography>
         </Box>
         {chipColor && (
@@ -182,6 +201,8 @@ function formatRelativeTime(iso: string): string {
 
 export default function EventLogPage({ eventId }: { eventId: string }) {
   const t = useT();
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id;
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -252,7 +273,7 @@ export default function EventLogPage({ eventId }: { eventId: string }) {
             {entries.length > 0 && (
               <Stack spacing={1}>
                 {entries.map((e) => (
-                  <LogEntryRow key={e.id} entry={e} />
+                  <LogEntryRow key={e.id} entry={e} currentUserId={currentUserId} />
                 ))}
                 {hasMore && (
                   <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
