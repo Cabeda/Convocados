@@ -874,4 +874,22 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { lock: true }));
     expect(res.status).toBe(403);
   });
+
+  it("updates teamsSnapshot", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const history = await seedHistory(id);
+    const newTeams = [
+      { team: "Red", players: [{ name: "Alice", order: 0 }, { name: "Charlie", order: 1 }] },
+      { team: "Blue", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { teamsSnapshot: newTeams }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const parsed = JSON.parse(body.teamsSnapshot);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].team).toBe("Red");
+    expect(parsed[0].players).toHaveLength(2);
+  });
 });
