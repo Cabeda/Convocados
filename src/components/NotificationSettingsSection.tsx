@@ -14,6 +14,8 @@ interface Prefs {
   gameReminderEmail: boolean;
   gameReminderPush: boolean;
   weeklySummaryEmail: boolean;
+  paymentReminderEmail: boolean;
+  paymentReminderPush: boolean;
   reminder24h: boolean;
   reminder2h: boolean;
   reminder1h: boolean;
@@ -27,6 +29,8 @@ const DEFAULTS: Prefs = {
   gameReminderEmail: true,
   gameReminderPush: true,
   weeklySummaryEmail: false,
+  paymentReminderEmail: true,
+  paymentReminderPush: true,
   reminder24h: true,
   reminder2h: true,
   reminder1h: false,
@@ -141,6 +145,18 @@ export function NotificationSettingsSection() {
             <FormControlLabel
               control={<Switch checked={prefs.weeklySummaryEmail} onChange={() => toggle("weeklySummaryEmail")} disabled={saving || !prefs.emailEnabled} size="small" />}
               label={t("emailNotifications")}
+            />
+          </Stack>
+
+          <Typography variant="subtitle2" fontWeight={600}>{t("paymentReminders")}</Typography>
+          <Stack spacing={0.5} sx={{ pl: 1 }}>
+            <FormControlLabel
+              control={<Switch checked={prefs.paymentReminderEmail} onChange={() => toggle("paymentReminderEmail")} disabled={saving || !prefs.emailEnabled} size="small" />}
+              label={t("emailNotifications")}
+            />
+            <FormControlLabel
+              control={<Switch checked={prefs.paymentReminderPush} onChange={() => toggle("paymentReminderPush")} disabled={saving || !prefs.pushEnabled} size="small" />}
+              label={t("pushNotifications")}
             />
           </Stack>
 

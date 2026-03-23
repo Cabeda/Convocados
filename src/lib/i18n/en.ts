@@ -608,6 +608,13 @@ const en = {
   publicStatsDesc: "Allow anyone to view your stats on your profile page.",
   publicStatsSaved: "Stats visibility updated.",
   publicStatsSaveError: "Could not update stats visibility.",
+
+  // Payment reminders (#162)
+  paymentReminders: "Payment reminders",
+  paymentRemindersDesc: "Get daily reminders for unpaid games until you mark them as paid.",
+  paymentReminderSubject: "Payment pending: {title}",
+  paymentReminderHeading: "Payment pending for {title}",
+  paymentReminderBody: "You have an outstanding payment of {amount} {currency} for this game.",
 } as const;
 
 export default en;

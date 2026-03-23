@@ -562,6 +562,13 @@ const fr: TranslationKeys = {
   publicStatsDesc: "Permettre à tout le monde de voir tes statistiques sur ta page de profil.",
   publicStatsSaved: "Visibilité des statistiques mise à jour.",
   publicStatsSaveError: "Impossible de mettre à jour la visibilité des statistiques.",
+
+  // Payment reminders (#162)
+  paymentReminders: "Rappels de paiement",
+  paymentRemindersDesc: "Reçois des rappels quotidiens pour les matchs impayés jusqu'à ce que tu les marques comme payés.",
+  paymentReminderSubject: "Paiement en attente : {title}",
+  paymentReminderHeading: "Paiement en attente pour {title}",
+  paymentReminderBody: "Tu as un paiement en attente de {amount} {currency} pour ce match.",
 };
 
 export default fr;
