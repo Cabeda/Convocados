@@ -233,6 +233,31 @@ export async function sendChangeEmailVerification(to: string, url: string) {
   log.info({ to, id: result.data?.id }, "Change-email verification sent");
 }
 
+// ── Payment reminder emails ───────────────────────────────────────────────────
+
+export interface PaymentReminderData {
+  eventTitle: string;
+  amount: string;
+  currency: string;
+  eventUrl: string;
+}
+
+export async function sendPaymentReminder(to: string, data: PaymentReminderData) {
+  const result = await getResend().emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: `Payment pending: ${data.eventTitle} — Convocados`,
+    html: emailTemplate({
+      heading: `Payment pending for ${data.eventTitle}`,
+      body: `You have an outstanding payment of <strong>${data.amount} ${data.currency}</strong> for this game.<br/><br/>Please settle your payment or contact the event organizer.`,
+      buttonText: "View game",
+      buttonUrl: data.eventUrl,
+      footnote: `Don't want payment reminders? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+    }),
+  });
+  if (result.error) throw new Error(`Failed to send payment reminder: ${result.error.message}`);
+}
+
 // ── Priority enrollment emails ────────────────────────────────────────────────
 
 export interface PriorityEnrollmentData {

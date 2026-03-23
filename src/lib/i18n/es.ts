@@ -562,6 +562,13 @@ const es: TranslationKeys = {
   publicStatsDesc: "Permitir que cualquiera vea tus estadísticas en tu página de perfil.",
   publicStatsSaved: "Visibilidad de estadísticas actualizada.",
   publicStatsSaveError: "No se pudo actualizar la visibilidad de las estadísticas.",
+
+  // Payment reminders (#162)
+  paymentReminders: "Recordatorios de pago",
+  paymentRemindersDesc: "Recibe recordatorios diarios para juegos no pagados hasta que los marques como pagados.",
+  paymentReminderSubject: "Pago pendiente: {title}",
+  paymentReminderHeading: "Pago pendiente para {title}",
+  paymentReminderBody: "Tienes un pago pendiente de {amount} {currency} para este juego.",
 };
 
 export default es;

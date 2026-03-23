@@ -8,6 +8,8 @@ export interface NotificationPrefs {
   gameReminderEmail: boolean;
   gameReminderPush: boolean;
   weeklySummaryEmail: boolean;
+  paymentReminderEmail: boolean;
+  paymentReminderPush: boolean;
   reminder24h: boolean;
   reminder2h: boolean;
   reminder1h: boolean;
@@ -21,6 +23,8 @@ const DEFAULTS: NotificationPrefs = {
   gameReminderEmail: true,
   gameReminderPush: true,
   weeklySummaryEmail: false,
+  paymentReminderEmail: true,
+  paymentReminderPush: true,
   reminder24h: true,
   reminder2h: true,
   reminder1h: false,
@@ -58,4 +62,14 @@ export function wantsGameInviteEmail(prefs: NotificationPrefs): boolean {
 /** Check if a user wants weekly summary emails */
 export function wantsWeeklySummary(prefs: NotificationPrefs): boolean {
   return prefs.emailEnabled && prefs.weeklySummaryEmail;
+}
+
+/** Check if a user wants payment reminder emails */
+export function wantsPaymentReminderEmail(prefs: NotificationPrefs): boolean {
+  return prefs.emailEnabled && prefs.paymentReminderEmail;
+}
+
+/** Check if a user wants payment reminder push notifications */
+export function wantsPaymentReminderPush(prefs: NotificationPrefs): boolean {
+  return prefs.pushEnabled && prefs.paymentReminderPush;
 }
