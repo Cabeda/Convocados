@@ -185,9 +185,11 @@ async function main() {
 
     // ── Past events: add game history, teams, elo, and payments ──────────
     // Recurring events get multiple game history entries (simulating weeks of play)
+    // Public events always get a recent game (yesterday) so editableUntil is in the future
+    const needsRecentGame = isPublic && playerNames.length >= 4;
     const gameCount = isPast && playerNames.length >= 4
       ? isRecurring ? randInt(4, 12) : 1
-      : 0;
+      : needsRecentGame ? 1 : 0;
 
     if (gameCount > 0) {
       // ELO ratings — accumulate across games for this event
@@ -201,7 +203,10 @@ async function main() {
 
       for (let g = 0; g < gameCount; g++) {
         // Each game is 7 days apart going back in time
-        const gameDateTime = new Date(dateTime.getTime() - g * 7 * 86400000);
+        // For public events, the most recent game (g===0) is yesterday so editableUntil is in the future
+        const gameDateTime = needsRecentGame && g === 0
+          ? new Date(now - 86400000)
+          : new Date(dateTime.getTime() - g * 7 * 86400000);
 
         // Vary the roster per game: some players may miss some games (70-100% attendance)
         const allPlayers = playerNames.slice(0, maxPlayers);

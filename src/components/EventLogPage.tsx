@@ -12,6 +12,8 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import PaymentIcon from "@mui/icons-material/Payment";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import UnarchiveIcon from "@mui/icons-material/Unarchive";
+import ScoreboardIcon from "@mui/icons-material/Scoreboard";
+import SportsIcon from "@mui/icons-material/Sports";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -45,6 +47,12 @@ const ACTION_COLORS: Record<string, "success" | "error" | "info" | "warning" | "
   recurrence_reset: "warning",
   event_archived: "warning",
   event_unarchived: "info",
+  history_score_updated: "info",
+  history_teams_updated: "info",
+  history_status_updated: "warning",
+  history_payments_updated: "info",
+  history_unlocked: "warning",
+  history_locked: "info",
 };
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -56,6 +64,12 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
   payment_updated: <PaymentIcon fontSize="small" />,
   event_archived: <ArchiveIcon fontSize="small" />,
   event_unarchived: <UnarchiveIcon fontSize="small" />,
+  history_score_updated: <ScoreboardIcon fontSize="small" />,
+  history_teams_updated: <SportsIcon fontSize="small" />,
+  history_status_updated: <HistoryIcon fontSize="small" />,
+  history_payments_updated: <PaymentIcon fontSize="small" />,
+  history_unlocked: <HistoryIcon fontSize="small" />,
+  history_locked: <HistoryIcon fontSize="small" />,
 };
 
 const ACTION_I18N: Record<string, string> = {
@@ -77,6 +91,12 @@ const ACTION_I18N: Record<string, string> = {
   recurrence_reset: "logRecurrenceReset",
   event_archived: "logEventArchived",
   event_unarchived: "logEventUnarchived",
+  history_score_updated: "logHistoryScoreUpdated",
+  history_teams_updated: "logHistoryTeamsUpdated",
+  history_status_updated: "logHistoryStatusUpdated",
+  history_payments_updated: "logHistoryPaymentsUpdated",
+  history_unlocked: "logHistoryUnlocked",
+  history_locked: "logHistoryLocked",
 };
 
 function LogEntryRow({ entry }: { entry: LogEntry }) {

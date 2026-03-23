@@ -585,6 +585,16 @@ const en = {
   archivedBadge: "Archived",
   logEventArchived: "{actor} archived the event",
   logEventUnarchived: "{actor} unarchived the event",
+  logHistoryScoreUpdated: "{actor} updated the score for {date}",
+  logHistoryTeamsUpdated: "{actor} updated the teams for {date}",
+  logHistoryStatusUpdated: "{actor} changed the status for {date}",
+  logHistoryPaymentsUpdated: "{actor} updated payments for {date}",
+  logHistoryUnlocked: "{actor} unlocked the game from {date}",
+  logHistoryLocked: "{actor} locked the game from {date}",
+  unlockHistory: "Unlock for editing",
+  lockHistory: "Lock editing",
+  loginRequiredToEdit: "You must be logged in to edit results",
+  duplicatePlayerWarning: "A player cannot be on both teams: {names}",
 
   // Player stats dashboard (#53)
   playerStats: "My Stats",
