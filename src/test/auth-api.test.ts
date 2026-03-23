@@ -892,4 +892,71 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(parsed[0].team).toBe("Red");
     expect(parsed[0].players).toHaveLength(2);
   });
+
+  it("recalculates ratings when teams are updated on an already-processed game", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+
+    // Create players with initial ratings
+    await testPrisma.playerRating.create({
+      data: { eventId: id, name: "Alice", rating: 1000, gamesPlayed: 0 },
+    });
+    await testPrisma.playerRating.create({
+      data: { eventId: id, name: "Bob", rating: 1000, gamesPlayed: 0 },
+    });
+    await testPrisma.playerRating.create({
+      data: { eventId: id, name: "Charlie", rating: 1000, gamesPlayed: 0 },
+    });
+
+    const originalTeams = [
+      { team: "T1", players: [{ name: "Alice", order: 0 }] },
+      { team: "T2", players: [{ name: "Bob", order: 0 }] },
+    ];
+
+    // Create a game that has already been ELO-processed
+    const history = await seedHistory(id, {
+      scoreOne: 3,
+      scoreTwo: 1,
+      teamsSnapshot: JSON.stringify(originalTeams),
+      eloProcessed: true,
+    });
+
+    // Process ELO for the original game so ratings reflect Alice vs Bob
+    const { processGame } = await import("~/lib/elo.server");
+    await processGame(id, history.id, originalTeams, 3, 1);
+
+    // Capture ratings after initial processing
+    const aliceBefore = await testPrisma.playerRating.findUnique({
+      where: { eventId_name: { eventId: id, name: "Alice" } },
+    });
+    const charlieBefore = await testPrisma.playerRating.findUnique({
+      where: { eventId_name: { eventId: id, name: "Charlie" } },
+    });
+    expect(aliceBefore!.gamesPlayed).toBeGreaterThan(0);
+    // Charlie hasn't played yet
+    expect(charlieBefore!.gamesPlayed).toBe(0);
+
+    // Now update teams: swap Bob for Charlie
+    const newTeams = [
+      { team: "T1", players: [{ name: "Alice", order: 0 }] },
+      { team: "T2", players: [{ name: "Charlie", order: 0 }] },
+    ];
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { teamsSnapshot: newTeams }));
+    expect(res.status).toBe(200);
+
+    // After updating teams on a processed game, ratings should be recalculated
+    // Charlie should now have games played (he replaced Bob)
+    const charlieAfter = await testPrisma.playerRating.findUnique({
+      where: { eventId_name: { eventId: id, name: "Charlie" } },
+    });
+    expect(charlieAfter!.gamesPlayed).toBeGreaterThan(0);
+
+    // Bob should no longer have a rating record (recalculation wiped it since
+    // he's not in any game's teams anymore)
+    const bobAfter = await testPrisma.playerRating.findUnique({
+      where: { eventId_name: { eventId: id, name: "Bob" } },
+    });
+    expect(bobAfter).toBeNull();
+  });
 });
