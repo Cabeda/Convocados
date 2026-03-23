@@ -602,6 +602,12 @@ const en = {
   statsAttendanceRate: "Attendance",
   statsCurrentStreak: "Streak",
   statsViewEvent: "View event",
+
+  // Public stats privacy (#53)
+  publicStatsLabel: "Public stats",
+  publicStatsDesc: "Allow anyone to view your stats on your profile page.",
+  publicStatsSaved: "Stats visibility updated.",
+  publicStatsSaveError: "Could not update stats visibility.",
 } as const;
 
 export default en;

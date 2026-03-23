@@ -3,13 +3,14 @@ import {
   Container, Paper, Typography, Stack, Box, Chip, Avatar,
   CircularProgress, Alert, Tabs, Tab, TextField, Button,
   IconButton, Snackbar, Divider, Dialog, DialogTitle,
-  DialogContent, DialogActions,
+  DialogContent, DialogActions, Switch, FormControlLabel,
 } from "@mui/material";
 import SportsIcon from "@mui/icons-material/Sports";
 import EditIcon from "@mui/icons-material/Edit";
 import LockIcon from "@mui/icons-material/Lock";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
+import BarChartIcon from "@mui/icons-material/BarChart";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { NotificationSettingsSection } from "./NotificationSettingsSection";
@@ -27,6 +28,7 @@ interface UserProfile {
     createdAt: string;
   };
   hasPassword?: boolean;
+  publicStats?: boolean;
   owned: GameSummary[];
   joined: GameSummary[];
   stats: {
@@ -247,6 +249,67 @@ function ChangePasswordSection({ hasPassword }: { hasPassword: boolean }) {
         autoHideDuration={3000}
         onClose={() => setSnackbar(false)}
         message={t("passwordChanged")}
+      />
+    </Paper>
+  );
+}
+
+/** Public stats visibility toggle */
+function PublicStatsSection({ userId, userName, initialValue }: { userId: string; userName: string; initialValue: boolean }) {
+  const t = useT();
+  const [publicStats, setPublicStats] = useState(initialValue);
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleToggle = async (checked: boolean) => {
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: userName, publicStats: checked }),
+      });
+      if (!res.ok) {
+        setError(t("publicStatsSaveError"));
+        setSaving(false);
+        return;
+      }
+      setPublicStats(checked);
+      setSnackbar(true);
+    } catch {
+      setError(t("publicStatsSaveError"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+      <Stack spacing={2}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <BarChartIcon fontSize="small" color="action" />
+          <Typography variant="h6" fontWeight={600}>{t("publicStatsLabel")}</Typography>
+        </Stack>
+        <Typography variant="body2" color="text.secondary">{t("publicStatsDesc")}</Typography>
+        {error && <Alert severity="error">{error}</Alert>}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={publicStats}
+              onChange={(_, checked) => handleToggle(checked)}
+              disabled={saving}
+            />
+          }
+          label={t("publicStatsLabel")}
+        />
+      </Stack>
+      <Snackbar
+        open={snackbar}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar(false)}
+        message={t("publicStatsSaved")}
       />
     </Paper>
   );
@@ -524,6 +587,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
             {/* Account management sections (own profile only) */}
             {isOwnProfile && (
               <>
+                <PublicStatsSection userId={user.id} userName={user.name} initialValue={data.publicStats ?? false} />
                 <NotificationSettingsSection />
                 <ChangePasswordSection hasPassword={hasPassword ?? false} />
                 <ExportDataSection />
