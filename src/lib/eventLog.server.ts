@@ -17,7 +17,9 @@ export type EventAction =
   | "ownership_claimed"
   | "ownership_relinquished"
   | "ownership_transferred"
-  | "recurrence_reset";
+  | "recurrence_reset"
+  | "event_archived"
+  | "event_unarchived";
 
 /**
  * Append an entry to the event activity log.

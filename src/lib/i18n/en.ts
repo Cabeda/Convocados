@@ -572,6 +572,17 @@ const en = {
   adminRange1y: "1 year",
   adminRangeAll: "All time",
   adminNoGrowthData: "No growth data available yet.",
+
+  // Event archive (#161)
+  archiveEvent: "Archive event",
+  archiveEventDesc: "Archived events are hidden from public listings and your dashboard. You can unarchive at any time.",
+  archiveEventBtn: "Archive",
+  unarchiveEventBtn: "Unarchive",
+  eventArchived: "Event archived.",
+  eventUnarchived: "Event unarchived.",
+  archivedBadge: "Archived",
+  logEventArchived: "{actor} archived the event",
+  logEventUnarchived: "{actor} unarchived the event",
 } as const;
 
 export default en;

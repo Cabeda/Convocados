@@ -155,6 +155,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     createdAt: event.createdAt.toISOString(),
     updatedAt: event.updatedAt.toISOString(),
     nextResetAt: event.nextResetAt?.toISOString() ?? null,
+    archivedAt: event.archivedAt?.toISOString() ?? null,
     players: event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() })),
   });
 };

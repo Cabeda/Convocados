@@ -526,6 +526,17 @@ const de: TranslationKeys = {
   adminRange1y: "1 Jahr",
   adminRangeAll: "Gesamter Zeitraum",
   adminNoGrowthData: "Noch keine Wachstumsdaten verfügbar.",
+
+  // Event archive (#161)
+  archiveEvent: "Event archivieren",
+  archiveEventDesc: "Archivierte Events werden in öffentlichen Listen und deinem Dashboard ausgeblendet. Du kannst sie jederzeit wiederherstellen.",
+  archiveEventBtn: "Archivieren",
+  unarchiveEventBtn: "Wiederherstellen",
+  eventArchived: "Event archiviert.",
+  eventUnarchived: "Event wiederhergestellt.",
+  archivedBadge: "Archiviert",
+  logEventArchived: "{actor} hat das Event archiviert",
+  logEventUnarchived: "{actor} hat das Event wiederhergestellt",
 };
 
 export default de;

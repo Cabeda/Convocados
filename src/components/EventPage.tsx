@@ -70,6 +70,7 @@ interface EventData {
   wasReset?: boolean;
   hasPassword?: boolean;
   locked?: boolean;
+  archivedAt?: string | null;
 }
 
 // ── Countdown ─────────────────────────────────────────────────────────────────
@@ -1066,6 +1067,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
                     {/* Owner badge — always visible for owners */}
                     {isOwner && (
                       <Chip icon={<StarIcon />} label={t("ownerBadge")} size="small" color="success" variant="outlined" />
+                    )}
+                    {/* Archived badge */}
+                    {event.archivedAt && (
+                      <Chip label={t("archivedBadge")} size="small" color="warning" variant="outlined" />
                     )}
                     {/* Claim ownership for authenticated users on ownerless events */}
                     {isAuthenticated && isOwnerless && (
