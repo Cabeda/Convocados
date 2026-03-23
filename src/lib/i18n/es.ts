@@ -537,6 +537,25 @@ const es: TranslationKeys = {
   archivedBadge: "Archivado",
   logEventArchived: "{actor} archivó el evento",
   logEventUnarchived: "{actor} desarchivó el evento",
+
+  // Player stats dashboard (#53)
+  playerStats: "Mis Estadísticas",
+  playerStatsDesc: "Tu rendimiento en todos los juegos.",
+  statsOverview: "Resumen",
+  statsTotalGames: "Total de juegos",
+  statsWins: "Victorias",
+  statsDraws: "Empates",
+  statsLosses: "Derrotas",
+  statsWinRate: "Tasa de victoria",
+  statsAvgRating: "Rating promedio",
+  statsBestRating: "Mejor rating",
+  statsEventsPlayed: "Eventos jugados",
+  statsPerEvent: "Por evento",
+  statsNoData: "Sin estadísticas aún.",
+  statsNoDataDesc: "Únete a juegos y registra resultados para ver tus estadísticas.",
+  statsAttendanceRate: "Asistencia",
+  statsCurrentStreak: "Racha",
+  statsViewEvent: "Ver evento",
 };
 
 export default es;

@@ -583,6 +583,25 @@ const en = {
   archivedBadge: "Archived",
   logEventArchived: "{actor} archived the event",
   logEventUnarchived: "{actor} unarchived the event",
+
+  // Player stats dashboard (#53)
+  playerStats: "My Stats",
+  playerStatsDesc: "Your performance across all games.",
+  statsOverview: "Overview",
+  statsTotalGames: "Total games",
+  statsWins: "Wins",
+  statsDraws: "Draws",
+  statsLosses: "Losses",
+  statsWinRate: "Win rate",
+  statsAvgRating: "Avg. rating",
+  statsBestRating: "Best rating",
+  statsEventsPlayed: "Events played",
+  statsPerEvent: "Per-event breakdown",
+  statsNoData: "No stats yet.",
+  statsNoDataDesc: "Join some games and record results to see your stats.",
+  statsAttendanceRate: "Attendance",
+  statsCurrentStreak: "Streak",
+  statsViewEvent: "View event",
 } as const;
 
 export default en;
