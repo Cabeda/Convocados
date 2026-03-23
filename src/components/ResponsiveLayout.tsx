@@ -349,7 +349,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                   </MenuItem>
                   <MenuItem component="a" href="/stats" onClick={() => setUserAnchor(null)}>
                     <ListItemIcon><BarChartIcon fontSize="small" /></ListItemIcon>
-                    <ListItemText>{t("playerStatsTitle")}</ListItemText>
+                    <ListItemText>{t("playerStats")}</ListItemText>
                   </MenuItem>
                   {isAdminUser && (
                     <MenuItem component="a" href="/admin" onClick={() => setUserAnchor(null)}>

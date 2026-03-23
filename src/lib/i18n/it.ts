@@ -556,6 +556,12 @@ const it: TranslationKeys = {
   statsAttendanceRate: "Presenza",
   statsCurrentStreak: "Serie",
   statsViewEvent: "Vedi evento",
+
+  // Public stats privacy (#53)
+  publicStatsLabel: "Statistiche pubbliche",
+  publicStatsDesc: "Permetti a chiunque di vedere le tue statistiche sulla tua pagina profilo.",
+  publicStatsSaved: "Visibilità delle statistiche aggiornata.",
+  publicStatsSaveError: "Impossibile aggiornare la visibilità delle statistiche.",
 };
 
 export default it;
