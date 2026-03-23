@@ -25,7 +25,11 @@ export type EventAction =
   | "history_status_updated"
   | "history_payments_updated"
   | "history_unlocked"
-  | "history_locked";
+  | "history_locked"
+  | "rating_initial_set"
+  | "rating_recalculated"
+  | "rating_manual_enabled"
+  | "rating_manual_disabled";
 
 /**
  * Append an entry to the event activity log.

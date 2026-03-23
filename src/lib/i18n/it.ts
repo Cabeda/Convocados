@@ -581,6 +581,15 @@ const it: TranslationKeys = {
   paymentReminderSubject: "Pagamento in sospeso: {title}",
   paymentReminderHeading: "Pagamento in sospeso per {title}",
   paymentReminderBody: "Hai un pagamento in sospeso di {amount} {currency} per questa partita.",
+
+  // ELO rating hardening (#170)
+  allowManualRating: "Modifica manuale del punteggio",
+  allowManualRatingTooltip: "Consenti a proprietari e admin di impostare manualmente il punteggio iniziale dei giocatori",
+  manualRatingDisabled: "La modifica manuale del punteggio è disattivata per questo evento.",
+  logRatingInitialSet: "{actor} ha impostato il punteggio iniziale di {player}",
+  logRatingRecalculated: "{actor} ha ricalcolato tutti i punteggi",
+  logRatingManualEnabled: "{actor} ha attivato la modifica manuale del punteggio",
+  logRatingManualDisabled: "{actor} ha disattivato la modifica manuale del punteggio",
 };
 
 export default it;

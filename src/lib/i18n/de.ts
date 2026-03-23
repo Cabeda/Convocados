@@ -581,6 +581,15 @@ const de: TranslationKeys = {
   paymentReminderSubject: "Zahlung ausstehend: {title}",
   paymentReminderHeading: "Zahlung ausstehend für {title}",
   paymentReminderBody: "Du hast eine ausstehende Zahlung von {amount} {currency} für dieses Spiel.",
+
+  // ELO rating hardening (#170)
+  allowManualRating: "Manuelle Bewertungsbearbeitung",
+  allowManualRatingTooltip: "Eigentümern und Admins erlauben, die Anfangsbewertung der Spieler manuell festzulegen",
+  manualRatingDisabled: "Die manuelle Bewertungsbearbeitung ist für dieses Event deaktiviert.",
+  logRatingInitialSet: "{actor} hat die Anfangsbewertung von {player} festgelegt",
+  logRatingRecalculated: "{actor} hat alle Bewertungen neu berechnet",
+  logRatingManualEnabled: "{actor} hat die manuelle Bewertungsbearbeitung aktiviert",
+  logRatingManualDisabled: "{actor} hat die manuelle Bewertungsbearbeitung deaktiviert",
 };
 
 export default de;
