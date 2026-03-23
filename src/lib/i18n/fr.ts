@@ -537,6 +537,31 @@ const fr: TranslationKeys = {
   archivedBadge: "Archivé",
   logEventArchived: "{actor} a archivé l'événement",
   logEventUnarchived: "{actor} a désarchivé l'événement",
+
+  // Player stats dashboard (#53)
+  playerStats: "Mes Statistiques",
+  playerStatsDesc: "Tes performances dans tous les matchs.",
+  statsOverview: "Aperçu",
+  statsTotalGames: "Total de matchs",
+  statsWins: "Victoires",
+  statsDraws: "Nuls",
+  statsLosses: "Défaites",
+  statsWinRate: "Taux de victoire",
+  statsAvgRating: "Rating moyen",
+  statsBestRating: "Meilleur rating",
+  statsEventsPlayed: "Événements joués",
+  statsPerEvent: "Par événement",
+  statsNoData: "Pas encore de statistiques.",
+  statsNoDataDesc: "Rejoins des matchs et enregistre des résultats pour voir tes statistiques.",
+  statsAttendanceRate: "Présence",
+  statsCurrentStreak: "Série",
+  statsViewEvent: "Voir l'événement",
+
+  // Public stats privacy (#53)
+  publicStatsLabel: "Statistiques publiques",
+  publicStatsDesc: "Permettre à tout le monde de voir tes statistiques sur ta page de profil.",
+  publicStatsSaved: "Visibilité des statistiques mise à jour.",
+  publicStatsSaveError: "Impossible de mettre à jour la visibilité des statistiques.",
 };
 
 export default fr;

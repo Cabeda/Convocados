@@ -3,13 +3,17 @@ import {
   Container, Paper, Typography, Stack, Box, Chip, Avatar,
   CircularProgress, Alert, Tabs, Tab, TextField, Button,
   IconButton, Snackbar, Divider, Dialog, DialogTitle,
-  DialogContent, DialogActions,
+  DialogContent, DialogActions, Switch, FormControlLabel,
+  alpha, useTheme,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
 } from "@mui/material";
 import SportsIcon from "@mui/icons-material/Sports";
 import EditIcon from "@mui/icons-material/Edit";
 import LockIcon from "@mui/icons-material/Lock";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
+import BarChartIcon from "@mui/icons-material/BarChart";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { NotificationSettingsSection } from "./NotificationSettingsSection";
@@ -27,6 +31,7 @@ interface UserProfile {
     createdAt: string;
   };
   hasPassword?: boolean;
+  publicStats?: boolean;
   owned: GameSummary[];
   joined: GameSummary[];
   stats: {
@@ -36,6 +41,248 @@ interface UserProfile {
   };
   isOwnProfile: boolean;
 }
+
+// ── Stats types & components ────────────────────────────────────────────────
+
+interface EventStats {
+  eventId: string;
+  eventTitle: string;
+  sport: string;
+  rating: number;
+  gamesPlayed: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  winRate: number;
+  attendance: {
+    gamesPlayed: number;
+    totalGames: number;
+    attendanceRate: number;
+    currentStreak: number;
+  } | null;
+}
+
+interface StatsData {
+  summary: {
+    totalGames: number;
+    totalWins: number;
+    totalDraws: number;
+    totalLosses: number;
+    winRate: number;
+    avgRating: number;
+    bestRating: number;
+    eventsPlayed: number;
+  };
+  events: EventStats[];
+}
+
+function StatCard({ label, value, color }: { label: string; value: string | number; color?: string }) {
+  const theme = useTheme();
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 2, borderRadius: 2, textAlign: "center", flex: "1 1 120px", minWidth: 100,
+        bgcolor: color ? alpha(color, theme.palette.mode === "dark" ? 0.1 : 0.04) : undefined,
+      }}
+    >
+      <Typography variant="h5" fontWeight={700} color={color ?? "text.primary"}>
+        {value}
+      </Typography>
+      <Typography variant="caption" color="text.secondary">{label}</Typography>
+    </Paper>
+  );
+}
+
+function RatingBar({ rating, maxRating }: { rating: number; maxRating: number }) {
+  const theme = useTheme();
+  const pct = maxRating > 0 ? Math.min((rating / maxRating) * 100, 100) : 0;
+  const color = rating >= 1200
+    ? theme.palette.success.main
+    : rating >= 1000
+      ? theme.palette.primary.main
+      : theme.palette.warning.main;
+
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, width: "100%" }}>
+      <Box sx={{ flex: 1, height: 8, borderRadius: 4, bgcolor: alpha(color, 0.15) }}>
+        <Box sx={{ width: `${pct}%`, height: "100%", borderRadius: 4, bgcolor: color, transition: "width 0.3s" }} />
+      </Box>
+      <Typography variant="body2" fontWeight={700} sx={{ minWidth: 40, textAlign: "right" }}>
+        {rating}
+      </Typography>
+    </Box>
+  );
+}
+
+function StatsTabContent({ userId }: { userId: string }) {
+  const t = useT();
+  const theme = useTheme();
+  const [data, setData] = useState<StatsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/users/${userId}/stats`)
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
+      .then((d) => { setData(d); setLoading(false); })
+      .catch(() => { setError(true); setLoading(false); });
+  }, [userId]);
+
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return <Alert severity="error">{t("somethingWentWrong")}</Alert>;
+  }
+
+  if (!data || data.summary.totalGames === 0) {
+    return (
+      <Box sx={{ textAlign: "center", py: 4 }}>
+        <SportsIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
+        <Typography variant="h6" color="text.secondary">{t("statsNoData")}</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>{t("statsNoDataDesc")}</Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Stack spacing={2}>
+      {/* Summary cards */}
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>
+        <StatCard label={t("statsTotalGames")} value={data.summary.totalGames} />
+        <StatCard label={t("statsWins")} value={data.summary.totalWins} color={theme.palette.success.main} />
+        <StatCard label={t("statsDraws")} value={data.summary.totalDraws} />
+        <StatCard label={t("statsLosses")} value={data.summary.totalLosses} color={theme.palette.error.main} />
+        <StatCard label={t("statsWinRate")} value={`${Math.round(data.summary.winRate * 100)}%`} color={theme.palette.primary.main} />
+        <StatCard label={t("statsAvgRating")} value={data.summary.avgRating} />
+        <StatCard label={t("statsBestRating")} value={data.summary.bestRating} color={theme.palette.success.main} />
+        <StatCard label={t("statsEventsPlayed")} value={data.summary.eventsPlayed} />
+      </Box>
+
+      {/* W/D/L ratio bar */}
+      <Box>
+        <Box sx={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}>
+          {data.summary.totalWins > 0 && (
+            <Box sx={{ flex: data.summary.totalWins, bgcolor: "success.main", transition: "flex 0.3s" }} />
+          )}
+          {data.summary.totalDraws > 0 && (
+            <Box sx={{ flex: data.summary.totalDraws, bgcolor: "grey.400", transition: "flex 0.3s" }} />
+          )}
+          {data.summary.totalLosses > 0 && (
+            <Box sx={{ flex: data.summary.totalLosses, bgcolor: "error.main", transition: "flex 0.3s" }} />
+          )}
+        </Box>
+        <Stack direction="row" spacing={2} sx={{ mt: 1, justifyContent: "center" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: "success.main" }} />
+            <Typography variant="caption">{t("statsWins")} ({data.summary.totalWins})</Typography>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: "grey.400" }} />
+            <Typography variant="caption">{t("statsDraws")} ({data.summary.totalDraws})</Typography>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: "error.main" }} />
+            <Typography variant="caption">{t("statsLosses")} ({data.summary.totalLosses})</Typography>
+          </Box>
+        </Stack>
+      </Box>
+
+      {/* Per-event breakdown */}
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.15 : 0.06) }}>
+              <TableCell sx={{ fontWeight: 700 }}></TableCell>
+              <TableCell align="center" sx={{ fontWeight: 700 }}>{t("rating")}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 700 }}>{t("gamesPlayed")}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 700, color: "success.main" }}>{t("wins")}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 700 }}>{t("draws")}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 700, color: "error.main" }}>{t("losses")}</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 700 }}>{t("statsAttendanceRate")}</TableCell>
+              <TableCell sx={{ width: 48 }} />
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {data.events.map((ev) => (
+              <TableRow key={ev.eventId} sx={{ "&:last-child td": { borderBottom: 0 } }}>
+                <TableCell>
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2" fontWeight={600}>{ev.eventTitle}</Typography>
+                    <RatingBar rating={ev.rating} maxRating={data.summary.bestRating > 0 ? data.summary.bestRating * 1.1 : 1500} />
+                  </Stack>
+                </TableCell>
+                <TableCell align="center">
+                  <Chip
+                    label={ev.rating}
+                    size="small"
+                    sx={{
+                      fontWeight: 700, fontSize: "0.8rem", minWidth: 48,
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      color: theme.palette.text.primary,
+                    }}
+                  />
+                </TableCell>
+                <TableCell align="center">
+                  <Typography variant="body2">{ev.gamesPlayed}</Typography>
+                </TableCell>
+                <TableCell align="center">
+                  <Typography variant="body2" color="success.main" fontWeight={600}>{ev.wins}</Typography>
+                </TableCell>
+                <TableCell align="center">
+                  <Typography variant="body2" color="text.secondary">{ev.draws}</Typography>
+                </TableCell>
+                <TableCell align="center">
+                  <Typography variant="body2" color="error.main" fontWeight={600}>{ev.losses}</Typography>
+                </TableCell>
+                <TableCell align="center">
+                  {ev.attendance ? (
+                    <Stack spacing={0.5} alignItems="center">
+                      <Typography variant="body2">
+                        {Math.round(ev.attendance.attendanceRate * 100)}%
+                      </Typography>
+                      {ev.attendance.currentStreak > 0 && (
+                        <Chip
+                          label={`${ev.attendance.currentStreak} ${t("statsCurrentStreak").toLowerCase()}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontSize: "0.65rem" }}
+                        />
+                      )}
+                    </Stack>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">—</Typography>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    href={`/events/${ev.eventId}`}
+                    size="small"
+                    sx={{ minWidth: 0, p: 0.5 }}
+                    aria-label={t("statsViewEvent")}
+                  >
+                    <OpenInNewIcon fontSize="small" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Stack>
+  );
+}
+
+// ── Profile form & settings components ──────────────────────────────────────
 
 function ProfileEditForm({ user, onSaved }: { user: UserProfile["user"]; onSaved: () => void }) {
   const t = useT();
@@ -247,6 +494,67 @@ function ChangePasswordSection({ hasPassword }: { hasPassword: boolean }) {
         autoHideDuration={3000}
         onClose={() => setSnackbar(false)}
         message={t("passwordChanged")}
+      />
+    </Paper>
+  );
+}
+
+/** Public stats visibility toggle */
+function PublicStatsSection({ userId, userName, initialValue }: { userId: string; userName: string; initialValue: boolean }) {
+  const t = useT();
+  const [publicStats, setPublicStats] = useState(initialValue);
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleToggle = async (checked: boolean) => {
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: userName, publicStats: checked }),
+      });
+      if (!res.ok) {
+        setError(t("publicStatsSaveError"));
+        setSaving(false);
+        return;
+      }
+      setPublicStats(checked);
+      setSnackbar(true);
+    } catch {
+      setError(t("publicStatsSaveError"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+      <Stack spacing={2}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <BarChartIcon fontSize="small" color="action" />
+          <Typography variant="h6" fontWeight={600}>{t("publicStatsLabel")}</Typography>
+        </Stack>
+        <Typography variant="body2" color="text.secondary">{t("publicStatsDesc")}</Typography>
+        {error && <Alert severity="error">{error}</Alert>}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={publicStats}
+              onChange={(_, checked) => handleToggle(checked)}
+              disabled={saving}
+            />
+          }
+          label={t("publicStatsLabel")}
+        />
+      </Stack>
+      <Snackbar
+        open={snackbar}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar(false)}
+        message={t("publicStatsSaved")}
       />
     </Paper>
   );
@@ -472,8 +780,18 @@ export default function UserProfilePage({ userId }: { userId: string }) {
   }
 
   const { user, owned, joined, stats, isOwnProfile, hasPassword } = data;
+  const showStats = isOwnProfile || data.publicStats;
   const memberSince = new Date(user.createdAt);
-  const allGames = tab === 0 ? [...owned, ...joined].sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime()) : tab === 1 ? owned : joined;
+
+  // Tab indices shift when stats tab is present
+  const STATS_TAB = showStats ? 0 : -1;
+  const HISTORY_TAB = showStats ? 1 : 0;
+  const OWNED_TAB = showStats ? 2 : 1;
+  const JOINED_TAB = showStats ? 3 : 2;
+
+  const allGames = tab === HISTORY_TAB
+    ? [...owned, ...joined].sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime())
+    : tab === OWNED_TAB ? owned : joined;
 
   return (
     <ThemeModeProvider>
@@ -524,6 +842,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
             {/* Account management sections (own profile only) */}
             {isOwnProfile && (
               <>
+                <PublicStatsSection userId={user.id} userName={user.name} initialValue={data.publicStats ?? false} />
                 <NotificationSettingsSection />
                 <ChangePasswordSection hasPassword={hasPassword ?? false} />
                 <ExportDataSection />
@@ -531,22 +850,27 @@ export default function UserProfilePage({ userId }: { userId: string }) {
               </>
             )}
 
-            {/* Game tabs */}
+            {/* Tabs: Stats (if visible) + History + Owned + Joined */}
             <Paper elevation={2} sx={{ borderRadius: 3, overflow: "hidden" }}>
               <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth">
+                {showStats && <Tab label={t("playerStats")} />}
                 <Tab label={`${t("history")} (${stats.totalGames})`} />
                 <Tab label={`${t("ownedGames")} (${stats.ownedGames})`} />
                 <Tab label={`${t("joinedGames")} (${stats.joinedGames})`} />
               </Tabs>
               <Box sx={{ p: { xs: 2, sm: 3 } }}>
-                {allGames.length > 0 ? (
-                  <Stack spacing={1.5}>
-                    {allGames.map((g) => <GameCard key={g.id} game={g} dimPast />)}
-                  </Stack>
+                {tab === STATS_TAB && showStats ? (
+                  <StatsTabContent userId={userId} />
                 ) : (
-                  <Alert severity="info">
-                    {tab === 1 ? t("noOwnedGames") : tab === 2 ? t("noJoinedGames") : t("noHistory")}
-                  </Alert>
+                  allGames.length > 0 ? (
+                    <Stack spacing={1.5}>
+                      {allGames.map((g) => <GameCard key={g.id} game={g} dimPast />)}
+                    </Stack>
+                  ) : (
+                    <Alert severity="info">
+                      {tab === OWNED_TAB ? t("noOwnedGames") : tab === JOINED_TAB ? t("noJoinedGames") : t("noHistory")}
+                    </Alert>
+                  )
                 )}
               </Box>
             </Paper>

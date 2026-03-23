@@ -11,7 +11,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, image: true, createdAt: true, accounts: { select: { providerId: true, password: true } } },
+    select: { id: true, name: true, email: true, image: true, createdAt: true, publicStats: true, accounts: { select: { providerId: true, password: true } } },
   });
 
   if (!user) return Response.json({ error: "User not found." }, { status: 404 });
@@ -106,6 +106,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     hasPassword: isOwnProfile
       ? user.accounts.some((a) => a.providerId === "credential" && !!a.password)
       : undefined,
+    publicStats: user.publicStats,
     owned: visibleOwned.map(serialize),
     joined: visibleJoined.map(serialize),
     stats: {
@@ -134,10 +135,15 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
   const name = body.name.trim().slice(0, 50);
 
+  const data: { name: string; publicStats?: boolean } = { name };
+  if (typeof body.publicStats === "boolean") {
+    data.publicStats = body.publicStats;
+  }
+
   const updated = await prisma.user.update({
     where: { id: userId },
-    data: { name },
-    select: { id: true, name: true, email: true, image: true },
+    data,
+    select: { id: true, name: true, email: true, image: true, publicStats: true },
   });
 
   return Response.json({ user: updated });
