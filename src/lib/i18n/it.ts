@@ -78,6 +78,8 @@ const it: TranslationKeys = {
   recentPlayers: "Giocatori recenti",
   showAllPlayers: "Mostra tutti",
   noSuggestions: "Scrivi un nuovo nome",
+  createNewPlayer: "Crea nuovo giocatore: {name}",
+  nGamesPlayed: "{n} partite",
   history: "Cronologia",
   viewHistory: "Vedi cronologia",
   noHistory: "Nessuna partita passata.",
