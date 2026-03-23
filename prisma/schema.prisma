@@ -115,6 +115,9 @@ model Event {
   // Access control
   accessPassword        String?               // bcrypt-hashed password (null = no password)
 
+  // Rating settings
+  allowManualRating Boolean @default(false)
+
   // Archive
   archivedAt     DateTime?
 

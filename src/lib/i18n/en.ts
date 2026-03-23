@@ -627,6 +627,15 @@ const en = {
   paymentReminderSubject: "Payment pending: {title}",
   paymentReminderHeading: "Payment pending for {title}",
   paymentReminderBody: "You have an outstanding payment of {amount} {currency} for this game.",
+
+  // ELO rating hardening (#170)
+  allowManualRating: "Manual rating editing",
+  allowManualRatingTooltip: "Allow owners and admins to manually set player initial ratings",
+  manualRatingDisabled: "Manual rating editing is disabled for this event.",
+  logRatingInitialSet: "{actor} set initial rating for {player}",
+  logRatingRecalculated: "{actor} recalculated all ratings",
+  logRatingManualEnabled: "{actor} enabled manual rating editing",
+  logRatingManualDisabled: "{actor} disabled manual rating editing",
 } as const;
 
 export default en;

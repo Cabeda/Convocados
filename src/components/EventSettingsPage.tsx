@@ -198,6 +198,11 @@ export default function EventSettingsPage({ eventId }: Props) {
     updateSetting("balanced", { balanced: v });
   };
 
+  const handleToggleManualRating = (v: boolean) => {
+    setEvent((e: any) => e ? { ...e, allowManualRating: v } : e);
+    updateSetting("manual-rating", { allowManualRating: v });
+  };
+
   const handleSportChange = (v: string) => {
     setEvent((e: any) => e ? { ...e, sport: v } : e);
     updateSetting("sport", { sport: v });
@@ -466,6 +471,12 @@ export default function EventSettingsPage({ eventId }: Props) {
               <FormControlLabel
                 control={<Switch size="small" checked={event.balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} disabled={!canEdit} />}
                 label={<Typography variant="body2">{t("balancedTeams")}</Typography>}
+              />
+            </Tooltip>
+            <Tooltip title={t("allowManualRatingTooltip")}>
+              <FormControlLabel
+                control={<Switch size="small" checked={event.allowManualRating ?? false} onChange={(e) => handleToggleManualRating(e.target.checked)} disabled={!canEdit} />}
+                label={<Typography variant="body2">{t("allowManualRating")}</Typography>}
               />
             </Tooltip>
           </Box>

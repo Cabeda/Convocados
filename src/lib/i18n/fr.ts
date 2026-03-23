@@ -581,6 +581,15 @@ const fr: TranslationKeys = {
   paymentReminderSubject: "Paiement en attente : {title}",
   paymentReminderHeading: "Paiement en attente pour {title}",
   paymentReminderBody: "Tu as un paiement en attente de {amount} {currency} pour ce match.",
+
+  // ELO rating hardening (#170)
+  allowManualRating: "Modification manuelle du classement",
+  allowManualRatingTooltip: "Autoriser les propriétaires et admins à définir manuellement le classement initial des joueurs",
+  manualRatingDisabled: "La modification manuelle du classement est désactivée pour cet événement.",
+  logRatingInitialSet: "{actor} a défini le classement initial de {player}",
+  logRatingRecalculated: "{actor} a recalculé tous les classements",
+  logRatingManualEnabled: "{actor} a activé la modification manuelle du classement",
+  logRatingManualDisabled: "{actor} a désactivé la modification manuelle du classement",
 };
 
 export default fr;
