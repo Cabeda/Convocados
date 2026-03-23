@@ -14,6 +14,8 @@ import ArchiveIcon from "@mui/icons-material/Archive";
 import UnarchiveIcon from "@mui/icons-material/Unarchive";
 import ScoreboardIcon from "@mui/icons-material/Scoreboard";
 import SportsIcon from "@mui/icons-material/Sports";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import TuneIcon from "@mui/icons-material/Tune";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -53,6 +55,10 @@ const ACTION_COLORS: Record<string, "success" | "error" | "info" | "warning" | "
   history_payments_updated: "info",
   history_unlocked: "warning",
   history_locked: "info",
+  rating_initial_set: "info",
+  rating_recalculated: "info",
+  rating_manual_enabled: "warning",
+  rating_manual_disabled: "warning",
 };
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -70,6 +76,10 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
   history_payments_updated: <PaymentIcon fontSize="small" />,
   history_unlocked: <HistoryIcon fontSize="small" />,
   history_locked: <HistoryIcon fontSize="small" />,
+  rating_initial_set: <EmojiEventsIcon fontSize="small" />,
+  rating_recalculated: <EmojiEventsIcon fontSize="small" />,
+  rating_manual_enabled: <TuneIcon fontSize="small" />,
+  rating_manual_disabled: <TuneIcon fontSize="small" />,
 };
 
 const ACTION_I18N: Record<string, string> = {
@@ -97,6 +107,10 @@ const ACTION_I18N: Record<string, string> = {
   history_payments_updated: "logHistoryPaymentsUpdated",
   history_unlocked: "logHistoryUnlocked",
   history_locked: "logHistoryLocked",
+  rating_initial_set: "logRatingInitialSet",
+  rating_recalculated: "logRatingRecalculated",
+  rating_manual_enabled: "logRatingManualEnabled",
+  rating_manual_disabled: "logRatingManualDisabled",
 };
 
 function LogEntryRow({ entry }: { entry: LogEntry }) {
