@@ -1,0 +1,35 @@
+---
+// Redirect /stats to the user's own profile page where stats are now shown as a tab
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My Stats — Convocados</title>
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1b6b4a" />
+  </head>
+  <body>
+    <script is:inline>
+      fetch("/api/auth/get-session", { credentials: "same-origin" })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d && d.user && d.user.id) {
+            window.location.replace("/users/" + d.user.id);
+          } else {
+            window.location.replace("/auth/signin?callbackURL=/stats");
+          }
+        })
+        .catch(function() {
+          window.location.replace("/auth/signin?callbackURL=/stats");
+        });
+    </script>
+    <div style="display:flex;justify-content:center;align-items:center;height:100vh">
+      <p>Redirecting…</p>
+    </div>
+  </body>
+</html>

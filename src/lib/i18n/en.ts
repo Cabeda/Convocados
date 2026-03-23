@@ -583,6 +583,31 @@ const en = {
   archivedBadge: "Archived",
   logEventArchived: "{actor} archived the event",
   logEventUnarchived: "{actor} unarchived the event",
+
+  // Player stats dashboard (#53)
+  playerStats: "My Stats",
+  playerStatsDesc: "Your performance across all games.",
+  statsOverview: "Overview",
+  statsTotalGames: "Total games",
+  statsWins: "Wins",
+  statsDraws: "Draws",
+  statsLosses: "Losses",
+  statsWinRate: "Win rate",
+  statsAvgRating: "Avg. rating",
+  statsBestRating: "Best rating",
+  statsEventsPlayed: "Events played",
+  statsPerEvent: "Per-event breakdown",
+  statsNoData: "No stats yet.",
+  statsNoDataDesc: "Join some games and record results to see your stats.",
+  statsAttendanceRate: "Attendance",
+  statsCurrentStreak: "Streak",
+  statsViewEvent: "View event",
+
+  // Public stats privacy (#53)
+  publicStatsLabel: "Public stats",
+  publicStatsDesc: "Allow anyone to view your stats on your profile page.",
+  publicStatsSaved: "Stats visibility updated.",
+  publicStatsSaveError: "Could not update stats visibility.",
 } as const;
 
 export default en;

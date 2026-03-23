@@ -584,6 +584,31 @@ const pt: TranslationKeys = {
   archivedBadge: "Arquivado",
   logEventArchived: "{actor} arquivou o evento",
   logEventUnarchived: "{actor} desarquivou o evento",
+
+  // Player stats dashboard (#53)
+  playerStats: "As Minhas Estatísticas",
+  playerStatsDesc: "O teu desempenho em todos os jogos.",
+  statsOverview: "Resumo",
+  statsTotalGames: "Total de jogos",
+  statsWins: "Vitórias",
+  statsDraws: "Empates",
+  statsLosses: "Derrotas",
+  statsWinRate: "Taxa de vitória",
+  statsAvgRating: "Rating médio",
+  statsBestRating: "Melhor rating",
+  statsEventsPlayed: "Eventos jogados",
+  statsPerEvent: "Por evento",
+  statsNoData: "Sem estatísticas ainda.",
+  statsNoDataDesc: "Junta-te a jogos e regista resultados para ver as tuas estatísticas.",
+  statsAttendanceRate: "Presença",
+  statsCurrentStreak: "Sequência",
+  statsViewEvent: "Ver evento",
+
+  // Public stats privacy (#53)
+  publicStatsLabel: "Estatísticas públicas",
+  publicStatsDesc: "Permitir que qualquer pessoa veja as tuas estatísticas na tua página de perfil.",
+  publicStatsSaved: "Visibilidade das estatísticas atualizada.",
+  publicStatsSaveError: "Não foi possível atualizar a visibilidade das estatísticas.",
 };
 
 export default pt;
