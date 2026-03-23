@@ -9,6 +9,7 @@ import HistoryIcon from "@mui/icons-material/History";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import LockIcon from "@mui/icons-material/Lock";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
 import SaveIcon from "@mui/icons-material/Save";
 import SportsIcon from "@mui/icons-material/Sports";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
@@ -86,6 +87,7 @@ function HistoryCardFull({
   isAuthenticated,
   knownPlayers,
   playerRatings,
+  isOwner,
 }: {
   entry: HistoryEntry;
   eventId: string;
@@ -93,6 +95,7 @@ function HistoryCardFull({
   isAuthenticated: boolean;
   knownPlayers: { name: string; gamesPlayed: number }[];
   playerRatings: { name: string; rating: number; gamesPlayed: number }[];
+  isOwner: boolean;
 }) {
   const t = useT();
   const locale = detectLocale();
@@ -119,6 +122,22 @@ function HistoryCardFull({
 
   // Gate editing on both time-based editability AND authentication
   const canEdit = entry.editable && isAuthenticated;
+
+  const [unlocking, setUnlocking] = useState(false);
+  const handleToggleLock = async () => {
+    setUnlocking(true);
+    setError(null);
+    const action = entry.editable ? { lock: true } : { unlock: true };
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(action),
+    });
+    const json = await res.json();
+    setUnlocking(false);
+    if (!res.ok) { setError(json.error); return; }
+    onUpdate(json);
+  };
 
   // Live ELO preview: compute deltas from current editable teams + scores
   const liveEloUpdates: EloUpdate[] = useMemo(() => {
@@ -295,11 +314,19 @@ function HistoryCardFull({
             size="small"
             sx={{ fontWeight: 600 }}
           />
-          {!entry.editable && (
+          {isOwner ? (
+            <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
+              <span>
+                <IconButton size="small" color={entry.editable ? "default" : "warning"} onClick={handleToggleLock} disabled={unlocking}>
+                  {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+                </IconButton>
+              </span>
+            </Tooltip>
+          ) : !entry.editable ? (
             <Tooltip title={t("notEditable")}>
               <LockIcon fontSize="small" color="disabled" />
             </Tooltip>
-          )}
+          ) : null}
         </Stack>
       </Box>
 
@@ -685,6 +712,9 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [knownPlayers, setKnownPlayers] = useState<{ name: string; gamesPlayed: number }[]>([]);
   const [playerRatings, setPlayerRatings] = useState<{ name: string; rating: number; gamesPlayed: number }[]>([]);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const isOwner = !!(session?.user && ownerId && session.user.id === ownerId);
 
   const load = useCallback(async () => {
     const [evRes, histRes] = await Promise.all([
@@ -695,6 +725,8 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     const ev = await evRes.json();
     const hist = await histRes.json();
     setTitle(ev.title);
+    setOwnerId(ev.ownerId ?? null);
+    setIsAdmin(!!ev.isAdmin);
     setHistory(hist.data);
     setNextCursor(hist.nextCursor);
     setHasMore(hist.hasMore);
@@ -788,7 +820,8 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
               <>
                 {history.map((entry) => (
                   <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} onUpdate={handleUpdate}
-                    isAuthenticated={isAuthenticated} knownPlayers={knownPlayers} playerRatings={playerRatings} />
+                    isAuthenticated={isAuthenticated} knownPlayers={knownPlayers} playerRatings={playerRatings}
+                    isOwner={isOwner || isAdmin} />
                 ))}
                 {hasMore && (
                   <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>

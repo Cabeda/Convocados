@@ -23,7 +23,9 @@ export type EventAction =
   | "history_score_updated"
   | "history_teams_updated"
   | "history_status_updated"
-  | "history_payments_updated";
+  | "history_payments_updated"
+  | "history_unlocked"
+  | "history_locked";
 
 /**
  * Append an entry to the event activity log.

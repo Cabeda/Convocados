@@ -22,6 +22,65 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     where: { id: params.historyId, eventId: params.id },
   });
   if (!entry) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const body = await request.json();
+
+  // Handle unlock request — owner/admin only, bypasses editableUntil check
+  if (body.unlock === true) {
+    if (!isOwner && !isAdmin) {
+      return Response.json({ error: "Only the event owner or admin can unlock history." }, { status: 403 });
+    }
+    const newEditableUntil = new Date(Date.now() + 7 * 86400_000);
+    const unlocked = await prisma.gameHistory.update({
+      where: { id: params.historyId },
+      data: { editableUntil: newEditableUntil },
+    });
+
+    const actor = session.user.name ?? session.user.email ?? "Unknown";
+    const actorId = session.user.id;
+    const historyDate = entry.dateTime.toISOString().slice(0, 10);
+    logEvent(params.id!, "history_unlocked", actor, actorId, {
+      historyId: entry.id, date: historyDate,
+    });
+
+    return Response.json({
+      ...unlocked,
+      dateTime: unlocked.dateTime.toISOString(),
+      editableUntil: unlocked.editableUntil.toISOString(),
+      createdAt: unlocked.createdAt.toISOString(),
+      editable: unlocked.editableUntil > new Date(),
+      eloUpdates: null,
+    });
+  }
+
+  // Handle lock request — owner/admin only, sets editableUntil to the past
+  if (body.lock === true) {
+    if (!isOwner && !isAdmin) {
+      return Response.json({ error: "Only the event owner or admin can lock history." }, { status: 403 });
+    }
+    const newEditableUntil = new Date(Date.now() - 1000);
+    const locked = await prisma.gameHistory.update({
+      where: { id: params.historyId },
+      data: { editableUntil: newEditableUntil },
+    });
+
+    const actor = session.user.name ?? session.user.email ?? "Unknown";
+    const actorId = session.user.id;
+    const historyDate = entry.dateTime.toISOString().slice(0, 10);
+    logEvent(params.id!, "history_locked", actor, actorId, {
+      historyId: entry.id, date: historyDate,
+    });
+
+    return Response.json({
+      ...locked,
+      dateTime: locked.dateTime.toISOString(),
+      editableUntil: locked.editableUntil.toISOString(),
+      createdAt: locked.createdAt.toISOString(),
+      editable: locked.editableUntil > new Date(),
+      eloUpdates: null,
+    });
+  }
+
   if (entry.editableUntil <= new Date()) {
     return Response.json({ error: "This result can no longer be edited." }, { status: 403 });
   }
@@ -39,8 +98,6 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   if (event.ownerId && !isOwner && !isAdmin && !isParticipant) {
     return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });
   }
-
-  const body = await request.json();
   const status = ["played", "cancelled"].includes(body.status) ? body.status : undefined;
   const scoreOne = body.scoreOne !== undefined ? (body.scoreOne === null ? null : parseInt(String(body.scoreOne), 10)) : undefined;
   const scoreTwo = body.scoreTwo !== undefined ? (body.scoreTwo === null ? null : parseInt(String(body.scoreTwo), 10)) : undefined;

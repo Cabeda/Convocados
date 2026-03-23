@@ -822,4 +822,56 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const body = await res.json();
     expect(body.paymentsSnapshot).toBeNull();
   });
+
+  it("allows owner to unlock an expired history entry", async () => {
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.editable).toBe(true);
+    expect(new Date(body.editableUntil).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("returns 403 when non-owner tries to unlock", async () => {
+    const owner = await seedUser();
+    const other = await seedUser({ name: "Outsider" });
+    mockAuth(other.id, "Outsider");
+    const id = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 401 when unauthenticated user tries to unlock", async () => {
+    mockAnonymous();
+    const id = await seedEvent();
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
+    expect(res.status).toBe(401);
+  });
+
+  it("allows owner to lock an editable history entry", async () => {
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(id);
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { lock: true }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.editable).toBe(false);
+    expect(new Date(body.editableUntil).getTime()).toBeLessThan(Date.now());
+  });
+
+  it("returns 403 when non-owner tries to lock", async () => {
+    const owner = await seedUser();
+    const other = await seedUser({ name: "Outsider" });
+    mockAuth(other.id, "Outsider");
+    const id = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(id);
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { lock: true }));
+    expect(res.status).toBe(403);
+  });
 });
