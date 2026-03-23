@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Chip, Button, Divider,
-  CircularProgress, Alert, TextField,
+  CircularProgress, Alert, TextField, Autocomplete, InputAdornment,
   alpha, useTheme, IconButton, Tooltip, Grid2,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -14,10 +14,18 @@ import SportsIcon from "@mui/icons-material/Sports";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PaymentIcon from "@mui/icons-material/Payment";
+import LoginIcon from "@mui/icons-material/Login";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
+import { useSession } from "~/lib/auth.client";
+import { matchesWithName } from "~/lib/stringMatch";
+import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
+
+type PlayerOption =
+  | { type: "existing"; name: string; gamesPlayed: number }
+  | { type: "create"; name: string };
 
 interface TeamSnapshot {
   team: string;
@@ -75,10 +83,16 @@ function HistoryCardFull({
   entry,
   eventId,
   onUpdate,
+  isAuthenticated,
+  knownPlayers,
+  playerRatings,
 }: {
   entry: HistoryEntry;
   eventId: string;
   onUpdate: (updated: HistoryEntry) => void;
+  isAuthenticated: boolean;
+  knownPlayers: { name: string; gamesPlayed: number }[];
+  playerRatings: { name: string; rating: number; gamesPlayed: number }[];
 }) {
   const t = useT();
   const locale = detectLocale();
@@ -99,6 +113,36 @@ function HistoryCardFull({
   const date = new Date(entry.dateTime);
   const editableUntil = new Date(entry.editableUntil);
   const isCancelled = entry.status === "cancelled";
+
+  // Drag state for moving players between teams
+  const [dragPlayer, setDragPlayer] = useState<{ name: string; fromTeam: number } | null>(null);
+
+  // Gate editing on both time-based editability AND authentication
+  const canEdit = entry.editable && isAuthenticated;
+
+  // Live ELO preview: compute deltas from current editable teams + scores
+  const liveEloUpdates: EloUpdate[] = useMemo(() => {
+    if (isCancelled || editableTeams.length !== 2) return [];
+    const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
+    const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
+    if (s1 == null || s2 == null || isNaN(s1) || isNaN(s2)) return [];
+    return computeGameUpdates(playerRatings, editableTeams, s1, s2);
+  }, [editableTeams, scoreOne, scoreTwo, playerRatings, isCancelled]);
+
+  // Duplicate detection across teams
+  const duplicateNames = useMemo(() => {
+    if (editableTeams.length < 2) return [];
+    const seen = new Map<string, number>();
+    const dupes: string[] = [];
+    for (const team of editableTeams) {
+      for (const p of team.players) {
+        const lower = p.name.toLowerCase();
+        if (seen.has(lower)) dupes.push(p.name);
+        else seen.set(lower, 1);
+      }
+    }
+    return [...new Set(dupes)];
+  }, [editableTeams]);
 
   const patch = async (data: object) => {
     setSaving(true);
@@ -129,22 +173,61 @@ function HistoryCardFull({
     setTeamsDirty(true);
   };
 
-  const addPlayerToTeam = (teamIdx: number) => {
-    const name = (newPlayerInputs[teamIdx] ?? "").trim();
+  const addPlayerToTeam = (teamIdx: number, playerName?: string) => {
+    const name = (playerName ?? newPlayerInputs[teamIdx] ?? "").trim();
     if (!name) return;
-    const allNames = editableTeams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
-    if (allNames.includes(name.toLowerCase())) return;
+    // Allow temporary duplicates during editing — validated on save
     setEditableTeams((prev) => prev.map((t, i) => {
       if (i !== teamIdx) return t;
+      // Don't add if already on this specific team
+      if (t.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) return t;
       return { ...t, players: [...t.players, { name, order: t.players.length }] };
     }));
-    setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+    if (!playerName) setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
     setTeamsDirty(true);
   };
 
   const handleSaveTeams = () => {
+    if (duplicateNames.length > 0) {
+      setError(t("duplicatePlayerWarning", { names: duplicateNames.join(", ") }));
+      return;
+    }
     patch({ teamsSnapshot: editableTeams });
     setTeamsDirty(false);
+  };
+
+  // Drag & drop handlers
+  const handleDragStart = (playerName: string, fromTeam: number) => {
+    setDragPlayer({ name: playerName, fromTeam });
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (targetTeam: number) => {
+    if (!dragPlayer || dragPlayer.fromTeam === targetTeam) {
+      setDragPlayer(null);
+      return;
+    }
+    // Move player from source team to target team
+    setEditableTeams((prev) => {
+      const updated = prev.map((t, i) => {
+        if (i === dragPlayer.fromTeam) {
+          const filtered = t.players.filter((p) => p.name !== dragPlayer.name);
+          return { ...t, players: filtered.map((p, j) => ({ ...p, order: j })) };
+        }
+        if (i === targetTeam) {
+          // Allow temporary duplicate — validated on save
+          return { ...t, players: [...t.players, { name: dragPlayer.name, order: t.players.length }] };
+        }
+        return t;
+      });
+      return updated;
+    });
+    setTeamsDirty(true);
+    setDragPlayer(null);
   };
 
   const cyclePaymentStatus = (idx: number) => {
@@ -162,6 +245,14 @@ function HistoryCardFull({
   const handleSavePayments = () => {
     patch({ paymentsSnapshot: editablePayments });
     setPaymentsDirty(false);
+  };
+
+  // Filter known players for autocomplete: exclude players already on this team
+  const getAvailableSuggestions = (teamIdx: number) => {
+    const currentNames = new Set(
+      editableTeams[teamIdx]?.players.map((p) => p.name.toLowerCase()) ?? []
+    );
+    return knownPlayers.filter((kp) => !currentNames.has(kp.name.toLowerCase()));
   };
 
   const localeStr = locale === "pt" ? "pt-PT" : "en-GB";
@@ -223,7 +314,7 @@ function HistoryCardFull({
         {!isCancelled && (
           <Box sx={{ px: 3, py: 2.5 }}>
             <Section title={t("score")} action={
-              entry.editable ? (
+              canEdit ? (
                 <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
                   onClick={handleSaveScore} disabled={saving}
                   sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
@@ -241,7 +332,7 @@ function HistoryCardFull({
                   <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
                     {entry.teamOneName}
                   </Typography>
-                  {entry.editable ? (
+                  {canEdit ? (
                     <TextField
                       size="small" type="number" value={scoreOne}
                       onChange={(e) => setScoreOne(e.target.value)}
@@ -262,7 +353,7 @@ function HistoryCardFull({
                   <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
                     {entry.teamTwoName}
                   </Typography>
-                  {entry.editable ? (
+                  {canEdit ? (
                     <TextField
                       size="small" type="number" value={scoreTwo}
                       onChange={(e) => setScoreTwo(e.target.value)}
@@ -287,31 +378,54 @@ function HistoryCardFull({
               title={t("teams")}
               icon={<SportsIcon fontSize="small" sx={{ color: "text.secondary" }} />}
               action={
-                entry.editable && teamsDirty ? (
+                canEdit && teamsDirty ? (
                   <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
-                    onClick={handleSaveTeams} disabled={saving}
+                    onClick={handleSaveTeams} disabled={saving || duplicateNames.length > 0}
                     sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
                     {t("saveTeams")}
                   </Button>
                 ) : undefined
               }
             >
+              {duplicateNames.length > 0 && (
+                <Alert severity="warning" sx={{ mb: 1.5, borderRadius: 2 }}>
+                  {t("duplicatePlayerWarning", { names: duplicateNames.join(", ") })}
+                </Alert>
+              )}
               <Grid2 container spacing={2}>
-                {(entry.editable ? editableTeams : teams).map((team, teamIdx) => (
+                {(canEdit ? editableTeams : teams).map((team, teamIdx) => {
+                  const availableSuggestions = canEdit ? getAvailableSuggestions(teamIdx) : [];
+                  const inputValue = newPlayerInputs[teamIdx] ?? "";
+                  return (
                   <Grid2 key={team.team} size={{ xs: 12, sm: 6 }}>
-                    <Box sx={{
-                      p: 2, borderRadius: 3,
-                      backgroundColor: alpha(theme.palette.action.hover, 0.04),
-                      border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-                    }}>
+                    <Box
+                      onDragOver={canEdit ? handleDragOver : undefined}
+                      onDrop={canEdit ? () => handleDrop(teamIdx) : undefined}
+                      sx={{
+                        p: 2, borderRadius: 3,
+                        backgroundColor: alpha(theme.palette.action.hover, 0.04),
+                        border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+                        ...(canEdit && dragPlayer && dragPlayer.fromTeam !== teamIdx ? {
+                          border: `2px dashed ${alpha(theme.palette.primary.main, 0.4)}`,
+                          backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                        } : {}),
+                        transition: "border 0.2s, background-color 0.2s",
+                      }}
+                    >
                       <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>{team.team}</Typography>
                       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
                         {team.players.map((p) => {
-                          const elo = entry.eloUpdates?.find((e) => e.name === p.name);
+                          const liveElo = liveEloUpdates.find((e) => e.name === p.name);
+                          const savedElo = entry.eloUpdates?.find((e) => e.name === p.name);
+                          const elo = liveElo ?? savedElo;
                           const deltaLabel = elo ? (elo.delta >= 0 ? `+${elo.delta}` : `${elo.delta}`) : null;
+                          const isDuplicate = duplicateNames.some((d) => d.toLowerCase() === p.name.toLowerCase());
                           return (
                             <Chip
                               key={p.name} size="small" variant="outlined"
+                              draggable={canEdit}
+                              onDragStart={canEdit ? () => handleDragStart(p.name, teamIdx) : undefined}
+                              color={isDuplicate ? "error" : "default"}
                               label={
                                 deltaLabel ? (
                                   <span>
@@ -327,35 +441,117 @@ function HistoryCardFull({
                                   </span>
                                 ) : p.name
                               }
-                              onDelete={entry.editable ? () => removePlayerFromTeam(teamIdx, p.name) : undefined}
-                              sx={{ borderRadius: 2 }}
+                              onDelete={canEdit ? () => removePlayerFromTeam(teamIdx, p.name) : undefined}
+                              sx={{
+                                borderRadius: 2,
+                                ...(canEdit ? { cursor: "grab", "&:active": { cursor: "grabbing" } } : {}),
+                              }}
                             />
                           );
                         })}
                       </Box>
-                      {entry.editable && (
-                        <Stack direction="row" spacing={0.5} sx={{ mt: 1.5 }} alignItems="center">
-                          <TextField
+                      {canEdit && (
+                        <Box sx={{ mt: 1.5 }}>
+                          <Autocomplete<PlayerOption, false, false, true>
+                            freeSolo
                             size="small"
-                            placeholder={t("addPlayerToTeam")}
-                            value={newPlayerInputs[teamIdx] ?? ""}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: e.target.value.slice(0, 50) }))}
-                            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter") { e.preventDefault(); addPlayerToTeam(teamIdx); } }}
-                            inputProps={{ maxLength: 50 }}
-                            sx={{ flex: 1, "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                            options={(() => {
+                              const trimmed = inputValue.trim();
+                              const filtered: PlayerOption[] = availableSuggestions
+                                .filter((s) => matchesWithName(s.name, trimmed))
+                                .map((s) => ({ type: "existing" as const, name: s.name, gamesPlayed: s.gamesPlayed }));
+                              if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
+                                filtered.push({ type: "create" as const, name: trimmed });
+                              }
+                              return filtered;
+                            })()}
+                            filterOptions={(options) => options}
+                            getOptionLabel={(option) =>
+                              typeof option === "string" ? option : option.name
+                            }
+                            isOptionEqualToValue={(option, value) =>
+                              option.type === value.type && option.name === value.name
+                            }
+                            value={null}
+                            inputValue={inputValue}
+                            onInputChange={(_, newInputValue, reason) => {
+                              if (reason === "reset") return;
+                              setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: newInputValue }));
+                            }}
+                            onChange={(_, newValue) => {
+                              if (!newValue) return;
+                              const name = typeof newValue === "string" ? newValue.trim() : newValue.name;
+                              if (name) {
+                                addPlayerToTeam(teamIdx, name);
+                                setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+                              }
+                            }}
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                placeholder={t("addPlayerToTeam")}
+                                inputProps={{ ...params.inputProps, maxLength: 50 }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && inputValue.trim()) {
+                                    const trimmed = inputValue.trim();
+                                    const hasMatch = availableSuggestions.some(
+                                      (s) => matchesWithName(s.name, trimmed)
+                                    );
+                                    if (!hasMatch) {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      addPlayerToTeam(teamIdx, trimmed);
+                                      setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+                                    }
+                                  }
+                                }}
+                                InputProps={{
+                                  ...params.InputProps,
+                                  endAdornment: (
+                                    <InputAdornment position="end">
+                                      <IconButton size="small" color="primary" edge="end"
+                                        disabled={!inputValue.trim()}
+                                        onClick={() => {
+                                          addPlayerToTeam(teamIdx, inputValue.trim());
+                                          setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+                                        }}>
+                                        <PersonAddIcon fontSize="small" />
+                                      </IconButton>
+                                    </InputAdornment>
+                                  ),
+                                }}
+                                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                              />
+                            )}
+                            renderOption={(props, option) => {
+                              const { key, ...otherProps } = props as any;
+                              if (option.type === "create") {
+                                return (
+                                  <li key={key} {...otherProps} style={{ minHeight: 40, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>
+                                    <PersonAddIcon fontSize="small" color="primary" />
+                                    {t("createNewPlayer", { name: option.name })}
+                                  </li>
+                                );
+                              }
+                              return (
+                                <li key={key} {...otherProps} style={{ minHeight: 40, display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                                  <span>{option.name}</span>
+                                  {option.gamesPlayed > 0 && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
+                                      {t("nGamesPlayed", { n: option.gamesPlayed })}
+                                    </Typography>
+                                  )}
+                                </li>
+                              );
+                            }}
+                            noOptionsText={t("noSuggestions")}
                           />
-                          <IconButton
-                            size="small" color="primary"
-                            disabled={!(newPlayerInputs[teamIdx] ?? "").trim()}
-                            onClick={() => addPlayerToTeam(teamIdx)}
-                          >
-                            <PersonAddIcon fontSize="small" />
-                          </IconButton>
-                        </Stack>
+                        </Box>
                       )}
                     </Box>
                   </Grid2>
-                ))}
+                  );
+                })}
               </Grid2>
             </Section>
           </Box>
@@ -368,7 +564,7 @@ function HistoryCardFull({
               title={t("historyPayments")}
               icon={<PaymentIcon fontSize="small" sx={{ color: "text.secondary" }} />}
               action={
-                entry.editable && paymentsDirty ? (
+                canEdit && paymentsDirty ? (
                   <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
                     onClick={handleSavePayments} disabled={saving}
                     sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
@@ -383,7 +579,7 @@ function HistoryCardFull({
                 border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
               }}>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                  {(entry.editable ? editablePayments : payments).map((p, idx) => {
+                  {(canEdit ? editablePayments : payments).map((p, idx) => {
                     const isPaid = p.status === "paid";
                     const isExempt = p.status === "exempt";
                     const chipColor = isPaid ? "success" : isExempt ? "default" : "warning";
@@ -394,11 +590,11 @@ function HistoryCardFull({
                         variant={isPaid ? "filled" : "outlined"}
                         color={chipColor}
                         label={`${p.playerName}  ${p.amount.toFixed(2)}`}
-                        onClick={entry.editable ? () => cyclePaymentStatus(idx) : undefined}
+                        onClick={canEdit ? () => cyclePaymentStatus(idx) : undefined}
                         sx={{
                           borderRadius: 2,
                           fontWeight: isPaid ? 600 : 400,
-                          ...(entry.editable ? { cursor: "pointer" } : {}),
+                          ...(canEdit ? { cursor: "pointer" } : {}),
                         }}
                       />
                     );
@@ -424,7 +620,7 @@ function HistoryCardFull({
         )}
 
         {/* ── Status + Editable info ── */}
-        {entry.editable && (
+        {canEdit && (
           <Box sx={{ px: 3, py: 2.5 }}>
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
               <Button
@@ -461,6 +657,13 @@ function HistoryCardFull({
             </Stack>
           </Box>
         )}
+        {entry.editable && !isAuthenticated && (
+          <Box sx={{ px: 3, py: 2 }}>
+            <Alert severity="info" icon={<LoginIcon />} sx={{ borderRadius: 2 }}>
+              {t("loginRequiredToEdit")}
+            </Alert>
+          </Box>
+        )}
       </Stack>
     </Paper>
   );
@@ -471,6 +674,8 @@ function HistoryCardFull({
 export default function HistoryPage({ eventId }: { eventId: string }) {
   const t = useT();
   const locale = detectLocale();
+  const { data: session } = useSession();
+  const isAuthenticated = !!session?.user;
   const [title, setTitle] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -478,6 +683,8 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [knownPlayers, setKnownPlayers] = useState<{ name: string; gamesPlayed: number }[]>([]);
+  const [playerRatings, setPlayerRatings] = useState<{ name: string; rating: number; gamesPlayed: number }[]>([]);
 
   const load = useCallback(async () => {
     const [evRes, histRes] = await Promise.all([
@@ -492,6 +699,17 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setNextCursor(hist.nextCursor);
     setHasMore(hist.hasMore);
     setLoading(false);
+
+    // Fetch known players and ratings in parallel (non-blocking)
+    Promise.all([
+      fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).catch(() => ({ players: [] })),
+      fetch(`/api/events/${eventId}/ratings`).then((r) => r.json()).catch(() => ({ data: [] })),
+    ]).then(([kp, ratings]) => {
+      setKnownPlayers(kp.players ?? []);
+      setPlayerRatings(
+        (ratings.data ?? []).map((r: any) => ({ name: r.name, rating: r.rating, gamesPlayed: r.gamesPlayed }))
+      );
+    });
   }, [eventId]);
 
   useEffect(() => { load(); }, [load]);
@@ -569,7 +787,8 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
             ) : (
               <>
                 {history.map((entry) => (
-                  <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} onUpdate={handleUpdate} />
+                  <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} onUpdate={handleUpdate}
+                    isAuthenticated={isAuthenticated} knownPlayers={knownPlayers} playerRatings={playerRatings} />
                 ))}
                 {hasMore && (
                   <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>

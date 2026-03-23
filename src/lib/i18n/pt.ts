@@ -586,6 +586,12 @@ const pt: TranslationKeys = {
   archivedBadge: "Arquivado",
   logEventArchived: "{actor} arquivou o evento",
   logEventUnarchived: "{actor} desarquivou o evento",
+  logHistoryScoreUpdated: "{actor} atualizou o resultado de {date}",
+  logHistoryTeamsUpdated: "{actor} atualizou as equipas de {date}",
+  logHistoryStatusUpdated: "{actor} alterou o estado de {date}",
+  logHistoryPaymentsUpdated: "{actor} atualizou pagamentos de {date}",
+  loginRequiredToEdit: "Tens de iniciar sessão para editar resultados",
+  duplicatePlayerWarning: "Um jogador não pode estar nas duas equipas: {names}",
 
   // Player stats dashboard (#53)
   playerStats: "As Minhas Estatísticas",

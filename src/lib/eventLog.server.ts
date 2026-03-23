@@ -19,7 +19,11 @@ export type EventAction =
   | "ownership_transferred"
   | "recurrence_reset"
   | "event_archived"
-  | "event_unarchived";
+  | "event_unarchived"
+  | "history_score_updated"
+  | "history_teams_updated"
+  | "history_status_updated"
+  | "history_payments_updated";
 
 /**
  * Append an entry to the event activity log.
