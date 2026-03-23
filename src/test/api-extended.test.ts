@@ -514,6 +514,25 @@ describe("GET /api/events/[id]/ratings", () => {
     const res = await getRatings(ctx({ id: "nonexistent" }));
     expect(res.status).toBe(404);
   });
+
+  it("returns ratings for balanced event without auth (public access)", async () => {
+    const id = await seedEvent({ balanced: true } as any);
+    await prisma.playerRating.create({
+      data: { eventId: id, name: "Bob", rating: 1100, gamesPlayed: 3, wins: 2, draws: 0, losses: 1 },
+    });
+    await prisma.playerRating.create({
+      data: { eventId: id, name: "Carol", rating: 950, gamesPlayed: 3, wins: 1, draws: 0, losses: 2 },
+    });
+    // No auth headers — simulates a non-owner viewing the event
+    const res = await getRatings(ctx({ id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data).toHaveLength(2);
+    expect(body.data[0].name).toBe("Bob");
+    expect(body.data[0].rating).toBe(1100);
+    expect(body.data[1].name).toBe("Carol");
+    expect(body.data[1].rating).toBe(950);
+  });
 });
 
 // ─── GET /api/events/[id]/calendar ───────────────────────────────────────────
