@@ -7,7 +7,7 @@ export const GET: APIRoute = async ({ request }) => {
   const { limit, cursor } = parsePaginationParams(url);
 
   const events = await prisma.event.findMany({
-    where: { isPublic: true },
+    where: { isPublic: true, archivedAt: null },
     include: {
       players: { orderBy: { order: "asc" } },
     },
