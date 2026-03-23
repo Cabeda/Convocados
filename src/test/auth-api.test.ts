@@ -31,6 +31,7 @@ import { PUT as reorderPlayers } from "~/pages/api/events/[id]/reorder-players";
 import { POST as undoRemove } from "~/pages/api/events/[id]/undo-remove";
 import { GET as getMyGames } from "~/pages/api/me/games";
 import { GET as getUserProfile, PATCH as patchUserProfile } from "~/pages/api/users/[id]";
+import { PATCH as patchHistory } from "~/pages/api/events/[id]/history/[historyId]";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -88,14 +89,28 @@ function mockAuth(userId: string, userName = "Test User") {
   mockCheckOwnership.mockImplementation(async (_req: any, ownerId: string | null, existing?: any) => {
     const s = existing ?? session;
     const isOwner = !!(s?.user && ownerId && s.user.id === ownerId);
-    return { isOwner, session: s };
+    return { isOwner, isAdmin: false, session: s };
   });
   return session;
 }
 
 function mockAnonymous() {
   mockGetSession.mockResolvedValue(null);
-  mockCheckOwnership.mockResolvedValue({ isOwner: false, session: null });
+  mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+}
+
+async function seedHistory(eventId: string, overrides: Record<string, unknown> = {}) {
+  return testPrisma.gameHistory.create({
+    data: {
+      eventId,
+      dateTime: new Date(),
+      status: "played",
+      teamOneName: "Ninjas",
+      teamTwoName: "Gunas",
+      editableUntil: new Date(Date.now() + 86400_000),
+      ...overrides,
+    },
+  });
 }
 
 beforeEach(async () => {
@@ -667,5 +682,214 @@ describe("POST /api/events/[id]/undo-remove", () => {
     const id = await seedEvent();
     const res = await undoRemove(ctx({ id }, { name: "", order: "bad" }));
     expect(res.status).toBe(400);
+  });
+});
+
+// ─── PATCH /api/events/[id]/history/[historyId] (authenticated) ──────────────
+
+describe("PATCH /api/events/[id]/history/[historyId]", () => {
+  it("returns 401 when not authenticated", async () => {
+    mockAnonymous();
+    const id = await seedEvent();
+    const history = await seedHistory(id);
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3, scoreTwo: 1 }));
+    expect(res.status).toBe(401);
+  });
+
+  it("updates a history entry when authenticated", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const history = await seedHistory(id);
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3, scoreTwo: 1 }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scoreOne).toBe(3);
+    expect(body.scoreTwo).toBe(1);
+  });
+
+  it("returns 404 for unknown event", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const res = await patchHistory(patchCtx({ id: "nonexistent", historyId: "x" }, { scoreOne: 1 }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for unknown history entry", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const res = await patchHistory(patchCtx({ id, historyId: "nonexistent" }, { scoreOne: 1 }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 403 when entry is no longer editable", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3 }));
+    expect(res.status).toBe(403);
+  });
+
+  it("triggers ELO processing when scores are set", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 2, scoreTwo: 1 }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.eloUpdates).toBeTruthy();
+    expect(body.eloUpdates.length).toBe(2);
+    const updated = await testPrisma.gameHistory.findUnique({ where: { id: history.id } });
+    expect(updated?.eloProcessed).toBe(true);
+  });
+
+  it("returns 403 when event has owner and request is not from owner or participant", async () => {
+    const owner = await seedUser();
+    const other = await seedUser({ name: "Outsider" });
+    mockAuth(other.id, "Outsider");
+    const id = await seedEvent({ ownerId: owner.id });
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 1 }));
+    expect(res.status).toBe(403);
+  });
+
+  it("allows a participant to edit even if not owner", async () => {
+    const owner = await seedUser();
+    const participant = await seedUser({ name: "Alice" });
+    mockAuth(participant.id, "Alice");
+    const id = await seedEvent({ ownerId: owner.id });
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 2, scoreTwo: 1 }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scoreOne).toBe(2);
+  });
+
+  it("handles status change to cancelled", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const history = await seedHistory(id);
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { status: "cancelled" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("cancelled");
+  });
+
+  it("updates paymentsSnapshot", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const history = await seedHistory(id);
+    const payments = [
+      { playerName: "Alice", amount: 10, status: "paid", method: "revolut" },
+      { playerName: "Bob", amount: 10, status: "pending", method: null },
+    ];
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { paymentsSnapshot: payments }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.paymentsSnapshot).toBeTruthy();
+    const parsed = JSON.parse(body.paymentsSnapshot);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].playerName).toBe("Alice");
+    expect(parsed[0].status).toBe("paid");
+    expect(parsed[1].status).toBe("pending");
+  });
+
+  it("clears paymentsSnapshot when set to null", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const payments = JSON.stringify([{ playerName: "Alice", amount: 10, status: "paid", method: null }]);
+    const history = await seedHistory(id, { paymentsSnapshot: payments });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { paymentsSnapshot: null }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.paymentsSnapshot).toBeNull();
+  });
+
+  it("allows owner to unlock an expired history entry", async () => {
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.editable).toBe(true);
+    expect(new Date(body.editableUntil).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("returns 403 when non-owner tries to unlock", async () => {
+    const owner = await seedUser();
+    const other = await seedUser({ name: "Outsider" });
+    mockAuth(other.id, "Outsider");
+    const id = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 401 when unauthenticated user tries to unlock", async () => {
+    mockAnonymous();
+    const id = await seedEvent();
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
+    expect(res.status).toBe(401);
+  });
+
+  it("allows owner to lock an editable history entry", async () => {
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(id);
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { lock: true }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.editable).toBe(false);
+    expect(new Date(body.editableUntil).getTime()).toBeLessThan(Date.now());
+  });
+
+  it("returns 403 when non-owner tries to lock", async () => {
+    const owner = await seedUser();
+    const other = await seedUser({ name: "Outsider" });
+    mockAuth(other.id, "Outsider");
+    const id = await seedEvent({ ownerId: owner.id });
+    const history = await seedHistory(id);
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { lock: true }));
+    expect(res.status).toBe(403);
+  });
+
+  it("updates teamsSnapshot", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const history = await seedHistory(id);
+    const newTeams = [
+      { team: "Red", players: [{ name: "Alice", order: 0 }, { name: "Charlie", order: 1 }] },
+      { team: "Blue", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { teamsSnapshot: newTeams }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const parsed = JSON.parse(body.teamsSnapshot);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].team).toBe("Red");
+    expect(parsed[0].players).toHaveLength(2);
   });
 });

@@ -18,7 +18,6 @@ import { POST as transferOwnership } from "~/pages/api/events/[id]/transfer";
 import { GET as getStatus } from "~/pages/api/events/[id]/status";
 import { POST as subscribePush, DELETE as unsubscribePush } from "~/pages/api/events/[id]/push";
 import { GET as getHistory } from "~/pages/api/events/[id]/history/index";
-import { PATCH as patchHistory } from "~/pages/api/events/[id]/history/[historyId]";
 import { GET as getRatings } from "~/pages/api/events/[id]/ratings/index";
 import { POST as recalculateRatings } from "~/pages/api/events/[id]/ratings/recalculate";
 import { GET as getCalendar } from "~/pages/api/events/[id]/calendar";
@@ -402,97 +401,7 @@ describe("GET /api/events/[id]/history", () => {
 });
 
 // ─── PATCH /api/events/[id]/history/[historyId] ──────────────────────────────
-
-describe("PATCH /api/events/[id]/history/[historyId]", () => {
-  it("updates a history entry", async () => {
-    const id = await seedEvent();
-    const history = await seedHistory(id);
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3, scoreTwo: 1 }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.scoreOne).toBe(3);
-    expect(body.scoreTwo).toBe(1);
-  });
-
-  it("returns 404 for unknown event", async () => {
-    const res = await patchHistory(patchCtx({ id: "nonexistent", historyId: "x" }, { scoreOne: 1 }));
-    expect(res.status).toBe(404);
-  });
-
-  it("returns 404 for unknown history entry", async () => {
-    const id = await seedEvent();
-    const res = await patchHistory(patchCtx({ id, historyId: "nonexistent" }, { scoreOne: 1 }));
-    expect(res.status).toBe(404);
-  });
-
-  it("returns 403 when entry is no longer editable", async () => {
-    const id = await seedEvent();
-    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3 }));
-    expect(res.status).toBe(403);
-  });
-
-  it("triggers ELO processing when scores are set", async () => {
-    const id = await seedEvent();
-    const teams = [
-      { team: "A", players: [{ name: "Alice", order: 0 }] },
-      { team: "B", players: [{ name: "Bob", order: 0 }] },
-    ];
-    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 2, scoreTwo: 1 }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.eloUpdates).toBeTruthy();
-    expect(body.eloUpdates.length).toBe(2);
-    const updated = await prisma.gameHistory.findUnique({ where: { id: history.id } });
-    expect(updated?.eloProcessed).toBe(true);
-  });
-
-  it("returns 403 when event has owner and request is not from owner", async () => {
-    const user = await seedUser();
-    const id = await seedEvent({ ownerId: user.id });
-    const history = await seedHistory(id);
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 1 }));
-    expect(res.status).toBe(403);
-  });
-
-  it("handles status change to cancelled", async () => {
-    const id = await seedEvent();
-    const history = await seedHistory(id);
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { status: "cancelled" }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.status).toBe("cancelled");
-  });
-
-  it("updates paymentsSnapshot", async () => {
-    const id = await seedEvent();
-    const history = await seedHistory(id);
-    const payments = [
-      { playerName: "Alice", amount: 10, status: "paid", method: "revolut" },
-      { playerName: "Bob", amount: 10, status: "pending", method: null },
-    ];
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { paymentsSnapshot: payments }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.paymentsSnapshot).toBeTruthy();
-    const parsed = JSON.parse(body.paymentsSnapshot);
-    expect(parsed).toHaveLength(2);
-    expect(parsed[0].playerName).toBe("Alice");
-    expect(parsed[0].status).toBe("paid");
-    expect(parsed[1].status).toBe("pending");
-  });
-
-  it("clears paymentsSnapshot when set to null", async () => {
-    const id = await seedEvent();
-    const payments = JSON.stringify([{ playerName: "Alice", amount: 10, status: "paid", method: null }]);
-    const history = await seedHistory(id, { paymentsSnapshot: payments });
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { paymentsSnapshot: null }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.paymentsSnapshot).toBeNull();
-  });
-});
+// Tests moved to auth-api.test.ts (endpoint now requires authentication)
 
 // ─── GET /api/events/[id]/ratings ────────────────────────────────────────────
 

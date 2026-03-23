@@ -2,27 +2,102 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { processGame } from "../../../../../lib/elo.server";
 import { computeGameUpdates } from "../../../../../lib/elo";
-import { checkOwnership } from "../../../../../lib/auth.helpers.server";
+import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
+import { logEvent } from "../../../../../lib/eventLog.server";
 
 // PATCH /api/events/[id]/history/[historyId]
 export const PATCH: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, params.id);
-  if (event.ownerId && !isOwner && !isAdmin) {
-    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+  // Require authentication for all history edits
+  const session = await getSession(request);
+  if (!session?.user) {
+    return Response.json({ error: "Authentication required." }, { status: 401 });
   }
+
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, params.id);
 
   const entry = await prisma.gameHistory.findUnique({
     where: { id: params.historyId, eventId: params.id },
   });
   if (!entry) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const body = await request.json();
+
+  // Handle unlock request — owner/admin only, bypasses editableUntil check
+  if (body.unlock === true) {
+    if (!isOwner && !isAdmin) {
+      return Response.json({ error: "Only the event owner or admin can unlock history." }, { status: 403 });
+    }
+    const newEditableUntil = new Date(Date.now() + 7 * 86400_000);
+    const unlocked = await prisma.gameHistory.update({
+      where: { id: params.historyId },
+      data: { editableUntil: newEditableUntil },
+    });
+
+    const actor = session.user.name ?? session.user.email ?? "Unknown";
+    const actorId = session.user.id;
+    const historyDate = entry.dateTime.toISOString().slice(0, 10);
+    logEvent(params.id!, "history_unlocked", actor, actorId, {
+      historyId: entry.id, date: historyDate,
+    });
+
+    return Response.json({
+      ...unlocked,
+      dateTime: unlocked.dateTime.toISOString(),
+      editableUntil: unlocked.editableUntil.toISOString(),
+      createdAt: unlocked.createdAt.toISOString(),
+      editable: unlocked.editableUntil > new Date(),
+      eloUpdates: null,
+    });
+  }
+
+  // Handle lock request — owner/admin only, sets editableUntil to the past
+  if (body.lock === true) {
+    if (!isOwner && !isAdmin) {
+      return Response.json({ error: "Only the event owner or admin can lock history." }, { status: 403 });
+    }
+    const newEditableUntil = new Date(Date.now() - 1000);
+    const locked = await prisma.gameHistory.update({
+      where: { id: params.historyId },
+      data: { editableUntil: newEditableUntil },
+    });
+
+    const actor = session.user.name ?? session.user.email ?? "Unknown";
+    const actorId = session.user.id;
+    const historyDate = entry.dateTime.toISOString().slice(0, 10);
+    logEvent(params.id!, "history_locked", actor, actorId, {
+      historyId: entry.id, date: historyDate,
+    });
+
+    return Response.json({
+      ...locked,
+      dateTime: locked.dateTime.toISOString(),
+      editableUntil: locked.editableUntil.toISOString(),
+      createdAt: locked.createdAt.toISOString(),
+      editable: locked.editableUntil > new Date(),
+      eloUpdates: null,
+    });
+  }
+
   if (entry.editableUntil <= new Date()) {
     return Response.json({ error: "This result can no longer be edited." }, { status: 403 });
   }
 
-  const body = await request.json();
+  // Allow owner, admin, or any player who participated in this game
+  let isParticipant = false;
+  if (entry.teamsSnapshot && session.user.name) {
+    try {
+      const teams = JSON.parse(entry.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
+      const allNames = teams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
+      isParticipant = allNames.includes(session.user.name.toLowerCase());
+    } catch { /* ignore parse errors */ }
+  }
+
+  if (event.ownerId && !isOwner && !isAdmin && !isParticipant) {
+    return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });
+  }
   const status = ["played", "cancelled"].includes(body.status) ? body.status : undefined;
   const scoreOne = body.scoreOne !== undefined ? (body.scoreOne === null ? null : parseInt(String(body.scoreOne), 10)) : undefined;
   const scoreTwo = body.scoreTwo !== undefined ? (body.scoreTwo === null ? null : parseInt(String(body.scoreTwo), 10)) : undefined;
@@ -41,6 +116,33 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       ...(paymentsSnapshot !== undefined && { paymentsSnapshot }),
     },
   });
+
+  // Log activity for each type of change
+  const actor = session.user.name ?? session.user.email ?? "Unknown";
+  const actorId = session.user.id;
+  const historyDate = entry.dateTime.toISOString().slice(0, 10);
+
+  if (scoreOne !== undefined || scoreTwo !== undefined) {
+    logEvent(params.id!, "history_score_updated", actor, actorId, {
+      historyId: entry.id, date: historyDate,
+      scoreOne: updated.scoreOne, scoreTwo: updated.scoreTwo,
+    });
+  }
+  if (teamsSnapshot !== undefined) {
+    logEvent(params.id!, "history_teams_updated", actor, actorId, {
+      historyId: entry.id, date: historyDate,
+    });
+  }
+  if (status !== undefined) {
+    logEvent(params.id!, "history_status_updated", actor, actorId, {
+      historyId: entry.id, date: historyDate, status: updated.status,
+    });
+  }
+  if (paymentsSnapshot !== undefined) {
+    logEvent(params.id!, "history_payments_updated", actor, actorId, {
+      historyId: entry.id, date: historyDate,
+    });
+  }
 
   // Trigger ELO DB update when scores are saved for the first time
   const finalScoreOne = updated.scoreOne;

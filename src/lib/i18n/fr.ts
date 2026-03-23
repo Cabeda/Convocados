@@ -539,6 +539,16 @@ const fr: TranslationKeys = {
   archivedBadge: "Archivé",
   logEventArchived: "{actor} a archivé l'événement",
   logEventUnarchived: "{actor} a désarchivé l'événement",
+  logHistoryScoreUpdated: "{actor} a mis à jour le score du {date}",
+  logHistoryTeamsUpdated: "{actor} a mis à jour les équipes du {date}",
+  logHistoryStatusUpdated: "{actor} a changé le statut du {date}",
+  logHistoryPaymentsUpdated: "{actor} a mis à jour les paiements du {date}",
+  logHistoryUnlocked: "{actor} a déverrouillé le match du {date}",
+  logHistoryLocked: "{actor} a verrouillé le match du {date}",
+  unlockHistory: "Déverrouiller pour modifier",
+  lockHistory: "Verrouiller la modification",
+  loginRequiredToEdit: "Vous devez être connecté pour modifier les résultats",
+  duplicatePlayerWarning: "Un joueur ne peut pas être dans les deux équipes : {names}",
 
   // Player stats dashboard (#53)
   playerStats: "Mes Statistiques",
