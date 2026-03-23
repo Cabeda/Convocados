@@ -114,6 +114,9 @@ model Event {
   // Access control
   accessPassword        String?               // bcrypt-hashed password (null = no password)
 
+  // Archive
+  archivedAt     DateTime?
+
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
 
