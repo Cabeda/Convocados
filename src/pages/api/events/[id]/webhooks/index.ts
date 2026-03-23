@@ -62,10 +62,15 @@ export const POST: APIRoute = async ({ params, request }) => {
 };
 
 /** GET — list webhooks for an event */
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   const eventId = params.id!;
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+  if (event.ownerId && !isOwner && !isAdmin) {
+    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+  }
 
   const webhooks = await prisma.webhookSubscription.findMany({
     where: { eventId },

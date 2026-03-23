@@ -90,6 +90,8 @@ const en = {
   recentPlayers: "Recent players",
   showAllPlayers: "Show all",
   noSuggestions: "Type a new name",
+  createNewPlayer: "Create new player: {name}",
+  nGamesPlayed: "{n} games",
 
   // History
   history: "History",
