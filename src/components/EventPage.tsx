@@ -39,7 +39,7 @@ import { describeRecurrenceRule, parseRecurrenceRule } from "~/lib/recurrence";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { matchesWithName } from "~/lib/stringMatch";
-import { getKnownNames, addKnownName, getQjName, setQjName } from "~/lib/knownNames";
+import { addKnownName, getQjName } from "~/lib/knownNames";
 import { SPORT_PRESETS, getSportPreset, getDefaultMaxPlayers } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
 import { googleCalendarUrl } from "~/lib/calendar";
@@ -341,6 +341,11 @@ interface KnownPlayer {
   gamesPlayed?: number;
 }
 
+/** Option type for the player Autocomplete: either an existing player or a "create new" action. */
+type PlayerOption =
+  | { type: "existing"; name: string; gamesPlayed: number }
+  | { type: "create"; name: string };
+
 function QuickJoin({
   userName,
   players,
@@ -540,28 +545,17 @@ export default function EventPage({ eventId }: { eventId: string }) {
     fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).then(setKnownPlayersData);
   }, [eventId]);
   
-  const localKnownNames = useMemo(() => getKnownNames(), []);
-  
   const mergedSuggestions = useMemo(() => {
-    const serverNames = new Map<string, number>();
-    for (const p of knownPlayersData?.players ?? []) {
-      serverNames.set(p.name, p.gamesPlayed ?? 1);
-    }
-    for (const n of localKnownNames) {
-      if (!serverNames.has(n)) {
-        serverNames.set(n, 0);
-      }
-    }
     const qjName = getQjName().trim();
-    const result = Array.from(serverNames.entries())
-      .map(([name, gamesPlayed]) => ({ name, gamesPlayed }))
+    const result = (knownPlayersData?.players ?? [])
+      .map((p) => ({ name: p.name, gamesPlayed: p.gamesPlayed ?? 1 }))
       .sort((a, b) => {
         if (qjName && a.name.toLowerCase() === qjName.toLowerCase()) return -1;
         if (qjName && b.name.toLowerCase() === qjName.toLowerCase()) return 1;
         return b.gamesPlayed - a.gamesPlayed;
       });
     return result;
-  }, [knownPlayersData, localKnownNames]);
+  }, [knownPlayersData]);
   
   const currentPlayerNames = useMemo(
     () => new Set((event?.players ?? []).map((p) => p.name.toLowerCase())),
@@ -1112,11 +1106,25 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
                       {playerError && <Alert severity="error" onClose={() => setPlayerError(null)}>{playerError}</Alert>}
                       
-                      <Autocomplete
+                      <Autocomplete<PlayerOption, false, false, true>
                         freeSolo
-                        options={availableSuggestions.map((s) => s.name)}
-                        filterOptions={(options, { inputValue }) =>
-                          options.filter((opt) => matchesWithName(opt, inputValue))
+                        options={(() => {
+                          const trimmed = playerInput.trim();
+                          const filtered: PlayerOption[] = availableSuggestions
+                            .filter((s) => matchesWithName(s.name, trimmed))
+                            .map((s) => ({ type: "existing" as const, name: s.name, gamesPlayed: s.gamesPlayed }));
+                          // Add "Create new player" option when input doesn't exactly match an existing suggestion
+                          if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
+                            filtered.push({ type: "create" as const, name: trimmed });
+                          }
+                          return filtered;
+                        })()}
+                        filterOptions={(options) => options}
+                        getOptionLabel={(option) =>
+                          typeof option === "string" ? option : option.name
+                        }
+                        isOptionEqualToValue={(option, value) =>
+                          option.type === value.type && option.name === value.name
                         }
                         value={null}
                         inputValue={playerInput}
@@ -1126,8 +1134,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
                           setPlayerError(null);
                         }}
                         onChange={(_, newValue) => {
-                          if (typeof newValue === "string" && newValue.trim()) {
-                            addPlayer(newValue);
+                          if (!newValue) return;
+                          if (typeof newValue === "string") {
+                            if (newValue.trim()) { addPlayer(newValue); setPlayerInput(""); }
+                          } else {
+                            addPlayer(newValue.name);
                             setPlayerInput("");
                           }
                         }}
@@ -1141,9 +1152,27 @@ export default function EventPage({ eventId }: { eventId: string }) {
                             inputProps={{ ...params.inputProps, maxLength: 50 }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && playerInput.trim()) {
+                                // If there's an exact or partial match in suggestions, let Autocomplete handle it
+                                // (it will select the highlighted option). Only force-add if no dropdown is open.
+                                const trimmed = playerInput.trim();
+                                const hasExactMatch = availableSuggestions.some(
+                                  (s) => s.name.toLowerCase() === trimmed.toLowerCase()
+                                );
+                                if (hasExactMatch) {
+                                  // Let Autocomplete's onChange fire with the matched option
+                                  return;
+                                }
+                                const hasPartialMatch = availableSuggestions.some(
+                                  (s) => matchesWithName(s.name, trimmed)
+                                );
+                                if (hasPartialMatch) {
+                                  // Partial matches exist — let the user pick from dropdown
+                                  return;
+                                }
+                                // No matches at all — create new player directly
                                 e.preventDefault();
                                 e.stopPropagation();
-                                addPlayer(playerInput);
+                                addPlayer(trimmed);
                                 setPlayerInput("");
                               }
                             }}
@@ -1171,9 +1200,22 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         )}
                         renderOption={(props, option) => {
                           const { key, ...otherProps } = props as any;
+                          if (option.type === "create") {
+                            return (
+                              <li key={key} {...otherProps} style={{ minHeight: 44, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>
+                                <PersonAddIcon fontSize="small" color="primary" />
+                                {t("createNewPlayer", { name: option.name })}
+                              </li>
+                            );
+                          }
                           return (
-                            <li key={key} {...otherProps} style={{ minHeight: 44 }}>
-                              {option}
+                            <li key={key} {...otherProps} style={{ minHeight: 44, display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                              <span>{option.name}</span>
+                              {option.gamesPlayed > 0 && (
+                                <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
+                                  {t("nGamesPlayed", { n: option.gamesPlayed })}
+                                </Typography>
+                              )}
                             </li>
                           );
                         }}

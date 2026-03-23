@@ -78,6 +78,8 @@ const de: TranslationKeys = {
   recentPlayers: "Letzte Spieler",
   showAllPlayers: "Alle anzeigen",
   noSuggestions: "Neuen Namen eingeben",
+  createNewPlayer: "Neuen Spieler erstellen: {name}",
+  nGamesPlayed: "{n} Spiele",
   history: "Verlauf",
   viewHistory: "Verlauf anzeigen",
   noHistory: "Noch keine vergangenen Spiele.",
