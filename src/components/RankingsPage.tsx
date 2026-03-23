@@ -55,9 +55,10 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     setRatings(rat.data);
     setNextCursor(rat.nextCursor);
     setHasMore(rat.hasMore);
-    // Owner or admin can edit ratings
+    // Owner or admin can edit ratings (only if allowManualRating is enabled)
     const isOwner = ev.ownerId && ev.ownerId === ev._currentUserId;
-    setCanEdit(isOwner || ev.isAdmin || !ev.ownerId);
+    const hasEditPermission = isOwner || ev.isAdmin || !ev.ownerId;
+    setCanEdit(hasEditPermission && !!ev.allowManualRating);
     setLoading(false);
   }, [eventId]);
 

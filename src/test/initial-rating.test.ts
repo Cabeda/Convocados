@@ -35,6 +35,7 @@ async function seedEvent(ownerId?: string) {
       location: "Pitch A",
       dateTime: new Date(Date.now() + 86400_000),
       ownerId: ownerId ?? null,
+      allowManualRating: true,
     },
   });
   return event;
@@ -95,7 +96,7 @@ describe("Ratings API — initial rating", () => {
     expect(body.needsRecalculate).toBe(false);
   });
 
-  it("sets initial rating for player with games — only stores initialRating, not live rating", async () => {
+  it("sets initial rating for player with games — auto-recalculates", async () => {
     const event = await seedEvent("owner1");
     await prisma.playerRating.create({
       data: { eventId: event.id, name: "Charlie", rating: 1050, gamesPlayed: 5 },
@@ -104,21 +105,21 @@ describe("Ratings API — initial rating", () => {
     const res = await PATCH(ctx({ id: event.id }, { name: "Charlie", initialRating: 1200 }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.rating).toBe(1050); // live rating NOT changed
     expect(body.initialRating).toBe(1200);
-    expect(body.needsRecalculate).toBe(true);
+    expect(body.needsRecalculate).toBe(false);
+    expect(body.recalculated).toBe(true);
   });
 
-  it("clamps rating to 500–1500 range", async () => {
+  it("clamps rating to 800–1200 range for new players (no games)", async () => {
     const event = await seedEvent("owner1");
 
     const res1 = await PATCH(ctx({ id: event.id }, { name: "Low", initialRating: 100 }));
     const body1 = await res1.json();
-    expect(body1.rating).toBe(500);
+    expect(body1.rating).toBe(800);
 
     const res2 = await PATCH(ctx({ id: event.id }, { name: "High", initialRating: 2000 }));
     const body2 = await res2.json();
-    expect(body2.rating).toBe(1500);
+    expect(body2.rating).toBe(1200);
   });
 
   it("returns 400 for missing name", async () => {
@@ -141,6 +142,23 @@ describe("Ratings API — initial rating", () => {
 
     const res = await PATCH(ctx({ id: event.id }, { name: "Alice", initialRating: 1200 }));
     expect(res.status).toBe(403);
+  });
+
+  it("returns 403 when allowManualRating is disabled", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Locked Event",
+        location: "Pitch B",
+        dateTime: new Date(Date.now() + 86400_000),
+        ownerId: null,
+        allowManualRating: false,
+      },
+    });
+
+    const res = await PATCH(ctx({ id: event.id }, { name: "Alice", initialRating: 1200 }));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toContain("Manual rating editing is disabled");
   });
 
   it("returns 404 for non-existent event", async () => {
@@ -222,5 +240,18 @@ describe("Ratings API — initial rating", () => {
     });
     expect(bob!.initialRating).toBeNull();
     expect(bob!.gamesPlayed).toBe(1);
+  });
+
+  it("recalculate returns 403 for non-owner", async () => {
+    const event = await seedEvent("owner1");
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
+
+    const res = await recalculate(ctx({ id: event.id }, {}, "POST"));
+    expect(res.status).toBe(403);
+  });
+
+  it("recalculate returns 404 for non-existent event", async () => {
+    const res = await recalculate(ctx({ id: "nonexistent" }, {}, "POST"));
+    expect(res.status).toBe(404);
   });
 });

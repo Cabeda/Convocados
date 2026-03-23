@@ -581,6 +581,15 @@ const es: TranslationKeys = {
   paymentReminderSubject: "Pago pendiente: {title}",
   paymentReminderHeading: "Pago pendiente para {title}",
   paymentReminderBody: "Tienes un pago pendiente de {amount} {currency} para este juego.",
+
+  // ELO rating hardening (#170)
+  allowManualRating: "Edición manual de puntuación",
+  allowManualRatingTooltip: "Permitir que propietarios y admins establezcan manualmente la puntuación inicial de los jugadores",
+  manualRatingDisabled: "La edición manual de puntuación está desactivada para este evento.",
+  logRatingInitialSet: "{actor} estableció la puntuación inicial de {player}",
+  logRatingRecalculated: "{actor} recalculó todas las puntuaciones",
+  logRatingManualEnabled: "{actor} activó la edición manual de puntuación",
+  logRatingManualDisabled: "{actor} desactivó la edición manual de puntuación",
 };
 
 export default es;

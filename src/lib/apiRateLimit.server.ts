@@ -16,6 +16,8 @@ const PRESETS = {
   write: { windowMs: 60_000, maxRequests: 30 },
   /** Auth endpoints: 10 req/min */
   auth: { windowMs: 60_000, maxRequests: 10 },
+  /** Heavy operations (e.g. ELO recalculate): 1 req/min */
+  heavy: { windowMs: 60_000, maxRequests: 1 },
 } as const;
 
 export type RateLimitPreset = keyof typeof PRESETS;
@@ -104,6 +106,7 @@ export async function resetApiRateLimitStore(): Promise<void> {
         { key: { startsWith: "read:" } },
         { key: { startsWith: "write:" } },
         { key: { startsWith: "auth:" } },
+        { key: { startsWith: "heavy:" } },
       ],
     },
   });
