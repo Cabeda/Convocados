@@ -543,6 +543,10 @@ const es: TranslationKeys = {
   logHistoryTeamsUpdated: "{actor} actualizó los equipos de {date}",
   logHistoryStatusUpdated: "{actor} cambió el estado de {date}",
   logHistoryPaymentsUpdated: "{actor} actualizó los pagos de {date}",
+  logHistoryUnlocked: "{actor} desbloqueó el partido del {date}",
+  logHistoryLocked: "{actor} bloqueó el partido del {date}",
+  unlockHistory: "Desbloquear para editar",
+  lockHistory: "Bloquear edición",
   loginRequiredToEdit: "Debes iniciar sesión para editar resultados",
   duplicatePlayerWarning: "Un jugador no puede estar en ambos equipos: {names}",
 

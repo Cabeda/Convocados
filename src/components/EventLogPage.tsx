@@ -51,6 +51,8 @@ const ACTION_COLORS: Record<string, "success" | "error" | "info" | "warning" | "
   history_teams_updated: "info",
   history_status_updated: "warning",
   history_payments_updated: "info",
+  history_unlocked: "warning",
+  history_locked: "info",
 };
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -66,6 +68,8 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
   history_teams_updated: <SportsIcon fontSize="small" />,
   history_status_updated: <HistoryIcon fontSize="small" />,
   history_payments_updated: <PaymentIcon fontSize="small" />,
+  history_unlocked: <HistoryIcon fontSize="small" />,
+  history_locked: <HistoryIcon fontSize="small" />,
 };
 
 const ACTION_I18N: Record<string, string> = {
@@ -91,6 +95,8 @@ const ACTION_I18N: Record<string, string> = {
   history_teams_updated: "logHistoryTeamsUpdated",
   history_status_updated: "logHistoryStatusUpdated",
   history_payments_updated: "logHistoryPaymentsUpdated",
+  history_unlocked: "logHistoryUnlocked",
+  history_locked: "logHistoryLocked",
 };
 
 function LogEntryRow({ entry }: { entry: LogEntry }) {
