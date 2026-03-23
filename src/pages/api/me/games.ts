@@ -17,7 +17,7 @@ export const GET: APIRoute = async ({ request }) => {
 
   const [ownedEvents, joinedPlayers] = await Promise.all([
     prisma.event.findMany({
-      where: { ownerId: userId },
+      where: { ownerId: userId, archivedAt: null },
       select: {
         id: true,
         title: true,
@@ -32,7 +32,7 @@ export const GET: APIRoute = async ({ request }) => {
       ...(ownedCursor ? { cursor: { id: ownedCursor }, skip: 1 } : {}),
     }),
     prisma.player.findMany({
-      where: { userId },
+      where: { userId, event: { archivedAt: null } },
       select: {
         id: true,
         event: {

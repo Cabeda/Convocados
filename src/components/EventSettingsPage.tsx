@@ -22,6 +22,8 @@ import LockIcon from "@mui/icons-material/Lock";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import DeleteIcon from "@mui/icons-material/Delete";
 import GroupIcon from "@mui/icons-material/Group";
+import ArchiveIcon from "@mui/icons-material/Archive";
+import UnarchiveIcon from "@mui/icons-material/Unarchive";
 import { useT } from "~/lib/useT";
 import { SPORT_PRESETS, getSportPreset } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
@@ -379,6 +381,23 @@ export default function EventSettingsPage({ eventId }: Props) {
     if (res.ok) {
       setAdmins((prev) => prev.filter((a) => a.userId !== userId));
       setMessage({ type: "success", text: t("adminRemoved") });
+    }
+  };
+
+  // ── Archive handler ───────────────────────────────────────────────────
+
+  const handleArchiveToggle = async () => {
+    const archive = !event.archivedAt;
+    const res = await fetch(`/api/events/${eventId}/archive`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archive }),
+    });
+    if (res.ok) {
+      await fetchEvent();
+      setMessage({ type: "success", text: archive ? t("eventArchived") : t("eventUnarchived") });
+    } else {
+      setMessage({ type: "error", text: t("somethingWentWrong") });
     }
   };
 
@@ -820,6 +839,30 @@ export default function EventSettingsPage({ eventId }: Props) {
           </Paper>
         </Stack>
       </SectionCard>
+
+      {/* ── Archive ── */}
+      {isOwner && (
+        <SectionCard title={t("archiveEvent")} icon={<ArchiveIcon color="action" />}>
+          <Stack spacing={1}>
+            <Typography variant="body2" color="text.secondary">
+              {t("archiveEventDesc")}
+            </Typography>
+            {event.archivedAt && (
+              <Chip label={t("archivedBadge")} color="warning" size="small" sx={{ alignSelf: "flex-start" }} />
+            )}
+            <Button
+              variant="outlined"
+              color={event.archivedAt ? "primary" : "warning"}
+              size="small"
+              startIcon={event.archivedAt ? <UnarchiveIcon /> : <ArchiveIcon />}
+              onClick={handleArchiveToggle}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              {event.archivedAt ? t("unarchiveEventBtn") : t("archiveEventBtn")}
+            </Button>
+          </Stack>
+        </SectionCard>
+      )}
 
       {/* ── Ownership ── */}
       {isOwner && (

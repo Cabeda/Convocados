@@ -10,6 +10,8 @@ import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
 import SettingsIcon from "@mui/icons-material/Settings";
 import PaymentIcon from "@mui/icons-material/Payment";
+import ArchiveIcon from "@mui/icons-material/Archive";
+import UnarchiveIcon from "@mui/icons-material/Unarchive";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -41,6 +43,8 @@ const ACTION_COLORS: Record<string, "success" | "error" | "info" | "warning" | "
   cost_removed: "error",
   payment_updated: "info",
   recurrence_reset: "warning",
+  event_archived: "warning",
+  event_unarchived: "info",
 };
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -50,6 +54,8 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
   event_updated: <SettingsIcon fontSize="small" />,
   cost_set: <PaymentIcon fontSize="small" />,
   payment_updated: <PaymentIcon fontSize="small" />,
+  event_archived: <ArchiveIcon fontSize="small" />,
+  event_unarchived: <UnarchiveIcon fontSize="small" />,
 };
 
 const ACTION_I18N: Record<string, string> = {
@@ -69,6 +75,8 @@ const ACTION_I18N: Record<string, string> = {
   cost_removed: "logCostRemoved",
   payment_updated: "logPaymentUpdated",
   recurrence_reset: "logRecurrenceReset",
+  event_archived: "logEventArchived",
+  event_unarchived: "logEventUnarchived",
 };
 
 function LogEntryRow({ entry }: { entry: LogEntry }) {
