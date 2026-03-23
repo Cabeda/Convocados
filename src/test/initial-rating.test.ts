@@ -241,4 +241,17 @@ describe("Ratings API — initial rating", () => {
     expect(bob!.initialRating).toBeNull();
     expect(bob!.gamesPlayed).toBe(1);
   });
+
+  it("recalculate returns 403 for non-owner", async () => {
+    const event = await seedEvent("owner1");
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
+
+    const res = await recalculate(ctx({ id: event.id }, {}, "POST"));
+    expect(res.status).toBe(403);
+  });
+
+  it("recalculate returns 404 for non-existent event", async () => {
+    const res = await recalculate(ctx({ id: "nonexistent" }, {}, "POST"));
+    expect(res.status).toBe(404);
+  });
 });

@@ -122,4 +122,14 @@ describe("Manual Rating toggle API", () => {
     const body = await res.json();
     expect(body.allowManualRating).toBe(true);
   });
+
+  it("allows toggle on unclaimed event (no ownerId)", async () => {
+    const event = await seedEvent(); // no owner
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
+
+    const res = await PUT(ctx({ id: event.id }, { allowManualRating: true }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.allowManualRating).toBe(true);
+  });
 });
