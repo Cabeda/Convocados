@@ -18,7 +18,6 @@ import TranslateIcon from "@mui/icons-material/Translate";
 import LogoutIcon from "@mui/icons-material/Logout";
 import SettingsIcon from "@mui/icons-material/Settings";
 import DashboardIcon from "@mui/icons-material/Dashboard";
-import BarChartIcon from "@mui/icons-material/BarChart";
 import PersonIcon from "@mui/icons-material/Person";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import { useThemeMode } from "./ThemeModeProvider";
@@ -346,10 +345,6 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                   <MenuItem component="a" href="/dashboard" onClick={() => setUserAnchor(null)}>
                     <ListItemIcon><DashboardIcon fontSize="small" /></ListItemIcon>
                     <ListItemText>{t("myGames")}</ListItemText>
-                  </MenuItem>
-                  <MenuItem component="a" href="/stats" onClick={() => setUserAnchor(null)}>
-                    <ListItemIcon><BarChartIcon fontSize="small" /></ListItemIcon>
-                    <ListItemText>{t("playerStats")}</ListItemText>
                   </MenuItem>
                   {isAdminUser && (
                     <MenuItem component="a" href="/admin" onClick={() => setUserAnchor(null)}>
