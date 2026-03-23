@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
-import { processGame } from "../../../../../lib/elo.server";
+import { processGame, recalculateAllRatings } from "../../../../../lib/elo.server";
 import { computeGameUpdates } from "../../../../../lib/elo";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
@@ -157,6 +157,16 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     try {
       await processGame(params.id!, updated.id, JSON.parse(updated.teamsSnapshot), finalScoreOne, finalScoreTwo);
     } catch { /* ELO processing is best-effort */ }
+  }
+
+  // Recalculate all ratings when teams or scores change on an already-processed game
+  if (
+    updated.eloProcessed &&
+    (teamsSnapshot !== undefined || scoreOne !== undefined || scoreTwo !== undefined)
+  ) {
+    try {
+      await recalculateAllRatings(params.id!);
+    } catch { /* recalculation is best-effort */ }
   }
 
   // Always compute ELO deltas for display (even if already processed)
