@@ -11,6 +11,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import { useSession } from "~/lib/auth.client";
 
 interface PlayerRating {
   name: string;
@@ -27,6 +28,7 @@ const PODIUM_COLORS = ["#FFD700", "#C0C0C0", "#CD7F32"] as const;
 export default function RankingsPage({ eventId }: { eventId: string }) {
   const t = useT();
   const theme = useTheme();
+  const { data: session } = useSession();
   const [title, setTitle] = useState("");
   const [ratings, setRatings] = useState<PlayerRating[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,11 +58,11 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     setNextCursor(rat.nextCursor);
     setHasMore(rat.hasMore);
     // Owner or admin can edit ratings (only if allowManualRating is enabled)
-    const isOwner = ev.ownerId && ev.ownerId === ev._currentUserId;
+    const isOwner = !!(session?.user && ev.ownerId && session.user.id === ev.ownerId);
     const hasEditPermission = isOwner || ev.isAdmin || !ev.ownerId;
     setCanEdit(hasEditPermission && !!ev.allowManualRating);
     setLoading(false);
-  }, [eventId]);
+  }, [eventId, session]);
 
   useEffect(() => { load(); }, [load]);
 
