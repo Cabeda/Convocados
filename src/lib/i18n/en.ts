@@ -650,6 +650,15 @@ const en = {
   logRatingRecalculated: "{actor} recalculated all ratings",
   logRatingManualEnabled: "{actor} enabled manual rating editing",
   logRatingManualDisabled: "{actor} disabled manual rating editing",
+
+  // Split costs toggle (#192)
+  splitCostsEnabled: "Cost splitting",
+  splitCostsEnabledTooltip: "Enable the split costs section on the event page",
+
+  // Dashboard active/archived (#193)
+  activeGames: "Active Games",
+  archivedGames: "Archived Games",
+  noArchivedGames: "No archived games.",
 } as const;
 
 export default en;

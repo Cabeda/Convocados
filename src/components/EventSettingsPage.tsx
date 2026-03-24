@@ -208,6 +208,11 @@ export default function EventSettingsPage({ eventId }: Props) {
     updateSetting("manual-rating", { allowManualRating: v });
   };
 
+  const handleToggleSplitCosts = (v: boolean) => {
+    setEvent((e: any) => e ? { ...e, splitCostsEnabled: v } : e);
+    updateSetting("split-costs", { splitCostsEnabled: v });
+  };
+
   const handleSportChange = (v: string) => {
     setEvent((e: any) => e ? { ...e, sport: v } : e);
     updateSetting("sport", { sport: v });
@@ -482,6 +487,12 @@ export default function EventSettingsPage({ eventId }: Props) {
               <FormControlLabel
                 control={<Switch size="small" checked={event.balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
                 label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("balancedTeams")}</Typography>}
+              />
+            </Tooltip>
+            <Tooltip title={t("splitCostsEnabledTooltip")}>
+              <FormControlLabel
+                control={<Switch size="small" checked={event.splitCostsEnabled ?? true} onChange={(e) => handleToggleSplitCosts(e.target.checked)} disabled={!canEdit} />}
+                label={<Typography variant="body2">{t("splitCostsEnabled")}</Typography>}
               />
             </Tooltip>
             <Tooltip title={t("allowManualRatingTooltip")}>

@@ -119,6 +119,9 @@ model Event {
   eloEnabled        Boolean @default(true)
   allowManualRating Boolean @default(false)
 
+  // Cost tracking
+  splitCostsEnabled Boolean @default(true)
+
   // Archive
   archivedAt     DateTime?
 
