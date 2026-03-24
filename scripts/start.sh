@@ -19,11 +19,26 @@ fi
 # ── Run Prisma migrations ────────────────────────────────────────────────────
 echo "[startup] Running database migrations..."
 
-# Resolve any previously failed migrations so deploy can proceed
-FAILED=$(./node_modules/.bin/prisma migrate status 2>&1 | grep -oE 'The `[^`]+` migration' | head -1 | sed 's/The `\(.*\)` migration/\1/' || true)
-if [ -n "$FAILED" ]; then
-  echo "[startup] Found failed migration: $FAILED — marking as rolled back and re-applying..."
-  ./node_modules/.bin/prisma migrate resolve --rolled-back "$FAILED"
+# Resolve any previously failed migrations so deploy can proceed.
+# Temporarily disable set -e since prisma migrate status exits non-zero on failures.
+set +e
+MIGRATE_STATUS=$(./node_modules/.bin/prisma migrate status 2>&1)
+MIGRATE_EXIT=$?
+set -e
+
+echo "[startup] migrate status (exit $MIGRATE_EXIT):"
+echo "$MIGRATE_STATUS"
+
+if echo "$MIGRATE_STATUS" | grep -q "failed"; then
+  FAILED_NAME=$(echo "$MIGRATE_STATUS" | sed -n 's/.*`\([^`]*\)` migration.*/\1/p' | head -1)
+  if [ -n "$FAILED_NAME" ]; then
+    echo "[startup] Resolving failed migration: $FAILED_NAME"
+    set +e
+    ./node_modules/.bin/prisma migrate resolve --rolled-back "$FAILED_NAME"
+    set -e
+  else
+    echo "[startup] WARNING: detected failed migration but could not extract name"
+  fi
 fi
 
 ./node_modules/.bin/prisma migrate deploy
