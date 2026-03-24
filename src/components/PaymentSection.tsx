@@ -70,12 +70,10 @@ export function PaymentSection({
   eventId,
   canEdit,
   activePlayerCount,
-  refreshKey,
 }: {
   eventId: string;
   canEdit: boolean;
   activePlayerCount: number;
-  refreshKey: number;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -95,7 +93,13 @@ export function PaymentSection({
     setCostData(data);
   }, [eventId]);
 
-  useEffect(() => { fetchCost(); }, [fetchCost, activePlayerCount, refreshKey]);
+  useEffect(() => { fetchCost(); }, [fetchCost, activePlayerCount]);
+
+  // Poll for cost updates every 10s (replaces SSE refreshKey)
+  useEffect(() => {
+    const id = setInterval(fetchCost, 10_000);
+    return () => clearInterval(id);
+  }, [fetchCost]);
 
   const hasCost = costData && costData.totalAmount > 0;
   const perPlayer = hasCost && activePlayerCount > 0

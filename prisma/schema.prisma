@@ -426,14 +426,4 @@ model PaymentReminderLog {
   @@index([eventId, userId])
 }
 
-// ── Rate limiting ─────────────────────────────────────────────────────────────
-
-model RateLimit {
-  id          String   @id @default(cuid())
-  key         String   @unique // composite: "{preset}:{ip}"
-  count       Int      @default(1)
-  windowStart DateTime
-  expiresAt   DateTime
-
-  @@index([expiresAt])
-}
+// ── Rate limiting (in-memory, no DB model needed) ─────────────────────────────

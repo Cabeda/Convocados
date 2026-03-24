@@ -2,7 +2,6 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { addPlayerToTeams } from "./players";
-import { sseManager } from "../../../../lib/sse.server";
 
 const UNDO_WINDOW_MS = 60_000; // 60 seconds
 
@@ -56,7 +55,6 @@ export const POST: APIRoute = async ({ params, request }) => {
     await addPlayerToTeams(eventId, name);
   }
 
-  sseManager.broadcast(eventId, "update", { action: "player_restored" });
 
   return Response.json({ ok: true });
 };

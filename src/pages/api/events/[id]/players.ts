@@ -4,7 +4,6 @@ import { sendPushToEvent } from "../../../../lib/push.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { sseManager } from "../../../../lib/sse.server";
 import { syncPaymentsForEvent } from "../../../../lib/payments.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 
@@ -156,7 +155,6 @@ export const POST: APIRoute = async ({ params, request }) => {
   // Recalculate payment shares if a cost is set
   await syncPaymentsForEvent(eventId);
 
-  sseManager.broadcast(eventId, "update", { action: "player_added" });
 
   logEvent(eventId, "player_added", session?.user?.name ?? trimmed, session?.user?.id ?? null, { playerName: trimmed }).catch(() => {});
 
@@ -233,7 +231,6 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   // Recalculate payment shares if a cost is set
   await syncPaymentsForEvent(eventId);
 
-  sseManager.broadcast(eventId, "update", { action: "player_removed" });
 
   logEvent(eventId, "player_removed", session?.user?.name ?? null, session?.user?.id ?? null, { playerName: player.name }).catch(() => {});
 

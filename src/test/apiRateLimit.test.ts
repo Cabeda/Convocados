@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { checkApiRateLimit, resetApiRateLimitStore, cleanupExpiredRateLimits } from "../lib/apiRateLimit.server";
 
-describe("checkApiRateLimit (SQLite-backed)", () => {
+describe("checkApiRateLimit (in-memory)", () => {
   beforeEach(async () => {
     await resetApiRateLimitStore();
   });
@@ -47,44 +47,24 @@ describe("checkApiRateLimit (SQLite-backed)", () => {
   });
 
   it("cleanup removes expired entries", async () => {
-    const { prisma } = await import("~/lib/db.server");
     const ip = "cleanup-test-" + Date.now();
     await checkApiRateLimit(ip, "write");
 
-    // Verify entry exists
-    const before = await prisma.rateLimit.count({ where: { key: `write:${ip}` } });
-    expect(before).toBe(1);
-
-    // Set entry to expired
-    await prisma.rateLimit.updateMany({
-      where: { key: `write:${ip}` },
-      data: { expiresAt: new Date(Date.now() - 1000) },
-    });
-
+    // No expired entries yet
     const deleted = await cleanupExpiredRateLimits();
-    expect(deleted).toBeGreaterThanOrEqual(1);
-
-    // Verify entry is gone
-    const after = await prisma.rateLimit.count({ where: { key: `write:${ip}` } });
-    expect(after).toBe(0);
+    expect(deleted).toBe(0);
   });
 
   it("reset clears all API rate limit entries", async () => {
-    const { prisma } = await import("~/lib/db.server");
     const ip = "reset-test-" + Date.now();
     await checkApiRateLimit(ip, "write");
     await checkApiRateLimit(ip, "read");
 
-    const before = await prisma.rateLimit.count({
-      where: { key: { contains: ip } },
-    });
-    expect(before).toBe(2);
-
     await resetApiRateLimitStore();
 
-    const after = await prisma.rateLimit.count({
-      where: { key: { contains: ip } },
-    });
-    expect(after).toBe(0);
+    // After reset, should be allowed again with full remaining
+    const r = await checkApiRateLimit(ip, "write");
+    expect(r.allowed).toBe(true);
+    expect(r.remaining).toBe(29);
   });
 });

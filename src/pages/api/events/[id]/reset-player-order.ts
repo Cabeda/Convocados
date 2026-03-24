@@ -2,7 +2,6 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { sseManager } from "../../../../lib/sse.server";
 
 /** POST — reset player order to original signup order (createdAt). Owner-only. */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -48,7 +47,6 @@ export const POST: APIRoute = async ({ params, request }) => {
     if (hasBenchPlayersInTeams) {
       // Clear teams to force re-randomization
       await prisma.teamResult.deleteMany({ where: { eventId } });
-      sseManager.broadcast(eventId, "update", { action: "player_order_reset" });
       return Response.json({
         ok: true,
         teamsCleared: true,
@@ -57,7 +55,6 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
   }
 
-  sseManager.broadcast(eventId, "update", { action: "player_order_reset" });
 
   return Response.json({ ok: true, teamsCleared: false });
 };

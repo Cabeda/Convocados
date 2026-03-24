@@ -2,7 +2,6 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { sseManager } from "../../../../lib/sse.server";
 
 /** PUT — reorder players. Owner-only — claim ownership first on ownerless events. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -40,7 +39,6 @@ export const PUT: APIRoute = async ({ params, request }) => {
     )
   );
 
-  sseManager.broadcast(eventId, "update", { action: "players_reordered" });
 
   return Response.json({ ok: true });
 };

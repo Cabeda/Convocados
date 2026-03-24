@@ -26,6 +26,7 @@ async function applyPragmas(client: PrismaClient): Promise<void> {
   await client.$queryRawUnsafe("PRAGMA synchronous = NORMAL");
   await client.$queryRawUnsafe("PRAGMA cache_size = -20000");
   await client.$queryRawUnsafe("PRAGMA foreign_keys = ON");
+  await client.$queryRawUnsafe("PRAGMA mmap_size = 67108864"); // 64MB mmap for better read perf
 }
 
 function createClient(): PrismaClient {

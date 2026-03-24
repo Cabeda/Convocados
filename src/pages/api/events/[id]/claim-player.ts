@@ -2,7 +2,6 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { sseManager } from "../../../../lib/sse.server";
 
 /** POST — claim an anonymous player: replace it with the authenticated user's identity */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -108,7 +107,6 @@ export const POST: APIRoute = async ({ params, request }) => {
     throw err;
   }
 
-  sseManager.broadcast(eventId, "update", { action: "player_claimed" });
 
   return Response.json({
     ok: true,

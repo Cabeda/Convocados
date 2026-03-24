@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
-import { GET as getStream } from "~/pages/api/events/[id]/stream";
 import { GET as getEventCalendar } from "~/pages/api/events/[id]/calendar.ics";
 import { GET as getUserCalendar } from "~/pages/api/users/[id]/calendar.ics";
 import { GET as getStatus } from "~/pages/api/events/[id]/status";
@@ -59,28 +58,6 @@ describe("GET /api/health", () => {
     expect(body.status).toBe("ok");
     expect(body.db.writable).toBe(true);
     expect(body.db.journalMode).toBeTruthy();
-  });
-});
-
-// ─── GET /api/events/[id]/stream ─────────────────────────────────────────────
-
-describe("GET /api/events/[id]/stream", () => {
-  it("returns a readable stream with SSE headers", async () => {
-    const event = await seedEvent();
-    const res = await getStream(ctx({ id: event.id }));
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
-    expect(res.headers.get("Cache-Control")).toBe("no-cache");
-    expect(res.headers.get("Connection")).toBe("keep-alive");
-    expect(res.body).toBeTruthy();
-
-    // Read the first chunk (connected event)
-    const reader = res.body!.getReader();
-    const { value, done } = await reader.read();
-    expect(done).toBe(false);
-    expect(value).toContain("event: connected");
-    expect(value).toContain(event.id);
-    reader.cancel();
   });
 });
 

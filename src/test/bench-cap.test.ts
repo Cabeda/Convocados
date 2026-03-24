@@ -38,7 +38,6 @@ beforeEach(async () => {
   await prisma.teamResult.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
-  await prisma.rateLimit.deleteMany();
 });
 
 describe("Bench player cap (#175)", () => {
