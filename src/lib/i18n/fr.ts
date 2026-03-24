@@ -38,6 +38,7 @@ const fr: TranslationKeys = {
   maxPlayersError: "Le nombre de joueurs doit être entre 2 et 100",
   activePlayers: "En jeu ({n}/{max})",
   benchPlayers: "Banc ({n})",
+  benchFull: "Le banc est plein (maximum {max} joueurs sur le banc).",
   benchInfo: "Les joueurs sur le banc sont promus automatiquement quand une place se libère.",
   youAreOnBench: "Tu es sur le banc — tu seras promu si une place se libère.",
   youArePlaying: "Tu as rejoint en tant que {name}",

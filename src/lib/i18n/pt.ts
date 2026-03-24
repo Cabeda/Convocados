@@ -43,6 +43,7 @@ const pt: TranslationKeys = {
   // Bench
   activePlayers: "A jogar ({n}/{max})",
   benchPlayers: "Banco ({n})",
+  benchFull: "O banco está cheio (máximo de {max} jogadores no banco).",
   benchInfo: "Os jogadores no banco são promovidos automaticamente quando há uma vaga.",
   youAreOnBench: "Estás no banco — serás promovido se houver uma vaga.",
   youArePlaying: "Entraste como {name}",
