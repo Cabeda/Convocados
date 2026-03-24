@@ -77,34 +77,34 @@ beforeEach(async () => {
 
 describe("POST /api/events/[id]/priority/[userId]", () => {
   it("returns 404 for non-existent event", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const res = await priorityAddUser(postCtx({ id: "nonexistent", userId: "u1" }));
     expect(res.status).toBe(404);
   });
 
   it("returns 403 when not owner or admin", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
     const event = await seedEvent({ priorityEnabled: true });
     const res = await priorityAddUser(postCtx({ id: event.id, userId: "u1" }));
     expect(res.status).toBe(403);
   });
 
   it("returns 400 when priority is not enabled", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const event = await seedEvent({ priorityEnabled: false });
     const res = await priorityAddUser(postCtx({ id: event.id, userId: "u1" }));
     expect(res.status).toBe(400);
   });
 
   it("returns 404 when user does not exist", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const event = await seedEvent({ priorityEnabled: true });
     const res = await priorityAddUser(postCtx({ id: event.id, userId: "nonexistent-user" }));
     expect(res.status).toBe(404);
   });
 
   it("successfully adds enrollment", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const event = await seedEvent({ priorityEnabled: true });
     const user = await seedUser("Priority User");
     const res = await priorityAddUser(postCtx({ id: event.id, userId: user.id }));
@@ -118,20 +118,20 @@ describe("POST /api/events/[id]/priority/[userId]", () => {
 
 describe("DELETE /api/events/[id]/priority/[userId]", () => {
   it("returns 404 for non-existent event", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const res = await priorityRemoveUser(deleteCtx({ id: "nonexistent", userId: "u1" }));
     expect(res.status).toBe(404);
   });
 
   it("returns 403 when not owner", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
     const event = await seedEvent();
     const res = await priorityRemoveUser(deleteCtx({ id: event.id, userId: "u1" }));
     expect(res.status).toBe(403);
   });
 
   it("successfully removes enrollment", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const event = await seedEvent({ priorityEnabled: true });
     const user = await seedUser("Remove User");
     await prisma.priorityEnrollment.create({
@@ -266,21 +266,21 @@ describe("PUT /api/events/[id]/priority/opt-out", () => {
 
 describe("PUT /api/events/[id]/location", () => {
   it("returns 404 for non-existent event", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const res = await updateLocation(putCtx({ id: "nonexistent" }, { location: "New Place" }));
     expect(res.status).toBe(404);
   });
 
   it("returns 403 when owned event and not owner", async () => {
     const user = await seedUser("Owner");
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
     const event = await seedEvent({ ownerId: user.id });
     const res = await updateLocation(putCtx({ id: event.id }, { location: "New Place" }));
     expect(res.status).toBe(403);
   });
 
   it("allows update on ownerless event even if not owner", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
     const event = await seedEvent({ ownerId: null });
     const res = await updateLocation(putCtx({ id: event.id }, { location: "New Place" }));
     expect(res.status).toBe(200);
@@ -289,7 +289,7 @@ describe("PUT /api/events/[id]/location", () => {
   });
 
   it("updates location with empty string", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const event = await seedEvent();
     const res = await updateLocation(putCtx({ id: event.id }, { location: "" }));
     expect(res.status).toBe(200);

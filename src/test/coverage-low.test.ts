@@ -75,27 +75,27 @@ beforeEach(async () => {
 
 describe("PUT /api/events/[id]/reorder-players", () => {
   it("returns 404 for non-existent event", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const res = await reorderPlayers(putCtx({ id: "nonexistent" }, { playerIds: [] }));
     expect(res.status).toBe(404);
   });
 
   it("returns 403 when not owner or admin", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
     const event = await seedEvent();
     const res = await reorderPlayers(putCtx({ id: event.id }, { playerIds: [] }));
     expect(res.status).toBe(403);
   });
 
   it("returns 400 when playerIds is not an array", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const event = await seedEvent();
     const res = await reorderPlayers(putCtx({ id: event.id }, { playerIds: "not-array" }));
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when playerIds don't match current players", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const event = await seedEvent();
     await prisma.player.create({ data: { name: "P1", eventId: event.id, order: 0 } });
     const res = await reorderPlayers(putCtx({ id: event.id }, { playerIds: ["wrong-id"] }));
@@ -103,7 +103,7 @@ describe("PUT /api/events/[id]/reorder-players", () => {
   });
 
   it("successfully reorders players", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
     const event = await seedEvent();
     const p1 = await prisma.player.create({ data: { name: "P1", eventId: event.id, order: 0 } });
     const p2 = await prisma.player.create({ data: { name: "P2", eventId: event.id, order: 1 } });
@@ -123,7 +123,7 @@ describe("PUT /api/events/[id]/reorder-players", () => {
   });
 
   it("allows admin to reorder players", async () => {
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: true });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: true, session: null });
     const event = await seedEvent();
     const p1 = await prisma.player.create({ data: { name: "P1", eventId: event.id, order: 0 } });
     const p2 = await prisma.player.create({ data: { name: "P2", eventId: event.id, order: 1 } });
