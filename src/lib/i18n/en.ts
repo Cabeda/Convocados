@@ -163,8 +163,10 @@ const en = {
   webhookHelp: "POST to this URL to register a webhook. See docs for payload format.",
 
   // ELO / Ratings
-  balancedTeams: "Balanced",
-  balancedTeamsTooltip: "Use ELO ratings to balance teams",
+  eloEnabled: "ELO ratings",
+  eloEnabledTooltip: "Track player skill ratings using the ELO system",
+  balancedTeams: "ELO-balanced teams",
+  balancedTeamsTooltip: "Use ELO ratings to balance teams when randomizing",
   ratings: "Ratings",
   rating: "Rating",
   gamesPlayed: "Games",
@@ -459,6 +461,7 @@ const en = {
   attendanceLow: "Irregular",
 
   // Event activity log (#122)
+  moreActions: "More",
   activityLog: "Activity",
   activityLogTitle: "Activity Log",
   activityLogDesc: "All actions recorded for this event.",

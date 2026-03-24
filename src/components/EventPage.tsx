@@ -4,7 +4,7 @@ import {
   Alert, IconButton, Tooltip, InputAdornment, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, Snackbar, alpha, useTheme, Grid2,
   CircularProgress, Divider, Autocomplete,
-  List, ListItem, ListItemText,
+  List, ListItem, ListItemText, Menu, MenuItem, ListItemIcon,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import HistoryIcon from "@mui/icons-material/History";
@@ -30,6 +30,9 @@ import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import StarIcon from "@mui/icons-material/Star";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import LockIcon from "@mui/icons-material/Lock";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import AssignmentIcon from "@mui/icons-material/Assignment";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -61,6 +64,7 @@ interface EventData {
   isRecurring: boolean;
   isPublic: boolean;
   balanced: boolean;
+  eloEnabled: boolean;
   sport: string;
   recurrenceRule: string | null;
   ownerId: string | null;
@@ -278,6 +282,61 @@ function NotifyButton({ eventId }: { eventId: string }) {
       onClick={subscribe} disabled={loading} sx={{ flexShrink: 0 }}>
       {t("notifySubscribe")}
     </Button>
+  );
+}
+
+// ── More Actions Menu ─────────────────────────────────────────────────────────
+
+function MoreActionsMenu({ eventId, event, gameDate }: {
+  eventId: string;
+  event: EventData;
+  gameDate: Date;
+}) {
+  const t = useT();
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
+
+  return (
+    <>
+      <Button variant="outlined" size="small" startIcon={<MoreVertIcon />}
+        onClick={(e) => setAnchorEl(e.currentTarget)}
+        aria-label={t("moreActions")}
+        sx={{ flexShrink: 0 }}>
+        {t("moreActions")}
+      </Button>
+      <Menu anchorEl={anchorEl} open={open} onClose={() => setAnchorEl(null)}>
+        <MenuItem component="a" href={`/events/${eventId}/log`} onClick={() => setAnchorEl(null)}>
+          <ListItemIcon><AssignmentIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t("activityLog")}</ListItemText>
+        </MenuItem>
+        {(gameDate <= new Date() || event.isRecurring) && (
+          <MenuItem component="a" href={`/events/${eventId}/attendance`} onClick={() => setAnchorEl(null)}>
+            <ListItemIcon><EmojiPeopleIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t("attendance")}</ListItemText>
+          </MenuItem>
+        )}
+        <MenuItem component="a" href={`/api/events/${eventId}/calendar`} onClick={() => setAnchorEl(null)}>
+          <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t("downloadIcs")}</ListItemText>
+        </MenuItem>
+        <MenuItem component="a"
+          href={googleCalendarUrl({
+            id: eventId,
+            title: event.title,
+            location: event.location,
+            dateTime: new Date(event.dateTime),
+            url: typeof window !== "undefined" ? window.location.href : undefined,
+            recurrence: event.isRecurring && event.recurrenceRule
+              ? JSON.parse(event.recurrenceRule)
+              : undefined,
+          })}
+          target="_blank" rel="noopener noreferrer"
+          onClick={() => setAnchorEl(null)}>
+          <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t("addToGoogleCalendar")}</ListItemText>
+        </MenuItem>
+      </Menu>
+    </>
   );
 }
 
@@ -1017,20 +1076,17 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 <Stack spacing={1}>
                   <ShareBar title={event.title} />
                   <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                    {/* Primary actions — always visible */}
                     {(gameDate <= new Date() || event.isRecurring) && (
                       <Button variant="outlined" size="small" startIcon={<HistoryIcon />}
                         href={`/events/${eventId}/history`} sx={{ flexShrink: 0 }}>
                         {t("history")}
                       </Button>
                     )}
-                    <Button variant="outlined" size="small" startIcon={<HistoryIcon />}
-                      href={`/events/${eventId}/log`} sx={{ flexShrink: 0 }}>
-                      {t("activityLog")}
-                    </Button>
-                    {(gameDate <= new Date() || event.isRecurring) && (
-                      <Button variant="outlined" size="small" startIcon={<EmojiPeopleIcon />}
-                        href={`/events/${eventId}/attendance`} sx={{ flexShrink: 0 }}>
-                        {t("attendance")}
+                    {(event.eloEnabled ?? true) && (
+                      <Button variant="outlined" size="small" startIcon={<EmojiEventsIcon />}
+                        href={`/events/${eventId}/rankings`} sx={{ flexShrink: 0 }}>
+                        {t("ratings")}
                       </Button>
                     )}
                     {canEditSettings && (
@@ -1039,25 +1095,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         {t("eventSettings")}
                       </Button>
                     )}
-                    <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />}
-                      href={`/api/events/${eventId}/calendar`} sx={{ flexShrink: 0 }}>
-                      {t("downloadIcs")}
-                    </Button>
-                    <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />}
-                      href={googleCalendarUrl({
-                        id: eventId,
-                        title: event.title,
-                        location: event.location,
-                        dateTime: new Date(event.dateTime),
-                        url: typeof window !== "undefined" ? window.location.href : undefined,
-                        recurrence: event.isRecurring && event.recurrenceRule
-                          ? JSON.parse(event.recurrenceRule)
-                          : undefined,
-                      })}
-                      target="_blank" rel="noopener noreferrer" sx={{ flexShrink: 0 }}>
-                      {t("addToGoogleCalendar")}
-                    </Button>
                     <NotifyButton eventId={eventId} />
+
+                    {/* Secondary actions — "More" menu */}
+                    <MoreActionsMenu
+                      eventId={eventId}
+                      event={event}
+                      gameDate={gameDate}
+                    />
+
                     {/* Owner badge — always visible for owners */}
                     {isOwner && (
                       <Chip icon={<StarIcon />} label={t("ownerBadge")} size="small" color="success" variant="outlined" />
