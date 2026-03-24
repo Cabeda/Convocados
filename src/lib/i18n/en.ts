@@ -42,6 +42,7 @@ const en = {
   // Bench
   activePlayers: "Playing ({n}/{max})",
   benchPlayers: "Bench ({n})",
+  benchFull: "The bench is full (maximum {max} bench players).",
   benchInfo: "Bench players are automatically promoted when a spot opens up.",
   youAreOnBench: "You're on the bench — you'll be promoted if a spot opens.",
   youArePlaying: "You joined as {name}",

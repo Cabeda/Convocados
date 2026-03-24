@@ -94,6 +94,15 @@ export const POST: APIRoute = async ({ params, request }) => {
   const trimmed = String(name ?? "").trim().slice(0, 50);
   if (!trimmed) return Response.json({ error: "Player name is required." }, { status: 400 });
 
+  // Bench cap: max bench size equals maxPlayers (total players = 2 * maxPlayers)
+  const maxTotal = event.maxPlayers * 2;
+  if (event.players.length >= maxTotal) {
+    return Response.json(
+      { error: `The bench is full (maximum ${event.maxPlayers} bench players).` },
+      { status: 400 },
+    );
+  }
+
   try {
     // Only link userId when the client explicitly requests it and user is authenticated
     const shouldLink = linkToAccount === true && !!session?.user;
