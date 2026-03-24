@@ -25,6 +25,8 @@ import { GET as getCalendar } from "~/pages/api/events/[id]/calendar";
 import { GET as getVapidKey } from "~/pages/api/push/vapid-public-key";
 import { GET as getUserProfile, PATCH as patchUserProfile } from "~/pages/api/users/[id]";
 import { GET as getMyGames } from "~/pages/api/me/games";
+import { PUT as saveTeamNames } from "~/pages/api/events/[id]/team-names";
+import { PUT as updateSport } from "~/pages/api/events/[id]/sport";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -611,5 +613,32 @@ describe("GET /api/me/games", () => {
   it("returns 401 for unauthenticated user", async () => {
     const res = await getMyGames(ctx({}));
     expect(res.status).toBe(401);
+  });
+});
+
+// ─── PUT /api/events/[id]/team-names — ownership branches ───────────────────
+
+describe("PUT /api/events/[id]/team-names ownership", () => {
+  it("returns 404 for unknown event", async () => {
+    const res = await saveTeamNames(putCtx({ id: "nonexistent" }, { teamOneName: "A", teamTwoName: "B" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 403 when event has owner and request is not from owner", async () => {
+    const user = await seedUser();
+    const id = await seedEvent({ ownerId: user.id });
+    const res = await saveTeamNames(putCtx({ id }, { teamOneName: "A", teamTwoName: "B" }));
+    expect(res.status).toBe(403);
+  });
+});
+
+// ─── PUT /api/events/[id]/sport — ownership branches ────────────────────────
+
+describe("PUT /api/events/[id]/sport ownership", () => {
+  it("returns 403 when event has owner and request is not from owner", async () => {
+    const user = await seedUser();
+    const id = await seedEvent({ ownerId: user.id });
+    const res = await updateSport(putCtx({ id }, { sport: "padel" }));
+    expect(res.status).toBe(403);
   });
 });
