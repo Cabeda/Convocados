@@ -10,6 +10,7 @@ dbs:
         path: convocados/db
         endpoint: ${LITESTREAM_REPLICA_ENDPOINT}
         region: ${LITESTREAM_REPLICA_REGION}
+        force-path-style: true
         access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
         secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
         retention: 168h  # 7 days
