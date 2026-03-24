@@ -81,6 +81,13 @@ const es: TranslationKeys = {
   noSuggestions: "Escribe un nuevo nombre",
   createNewPlayer: "Crear nuevo jugador: {name}",
   nGamesPlayed: "{n} juegos",
+
+  // Watch
+  watchScore: "Marcador en Reloj",
+  watchScoreDesc: "Abre este enlace en tu smartwatch para seguir el marcador en vivo.",
+  watchCopyLink: "Copiar enlace del reloj",
+  watchLinkCopied: "¡Enlace del reloj copiado!",
+
   history: "Historial",
   viewHistory: "Ver historial",
   noHistory: "Aún no hay juegos anteriores.",

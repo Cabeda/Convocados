@@ -95,6 +95,12 @@ const pt: TranslationKeys = {
   createNewPlayer: "Criar novo jogador: {name}",
   nGamesPlayed: "{n} jogos",
 
+  // Watch
+  watchScore: "Resultado no Relógio",
+  watchScoreDesc: "Abre este link no teu smartwatch para acompanhar o resultado em tempo real.",
+  watchCopyLink: "Copiar link do relógio",
+  watchLinkCopied: "Link do relógio copiado!",
+
   // History
   history: "Histórico",
   viewHistory: "Ver histórico",

@@ -94,6 +94,12 @@ const en = {
   createNewPlayer: "Create new player: {name}",
   nGamesPlayed: "{n} games",
 
+  // Watch
+  watchScore: "Watch Score",
+  watchScoreDesc: "Open this link on your smartwatch to track the score live.",
+  watchCopyLink: "Copy watch link",
+  watchLinkCopied: "Watch link copied!",
+
   // History
   history: "History",
   viewHistory: "View history",
