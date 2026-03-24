@@ -960,3 +960,104 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(bobAfter).toBeNull();
   });
 });
+
+// ─── PUT /api/events/[id]/split-costs (#192) ────────────────────────────────
+
+import { PUT as updateSplitCosts } from "~/pages/api/events/[id]/split-costs";
+
+function putCtx2(params: Record<string, string>, body: unknown) {
+  return ctx(params, body, "PUT");
+}
+
+describe("PUT /api/events/[id]/split-costs", () => {
+  it("returns 404 for unknown event", async () => {
+    const res = await updateSplitCosts(putCtx2({ id: "nonexistent" }, { splitCostsEnabled: false }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 403 when event has owner and request is not from owner", async () => {
+    const user = await seedUser();
+    const id = await seedEvent({ ownerId: user.id });
+    mockAnonymous();
+    const res = await updateSplitCosts(putCtx2({ id }, { splitCostsEnabled: false }));
+    expect(res.status).toBe(403);
+  });
+
+  it("allows owner to disable split costs", async () => {
+    const user = await seedUser();
+    const id = await seedEvent({ ownerId: user.id });
+    mockAuth(user.id);
+    const res = await updateSplitCosts(putCtx2({ id }, { splitCostsEnabled: false }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.splitCostsEnabled).toBe(false);
+    // Verify in DB
+    const event = await testPrisma.event.findUnique({ where: { id } });
+    expect(event!.splitCostsEnabled).toBe(false);
+  });
+
+  it("allows owner to re-enable split costs", async () => {
+    const user = await seedUser();
+    const id = await seedEvent({ ownerId: user.id, splitCostsEnabled: false });
+    mockAuth(user.id);
+    const res = await updateSplitCosts(putCtx2({ id }, { splitCostsEnabled: true }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.splitCostsEnabled).toBe(true);
+  });
+
+  it("allows ownerless event to toggle split costs", async () => {
+    const { resetApiRateLimitStore: resetApi } = await import("~/lib/apiRateLimit.server");
+    await resetApi();
+    const id = await seedEvent();
+    mockAnonymous();
+    const res = await updateSplitCosts(putCtx2({ id }, { splitCostsEnabled: false }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.splitCostsEnabled).toBe(false);
+  });
+});
+
+// ─── GET /api/me/games — archived games (#193) ─────────────────────────────
+
+describe("GET /api/me/games — archived games", () => {
+  it("separates active and archived owned games", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    await seedEvent({ ownerId: user.id, title: "Active Game" });
+    await seedEvent({ ownerId: user.id, title: "Archived Game", archivedAt: new Date() });
+    const res = await getMyGames(ctx({}));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.owned).toHaveLength(1);
+    expect(body.owned[0].title).toBe("Active Game");
+    expect(body.archivedOwned).toHaveLength(1);
+    expect(body.archivedOwned[0].title).toBe("Archived Game");
+    expect(body.archivedOwned[0].archivedAt).toBeTruthy();
+  });
+
+  it("separates active and archived joined games", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const activeId = await seedEvent({ title: "Active Joined" });
+    const archivedId = await seedEvent({ title: "Archived Joined", archivedAt: new Date() });
+    await testPrisma.player.create({ data: { name: user.name, eventId: activeId, userId: user.id } });
+    await testPrisma.player.create({ data: { name: user.name, eventId: archivedId, userId: user.id } });
+    const res = await getMyGames(ctx({}));
+    const body = await res.json();
+    expect(body.joined).toHaveLength(1);
+    expect(body.joined[0].title).toBe("Active Joined");
+    expect(body.archivedJoined).toHaveLength(1);
+    expect(body.archivedJoined[0].title).toBe("Archived Joined");
+  });
+
+  it("returns empty archived arrays when no archived games exist", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    await seedEvent({ ownerId: user.id });
+    const res = await getMyGames(ctx({}));
+    const body = await res.json();
+    expect(body.archivedOwned).toHaveLength(0);
+    expect(body.archivedJoined).toHaveLength(0);
+  });
+});
