@@ -604,6 +604,15 @@ const fr: TranslationKeys = {
   logRatingRecalculated: "{actor} a recalculé tous les classements",
   logRatingManualEnabled: "{actor} a activé la modification manuelle du classement",
   logRatingManualDisabled: "{actor} a désactivé la modification manuelle du classement",
+
+  // Split costs toggle (#192)
+  splitCostsEnabled: "Partage des frais",
+  splitCostsEnabledTooltip: "Activer la section de partage des frais sur la page de l'événement",
+
+  // Dashboard active/archived (#193)
+  activeGames: "Jeux Actifs",
+  archivedGames: "Jeux Archivés",
+  noArchivedGames: "Aucun jeu archivé.",
 };
 
 export default fr;

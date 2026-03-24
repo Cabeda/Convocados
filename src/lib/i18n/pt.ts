@@ -651,6 +651,15 @@ const pt: TranslationKeys = {
   logRatingRecalculated: "{actor} recalculou todos os ratings",
   logRatingManualEnabled: "{actor} ativou a edição manual de rating",
   logRatingManualDisabled: "{actor} desativou a edição manual de rating",
+
+  // Split costs toggle (#192)
+  splitCostsEnabled: "Divisão de custos",
+  splitCostsEnabledTooltip: "Ativar a secção de divisão de custos na página do evento",
+
+  // Dashboard active/archived (#193)
+  activeGames: "Jogos Ativos",
+  archivedGames: "Jogos Arquivados",
+  noArchivedGames: "Sem jogos arquivados.",
 };
 
 export default pt;

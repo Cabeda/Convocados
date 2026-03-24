@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect } from "react";
 import {
   Container, Typography, Stack, Box, Button,
-  CircularProgress, Alert, Divider,
+  CircularProgress, Alert, Divider, Accordion, AccordionSummary, AccordionDetails,
 } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -12,6 +13,8 @@ import { GameCard, type GameSummary } from "./GameCard";
 interface DashboardData {
   owned: GameSummary[];
   joined: GameSummary[];
+  archivedOwned: GameSummary[];
+  archivedJoined: GameSummary[];
   ownedNextCursor: string | null;
   ownedHasMore: boolean;
   joinedNextCursor: string | null;
@@ -24,6 +27,8 @@ export default function DashboardPage() {
 
   const [owned, setOwned] = useState<GameSummary[]>([]);
   const [joined, setJoined] = useState<GameSummary[]>([]);
+  const [archivedOwned, setArchivedOwned] = useState<GameSummary[]>([]);
+  const [archivedJoined, setArchivedJoined] = useState<GameSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [ownedCursor, setOwnedCursor] = useState<string | null>(null);
   const [ownedHasMore, setOwnedHasMore] = useState(false);
@@ -45,6 +50,8 @@ export default function DashboardPage() {
     fetchGames().then((data) => {
       setOwned(data.owned);
       setJoined(data.joined);
+      setArchivedOwned(data.archivedOwned ?? []);
+      setArchivedJoined(data.archivedJoined ?? []);
       setOwnedCursor(data.ownedNextCursor);
       setOwnedHasMore(data.ownedHasMore);
       setJoinedCursor(data.joinedNextCursor);
@@ -58,6 +65,7 @@ export default function DashboardPage() {
     setLoadingOwned(true);
     const data = await fetchGames(ownedCursor, null);
     setOwned((prev) => [...prev, ...data.owned]);
+    setArchivedOwned((prev) => [...prev, ...(data.archivedOwned ?? [])]);
     setOwnedCursor(data.ownedNextCursor);
     setOwnedHasMore(data.ownedHasMore);
     setLoadingOwned(false);
@@ -68,6 +76,7 @@ export default function DashboardPage() {
     setLoadingJoined(true);
     const data = await fetchGames(null, joinedCursor);
     setJoined((prev) => [...prev, ...data.joined]);
+    setArchivedJoined((prev) => [...prev, ...(data.archivedJoined ?? [])]);
     setJoinedCursor(data.joinedNextCursor);
     setJoinedHasMore(data.joinedHasMore);
     setLoadingJoined(false);
@@ -105,6 +114,8 @@ export default function DashboardPage() {
     );
   }
 
+  const allArchived = [...archivedOwned, ...archivedJoined];
+
   return (
     <ThemeModeProvider>
       <ResponsiveLayout>
@@ -118,7 +129,7 @@ export default function DashboardPage() {
               </Box>
             ) : (
               <>
-                {/* Owned games */}
+                {/* Active: Owned games */}
                 <Box>
                   <Typography variant="h6" fontWeight={600} gutterBottom>
                     {t("ownedGames")}
@@ -141,7 +152,7 @@ export default function DashboardPage() {
 
                 <Divider />
 
-                {/* Joined games */}
+                {/* Active: Joined games */}
                 <Box>
                   <Typography variant="h6" fontWeight={600} gutterBottom>
                     {t("joinedGames")}
@@ -161,6 +172,25 @@ export default function DashboardPage() {
                     <Alert severity="info">{t("noJoinedGames")}</Alert>
                   )}
                 </Box>
+
+                {/* Archived games (collapsible) */}
+                {allArchived.length > 0 && (
+                  <>
+                    <Divider />
+                    <Accordion defaultExpanded={false} variant="outlined" sx={{ borderRadius: 2, "&:before": { display: "none" } }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="h6" fontWeight={600}>
+                          {t("archivedGames")} ({allArchived.length})
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Stack spacing={1.5}>
+                          {allArchived.map((g) => <GameCard key={g.id} game={g} />)}
+                        </Stack>
+                      </AccordionDetails>
+                    </Accordion>
+                  </>
+                )}
               </>
             )}
           </Stack>

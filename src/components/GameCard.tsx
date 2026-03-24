@@ -3,6 +3,7 @@ import { Paper, Typography, Stack, Box, Chip } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { detectLocale } from "~/lib/i18n";
+import { useT } from "~/lib/useT";
 
 export interface GameSummary {
   id: string;
@@ -12,14 +13,17 @@ export interface GameSummary {
   sport: string;
   maxPlayers: number;
   playerCount: number;
+  archivedAt?: string | null;
 }
 
 export function GameCard({ game, dimPast = false }: { game: GameSummary; dimPast?: boolean }) {
   const locale = detectLocale();
+  const t = useT();
   const date = new Date(game.dateTime);
   const isPast = dimPast && date < new Date();
+  const isArchived = !!game.archivedAt;
   return (
-    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, opacity: isPast ? 0.7 : 1 }}>
+    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, opacity: isPast || isArchived ? 0.7 : 1 }}>
       <Stack spacing={1}>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Typography variant="subtitle1" fontWeight={600}>
@@ -27,11 +31,16 @@ export function GameCard({ game, dimPast = false }: { game: GameSummary; dimPast
               {game.title}
             </a>
           </Typography>
-          <Chip
-            label={`${game.playerCount}/${game.maxPlayers}`}
-            size="small"
-            color={game.playerCount >= game.maxPlayers ? "warning" : "primary"}
-          />
+          <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+            {isArchived && (
+              <Chip label={t("archivedBadge")} size="small" color="warning" variant="outlined" />
+            )}
+            <Chip
+              label={`${game.playerCount}/${game.maxPlayers}`}
+              size="small"
+              color={game.playerCount >= game.maxPlayers ? "warning" : "primary"}
+            />
+          </Box>
         </Box>
         <Stack direction="row" spacing={2} sx={{ flexWrap: "wrap" }}>
           {game.location && (

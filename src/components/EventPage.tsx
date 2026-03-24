@@ -65,6 +65,7 @@ interface EventData {
   isPublic: boolean;
   balanced: boolean;
   eloEnabled: boolean;
+  splitCostsEnabled: boolean;
   sport: string;
   recurrenceRule: string | null;
   ownerId: string | null;
@@ -1423,6 +1424,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             </Paper>
 
             {/* Payment tracking */}
+            {(event.splitCostsEnabled !== false) && (
             <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
               <PaymentSection
                 eventId={eventId}
@@ -1430,6 +1432,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
               />
             </Paper>
+            )}
 
             {/* Teams */}
             {localMatches && localMatches.length > 0 && (

@@ -15,37 +15,31 @@ export const GET: APIRoute = async ({ request }) => {
   const ownedCursor = url.searchParams.get("ownedCursor") || null;
   const joinedCursor = url.searchParams.get("joinedCursor") || null;
 
+  const gameSelect = {
+    id: true,
+    title: true,
+    location: true,
+    dateTime: true,
+    sport: true,
+    maxPlayers: true,
+    archivedAt: true,
+    _count: { select: { players: true } },
+  } as const;
+
   const [ownedEvents, joinedPlayers] = await Promise.all([
     prisma.event.findMany({
-      where: { ownerId: userId, archivedAt: null },
-      select: {
-        id: true,
-        title: true,
-        location: true,
-        dateTime: true,
-        sport: true,
-        maxPlayers: true,
-        _count: { select: { players: true } },
-      },
+      where: { ownerId: userId },
+      select: gameSelect,
       orderBy: { dateTime: "desc" },
       take: limit + 1,
       ...(ownedCursor ? { cursor: { id: ownedCursor }, skip: 1 } : {}),
     }),
     prisma.player.findMany({
-      where: { userId, event: { archivedAt: null } },
+      where: { userId },
       select: {
         id: true,
         event: {
-          select: {
-            id: true,
-            title: true,
-            location: true,
-            dateTime: true,
-            sport: true,
-            maxPlayers: true,
-            ownerId: true,
-            _count: { select: { players: true } },
-          },
+          select: { ...gameSelect, ownerId: true },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -69,17 +63,26 @@ export const GET: APIRoute = async ({ request }) => {
   const joinedHasMore = joinedPlayers.length > limit;
   const joinedSlice = joinedDeduped.slice(0, limit);
 
+  const mapGame = (e: typeof ownedSlice[number]) => ({
+    ...e,
+    dateTime: e.dateTime.toISOString(),
+    archivedAt: e.archivedAt?.toISOString() ?? null,
+    playerCount: e._count.players,
+  });
+
+  const allOwned = ownedSlice.map(mapGame);
+  const allJoined = joinedSlice.map((p) => ({
+    ...p.event,
+    dateTime: p.event.dateTime.toISOString(),
+    archivedAt: p.event.archivedAt?.toISOString() ?? null,
+    playerCount: p.event._count.players,
+  }));
+
   return Response.json({
-    owned: ownedSlice.map((e) => ({
-      ...e,
-      dateTime: e.dateTime.toISOString(),
-      playerCount: e._count.players,
-    })),
-    joined: joinedSlice.map((p) => ({
-      ...p.event,
-      dateTime: p.event.dateTime.toISOString(),
-      playerCount: p.event._count.players,
-    })),
+    owned: allOwned.filter((g) => !g.archivedAt),
+    joined: allJoined.filter((g) => !g.archivedAt),
+    archivedOwned: allOwned.filter((g) => !!g.archivedAt),
+    archivedJoined: allJoined.filter((g) => !!g.archivedAt),
     ownedNextCursor: ownedHasMore ? ownedSlice[ownedSlice.length - 1].id : null,
     ownedHasMore,
     joinedNextCursor: joinedHasMore && joinedSlice.length > 0
