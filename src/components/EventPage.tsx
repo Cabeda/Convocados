@@ -33,6 +33,7 @@ import LockIcon from "@mui/icons-material/Lock";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AssignmentIcon from "@mui/icons-material/Assignment";
+import WatchIcon from "@mui/icons-material/Watch";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -337,6 +338,77 @@ function MoreActionsMenu({ eventId, event, gameDate }: {
           <ListItemText>{t("addToGoogleCalendar")}</ListItemText>
         </MenuItem>
       </Menu>
+    </>
+  );
+}
+
+// ── Watch score button ────────────────────────────────────────────────────────
+
+function WatchScoreButton({ eventId }: { eventId: string }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const watchUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/watch/${eventId}`
+    : `/watch/${eventId}`;
+  const canShare = typeof navigator !== "undefined" && !!navigator.share;
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(watchUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleShare = async () => {
+    if (canShare) {
+      try {
+        await navigator.share({ title: t("watchScore"), url: watchUrl });
+        return;
+      } catch { /* cancelled */ }
+    }
+    handleCopy();
+  };
+
+  return (
+    <>
+      <Button variant="outlined" size="small" startIcon={<WatchIcon />}
+        onClick={() => setOpen(true)} sx={{ flexShrink: 0 }}>
+        {t("watchScore")}
+      </Button>
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t("watchScore")}</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>{t("watchScoreDesc")}</DialogContentText>
+          <Paper variant="outlined" sx={{ borderRadius: 2, p: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography variant="body2" sx={{
+              flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              fontFamily: "monospace", fontSize: "0.75rem", minWidth: 0,
+            }}>
+              {watchUrl}
+            </Typography>
+            <Button
+              variant={copied ? "outlined" : "contained"}
+              size="small"
+              color={copied ? "success" : "primary"}
+              startIcon={copied ? <CheckIcon /> : <ContentCopyIcon />}
+              onClick={handleCopy}
+              sx={{ flexShrink: 0 }}
+            >
+              {copied ? t("watchLinkCopied") : t("watchCopyLink")}
+            </Button>
+          </Paper>
+        </DialogContent>
+        <DialogActions>
+          {canShare && (
+            <Button onClick={handleShare} startIcon={<ShareIcon />}>
+              {t("shareGameMobile")}
+            </Button>
+          )}
+          <Button href={watchUrl} target="_blank" rel="noopener noreferrer" variant="contained">
+            {t("watchScore")}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }
@@ -1090,6 +1162,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       </Button>
                     )}
                     <NotifyButton eventId={eventId} />
+                    {localMatches && localMatches.length > 0 && (
+                      <WatchScoreButton eventId={eventId} />
+                    )}
 
                     {/* Secondary actions — "More" menu */}
                     <MoreActionsMenu
