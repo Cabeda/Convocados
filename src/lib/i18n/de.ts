@@ -38,6 +38,7 @@ const de: TranslationKeys = {
   maxPlayersError: "Die maximale Spielerzahl muss zwischen 2 und 100 liegen",
   activePlayers: "Spielen ({n}/{max})",
   benchPlayers: "Bank ({n})",
+  benchFull: "Die Bank ist voll (maximal {max} Spieler auf der Bank).",
   benchInfo: "Bankspieler werden automatisch befördert, wenn ein Platz frei wird.",
   youAreOnBench: "Du bist auf der Bank — du wirst befördert, wenn ein Platz frei wird.",
   youArePlaying: "Du bist beigetreten als {name}",
