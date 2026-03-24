@@ -11,6 +11,7 @@ const prisma = new PrismaClient({
 import { GET as getHealth } from "~/pages/api/health";
 import { PUT as updateBalanced } from "~/pages/api/events/[id]/balanced";
 import { PUT as updateVisibility } from "~/pages/api/events/[id]/visibility";
+import { PUT as updateElo } from "~/pages/api/events/[id]/elo";
 import { PUT as updateLocation } from "~/pages/api/events/[id]/location";
 import { PUT as updateTitle } from "~/pages/api/events/[id]/title";
 import { POST as claimOwnership, DELETE as relinquishOwnership } from "~/pages/api/events/[id]/claim";
@@ -143,6 +144,40 @@ describe("PUT /api/events/[id]/balanced", () => {
     const user = await seedUser();
     const id = await seedEvent({ ownerId: user.id });
     const res = await updateBalanced(putCtx({ id }, { balanced: true }));
+    expect(res.status).toBe(403);
+  });
+});
+
+// ─── PUT /api/events/[id]/elo ─────────────────────────────────────────────────
+
+describe("PUT /api/events/[id]/elo", () => {
+  it("toggles ELO enabled", async () => {
+    const id = await seedEvent();
+    const res = await updateElo(putCtx({ id }, { eloEnabled: false }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.eloEnabled).toBe(false);
+  });
+
+  it("disabling ELO also disables balanced", async () => {
+    const id = await seedEvent();
+    await updateBalanced(putCtx({ id }, { balanced: true }));
+    const res = await updateElo(putCtx({ id }, { eloEnabled: false }));
+    expect(res.status).toBe(200);
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event!.balanced).toBe(false);
+    expect(event!.eloEnabled).toBe(false);
+  });
+
+  it("returns 404 for unknown event", async () => {
+    const res = await updateElo(putCtx({ id: "nonexistent" }, { eloEnabled: true }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 403 when event has owner and request is not from owner", async () => {
+    const user = await seedUser();
+    const id = await seedEvent({ ownerId: user.id });
+    const res = await updateElo(putCtx({ id }, { eloEnabled: false }));
     expect(res.status).toBe(403);
   });
 });
