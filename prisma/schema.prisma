@@ -145,14 +145,15 @@ model GameHistory {
 }
 
 model Player {
-  id        String   @id @default(cuid())
-  name      String
-  order     Int      @default(0)
-  eventId   String
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  userId    String?
-  user      User?    @relation("PlayerUser", fields: [userId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  name       String
+  order      Int       @default(0)
+  eventId    String
+  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?     @relation("PlayerUser", fields: [userId], references: [id], onDelete: SetNull)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   @@unique([eventId, name])
   @@index([userId])
