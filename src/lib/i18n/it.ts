@@ -135,8 +135,10 @@ const it: TranslationKeys = {
   webhookEndpoint: "Endpoint del webhook",
   webhookCopied: "Copiato!",
   webhookHelp: "Fai POST a questo URL per registrare un webhook. Consulta la documentazione per il formato del payload.",
-  balancedTeams: "Equilibrato",
-  balancedTeamsTooltip: "Usa le classifiche ELO per bilanciare le squadre",
+  eloEnabled: "Classifiche ELO",
+  eloEnabledTooltip: "Traccia le classifiche di abilità dei giocatori usando il sistema ELO",
+  balancedTeams: "Squadre bilanciate per ELO",
+  balancedTeamsTooltip: "Usa le classifiche ELO per bilanciare le squadre durante il sorteggio",
   ratings: "Classifiche",
   rating: "Rating",
   gamesPlayed: "Partite",
@@ -413,6 +415,7 @@ const it: TranslationKeys = {
   attendanceLow: "Irregolare",
 
   // Event activity log (#122)
+  moreActions: "Altro",
   activityLog: "Attività",
   activityLogTitle: "Registro Attività",
   activityLogDesc: "Tutte le azioni registrate per questo evento.",

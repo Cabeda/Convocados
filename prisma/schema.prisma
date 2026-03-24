@@ -116,6 +116,7 @@ model Event {
   accessPassword        String?               // bcrypt-hashed password (null = no password)
 
   // Rating settings
+  eloEnabled        Boolean @default(true)
   allowManualRating Boolean @default(false)
 
   // Archive
