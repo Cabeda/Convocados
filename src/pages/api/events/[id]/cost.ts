@@ -2,7 +2,6 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { sseManager } from "../../../../lib/sse.server";
 import { validatePaymentMethods, normalizePaymentMethod } from "../../../../lib/paymentMethods";
 import type { PaymentMethod } from "../../../../lib/paymentMethods";
 
@@ -107,7 +106,6 @@ export const PUT: APIRoute = async ({ params, request }) => {
     orderBy: { playerName: "asc" },
   });
 
-  sseManager.broadcast(eventId, "update", { action: "cost_updated" });
 
   return Response.json({
     ...eventCost,
@@ -177,7 +175,6 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   await prisma.eventCost.delete({ where: { id: existing.id } });
 
-  sseManager.broadcast(eventId, "update", { action: "cost_deleted" });
 
   return Response.json({ ok: true });
 };

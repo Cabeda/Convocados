@@ -2,7 +2,6 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import type { Imatch } from "../../../../lib/random";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { sseManager } from "../../../../lib/sse.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -58,7 +57,6 @@ export const PUT: APIRoute = async ({ params, request }) => {
     ),
   ]);
 
-  sseManager.broadcast(eventId, "update", { action: "teams_updated" });
 
   return Response.json({ ok: true });
 };

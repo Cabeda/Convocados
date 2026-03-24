@@ -1,4 +1,3 @@
-import webpush from "web-push";
 import { prisma } from "./db.server";
 import { createT, type Locale, type TranslationKey } from "./i18n";
 import { createLogger } from "./logger.server";
@@ -6,9 +5,20 @@ import { createLogger } from "./logger.server";
 const log = createLogger("push");
 
 let initialized = false;
-function init() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _webpush: any = null;
+
+async function getWebPush(): Promise<typeof import("web-push")> {
+  if (!_webpush) {
+    _webpush = await import("web-push");
+  }
+  return _webpush;
+}
+
+async function init() {
   if (initialized) return;
   initialized = true;
+  const webpush = await getWebPush();
   webpush.setVapidDetails(
     "mailto:admin@convocados.fly.dev",
     process.env.VAPID_PUBLIC_KEY!,
@@ -26,7 +36,8 @@ export async function sendPushToEvent(
   senderClientId?: string,
 ) {
   if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return;
-  init();
+  await init();
+  const webpush = await getWebPush();
   const subs = await prisma.pushSubscription.findMany({ where: { eventId } });
   await Promise.allSettled(
     subs

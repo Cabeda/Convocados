@@ -4,10 +4,15 @@ RUN apk add --no-cache openssl
 
 WORKDIR /app
 
-# ── deps ──────────────────────────────────────────────────────────────────────
+# ── deps (all, for build) ─────────────────────────────────────────────────────
 FROM base AS deps
 COPY package.json package-lock.json ./
 RUN npm ci
+
+# ── prod-deps (no devDependencies) ───────────────────────────────────────────
+FROM base AS prod-deps
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
 # ── build ─────────────────────────────────────────────────────────────────────
 FROM base AS build
@@ -29,7 +34,7 @@ FROM base AS production
 ENV NODE_ENV=production
 
 COPY --from=litestream /usr/local/bin/litestream /usr/local/bin/litestream
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY package.json ./

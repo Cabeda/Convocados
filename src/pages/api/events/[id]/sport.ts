@@ -3,7 +3,6 @@ import { prisma } from "../../../../lib/db.server";
 import { getDefaultMaxPlayers } from "../../../../lib/sports";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { sseManager } from "../../../../lib/sse.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -28,7 +27,6 @@ export const PUT: APIRoute = async ({ params, request }) => {
     data: { sport, maxPlayers: defaultMaxPlayers },
   });
 
-  sseManager.broadcast(params.id!, "update", { action: "sport_updated" });
 
   return Response.json({ sport, maxPlayers: defaultMaxPlayers });
 };
