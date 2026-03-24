@@ -110,7 +110,6 @@ beforeEach(async () => {
   await prisma.account.deleteMany();
   await prisma.event.deleteMany();
   await prisma.user.deleteMany();
-  await prisma.rateLimit.deleteMany();
 });
 
 // ─── GET /api/health ─────────────────────────────────────────────────────────

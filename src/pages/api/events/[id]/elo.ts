@@ -2,7 +2,6 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { sseManager } from "../../../../lib/sse.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -28,7 +27,6 @@ export const PUT: APIRoute = async ({ params, request }) => {
     data,
   });
 
-  sseManager.broadcast(params.id!, "update", { action: "elo_updated" });
 
   return Response.json({ eloEnabled });
 };

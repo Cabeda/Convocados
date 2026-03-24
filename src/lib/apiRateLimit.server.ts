@@ -1,10 +1,7 @@
 /**
- * General-purpose API rate limiter backed by SQLite.
- * Persists across deploys and machine suspends.
- *
- * Uses Prisma upsert for atomic increment-or-create.
+ * General-purpose API rate limiter using in-memory Map with TTL.
+ * No database round-trips — suitable for single-instance Fly deployment.
  */
-import { prisma } from "./db.server";
 import { createLogger } from "./logger.server";
 
 const log = createLogger("api-rate-limit");
@@ -30,45 +27,46 @@ export function extractIp(request: Request): string {
   );
 }
 
+interface RateLimitEntry {
+  count: number;
+  expiresAt: number;
+}
+
+const store = new Map<string, RateLimitEntry>();
+
+// Cleanup expired entries every 60s
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of store) {
+    if (entry.expiresAt < now) store.delete(key);
+  }
+}, 60_000).unref?.();
+
 export async function checkApiRateLimit(
   ip: string,
   preset: RateLimitPreset = "read",
 ): Promise<{ allowed: boolean; remaining: number; retryAfterMs: number }> {
   const config = PRESETS[preset];
   const key = `${preset}:${ip}`;
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + config.windowMs);
+  const now = Date.now();
 
-  try {
-    const entry = await prisma.rateLimit.findUnique({ where: { key } });
+  const entry = store.get(key);
 
-    if (!entry || entry.expiresAt < now) {
-      // Window expired or first request — create/reset
-      await prisma.rateLimit.upsert({
-        where: { key },
-        create: { key, count: 1, windowStart: now, expiresAt },
-        update: { count: 1, windowStart: now, expiresAt },
-      });
-      return { allowed: true, remaining: config.maxRequests - 1, retryAfterMs: 0 };
-    }
-
-    if (entry.count >= config.maxRequests) {
-      const retryAfterMs = entry.expiresAt.getTime() - now.getTime();
-      log.warn({ ip, preset, count: entry.count, retryAfterMs }, "API rate limit exceeded");
-      return { allowed: false, remaining: 0, retryAfterMs };
-    }
-
-    // Increment
-    await prisma.rateLimit.update({
-      where: { key },
-      data: { count: entry.count + 1 },
-    });
-    return { allowed: true, remaining: config.maxRequests - (entry.count + 1), retryAfterMs: 0 };
-  } catch (err) {
-    // On DB error, fail open to avoid blocking legitimate users
-    log.error({ err, ip, preset }, "API rate limit check failed, allowing request");
+  if (!entry || entry.expiresAt < now) {
+    // Window expired or first request — create/reset
+    store.set(key, { count: 1, expiresAt: now + config.windowMs });
     return { allowed: true, remaining: config.maxRequests - 1, retryAfterMs: 0 };
   }
+
+  if (entry.count >= config.maxRequests) {
+    const retryAfterMs = entry.expiresAt - now;
+    log.warn({ ip, preset, count: entry.count, retryAfterMs }, "API rate limit exceeded");
+    return { allowed: false, remaining: 0, retryAfterMs };
+  }
+
+  // Increment
+  entry.count += 1;
+  return { allowed: true, remaining: config.maxRequests - entry.count, retryAfterMs: 0 };
 }
 
 /**
@@ -100,25 +98,21 @@ export async function rateLimitResponse(
 
 /** Clear all API rate limit entries. Used in tests. */
 export async function resetApiRateLimitStore(): Promise<void> {
-  await prisma.rateLimit.deleteMany({
-    where: {
-      OR: [
-        { key: { startsWith: "read:" } },
-        { key: { startsWith: "write:" } },
-        { key: { startsWith: "auth:" } },
-        { key: { startsWith: "heavy:" } },
-      ],
-    },
-  });
+  store.clear();
 }
 
 /** Delete all expired rate limit entries. Called from cron. */
 export async function cleanupExpiredRateLimits(): Promise<number> {
-  const result = await prisma.rateLimit.deleteMany({
-    where: { expiresAt: { lt: new Date() } },
-  });
-  if (result.count > 0) {
-    log.info({ deleted: result.count }, "Cleaned up expired rate limit entries");
+  const now = Date.now();
+  let deleted = 0;
+  for (const [key, entry] of store) {
+    if (entry.expiresAt < now) {
+      store.delete(key);
+      deleted++;
+    }
   }
-  return result.count;
+  if (deleted > 0) {
+    log.info({ deleted }, "Cleaned up expired rate limit entries");
+  }
+  return deleted;
 }

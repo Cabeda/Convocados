@@ -1,16 +1,18 @@
-import { Resend } from "resend";
 import { createLogger } from "./logger.server";
 
 const log = createLogger("email");
 
-let _resend: Resend | null = null;
+// Lazy-load Resend to avoid pulling it into memory at startup
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _resend: any = null;
 
-function getResend(): Resend {
+async function getResend() {
   if (!_resend) {
+    const { Resend } = await import("resend");
     const key = import.meta.env.RESEND_API_KEY ?? process.env.RESEND_API_KEY;
     _resend = new Resend(key);
   }
-  return _resend;
+  return _resend as { emails: { send: (opts: any) => Promise<{ data?: { id?: string }; error?: { message: string } | null }> } };
 }
 
 /** Visible for testing — resets the cached Resend client */
@@ -91,7 +93,8 @@ function emailTemplate({ heading, body, buttonText, buttonUrl, footnote }: {
 
 export async function sendVerificationEmail(to: string, url: string) {
   log.info({ to }, "Sending verification email");
-  const result = await getResend().emails.send({
+  const resend = await getResend();
+  const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
     subject: "Verify your email — Convocados",
@@ -120,7 +123,8 @@ export interface GameInviteData {
 }
 
 export async function sendGameInvite(to: string, data: GameInviteData) {
-  const result = await getResend().emails.send({
+  const resend = await getResend();
+  const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
     subject: `You're invited: ${data.eventTitle} — Convocados`,
@@ -146,7 +150,8 @@ export interface ReminderData {
 
 export async function sendReminder(to: string, data: ReminderData) {
   const spotsText = data.spotsLeft > 0 ? `${data.spotsLeft} spots left` : "Game is full";
-  const result = await getResend().emails.send({
+  const resend = await getResend();
+  const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
     subject: `Reminder: ${data.eventTitle} — Convocados`,
@@ -176,7 +181,8 @@ export async function sendWeeklySummary(to: string, data: WeeklySummaryData) {
     ? data.results.map((g) => `• ${g.title}: ${g.scoreOne} – ${g.scoreTwo}`).join("<br/>")
     : "";
   const body = `Hey ${data.userName}!<br/><br/><strong>Upcoming</strong><br/>${upcomingHtml}${resultsHtml ? `<br/><br/><strong>Recent results</strong><br/>${resultsHtml}` : ""}`;
-  const result = await getResend().emails.send({
+  const resend = await getResend();
+  const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
     subject: "Your Weekly Summary — Convocados",
@@ -193,7 +199,8 @@ export async function sendWeeklySummary(to: string, data: WeeklySummaryData) {
 
 export async function sendMagicLinkEmail(to: string, url: string) {
   log.info({ to }, "Sending magic link email");
-  const result = await getResend().emails.send({
+  const resend = await getResend();
+  const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
     subject: "Sign in to Convocados",
@@ -214,7 +221,8 @@ export async function sendMagicLinkEmail(to: string, url: string) {
 
 export async function sendChangeEmailVerification(to: string, url: string) {
   log.info({ to }, "Sending change-email verification");
-  const result = await getResend().emails.send({
+  const resend = await getResend();
+  const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
     subject: "Confirm your new email — Convocados",
@@ -243,7 +251,8 @@ export interface PaymentReminderData {
 }
 
 export async function sendPaymentReminder(to: string, data: PaymentReminderData) {
-  const result = await getResend().emails.send({
+  const resend = await getResend();
+  const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
     subject: `Payment pending: ${data.eventTitle} — Convocados`,
@@ -272,7 +281,8 @@ export interface PriorityEnrollmentData {
 export async function sendPriorityEnrollment(to: string, data: PriorityEnrollmentData) {
   const deadlineStr = new Date(data.deadline).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   const dateStr = new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
-  const result = await getResend().emails.send({
+  const resend = await getResend();
+  const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
     subject: `You're in for ${data.eventTitle}! — Convocados`,
@@ -289,7 +299,8 @@ export async function sendPriorityEnrollment(to: string, data: PriorityEnrollmen
 
 export async function sendPriorityDeadlineReminder(to: string, data: PriorityEnrollmentData) {
   const deadlineStr = new Date(data.deadline).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
-  const result = await getResend().emails.send({
+  const resend = await getResend();
+  const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
     subject: `Confirm your spot for ${data.eventTitle} — deadline soon`,
@@ -305,7 +316,8 @@ export async function sendPriorityDeadlineReminder(to: string, data: PriorityEnr
 }
 
 export async function sendPrioritySpotReleased(to: string, data: { eventTitle: string; eventUrl: string }) {
-  const result = await getResend().emails.send({
+  const resend = await getResend();
+  const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
     subject: `Your spot for ${data.eventTitle} was released`,

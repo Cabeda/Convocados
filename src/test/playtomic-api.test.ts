@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { prisma } from "~/lib/db.server";
-import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
+import { resetApiRateLimitStore, checkApiRateLimit } from "~/lib/apiRateLimit.server";
 import { GET as getClubs } from "~/pages/api/playtomic/clubs";
 import { GET as getAvailability } from "~/pages/api/playtomic/availability";
 
@@ -24,12 +23,9 @@ afterEach(() => {
 
 // Helper: exhaust the read rate limit (120 req/min)
 async function exhaustReadRateLimit() {
-  const key = "read:unknown";
-  await prisma.rateLimit.upsert({
-    where: { key },
-    create: { key, count: 120, windowStart: new Date(), expiresAt: new Date(Date.now() + 60_000) },
-    update: { count: 120, expiresAt: new Date(Date.now() + 60_000) },
-  });
+  for (let i = 0; i < 120; i++) {
+    await checkApiRateLimit("unknown", "read");
+  }
 }
 
 // ── GET /api/playtomic/clubs ──────────────────────────────────────────────────
