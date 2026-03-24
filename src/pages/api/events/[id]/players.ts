@@ -113,6 +113,13 @@ export const POST: APIRoute = async ({ params, request }) => {
     throw e;
   }
 
+  // Auto-add player to ranking system with default ELO (upsert to avoid overwriting existing ratings)
+  await prisma.playerRating.upsert({
+    where: { eventId_name: { eventId, name: trimmed } },
+    create: { eventId, name: trimmed, rating: 1000 },
+    update: {},
+  });
+
   // spotsLeft after adding: if going to bench, active count unchanged
   const activeBefore = Math.min(event.players.length, event.maxPlayers);
   const isOnBench = event.players.length >= event.maxPlayers;
