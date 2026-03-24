@@ -10,7 +10,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
     where: { id: params.id },
     include: {
-      players: { orderBy: { order: "asc" } },
+      players: { where: { archivedAt: null }, orderBy: { order: "asc" } },
       teamResults: { include: { members: { orderBy: { order: "asc" } } } },
       owner: { select: { id: true, name: true } },
     },
@@ -124,7 +124,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       const fresh = await prisma.event.findUnique({
         where: { id: event.id },
         include: {
-          players: { orderBy: { order: "asc" } },
+          players: { where: { archivedAt: null }, orderBy: { order: "asc" } },
           teamResults: { include: { members: { orderBy: { order: "asc" } } } },
         },
       });
