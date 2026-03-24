@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-DB_PATH="/data/prod.db"
+DB_PATH="/data/db.sqlite"
 
 # ── Restore from Litestream replica if DB doesn't exist ──────────────────────
 if [ -f /usr/local/bin/litestream ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
