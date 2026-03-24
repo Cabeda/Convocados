@@ -1,0 +1,7 @@
+node_modules
+dist
+.git
+*.db
+*.db-journal
+*.db-wal
+test.db
