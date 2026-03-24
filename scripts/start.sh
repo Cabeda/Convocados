@@ -18,6 +18,14 @@ fi
 
 # ── Run Prisma migrations ────────────────────────────────────────────────────
 echo "[startup] Running database migrations..."
+
+# Resolve any previously failed migrations so deploy can proceed
+FAILED=$(./node_modules/.bin/prisma migrate status 2>&1 | grep "failed" | sed 's/.*The `\(.*\)` migration.*/\1/' || true)
+if [ -n "$FAILED" ]; then
+  echo "[startup] Found failed migration: $FAILED — marking as rolled back and re-applying..."
+  ./node_modules/.bin/prisma migrate resolve --rolled-back "$FAILED"
+fi
+
 ./node_modules/.bin/prisma migrate deploy
 
 # ── Start the app (with or without Litestream) ───────────────────────────────
