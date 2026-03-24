@@ -198,6 +198,11 @@ export default function EventSettingsPage({ eventId }: Props) {
     updateSetting("balanced", { balanced: v });
   };
 
+  const handleToggleElo = (v: boolean) => {
+    setEvent((e: any) => e ? { ...e, eloEnabled: v, ...(v ? {} : { balanced: false }) } : e);
+    updateSetting("elo", { eloEnabled: v });
+  };
+
   const handleToggleManualRating = (v: boolean) => {
     setEvent((e: any) => e ? { ...e, allowManualRating: v } : e);
     updateSetting("manual-rating", { allowManualRating: v });
@@ -467,16 +472,22 @@ export default function EventSettingsPage({ eventId }: Props) {
                 label={<Typography variant="body2">{t("makePublic")}</Typography>}
               />
             </Tooltip>
+            <Tooltip title={t("eloEnabledTooltip")}>
+              <FormControlLabel
+                control={<Switch size="small" checked={event.eloEnabled ?? true} onChange={(e) => handleToggleElo(e.target.checked)} disabled={!canEdit} />}
+                label={<Typography variant="body2">{t("eloEnabled")}</Typography>}
+              />
+            </Tooltip>
             <Tooltip title={t("balancedTeamsTooltip")}>
               <FormControlLabel
-                control={<Switch size="small" checked={event.balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} disabled={!canEdit} />}
-                label={<Typography variant="body2">{t("balancedTeams")}</Typography>}
+                control={<Switch size="small" checked={event.balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
+                label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("balancedTeams")}</Typography>}
               />
             </Tooltip>
             <Tooltip title={t("allowManualRatingTooltip")}>
               <FormControlLabel
-                control={<Switch size="small" checked={event.allowManualRating ?? false} onChange={(e) => handleToggleManualRating(e.target.checked)} disabled={!canEdit} />}
-                label={<Typography variant="body2">{t("allowManualRating")}</Typography>}
+                control={<Switch size="small" checked={event.allowManualRating ?? false} onChange={(e) => handleToggleManualRating(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
+                label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("allowManualRating")}</Typography>}
               />
             </Tooltip>
           </Box>
