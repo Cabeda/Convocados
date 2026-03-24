@@ -29,7 +29,9 @@ export type EventAction =
   | "rating_initial_set"
   | "rating_recalculated"
   | "rating_manual_enabled"
-  | "rating_manual_disabled";
+  | "rating_manual_disabled"
+  | "player_archived"
+  | "player_unarchived";
 
 /**
  * Append an entry to the event activity log.
