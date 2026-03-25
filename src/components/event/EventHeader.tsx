@@ -232,7 +232,7 @@ export function EventHeader({
               <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
                 {/* Watch Score - show on mobile when available */}
                 {localMatches && localMatches.length > 0 && (
-                  <MenuItem component="a" href={`/events/${eventId}/watch`} target="_blank" onClick={() => setAnchorEl(null)}>
+                  <MenuItem component="a" href={`/watch/${eventId}`} target="_blank" onClick={() => setAnchorEl(null)}>
                     <ListItemIcon><SportsSoccerIcon fontSize="small" /></ListItemIcon>
                     <ListItemText>{t("watchScore")}</ListItemText>
                   </MenuItem>
