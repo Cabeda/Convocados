@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   Paper, Typography, Box, Stack, Chip, Button, Divider, IconButton,
-  TextField, Tooltip, alpha, useTheme,
+  TextField, Tooltip, alpha, useTheme, useMediaQuery, Menu, MenuItem, ListItemIcon, ListItemText,
 } from "@mui/material";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
@@ -14,16 +14,20 @@ import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { describeRecurrenceRule, parseRecurrenceRule } from "~/lib/recurrence";
 import { getSportPreset } from "~/lib/sports";
+import { googleCalendarUrl } from "~/lib/calendar";
 import type { EventData } from "./types";
 import type { Imatch } from "~/lib/random";
 import { ShareBar } from "./ShareBar";
 import { NotifyButton } from "./NotifyButton";
 import { WatchScoreButton } from "./WatchScoreButton";
-import { MoreActionsMenu } from "./MoreActionsMenu";
 
 interface Props {
   eventId: string;
@@ -50,12 +54,14 @@ export function EventHeader({
   const t = useT();
   const locale = detectLocale();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const rule = parseRecurrenceRule(event.recurrenceRule);
 
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [editingLocation, setEditingLocation] = useState(false);
   const [locationDraft, setLocationDraft] = useState("");
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleSaveTitle = async () => {
     const trimmed = titleDraft.trim();
@@ -68,6 +74,8 @@ export function EventHeader({
     setEditingLocation(false);
     await onSaveLocation(locationDraft);
   };
+
+  const playerCount = event.players.length;
 
   return (
     <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
@@ -201,54 +209,170 @@ export function EventHeader({
 
         <Divider />
 
-        {/* ── Quick Actions — always visible ── */}
-        <Stack spacing={1}>
-          <ShareBar title={event.title} />
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
-            {/* Primary actions — always visible */}
-            {(gameDate <= new Date() || event.isRecurring) && (
-              <Button variant="outlined" size="small" startIcon={<HistoryIcon />}
-                href={`/events/${eventId}/history`} sx={{ flexShrink: 0 }}>
-                {t("history")}
-              </Button>
-            )}
-            {(event.eloEnabled ?? true) && (
-              <Button variant="outlined" size="small" startIcon={<EmojiEventsIcon />}
-                href={`/events/${eventId}/rankings`} sx={{ flexShrink: 0 }}>
-                {t("ratings")}
-              </Button>
-            )}
-            {canEditSettings && (
-              <Button variant="outlined" size="small" startIcon={<SettingsIcon />}
-                href={`/events/${eventId}/settings`} sx={{ flexShrink: 0 }}>
-                {t("eventSettings")}
-              </Button>
-            )}
-            <NotifyButton eventId={eventId} />
-            {localMatches && localMatches.length > 0 && (
-              <WatchScoreButton eventId={eventId} />
-            )}
+        {/* ── Quick Actions — responsive layout ── */}
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+          <ShareBar
+            title={event.title}
+            dateTime={gameDate}
+            location={event.location}
+            maxPlayers={event.maxPlayers}
+            playerCount={playerCount}
+          />
 
-            {/* Secondary actions — "More" menu */}
-            <MoreActionsMenu eventId={eventId} event={event} gameDate={gameDate} />
+          {isMobile ? (
+            <>
+              {/* Mobile: All actions in "More" menu */}
+              <IconButton
+                onClick={(e) => setAnchorEl(e.currentTarget)}
+                aria-label={t("moreActions")}
+                sx={{ border: 1, borderColor: "divider" }}
+              >
+                <MoreVertIcon />
+              </IconButton>
+              <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
+                {(gameDate <= new Date() || event.isRecurring) && (
+                  <MenuItem component="a" href={`/events/${eventId}/history`} onClick={() => setAnchorEl(null)}>
+                    <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("history")}</ListItemText>
+                  </MenuItem>
+                )}
+                {(event.eloEnabled ?? true) && (
+                  <MenuItem component="a" href={`/events/${eventId}/rankings`} onClick={() => setAnchorEl(null)}>
+                    <ListItemIcon><EmojiEventsIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("ratings")}</ListItemText>
+                  </MenuItem>
+                )}
+                <MenuItem onClick={() => { navigator.clipboard.writeText(window.location.href); setAnchorEl(null); }}>
+                  <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText>{t("copyLink")}</ListItemText>
+                </MenuItem>
+                {canEditSettings && (
+                  <MenuItem component="a" href={`/events/${eventId}/settings`} onClick={() => setAnchorEl(null)}>
+                    <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("eventSettings")}</ListItemText>
+                  </MenuItem>
+                )}
+                <Divider sx={{ my: 0.5 }} />
+                <MenuItem component="a" href={`/events/${eventId}/log`} onClick={() => setAnchorEl(null)}>
+                  <ListItemIcon><AssignmentIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText>{t("activityLog")}</ListItemText>
+                </MenuItem>
+                {(gameDate <= new Date() || event.isRecurring) && (
+                  <MenuItem component="a" href={`/events/${eventId}/attendance`} onClick={() => setAnchorEl(null)}>
+                    <ListItemIcon><EmojiPeopleIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("attendance")}</ListItemText>
+                  </MenuItem>
+                )}
+                <MenuItem component="a" href={`/api/events/${eventId}/calendar`} onClick={() => setAnchorEl(null)}>
+                  <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText>{t("downloadIcs")}</ListItemText>
+                </MenuItem>
+                <MenuItem component="a"
+                  href={googleCalendarUrl({
+                    id: eventId,
+                    title: event.title,
+                    location: event.location,
+                    dateTime: gameDate,
+                    url: typeof window !== "undefined" ? window.location.href : undefined,
+                    recurrence: event.isRecurring && event.recurrenceRule
+                      ? JSON.parse(event.recurrenceRule)
+                      : undefined,
+                  })}
+                  target="_blank" rel="noopener noreferrer"
+                  onClick={() => setAnchorEl(null)}>
+                  <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText>{t("addToGoogleCalendar")}</ListItemText>
+                </MenuItem>
+              </Menu>
+            </>
+          ) : (
+            <>
+              {/* Desktop: Priority actions visible, rest in "More" menu */}
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                <NotifyButton eventId={eventId} />
+                {localMatches && localMatches.length > 0 && (
+                  <WatchScoreButton eventId={eventId} />
+                )}
+                
+                <Button variant="outlined" size="small" startIcon={<MoreVertIcon />}
+                  onClick={(e) => setAnchorEl(e.currentTarget)}
+                  aria-label={t("moreActions")}
+                  sx={{ flexShrink: 0 }}>
+                  {t("moreActions")}
+                </Button>
+                <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
+                  {(gameDate <= new Date() || event.isRecurring) && (
+                    <>
+                      <MenuItem component="a" href={`/events/${eventId}/history`} onClick={() => setAnchorEl(null)}>
+                        <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+                        <ListItemText>{t("history")}</ListItemText>
+                      </MenuItem>
+                      <MenuItem component="a" href={`/events/${eventId}/attendance`} onClick={() => setAnchorEl(null)}>
+                        <ListItemIcon><EmojiPeopleIcon fontSize="small" /></ListItemIcon>
+                        <ListItemText>{t("attendance")}</ListItemText>
+                      </MenuItem>
+                    </>
+                  )}
+                  {(event.eloEnabled ?? true) && (
+                    <MenuItem component="a" href={`/events/${eventId}/rankings`} onClick={() => setAnchorEl(null)}>
+                      <ListItemIcon><EmojiEventsIcon fontSize="small" /></ListItemIcon>
+                      <ListItemText>{t("ratings")}</ListItemText>
+                    </MenuItem>
+                  )}
+                  <Divider sx={{ my: 0.5 }} />
+                  <MenuItem component="a" href={`/events/${eventId}/log`} onClick={() => setAnchorEl(null)}>
+                    <ListItemIcon><AssignmentIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("activityLog")}</ListItemText>
+                  </MenuItem>
+                  <MenuItem component="a" href={`/api/events/${eventId}/calendar`} onClick={() => setAnchorEl(null)}>
+                    <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("downloadIcs")}</ListItemText>
+                  </MenuItem>
+                  <MenuItem component="a"
+                    href={googleCalendarUrl({
+                      id: eventId,
+                      title: event.title,
+                      location: event.location,
+                      dateTime: gameDate,
+                      url: typeof window !== "undefined" ? window.location.href : undefined,
+                      recurrence: event.isRecurring && event.recurrenceRule
+                        ? JSON.parse(event.recurrenceRule)
+                        : undefined,
+                    })}
+                    target="_blank" rel="noopener noreferrer"
+                    onClick={() => setAnchorEl(null)}>
+                    <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("addToGoogleCalendar")}</ListItemText>
+                  </MenuItem>
+                  {canEditSettings && (
+                    <>
+                      <Divider sx={{ my: 0.5 }} />
+                      <MenuItem component="a" href={`/events/${eventId}/settings`} onClick={() => setAnchorEl(null)}>
+                        <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+                        <ListItemText>{t("eventSettings")}</ListItemText>
+                      </MenuItem>
+                    </>
+                  )}
+                </Menu>
+              </Box>
+            </>
+          )}
+        </Box>
 
-            {/* Owner badge — always visible for owners */}
-            {isOwner && (
-              <Chip icon={<StarIcon />} label={t("ownerBadge")} size="small" color="success" variant="outlined" />
-            )}
-            {/* Archived badge */}
-            {event.archivedAt && (
-              <Chip label={t("archivedBadge")} size="small" color="warning" variant="outlined" />
-            )}
-            {/* Claim ownership for authenticated users on ownerless events */}
-            {isAuthenticated && isOwnerless && (
-              <Button variant="outlined" size="small" color="secondary" onClick={onClaimOwnership}>
-                {t("claimOwnership")}
-              </Button>
-            )}
-          </Box>
-        </Stack>
-
+        {/* Owner/Archived badges and Claim ownership */}
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+          {isOwner && (
+            <Chip icon={<StarIcon />} label={t("ownerBadge")} size="small" color="success" variant="outlined" />
+          )}
+          {event.archivedAt && (
+            <Chip label={t("archivedBadge")} size="small" color="warning" variant="outlined" />
+          )}
+          {isAuthenticated && isOwnerless && (
+            <Button variant="outlined" size="small" color="secondary" onClick={onClaimOwnership}>
+              {t("claimOwnership")}
+            </Button>
+          )}
+        </Box>
       </Stack>
     </Paper>
   );

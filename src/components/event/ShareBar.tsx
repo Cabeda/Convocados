@@ -1,61 +1,84 @@
 import React, { useState } from "react";
-import { Button, Typography, Paper } from "@mui/material";
+import { IconButton, Tooltip, Snackbar, Box, Typography } from "@mui/material";
 import ShareIcon from "@mui/icons-material/Share";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import CheckIcon from "@mui/icons-material/Check";
 import { useT } from "~/lib/useT";
+import { detectLocale } from "~/lib/i18n";
 
 interface Props {
   title: string;
+  dateTime: Date;
+  location?: string | null;
+  maxPlayers: number;
+  playerCount: number;
 }
 
-export function ShareBar({ title }: Props) {
+export function ShareBar({ title, dateTime, location, maxPlayers, playerCount }: Props) {
   const t = useT();
-  const [copied, setCopied] = useState(false);
+  const locale = detectLocale();
+  const [snackbar, setSnackbar] = useState<string | null>(null);
+
+  const spotsLeft = maxPlayers - playerCount;
   const url = typeof window !== "undefined" ? window.location.href : "";
-  const canShare = typeof navigator !== "undefined" && !!navigator.share;
+
+  const formattedDate = dateTime.toLocaleString(locale === "pt" ? "pt-PT" : "en-GB", {
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const shareText = [
+    `⚽ ${title}`,
+    `📅 ${formattedDate}`,
+    location && `📍 ${location}`,
+    spotsLeft > 0 ? `👥 ${t("spotsLeft", { n: spotsLeft })}` : `👥 ${t("full")}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const handleShare = async () => {
+    const canShare = typeof navigator !== "undefined" && !!navigator.share;
+
     if (canShare) {
       try {
-        await navigator.share({ title, url });
+        await navigator.share({
+          title,
+          text: shareText,
+          url,
+        });
         return;
       } catch {
-        // user cancelled or not supported — fall through to clipboard
+        // User cancelled
       }
     }
+
+    // Fallback: copy link to clipboard
     await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+    setSnackbar(t("linkCopiedFull"));
+    setTimeout(() => setSnackbar(null), 2500);
   };
 
-  // On mobile with native share, just show a button — no need to display the URL
-  if (canShare) {
-    return (
-      <Button variant="contained" size="small" startIcon={<ShareIcon />} onClick={handleShare} sx={{ flexShrink: 0 }}>
-        {t("shareGameMobile")}
-      </Button>
-    );
-  }
-
   return (
-    <Paper variant="outlined" sx={{ borderRadius: 2, p: 1, display: "flex", alignItems: "center", gap: 1, width: "100%" }}>
-      <Typography variant="body2" color="text.secondary" sx={{
-        flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        fontFamily: "monospace", fontSize: "0.75rem", minWidth: 0,
-      }}>
-        {url}
-      </Typography>
-      <Button
-        variant={copied ? "outlined" : "contained"}
-        size="small"
-        color={copied ? "success" : "primary"}
-        startIcon={copied ? <CheckIcon /> : <ContentCopyIcon />}
+    <>
+      <IconButton
         onClick={handleShare}
-        sx={{ flexShrink: 0 }}
+        size="medium"
+        aria-label={t("shareGame")}
+        sx={{
+          border: 1,
+          borderColor: "divider",
+          "&:hover": { bgcolor: "action.hover" },
+        }}
       >
-        {copied ? t("linkCopied") : t("shareGame")}
-      </Button>
-    </Paper>
+        <ShareIcon />
+      </IconButton>
+
+      <Snackbar
+        open={!!snackbar}
+        message={snackbar}
+        autoHideDuration={2500}
+        onClose={() => setSnackbar(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
+    </>
   );
 }
