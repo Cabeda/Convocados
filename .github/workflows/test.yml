@@ -37,11 +37,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-output
-          path: |
-            dist/
-            node_modules/.prisma/
-            node_modules/prisma/
-            node_modules/@prisma/engines/
+          path: dist/
           retention-days: 1
 
   e2e:
@@ -58,10 +54,13 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm prisma generate
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: build-output
+          path: dist/
       - name: Install Playwright browsers
         run: pnpm playwright install --with-deps chromium
       - name: Run E2E tests
@@ -88,10 +87,13 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm prisma generate
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: build-output
+          path: dist/
       - name: Prepare database
         run: pnpm prisma migrate deploy
         env:
