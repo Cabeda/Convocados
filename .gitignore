@@ -43,3 +43,5 @@ yarn-error.log*
 
 # k6 load testing
 /k6-results
+.tsbuildinfo
+package-lock.json

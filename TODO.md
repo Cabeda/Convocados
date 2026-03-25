@@ -32,3 +32,15 @@
 - [x] #125 — E2E tests with Playwright
 - [ ] #126 — React component tests with Vitest + Testing Library
 - [ ] #127 — Persistent rate limiting backed by SQLite
+
+## CI migration to pnpm + incremental typecheck (#197)
+- [x] Enable incremental type checking with tsBuildInfoFile
+- [x] Migrate test.yml (ci, e2e, lighthouse) from npm to pnpm
+- [x] Migrate release.yml from npm to pnpm
+- [x] Migrate deploy.yml from npm to pnpm
+- [x] Migrate performance.yml from npm to pnpm
+- [x] Remove redundant install+test in deploy jobs
+- [x] Share build artifacts between ci → e2e/lighthouse
+- [x] Delete stale package-lock.json
+- [ ] Create PR and merge
+- [ ] Verify deployment succeeds
