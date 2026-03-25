@@ -99,4 +99,4 @@ jobs:
         env:
           DATABASE_URL: file:./ci-test.db
       - name: Run Lighthouse CI
-        run: pnpm lhci autorun --config=lighthouserc.cjs
+        run: pnpm lhci
