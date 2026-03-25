@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Chip, Button,
-  CircularProgress, alpha, useTheme, Grid2, ToggleButtonGroup, ToggleButton,
+  CircularProgress, useTheme, Grid2, ToggleButtonGroup, ToggleButton,
   FormControlLabel, Switch, FormControl, Select, MenuItem, InputLabel,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert,
 } from "@mui/material";
@@ -16,7 +16,7 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
-import { SPORT_PRESETS, getSportPreset } from "~/lib/sports";
+import { getSportPreset } from "~/lib/sports";
 
 interface PublicEvent {
   id: string;
@@ -41,11 +41,10 @@ type ViewMode = "cards" | "table" | "map";
 
 // ── Card view ─────────────────────────────────────────────────────────────────
 
-function CardView({ events, locale, t, theme }: {
+function CardView({ events, locale, t }: {
   events: PublicEvent[];
   locale: string;
   t: any;
-  theme: any;
 }) {
   return (
     <Grid2 container spacing={2}>
@@ -260,7 +259,7 @@ function MapView({ events, t, locale }: {
           height="100%"
           style={{ border: 0 }}
           sandbox="allow-scripts allow-top-navigation"
-          srcDoc={buildMapHtml(center, geoEvents, t, locale)}
+          srcDoc={buildMapHtml(center, geoEvents, t)}
         />
       </Paper>
       {geoEvents.length === 0 && (
@@ -276,15 +275,8 @@ function buildMapHtml(
   center: [number, number],
   events: GeoEvent[],
   t: any,
-  locale: string,
 ): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-
-  const markers = events.map((ev) => {
-    const sportPreset = getSportPreset(ev.sport);
-    const label = `${ev.title} — ${t(sportPreset.labelKey as any)} (${ev.playerCount}/${ev.maxPlayers})`;
-    return `marker=${ev.lat},${ev.lng},${encodeURIComponent(label)}`;
-  });
 
   // Use an OpenStreetMap embed with markers via a data URI with Leaflet
   const html = `<!DOCTYPE html>
@@ -492,7 +484,7 @@ export default function PublicGamesPage() {
             )}
 
             {!isLoading && filtered.length > 0 && viewMode === "cards" && (
-              <CardView events={filtered} locale={locale} t={t} theme={theme} />
+              <CardView events={filtered} locale={locale} t={t} />
             )}
 
             {!isLoading && filtered.length > 0 && viewMode === "table" && (

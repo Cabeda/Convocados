@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   Box, Chip, Paper, Typography, alpha, useTheme, Stack, Avatar,
-  List, ListItem, ListItemAvatar, ListItemText, IconButton, TextField, Tooltip,
+  List, ListItem, ListItemAvatar, ListItemText, IconButton, TextField,
 } from "@mui/material";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import EditIcon from "@mui/icons-material/Edit";

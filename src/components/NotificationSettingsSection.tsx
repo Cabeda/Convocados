@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Paper, Typography, Stack, Switch, FormControlLabel,
-  Divider, Alert, Snackbar, CircularProgress,
+  Divider, Snackbar, CircularProgress,
 } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import { useT } from "~/lib/useT";
