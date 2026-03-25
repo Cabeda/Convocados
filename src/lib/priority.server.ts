@@ -230,7 +230,6 @@ export async function autoPriorityEnroll(eventId: string) {
 
   // Lazy import to avoid circular deps
   const { calculateEligibility, rankAndCap, confirmationDeadline } = await import("./priority");
-  const { calculateAttendance } = await import("./attendance");
 
   const history = await prisma.gameHistory.findMany({
     where: { eventId },

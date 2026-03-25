@@ -1,5 +1,5 @@
 import { prisma } from "./db.server";
-import { expectedScore, kFactor, computeGameUpdates, type EloUpdate } from "./elo";
+import { expectedScore, kFactor, type EloUpdate } from "./elo";
 
 const DEFAULT_RATING = 1000;
 

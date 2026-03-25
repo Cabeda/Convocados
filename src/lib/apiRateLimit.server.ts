@@ -78,7 +78,7 @@ export async function rateLimitResponse(
   preset: RateLimitPreset = "read",
 ): Promise<Response | null> {
   const ip = extractIp(request);
-  const { allowed, remaining, retryAfterMs } = await checkApiRateLimit(ip, preset);
+  const { allowed, retryAfterMs } = await checkApiRateLimit(ip, preset);
 
   if (!allowed) {
     return Response.json(
