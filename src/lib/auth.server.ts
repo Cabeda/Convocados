@@ -27,7 +27,7 @@ export const auth = betterAuth({
       },
     }),
     oidcProvider({
-      loginPage: "/login",
+      loginPage: "/auth/signin",
       consentPage: "/oauth/consent",
       requirePKCE: true,
       allowPlainCodeChallengeMethod: false,
