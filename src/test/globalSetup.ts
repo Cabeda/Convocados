@@ -12,6 +12,7 @@ export function setup() {
   }
 
   process.env.DATABASE_URL = `file:${TEST_DB_PATH}`;
+  process.env.BETTER_AUTH_URL = "http://localhost:4321";
 
   execSync(`npx prisma migrate deploy`, {
     env: { ...process.env, DATABASE_URL: `file:${TEST_DB_PATH}` },
