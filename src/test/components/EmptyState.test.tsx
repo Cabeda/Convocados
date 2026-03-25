@@ -7,80 +7,75 @@ import SportsIcon from "@mui/icons-material/Sports";
 
 describe("EmptyState", () => {
   it("renders with title and icon", () => {
-    render(<EmptyState icon={SportsIcon} title="No games yet" />);
-
+    const { unmount } = render(<EmptyState icon={SportsIcon} title="No games yet" />);
     expect(screen.getByText("No games yet")).toBeInTheDocument();
     expect(screen.getByTestId("SportsIcon")).toBeInTheDocument();
+    unmount();
   });
 
   it("renders with description", () => {
-    render(
+    const { unmount } = render(
       <EmptyState
         icon={SportsIcon}
-        title="No games yet"
+        title="No games description test"
         description="Create your first game to get started"
       />
     );
-
     expect(screen.getByText("Create your first game to get started")).toBeInTheDocument();
+    unmount();
   });
 
   it("renders with primary action button", () => {
     const handleClick = vi.fn();
-    render(
+    const { unmount } = render(
       <EmptyState
         icon={AddIcon}
         title="No players"
         action={{ label: "Add player", onClick: handleClick }}
       />
     );
-
-    // Find by text since MUI may render multiple elements with button role
     expect(screen.getByText("Add player")).toBeInTheDocument();
+    unmount();
   });
 
   it("calls action onClick when button is clicked", () => {
     const handleClick = vi.fn();
-    render(
+    const { unmount } = render(
       <EmptyState
         icon={AddIcon}
-        title="No players"
-        action={{ label: "Add player", onClick: handleClick }}
+        title="No players click test"
+        action={{ label: "Add player test", onClick: handleClick }}
       />
     );
-
-    // Use fireEvent.click on the button element
-    const button = screen.getByRole("button", { name: /Add player/i });
+    const button = screen.getByRole("button", { name: /Add player test/i });
     fireEvent.click(button);
-
     expect(handleClick).toHaveBeenCalledTimes(1);
+    unmount();
   });
 
   it("renders with secondary action button", () => {
     const handlePrimary = vi.fn();
     const handleSecondary = vi.fn();
-    render(
+    const { unmount } = render(
       <EmptyState
         icon={SportsIcon}
-        title="No games"
+        title="No games secondary"
         description="Create a game to get started"
         action={{ label: "Create game", onClick: handlePrimary }}
         secondaryAction={{ label: "Browse public games", onClick: handleSecondary }}
       />
     );
-
     expect(screen.getByText("Create game")).toBeInTheDocument();
     expect(screen.getByText("Browse public games")).toBeInTheDocument();
+    unmount();
   });
 
   it("renders without action buttons when not provided", () => {
-    render(<EmptyState icon={SportsIcon} title="No data" />);
-
-    expect(screen.getByText("No data")).toBeInTheDocument();
-    // The Paper component from MUI wraps everything but shouldn't have action buttons
-    // Just verify the title is there and no button text is present
-    expect(screen.queryByText("Create game")).not.toBeInTheDocument();
-    expect(screen.queryByText("Add player")).not.toBeInTheDocument();
-    expect(screen.queryByText("Browse public games")).not.toBeInTheDocument();
+    const { unmount, container } = render(<EmptyState icon={SportsIcon} title="No data unique" />);
+    // Check title is rendered within this specific container
+    expect(container.querySelector('h6')?.textContent).toBe("No data unique");
+    // Check there are no buttons in this specific render
+    expect(container.querySelectorAll('button')).toHaveLength(0);
+    unmount();
   });
 });
