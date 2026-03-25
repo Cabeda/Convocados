@@ -42,5 +42,5 @@
 - [x] Remove redundant install+test in deploy jobs
 - [x] Share build artifacts between ci → e2e/lighthouse
 - [x] Delete stale package-lock.json
-- [ ] Create PR and merge
-- [ ] Verify deployment succeeds
+- [x] Create PR and merge (PR #198 ✅ merged)
+- [x] Verify deployment succeeds (v3.37.0 deployed, health check OK)
