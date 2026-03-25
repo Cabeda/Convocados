@@ -110,7 +110,7 @@ describe("sendWeeklySummary", () => {
     mockSend.mockResolvedValue({ data: { id: "sum-1" }, error: null });
 
     await sendWeeklySummary("player@example.com", {
-      userName: "José",
+      userName: "Test User",
       upcoming: [{ title: "Futsal Friday", dateTime: "2026-03-20T19:00:00Z", location: "Gym" }],
       results: [{ title: "Last Game", scoreOne: 3, scoreTwo: 2 }],
       dashboardUrl: "https://convocados.fly.dev/dashboard",
@@ -120,7 +120,7 @@ describe("sendWeeklySummary", () => {
     const call = mockSend.mock.calls[0][0];
     expect(call.to).toBe("player@example.com");
     expect(call.subject).toContain("Weekly");
-    expect(call.html).toContain("José");
+    expect(call.html).toContain("Test User");
     expect(call.html).toContain("Futsal Friday");
     expect(call.html).toContain("3 – 2");
   });
@@ -129,7 +129,7 @@ describe("sendWeeklySummary", () => {
     mockSend.mockResolvedValue({ data: { id: "sum-2" }, error: null });
 
     await sendWeeklySummary("p@example.com", {
-      userName: "Ana",
+      userName: "Jane",
       upcoming: [],
       results: [],
       dashboardUrl: "https://convocados.fly.dev/dashboard",

@@ -46,20 +46,20 @@ describe("Team Randomization with Claimed Players", () => {
     await resetApiRateLimitStore();
   });
 
-  it("should include claimed player when randomizing teams (10 players,1 claimed)", async () => {
+  it("should include claimed player when randomizing teams (10 players, 1 claimed)", async () => {
     // Create user
-    const user = await createTestUser("jose@example.com", "José Cabeda");
+    const user = await createTestUser("test@example.com", "Test User1");
 
     // Create event with maxPlayers = 10
     const event = await createTestEvent(null, 10);
 
-    // Add 9 anonymous players (order0-8)
+    // Add 9 anonymous players (order 0-8)
     for (let i = 0; i < 9; i++) {
-      await addPlayer(event.id, `Anonymous Player${i + 1}`, i);
+      await addPlayer(event.id, `Anonymous Player ${i + 1}`, i);
     }
 
-    // Add1 player that will be claimed (order9)
-    const claimedPlayer = await addPlayer(event.id, "Anonymous Player10", 9);
+    // Add 1 player that will be claimed (order 9)
+    const claimedPlayer = await addPlayer(event.id, "Anonymous Player 10", 9);
 
     // Simulate claiming: update the player with user's name and userId
     await prisma.player.update({
@@ -74,17 +74,17 @@ describe("Team Randomization with Claimed Players", () => {
       take: event.maxPlayers,
     });
 
-    // Verify: all 10players should be included
+    // Verify: all 10 players should be included
     expect(players).toHaveLength(10);
-    expect(players.map(p => p.name)).toContain("José Cabeda");
-    expect(players.find(p => p.name === "José Cabeda")?.userId).toBe(user.id);
+    expect(players.map(p => p.name)).toContain("Test User1");
+    expect(players.find(p => p.name === "Test User1")?.userId).toBe(user.id);
   });
 
   it("should NOT exclude a claimed bench player", async () => {
-    const user = await createTestUser("jose@example.com", "José Cabeda");
+    const user = await createTestUser("test@example.com", "Test User1");
     const event = await createTestEvent(null, 10);
 
-    // Add 10 active players (order0-9)
+    // Add 10 active players (order 0-9)
     for (let i = 0; i < 10; i++) {
       await addPlayer(event.id, `Player ${i + 1}`, i);
     }
@@ -105,22 +105,22 @@ describe("Team Randomization with Claimed Players", () => {
       take: event.maxPlayers,
     });
 
-    // Verify: should have 10players (maxPlayers), bench player excluded
+    // Verify: should have 10 players (maxPlayers), bench player excluded
     expect(players).toHaveLength(10);
     // The claimed bench player should be EXCLUDED (order 10)
-    expect(players.map(p => p.name)).not.toContain("José Cabeda");
+    expect(players.map(p => p.name)).not.toContain("Test User1");
   });
 
   it("handles scenario: user joins event that's already full, then randomizes", async () => {
-    const user = await createTestUser("jose@example.com", "José Cabeda");
+    const user = await createTestUser("test@example.com", "Test User1");
     const event = await createTestEvent(null, 10);
 
-    // Add 10 anonymous players (order0-9)
+    // Add 10 anonymous players (order 0-9)
     for (let i = 0; i < 10; i++) {
       await addPlayer(event.id, `Anonymous ${i + 1}`, i);
     }
 
-    // User joins - this creates a new player with order10
+    // User joins - this creates a new player with order 10
     // (this is what happens when linkToAccount is true)
     const userPlayer = await addPlayer(event.id, user.name, 10, user.id);
 
@@ -131,16 +131,17 @@ describe("Team Randomization with Claimed Players", () => {
       take: event.maxPlayers,
     });
 
-    // BUG: This will only have 10players (orders0-9), excluding user's player!console.log("Players for randomization:", players.map(p => ({ name: p.name, order: p.order })));
+    // BUG: This will only have 10 players (orders 0-9), excluding user's player!
+    console.log("Players for randomization:", players.map(p => ({ name: p.name, order: p.order })));
     expect(players).toHaveLength(10);
-    // User's player should be EXCLUDED (order10)
+    // User's player should be EXCLUDED (order 10)
     expect(players.find(p => p.name === user.name)).toBeUndefined();
     
     // This is the BUG - the user's player should be included, not excluded
   });
 
   it("should include user's claimed player even if there are more than maxPlayers total", async () => {
-    const user = await createTestUser("jose@example.com", "José Cabeda");
+    const user = await createTestUser("test@example.com", "Test User1");
     const event = await createTestEvent(null, 10);
 
     // Add 8 anonymous players (order 0-7)
@@ -176,7 +177,7 @@ describe("Team Randomization with Claimed Players", () => {
 
   it("reproduces the exact bug: player update during active game", async () => {
     // This test simulates the exact buggy scenario
-    const user = await createTestUser("jose@example.com", "José Cabeda");
+    const user = await createTestUser("test@example.com", "Test User1");
     const event = await createTestEvent(null, 10);
 
     // Step 1: Create 11 players (10 active + 1 bench)
@@ -201,9 +202,9 @@ describe("Team Randomization with Claimed Players", () => {
     const playerNamesInFirstRound = players.map(p => p.name);
     expect(playerNamesInFirstRound).not.toContain("Bench Player");
 
-    // Step 3: José claims one of the remaining players (player with high order)
-    // Simulate: José joins and takes order 10 (would be bench)
-    const josePlayer = await addPlayer(event.id, "José Cabeda (temp)", 11, user.id);
+    // Step 3: Test User claims one of the remaining players (player with high order)
+    // Simulate: Test User joins and takes order 11 (would be bench)
+    const testUserPlayer = await addPlayer(event.id, "Test User1 (temp)", 11, user.id);
     
     // Now we have 12 players: 10 active + 2 bench
     players = await prisma.player.findMany({
@@ -219,10 +220,10 @@ describe("Team Randomization with Claimed Players", () => {
       take: event.maxPlayers,
     });
 
-    // BUG: José Cabeda should NOT be in the teams (order 11)
+    // BUG: Test User1 should NOT be in the teams (order 11)
     // The first 10 players should be selected (orders 0-9)
     expect(players).toHaveLength(10);
-    expect(players.map(p => p.name)).not.toContain("José Cabeda (temp)");
+    expect(players.map(p => p.name)).not.toContain("Test User1 (temp)");
     expect(players.map(p => p.name)).not.toContain("Bench Player");
   });
 });
