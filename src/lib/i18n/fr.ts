@@ -620,6 +620,30 @@ const fr: TranslationKeys = {
   activeGames: "Jeux Actifs",
   archivedGames: "Jeux Archivés",
   noArchivedGames: "Aucun jeu archivé.",
+
+  // Empty states (#208)
+  emptyStateNoGames: "Pas encore de jeux",
+  emptyStateNoGamesDesc: "Crée ton premier jeu pour commencer",
+  emptyStateNoPlayers: "Aucun joueur inscrit",
+  emptyStateNoPlayersDesc: "Partage ce jeu pour inviter des joueurs",
+  emptyStateNoHistory: "Pas d'historique de jeux",
+  emptyStateNoHistoryDesc: "Ton historique de jeux apparaîtra ici après ton premier match",
+  emptyStateNoRatings: "Pas de classements",
+  emptyStateNoRatingsDesc: "Les classements seront calculés après l'enregistrement des matchs avec résultats",
+  emptyStateNoAttendance: "Aucune donnée de présence",
+  emptyStateNoAttendanceDesc: "Le suivi des présences commence après le premier match",
+  emptyStateNoPublicGames: "Pas de jeux publics",
+  emptyStateNoPublicGamesDesc: "Crée un jeu public pour inviter d'autres",
+  emptyStateCreateGame: "Créer un jeu",
+  emptyStateBrowsePublic: "Voir les jeux publics",
+  emptyStateShare: "Partager le jeu",
+
+  // Countdown (#206)
+  countdownDays: "dans {n} jours",
+  countdownTomorrow: "Demain à {time}",
+  countdownHours: "dans {n}h {m}m",
+  countdownMinutes: "dans {n}m",
+  countdownNow: "Maintenant",
 };
 
 export default fr;
