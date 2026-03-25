@@ -1,14 +1,9 @@
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "./db.server";
+import { APP_SCOPES } from "./scopes";
 
-export const API_SCOPES = [
-  "read:events",
-  "write:events",
-  "manage:players",
-  "create:events",
-] as const;
-
-export type ApiScope = (typeof API_SCOPES)[number];
+export { APP_SCOPES as API_SCOPES };
+export type ApiScope = (typeof APP_SCOPES)[number];
 
 /** Hash an API key for storage (SHA-256) */
 export function hashApiKey(raw: string): string {
