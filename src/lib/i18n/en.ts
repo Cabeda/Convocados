@@ -665,6 +665,30 @@ const en = {
   activeGames: "Active Games",
   archivedGames: "Archived Games",
   noArchivedGames: "No archived games.",
+
+  // Empty states (#208)
+  emptyStateNoGames: "No games yet",
+  emptyStateNoGamesDesc: "Create your first game to get started",
+  emptyStateNoPlayers: "No players signed up",
+  emptyStateNoPlayersDesc: "Share this game to invite players",
+  emptyStateNoHistory: "No game history",
+  emptyStateNoHistoryDesc: "Your game history will appear here after your first match",
+  emptyStateNoRatings: "No ratings yet",
+  emptyStateNoRatingsDesc: "Ratings will be calculated after games are recorded with scores",
+  emptyStateNoAttendance: "No attendance data",
+  emptyStateNoAttendanceDesc: "Attendance tracking starts after the first game",
+  emptyStateNoPublicGames: "No public games",
+  emptyStateNoPublicGamesDesc: "Create a public game to invite others",
+  emptyStateCreateGame: "Create game",
+  emptyStateBrowsePublic: "Browse public games",
+  emptyStateShare: "Share game",
+
+  // Countdown (#206)
+  countdownDays: "in {n} days",
+  countdownTomorrow: "Tomorrow at {time}",
+  countdownHours: "in {n}h {m}m",
+  countdownMinutes: "in {n}m",
+  countdownNow: "Now",
 } as const;
 
 export default en;
