@@ -230,6 +230,13 @@ export function EventHeader({
                 <MoreVertIcon />
               </IconButton>
               <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
+                {/* Watch Score - show on mobile when available */}
+                {localMatches && localMatches.length > 0 && (
+                  <MenuItem component="a" href={`/events/${eventId}/watch`} target="_blank" onClick={() => setAnchorEl(null)}>
+                    <ListItemIcon><SportsSoccerIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("watchScore")}</ListItemText>
+                  </MenuItem>
+                )}
                 {(gameDate <= new Date() || event.isRecurring) && (
                   <MenuItem component="a" href={`/events/${eventId}/history`} onClick={() => setAnchorEl(null)}>
                     <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
@@ -242,10 +249,6 @@ export function EventHeader({
                     <ListItemText>{t("ratings")}</ListItemText>
                   </MenuItem>
                 )}
-                <MenuItem onClick={() => { navigator.clipboard.writeText(window.location.href); setAnchorEl(null); }}>
-                  <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
-                  <ListItemText>{t("copyLink")}</ListItemText>
-                </MenuItem>
                 {canEditSettings && (
                   <MenuItem component="a" href={`/events/${eventId}/settings`} onClick={() => setAnchorEl(null)}>
                     <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
