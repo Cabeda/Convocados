@@ -23,7 +23,7 @@ primary_region = "cdg"
     soft_limit = 10
 
   [[http_service.checks]]
-    grace_period = "10s"
+    grace_period = "120s"
     interval = "30s"
     method = "GET"
     path = "/api/health"

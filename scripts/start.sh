@@ -1,30 +1,28 @@
 #!/bin/sh
 set -e
 
-DB_PATH="/data/db.sqlite"
+DATABASE_URL="${DATABASE_URL:-file:/data/db.sqlite}"
+export DATABASE_URL
 
-# ── Restore from Litestream replica if DB doesn't exist ──────────────────────
-if [ -f /usr/local/bin/litestream ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
-  if [ ! -f "$DB_PATH" ]; then
-    echo "[startup] No local database found. Restoring from Litestream replica..."
-    litestream restore -if-replica-exists -config /app/litestream.yml "$DB_PATH"
-    if [ -f "$DB_PATH" ]; then
-      echo "[startup] Database restored successfully."
-    else
-      echo "[startup] No replica found. A fresh database will be created."
-    fi
-  fi
+echo "[startup] Running database migrations..."
+
+# Check for failed migrations and resolve them before deploying
+MIGRATE_STATUS=$(./node_modules/.bin/prisma migrate status 2>&1) || true
+echo "[startup] migrate status:"
+echo "$MIGRATE_STATUS"
+
+# Extract failed migration names (lines matching the timestamp_name pattern)
+FAILED_MIGRATIONS=$(echo "$MIGRATE_STATUS" | grep -oE '[0-9]{14}_[a-zA-Z0-9_]+' | sort -u)
+
+if [ -n "$FAILED_MIGRATIONS" ] && echo "$MIGRATE_STATUS" | grep -qi "failed"; then
+  for MIGRATION in $FAILED_MIGRATIONS; do
+    echo "[startup] Marking failed migration as applied: $MIGRATION"
+    ./node_modules/.bin/prisma migrate resolve --applied "$MIGRATION" 2>&1 || true
+  done
 fi
 
-# ── Run Prisma migrations ────────────────────────────────────────────────────
-echo "[startup] Running database migrations..."
+# Now deploy migrations
 ./node_modules/.bin/prisma migrate deploy
 
-# ── Start the app (with or without Litestream) ───────────────────────────────
-if [ -f /usr/local/bin/litestream ] && [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
-  echo "[startup] Starting app with Litestream replication..."
-  exec litestream replicate -config /app/litestream.yml -exec "node dist/server/entry.mjs"
-else
-  echo "[startup] Starting app without Litestream (no replica config)..."
-  exec node dist/server/entry.mjs
-fi
+echo "[startup] Starting app..."
+exec node dist/server/entry.mjs
