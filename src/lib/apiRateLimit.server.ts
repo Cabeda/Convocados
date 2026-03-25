@@ -15,6 +15,12 @@ const PRESETS = {
   auth: { windowMs: 60_000, maxRequests: 10 },
   /** Heavy operations (e.g. ELO recalculate): 1 req/min */
   heavy: { windowMs: 60_000, maxRequests: 1 },
+  /** OAuth token endpoint: 20 req/min per IP */
+  oauth_token: { windowMs: 60_000, maxRequests: 20 },
+  /** OAuth authorize endpoint: 30 req/min per IP */
+  oauth_authorize: { windowMs: 60_000, maxRequests: 30 },
+  /** OAuth client registration: 5 req/hour per IP */
+  oauth_register: { windowMs: 3_600_000, maxRequests: 5 },
 } as const;
 
 export type RateLimitPreset = keyof typeof PRESETS;

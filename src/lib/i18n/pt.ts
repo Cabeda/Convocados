@@ -690,6 +690,31 @@ const pt: TranslationKeys = {
   countdownHours: "em {n}h {m}m",
   countdownMinutes: "em {n}m",
   countdownNow: "Agora",
+
+  // OAuth consent screen (#221)
+  oauthConsentTitle: "Autorizar {appName}",
+  oauthConsentDescription: "{appName} quer aceder à tua conta Convocados",
+  oauthConsentScopesLabel: "Esta app poderá:",
+  oauthConsentAllow: "Permitir",
+  oauthConsentDeny: "Recusar",
+  oauthConsentPrivacyPolicy: "Política de Privacidade",
+  oauthConsentTermsOfService: "Termos de Serviço",
+  oauthConsentScopeOpenid: "Verificar a tua identidade",
+  oauthConsentScopeProfile: "Ver o teu perfil básico",
+  oauthConsentScopeEmail: "Ver o teu email",
+  oauthConsentScopeOfflineAccess: "Manter sessão iniciada",
+  oauthConsentScopeReadProfile: "Ver o teu perfil",
+  oauthConsentScopeReadEvents: "Ver os teus eventos",
+  oauthConsentScopeWriteEvents: "Modificar definições de eventos",
+  oauthConsentScopeCreateEvents: "Criar novos eventos",
+  oauthConsentScopeManagePlayers: "Adicionar e remover jogadores",
+  oauthConsentScopeReadRatings: "Ver classificações ELO",
+  oauthConsentScopeReadHistory: "Ver histórico de jogos",
+  oauthConsentScopeManageTeams: "Sortear e atribuir equipas",
+  oauthConsentScopeManageWebhooks: "Gerir webhooks",
+  oauthConsentScopeManagePush: "Gerir notificações push",
+  oauthConsentScopeReadCalendar: "Aceder ao calendário",
+  oauthConsentScopeManagePayments: "Gerir custos e pagamentos",
 };
 
 export default pt;

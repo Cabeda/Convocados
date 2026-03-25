@@ -644,6 +644,31 @@ const de: TranslationKeys = {
   countdownHours: "in {n}h {m}m",
   countdownMinutes: "in {n}m",
   countdownNow: "Jetzt",
+
+  // OAuth consent screen (#221)
+  oauthConsentTitle: "{appName} autorisieren",
+  oauthConsentDescription: "{appName} möchte auf dein Convocados-Konto zugreifen",
+  oauthConsentScopesLabel: "Diese App kann:",
+  oauthConsentAllow: "Erlauben",
+  oauthConsentDeny: "Ablehnen",
+  oauthConsentPrivacyPolicy: "Datenschutzrichtlinie",
+  oauthConsentTermsOfService: "Nutzungsbedingungen",
+  oauthConsentScopeOpenid: "Deine Identität überprüfen",
+  oauthConsentScopeProfile: "Dein Basisprofil ansehen",
+  oauthConsentScopeEmail: "Deine E-Mail-Adresse ansehen",
+  oauthConsentScopeOfflineAccess: "Angemeldet bleiben",
+  oauthConsentScopeReadProfile: "Dein Profil ansehen",
+  oauthConsentScopeReadEvents: "Deine Events ansehen",
+  oauthConsentScopeWriteEvents: "Event-Einstellungen ändern",
+  oauthConsentScopeCreateEvents: "Neue Events erstellen",
+  oauthConsentScopeManagePlayers: "Spieler hinzufügen und entfernen",
+  oauthConsentScopeReadRatings: "ELO-Ranglisten ansehen",
+  oauthConsentScopeReadHistory: "Spielverlauf ansehen",
+  oauthConsentScopeManageTeams: "Teams auslosen und zuweisen",
+  oauthConsentScopeManageWebhooks: "Webhooks verwalten",
+  oauthConsentScopeManagePush: "Push-Benachrichtigungen verwalten",
+  oauthConsentScopeReadCalendar: "Auf Kalender zugreifen",
+  oauthConsentScopeManagePayments: "Kosten und Zahlungen verwalten",
 };
 
 export default de;
