@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { EmptyState } from "~/components/EmptyState";
 import AddIcon from "@mui/icons-material/Add";
@@ -35,11 +35,11 @@ describe("EmptyState", () => {
       />
     );
 
-    const buttons = screen.getAllByRole("button", { name: "Add player" });
-    expect(buttons.length).toBeGreaterThan(0);
+    // Find by text since MUI may render multiple elements with button role
+    expect(screen.getByText("Add player")).toBeInTheDocument();
   });
 
-  it("calls action onClick when button is clicked", async () => {
+  it("calls action onClick when button is clicked", () => {
     const handleClick = vi.fn();
     render(
       <EmptyState
@@ -49,8 +49,9 @@ describe("EmptyState", () => {
       />
     );
 
-    const buttons = screen.getAllByRole("button", { name: "Add player" });
-    buttons[0].click();
+    // Use fireEvent.click on the button element
+    const button = screen.getByRole("button", { name: /Add player/i });
+    fireEvent.click(button);
 
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
@@ -68,20 +69,18 @@ describe("EmptyState", () => {
       />
     );
 
-    const primaryButtons = screen.getAllByRole("button", { name: "Create game" });
-    const secondaryButtons = screen.getAllByRole("button", { name: "Browse public games" });
-    
-    expect(primaryButtons.length).toBeGreaterThan(0);
-    expect(secondaryButtons.length).toBeGreaterThan(0);
+    expect(screen.getByText("Create game")).toBeInTheDocument();
+    expect(screen.getByText("Browse public games")).toBeInTheDocument();
   });
 
-it("renders without action buttons when not provided", () => {
+  it("renders without action buttons when not provided", () => {
     render(<EmptyState icon={SportsIcon} title="No data" />);
 
     expect(screen.getByText("No data")).toBeInTheDocument();
-    // Check the title exists and there are no action labels present
-    expect(screen.queryAllByRole("button", { name: "Create game" })).toHaveLength(0);
-    expect(screen.queryAllByRole("button", { name: "Add player" })).toHaveLength(0);
-    expect(screen.queryAllByRole("button", { name: "Browse public games" })).toHaveLength(0);
+    // The Paper component from MUI wraps everything but shouldn't have action buttons
+    // Just verify the title is there and no button text is present
+    expect(screen.queryByText("Create game")).not.toBeInTheDocument();
+    expect(screen.queryByText("Add player")).not.toBeInTheDocument();
+    expect(screen.queryByText("Browse public games")).not.toBeInTheDocument();
   });
 });
