@@ -4,7 +4,6 @@ import {
   CircularProgress, Alert, alpha, useTheme,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
 } from "@mui/material";
-import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import SportsIcon from "@mui/icons-material/Sports";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";

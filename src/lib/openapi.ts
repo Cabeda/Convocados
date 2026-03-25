@@ -11,10 +11,6 @@ const eventIdParam = {
   description: "Event ID",
 };
 
-const json = (schema: object, description = "Success") => ({
-  [description]: { content: { "application/json": { schema } } },
-});
-
 const errorResponses = {
   "400": { description: "Bad request" },
   "401": { description: "Unauthorized" },

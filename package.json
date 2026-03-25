@@ -8,6 +8,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "start": "sh ./scripts/start.sh",
+    "lint": "eslint src/",
     "typecheck": "tsc",
     "test": "vitest run",
     "test:e2e": "npx playwright test",
@@ -43,6 +44,8 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@eslint-react/eslint-plugin": "^3.0.0",
+    "@eslint/js": "^10.0.1",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
@@ -52,11 +55,14 @@
     "@types/react-dom": "^19.0.4",
     "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^10.1.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "jsdom": "^29.0.0",
     "pino-pretty": "^13.1.3",
     "prisma": "^6.5.0",
     "supertest": "^7.2.2",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.57.2",
     "vitest": "^3.0.7"
   },
   "packageManager": "pnpm@10.32.1"

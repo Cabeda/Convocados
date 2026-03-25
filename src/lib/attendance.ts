@@ -77,17 +77,15 @@ export function calculateAttendance(history: HistoryEntry[]): AttendanceResult {
     let lastPlayed: string | null = null;
 
     // Walk games in chronological order to compute streak
-    let tempStreak = 0;
     for (const g of gameParticipants) {
       if (g.players.has(name)) {
         gamesPlayed++;
-        tempStreak++;
+        currentStreak++;
         lastPlayed = g.dateTime;
       } else {
-        tempStreak = 0;
+        currentStreak = 0;
       }
     }
-    currentStreak = tempStreak;
 
     records.push({
       name,

@@ -12,6 +12,9 @@ export function setup() {
   }
 
   process.env.DATABASE_URL = `file:${TEST_DB_PATH}`;
+  process.env.BETTER_AUTH_URL = "http://localhost:4321";
+  process.env.GOOGLE_CLIENT_ID = "test-client-id";
+  process.env.GOOGLE_CLIENT_SECRET = "test-client-secret";
 
   execSync(`npx prisma migrate deploy`, {
     env: { ...process.env, DATABASE_URL: `file:${TEST_DB_PATH}` },

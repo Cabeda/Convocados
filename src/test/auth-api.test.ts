@@ -402,7 +402,7 @@ describe("PATCH /api/users/[id] (authenticated)", () => {
 
 describe("POST /api/events/[id]/claim-player", () => {
   it("claims an anonymous player: renames to user name and links userId", async () => {
-    const user = await seedUser({ name: "José" });
+    const user = await seedUser({ name: "Test User" });
     mockAuth(user.id, user.name);
     const id = await seedEvent();
     const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
@@ -414,15 +414,15 @@ describe("POST /api/events/[id]/claim-player", () => {
     // Verify: player is renamed and linked
     const player = await testPrisma.player.findUnique({ where: { id: p.id } });
     expect((player as any)?.userId).toBe(user.id);
-    expect(player?.name).toBe("José");
+    expect(player?.name).toBe("Test User");
   });
 
   it("returns 409 when user already has a linked player in the event", async () => {
-    const user = await seedUser({ name: "José" });
+    const user = await seedUser({ name: "Test User" });
     mockAuth(user.id, user.name);
     const id = await seedEvent();
     // User already has a linked player
-    await testPrisma.player.create({ data: { name: "José", eventId: id, userId: user.id } as any });
+    await testPrisma.player.create({ data: { name: "Test User", eventId: id, userId: user.id } as any });
     // Anonymous player to claim
     const anon = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
     const res = await claimPlayerEndpoint(ctx({ id }, { playerId: anon.id }));
@@ -470,7 +470,7 @@ describe("POST /api/events/[id]/claim-player", () => {
   });
 
   it("renames PlayerRating to user name when claiming", async () => {
-    const user = await seedUser({ name: "José" });
+    const user = await seedUser({ name: "Test User" });
     mockAuth(user.id, user.name);
     const id = await seedEvent();
     const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
@@ -481,13 +481,13 @@ describe("POST /api/events/[id]/claim-player", () => {
     const oldRating = await testPrisma.playerRating.findUnique({ where: { eventId_name: { eventId: id, name: "Anon" } } });
     expect(oldRating).toBeNull();
     // New name rating should exist with the ELO carried over
-    const newRating = await testPrisma.playerRating.findUnique({ where: { eventId_name: { eventId: id, name: "José" } } });
+    const newRating = await testPrisma.playerRating.findUnique({ where: { eventId_name: { eventId: id, name: "Test User" } } });
     expect(newRating?.userId).toBe(user.id);
     expect(newRating?.rating).toBe(1200);
   });
 
   it("updates GameHistory teamsSnapshot when claiming anonymous player", async () => {
-    const user = await seedUser({ name: "José" });
+    const user = await seedUser({ name: "Test User" });
     mockAuth(user.id, user.name);
     const id = await seedEvent();
     const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
@@ -518,12 +518,12 @@ describe("POST /api/events/[id]/claim-player", () => {
     const updated = await testPrisma.gameHistory.findUnique({ where: { id: h.id } });
     const parsed = JSON.parse(updated!.teamsSnapshot!);
     const allNames = parsed.flatMap((t: any) => t.players.map((p: any) => p.name));
-    expect(allNames).toContain("José");
+    expect(allNames).toContain("Test User");
     expect(allNames).not.toContain("Anon");
   });
 
   it("preserves ELO rating after recalculateAllRatings following a claim", async () => {
-    const user = await seedUser({ name: "José" });
+    const user = await seedUser({ name: "Test User" });
     mockAuth(user.id, user.name);
     const id = await seedEvent();
     const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
@@ -559,9 +559,9 @@ describe("POST /api/events/[id]/claim-player", () => {
     const { recalculateAllRatings } = await import("~/lib/elo.server");
     await recalculateAllRatings(id);
 
-    // After recalculation, the rating should be under "José", not "Anon"
+    // After recalculation, the rating should be under "Test User", not "Anon"
     const joseRating = await testPrisma.playerRating.findUnique({
-      where: { eventId_name: { eventId: id, name: "José" } },
+      where: { eventId_name: { eventId: id, name: "Test User" } },
     });
     expect(joseRating).not.toBeNull();
     expect(joseRating!.gamesPlayed).toBe(1);

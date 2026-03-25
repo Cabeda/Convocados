@@ -6,7 +6,6 @@ import { prisma } from "./db.server";
  * Defaults to empty (no admins).
  */
 function getAdminEmails(): Set<string> {
-  // @ts-ignore — import.meta.env may not exist in test/node context
   const raw: string = (typeof import.meta !== "undefined" && import.meta.env?.ADMIN_EMAIL)
     ?? process.env.ADMIN_EMAIL
     ?? "";

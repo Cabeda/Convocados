@@ -10,11 +10,9 @@ export default defineConfig({
     alias: {
       "~": path.resolve(__dirname, "./src"),
     },
-    // Default: node environment for API/unit tests
     environment: "node",
     globalSetup: ["./src/test/globalSetup.ts"],
     setupFiles: ["./src/test/setup.ts"],
-    // Component tests use jsdom via inline config comment
     environmentMatchGlobs: [
       ["src/test/components/**", "jsdom"],
     ],
