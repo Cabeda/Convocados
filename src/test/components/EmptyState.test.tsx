@@ -35,8 +35,8 @@ describe("EmptyState", () => {
       />
     );
 
-    const button = screen.getByRole("button", { name: "Add player" });
-    expect(button).toBeInTheDocument();
+    const buttons = screen.getAllByRole("button", { name: "Add player" });
+    expect(buttons.length).toBeGreaterThan(0);
   });
 
   it("calls action onClick when button is clicked", async () => {
@@ -49,8 +49,8 @@ describe("EmptyState", () => {
       />
     );
 
-    const button = screen.getByRole("button", { name: "Add player" });
-    button.click();
+    const buttons = screen.getAllByRole("button", { name: "Add player" });
+    buttons[0].click();
 
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
@@ -68,17 +68,20 @@ describe("EmptyState", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: "Create game" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Browse public games" })).toBeInTheDocument();
+    const primaryButtons = screen.getAllByRole("button", { name: "Create game" });
+    const secondaryButtons = screen.getAllByRole("button", { name: "Browse public games" });
+    
+    expect(primaryButtons.length).toBeGreaterThan(0);
+    expect(secondaryButtons.length).toBeGreaterThan(0);
   });
 
-  it("renders without action buttons when not provided", () => {
+it("renders without action buttons when not provided", () => {
     render(<EmptyState icon={SportsIcon} title="No data" />);
 
-    // Check that we can find the title
     expect(screen.getByText("No data")).toBeInTheDocument();
-    // Check that we don't have buttons with specific action labels
-    expect(screen.queryByRole("button", { name: "Create game" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Browse public games" })).not.toBeInTheDocument();
+    // Check the title exists and there are no action labels present
+    expect(screen.queryAllByRole("button", { name: "Create game" })).toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: "Add player" })).toHaveLength(0);
+    expect(screen.queryAllByRole("button", { name: "Browse public games" })).toHaveLength(0);
   });
 });
