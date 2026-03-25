@@ -3,7 +3,7 @@ import {
   AppBar, Toolbar, IconButton, Typography, Box, useTheme,
   Tooltip, Container, useScrollTrigger, Paper, Button, Slide,
   Menu, MenuItem, ListItemText, ListItemIcon, Avatar, Divider,
-  CircularProgress, Stack,
+  CircularProgress, Stack, Chip,
 } from "@mui/material";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
@@ -301,9 +301,11 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
               sx={{
                 flexGrow: 1, fontWeight: 700, textDecoration: "none", color: "inherit",
                 "&:hover": { color: theme.palette.primary.main },
+                display: "flex", alignItems: "center", gap: 0.5,
               }}
             >
               {t("appName")}
+              <Chip label="beta" size="small" sx={{ fontSize: "0.6rem", height: 18, ml: 0.5 }} />
             </Typography>
             <Tooltip title={t("publicGames")}>
               <IconButton color="inherit" aria-label={t("publicGames")}
