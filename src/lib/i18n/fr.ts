@@ -644,6 +644,31 @@ const fr: TranslationKeys = {
   countdownHours: "dans {n}h {m}m",
   countdownMinutes: "dans {n}m",
   countdownNow: "Maintenant",
+
+  // OAuth consent screen (#221)
+  oauthConsentTitle: "Autoriser {appName}",
+  oauthConsentDescription: "{appName} souhaite accéder à votre compte Convocados",
+  oauthConsentScopesLabel: "Cette application pourra :",
+  oauthConsentAllow: "Autoriser",
+  oauthConsentDeny: "Refuser",
+  oauthConsentPrivacyPolicy: "Politique de confidentialité",
+  oauthConsentTermsOfService: "Conditions d'utilisation",
+  oauthConsentScopeOpenid: "Vérifier votre identité",
+  oauthConsentScopeProfile: "Voir votre profil de base",
+  oauthConsentScopeEmail: "Voir votre adresse e-mail",
+  oauthConsentScopeOfflineAccess: "Rester connecté",
+  oauthConsentScopeReadProfile: "Voir votre profil",
+  oauthConsentScopeReadEvents: "Voir vos événements",
+  oauthConsentScopeWriteEvents: "Modifier les paramètres d'événements",
+  oauthConsentScopeCreateEvents: "Créer de nouveaux événements",
+  oauthConsentScopeManagePlayers: "Ajouter et supprimer des joueurs",
+  oauthConsentScopeReadRatings: "Voir les classements ELO",
+  oauthConsentScopeReadHistory: "Voir l'historique des matchs",
+  oauthConsentScopeManageTeams: "Tirer au sort et assigner les équipes",
+  oauthConsentScopeManageWebhooks: "Gérer les webhooks",
+  oauthConsentScopeManagePush: "Gérer les notifications push",
+  oauthConsentScopeReadCalendar: "Accéder au calendrier",
+  oauthConsentScopeManagePayments: "Gérer les coûts et paiements",
 };
 
 export default fr;
