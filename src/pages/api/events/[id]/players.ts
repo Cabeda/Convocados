@@ -1,6 +1,8 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { sendPushToEvent } from "../../../../lib/push.server";
+import { sendGameInvite } from "../../../../lib/email.server";
+import { getNotificationPrefs, wantsGameInviteEmail } from "../../../../lib/notificationPrefs.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
@@ -102,9 +104,10 @@ export const POST: APIRoute = async ({ params, request }) => {
     );
   }
 
+  // Only link userId when the client explicitly requests it and user is authenticated
+  const shouldLink = linkToAccount === true && !!session?.user;
+
   try {
-    // Only link userId when the client explicitly requests it and user is authenticated
-    const shouldLink = linkToAccount === true && !!session?.user;
     const nextOrder = event.players.length;
     await prisma.player.create({
       data: {
@@ -143,6 +146,23 @@ export const POST: APIRoute = async ({ params, request }) => {
     await sendPushToEvent(eventId, event.title, "notifyPlayerJoinedBench", { name: trimmed }, url, spotsLeft, senderClientId);
   } else {
     await sendPushToEvent(eventId, event.title, "notifyPlayerJoined", { name: trimmed }, url, spotsLeft, senderClientId);
+  }
+
+  // Send game invite email to the joining player if they have a linked account
+  if (shouldLink && session?.user?.email) {
+    try {
+      const prefs = await getNotificationPrefs(session.user.id);
+      if (wantsGameInviteEmail(prefs)) {
+        await sendGameInvite(session.user.email, {
+          eventTitle: event.title,
+          dateTime: event.dateTime.toISOString(),
+          location: event.location,
+          eventUrl: url,
+        });
+      }
+    } catch (err) {
+      // Non-blocking — don't fail the join if email fails
+    }
   }
 
   // Fire webhooks (non-blocking)
