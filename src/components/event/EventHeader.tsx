@@ -221,7 +221,8 @@ export function EventHeader({
 
           {isMobile ? (
             <>
-              {/* Mobile: All actions in "More" menu */}
+              {/* Mobile: Notify button always visible, rest in "More" menu */}
+              <NotifyButton eventId={eventId} />
               <IconButton
                 onClick={(e) => setAnchorEl(e.currentTarget)}
                 aria-label={t("moreActions")}
