@@ -57,6 +57,7 @@ interface HistoryEntry {
   editableUntil: string;
   editable: boolean;
   source: string;
+  eloProcessed: boolean;
   eloUpdates?: { name: string; delta: number }[] | null;
 }
 
@@ -92,6 +93,7 @@ interface AddHistoricalGameDialogProps {
   defaultTeamOneName: string;
   defaultTeamTwoName: string;
   knownPlayers: { name: string; gamesPlayed: number }[];
+  playerRatings: { name: string; rating: number; gamesPlayed: number }[];
   onSuccess: (entry: HistoryEntry) => void;
 }
 
@@ -102,6 +104,7 @@ function AddHistoricalGameDialog({
   defaultTeamOneName,
   defaultTeamTwoName,
   knownPlayers,
+  playerRatings,
   onSuccess,
 }: AddHistoricalGameDialogProps) {
   const t = useT();
@@ -135,6 +138,19 @@ function AddHistoricalGameDialog({
     }
   }, [open, defaultTeamOneName, defaultTeamTwoName]);
 
+  // ELO preview computation
+  const eloPreview: EloUpdate[] = useMemo(() => {
+    if (team1Players.length === 0 || team2Players.length === 0) return [];
+    const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
+    const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
+    if (s1 == null || s2 == null) return [];
+    const teams = [
+      { team: teamOneName, players: team1Players },
+      { team: teamTwoName, players: team2Players },
+    ];
+    return computeGameUpdates(playerRatings, teams, s1, s2);
+  }, [team1Players, team2Players, teamOneName, teamTwoName, scoreOne, scoreTwo, playerRatings]);
+
   const addPlayerToTeam = (teamIdx: number, playerName?: string) => {
     const name = (playerName ?? newPlayerInputs[teamIdx] ?? "").trim();
     if (!name) return;
@@ -158,9 +174,12 @@ function AddHistoricalGameDialog({
   };
 
   const handleSubmit = async () => {
-    if (!dateTime || !teamOneName || !teamTwoName || scoreOne === "" || scoreTwo === "" ||
-        team1Players.length === 0 || team2Players.length === 0) {
+    if (!dateTime || !teamOneName || !teamTwoName || scoreOne === "" || scoreTwo === "") {
       setError(t("errorPlayerNameRequired"));
+      return;
+    }
+    if (team1Players.length === 0 || team2Players.length === 0) {
+      setError(t("errorNeedMorePlayers"));
       return;
     }
 
@@ -305,6 +324,41 @@ function AddHistoricalGameDialog({
               </Grid2>
             ))}
           </Grid2>
+
+          {/* ELO Preview */}
+          {eloPreview.length > 0 && (
+            <Box sx={{
+              p: 2, borderRadius: 3,
+              backgroundColor: alpha(theme.palette.action.hover, 0.04),
+              border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+            }}>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
+                {t("ratings")} Preview
+              </Typography>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+                {eloPreview.map((update) => (
+                  <Box key={update.name} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Typography variant="body2">{update.name}</Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {update.oldRating}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        fontWeight={700}
+                        color={update.delta > 0 ? "success.main" : update.delta < 0 ? "error.main" : "text.primary"}
+                      >
+                        {update.delta > 0 ? "+" : ""}{update.delta}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        → {update.newRating}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
@@ -372,6 +426,20 @@ function HistoryCardFull({
     });
     const json = await res.json();
     setUnlocking(false);
+    if (!res.ok) { setError(json.error); return; }
+    onUpdate(json);
+  };
+
+  const [approvingElo, setApprovingElo] = useState(false);
+  const handleApproveElo = async () => {
+    setApprovingElo(true);
+    setError(null);
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}/approve-elo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const json = await res.json();
+    setApprovingElo(false);
     if (!res.ok) { setError(json.error); return; }
     onUpdate(json);
   };
@@ -544,6 +612,16 @@ function HistoryCardFull({
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
+          {entry.source === "historical" && (
+            <Chip
+              icon={<HistoryIcon />}
+              label={t("historicalGame")}
+              color="warning"
+              size="small"
+              variant="outlined"
+              sx={{ fontWeight: 600 }}
+            />
+          )}
           <Chip
             icon={isCancelled ? <CancelIcon /> : <CheckCircleIcon />}
             label={isCancelled ? t("statusCancelled") : t("statusPlayed")}
@@ -631,6 +709,41 @@ function HistoryCardFull({
                   )}
                 </Stack>
               </Stack>
+            </Section>
+          </Box>
+        )}
+
+        {/* ── ELO Approval for Historical Games ── */}
+        {entry.source === "historical" && !isCancelled && (
+          <Box sx={{ px: 3, py: 2.5 }}>
+            <Section
+              title={entry.eloProcessed ? t("eloApproved") : t("eloPending")}
+              icon={<EmojiEventsIcon fontSize="small" sx={{ color: entry.eloProcessed ? "success.main" : "warning.main" }} />}
+              action={
+                !entry.eloProcessed && isOwner ? (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disableElevation
+                    startIcon={<EmojiEventsIcon />}
+                    onClick={handleApproveElo}
+                    disabled={approvingElo}
+                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+                  >
+                    {approvingElo ? t("approvingElo") : t("approveElo")}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {entry.eloProcessed ? (
+                <Alert severity="success" sx={{ borderRadius: 2 }}>
+                  {t("eloApprovedSuccess")}
+                </Alert>
+              ) : (
+                <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                  {t("eloPending")}
+                </Alert>
+              )}
             </Section>
           </Box>
         )}
@@ -974,12 +1087,24 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setHasMore(hist.hasMore);
     setLoading(false);
 
-    // Fetch known players and ratings in parallel (non-blocking)
+    // Fetch known players (historical) and ratings in parallel (non-blocking)
+    // Combine current event players with historical players for suggestions
+    const currentPlayers = (ev.players ?? []).map((p: any) => ({ name: p.name, gamesPlayed: -1 })); // -1 indicates current player
     Promise.all([
       fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).catch(() => ({ players: [] })),
       fetch(`/api/events/${eventId}/ratings`).then((r) => r.json()).catch(() => ({ data: [] })),
     ]).then(([kp, ratings]) => {
-      setKnownPlayers(kp.players ?? []);
+      // Combine current players with historical players, deduping by name
+      const allPlayersMap = new Map<string, { name: string; gamesPlayed: number }>();
+      // Current players first (they get priority)
+      currentPlayers.forEach((p: { name: string; gamesPlayed: number }) => allPlayersMap.set(p.name.toLowerCase(), p));
+      // Historical players (only if not already in current)
+      (kp.players ?? []).forEach((p: { name: string; gamesPlayed: number }) => {
+        if (!allPlayersMap.has(p.name.toLowerCase())) {
+          allPlayersMap.set(p.name.toLowerCase(), p);
+        }
+      });
+      setKnownPlayers(Array.from(allPlayersMap.values()));
       setPlayerRatings(
         (ratings.data ?? []).map((r: any) => ({ name: r.name, rating: r.rating, gamesPlayed: r.gamesPlayed }))
       );
@@ -1096,6 +1221,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
             defaultTeamOneName={teamOneName}
             defaultTeamTwoName={teamTwoName}
             knownPlayers={knownPlayers}
+            playerRatings={playerRatings}
             onSuccess={handleAddHistoricalSuccess}
           />
         </Container>
