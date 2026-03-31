@@ -643,6 +643,18 @@ const de: TranslationKeys = {
   emptyStateBrowsePublic: "Öffentliche Spiele ansehen",
   emptyStateShare: "Spiel teilen",
 
+  // Timezone & datetime editing (#231)
+  timezone: "Zeitzone",
+  timezoneHelper: "Wähle die Zeitzone für dieses Ereignis",
+  editDateTime: "Datum & Uhrzeit bearbeiten",
+  saveDateTime: "Speichern",
+  dateTimeSaved: "Datum und Uhrzeit aktualisiert.",
+  dateTimeSaveError: "Datum und Uhrzeit konnten nicht aktualisiert werden.",
+  savingDateTime: "Speichern...",
+  notifyEventDetailsChanged: "Ereignisdetails aktualisiert: {title}",
+  logDateTimeUpdated: "{actor} hat Datum/Uhrzeit aktualisiert",
+  logTimezoneUpdated: "{actor} hat die Zeitzone aktualisiert",
+
   // Countdown (#206)
   countdownDays: "in {n} Tagen",
   countdownTomorrow: "Morgen um {time}",

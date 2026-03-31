@@ -643,6 +643,18 @@ const es: TranslationKeys = {
   emptyStateBrowsePublic: "Ver juegos públicos",
   emptyStateShare: "Compartir juego",
 
+  // Timezone & datetime editing (#231)
+  timezone: "Zona horaria",
+  timezoneHelper: "Selecciona la zona horaria de este evento",
+  editDateTime: "Editar fecha y hora",
+  saveDateTime: "Guardar",
+  dateTimeSaved: "Fecha y hora actualizadas.",
+  dateTimeSaveError: "No se pudo actualizar la fecha y hora.",
+  savingDateTime: "Guardando...",
+  notifyEventDetailsChanged: "Detalles del evento actualizados: {title}",
+  logDateTimeUpdated: "{actor} actualizó la fecha/hora",
+  logTimezoneUpdated: "{actor} actualizó la zona horaria",
+
   // Countdown (#206)
   countdownDays: "en {n} días",
   countdownTomorrow: "Mañana a las {time}",

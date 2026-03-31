@@ -19,6 +19,7 @@ import { detectLocale } from "~/lib/i18n";
 import { SPORT_PRESETS, getDefaultMaxPlayers } from "~/lib/sports";
 import { isPlaytomicSport } from "~/lib/playtomic";
 import { getRandomTitle, type TitleLocale } from "~/lib/randomTitles";
+import { COMMON_TIMEZONES, detectTimezone } from "~/lib/timezones";
 
 const DAYS = [
   { value: "MO", key: "monday" },
@@ -60,6 +61,7 @@ export default function CreateEventForm() {
   const [location, setLocation] = useState("");
   const [courtFinderOpen, setCourtFinderOpen] = useState(false);
   const [dateTime, setDateTime] = useState(nextHour);
+  const [timezone, setTimezone] = useState(() => detectTimezone());
 
   const handleSportChange = (newSport: string) => {
     setSport(newSport);
@@ -85,6 +87,7 @@ export default function CreateEventForm() {
       title: fd.get("title"),
       location: location || "",
       dateTime: dateTime,
+      timezone,
       teamOneName: fd.get("teamOneName"),
       teamTwoName: fd.get("teamTwoName"),
       maxPlayers: parsedMaxPlayers,
@@ -171,6 +174,16 @@ export default function CreateEventForm() {
                     onChange={(e) => setDateTime(e.target.value)}
                     inputProps={{ min: minDateTime() }}
                     InputLabelProps={{ shrink: true }} />
+
+                  <FormControl fullWidth>
+                    <InputLabel>{t("timezone")}</InputLabel>
+                    <Select value={timezone} label={t("timezone")}
+                      onChange={(e) => setTimezone(e.target.value)}>
+                      {COMMON_TIMEZONES.map((tz) => (
+                        <MenuItem key={tz.value} value={tz.value}>{tz.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
                   {/* Advanced options */}
                   <Accordion disableGutters elevation={0} sx={{
