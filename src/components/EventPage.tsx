@@ -345,6 +345,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
     fetchEvent();
   };
 
+  const handleSaveDateTime = async (dateTime: string, timezone: string) => {
+    await fetch(`/api/events/${eventId}/datetime`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dateTime, timezone }),
+    });
+    fetchEvent();
+  };
+
   // ── Ownership ───────────────────────────────────────────────────────────────
 
   const handleClaimOwnership = async () => {
@@ -449,6 +458,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               localMatches={localMatches}
               onSaveTitle={handleSaveTitle}
               onSaveLocation={handleSaveLocation}
+              onSaveDateTime={handleSaveDateTime}
               onClaimOwnership={handleClaimOwnership}
               onSnackbar={setSnackbar}
             />
