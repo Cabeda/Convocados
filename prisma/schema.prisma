@@ -458,13 +458,20 @@ model NotificationJob {
   eventId        String
   event          Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   type           String    // "player_joined" | "player_left" | "player_joined_bench" | "player_left_bench" | "player_left_promoted" | "event_details" | "reminder"
-  payload        String    @default("{}") // JSON
+  // NOTE(postgres): When adding Postgres support (#236), consider migrating this
+  // column to native Json type for better querying. The drain code does
+  // JSON.parse(job.payload) — if changed to Json, remove that parse call.
+  payload        String    @default("{}") // JSON string
   senderClientId String?   // suppress sending back to originator
   retryCount     Int       @default(0)
   failedAt       DateTime? // set when all retries exhausted (dead-letter)
   createdAt      DateTime  @default(now())
   processedAt    DateTime?
 
+  // NOTE(postgres): Replace the $transaction claim approach with
+  // SELECT ... FOR UPDATE SKIP LOCKED when on Postgres (#236) to get
+  // true atomic claiming under READ COMMITTED isolation.
   @@index([processedAt, createdAt])
+  @@index([failedAt])
   @@index([eventId])
 }
