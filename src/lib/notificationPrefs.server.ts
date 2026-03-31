@@ -1,41 +1,36 @@
 import { prisma } from "./db.server";
+import type { NotificationJobType } from "./notificationQueue.server";
+import { DEFAULTS } from "./notificationPrefsDefaults";
+import type { NotificationPrefs } from "./notificationPrefsDefaults";
 
-export interface NotificationPrefs {
-  emailEnabled: boolean;
-  pushEnabled: boolean;
-  gameInviteEmail: boolean;
-  gameInvitePush: boolean;
-  gameReminderEmail: boolean;
-  gameReminderPush: boolean;
-  weeklySummaryEmail: boolean;
-  paymentReminderEmail: boolean;
-  paymentReminderPush: boolean;
-  reminder24h: boolean;
-  reminder2h: boolean;
-  reminder1h: boolean;
-}
-
-const DEFAULTS: NotificationPrefs = {
-  emailEnabled: true,
-  pushEnabled: true,
-  gameInviteEmail: true,
-  gameInvitePush: true,
-  gameReminderEmail: true,
-  gameReminderPush: true,
-  weeklySummaryEmail: false,
-  paymentReminderEmail: true,
-  paymentReminderPush: true,
-  reminder24h: true,
-  reminder2h: true,
-  reminder1h: false,
-};
+export type { NotificationPrefs } from "./notificationPrefsDefaults";
+export { DEFAULTS } from "./notificationPrefsDefaults";
 
 /** Get notification preferences for a user, returning defaults if none are stored */
 export async function getNotificationPrefs(userId: string): Promise<NotificationPrefs> {
   const prefs = await prisma.notificationPreferences.findUnique({
     where: { userId },
   });
-  return prefs ?? DEFAULTS;
+  return prefs ? { ...DEFAULTS, ...prefs } : DEFAULTS;
+}
+
+/** Check if a user wants push for a given job type */
+export function wantsPushForJobType(prefs: NotificationPrefs, type: NotificationJobType): boolean {
+  if (!prefs.pushEnabled) return false;
+  switch (type) {
+    case "player_joined":
+    case "player_left":
+    case "player_joined_bench":
+    case "player_left_bench":
+    case "player_left_promoted":
+      return prefs.playerActivityPush;
+    case "event_details":
+      return prefs.eventDetailsPush;
+    case "reminder":
+      return prefs.gameReminderPush;
+    default:
+      return true;
+  }
 }
 
 /** Check if a user wants email reminders for a given reminder type */

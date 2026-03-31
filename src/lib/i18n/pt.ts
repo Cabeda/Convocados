@@ -156,6 +156,7 @@ const pt: TranslationKeys = {
   notifyPlayerLeftPromoted: "{left} saiu · {promoted} está agora a jogar",
   notifyPlayerJoinedBench: "{name} entrou para o banco",
   notifyPlayerPromoted: "{name} saiu do banco",
+  notifyGameReminder: "Lembrete: {title}",
   notifyGameFull: "Jogo completo",
   notifySpotsLeft: "Faltam {n} jogador(es)",
 
@@ -444,6 +445,10 @@ const pt: TranslationKeys = {
   pushNotifications: "Notificações push",
   gameInvites: "Convites para jogos",
   gameReminders: "Lembretes de jogos",
+  playerActivity: "Atividade de jogadores",
+  playerActivityDesc: "Quando jogadores entram ou saem do jogo",
+  eventDetails: "Alterações ao evento",
+  eventDetailsDesc: "Quando a data, local ou título mudar",
   weeklySummary: "Resumo semanal",
   reminder24hLabel: "24 horas antes",
   reminder2hLabel: "2 horas antes",

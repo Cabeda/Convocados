@@ -155,6 +155,7 @@ const en = {
   notifyPlayerLeftPromoted: "{left} left · {promoted} is now playing",
   notifyPlayerJoinedBench: "{name} joined the bench",
   notifyPlayerPromoted: "{name} was promoted from the bench",
+  notifyGameReminder: "Reminder: {title}",
   notifyGameFull: "Game is full",
   notifySpotsLeft: "{n} spot(s) left",
 
@@ -443,6 +444,10 @@ const en = {
   pushNotifications: "Push notifications",
   gameInvites: "Game invites",
   gameReminders: "Game reminders",
+  playerActivity: "Player activity",
+  playerActivityDesc: "When players join or leave the game",
+  eventDetails: "Event changes",
+  eventDetailsDesc: "When the date, location or title changes",
   weeklySummary: "Weekly summary",
   reminder24hLabel: "24 hours before",
   reminder2hLabel: "2 hours before",

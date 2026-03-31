@@ -1,25 +1,10 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
+import { DEFAULTS } from "~/lib/notificationPrefs.server";
 import { createLogger } from "~/lib/logger.server";
 
 const log = createLogger("notification-prefs");
-
-/** Default preferences for new users (matches Prisma defaults) */
-const DEFAULTS = {
-  emailEnabled: true,
-  pushEnabled: true,
-  gameInviteEmail: true,
-  gameInvitePush: true,
-  gameReminderEmail: true,
-  gameReminderPush: true,
-  weeklySummaryEmail: false,
-  paymentReminderEmail: true,
-  paymentReminderPush: true,
-  reminder24h: true,
-  reminder2h: true,
-  reminder1h: false,
-};
 
 const BOOLEAN_FIELDS = Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[];
 
@@ -34,7 +19,6 @@ export const GET: APIRoute = async ({ request }) => {
     where: { userId: session.user.id },
   });
 
-  // Return stored prefs or defaults
   return Response.json(prefs ?? { ...DEFAULTS, userId: session.user.id });
 };
 
@@ -52,7 +36,6 @@ export const PUT: APIRoute = async ({ request }) => {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Validate: only accept known boolean fields
   const data: Record<string, boolean> = {};
   for (const field of BOOLEAN_FIELDS) {
     if (field in body) {
