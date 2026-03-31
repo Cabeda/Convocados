@@ -1,5 +1,4 @@
-/// <reference types="@types/google.maps" />
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useCallback, lazy, Suspense } from "react";
 import {
   TextField, Box, Paper, List, ListItemButton, ListItemText,
   CircularProgress, InputAdornment, IconButton, Tooltip, Dialog,
@@ -11,9 +10,13 @@ import CloseIcon from "@mui/icons-material/Close";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
 import { useT } from "~/lib/useT";
 
+// Lazy-load the map to avoid Leaflet's `window` access during SSR
+const LeafletMap = lazy(() => import("./LeafletMap"));
+
 interface Suggestion {
-  placeId: string;
-  description: string;
+  label: string;
+  lat: number;
+  lon: number;
 }
 
 interface Props {
@@ -26,24 +29,46 @@ interface Props {
   inputProps?: Record<string, unknown>;
 }
 
-const GOOGLE_MAPS_API_KEY = (import.meta as any).env?.PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+const PHOTON_URL =
+  (import.meta as any).env?.PUBLIC_PHOTON_URL ?? "https://photon.komoot.io";
 
-// Load the Google Maps JS SDK once
-let sdkPromise: Promise<void> | null = null;
-function loadGoogleMaps(): Promise<void> {
-  if (!GOOGLE_MAPS_API_KEY) return Promise.resolve();
-  if (typeof window === "undefined") return Promise.resolve();
-  if ((window as any).google?.maps?.places) return Promise.resolve();
-  if (sdkPromise) return sdkPromise;
-  sdkPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-  return sdkPromise;
+const NOMINATIM_URL =
+  (import.meta as any).env?.PUBLIC_NOMINATIM_URL ?? "https://nominatim.openstreetmap.org";
+
+async function fetchSuggestionsFromPhoton(query: string): Promise<Suggestion[]> {
+  if (query.length < 2) return [];
+  try {
+    const res = await fetch(
+      `${PHOTON_URL}/api/?q=${encodeURIComponent(query)}&limit=5&lang=en`,
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.features ?? []).map((f: any) => {
+      const p = f.properties;
+      const parts = [p.name, p.street, p.city, p.country].filter(Boolean);
+      return {
+        label: parts.join(", "),
+        lat: f.geometry.coordinates[1],
+        lon: f.geometry.coordinates[0],
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function reverseGeocode(lat: number, lon: number): Promise<string> {
+  try {
+    const res = await fetch(
+      `${NOMINATIM_URL}/reverse?lat=${lat}&lon=${lon}&format=json`,
+      { headers: { "Accept-Language": "en", "User-Agent": "Convocados/1.0" } },
+    );
+    if (!res.ok) return `${lat.toFixed(6)},${lon.toFixed(6)}`;
+    const data = await res.json();
+    return data.display_name ?? `${lat.toFixed(6)},${lon.toFixed(6)}`;
+  } catch {
+    return `${lat.toFixed(6)},${lon.toFixed(6)}`;
+  }
 }
 
 export default function LocationAutocomplete({
@@ -54,157 +79,41 @@ export default function LocationAutocomplete({
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  const [sdkReady, setSdkReady] = useState(false);
-  const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
-  const geocoderRef = useRef<google.maps.Geocoder | null>(null);
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (!GOOGLE_MAPS_API_KEY) return;
-    loadGoogleMaps().then(() => {
-      autocompleteService.current = new google.maps.places.AutocompleteService();
-      geocoderRef.current = new google.maps.Geocoder();
-      setSdkReady(true);
-    }).catch(() => {/* SDK failed to load — degrade gracefully */});
-  }, []);
-
-  const fetchSuggestions = useCallback((input: string) => {
-    if (!sdkReady || !autocompleteService.current || input.length < 2) {
-      setSuggestions([]);
-      return;
-    }
-    setLoading(true);
-    autocompleteService.current.getPlacePredictions(
-      { input },
-      (
-        predictions: google.maps.places.AutocompletePrediction[] | null,
-        status: google.maps.places.PlacesServiceStatus,
-      ) => {
-        setLoading(false);
-        if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
-          setSuggestions(predictions.map((p) => ({ placeId: p.place_id, description: p.description })));
-          setOpen(true);
-        } else {
-          setSuggestions([]);
-        }
-      },
-    );
-  }, [sdkReady]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     onChange(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchSuggestions(val), 300);
+    if (!val.trim()) { setSuggestions([]); return; }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      const results = await fetchSuggestionsFromPhoton(val);
+      setLoading(false);
+      setSuggestions(results);
+      if (results.length > 0) setOpen(true);
+    }, 300);
   };
 
-  const handleSelect = (description: string) => {
-    onChange(description);
+  const handleSelect = (s: Suggestion) => {
+    onChange(s.label);
     setSuggestions([]);
     setOpen(false);
   };
 
-  // ── Map dialog ────────────────────────────────────────────────────────────
-
-  const initMap = useCallback(() => {
-    if (!mapRef.current || !sdkReady) return;
-    const defaultCenter = { lat: 41.1579, lng: -8.6291 }; // Porto fallback
-    const map = new google.maps.Map(mapRef.current, {
-      center: defaultCenter,
-      zoom: 14,
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: false,
-    });
-    mapInstanceRef.current = map;
-
-    const marker = new google.maps.Marker({
-      position: defaultCenter,
-      map,
-      draggable: true,
-      title: t("locationDragPin"),
-    });
-    markerRef.current = marker;
-
-    // If we already have a value, geocode it to center the map
-    if (value && geocoderRef.current) {
-      geocoderRef.current.geocode({ address: value }, (
-        results: google.maps.GeocoderResult[] | null,
-        status: google.maps.GeocoderStatus,
-      ) => {
-        if (status === "OK" && results?.[0]) {
-          const loc = results[0].geometry.location;
-          map.setCenter(loc);
-          marker.setPosition(loc);
-        }
-      });
-    }
-
-    // Update location when marker is dragged
-    marker.addListener("dragend", () => {
-      const pos = marker.getPosition();
-      if (!pos || !geocoderRef.current) return;
-      geocoderRef.current.geocode({ location: pos }, (
-        results: google.maps.GeocoderResult[] | null,
-        status: google.maps.GeocoderStatus,
-      ) => {
-        if (status === "OK" && results?.[0]) {
-          onChange(results[0].formatted_address);
-        } else {
-          onChange(`${pos.lat().toFixed(6)},${pos.lng().toFixed(6)}`);
-        }
-      });
-    });
-
-    // Click on map to move marker
-    map.addListener("click", (e: google.maps.MapMouseEvent) => {
-      if (!e.latLng) return;
-      marker.setPosition(e.latLng);
-      if (!geocoderRef.current) return;
-      geocoderRef.current.geocode({ location: e.latLng }, (
-        results: google.maps.GeocoderResult[] | null,
-        status: google.maps.GeocoderStatus,
-      ) => {
-        if (status === "OK" && results?.[0]) {
-          onChange(results[0].formatted_address);
-        } else {
-          onChange(`${e.latLng!.lat().toFixed(6)},${e.latLng!.lng().toFixed(6)}`);
-        }
-      });
-    });
-  }, [sdkReady, value, onChange, t]);
-
-  useEffect(() => {
-    if (mapOpen && sdkReady) {
-      setTimeout(initMap, 100);
-    }
-  }, [mapOpen, sdkReady, initMap]);
+  const handlePinDrop = useCallback(async (lat: number, lon: number) => {
+    const address = await reverseGeocode(lat, lon);
+    onChange(address);
+  }, [onChange]);
 
   const handleUseMyLocation = () => {
-    if (!navigator.geolocation || !mapInstanceRef.current || !markerRef.current) return;
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const latLng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      mapInstanceRef.current!.setCenter(latLng);
-      markerRef.current!.setPosition(latLng);
-      if (geocoderRef.current) {
-        geocoderRef.current.geocode({ location: latLng }, (
-          results: google.maps.GeocoderResult[] | null,
-          status: google.maps.GeocoderStatus,
-        ) => {
-          if (status === "OK" && results?.[0]) {
-            onChange(results[0].formatted_address);
-          } else {
-            onChange(`${latLng.lat.toFixed(6)},${latLng.lng.toFixed(6)}`);
-          }
-        });
-      }
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const address = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+      onChange(address);
+      setMapOpen(false);
     });
   };
-
-  const hasMapSupport = sdkReady && !!GOOGLE_MAPS_API_KEY;
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -227,13 +136,11 @@ export default function LocationAutocomplete({
           endAdornment: (
             <InputAdornment position="end">
               {loading && <CircularProgress size={16} />}
-              {hasMapSupport && (
-                <Tooltip title={t("locationOpenMap")}>
-                  <IconButton size="small" onClick={() => setMapOpen(true)} edge="end">
-                    <MapIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              )}
+              <Tooltip title={t("locationOpenMap")}>
+                <IconButton size="small" onClick={() => setMapOpen(true)} edge="end">
+                  <MapIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             </InputAdornment>
           ),
         }}
@@ -249,15 +156,15 @@ export default function LocationAutocomplete({
           }}
         >
           <List dense disablePadding>
-            {suggestions.map((s) => (
+            {suggestions.map((s, i) => (
               <ListItemButton
-                key={s.placeId}
-                onMouseDown={() => handleSelect(s.description)}
+                key={i}
+                onMouseDown={() => handleSelect(s)}
                 sx={{ py: 1 }}
               >
                 <LocationOnIcon fontSize="small" color="action" sx={{ mr: 1, flexShrink: 0 }} />
                 <ListItemText
-                  primary={s.description}
+                  primary={s.label}
                   primaryTypographyProps={{ variant: "body2", noWrap: true }}
                 />
               </ListItemButton>
@@ -266,7 +173,7 @@ export default function LocationAutocomplete({
         </Paper>
       )}
 
-      {/* Map dialog */}
+      {/* Map dialog — lazy loaded to avoid SSR issues with Leaflet */}
       <Dialog open={mapOpen} onClose={() => setMapOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1 }}>
           <Typography variant="subtitle1" fontWeight={600}>{t("locationPickOnMap")}</Typography>
@@ -282,15 +189,18 @@ export default function LocationAutocomplete({
               </Typography>
             </Box>
           )}
-          <Box ref={mapRef} sx={{ width: "100%", height: 400 }} />
+          {mapOpen && (
+            <Suspense fallback={
+              <Box sx={{ height: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <CircularProgress />
+              </Box>
+            }>
+              <LeafletMap initialAddress={value} onPinDrop={handlePinDrop} />
+            </Suspense>
+          )}
         </DialogContent>
         <DialogActions sx={{ justifyContent: "space-between", px: 2 }}>
-          <Button
-            size="small"
-            startIcon={<MyLocationIcon />}
-            onClick={handleUseMyLocation}
-            variant="outlined"
-          >
+          <Button size="small" startIcon={<MyLocationIcon />} variant="outlined" onClick={handleUseMyLocation}>
             {t("locationUseMyLocation")}
           </Button>
           <Button variant="contained" onClick={() => setMapOpen(false)}>
