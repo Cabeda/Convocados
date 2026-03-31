@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
+import { getSession } from "../../../../lib/auth.helpers.server";
 
 export const POST: APIRoute = async ({ params, request }) => {
   const eventId = params.id!;
@@ -13,11 +14,13 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const lang = typeof locale === "string" && locale.toLowerCase().startsWith("pt") ? "pt" : "en";
   const cid = typeof clientId === "string" ? clientId : "";
+  const session = await getSession(request);
+  const userId = session?.user?.id ?? null;
 
   await prisma.pushSubscription.upsert({
     where: { eventId_endpoint: { eventId, endpoint } },
-    create: { eventId, endpoint, p256dh: keys.p256dh, auth: keys.auth, locale: lang, clientId: cid },
-    update: { p256dh: keys.p256dh, auth: keys.auth, locale: lang, clientId: cid },
+    create: { eventId, endpoint, p256dh: keys.p256dh, auth: keys.auth, locale: lang, clientId: cid, userId },
+    update: { p256dh: keys.p256dh, auth: keys.auth, locale: lang, clientId: cid, userId },
   });
 
   return Response.json({ ok: true });
