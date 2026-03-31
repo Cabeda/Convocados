@@ -27,6 +27,7 @@ import { SPORT_PRESETS } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
+import { COMMON_TIMEZONES } from "~/lib/timezones";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -104,6 +105,12 @@ export default function EventSettingsPage({ eventId }: Props) {
   // Webhook copy
   const [webhookCopied, setWebhookCopied] = useState(false);
 
+  // DateTime editing
+  const [editingDateTime, setEditingDateTime] = useState(false);
+  const [newDateTime, setNewDateTime] = useState("");
+  const [newTimezone, setNewTimezone] = useState("UTC");
+  const [savingDateTime, setSavingDateTime] = useState(false);
+
   // Access control
   const [hasPassword, setHasPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -119,7 +126,12 @@ export default function EventSettingsPage({ eventId }: Props) {
   const fetchEvent = useCallback(async () => {
     try {
       const res = await fetch(`/api/events/${eventId}`);
-      if (res.ok) setEvent(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setEvent(data);
+        setNewDateTime(data.dateTime ? data.dateTime.slice(0, 16) : "");
+        setNewTimezone(data.timezone ?? "UTC");
+      }
     } catch { /* ignore */ }
     setLoading(false);
   }, [eventId]);
@@ -214,6 +226,28 @@ export default function EventSettingsPage({ eventId }: Props) {
   const handleSportChange = (v: string) => {
     setEvent((e: any) => e ? { ...e, sport: v } : e);
     updateSetting("sport", { sport: v });
+  };
+
+  const handleSaveDateTime = async () => {
+    setSavingDateTime(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/datetime`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dateTime: newDateTime, timezone: newTimezone }),
+      });
+      if (res.ok) {
+        await fetchEvent();
+        setEditingDateTime(false);
+        setMessage({ type: "success", text: t("dateTimeSaved") });
+      } else {
+        setMessage({ type: "error", text: t("dateTimeSaveError") });
+      }
+    } catch {
+      setMessage({ type: "error", text: t("dateTimeSaveError") });
+    }
+    setSavingDateTime(false);
   };
 
   const handleRelinquish = async () => {
@@ -512,6 +546,50 @@ export default function EventSettingsPage({ eventId }: Props) {
               </Select>
             </FormControl>
           </Box>
+
+          {/* DateTime & Timezone editing */}
+          {canEdit && (
+            <Box>
+              <Typography variant="body2" color="text.secondary" gutterBottom>{t("dateTime")}</Typography>
+              {editingDateTime ? (
+                <Stack spacing={1}>
+                  <TextField
+                    size="small"
+                    type="datetime-local"
+                    value={newDateTime}
+                    onChange={(e) => setNewDateTime(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    fullWidth
+                  />
+                  <FormControl size="small" fullWidth>
+                    <Select value={newTimezone} onChange={(e) => setNewTimezone(e.target.value)}>
+                      {COMMON_TIMEZONES.map((tz) => (
+                        <MenuItem key={tz.value} value={tz.value} sx={{ fontSize: "0.85rem" }}>{tz.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <Stack direction="row" spacing={1}>
+                    <Button size="small" variant="contained" onClick={handleSaveDateTime} disabled={savingDateTime}>
+                      {savingDateTime ? t("savingDateTime") : t("saveDateTime")}
+                    </Button>
+                    <Button size="small" variant="outlined" onClick={() => setEditingDateTime(false)} disabled={savingDateTime}>
+                      {t("cancelEdit")}
+                    </Button>
+                  </Stack>
+                </Stack>
+              ) : (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="body2">
+                    {event.dateTime ? new Date(event.dateTime).toLocaleString() : "—"}
+                    {event.timezone && event.timezone !== "UTC" ? ` (${event.timezone})` : ""}
+                  </Typography>
+                  <Button size="small" variant="outlined" onClick={() => setEditingDateTime(true)}>
+                    {t("editDateTime")}
+                  </Button>
+                </Stack>
+              )}
+            </Box>
+          )}
         </Stack>
       </SectionCard>
 

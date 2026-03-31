@@ -689,6 +689,18 @@ const pt: TranslationKeys = {
   emptyStateBrowsePublic: "Ver jogos públicos",
   emptyStateShare: "Partilhar jogo",
 
+  // Timezone & datetime editing (#231)
+  timezone: "Fuso horário",
+  timezoneHelper: "Seleciona o fuso horário deste evento",
+  editDateTime: "Editar data e hora",
+  saveDateTime: "Guardar",
+  dateTimeSaved: "Data e hora atualizadas.",
+  dateTimeSaveError: "Não foi possível atualizar a data e hora.",
+  savingDateTime: "A guardar...",
+  notifyEventDetailsChanged: "Detalhes do evento atualizados: {title}",
+  logDateTimeUpdated: "{actor} atualizou a data/hora",
+  logTimezoneUpdated: "{actor} atualizou o fuso horário",
+
   // Countdown (#206)
   countdownDays: "em {n} dias",
   countdownTomorrow: "Amanhã às {time}",
