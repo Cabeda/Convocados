@@ -81,6 +81,7 @@ model Event {
   latitude       Float?
   longitude      Float?
   dateTime       DateTime
+  timezone       String                @default("UTC")
   maxPlayers     Int                   @default(10)
   teamOneName    String                @default("Ninjas")
   teamTwoName    String                @default("Gunas")

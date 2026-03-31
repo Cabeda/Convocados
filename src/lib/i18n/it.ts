@@ -643,6 +643,22 @@ const it: TranslationKeys = {
   emptyStateBrowsePublic: "Vedi partite pubbliche",
   emptyStateShare: "Condividi partita",
 
+  // Timezone & datetime editing (#231)
+  timezone: "Fuso orario",
+  timezoneHelper: "Seleziona il fuso orario per questo evento",
+  editDateTime: "Modifica data e ora",
+  saveDateTime: "Salva",
+  dateTimeSaved: "Data e ora aggiornate.",
+  dateTimeSaveError: "Impossibile aggiornare data e ora.",
+  savingDateTime: "Salvataggio...",
+  notifyEventDetailsChanged: "Dettagli evento aggiornati: {title}",
+  logDateTimeUpdated: "{actor} ha aggiornato la data/ora",
+  logTimezoneUpdated: "{actor} ha aggiornato il fuso orario",
+  saved: "Salvato",
+  eventEnded: "Terminato",
+  viewResults: "Vedi risultati",
+  playersProgress: "{n}/{max} giocatori",
+
   // Countdown (#206)
   countdownDays: "tra {n} giorni",
   countdownTomorrow: "Domani alle {time}",

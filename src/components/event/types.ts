@@ -20,6 +20,7 @@ export interface EventData {
   title: string;
   location: string;
   dateTime: string;
+  timezone: string;
   maxPlayers: number;
   teamOneName: string;
   teamTwoName: string;

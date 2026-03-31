@@ -26,6 +26,7 @@ export const POST: APIRoute = async ({ request }) => {
   const title = String(body.title ?? "").trim().slice(0, 100);
   const location = String(body.location ?? "").trim().slice(0, 200);
   const dateTimeRaw = String(body.dateTime ?? "");
+  const timezoneRaw = String(body.timezone ?? "UTC").trim().slice(0, 100);
   const teamOneName = String(body.teamOneName ?? "Ninjas").trim().slice(0, 50) || "Ninjas";
   const teamTwoName = String(body.teamTwoName ?? "Gunas").trim().slice(0, 50) || "Gunas";
   const maxPlayersRaw = parseInt(String(body.maxPlayers ?? "10"), 10);
@@ -43,6 +44,15 @@ export const POST: APIRoute = async ({ request }) => {
   const dateTime = new Date(dateTimeRaw);
   if (isNaN(dateTime.getTime())) return Response.json({ error: "Invalid date/time." }, { status: 400 });
   if (dateTime < new Date()) return Response.json({ error: "Event must be in the future." }, { status: 400 });
+
+  // Validate timezone
+  let timezone = "UTC";
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: timezoneRaw });
+    timezone = timezoneRaw;
+  } catch {
+    // fall back to UTC silently
+  }
 
   let recurrenceRule: string | null = null;
   let nextResetAt: Date | null = null;
@@ -62,7 +72,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   const event = await prisma.event.create({
     data: {
-      title, location, dateTime, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
+      title, location, dateTime, timezone, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
       latitude: geo?.latitude ?? null,
       longitude: geo?.longitude ?? null,
       ownerId: session?.user?.id ?? null,

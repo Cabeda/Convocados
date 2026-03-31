@@ -512,6 +512,7 @@ export default function EventSettingsPage({ eventId }: Props) {
               </Select>
             </FormControl>
           </Box>
+
         </Stack>
       </SectionCard>
 
