@@ -306,16 +306,16 @@ export function EventHeader({
                 </Button>
                 <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
                   {(gameDate <= new Date() || event.isRecurring) && (
-                    <>
-                      <MenuItem component="a" href={`/events/${eventId}/history`} onClick={() => setAnchorEl(null)}>
-                        <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
-                        <ListItemText>{t("history")}</ListItemText>
-                      </MenuItem>
-                      <MenuItem component="a" href={`/events/${eventId}/attendance`} onClick={() => setAnchorEl(null)}>
-                        <ListItemIcon><EmojiPeopleIcon fontSize="small" /></ListItemIcon>
-                        <ListItemText>{t("attendance")}</ListItemText>
-                      </MenuItem>
-                    </>
+                    <MenuItem component="a" href={`/events/${eventId}/history`} onClick={() => setAnchorEl(null)}>
+                      <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+                      <ListItemText>{t("history")}</ListItemText>
+                    </MenuItem>
+                  )}
+                  {(gameDate <= new Date() || event.isRecurring) && (
+                    <MenuItem component="a" href={`/events/${eventId}/attendance`} onClick={() => setAnchorEl(null)}>
+                      <ListItemIcon><EmojiPeopleIcon fontSize="small" /></ListItemIcon>
+                      <ListItemText>{t("attendance")}</ListItemText>
+                    </MenuItem>
                   )}
                   {(event.eloEnabled ?? true) && (
                     <MenuItem component="a" href={`/events/${eventId}/rankings`} onClick={() => setAnchorEl(null)}>
@@ -348,14 +348,12 @@ export function EventHeader({
                     <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
                     <ListItemText>{t("addToGoogleCalendar")}</ListItemText>
                   </MenuItem>
+                  {canEditSettings && <Divider sx={{ my: 0.5 }} />}
                   {canEditSettings && (
-                    <>
-                      <Divider sx={{ my: 0.5 }} />
-                      <MenuItem component="a" href={`/events/${eventId}/settings`} onClick={() => setAnchorEl(null)}>
-                        <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
-                        <ListItemText>{t("eventSettings")}</ListItemText>
-                      </MenuItem>
-                    </>
+                    <MenuItem component="a" href={`/events/${eventId}/settings`} onClick={() => setAnchorEl(null)}>
+                      <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+                      <ListItemText>{t("eventSettings")}</ListItemText>
+                    </MenuItem>
                   )}
                 </Menu>
               </Box>
