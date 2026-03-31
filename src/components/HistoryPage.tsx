@@ -18,12 +18,13 @@ import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PaymentIcon from "@mui/icons-material/Payment";
 import LoginIcon from "@mui/icons-material/Login";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
-import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
 import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
 
@@ -248,27 +249,56 @@ function AddHistoricalGameDialog({
             />
           </Stack>
 
-          <Stack direction="row" spacing={2} alignItems="center">
-            <TextField
-              label={t("score")}
-              type="number"
-              value={scoreOne}
-              onChange={(e) => setScoreOne(e.target.value)}
-              inputProps={{ min: 0, max: 99 }}
-              size="small"
-              sx={{ width: 80 }}
-            />
-            <Typography variant="h6" color="text.secondary">:</Typography>
-            <TextField
-              label={t("score")}
-              type="number"
-              value={scoreTwo}
-              onChange={(e) => setScoreTwo(e.target.value)}
-              inputProps={{ min: 0, max: 99 }}
-              size="small"
-              sx={{ width: 80 }}
-            />
-          </Stack>
+          <Box sx={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 2,
+            py: 2, px: 3, borderRadius: 3,
+            backgroundColor: alpha(theme.palette.action.hover, 0.04),
+            border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+          }}>
+            <Box sx={{ textAlign: "center", flex: 1 }}>
+              <Typography variant="caption" fontWeight={600} color="text.secondary">{teamOneName}</Typography>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mt: 1 }}>
+                <IconButton size="small" onClick={() => setScoreOne(Math.max(0, parseInt(scoreOne || "0", 10) - 1).toString())}
+                  sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.3)}`, borderRadius: 2 }}>
+                  <RemoveIcon fontSize="small" />
+                </IconButton>
+                <TextField
+                  type="number"
+                  value={scoreOne}
+                  onChange={(e) => setScoreOne(e.target.value)}
+                  inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem", width: 60 } }}
+                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                />
+                <IconButton size="small" onClick={() => setScoreOne(Math.min(99, parseInt(scoreOne || "0", 10) + 1).toString())}
+                  sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.3)}`, borderRadius: 2 }}>
+                  <AddIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            </Box>
+
+            <Typography variant="h4" color="text.disabled" fontWeight={300}>:</Typography>
+
+            <Box sx={{ textAlign: "center", flex: 1 }}>
+              <Typography variant="caption" fontWeight={600} color="text.secondary">{teamTwoName}</Typography>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mt: 1 }}>
+                <IconButton size="small" onClick={() => setScoreTwo(Math.max(0, parseInt(scoreTwo || "0", 10) - 1).toString())}
+                  sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.3)}`, borderRadius: 2 }}>
+                  <RemoveIcon fontSize="small" />
+                </IconButton>
+                <TextField
+                  type="number"
+                  value={scoreTwo}
+                  onChange={(e) => setScoreTwo(e.target.value)}
+                  inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem", width: 60 } }}
+                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                />
+                <IconButton size="small" onClick={() => setScoreTwo(Math.min(99, parseInt(scoreTwo || "0", 10) + 1).toString())}
+                  sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.3)}`, borderRadius: 2 }}>
+                  <AddIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            </Box>
+          </Box>
 
           <Typography variant="subtitle2" fontWeight={700}>{t("selectPlayers")}</Typography>
 
@@ -294,13 +324,54 @@ function AddHistoricalGameDialog({
                     ))}
                   </Box>
                   <Box sx={{ mt: 1.5 }}>
-                    <PlayerAutocomplete
-                      value={newPlayerInputs[idx] ?? ""}
-                      onChange={(val) => setNewPlayerInputs((prev) => ({ ...prev, [idx]: val }))}
-                      onAdd={(name) => addPlayerToTeam(idx, name)}
-                      suggestions={getAvailableSuggestions(idx)}
-                      disabled={saving}
-                      label={t("addPlayerToTeam")}
+                    <Autocomplete<PlayerOption, false, false, true>
+                      freeSolo
+                      size="small"
+                      options={(() => {
+                        const inputValue = newPlayerInputs[idx] ?? "";
+                        const trimmed = inputValue.trim();
+                        const filtered: PlayerOption[] = getAvailableSuggestions(idx)
+                          .filter((s) => matchesWithName(s.name, trimmed))
+                          .map((s) => ({ type: "existing" as const, name: s.name, gamesPlayed: s.gamesPlayed }));
+                        if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
+                          filtered.push({ type: "create" as const, name: trimmed });
+                        }
+                        return filtered;
+                      })()}
+                      filterOptions={(options) => options}
+                      getOptionLabel={(option) => typeof option === "string" ? option : option.name}
+                      isOptionEqualToValue={(option, value) => option.type === value.type && option.name === value.name}
+                      value={null}
+                      inputValue={newPlayerInputs[idx] ?? ""}
+                      onInputChange={(_, newInputValue, reason) => {
+                        if (reason === "reset") return;
+                        setNewPlayerInputs((prev) => ({ ...prev, [idx]: newInputValue }));
+                      }}
+                      onChange={(_, newValue) => {
+                        if (!newValue) return;
+                        const name = typeof newValue === "string" ? newValue.trim() : newValue.name;
+                        if (name) { addPlayerToTeam(idx, name); setNewPlayerInputs((prev) => ({ ...prev, [idx]: "" })); }
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder={t("addPlayerToTeam")}
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <InputAdornment position="end">
+                                <IconButton size="small" color="primary" edge="end"
+                                  disabled={!(newPlayerInputs[idx] ?? "").trim()}
+                                  onClick={() => { addPlayerToTeam(idx); setNewPlayerInputs((prev) => ({ ...prev, [idx]: "" })); }}>
+                                  <PersonAddIcon fontSize="small" />
+                                </IconButton>
+                              </InputAdornment>
+                            ),
+                          }}
+                          sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                        />
+                      )}
+                      noOptionsText={t("noSuggestions")}
                     />
                   </Box>
                 </Box>
@@ -958,9 +1029,6 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [showAddHistorical, setShowAddHistorical] = useState(false);
   const isOwner = !!(session?.user && ownerId && session.user.id === ownerId);
 
-  // DEBUG
-  console.log("[HistoryPage] session:", session?.user?.id, "ownerId:", ownerId, "isOwner:", isOwner, "isAdmin:", isAdmin);
-
   const load = useCallback(async () => {
     const [evRes, histRes] = await Promise.all([
       fetch(`/api/events/${eventId}`),
@@ -969,7 +1037,6 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     if (evRes.status === 404) { setNotFound(true); setLoading(false); return; }
     const ev = await evRes.json();
     const hist = await histRes.json();
-    console.log("[HistoryPage] API ev.ownerId:", ev.ownerId, "ev.isAdmin:", ev.isAdmin);
     setTitle(ev.title);
     setTeamOneName(ev.teamOneName ?? "Team A");
     setTeamTwoName(ev.teamTwoName ?? "Team B");
@@ -1039,36 +1106,32 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
       <ResponsiveLayout>
         <Container maxWidth="md" sx={{ py: 4 }}>
           <Stack spacing={3}>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <Button variant="outlined" startIcon={<ArrowBackIcon />} href={`/events/${eventId}`} size="small"
-                  sx={{ borderRadius: 2, textTransform: "none" }}>
-                  {t("backToGame")}
-                </Button>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <HistoryIcon color="primary" />
-                  <Typography variant="h5" fontWeight={700}>
-                    {t("historyTitle", { title })}
-                  </Typography>
-                </Box>
-              </Box>
-
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+              <Button variant="outlined" startIcon={<ArrowBackIcon />} href={`/events/${eventId}`} size="small"
+                sx={{ borderRadius: 2, textTransform: "none" }}>
+                {t("backToGame")}
+              </Button>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Button variant="outlined" startIcon={<EmojiEventsIcon />}
-                  href={`/events/${eventId}/rankings`} size="small"
-                  sx={{ borderRadius: 2, textTransform: "none" }}>
-                  {t("ratings")}
-                </Button>
-
-                {(isOwner || isAdmin) && (
-                  <Button variant="contained" startIcon={<AddCircleIcon />}
-                    onClick={() => setShowAddHistorical(true)} size="small"
-                    sx={{ borderRadius: 2, textTransform: "none" }}>
-                    {t("addHistoricalGame")}
-                  </Button>
-                )}
+                <HistoryIcon color="primary" />
+                <Typography variant="h5" fontWeight={700}>
+                  {t("historyTitle", { title })}
+                </Typography>
               </Box>
             </Box>
+
+            <Button variant="outlined" startIcon={<EmojiEventsIcon />}
+              href={`/events/${eventId}/rankings`} size="small"
+              sx={{ alignSelf: "flex-start", borderRadius: 2, textTransform: "none" }}>
+              {t("ratings")}
+            </Button>
+
+            {(isOwner || isAdmin) && (
+              <Button variant="contained" startIcon={<AddCircleIcon />}
+                onClick={() => setShowAddHistorical(true)} size="small"
+                sx={{ alignSelf: "flex-start", borderRadius: 2, textTransform: "none" }}>
+                {t("addHistoricalGame")}
+              </Button>
+            )}
 
             {history.length === 0 ? (
               <Paper elevation={0} sx={{
