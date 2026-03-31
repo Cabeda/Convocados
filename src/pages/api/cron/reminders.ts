@@ -24,8 +24,8 @@ export const POST: APIRoute = async ({ request }) => {
     const reminders = await getUpcomingReminders(type);
     for (const r of reminders) {
       try {
-        // Enqueue push notifications for this reminder
-        enqueueNotification(r.eventId, "reminder", { title: r.eventTitle, key: "notifyGameFull" as any, params: { title: r.eventTitle }, url: `/events/${r.eventId}`, spotsLeft: 0 });
+        // Enqueue push notifications for this reminder (drained at end of cron)
+        enqueueNotification(r.eventId, "reminder", { title: r.eventTitle, key: "notifyGameReminder", params: { title: r.eventTitle }, url: `/events/${r.eventId}`, spotsLeft: 0 });
         sent.push(`${r.eventId}:${type}`);
 
         // Send email reminders to players who have accounts and want them

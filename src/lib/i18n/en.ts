@@ -155,6 +155,7 @@ const en = {
   notifyPlayerLeftPromoted: "{left} left · {promoted} is now playing",
   notifyPlayerJoinedBench: "{name} joined the bench",
   notifyPlayerPromoted: "{name} was promoted from the bench",
+  notifyGameReminder: "Reminder: {title}",
   notifyGameFull: "Game is full",
   notifySpotsLeft: "{n} spot(s) left",
 

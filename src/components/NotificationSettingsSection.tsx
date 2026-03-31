@@ -5,7 +5,7 @@ import {
 } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import { useT } from "~/lib/useT";
-import { DEFAULTS } from "~/lib/notificationPrefs.server";
+import { DEFAULTS } from "~/lib/notificationPrefsDefaults";
 
 type Prefs = typeof DEFAULTS;
 
