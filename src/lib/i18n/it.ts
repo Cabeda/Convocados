@@ -134,6 +134,7 @@ const it: TranslationKeys = {
   notifyPlayerLeftPromoted: "{left} è uscito · {promoted} ora sta giocando",
   notifyPlayerJoinedBench: "{name} è entrato in panchina",
   notifyPlayerPromoted: "{name} è stato promosso dalla panchina",
+  notifyGameReminder: "Promemoria: {title}",
   notifyGameFull: "Partita al completo",
   notifySpotsLeft: "{n} posto/i disponibile/i",
   updateAvailable: "Nuova versione disponibile",

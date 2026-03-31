@@ -30,6 +30,7 @@ model User {
   priorityConfirmations   PriorityConfirmation[]
   eventInvites            EventInvite[]
   adminEvents             EventAdmin[]  @relation("EventAdmins")
+  pushSubscriptions       PushSubscription[]
 }
 
 model Session {
@@ -103,6 +104,7 @@ model Event {
   priorityConfirmations PriorityConfirmation[]
   invites         EventInvite[]
   admins          EventAdmin[]
+  notificationJobs NotificationJob[]
 
   // Priority enrollment settings
   priorityEnabled       Boolean @default(false)
@@ -208,6 +210,7 @@ model PushSubscription {
   locale    String   @default("en")
   clientId  String   @default("")
   userId    String?  // linked when user is authenticated at subscribe time
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
 
   @@unique([eventId, endpoint])
@@ -436,13 +439,14 @@ model PaymentReminderLog {
 // ── Notification job queue ────────────────────────────────────────────────────
 
 model NotificationJob {
-  id          String    @id @default(cuid())
-  eventId     String
-  type        String    // "player_joined" | "player_left" | "player_joined_bench" | "player_left_bench" | "player_left_promoted" | "event_details" | "reminder"
-  payload     String    @default("{}") // JSON
-  senderClientId String? // suppress sending back to originator
-  createdAt   DateTime  @default(now())
-  processedAt DateTime?
+  id             String    @id @default(cuid())
+  eventId        String
+  event          Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type           String    // "player_joined" | "player_left" | "player_joined_bench" | "player_left_bench" | "player_left_promoted" | "event_details" | "reminder"
+  payload        String    @default("{}") // JSON
+  senderClientId String?   // suppress sending back to originator
+  createdAt      DateTime  @default(now())
+  processedAt    DateTime?
 
   @@index([processedAt, createdAt])
   @@index([eventId])

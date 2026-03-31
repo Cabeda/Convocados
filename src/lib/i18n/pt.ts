@@ -156,6 +156,7 @@ const pt: TranslationKeys = {
   notifyPlayerLeftPromoted: "{left} saiu · {promoted} está agora a jogar",
   notifyPlayerJoinedBench: "{name} entrou para o banco",
   notifyPlayerPromoted: "{name} saiu do banco",
+  notifyGameReminder: "Lembrete: {title}",
   notifyGameFull: "Jogo completo",
   notifySpotsLeft: "Faltam {n} jogador(es)",
 
