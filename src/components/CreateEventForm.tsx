@@ -14,6 +14,7 @@ import PlaceIcon from "@mui/icons-material/Place";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import PlaytomicCourtFinder from "./PlaytomicCourtFinder";
+import LocationAutocomplete from "./LocationAutocomplete";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { SPORT_PRESETS, getDefaultMaxPlayers } from "~/lib/sports";
@@ -197,11 +198,12 @@ export default function CreateEventForm() {
                     </AccordionSummary>
                     <AccordionDetails>
                       <Stack spacing={3}>
-                        <TextField name="location" label={t("locationOptional")}
-                          placeholder={t("locationPlaceholder")} fullWidth
+                        <LocationAutocomplete
                           value={location}
-                          onChange={(e) => setLocation(e.target.value)}
-                          inputProps={{ maxLength: 200 }} />
+                          onChange={setLocation}
+                          label={t("locationOptional")}
+                          placeholder={t("locationPlaceholder")}
+                        />
 
                         {isPlaytomicSport(sport) && (
                           <Button
