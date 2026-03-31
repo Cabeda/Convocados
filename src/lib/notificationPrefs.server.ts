@@ -1,4 +1,5 @@
 import { prisma } from "./db.server";
+import type { NotificationJobType } from "./notificationQueue.server";
 
 export interface NotificationPrefs {
   emailEnabled: boolean;
@@ -7,6 +8,8 @@ export interface NotificationPrefs {
   gameInvitePush: boolean;
   gameReminderEmail: boolean;
   gameReminderPush: boolean;
+  playerActivityPush: boolean;
+  eventDetailsPush: boolean;
   weeklySummaryEmail: boolean;
   paymentReminderEmail: boolean;
   paymentReminderPush: boolean;
@@ -15,13 +18,15 @@ export interface NotificationPrefs {
   reminder1h: boolean;
 }
 
-const DEFAULTS: NotificationPrefs = {
+export const DEFAULTS: NotificationPrefs = {
   emailEnabled: true,
   pushEnabled: true,
   gameInviteEmail: true,
   gameInvitePush: true,
   gameReminderEmail: true,
   gameReminderPush: true,
+  playerActivityPush: true,
+  eventDetailsPush: true,
   weeklySummaryEmail: false,
   paymentReminderEmail: true,
   paymentReminderPush: true,
@@ -35,7 +40,26 @@ export async function getNotificationPrefs(userId: string): Promise<Notification
   const prefs = await prisma.notificationPreferences.findUnique({
     where: { userId },
   });
-  return prefs ?? DEFAULTS;
+  return prefs ? { ...DEFAULTS, ...prefs } : DEFAULTS;
+}
+
+/** Check if a user wants push for a given job type */
+export function wantsPushForJobType(prefs: NotificationPrefs, type: NotificationJobType): boolean {
+  if (!prefs.pushEnabled) return false;
+  switch (type) {
+    case "player_joined":
+    case "player_left":
+    case "player_joined_bench":
+    case "player_left_bench":
+    case "player_left_promoted":
+      return prefs.playerActivityPush;
+    case "event_details":
+      return prefs.eventDetailsPush;
+    case "reminder":
+      return prefs.gameReminderPush;
+    default:
+      return true;
+  }
 }
 
 /** Check if a user wants email reminders for a given reminder type */

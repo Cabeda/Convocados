@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
 import { getUpcomingReminders, markReminderSent } from "~/lib/reminders.server";
-import { sendPushToEvent } from "~/lib/push.server";
+import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 import { sendReminder, sendPaymentReminder } from "~/lib/email.server";
-import { getNotificationPrefs, wantsEmailReminder, wantsPushReminder, wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
+import { getNotificationPrefs, wantsEmailReminder, wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
 import { getPlayersWithPendingPayments, shouldSendPaymentReminder, markPaymentReminderSent } from "~/lib/paymentReminders.server";
 import { cleanupExpiredRateLimits } from "~/lib/apiRateLimit.server";
 import { expireUnconfirmed } from "~/lib/priority.server";
@@ -24,8 +24,8 @@ export const POST: APIRoute = async ({ request }) => {
     const reminders = await getUpcomingReminders(type);
     for (const r of reminders) {
       try {
-        // Send push notifications (respecting per-user preferences)
-        await sendPushToEvent(r.eventId, "Reminder", "notifyReminder" as any, { title: r.eventTitle }, `/events/${r.eventId}`, 0);
+        // Enqueue push notifications for this reminder
+        enqueueNotification(r.eventId, "reminder", { title: r.eventTitle, key: "notifyGameFull" as any, params: { title: r.eventTitle }, url: `/events/${r.eventId}`, spotsLeft: 0 });
         sent.push(`${r.eventId}:${type}`);
 
         // Send email reminders to players who have accounts and want them
@@ -104,7 +104,15 @@ export const POST: APIRoute = async ({ request }) => {
     log.error({ err }, "Failed to expire unconfirmed priority spots");
   }
 
-  return new Response(JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, rateLimitsCleaned, priorityExpired }), {
+  // Drain the notification job queue
+  let notificationJobsDrained = 0;
+  try {
+    notificationJobsDrained = await drainNotificationQueue();
+  } catch (err) {
+    log.error({ err }, "Failed to drain notification queue");
+  }
+
+  return new Response(JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, rateLimitsCleaned, priorityExpired, notificationJobsDrained }), {
     headers: { "Content-Type": "application/json" },
   });
 };
