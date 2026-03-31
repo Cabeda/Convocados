@@ -700,6 +700,10 @@ const pt: TranslationKeys = {
   notifyEventDetailsChanged: "Detalhes do evento atualizados: {title}",
   logDateTimeUpdated: "{actor} atualizou a data/hora",
   logTimezoneUpdated: "{actor} atualizou o fuso horário",
+  saved: "Guardado",
+  eventEnded: "Terminado",
+  viewResults: "Ver resultados",
+  playersProgress: "{n}/{max} jogadores",
 
   // Countdown (#206)
   countdownDays: "em {n} dias",
