@@ -122,6 +122,31 @@ export interface GameInviteData {
   eventUrl: string;
 }
 
+export interface PlayerJoinedOwnerData {
+  eventTitle: string;
+  playerName: string;
+  spotsLeft: number;
+  eventUrl: string;
+}
+
+export async function sendPlayerJoinedOwnerNotification(to: string, data: PlayerJoinedOwnerData) {
+  const resend = await getResend();
+  const spotsText = data.spotsLeft === 0 ? "Game is now full" : `${data.spotsLeft} spot${data.spotsLeft === 1 ? "" : "s"} left`;
+  const result = await resend.emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: `${data.playerName} joined ${data.eventTitle} — Convocados`,
+    html: emailTemplate({
+      heading: `${data.playerName} joined your game`,
+      body: `<strong>${data.playerName}</strong> just joined <strong>${data.eventTitle}</strong>.<br/><br/>👥 ${spotsText}`,
+      buttonText: "View game",
+      buttonUrl: data.eventUrl,
+      footnote: `Don't want these emails? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+    }),
+  });
+  if (result.error) throw new Error(`Failed to send player joined notification: ${result.error.message}`);
+}
+
 export async function sendGameInvite(to: string, data: GameInviteData) {
   const resend = await getResend();
   const result = await resend.emails.send({

@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { sendPushToEvent } from "../../../../lib/push.server";
-import { sendGameInvite } from "../../../../lib/email.server";
+import { sendGameInvite, sendPlayerJoinedOwnerNotification } from "../../../../lib/email.server";
 import { getNotificationPrefs, wantsGameInviteEmail } from "../../../../lib/notificationPrefs.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
@@ -162,6 +162,26 @@ export const POST: APIRoute = async ({ params, request }) => {
       }
     } catch (err) {
       // Non-blocking — don't fail the join if email fails
+    }
+  }
+
+  // Notify the event owner when someone joins (skip if owner is the one joining)
+  if (event.ownerId && event.ownerId !== session?.user?.id) {
+    try {
+      const owner = await prisma.user.findUnique({ where: { id: event.ownerId }, select: { email: true, id: true } });
+      if (owner?.email) {
+        const ownerPrefs = await getNotificationPrefs(owner.id);
+        if (wantsGameInviteEmail(ownerPrefs)) {
+          await sendPlayerJoinedOwnerNotification(owner.email, {
+            eventTitle: event.title,
+            playerName: trimmed,
+            spotsLeft,
+            eventUrl: url,
+          });
+        }
+      }
+    } catch {
+      // Non-blocking
     }
   }
 
