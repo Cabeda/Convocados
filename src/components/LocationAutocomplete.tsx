@@ -22,6 +22,7 @@ interface Suggestion {
 interface Props {
   value: string;
   onChange: (value: string) => void;
+  coordinate?: { lat: number; lon: number };
   label?: string;
   placeholder?: string;
   fullWidth?: boolean;
@@ -72,18 +73,26 @@ export async function reverseGeocode(lat: number, lon: number): Promise<string> 
 }
 
 export default function LocationAutocomplete({
-  value, onChange, label, placeholder, fullWidth = true, size = "medium", inputProps,
+  value, onChange, coordinate, label, placeholder, fullWidth = true, size = "medium", inputProps,
 }: Props) {
   const t = useT();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
+  // Track the known coordinate — set when user picks from autocomplete or Playtomic
+  const [knownCoord, setKnownCoord] = useState<{ lat: number; lon: number } | undefined>(coordinate);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync external coordinate prop (e.g. from Playtomic)
+  React.useEffect(() => {
+    if (coordinate) setKnownCoord(coordinate);
+  }, [coordinate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     onChange(val);
+    setKnownCoord(undefined); // user is typing freely — discard known coord
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!val.trim()) { setSuggestions([]); return; }
     debounceRef.current = setTimeout(async () => {
@@ -97,6 +106,7 @@ export default function LocationAutocomplete({
 
   const handleSelect = (s: Suggestion) => {
     onChange(s.label);
+    setKnownCoord({ lat: s.lat, lon: s.lon }); // store exact coord from Photon
     setSuggestions([]);
     setOpen(false);
   };
@@ -195,7 +205,7 @@ export default function LocationAutocomplete({
                 <CircularProgress />
               </Box>
             }>
-              <LeafletMap initialAddress={value} onPinDrop={handlePinDrop} />
+              <LeafletMap initialAddress={value} initialCoordinate={knownCoord} onPinDrop={handlePinDrop} />
             </Suspense>
           )}
         </DialogContent>
