@@ -1,7 +1,7 @@
 import "leaflet/dist/leaflet.css";
 import React, { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
-import L from "leaflet";
+import L, { type LeafletMouseEvent } from "leaflet";
 import { Box } from "@mui/material";
 
 // Fix Leaflet's default icon paths broken by bundlers
@@ -43,7 +43,7 @@ function DraggableMarker({ position, onMove }: {
 
 function ClickHandler({ onClick }: { onClick: (lat: number, lon: number) => void }) {
   useMapEvents({
-    click(e) {
+    click(e: LeafletMouseEvent) {
       onClick(e.latlng.lat, e.latlng.lng);
     },
   });
