@@ -23,6 +23,7 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
+import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
 import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
 
@@ -293,54 +294,13 @@ function AddHistoricalGameDialog({
                     ))}
                   </Box>
                   <Box sx={{ mt: 1.5 }}>
-                    <Autocomplete<PlayerOption, false, false, true>
-                      freeSolo
-                      size="small"
-                      options={(() => {
-                        const inputValue = newPlayerInputs[idx] ?? "";
-                        const trimmed = inputValue.trim();
-                        const filtered: PlayerOption[] = getAvailableSuggestions(idx)
-                          .filter((s) => matchesWithName(s.name, trimmed))
-                          .map((s) => ({ type: "existing" as const, name: s.name, gamesPlayed: s.gamesPlayed }));
-                        if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
-                          filtered.push({ type: "create" as const, name: trimmed });
-                        }
-                        return filtered;
-                      })()}
-                      filterOptions={(options) => options}
-                      getOptionLabel={(option) => typeof option === "string" ? option : option.name}
-                      isOptionEqualToValue={(option, value) => option.type === value.type && option.name === value.name}
-                      value={null}
-                      inputValue={newPlayerInputs[idx] ?? ""}
-                      onInputChange={(_, newInputValue, reason) => {
-                        if (reason === "reset") return;
-                        setNewPlayerInputs((prev) => ({ ...prev, [idx]: newInputValue }));
-                      }}
-                      onChange={(_, newValue) => {
-                        if (!newValue) return;
-                        const name = typeof newValue === "string" ? newValue.trim() : newValue.name;
-                        if (name) { addPlayerToTeam(idx, name); setNewPlayerInputs((prev) => ({ ...prev, [idx]: "" })); }
-                      }}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          placeholder={t("addPlayerToTeam")}
-                          InputProps={{
-                            ...params.InputProps,
-                            endAdornment: (
-                              <InputAdornment position="end">
-                                <IconButton size="small" color="primary" edge="end"
-                                  disabled={!(newPlayerInputs[idx] ?? "").trim()}
-                                  onClick={() => { addPlayerToTeam(idx); setNewPlayerInputs((prev) => ({ ...prev, [idx]: "" })); }}>
-                                  <PersonAddIcon fontSize="small" />
-                                </IconButton>
-                              </InputAdornment>
-                            ),
-                          }}
-                          sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-                        />
-                      )}
-                      noOptionsText={t("noSuggestions")}
+                    <PlayerAutocomplete
+                      value={newPlayerInputs[idx] ?? ""}
+                      onChange={(val) => setNewPlayerInputs((prev) => ({ ...prev, [idx]: val }))}
+                      onAdd={(name) => addPlayerToTeam(idx, name)}
+                      suggestions={getAvailableSuggestions(idx)}
+                      disabled={saving}
+                      label={t("addPlayerToTeam")}
                     />
                   </Box>
                 </Box>
