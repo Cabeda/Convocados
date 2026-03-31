@@ -149,6 +149,7 @@ model GameHistory {
   paymentsSnapshot String? // JSON: [{playerName, amount, status, method}]
   editableUntil    DateTime
   eloProcessed     Boolean  @default(false)
+  source           String   @default("live") // "live" | "historical"
   createdAt        DateTime @default(now())
 }
 
