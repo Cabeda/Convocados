@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button,
-  CircularProgress, Alert,
+  Alert, Skeleton,
 } from "@mui/material";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import { ThemeModeProvider } from "./ThemeModeProvider";
@@ -324,12 +324,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── Title & location save ───────────────────────────────────────────────────
 
   const handleSaveTitle = async (title: string) => {
-    await fetch(`/api/events/${eventId}/title`, {
+    // Optimistic update
+    setEvent((e) => e ? { ...e, title } : e);
+    const res = await fetch(`/api/events/${eventId}/title`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
     });
-    fetchEvent();
+    if (!res.ok) fetchEvent(); // revert on error
+    else fetchEvent();
   };
 
   const handleSaveLocation = async (location: string) => {
@@ -342,6 +345,24 @@ export default function EventPage({ eventId }: { eventId: string }) {
     if (location && !data.geocoded) {
       setSnackbar(t("locationNotGeocoded"));
     }
+    fetchEvent();
+  };
+
+  const handleSaveDateTime = async (dateTime: string, timezone: string) => {
+    await fetch(`/api/events/${eventId}/datetime`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dateTime, timezone }),
+    });
+    fetchEvent();
+  };
+
+  const handleSaveSport = async (sport: string) => {
+    await fetch(`/api/events/${eventId}/sport`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sport }),
+    });
     fetchEvent();
   };
 
@@ -388,9 +409,42 @@ export default function EventPage({ eventId }: { eventId: string }) {
   if (isLoading) return (
     <ThemeModeProvider>
       <ResponsiveLayout>
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
-          <CircularProgress />
-        </Box>
+        <Container maxWidth="md" sx={{ py: 4 }}>
+          <Stack spacing={3}>
+            <Paper elevation={2} sx={{ borderRadius: 3, overflow: "hidden" }}>
+              <Skeleton variant="rectangular" height={3} />
+              <Box sx={{ p: { xs: 2, sm: 3 } }}>
+                <Stack spacing={2}>
+                  <Skeleton variant="text" width="60%" height={36} />
+                  <Skeleton variant="text" width="30%" height={20} />
+                  <Skeleton variant="rectangular" height={32} width={120} sx={{ borderRadius: 2 }} />
+                  <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 1 }} />
+                  <Stack spacing={0.75}>
+                    <Skeleton variant="text" width="45%" height={20} />
+                    <Skeleton variant="text" width="35%" height={20} />
+                  </Stack>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Skeleton variant="rounded" width={60} height={24} />
+                    <Skeleton variant="rounded" width={80} height={24} />
+                  </Box>
+                  <Skeleton variant="rectangular" height={1} />
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Skeleton variant="circular" width={40} height={40} />
+                    <Skeleton variant="circular" width={40} height={40} />
+                  </Box>
+                </Stack>
+              </Box>
+            </Paper>
+            <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+              <Skeleton variant="text" width="40%" height={28} sx={{ mb: 2 }} />
+              <Stack spacing={1}>
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} variant="rectangular" height={48} sx={{ borderRadius: 1 }} />
+                ))}
+              </Stack>
+            </Paper>
+          </Stack>
+        </Container>
       </ResponsiveLayout>
     </ThemeModeProvider>
   );
@@ -449,6 +503,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
               localMatches={localMatches}
               onSaveTitle={handleSaveTitle}
               onSaveLocation={handleSaveLocation}
+              onSaveDateTime={handleSaveDateTime}
+              onSaveSport={handleSaveSport}
               onClaimOwnership={handleClaimOwnership}
               onSnackbar={setSnackbar}
             />

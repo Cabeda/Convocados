@@ -688,6 +688,22 @@ const en = {
   emptyStateBrowsePublic: "Browse public games",
   emptyStateShare: "Share game",
 
+  // Timezone & datetime editing (#231)
+  timezone: "Timezone",
+  timezoneHelper: "Select the timezone for this event",
+  editDateTime: "Edit details",
+  saveDateTime: "Save",
+  dateTimeSaved: "Date and time updated.",
+  dateTimeSaveError: "Could not update date and time.",
+  savingDateTime: "Saving...",
+  notifyEventDetailsChanged: "Event details updated: {title}",
+  logDateTimeUpdated: "{actor} updated the date/time",
+  logTimezoneUpdated: "{actor} updated the timezone",
+  saved: "Saved",
+  eventEnded: "Ended",
+  viewResults: "View results",
+  playersProgress: "{n}/{max} players",
+
   // Countdown (#206)
   countdownDays: "in {n} days",
   countdownTomorrow: "Tomorrow at {time}",

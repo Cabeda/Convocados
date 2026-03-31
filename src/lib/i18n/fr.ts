@@ -643,6 +643,22 @@ const fr: TranslationKeys = {
   emptyStateBrowsePublic: "Voir les jeux publics",
   emptyStateShare: "Partager le jeu",
 
+  // Timezone & datetime editing (#231)
+  timezone: "Fuseau horaire",
+  timezoneHelper: "Sélectionne le fuseau horaire de cet événement",
+  editDateTime: "Modifier la date et l'heure",
+  saveDateTime: "Enregistrer",
+  dateTimeSaved: "Date et heure mises à jour.",
+  dateTimeSaveError: "Impossible de mettre à jour la date et l'heure.",
+  savingDateTime: "Enregistrement...",
+  notifyEventDetailsChanged: "Détails de l'événement mis à jour : {title}",
+  logDateTimeUpdated: "{actor} a mis à jour la date/heure",
+  logTimezoneUpdated: "{actor} a mis à jour le fuseau horaire",
+  saved: "Enregistré",
+  eventEnded: "Terminé",
+  viewResults: "Voir les résultats",
+  playersProgress: "{n}/{max} joueurs",
+
   // Countdown (#206)
   countdownDays: "dans {n} jours",
   countdownTomorrow: "Demain à {time}",
