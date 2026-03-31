@@ -18,8 +18,6 @@ import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PaymentIcon from "@mui/icons-material/Payment";
 import LoginIcon from "@mui/icons-material/Login";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
-import AddIcon from "@mui/icons-material/Add";
-import RemoveIcon from "@mui/icons-material/Remove";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -27,6 +25,7 @@ import { detectLocale } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
 import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
+import { ScoreRoller } from "./event/ScoreRoller";
 
 type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number }
@@ -250,72 +249,22 @@ function AddHistoricalGameDialog({
           </Stack>
 
           <Box sx={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 2,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
             py: 2, px: 3, borderRadius: 3,
             backgroundColor: alpha(theme.palette.action.hover, 0.04),
             border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
           }}>
-            <Box sx={{ textAlign: "center", flex: 1 }}>
-              <Typography variant="caption" fontWeight={600} color="text.secondary">{teamOneName}</Typography>
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mt: 1 }}>
-                <IconButton size="small" onClick={() => setScoreOne(Math.max(0, parseInt(scoreOne || "0", 10) - 1).toString())}
-                  sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.3)}`, borderRadius: 2 }}>
-                  <RemoveIcon fontSize="small" />
-                </IconButton>
-                <TextField
-                  type="number"
-                  value={scoreOne}
-                  onChange={(e) => setScoreOne(e.target.value)}
-                  inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem", width: 60 } }}
-                  sx={{
-                    "& .MuiOutlinedInput-root": { borderRadius: 2 },
-                    "& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button": {
-                      "-webkit-appearance": "none",
-                      margin: 0,
-                    },
-                    "& input[type=number]": {
-                      "-moz-appearance": "textfield",
-                    },
-                  }}
-                />
-                <IconButton size="small" onClick={() => setScoreOne(Math.min(99, parseInt(scoreOne || "0", 10) + 1).toString())}
-                  sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.3)}`, borderRadius: 2 }}>
-                  <AddIcon fontSize="small" />
-                </IconButton>
-              </Box>
-            </Box>
-
+            <ScoreRoller
+              value={scoreOne}
+              onChange={setScoreOne}
+              teamName={teamOneName}
+            />
             <Typography variant="h4" color="text.disabled" fontWeight={300}>:</Typography>
-
-            <Box sx={{ textAlign: "center", flex: 1 }}>
-              <Typography variant="caption" fontWeight={600} color="text.secondary">{teamTwoName}</Typography>
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mt: 1 }}>
-                <IconButton size="small" onClick={() => setScoreTwo(Math.max(0, parseInt(scoreTwo || "0", 10) - 1).toString())}
-                  sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.3)}`, borderRadius: 2 }}>
-                  <RemoveIcon fontSize="small" />
-                </IconButton>
-                <TextField
-                  type="number"
-                  value={scoreTwo}
-                  onChange={(e) => setScoreTwo(e.target.value)}
-                  inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem", width: 60 } }}
-                  sx={{
-                    "& .MuiOutlinedInput-root": { borderRadius: 2 },
-                    "& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button": {
-                      "-webkit-appearance": "none",
-                      margin: 0,
-                    },
-                    "& input[type=number]": {
-                      "-moz-appearance": "textfield",
-                    },
-                  }}
-                />
-                <IconButton size="small" onClick={() => setScoreTwo(Math.min(99, parseInt(scoreTwo || "0", 10) + 1).toString())}
-                  sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.3)}`, borderRadius: 2 }}>
-                  <AddIcon fontSize="small" />
-                </IconButton>
-              </Box>
-            </Box>
+            <ScoreRoller
+              value={scoreTwo}
+              onChange={setScoreTwo}
+              teamName={teamTwoName}
+            />
           </Box>
 
           <Typography variant="subtitle2" fontWeight={700}>{t("selectPlayers")}</Typography>
