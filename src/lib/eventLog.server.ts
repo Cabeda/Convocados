@@ -26,6 +26,8 @@ export type EventAction =
   | "history_payments_updated"
   | "history_unlocked"
   | "history_locked"
+  | "history_backfill_created"
+  | "history_elo_approved"
   | "rating_initial_set"
   | "rating_recalculated"
   | "rating_manual_enabled"
