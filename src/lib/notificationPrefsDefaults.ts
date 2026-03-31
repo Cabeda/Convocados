@@ -17,17 +17,22 @@ export interface NotificationPrefs {
   reminder1h: boolean;
 }
 
+/**
+ * Default preferences for new users.
+ * Email is off by default — push (web + future app) is the primary channel.
+ * Users can opt-in to email in their settings.
+ */
 export const DEFAULTS: NotificationPrefs = {
-  emailEnabled: true,
+  emailEnabled: false,
   pushEnabled: true,
-  gameInviteEmail: true,
+  gameInviteEmail: false,
   gameInvitePush: true,
-  gameReminderEmail: true,
+  gameReminderEmail: false,
   gameReminderPush: true,
   playerActivityPush: true,
   eventDetailsPush: true,
   weeklySummaryEmail: false,
-  paymentReminderEmail: true,
+  paymentReminderEmail: false,
   paymentReminderPush: true,
   reminder24h: true,
   reminder2h: true,

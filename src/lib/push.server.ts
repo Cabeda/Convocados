@@ -1,7 +1,7 @@
 import { prisma } from "./db.server";
 import { createT, type Locale, type TranslationKey } from "./i18n";
 import { createLogger } from "./logger.server";
-import { getNotificationPrefs, wantsPushForJobType } from "./notificationPrefs.server";
+import { getNotificationPrefs, wantsPushForJobType, wantsPushReminder } from "./notificationPrefs.server";
 import type { NotificationJobType } from "./notificationQueue.server";
 
 const log = createLogger("push");
@@ -41,6 +41,7 @@ export async function sendPushToEvent(
   spotsLeft: number,
   senderClientId?: string,
   jobType?: NotificationJobType,
+  reminderType?: "24h" | "2h" | "1h",
 ) {
   if (!(import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY) ||
       !(import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY)) return;
@@ -59,6 +60,8 @@ export async function sendPushToEvent(
         if (jobType && sub.userId) {
           const prefs = await getNotificationPrefs(sub.userId);
           if (!wantsPushForJobType(prefs, jobType)) return;
+          // For reminders, also check the per-timing preference
+          if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) return;
         }
 
         const t = createT((sub.locale as Locale) ?? "en");

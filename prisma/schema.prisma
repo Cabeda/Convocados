@@ -31,6 +31,7 @@ model User {
   eventInvites            EventInvite[]
   adminEvents             EventAdmin[]  @relation("EventAdmins")
   pushSubscriptions       PushSubscription[]
+  appPushTokens           AppPushToken[]
 }
 
 model Session {
@@ -319,19 +320,19 @@ model NotificationPreferences {
   userId               String   @unique
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Global toggles
-  emailEnabled         Boolean  @default(true)
+  // Global toggles — email off by default, push on (web + future app)
+  emailEnabled         Boolean  @default(false)
   pushEnabled          Boolean  @default(true)
 
   // Per-type toggles
-  gameInviteEmail      Boolean  @default(true)
+  gameInviteEmail      Boolean  @default(false)
   gameInvitePush       Boolean  @default(true)
-  gameReminderEmail    Boolean  @default(true)
+  gameReminderEmail    Boolean  @default(false)
   gameReminderPush     Boolean  @default(true)
   playerActivityPush   Boolean  @default(true)   // player joined/left
   eventDetailsPush     Boolean  @default(true)   // date/location/title changes
   weeklySummaryEmail   Boolean  @default(false)
-  paymentReminderEmail Boolean  @default(true)
+  paymentReminderEmail Boolean  @default(false)
   paymentReminderPush  Boolean  @default(true)
 
   // Reminder time preferences
@@ -341,6 +342,20 @@ model NotificationPreferences {
 
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+}
+
+// ── Mobile app push tokens (React Native / Expo) ──────────────────────────────
+
+model AppPushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique  // Expo push token or FCM/APNs token
+  platform  String            // "ios" | "android"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // ── Event activity log ────────────────────────────────────────────────────────
@@ -445,6 +460,8 @@ model NotificationJob {
   type           String    // "player_joined" | "player_left" | "player_joined_bench" | "player_left_bench" | "player_left_promoted" | "event_details" | "reminder"
   payload        String    @default("{}") // JSON
   senderClientId String?   // suppress sending back to originator
+  retryCount     Int       @default(0)
+  failedAt       DateTime? // set when all retries exhausted (dead-letter)
   createdAt      DateTime  @default(now())
   processedAt    DateTime?
 
