@@ -5,36 +5,9 @@ import {
 } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import { useT } from "~/lib/useT";
+import { DEFAULTS } from "~/lib/notificationPrefs.server";
 
-interface Prefs {
-  emailEnabled: boolean;
-  pushEnabled: boolean;
-  gameInviteEmail: boolean;
-  gameInvitePush: boolean;
-  gameReminderEmail: boolean;
-  gameReminderPush: boolean;
-  weeklySummaryEmail: boolean;
-  paymentReminderEmail: boolean;
-  paymentReminderPush: boolean;
-  reminder24h: boolean;
-  reminder2h: boolean;
-  reminder1h: boolean;
-}
-
-const DEFAULTS: Prefs = {
-  emailEnabled: true,
-  pushEnabled: true,
-  gameInviteEmail: true,
-  gameInvitePush: true,
-  gameReminderEmail: true,
-  gameReminderPush: true,
-  weeklySummaryEmail: false,
-  paymentReminderEmail: true,
-  paymentReminderPush: true,
-  reminder24h: true,
-  reminder2h: true,
-  reminder1h: false,
-};
+type Prefs = typeof DEFAULTS;
 
 export function NotificationSettingsSection() {
   const t = useT();
@@ -69,7 +42,6 @@ export function NotificationSettingsSection() {
         body: JSON.stringify({ [field]: newValue }),
       });
       if (!res.ok) {
-        // Revert on failure
         setPrefs(prefs);
         setSnackbar(t("notificationsSaveError"));
       } else {
@@ -115,7 +87,7 @@ export function NotificationSettingsSection() {
 
           <Divider />
 
-          {/* Per-type toggles */}
+          {/* Game invites */}
           <Typography variant="subtitle2" fontWeight={600}>{t("gameInvites")}</Typography>
           <Stack spacing={0.5} sx={{ pl: 1 }}>
             <FormControlLabel
@@ -128,6 +100,27 @@ export function NotificationSettingsSection() {
             />
           </Stack>
 
+          {/* Player activity */}
+          <Typography variant="subtitle2" fontWeight={600}>{t("playerActivity")}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ pl: 1, mt: -1 }}>{t("playerActivityDesc")}</Typography>
+          <Stack spacing={0.5} sx={{ pl: 1 }}>
+            <FormControlLabel
+              control={<Switch checked={prefs.playerActivityPush} onChange={() => toggle("playerActivityPush")} disabled={saving || !prefs.pushEnabled} size="small" />}
+              label={t("pushNotifications")}
+            />
+          </Stack>
+
+          {/* Event detail changes */}
+          <Typography variant="subtitle2" fontWeight={600}>{t("eventDetails")}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ pl: 1, mt: -1 }}>{t("eventDetailsDesc")}</Typography>
+          <Stack spacing={0.5} sx={{ pl: 1 }}>
+            <FormControlLabel
+              control={<Switch checked={prefs.eventDetailsPush} onChange={() => toggle("eventDetailsPush")} disabled={saving || !prefs.pushEnabled} size="small" />}
+              label={t("pushNotifications")}
+            />
+          </Stack>
+
+          {/* Game reminders */}
           <Typography variant="subtitle2" fontWeight={600}>{t("gameReminders")}</Typography>
           <Stack spacing={0.5} sx={{ pl: 1 }}>
             <FormControlLabel
@@ -140,6 +133,7 @@ export function NotificationSettingsSection() {
             />
           </Stack>
 
+          {/* Weekly summary */}
           <Typography variant="subtitle2" fontWeight={600}>{t("weeklySummary")}</Typography>
           <Stack spacing={0.5} sx={{ pl: 1 }}>
             <FormControlLabel
@@ -148,6 +142,7 @@ export function NotificationSettingsSection() {
             />
           </Stack>
 
+          {/* Payment reminders */}
           <Typography variant="subtitle2" fontWeight={600}>{t("paymentReminders")}</Typography>
           <Stack spacing={0.5} sx={{ pl: 1 }}>
             <FormControlLabel

@@ -207,9 +207,11 @@ model PushSubscription {
   auth      String
   locale    String   @default("en")
   clientId  String   @default("")
+  userId    String?  // linked when user is authenticated at subscribe time
   createdAt DateTime @default(now())
 
   @@unique([eventId, endpoint])
+  @@index([userId])
 }
 
 model WebhookSubscription {
@@ -323,6 +325,8 @@ model NotificationPreferences {
   gameInvitePush       Boolean  @default(true)
   gameReminderEmail    Boolean  @default(true)
   gameReminderPush     Boolean  @default(true)
+  playerActivityPush   Boolean  @default(true)   // player joined/left
+  eventDetailsPush     Boolean  @default(true)   // date/location/title changes
   weeklySummaryEmail   Boolean  @default(false)
   paymentReminderEmail Boolean  @default(true)
   paymentReminderPush  Boolean  @default(true)
@@ -429,4 +433,17 @@ model PaymentReminderLog {
   @@index([eventId, userId])
 }
 
-// ── Rate limiting (in-memory, no DB model needed) ─────────────────────────────
+// ── Notification job queue ────────────────────────────────────────────────────
+
+model NotificationJob {
+  id          String    @id @default(cuid())
+  eventId     String
+  type        String    // "player_joined" | "player_left" | "player_joined_bench" | "player_left_bench" | "player_left_promoted" | "event_details" | "reminder"
+  payload     String    @default("{}") // JSON
+  senderClientId String? // suppress sending back to originator
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([processedAt, createdAt])
+  @@index([eventId])
+}
