@@ -19,10 +19,12 @@ async function init() {
   if (initialized) return;
   initialized = true;
   const webpush = await getWebPush();
+  const publicKey = import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY!;
+  const privateKey = import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY!;
   webpush.setVapidDetails(
     "mailto:admin@convocados.fly.dev",
-    process.env.VAPID_PUBLIC_KEY!,
-    process.env.VAPID_PRIVATE_KEY!,
+    publicKey,
+    privateKey,
   );
 }
 
@@ -35,7 +37,8 @@ export async function sendPushToEvent(
   spotsLeft: number,
   senderClientId?: string,
 ) {
-  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return;
+  if (!(import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY) ||
+      !(import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY)) return;
   await init();
   const webpush = await getWebPush();
   const subs = await prisma.pushSubscription.findMany({ where: { eventId } });
