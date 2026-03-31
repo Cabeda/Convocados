@@ -691,7 +691,7 @@ const en = {
   // Timezone & datetime editing (#231)
   timezone: "Timezone",
   timezoneHelper: "Select the timezone for this event",
-  editDateTime: "Edit date & time",
+  editDateTime: "Edit details",
   saveDateTime: "Save",
   dateTimeSaved: "Date and time updated.",
   dateTimeSaveError: "Could not update date and time.",
@@ -699,6 +699,10 @@ const en = {
   notifyEventDetailsChanged: "Event details updated: {title}",
   logDateTimeUpdated: "{actor} updated the date/time",
   logTimezoneUpdated: "{actor} updated the timezone",
+  saved: "Saved",
+  eventEnded: "Ended",
+  viewResults: "View results",
+  playersProgress: "{n}/{max} players",
 
   // Countdown (#206)
   countdownDays: "in {n} days",
