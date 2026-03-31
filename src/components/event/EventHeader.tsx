@@ -25,6 +25,7 @@ import { describeRecurrenceRule, parseRecurrenceRule } from "~/lib/recurrence";
 import { getSportPreset } from "~/lib/sports";
 import { googleCalendarUrl } from "~/lib/calendar";
 import { COMMON_TIMEZONES } from "~/lib/timezones";
+import { SPORT_PRESETS } from "~/lib/sports";
 import type { EventData } from "./types";
 import type { Imatch } from "~/lib/random";
 import { ShareBar } from "./ShareBar";
@@ -45,6 +46,7 @@ interface Props {
   onSaveTitle: (title: string) => Promise<void>;
   onSaveLocation: (location: string) => Promise<void>;
   onSaveDateTime: (dateTime: string, timezone: string) => Promise<void>;
+  onSaveSport: (sport: string) => Promise<void>;
   onClaimOwnership: () => Promise<void>;
   onSnackbar: (msg: string) => void;
 }
@@ -52,7 +54,7 @@ interface Props {
 export function EventHeader({
   eventId, event, sport, gameDate, countdown, canEditSettings,
   isOwner, isAuthenticated, isOwnerless, localMatches,
-  onSaveTitle, onSaveLocation, onSaveDateTime, onClaimOwnership,
+  onSaveTitle, onSaveLocation, onSaveDateTime, onSaveSport, onClaimOwnership,
 }: Props) {
   const t = useT();
   const locale = detectLocale();
@@ -68,15 +70,16 @@ export function EventHeader({
   const [locationDraft, setLocationDraft] = useState("");
   const [dateTimeDraft, setDateTimeDraft] = useState("");
   const [timezoneDraft, setTimezoneDraft] = useState("UTC");
+  const [sportDraft, setSportDraft] = useState("");
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const openEdit = () => {
     setTitleDraft(event.title);
     setLocationDraft(event.location || "");
-    // Convert ISO to datetime-local format (YYYY-MM-DDTHH:mm)
     setDateTimeDraft(event.dateTime.slice(0, 16));
     setTimezoneDraft(event.timezone || "UTC");
+    setSportDraft(sport);
     setEditMode(true);
   };
 
@@ -92,6 +95,9 @@ export function EventHeader({
     }
     if (dateTimeDraft !== event.dateTime.slice(0, 16) || timezoneDraft !== (event.timezone || "UTC")) {
       promises.push(onSaveDateTime(dateTimeDraft, timezoneDraft));
+    }
+    if (sportDraft && sportDraft !== sport) {
+      promises.push(onSaveSport(sportDraft));
     }
     await Promise.all(promises);
     setEditMode(false);
@@ -229,6 +235,21 @@ export function EventHeader({
                   {COMMON_TIMEZONES.map((tz) => (
                     <MenuItem key={tz.value} value={tz.value} sx={{ fontSize: "0.85rem" }}>
                       {tz.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <SportsSoccerIcon fontSize="small" color="action" sx={{ flexShrink: 0 }} />
+              <FormControl size="small" fullWidth>
+                <Select
+                  value={sportDraft}
+                  onChange={(e) => setSportDraft(e.target.value)}
+                >
+                  {SPORT_PRESETS.map((s) => (
+                    <MenuItem key={s.id} value={s.id} sx={{ fontSize: "0.85rem" }}>
+                      {t(s.labelKey as any)}
                     </MenuItem>
                   ))}
                 </Select>

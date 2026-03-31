@@ -354,6 +354,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
     fetchEvent();
   };
 
+  const handleSaveSport = async (sport: string) => {
+    await fetch(`/api/events/${eventId}/sport`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sport }),
+    });
+    fetchEvent();
+  };
+
   // ── Ownership ───────────────────────────────────────────────────────────────
 
   const handleClaimOwnership = async () => {
@@ -459,6 +468,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onSaveTitle={handleSaveTitle}
               onSaveLocation={handleSaveLocation}
               onSaveDateTime={handleSaveDateTime}
+              onSaveSport={handleSaveSport}
               onClaimOwnership={handleClaimOwnership}
               onSnackbar={setSnackbar}
             />
