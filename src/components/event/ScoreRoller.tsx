@@ -1,5 +1,5 @@
-import React, { useRef, useState, useCallback } from "react";
-import { Box, Typography, IconButton } from "@mui/material";
+import React, { useRef, useCallback } from "react";
+import { Box, Typography, IconButton, useTheme } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import { alpha } from "@mui/material";
@@ -13,73 +13,69 @@ interface ScoreRollerProps {
 }
 
 export function ScoreRoller({ value, onChange, teamName, min = 0, max = 99 }: ScoreRollerProps) {
+  const theme = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const isDragging = useRef(false);
   const dragStartY = useRef(0);
   const dragStartValue = useRef(0);
-  const velocityRef = useRef(0);
-  const lastYRef = useRef(0);
-  const animationRef = useRef<number | null>(null);
+  const lastY = useRef(0);
 
   const numValue = parseInt(value || "0", 10);
-  const digits = String(numValue).padStart(2, "0").split("").map(Number);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    isDragging.current = true;
     dragStartY.current = e.clientY;
     dragStartValue.current = numValue;
-    lastYRef.current = e.clientY;
-    velocityRef.current = 0;
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
+    lastY.current = e.clientY;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, [numValue]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDragging) return;
-    const deltaY = lastYRef.current - e.clientY;
-    velocityRef.current = deltaY;
-    lastYRef.current = e.clientY;
-
-    const totalDelta = dragStartY.current - e.clientY;
-    const step = Math.round(totalDelta / 20);
-    let newValue = dragStartValue.current + step;
-    newValue = Math.max(min, Math.min(max, newValue));
-    onChange(String(newValue));
-  }, [isDragging, onChange, min, max]);
+    if (!isDragging.current) return;
+    const deltaY = lastY.current - e.clientY;
+    lastY.current = e.clientY;
+    if (Math.abs(deltaY) > 5) {
+      const step = deltaY > 0 ? -1 : 1;
+      const newValue = Math.max(min, Math.min(max, numValue + step));
+      if (newValue !== numValue) {
+        onChange(String(newValue));
+      }
+    }
+  }, [numValue, onChange, min, max]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    if (!isDragging) return;
-    setIsDragging(false);
+    if (!isDragging.current) return;
+    isDragging.current = false;
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-
-    const velocity = velocityRef.current;
-    if (Math.abs(velocity) > 5) {
-      const applyMomentum = () => {
-        const current = parseInt(value || "0", 10);
-        const step = velocity > 0 ? -1 : 1;
-        const newValue = Math.max(min, Math.min(max, current + step));
-        onChange(String(newValue));
-        velocityRef.current *= 0.85;
-        if (Math.abs(velocityRef.current) > 1) {
-          animationRef.current = requestAnimationFrame(applyMomentum);
-        }
-      };
-      applyMomentum();
-    }
-  }, [isDragging, value, onChange, min, max]);
+  }, []);
 
   const handleClick = (delta: number) => {
-    let newValue = numValue + delta;
-    newValue = Math.max(min, Math.min(max, newValue));
-    onChange(String(newValue));
+    const newValue = Math.max(min, Math.min(max, numValue + delta));
+    if (newValue !== numValue) {
+      onChange(String(newValue));
+    }
   };
 
+  const displayValue = String(numValue).padStart(2, "0");
+
   return (
-    <Box sx={{ textAlign: "center", flex: 1 }}>
-      <Typography variant="caption" fontWeight={600} color="text.secondary">{teamName}</Typography>
+    <Box sx={{ textAlign: "center", flex: 1, minWidth: 0 }}>
+      <Typography 
+        variant="caption" 
+        fontWeight={600} 
+        color="text.secondary"
+        sx={{ 
+          display: "block",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          maxWidth: "100%",
+        }}
+      >
+        {teamName}
+      </Typography>
+      
       <Box
         ref={containerRef}
         onPointerDown={handlePointerDown}
@@ -90,19 +86,19 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 99 }: Sc
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          gap: 0.5,
+          gap: { xs: 0.5, sm: 1 },
           mt: 1,
-          py: 1,
-          px: 2,
-          borderRadius: 3,
-          backgroundColor: alpha(isDragging ? "#1976d2" : "#000", 0.04),
-          border: `2px solid ${isDragging ? "#1976d2" : "transparent"}`,
-          cursor: isDragging ? "grabbing" : "grab",
+          py: { xs: 1, sm: 1.5 },
+          px: { xs: 1, sm: 2 },
+          borderRadius: { xs: 2, sm: 3 },
+          backgroundColor: "action.hover",
+          cursor: "grab",
           userSelect: "none",
-          transition: "border-color 0.2s, background-color 0.2s",
           touchAction: "none",
-          "&:hover": {
-            backgroundColor: alpha("#1976d2", 0.08),
+          transition: "background-color 0.2s",
+          "&:active": {
+            cursor: "grabbing",
+            backgroundColor: "action.selected",
           },
         }}
       >
@@ -111,38 +107,46 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 99 }: Sc
           onClick={() => handleClick(-1)}
           onPointerDown={(e) => e.stopPropagation()}
           sx={{
-            border: `1px solid ${alpha("#000", 0.15)}`,
-            borderRadius: 2,
-            width: 32,
-            height: 32,
+            minWidth: { xs: 40, sm: 36 },
+            height: { xs: 40, sm: 36 },
+            borderRadius: "50%",
+            backgroundColor: "surface-container-low",
+            "&:hover": {
+              backgroundColor: "surface-container-high",
+            },
           }}
         >
           <RemoveIcon fontSize="small" />
         </IconButton>
 
-        <Box sx={{ display: "flex", gap: 0.25 }}>
-          {digits.map((digit, idx) => (
+        <Box
+          sx={{
+            display: "flex",
+            gap: { xs: 0.25, sm: 0.5 },
+            px: { xs: 0.5, sm: 1 },
+          }}
+        >
+          {displayValue.split("").map((digit, idx) => (
             <Box
               key={idx}
               sx={{
-                width: 36,
-                height: 52,
-                overflow: "hidden",
-                position: "relative",
-                borderRadius: 1,
-                backgroundColor: alpha("#000", 0.06),
+                width: { xs: 28, sm: 40 },
+                height: { xs: 44, sm: 56 },
+                borderRadius: { xs: 1, sm: 2 },
+                backgroundColor: "surface-container-highest",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                boxShadow: 1,
               }}
             >
               <Typography
                 sx={{
-                  fontSize: "2rem",
+                  fontSize: { xs: "1.5rem", sm: "2.25rem" },
                   fontWeight: 700,
                   lineHeight: 1,
-                  color: "text.primary",
-                  transition: "transform 0.05s",
+                  color: "on-surface",
+                  fontVariantNumeric: "tabular-nums",
                 }}
               >
                 {digit}
@@ -156,18 +160,18 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 99 }: Sc
           onClick={() => handleClick(1)}
           onPointerDown={(e) => e.stopPropagation()}
           sx={{
-            border: `1px solid ${alpha("#000", 0.15)}`,
-            borderRadius: 2,
-            width: 32,
-            height: 32,
+            minWidth: { xs: 40, sm: 36 },
+            height: { xs: 40, sm: 36 },
+            borderRadius: "50%",
+            backgroundColor: "surface-container-low",
+            "&:hover": {
+              backgroundColor: "surface-container-high",
+            },
           }}
         >
           <AddIcon fontSize="small" />
         </IconButton>
       </Box>
-      <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, display: "block" }}>
-        drag to roll
-      </Typography>
     </Box>
   );
 }
