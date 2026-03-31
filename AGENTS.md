@@ -59,6 +59,33 @@ docs: update AGENTS.md
 7. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
 8. **Before merging**, always run the full test suite (`npm run test`) and type checking (`npm run typecheck`) to ensure the build will succeed in CI/CD
 
+### Parallel Feature Development with Git Worktrees
+
+When working on multiple features in parallel, use git worktrees to avoid branch conflicts:
+
+```bash
+# Create a new worktree for a feature
+git worktree add ../feat/your-feature-name -b feat/your-feature-name main
+
+# Work in the new worktree
+cd ../feat/your-feature-name
+npm install --legacy-peer-deps  # Install dependencies
+cp ../Convocados/.env .env     # Copy environment variables
+npx prisma migrate deploy      # Apply any new migrations
+npm run db:generate            # Regenerate Prisma client
+
+# After completing work and merging the PR:
+# ALWAYS clean up the worktree after merging
+git worktree remove ../feat/your-feature-name
+git branch -d feat/your-feature-name  # Delete local branch
+```
+
+**Worktree Workflow:**
+1. Before starting a new feature, check existing worktrees: `git worktree list`
+2. If conflicts with current implementation are likely, create a worktree
+3. After PR is merged, **always clean up the worktree** to avoid stale branches
+4. Never work in the main Convocados directory when implementing features that conflict with current work
+
 ## Testing Guidelines
 
 ### Test File Location
