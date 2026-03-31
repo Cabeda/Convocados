@@ -267,7 +267,16 @@ function AddHistoricalGameDialog({
                   value={scoreOne}
                   onChange={(e) => setScoreOne(e.target.value)}
                   inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem", width: 60 } }}
-                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": { borderRadius: 2 },
+                    "& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button": {
+                      "-webkit-appearance": "none",
+                      margin: 0,
+                    },
+                    "& input[type=number]": {
+                      "-moz-appearance": "textfield",
+                    },
+                  }}
                 />
                 <IconButton size="small" onClick={() => setScoreOne(Math.min(99, parseInt(scoreOne || "0", 10) + 1).toString())}
                   sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.3)}`, borderRadius: 2 }}>
@@ -290,7 +299,16 @@ function AddHistoricalGameDialog({
                   value={scoreTwo}
                   onChange={(e) => setScoreTwo(e.target.value)}
                   inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem", width: 60 } }}
-                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": { borderRadius: 2 },
+                    "& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button": {
+                      "-webkit-appearance": "none",
+                      margin: 0,
+                    },
+                    "& input[type=number]": {
+                      "-moz-appearance": "textfield",
+                    },
+                  }}
                 />
                 <IconButton size="small" onClick={() => setScoreTwo(Math.min(99, parseInt(scoreTwo || "0", 10) + 1).toString())}
                   sx={{ border: `1px solid ${alpha(theme.palette.divider, 0.3)}`, borderRadius: 2 }}>
