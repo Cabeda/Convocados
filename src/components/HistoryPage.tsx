@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Chip, Button, Divider,
   CircularProgress, Alert, TextField, Autocomplete, InputAdornment,
-  alpha, useTheme, IconButton, Tooltip, Grid2,
+  alpha, useTheme, IconButton, Tooltip, Grid2, Dialog, DialogTitle,
+  DialogContent, DialogActions, Snackbar,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import HistoryIcon from "@mui/icons-material/History";
@@ -16,6 +17,7 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PaymentIcon from "@mui/icons-material/Payment";
 import LoginIcon from "@mui/icons-material/Login";
+import AddCircleIcon from "@mui/icons-material/AddCircle";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -52,6 +54,7 @@ interface HistoryEntry {
   paymentsSnapshot: string | null;
   editableUntil: string;
   editable: boolean;
+  source: string;
   eloUpdates?: { name: string; delta: number }[] | null;
 }
 
@@ -77,6 +80,282 @@ function Section({ icon, title, children, action }: {
       )}
       {children}
     </Box>
+  );
+}
+
+interface AddHistoricalGameDialogProps {
+  open: boolean;
+  onClose: () => void;
+  eventId: string;
+  defaultTeamOneName: string;
+  defaultTeamTwoName: string;
+  knownPlayers: { name: string; gamesPlayed: number }[];
+  onSuccess: (entry: HistoryEntry) => void;
+}
+
+function AddHistoricalGameDialog({
+  open,
+  onClose,
+  eventId,
+  defaultTeamOneName,
+  defaultTeamTwoName,
+  knownPlayers,
+  onSuccess,
+}: AddHistoricalGameDialogProps) {
+  const t = useT();
+  const theme = useTheme();
+  const [dateTime, setDateTime] = useState(() => {
+    const d = new Date();
+    d.setHours(d.getHours() - 1, 0, 0, 0);
+    return d.toISOString().slice(0, 16);
+  });
+  const [teamOneName, setTeamOneName] = useState(defaultTeamOneName);
+  const [teamTwoName, setTeamTwoName] = useState(defaultTeamTwoName);
+  const [scoreOne, setScoreOne] = useState("");
+  const [scoreTwo, setScoreTwo] = useState("");
+  const [team1Players, setTeam1Players] = useState<{ name: string; order: number }[]>([]);
+  const [team2Players, setTeam2Players] = useState<{ name: string; order: number }[]>([]);
+  const [newPlayerInputs, setNewPlayerInputs] = useState<Record<number, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setDateTime(new Date().toISOString().slice(0, 16));
+      setTeamOneName(defaultTeamOneName);
+      setTeamTwoName(defaultTeamTwoName);
+      setScoreOne("");
+      setScoreTwo("");
+      setTeam1Players([]);
+      setTeam2Players([]);
+      setNewPlayerInputs({});
+      setError(null);
+    }
+  }, [open, defaultTeamOneName, defaultTeamTwoName]);
+
+  const addPlayerToTeam = (teamIdx: number, playerName?: string) => {
+    const name = (playerName ?? newPlayerInputs[teamIdx] ?? "").trim();
+    if (!name) return;
+    const target = teamIdx === 0 ? team1Players : team2Players;
+    if (target.some((p) => p.name.toLowerCase() === name.toLowerCase())) return;
+    const newPlayer = { name, order: target.length };
+    if (teamIdx === 0) {
+      setTeam1Players([...team1Players, newPlayer]);
+    } else {
+      setTeam2Players([...team2Players, newPlayer]);
+    }
+    if (!playerName) setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+  };
+
+  const removePlayerFromTeam = (teamIdx: number, playerName: string) => {
+    if (teamIdx === 0) {
+      setTeam1Players(team1Players.filter((p) => p.name !== playerName).map((p, i) => ({ ...p, order: i })));
+    } else {
+      setTeam2Players(team2Players.filter((p) => p.name !== playerName).map((p, i) => ({ ...p, order: i })));
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!dateTime || !teamOneName || !teamTwoName || scoreOne === "" || scoreTwo === "" ||
+        team1Players.length === 0 || team2Players.length === 0) {
+      setError(t("errorPlayerNameRequired"));
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    const teamsSnapshot = [
+      { team: teamOneName, players: team1Players },
+      { team: teamTwoName, players: team2Players },
+    ];
+
+    try {
+      const res = await fetch(`/api/events/${eventId}/history`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dateTime: new Date(dateTime).toISOString(),
+          teamOneName,
+          teamTwoName,
+          scoreOne: parseInt(scoreOne, 10),
+          scoreTwo: parseInt(scoreTwo, 10),
+          teamsSnapshot,
+        }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json();
+        setError(json.error || t("errorCreatingPastGame"));
+        setSaving(false);
+        return;
+      }
+
+      const newEntry = await res.json();
+      onSuccess(newEntry);
+      onClose();
+    } catch {
+      setError(t("errorCreatingPastGame"));
+    }
+    setSaving(false);
+  };
+
+  const getAvailableSuggestions = (teamIdx: number) => {
+    const currentNames = new Set(
+      (teamIdx === 0 ? team1Players : team2Players).map((p) => p.name.toLowerCase())
+    );
+    return knownPlayers.filter((kp) => !currentNames.has(kp.name.toLowerCase()));
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <AddCircleIcon color="primary" />
+          <Typography variant="h6" fontWeight={700}>{t("addHistoricalGame")}</Typography>
+        </Stack>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={3} sx={{ pt: 1 }}>
+          <Alert severity="info" sx={{ borderRadius: 2 }}>{t("addHistoricalGameDesc")}</Alert>
+
+          {error && <Alert severity="error" onClose={() => setError(null)} sx={{ borderRadius: 2 }}>{error}</Alert>}
+
+          <TextField
+            label={t("dateTime")}
+            type="datetime-local"
+            value={dateTime}
+            onChange={(e) => setDateTime(e.target.value)}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+
+          <Stack direction="row" spacing={2}>
+            <TextField
+              label={t("pastGameTeam1Name")}
+              value={teamOneName}
+              onChange={(e) => setTeamOneName(e.target.value)}
+              fullWidth
+              size="small"
+            />
+            <TextField
+              label={t("pastGameTeam2Name")}
+              value={teamTwoName}
+              onChange={(e) => setTeamTwoName(e.target.value)}
+              fullWidth
+              size="small"
+            />
+          </Stack>
+
+          <Stack direction="row" spacing={2} alignItems="center">
+            <TextField
+              label={t("score")}
+              type="number"
+              value={scoreOne}
+              onChange={(e) => setScoreOne(e.target.value)}
+              inputProps={{ min: 0, max: 99 }}
+              size="small"
+              sx={{ width: 80 }}
+            />
+            <Typography variant="h6" color="text.secondary">:</Typography>
+            <TextField
+              label={t("score")}
+              type="number"
+              value={scoreTwo}
+              onChange={(e) => setScoreTwo(e.target.value)}
+              inputProps={{ min: 0, max: 99 }}
+              size="small"
+              sx={{ width: 80 }}
+            />
+          </Stack>
+
+          <Typography variant="subtitle2" fontWeight={700}>{t("selectPlayers")}</Typography>
+
+          <Grid2 container spacing={2}>
+            {[{ label: teamOneName, players: team1Players, idx: 0 }, { label: teamTwoName, players: team2Players, idx: 1 }].map(({ label, players, idx }) => (
+              <Grid2 key={idx} size={{ xs: 12, sm: 6 }}>
+                <Box sx={{
+                  p: 2, borderRadius: 3,
+                  backgroundColor: alpha(theme.palette.action.hover, 0.04),
+                  border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+                }}>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>{label}</Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, minHeight: 32 }}>
+                    {players.map((p) => (
+                      <Chip
+                        key={p.name}
+                        size="small"
+                        variant="outlined"
+                        label={p.name}
+                        onDelete={() => removePlayerFromTeam(idx, p.name)}
+                        sx={{ borderRadius: 2 }}
+                      />
+                    ))}
+                  </Box>
+                  <Box sx={{ mt: 1.5 }}>
+                    <Autocomplete<PlayerOption, false, false, true>
+                      freeSolo
+                      size="small"
+                      options={(() => {
+                        const inputValue = newPlayerInputs[idx] ?? "";
+                        const trimmed = inputValue.trim();
+                        const filtered: PlayerOption[] = getAvailableSuggestions(idx)
+                          .filter((s) => matchesWithName(s.name, trimmed))
+                          .map((s) => ({ type: "existing" as const, name: s.name, gamesPlayed: s.gamesPlayed }));
+                        if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
+                          filtered.push({ type: "create" as const, name: trimmed });
+                        }
+                        return filtered;
+                      })()}
+                      filterOptions={(options) => options}
+                      getOptionLabel={(option) => typeof option === "string" ? option : option.name}
+                      isOptionEqualToValue={(option, value) => option.type === value.type && option.name === value.name}
+                      value={null}
+                      inputValue={newPlayerInputs[idx] ?? ""}
+                      onInputChange={(_, newInputValue, reason) => {
+                        if (reason === "reset") return;
+                        setNewPlayerInputs((prev) => ({ ...prev, [idx]: newInputValue }));
+                      }}
+                      onChange={(_, newValue) => {
+                        if (!newValue) return;
+                        const name = typeof newValue === "string" ? newValue.trim() : newValue.name;
+                        if (name) { addPlayerToTeam(idx, name); setNewPlayerInputs((prev) => ({ ...prev, [idx]: "" })); }
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder={t("addPlayerToTeam")}
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <InputAdornment position="end">
+                                <IconButton size="small" color="primary" edge="end"
+                                  disabled={!(newPlayerInputs[idx] ?? "").trim()}
+                                  onClick={() => { addPlayerToTeam(idx); setNewPlayerInputs((prev) => ({ ...prev, [idx]: "" })); }}>
+                                  <PersonAddIcon fontSize="small" />
+                                </IconButton>
+                              </InputAdornment>
+                            ),
+                          }}
+                          sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                        />
+                      )}
+                      noOptionsText={t("noSuggestions")}
+                    />
+                  </Box>
+                </Box>
+              </Grid2>
+            ))}
+          </Grid2>
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={onClose} disabled={saving}>{t("cancel")}</Button>
+        <Button variant="contained" onClick={handleSubmit} disabled={saving} startIcon={<SaveIcon />}>
+          {saving ? t("creatingPastGame") : t("createPastGame")}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -704,6 +983,8 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const { data: session } = useSession();
   const isAuthenticated = !!session?.user;
   const [title, setTitle] = useState("");
+  const [teamOneName, setTeamOneName] = useState("");
+  const [teamTwoName, setTeamTwoName] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -714,7 +995,11 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [playerRatings, setPlayerRatings] = useState<{ name: string; rating: number; gamesPlayed: number }[]>([]);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showAddHistorical, setShowAddHistorical] = useState(false);
   const isOwner = !!(session?.user && ownerId && session.user.id === ownerId);
+
+  // DEBUG
+  console.log("[HistoryPage] session:", session?.user?.id, "ownerId:", ownerId, "isOwner:", isOwner, "isAdmin:", isAdmin);
 
   const load = useCallback(async () => {
     const [evRes, histRes] = await Promise.all([
@@ -724,7 +1009,10 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     if (evRes.status === 404) { setNotFound(true); setLoading(false); return; }
     const ev = await evRes.json();
     const hist = await histRes.json();
+    console.log("[HistoryPage] API ev.ownerId:", ev.ownerId, "ev.isAdmin:", ev.isAdmin);
     setTitle(ev.title);
+    setTeamOneName(ev.teamOneName ?? "Team A");
+    setTeamTwoName(ev.teamTwoName ?? "Team B");
     setOwnerId(ev.ownerId ?? null);
     setIsAdmin(!!ev.isAdmin);
     setHistory(hist.data);
@@ -761,6 +1049,10 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setHistory((prev) => prev.map((h) => h.id === updated.id ? updated : h));
   };
 
+  const handleAddHistoricalSuccess = (newEntry: HistoryEntry) => {
+    setHistory((prev) => [newEntry, ...prev]);
+  };
+
   if (loading) return (
     <ThemeModeProvider>
       <ResponsiveLayout>
@@ -787,24 +1079,36 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
       <ResponsiveLayout>
         <Container maxWidth="md" sx={{ py: 4 }}>
           <Stack spacing={3}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-              <Button variant="outlined" startIcon={<ArrowBackIcon />} href={`/events/${eventId}`} size="small"
-                sx={{ borderRadius: 2, textTransform: "none" }}>
-                {t("backToGame")}
-              </Button>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <Button variant="outlined" startIcon={<ArrowBackIcon />} href={`/events/${eventId}`} size="small"
+                  sx={{ borderRadius: 2, textTransform: "none" }}>
+                  {t("backToGame")}
+                </Button>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <HistoryIcon color="primary" />
+                  <Typography variant="h5" fontWeight={700}>
+                    {t("historyTitle", { title })}
+                  </Typography>
+                </Box>
+              </Box>
+
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <HistoryIcon color="primary" />
-                <Typography variant="h5" fontWeight={700}>
-                  {t("historyTitle", { title })}
-                </Typography>
+                <Button variant="outlined" startIcon={<EmojiEventsIcon />}
+                  href={`/events/${eventId}/rankings`} size="small"
+                  sx={{ borderRadius: 2, textTransform: "none" }}>
+                  {t("ratings")}
+                </Button>
+
+                {(isOwner || isAdmin) && (
+                  <Button variant="contained" startIcon={<AddCircleIcon />}
+                    onClick={() => setShowAddHistorical(true)} size="small"
+                    sx={{ borderRadius: 2, textTransform: "none" }}>
+                    {t("addHistoricalGame")}
+                  </Button>
+                )}
               </Box>
             </Box>
-
-            <Button variant="outlined" startIcon={<EmojiEventsIcon />}
-              href={`/events/${eventId}/rankings`} size="small"
-              sx={{ alignSelf: "flex-start", borderRadius: 2, textTransform: "none" }}>
-              {t("ratings")}
-            </Button>
 
             {history.length === 0 ? (
               <Paper elevation={0} sx={{
@@ -834,6 +1138,16 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
               </>
             )}
           </Stack>
+
+          <AddHistoricalGameDialog
+            open={showAddHistorical}
+            onClose={() => setShowAddHistorical(false)}
+            eventId={eventId}
+            defaultTeamOneName={teamOneName}
+            defaultTeamTwoName={teamTwoName}
+            knownPlayers={knownPlayers}
+            onSuccess={handleAddHistoricalSuccess}
+          />
         </Container>
       </ResponsiveLayout>
     </ThemeModeProvider>
