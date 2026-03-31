@@ -53,10 +53,9 @@ describe("LocationAutocomplete", () => {
     expect(screen.getByLabelText("Venue")).toBeInTheDocument();
   });
 
-  it("does not show map button when no API key is configured", () => {
-    // In test env PUBLIC_GOOGLE_MAPS_API_KEY is empty → sdkReady stays false
+  it("always shows the map button (no API key required)", () => {
     renderWithTheme(<LocationAutocomplete value="" onChange={vi.fn()} />);
-    expect(screen.queryByRole("button", { name: "locationOpenMap" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "locationOpenMap" })).toBeInTheDocument();
   });
 
   it("does not show dropdown when input is empty", () => {
