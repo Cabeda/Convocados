@@ -5,6 +5,7 @@ import type { TranslationKey } from "./i18n";
 const log = createLogger("notification-queue");
 
 const BATCH_SIZE = 100;
+const MAX_RETRIES = 3;
 
 export type NotificationJobType =
   | "player_joined"
@@ -21,6 +22,8 @@ export interface NotificationJobPayload {
   params: Record<string, string>;
   url: string;
   spotsLeft: number;
+  /** Only set for "reminder" jobs — used to check per-timing push prefs */
+  reminderType?: "24h" | "2h" | "1h";
 }
 
 /** Enqueue a notification job — fire and forget, never blocks the caller */
@@ -43,8 +46,10 @@ export function enqueueNotification(
 }
 
 /** Drain pending notification jobs — called by the cron endpoint.
- *  Atomically claims each batch by setting processedAt before processing,
- *  preventing double-delivery if the cron fires concurrently.
+ *
+ *  Uses a transaction to atomically claim each batch, preventing double-delivery
+ *  when the cron fires concurrently. Failed jobs are retried up to MAX_RETRIES
+ *  times; after that they are moved to the dead-letter state (failedAt set).
  */
 export async function drainNotificationQueue(): Promise<number> {
   // Lazy import to avoid circular dependency
@@ -52,22 +57,25 @@ export async function drainNotificationQueue(): Promise<number> {
 
   let totalProcessed = 0;
 
-  // Loop in batches until no unprocessed jobs remain
   while (true) {
-    // Atomically claim a batch: mark processedAt now so concurrent runs skip them
-    const claimTime = new Date();
-    const claimed = await prisma.notificationJob.updateMany({
-      where: { processedAt: null },
-      data: { processedAt: claimTime },
-    });
-
-    if (claimed.count === 0) break;
-
-    // Fetch the batch we just claimed
-    const jobs = await prisma.notificationJob.findMany({
-      where: { processedAt: claimTime },
-      orderBy: { createdAt: "asc" },
-      take: BATCH_SIZE,
+    // Atomically claim a batch inside a transaction so concurrent runs can't
+    // pick up the same jobs.
+    const jobs = await prisma.$transaction(async (tx) => {
+      const pending = await tx.notificationJob.findMany({
+        where: { processedAt: null, failedAt: null },
+        orderBy: { createdAt: "asc" },
+        take: BATCH_SIZE,
+        select: { id: true },
+      });
+      if (pending.length === 0) return [];
+      const ids = pending.map((j) => j.id);
+      await tx.notificationJob.updateMany({
+        where: { id: { in: ids } },
+        data: { processedAt: new Date() },
+      });
+      return tx.notificationJob.findMany({
+        where: { id: { in: ids } },
+      });
     });
 
     if (jobs.length === 0) break;
@@ -85,16 +93,28 @@ export async function drainNotificationQueue(): Promise<number> {
             payload.spotsLeft,
             job.senderClientId ?? undefined,
             job.type as NotificationJobType,
+            payload.reminderType,
           );
         } catch (err: unknown) {
           log.error({ jobId: job.id, eventId: job.eventId, type: job.type, err }, "Failed to process notification job");
+          const nextRetry = job.retryCount + 1;
+          if (nextRetry >= MAX_RETRIES) {
+            // Dead-letter: mark as permanently failed
+            await prisma.notificationJob
+              .update({ where: { id: job.id }, data: { failedAt: new Date(), processedAt: null } })
+              .catch(() => {});
+            log.error({ jobId: job.id }, "Notification job moved to dead-letter after max retries");
+          } else {
+            // Reset for retry
+            await prisma.notificationJob
+              .update({ where: { id: job.id }, data: { processedAt: null, retryCount: nextRetry } })
+              .catch(() => {});
+          }
         }
       }),
     );
 
     totalProcessed += jobs.length;
-
-    // If we got fewer than BATCH_SIZE, there are no more jobs
     if (jobs.length < BATCH_SIZE) break;
   }
 

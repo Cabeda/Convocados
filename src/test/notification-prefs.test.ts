@@ -105,10 +105,10 @@ describe("GET /api/me/notification-preferences", () => {
 
     const body = await res.json();
     expect(body.userId).toBe(user.id);
-    expect(body.emailEnabled).toBe(true);
+    expect(body.emailEnabled).toBe(false);
     expect(body.pushEnabled).toBe(true);
-    expect(body.gameInviteEmail).toBe(true);
-    expect(body.gameReminderEmail).toBe(true);
+    expect(body.gameInviteEmail).toBe(false);
+    expect(body.gameReminderEmail).toBe(false);
     expect(body.weeklySummaryEmail).toBe(false);
     expect(body.reminder24h).toBe(true);
     expect(body.reminder2h).toBe(true);
@@ -197,7 +197,7 @@ describe("PUT /api/me/notification-preferences", () => {
     expect(body.weeklySummaryEmail).toBe(true);
     // Other fields should be defaults
     expect(body.pushEnabled).toBe(true);
-    expect(body.gameReminderEmail).toBe(true);
+    expect(body.gameReminderEmail).toBe(false);
   });
 
   it("updates existing preferences (partial update)", async () => {
