@@ -1,6 +1,6 @@
 import "leaflet/dist/leaflet.css";
-import React, { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import React, { useEffect, useRef, useState } from "react";
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import L, { type LeafletMouseEvent } from "leaflet";
 import { Box } from "@mui/material";
 
@@ -14,11 +14,21 @@ L.Icon.Default.mergeOptions({
 
 interface Props {
   initialAddress: string;
+  initialCoordinate?: { lat: number; lon: number };
   onPinDrop: (lat: number, lon: number) => void;
 }
 
 const DEFAULT_CENTER: [number, number] = [41.1579, -8.6291]; // Porto fallback
 const DEFAULT_ZOOM = 13;
+
+// Uses useMap() inside MapContainer context to imperatively pan/zoom
+function MapController({ target }: { target: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (target) map.setView(target, DEFAULT_ZOOM);
+  }, [map, target]);
+  return null;
+}
 
 function DraggableMarker({ position, onMove }: {
   position: [number, number];
@@ -50,11 +60,23 @@ function ClickHandler({ onClick }: { onClick: (lat: number, lon: number) => void
   return null;
 }
 
-export default function LeafletMap({ initialAddress, onPinDrop }: Props) {
-  const [position, setPosition] = React.useState<[number, number]>(DEFAULT_CENTER);
-  const mapRef = useRef<L.Map>(null);
+export default function LeafletMap({ initialAddress, initialCoordinate, onPinDrop }: Props) {
+  const [position, setPosition] = useState<[number, number]>(
+    initialCoordinate ? [initialCoordinate.lat, initialCoordinate.lon] : DEFAULT_CENTER,
+  );
+  const [target, setTarget] = useState<[number, number] | null>(
+    initialCoordinate ? [initialCoordinate.lat, initialCoordinate.lon] : null,
+  );
 
   useEffect(() => {
+    // If we already have exact coordinates, skip geocoding entirely
+    if (initialCoordinate) {
+      const pos: [number, number] = [initialCoordinate.lat, initialCoordinate.lon];
+      setPosition(pos);
+      setTarget(pos);
+      return;
+    }
+
     if (!initialAddress?.trim()) return;
 
     // Try raw coords first
@@ -64,7 +86,7 @@ export default function LeafletMap({ initialAddress, onPinDrop }: Props) {
       const lon = parseFloat(rawMatch[2]);
       if (!isNaN(lat) && !isNaN(lon)) {
         setPosition([lat, lon]);
-        mapRef.current?.setView([lat, lon], DEFAULT_ZOOM);
+        setTarget([lat, lon]);
         return;
       }
     }
@@ -80,7 +102,7 @@ export default function LeafletMap({ initialAddress, onPinDrop }: Props) {
           const lat = parseFloat(data[0].lat);
           const lon = parseFloat(data[0].lon);
           setPosition([lat, lon]);
-          mapRef.current?.setView([lat, lon], DEFAULT_ZOOM);
+          setTarget([lat, lon]);
         }
       })
       .catch(() => {});
@@ -94,15 +116,15 @@ export default function LeafletMap({ initialAddress, onPinDrop }: Props) {
   return (
     <Box sx={{ width: "100%", height: 400 }}>
       <MapContainer
-        center={position}
+        center={DEFAULT_CENTER}
         zoom={DEFAULT_ZOOM}
         style={{ width: "100%", height: "100%" }}
-        ref={mapRef}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        <MapController target={target} />
         <DraggableMarker position={position} onMove={handleMove} />
         <ClickHandler onClick={handleMove} />
       </MapContainer>

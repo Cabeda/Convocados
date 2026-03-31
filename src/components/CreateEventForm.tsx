@@ -60,6 +60,7 @@ export default function CreateEventForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState("");
+  const [locationCoord, setLocationCoord] = useState<{ lat: number; lon: number } | undefined>();
   const [courtFinderOpen, setCourtFinderOpen] = useState(false);
   const [dateTime, setDateTime] = useState(nextHour);
   const [timezone, setTimezone] = useState(() => detectTimezone());
@@ -200,7 +201,8 @@ export default function CreateEventForm() {
                       <Stack spacing={3}>
                         <LocationAutocomplete
                           value={location}
-                          onChange={setLocation}
+                          onChange={(v) => { setLocation(v); setLocationCoord(undefined); }}
+                          coordinate={locationCoord}
                           label={t("locationOptional")}
                           placeholder={t("locationPlaceholder")}
                         />
@@ -314,7 +316,10 @@ export default function CreateEventForm() {
           onClose={() => setCourtFinderOpen(false)}
           sport={sport}
           date={dateTime.split("T")[0] || new Date().toISOString().split("T")[0]}
-          onSelect={(loc) => setLocation(loc)}
+          onSelect={(loc, coord) => {
+            setLocation(loc);
+            setLocationCoord(coord ? { lat: coord.lat, lon: coord.lng } : undefined);
+          }}
         />
       </ResponsiveLayout>
     </ThemeModeProvider>
