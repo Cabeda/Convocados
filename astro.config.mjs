@@ -8,6 +8,7 @@ export default defineConfig({
   adapter: node({ mode: "standalone" }),
   integrations: [react()],
   security: { checkOrigin: true },
+  server: { host: true },
   vite: {
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),

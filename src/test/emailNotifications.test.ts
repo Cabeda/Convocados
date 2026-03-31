@@ -11,6 +11,7 @@ import {
   sendGameInvite,
   sendReminder,
   sendWeeklySummary,
+  sendPlayerJoinedOwnerNotification,
   _resetResendClient,
 } from "~/lib/email.server";
 
@@ -151,5 +152,68 @@ describe("sendWeeklySummary", () => {
 
     const html = mockSend.mock.calls[0][0].html;
     expect(html).toContain("unsubscribe");
+  });
+});
+
+describe("sendPlayerJoinedOwnerNotification", () => {
+  it("sends notification with player name and spots left", async () => {
+    mockSend.mockResolvedValue({ data: { id: "own-1" }, error: null });
+
+    await sendPlayerJoinedOwnerNotification("owner@example.com", {
+      eventTitle: "Friday Futsal",
+      playerName: "João Silva",
+      spotsLeft: 2,
+      eventUrl: "https://convocados.fly.dev/events/abc",
+    });
+
+    expect(mockSend).toHaveBeenCalledOnce();
+    const call = mockSend.mock.calls[0][0];
+    expect(call.to).toBe("owner@example.com");
+    expect(call.subject).toContain("João Silva");
+    expect(call.subject).toContain("Friday Futsal");
+    expect(call.html).toContain("João Silva");
+    expect(call.html).toContain("2 spots left");
+    expect(call.html).toContain("/events/abc");
+  });
+
+  it("shows 'Game is now full' when spotsLeft is 0", async () => {
+    mockSend.mockResolvedValue({ data: { id: "own-2" }, error: null });
+
+    await sendPlayerJoinedOwnerNotification("owner@example.com", {
+      eventTitle: "Game",
+      playerName: "Ana",
+      spotsLeft: 0,
+      eventUrl: "https://convocados.fly.dev/events/x",
+    });
+
+    const html = mockSend.mock.calls[0][0].html;
+    expect(html).toContain("Game is now full");
+  });
+
+  it("shows singular 'spot left' when spotsLeft is 1", async () => {
+    mockSend.mockResolvedValue({ data: { id: "own-3" }, error: null });
+
+    await sendPlayerJoinedOwnerNotification("owner@example.com", {
+      eventTitle: "Game",
+      playerName: "Ana",
+      spotsLeft: 1,
+      eventUrl: "https://convocados.fly.dev/events/x",
+    });
+
+    const html = mockSend.mock.calls[0][0].html;
+    expect(html).toContain("1 spot left");
+  });
+
+  it("throws on Resend error", async () => {
+    mockSend.mockResolvedValue({ data: null, error: { message: "Bad request", name: "validation_error" } });
+
+    await expect(
+      sendPlayerJoinedOwnerNotification("owner@example.com", {
+        eventTitle: "Game",
+        playerName: "Ana",
+        spotsLeft: 3,
+        eventUrl: "https://convocados.fly.dev/events/x",
+      }),
+    ).rejects.toThrow("Failed to send player joined notification");
   });
 });
