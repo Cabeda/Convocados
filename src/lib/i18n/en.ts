@@ -124,6 +124,25 @@ const en = {
   backToGame: "Back to game",
   historyTitle: "{title} — History",
 
+  // Historical Game Backfill
+  addHistoricalGame: "Add past game",
+  addHistoricalGameDesc: "Record a game that happened in the past. ELO will not be calculated automatically — you can approve it after.",
+  historicalGame: "Past game",
+  eloPending: "ELO pending",
+  eloApproved: "ELO approved",
+  approveElo: "Approve ELO",
+  approveEloDesc: "Process this game for ELO rating calculation.",
+  approvingElo: "Approving...",
+  eloApprovedSuccess: "ELO approved successfully!",
+  pastGameTeam1Name: "Team 1 name",
+  pastGameTeam2Name: "Team 2 name",
+  selectPlayers: "Select players",
+  player: "Player",
+  createPastGame: "Record past game",
+  creatingPastGame: "Recording...",
+  addPastGameSuccess: "Past game recorded successfully!",
+  errorCreatingPastGame: "Failed to record past game.",
+
   // TeamPicker
   playerCount: "{n} player",
   playerCountPlural: "{n} players",
