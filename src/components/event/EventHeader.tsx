@@ -90,7 +90,7 @@ export function EventHeader({
     if (!el) return;
     const obs = new IntersectionObserver(
       ([entry]) => setShowSticky(!entry.isIntersecting),
-      { threshold: 0, rootMargin: "-64px 0px 0px 0px" },
+      { threshold: 0, rootMargin: "-120px 0px 0px 0px" },
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -193,10 +193,13 @@ export function EventHeader({
 
   return (
     <>
-      {/* ── Sticky mini-header ── */}
+      {/* ── Sticky mini-header — sits below the AppBar ── */}
       {showSticky && (
         <Box sx={{
-          position: "fixed", top: 0, left: 0, right: 0, zIndex: 1100,
+          position: "fixed",
+          top: { xs: "56px", sm: "64px" },
+          left: 0, right: 0,
+          zIndex: 1050,
           bgcolor: "background.paper",
           borderBottom: 1, borderColor: "divider",
           px: 2, py: 1,
