@@ -10,7 +10,9 @@ let _webpush: any = null;
 
 async function getWebPush(): Promise<typeof import("web-push")> {
   if (!_webpush) {
-    _webpush = await import("web-push");
+    const mod = await import("web-push");
+    // CJS module interop: functions may be on .default in ESM context
+    _webpush = (mod as any).default ?? mod;
   }
   return _webpush;
 }
