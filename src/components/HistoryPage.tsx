@@ -18,6 +18,7 @@ import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PaymentIcon from "@mui/icons-material/Payment";
 import LoginIcon from "@mui/icons-material/Login";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -375,6 +376,7 @@ function HistoryCardFull({
   entry,
   eventId,
   onUpdate,
+  onDelete,
   isAuthenticated,
   knownPlayers,
   playerRatings,
@@ -383,6 +385,7 @@ function HistoryCardFull({
   entry: HistoryEntry;
   eventId: string;
   onUpdate: (updated: HistoryEntry) => void;
+  onDelete: (id: string) => void;
   isAuthenticated: boolean;
   knownPlayers: { name: string; gamesPlayed: number }[];
   playerRatings: { name: string; rating: number; gamesPlayed: number }[];
@@ -442,6 +445,21 @@ function HistoryCardFull({
     setApprovingElo(false);
     if (!res.ok) { setError(json.error); return; }
     onUpdate(json);
+  };
+
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const handleDelete = async () => {
+    setDeleting(true);
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, { method: "DELETE" });
+    setDeleting(false);
+    setConfirmDelete(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json.error ?? "Failed to delete.");
+      return;
+    }
+    onDelete(entry.id);
   };
 
   // Live ELO preview: compute deltas from current editable teams + scores
@@ -630,13 +648,20 @@ function HistoryCardFull({
             sx={{ fontWeight: 600 }}
           />
           {isOwner ? (
-            <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
-              <span>
-                <IconButton size="small" color={entry.editable ? "default" : "warning"} onClick={handleToggleLock} disabled={unlocking}>
-                  {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+            <>
+              <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
+                <span>
+                  <IconButton size="small" color={entry.editable ? "default" : "warning"} onClick={handleToggleLock} disabled={unlocking}>
+                    {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title={t("deleteGame")}>
+                <IconButton size="small" color="error" onClick={() => setConfirmDelete(true)} disabled={deleting}>
+                  <DeleteIcon fontSize="small" />
                 </IconButton>
-              </span>
-            </Tooltip>
+              </Tooltip>
+            </>
           ) : !entry.editable ? (
             <Tooltip title={t("notEditable")}>
               <LockIcon fontSize="small" color="disabled" />
@@ -644,6 +669,25 @@ function HistoryCardFull({
           ) : null}
         </Stack>
       </Box>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t("deleteGame")}</DialogTitle>
+        <DialogContent>
+          <Typography>{t("deleteHistoryConfirm")}</Typography>
+          {entry.eloProcessed && (
+            <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
+              {t("deleteHistoryEloWarning")}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)} disabled={deleting}>{t("cancel")}</Button>
+          <Button color="error" variant="contained" onClick={handleDelete} disabled={deleting}>
+            {deleting ? t("deleting") : t("deleteGame")}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Stack spacing={0} divider={<Divider sx={{ mx: 3 }} />}>
         {error && (
@@ -1118,6 +1162,10 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setHistory((prev) => prev.map((h) => h.id === updated.id ? updated : h));
   };
 
+  const handleDelete = (id: string) => {
+    setHistory((prev) => prev.filter((h) => h.id !== id));
+  };
+
   const handleAddHistoricalSuccess = (newEntry: HistoryEntry) => {
     setHistory((prev) => [newEntry, ...prev]);
   };
@@ -1191,8 +1239,8 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
               <>
                 {history.map((entry) => (
                   <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} onUpdate={handleUpdate}
-                    isAuthenticated={isAuthenticated} knownPlayers={knownPlayers} playerRatings={playerRatings}
-                    isOwner={isOwner || isAdmin} />
+                    onDelete={handleDelete} isAuthenticated={isAuthenticated} knownPlayers={knownPlayers}
+                    playerRatings={playerRatings} isOwner={isOwner || isAdmin} />
                 ))}
                 {hasMore && (
                   <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
