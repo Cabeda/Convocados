@@ -290,4 +290,158 @@ describe("Approve ELO for Historical Game API", () => {
     const res = await POST_APPROVE(ctx({ id: event.id, historyId: game.id }, {}));
     expect(res.status).toBe(403);
   });
+
+  it("returns 400 for non-historical (live) game", async () => {
+    const event = await seedEvent("owner1");
+
+    const game = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date("2024-01-15T10:00:00Z"),
+        teamOneName: "Team A",
+        teamTwoName: "Team B",
+        scoreOne: 3,
+        scoreTwo: 1,
+        teamsSnapshot: JSON.stringify([
+          { team: "Team A", players: [{ name: "Player1", order: 0 }] },
+          { team: "Team B", players: [{ name: "Player2", order: 0 }] },
+        ]),
+        source: "live", // Not historical
+        eloProcessed: false,
+        editableUntil: new Date(Date.now() + 86400_000),
+      },
+    });
+
+    const res = await POST_APPROVE(ctx({ id: event.id, historyId: game.id }, {}));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    const event = await seedEvent("owner1");
+    mockGetSession.mockResolvedValue(null as any);
+
+    const res = await POST_APPROVE(ctx({ id: event.id, historyId: "any" }, {}));
+    expect(res.status).toBe(401);
+  });
+});
+
+import { DELETE } from "~/pages/api/events/[id]/history/[historyId]";
+
+describe("Delete Historical Game API", () => {
+  beforeEach(async () => {
+    await prisma.playerRating.deleteMany();
+    await prisma.gameHistory.deleteMany();
+    await prisma.eventAdmin.deleteMany();
+    await prisma.player.deleteMany();
+    await prisma.event.deleteMany();
+    await prisma.user.deleteMany();
+    await resetApiRateLimitStore();
+    mockGetSession.mockResolvedValue({ user: { id: "owner1", name: "Owner" } } as any);
+    mockCheckOwnership.mockResolvedValue({
+      isOwner: true,
+      isAdmin: false,
+      session: { user: { id: "owner1", name: "Owner" } },
+    } as any);
+  });
+
+  it("deletes a historical game", async () => {
+    const event = await seedEvent("owner1");
+
+    const game = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date("2024-01-15T10:00:00Z"),
+        teamOneName: "Team A",
+        teamTwoName: "Team B",
+        scoreOne: 3,
+        scoreTwo: 1,
+        teamsSnapshot: JSON.stringify([
+          { team: "Team A", players: [{ name: "Player1", order: 0 }] },
+          { team: "Team B", players: [{ name: "Player2", order: 0 }] },
+        ]),
+        source: "historical",
+        eloProcessed: false,
+        editableUntil: new Date(Date.now() + 86400_000),
+      },
+    });
+
+    const res = await DELETE(ctx({ id: event.id, historyId: game.id }, undefined, "DELETE"));
+    expect(res.status).toBe(204);
+
+    const deleted = await prisma.gameHistory.findUnique({ where: { id: game.id } });
+    expect(deleted).toBeNull();
+  });
+
+  it("recalculates ELO when deleting a processed game", async () => {
+    const event = await seedEvent("owner1");
+
+    const game = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date("2024-01-15T10:00:00Z"),
+        teamOneName: "Team A",
+        teamTwoName: "Team B",
+        scoreOne: 3,
+        scoreTwo: 1,
+        teamsSnapshot: JSON.stringify([
+          { team: "Team A", players: [{ name: "Player1", order: 0 }] },
+          { team: "Team B", players: [{ name: "Player2", order: 0 }] },
+        ]),
+        source: "historical",
+        eloProcessed: true, // Already processed
+        editableUntil: new Date(Date.now() + 86400_000),
+      },
+    });
+
+    const res = await DELETE(ctx({ id: event.id, historyId: game.id }, undefined, "DELETE"));
+    expect(res.status).toBe(204);
+
+    const deleted = await prisma.gameHistory.findUnique({ where: { id: game.id } });
+    expect(deleted).toBeNull();
+  });
+
+  it("returns 403 for non-owner", async () => {
+    const event = await seedEvent("owner1");
+    mockCheckOwnership.mockResolvedValue({
+      isOwner: false,
+      isAdmin: false,
+      session: { user: { id: "other", name: "Other" } },
+    } as any);
+
+    const game = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date("2024-01-15T10:00:00Z"),
+        teamOneName: "Team A",
+        teamTwoName: "Team B",
+        scoreOne: 3,
+        scoreTwo: 1,
+        teamsSnapshot: JSON.stringify([
+          { team: "Team A", players: [{ name: "Player1", order: 0 }] },
+          { team: "Team B", players: [{ name: "Player2", order: 0 }] },
+        ]),
+        source: "historical",
+        eloProcessed: false,
+        editableUntil: new Date(Date.now() + 86400_000),
+      },
+    });
+
+    const res = await DELETE(ctx({ id: event.id, historyId: game.id }, undefined, "DELETE"));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 for non-existent game", async () => {
+    const event = await seedEvent("owner1");
+
+    const res = await DELETE(ctx({ id: event.id, historyId: "nonexistent" }, undefined, "DELETE"));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    const event = await seedEvent("owner1");
+    mockGetSession.mockResolvedValue(null as any);
+
+    const res = await DELETE(ctx({ id: event.id, historyId: "any" }, undefined, "DELETE"));
+    expect(res.status).toBe(401);
+  });
 });
