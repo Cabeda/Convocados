@@ -35,6 +35,7 @@ const en = {
   weeks: "week(s)",
   months: "month(s)",
   onDay: "On day (optional)",
+  onDays: "On days (optional)",
   sameDayAsEvent: "Same day as event",
   recurrenceInfo: "The player list resets 1 hour after each game. The link stays the same.",
   creating: "Creating…",
@@ -153,12 +154,28 @@ const en = {
   dropPlayersHere: "Drop players here",
 
   // Recurrence descriptions
+  everyDay: "Every day",
+  everyNDays: "Every {n} days",
   everyWeek: "Every week",
   everyNWeeks: "Every {n} weeks",
   everyWeekOn: "Every week on {day}",
   everyNWeeksOn: "Every {n} weeks on {day}",
   everyMonth: "Every month",
   everyNMonths: "Every {n} months",
+  everyYear: "Every year",
+  everyNYears: "Every {n} years",
+
+  // Recurrence presets (Google Calendar style)
+  doesNotRepeat: "Does not repeat",
+  daily: "Daily",
+  weeklyOnDay: "Weekly on {day}",
+  monthlyOnDay: "Monthly on day {day}",
+  annually: "Annually on {date}",
+  customRecurrence: "Custom...",
+  customRecurrenceTitle: "Custom recurrence",
+  repeatEvery: "Repeat every",
+  days: "day(s)",
+  years: "year(s)",
 
   // API errors
   errorTooManyEvents: "Too many events created. Try again in an hour.",

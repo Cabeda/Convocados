@@ -36,6 +36,7 @@ const pt: TranslationKeys = {
   weeks: "semana(s)",
   months: "mês(es)",
   onDay: "No dia (opcional)",
+  onDays: "Nos dias (opcional)",
   sameDayAsEvent: "Mesmo dia do evento",
   recurrenceInfo: "A lista de jogadores é reiniciada 1 hora após cada jogo. O link mantém-se.",
   creating: "A criar…",
@@ -154,12 +155,28 @@ const pt: TranslationKeys = {
   dropPlayersHere: "Arrasta jogadores aqui",
 
   // Recurrence descriptions
+  everyDay: "Todos os dias",
+  everyNDays: "De {n} em {n} dias",
   everyWeek: "Todas as semanas",
   everyNWeeks: "De {n} em {n} semanas",
   everyWeekOn: "Todas as semanas à {day}",
   everyNWeeksOn: "De {n} em {n} semanas à {day}",
   everyMonth: "Todos os meses",
   everyNMonths: "De {n} em {n} meses",
+  everyYear: "Todos os anos",
+  everyNYears: "De {n} em {n} anos",
+
+  // Recurrence presets (Google Calendar style)
+  doesNotRepeat: "Não se repete",
+  daily: "Diariamente",
+  weeklyOnDay: "Semanalmente à {day}",
+  monthlyOnDay: "Mensalmente no dia {day}",
+  annually: "Anualmente a {date}",
+  customRecurrence: "Personalizar...",
+  customRecurrenceTitle: "Recorrência personalizada",
+  repeatEvery: "Repetir a cada",
+  days: "dia(s)",
+  years: "ano(s)",
 
   // API errors
   errorTooManyEvents: "Demasiados jogos criados. Tenta novamente dentro de uma hora.",

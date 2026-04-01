@@ -122,13 +122,75 @@ describe("CreateEventForm", () => {
 
     await user.click(screen.getByText(/Advanced options/i));
 
-    const recurringSwitch = await screen.findByLabelText(/Recurring game/i);
-    await user.click(recurringSwitch);
+    await waitFor(() => {
+      // The recurrence dropdown should be visible with "Does not repeat" as default
+      expect(screen.getByText(/Does not repeat/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows recurrence presets in dropdown", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<CreateEventForm />);
+
+    await user.click(screen.getByText(/Advanced options/i));
+
+    // Open the recurrence dropdown
+    const recurrenceSelect = screen.getAllByText(/Does not repeat/i)[0];
+    await user.click(recurrenceSelect);
 
     await waitFor(() => {
-      expect(screen.getByLabelText(/Every/i)).toBeInTheDocument();
-      const freqElements = screen.getAllByText(/Frequency/i);
-      expect(freqElements.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText(/Daily/i)).toBeInTheDocument();
+      expect(screen.getByText(/Custom\.\.\./i)).toBeInTheDocument();
+    });
+  });
+
+  it("opens custom recurrence dialog when Custom is selected", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<CreateEventForm />);
+
+    await user.click(screen.getByText(/Advanced options/i));
+
+    // Open the recurrence dropdown and select Custom
+    const recurrenceSelect = screen.getAllByText(/Does not repeat/i)[0];
+    await user.click(recurrenceSelect);
+
+    const customOption = await screen.findByText(/Custom\.\.\./i);
+    await user.click(customOption);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Custom recurrence/i)).toBeInTheDocument();
+    });
+  });
+
+  it("sends daily recurrence when Daily preset selected", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: "daily-event" }),
+    });
+
+    delete (window as any).location;
+    (window as any).location = { href: "", pathname: "/", search: "" };
+
+    renderWithTheme(<CreateEventForm />);
+
+    await user.click(screen.getByText(/Advanced options/i));
+
+    // Open the recurrence dropdown and select Daily
+    const recurrenceSelect = screen.getAllByText(/Does not repeat/i)[0];
+    await user.click(recurrenceSelect);
+    await user.click(await screen.findByText(/Daily/i));
+
+    const titleInput = screen.getByLabelText(/Game title/i);
+    await user.clear(titleInput);
+    await user.type(titleInput, "Daily Game");
+
+    await user.click(screen.getByRole("button", { name: /Create game/i }));
+
+    await waitFor(() => {
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.isRecurring).toBe(true);
+      expect(body.recurrenceFreq).toBe("daily");
     });
   });
 

@@ -42,6 +42,20 @@ describe("serializeRecurrenceRule", () => {
 describe("nextOccurrence", () => {
   const base = new Date("2026-03-10T18:00:00Z"); // Tuesday
 
+  it("advances daily by interval days", () => {
+    const rule: RecurrenceRule = { freq: "daily", interval: 1 };
+    const after = new Date("2026-03-10T19:00:00Z");
+    const next = nextOccurrence(base, rule, after);
+    expect(next.toISOString()).toBe("2026-03-11T18:00:00.000Z");
+  });
+
+  it("advances daily by 3 days", () => {
+    const rule: RecurrenceRule = { freq: "daily", interval: 3 };
+    const after = new Date("2026-03-10T19:00:00Z");
+    const next = nextOccurrence(base, rule, after);
+    expect(next.toISOString()).toBe("2026-03-13T18:00:00.000Z");
+  });
+
   it("advances weekly by interval weeks", () => {
     const rule: RecurrenceRule = { freq: "weekly", interval: 1 };
     const after = new Date("2026-03-10T19:00:00Z");
@@ -86,6 +100,61 @@ describe("nextOccurrence", () => {
     const next = nextOccurrence(base, rule, after);
     expect(next.getTime()).toBeGreaterThan(after.getTime());
   });
+
+  it("advances yearly by 1 year", () => {
+    const rule: RecurrenceRule = { freq: "yearly", interval: 1 };
+    const after = new Date("2026-03-10T19:00:00Z");
+    const next = nextOccurrence(base, rule, after);
+    expect(next.toISOString().slice(0, 10)).toBe("2027-03-10");
+  });
+
+  it("advances yearly by 2 years", () => {
+    const rule: RecurrenceRule = { freq: "yearly", interval: 2 };
+    const after = new Date("2026-03-10T19:00:00Z");
+    const next = nextOccurrence(base, rule, after);
+    expect(next.toISOString().slice(0, 10)).toBe("2028-03-10");
+  });
+});
+
+describe("nextOccurrence — multiple byDay", () => {
+  const base = new Date("2026-03-10T18:00:00Z"); // Tuesday
+
+  it("returns the nearest upcoming day when multiple days selected", () => {
+    // MO=1, WE=3 — base is TU(2), so WE is 1 day away, MO is 6 days away
+    const rule: RecurrenceRule = { freq: "weekly", interval: 1, byDay: "MO,WE" };
+    const after = new Date("2026-03-10T19:00:00Z");
+    const next = nextOccurrence(base, rule, after);
+    expect(next.getDay()).toBe(3); // Wednesday
+    expect(next.toISOString().slice(0, 10)).toBe("2026-03-11");
+  });
+
+  it("advances past 'after' for multi-day rule", () => {
+    const rule: RecurrenceRule = { freq: "weekly", interval: 1, byDay: "TU,TH" };
+    const after = new Date("2026-03-12T00:00:00Z"); // Thursday
+    const next = nextOccurrence(base, rule, after);
+    // TU base=Mar10, +7=Mar17; TH base→Mar12, but Mar12 <= after, so +7=Mar19 → nearest is Mar17
+    expect(next.getTime()).toBeGreaterThan(after.getTime());
+  });
+
+  it("handles three days per week", () => {
+    const rule: RecurrenceRule = { freq: "weekly", interval: 1, byDay: "MO,WE,FR" };
+    const after = new Date("2026-03-10T19:00:00Z"); // just after base (Tuesday)
+    const next = nextOccurrence(base, rule, after);
+    // WE=Mar11, FR=Mar13, MO=Mar16 → nearest is WE Mar11
+    expect(next.toISOString().slice(0, 10)).toBe("2026-03-11");
+  });
+});
+
+describe("describeRecurrenceRule — multiple byDay", () => {
+  it("describes every week on multiple days in English", () => {
+    expect(describeRecurrenceRule({ freq: "weekly", interval: 1, byDay: "MO,WE" }, "en"))
+      .toBe("Every week on Monday, Wednesday");
+  });
+
+  it("describes every N weeks on multiple days in English", () => {
+    expect(describeRecurrenceRule({ freq: "weekly", interval: 2, byDay: "TU,TH" }, "en"))
+      .toBe("Every 2 weeks on Tuesday, Thursday");
+  });
 });
 
 describe("describeRecurrenceRule", () => {
@@ -127,5 +196,29 @@ describe("describeRecurrenceRule", () => {
 
   it("defaults to English when no locale given", () => {
     expect(describeRecurrenceRule({ freq: "weekly", interval: 1 })).toBe("Every week");
+  });
+
+  it("describes every day in English", () => {
+    expect(describeRecurrenceRule({ freq: "daily", interval: 1 }, "en")).toBe("Every day");
+  });
+
+  it("describes every N days in English", () => {
+    expect(describeRecurrenceRule({ freq: "daily", interval: 3 }, "en")).toBe("Every 3 days");
+  });
+
+  it("describes every year in English", () => {
+    expect(describeRecurrenceRule({ freq: "yearly", interval: 1 }, "en")).toBe("Every year");
+  });
+
+  it("describes every N years in English", () => {
+    expect(describeRecurrenceRule({ freq: "yearly", interval: 2 }, "en")).toBe("Every 2 years");
+  });
+
+  it("describes every day in Portuguese", () => {
+    expect(describeRecurrenceRule({ freq: "daily", interval: 1 }, "pt")).toBe("Todos os dias");
+  });
+
+  it("describes every year in Portuguese", () => {
+    expect(describeRecurrenceRule({ freq: "yearly", interval: 1 }, "pt")).toBe("Todos os anos");
   });
 });
