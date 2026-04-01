@@ -210,6 +210,34 @@ describe("PATCH /api/users/[id] — publicStats toggle", () => {
     const user = await prisma.user.findUnique({ where: { id: "user1" } });
     expect(user!.publicStats).toBe(true);
   });
+
+  it("allows user to set profileVisibility to participants", async () => {
+    await seedUser("user1", "Test User", "test@test.com", true);
+    mockGetSession.mockResolvedValueOnce({
+      user: { id: "user1", name: "Test User", email: "test@test.com" },
+      session: {},
+    } as any);
+
+    const res = await patchProfile(patchCtx("user1", { name: "Test User", profileVisibility: "participants" }));
+    expect(res.status).toBe(200);
+
+    const user = await prisma.user.findUnique({ where: { id: "user1" }, select: { profileVisibility: true } });
+    expect(user!.profileVisibility).toBe("participants");
+  });
+
+  it("ignores invalid profileVisibility values", async () => {
+    await seedUser("user1", "Test User", "test@test.com", true);
+    mockGetSession.mockResolvedValueOnce({
+      user: { id: "user1", name: "Test User", email: "test@test.com" },
+      session: {},
+    } as any);
+
+    const res = await patchProfile(patchCtx("user1", { name: "Test User", profileVisibility: "invalid" }));
+    expect(res.status).toBe(200);
+
+    const user = await prisma.user.findUnique({ where: { id: "user1" }, select: { profileVisibility: true } });
+    expect(user!.profileVisibility).toBe("public"); // unchanged
+  });
 });
 
 // ─── GET /api/users/[id] — publicStats in profile ──────────────────────────

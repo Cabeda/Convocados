@@ -19,12 +19,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "User not found." }, { status: 404 });
   }
 
-  // Resolve effective visibility:
-  // profileVisibility takes precedence; if not set, fall back to publicStats boolean
-  const visibility = user.profileVisibility === "public" ? "public"
-    : user.profileVisibility === "participants" ? "participants"
-    : user.profileVisibility === "private" ? "private"
-    : user.publicStats ? "public" : "private";
+  // Resolve effective visibility. profileVisibility is the source of truth;
+  // fall back to publicStats boolean for rows that predate the migration.
+  const visibility: string = user.profileVisibility || (user.publicStats ? "public" : "private");
 
   if (!isOwnProfile) {
     if (visibility === "private") {
