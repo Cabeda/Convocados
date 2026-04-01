@@ -630,6 +630,14 @@ const es: TranslationKeys = {
   publicStatsDesc: "Permitir que cualquiera vea tus estadísticas en tu página de perfil.",
   publicStatsSaved: "Visibilidad de estadísticas actualizada.",
   publicStatsSaveError: "No se pudo actualizar la visibilidad de las estadísticas.",
+  profileVisibilityLabel: "Visibilidad del perfil",
+  profileVisibilityDesc: "Controla quién puede ver tus estadísticas y perfil.",
+  visibilityPublic: "Público",
+  visibilityPublicDesc: "Cualquiera puede ver tus estadísticas.",
+  visibilityParticipants: "Solo participantes",
+  visibilityParticipantsDesc: "Solo las personas que comparten un juego contigo pueden ver tus estadísticas.",
+  visibilityPrivate: "Privado",
+  visibilityPrivateDesc: "Solo tú puedes ver tus estadísticas.",
 
   // Payment reminders (#162)
   paymentReminders: "Recordatorios de pago",

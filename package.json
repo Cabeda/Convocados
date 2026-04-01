@@ -8,6 +8,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "start": "sh ./scripts/start.sh",
+    "setup-hooks": "sh ./scripts/install-hooks.sh",
     "lint": "eslint src/",
     "typecheck": "tsc",
     "test": "vitest run",

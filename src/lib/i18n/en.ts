@@ -675,6 +675,16 @@ const en = {
   publicStatsSaved: "Stats visibility updated.",
   publicStatsSaveError: "Could not update stats visibility.",
 
+  // Profile visibility (#229)
+  profileVisibilityLabel: "Profile visibility",
+  profileVisibilityDesc: "Control who can see your stats and profile.",
+  visibilityPublic: "Public",
+  visibilityPublicDesc: "Anyone can view your stats.",
+  visibilityParticipants: "Participants only",
+  visibilityParticipantsDesc: "Only people who share a game with you can view your stats.",
+  visibilityPrivate: "Private",
+  visibilityPrivateDesc: "Only you can view your stats.",
+
   // Payment reminders (#162)
   paymentReminders: "Payment reminders",
   paymentRemindersDesc: "Get daily reminders for unpaid games until you mark them as paid.",
