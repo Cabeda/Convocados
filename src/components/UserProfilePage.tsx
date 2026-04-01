@@ -32,6 +32,7 @@ interface UserProfile {
   };
   hasPassword?: boolean;
   publicStats?: boolean;
+  profileVisibility?: string;
   owned: GameSummary[];
   joined: GameSummary[];
   stats: {
@@ -499,29 +500,29 @@ function ChangePasswordSection({ hasPassword }: { hasPassword: boolean }) {
   );
 }
 
-/** Public stats visibility toggle */
-function PublicStatsSection({ userId, userName, initialValue }: { userId: string; userName: string; initialValue: boolean }) {
+/** Profile visibility selector (public / participants / private) */
+function ProfileVisibilitySection({ userId, userName, initialValue }: { userId: string; userName: string; initialValue: string }) {
   const t = useT();
-  const [publicStats, setPublicStats] = useState(initialValue);
+  const [visibility, setVisibility] = useState(initialValue);
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleToggle = async (checked: boolean) => {
+  const handleChange = async (value: string) => {
     setError(null);
     setSaving(true);
     try {
       const res = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: userName, publicStats: checked }),
+        body: JSON.stringify({ name: userName, profileVisibility: value }),
       });
       if (!res.ok) {
         setError(t("publicStatsSaveError"));
         setSaving(false);
         return;
       }
-      setPublicStats(checked);
+      setVisibility(value);
       setSnackbar(true);
     } catch {
       setError(t("publicStatsSaveError"));
@@ -530,25 +531,48 @@ function PublicStatsSection({ userId, userName, initialValue }: { userId: string
     }
   };
 
+  const options: { value: string; label: string; desc: string }[] = [
+    { value: "public", label: t("visibilityPublic"), desc: t("visibilityPublicDesc") },
+    { value: "participants", label: t("visibilityParticipants"), desc: t("visibilityParticipantsDesc") },
+    { value: "private", label: t("visibilityPrivate"), desc: t("visibilityPrivateDesc") },
+  ];
+
   return (
     <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
       <Stack spacing={2}>
         <Stack direction="row" alignItems="center" spacing={1}>
           <BarChartIcon fontSize="small" color="action" />
-          <Typography variant="h6" fontWeight={600}>{t("publicStatsLabel")}</Typography>
+          <Typography variant="h6" fontWeight={600}>{t("profileVisibilityLabel")}</Typography>
         </Stack>
-        <Typography variant="body2" color="text.secondary">{t("publicStatsDesc")}</Typography>
+        <Typography variant="body2" color="text.secondary">{t("profileVisibilityDesc")}</Typography>
         {error && <Alert severity="error">{error}</Alert>}
-        <FormControlLabel
-          control={
-            <Switch
-              checked={publicStats}
-              onChange={(_, checked) => handleToggle(checked)}
-              disabled={saving}
-            />
-          }
-          label={t("publicStatsLabel")}
-        />
+        <Stack spacing={1}>
+          {options.map((opt) => {
+            const selected = visibility === opt.value;
+            return (
+              <Box
+                key={opt.value}
+                onClick={() => !saving && handleChange(opt.value)}
+                sx={{
+                  p: 2, borderRadius: 2, cursor: saving ? "default" : "pointer",
+                  border: "2px solid",
+                  borderColor: selected ? "primary.main" : "divider",
+                  backgroundColor: selected ? "primary.50" : "background.paper",
+                  transition: "all 0.15s",
+                  "&:hover": saving ? {} : { borderColor: "primary.light", backgroundColor: "action.hover" },
+                }}
+              >
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                  <Box>
+                    <Typography variant="body2" fontWeight={selected ? 700 : 500}>{opt.label}</Typography>
+                    <Typography variant="caption" color="text.secondary">{opt.desc}</Typography>
+                  </Box>
+                  {selected && <Box sx={{ width: 12, height: 12, borderRadius: "50%", backgroundColor: "primary.main" }} />}
+                </Stack>
+              </Box>
+            );
+          })}
+        </Stack>
       </Stack>
       <Snackbar
         open={snackbar}
@@ -780,7 +804,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
   }
 
   const { user, owned, joined, stats, isOwnProfile, hasPassword } = data;
-  const showStats = isOwnProfile || data.publicStats;
+  const showStats = isOwnProfile || data.profileVisibility === "public" || (data.profileVisibility === "participants" && !isOwnProfile) || data.publicStats;
   const memberSince = new Date(user.createdAt);
 
   // Tab indices shift when stats tab is present
@@ -842,7 +866,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
             {/* Account management sections (own profile only) */}
             {isOwnProfile && (
               <>
-                <PublicStatsSection userId={user.id} userName={user.name} initialValue={data.publicStats ?? false} />
+                <ProfileVisibilitySection userId={user.id} userName={user.name} initialValue={data.profileVisibility ?? "public"} />
                 <NotificationSettingsSection />
                 <ChangePasswordSection hasPassword={hasPassword ?? false} />
                 <ExportDataSection />
