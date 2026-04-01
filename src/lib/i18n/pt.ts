@@ -592,7 +592,7 @@ const pt: TranslationKeys = {
   // Event admins (#143)
   eventAdmins: "Administradores",
   eventAdminsDesc: "Partilha direitos de gestão com outros utilizadores. Os admins podem gerir jogadores, definições e custos — mas não podem adicionar outros admins ou transferir a propriedade.",
-  adminByEmail: "Adicionar admin por email",
+  adminSearchPlaceholder: "Pesquisar por nome ou email...",
   addAdmin: "Adicionar",
   removeAdmin: "Remover",
   noAdmins: "Nenhum admin adicionado.",
@@ -600,6 +600,9 @@ const pt: TranslationKeys = {
   adminRemoved: "Admin removido.",
   cannotAddOwnerAsAdmin: "Não é possível adicionar o dono do evento como admin.",
   adminBadge: "Admin",
+  adminInviteEmail: "Convidar {email} a criar uma conta",
+  adminPlayerBadge: "Jogador",
+  adminEmailBadge: "Utilizador registado",
 
   // Playtomic court finder
   playtomicFindCourt: "Encontrar campo",

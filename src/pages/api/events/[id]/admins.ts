@@ -50,13 +50,15 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   const body = await request.json();
-  const { email } = body as { email?: string };
+  const { email, userId: targetUserId } = body as { email?: string; userId?: string };
 
-  if (!email || typeof email !== "string") {
-    return Response.json({ error: "Email required." }, { status: 400 });
+  if ((!email || typeof email !== "string") && (!targetUserId || typeof targetUserId !== "string")) {
+    return Response.json({ error: "Email or userId required." }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+  const user = targetUserId
+    ? await prisma.user.findUnique({ where: { id: targetUserId } })
+    : await prisma.user.findUnique({ where: { email: email!.toLowerCase().trim() } });
   if (!user) {
     return Response.json({ error: "User not found." }, { status: 404 });
   }

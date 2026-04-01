@@ -39,6 +39,7 @@ export interface EventData {
   hasPassword?: boolean;
   locked?: boolean;
   archivedAt?: string | null;
+  isAdmin?: boolean;
 }
 
 export interface KnownPlayer {

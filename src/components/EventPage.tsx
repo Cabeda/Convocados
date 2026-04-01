@@ -393,12 +393,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const isAuthenticated = !!session?.user;
   const isOwner = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
   const isOwnerless = !event?.ownerId;
-  const canEditSettings = isOwnerless || isOwner;
+  const isAdmin = !!event?.isAdmin;
+  const canEditSettings = isOwnerless || isOwner || isAdmin;
   const userHasLinkedPlayer = isAuthenticated && (event?.players ?? []).some((p: any) => p.userId === session.user.id);
   const canClaimPlayer = isAuthenticated && !userHasLinkedPlayer;
 
   const canRemovePlayer = (player: Player) => {
-    if (isOwner) return true;
+    if (isOwner || isAdmin) return true;
     if (session?.user && player.userId === session.user.id) return true;
     if (!player.userId) return true;
     return false;
