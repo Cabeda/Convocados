@@ -731,6 +731,19 @@ const de: TranslationKeys = {
   gameDurationError: "Die Dauer muss zwischen 0 und 600 Minuten liegen.",
   gameDurationSaved: "Spieldauer aktualisiert.",
 
+  // Post-game banner (#249)
+  postGameTitle: "Spiel vorbei! Abschließen",
+  postGameSubtitle: "Erledige diese Aufgaben, um das Spiel abzuschließen und das nächste vorzubereiten.",
+  postGameEnterScore: "Spielergebnis eintragen",
+  postGameScoreDone: "Ergebnis eingetragen",
+  postGameScorePending: "Gehe zum Verlauf, um das Endergebnis einzutragen",
+  postGameGoToScore: "Ergebnis eintragen",
+  postGameCompletePayments: "Zahlungen abschließen",
+  postGamePaymentsDone: "Alle Zahlungen erledigt",
+  postGamePaymentsPending: "Einige Spieler müssen noch bezahlen",
+  postGameGoToPayments: "Zahlungen anzeigen",
+  postGameProgress: "{done} von {total} Aufgaben erledigt",
+
   adminDeleteUser: "Benutzer löschen",
   adminDeleteUserConfirm: "Sind Sie sicher, dass Sie diesen Benutzer dauerhaft löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
   adminDeleteUserError: "Benutzer konnte nicht gelöscht werden.",

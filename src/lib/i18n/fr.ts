@@ -731,6 +731,19 @@ const fr: TranslationKeys = {
   gameDurationError: "La durée doit être entre 0 et 600 minutes.",
   gameDurationSaved: "Durée du match mise à jour.",
 
+  // Post-game banner (#249)
+  postGameTitle: "Match terminé ! Finalisez",
+  postGameSubtitle: "Complétez ces tâches pour clôturer le match et préparer le prochain.",
+  postGameEnterScore: "Saisir le score",
+  postGameScoreDone: "Score enregistré",
+  postGameScorePending: "Allez dans l'Historique pour ajouter le score final",
+  postGameGoToScore: "Ajouter le score",
+  postGameCompletePayments: "Compléter les paiements",
+  postGamePaymentsDone: "Tous les paiements effectués",
+  postGamePaymentsPending: "Certains joueurs doivent encore payer",
+  postGameGoToPayments: "Voir les paiements",
+  postGameProgress: "{done} sur {total} tâches terminées",
+
   adminDeleteUser: "Supprimer l'utilisateur",
   adminDeleteUserConfirm: "Êtes-vous sûr de vouloir supprimer définitivement cet utilisateur ? Cette action est irréversible.",
   adminDeleteUserError: "Impossible de supprimer l'utilisateur.",

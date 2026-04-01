@@ -23,6 +23,7 @@ import {
   useCountdown,
 } from "./event";
 import type { EventData, Player, KnownPlayer } from "./event";
+import { PostGameBanner } from "./PostGameBanner";
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -510,6 +511,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onSnackbar={setSnackbar}
             />
 
+            {/* Post-game banner — shown after game ends until tasks are complete */}
+            <PostGameBanner
+              eventId={eventId}
+              onScrollToScore={() => {
+                window.location.href = `/events/${eventId}/history`;
+              }}
+              onScrollToPayments={() => {
+                const el = document.getElementById("payment-section");
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              }}
+            />
+
             {/* Quick join — authenticated users only */}
             {isAuthenticated && session?.user?.name && (
               <QuickJoin
@@ -543,7 +556,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
             {/* Payment tracking */}
             {(event.splitCostsEnabled !== false) && (
-              <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+              <Paper id="payment-section" elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
                 <PaymentSection
                   eventId={eventId}
                   canEdit={canEditSettings}

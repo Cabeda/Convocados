@@ -785,6 +785,19 @@ const en = {
   gameDurationMinutes: "{n} min",
   gameDurationError: "Duration must be between 0 and 600 minutes.",
   gameDurationSaved: "Game duration updated.",
+
+  // Post-game banner (#249)
+  postGameTitle: "Game over! Wrap it up",
+  postGameSubtitle: "Complete these tasks to close out the game and get ready for the next one.",
+  postGameEnterScore: "Enter the game score",
+  postGameScoreDone: "Score recorded",
+  postGameScorePending: "Go to History to add the final score",
+  postGameGoToScore: "Add score",
+  postGameCompletePayments: "Complete payments",
+  postGamePaymentsDone: "All payments settled",
+  postGamePaymentsPending: "Some players still need to pay",
+  postGameGoToPayments: "View payments",
+  postGameProgress: "{done} of {total} tasks complete",
 } as const;
 
 export default en;
