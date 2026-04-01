@@ -778,6 +778,13 @@ const en = {
   countdownHours: "in {n}h {m}m",
   countdownMinutes: "in {n}m",
   countdownNow: "Now",
+
+  // Game duration (#249)
+  gameDuration: "Game duration",
+  gameDurationHelper: "How long the game lasts (in minutes)",
+  gameDurationMinutes: "{n} min",
+  gameDurationError: "Duration must be between 0 and 600 minutes.",
+  gameDurationSaved: "Game duration updated.",
 } as const;
 
 export default en;

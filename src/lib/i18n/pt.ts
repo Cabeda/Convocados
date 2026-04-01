@@ -770,6 +770,13 @@ const pt: TranslationKeys = {
   countdownHours: "em {n}h {m}m",
   countdownMinutes: "em {n}m",
   countdownNow: "Agora",
+
+  // Game duration (#249)
+  gameDuration: "Duração do jogo",
+  gameDurationHelper: "Quanto tempo dura o jogo (em minutos)",
+  gameDurationMinutes: "{n} min",
+  gameDurationError: "A duração deve ser entre 0 e 600 minutos.",
+  gameDurationSaved: "Duração do jogo atualizada.",
   adminDeleteUser: "Eliminar utilizador",
   adminDeleteUserConfirm: "Tem a certeza que quer eliminar permanentemente este utilizador? Esta ação não pode ser desfeita.",
   adminDeleteUserError: "Não foi possível eliminar o utilizador.",
