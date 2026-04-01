@@ -34,7 +34,9 @@ export const POST: APIRoute = async ({ request }) => {
   const sport = String(body.sport ?? "football-5v5").trim().slice(0, 50) || "football-5v5";
   const isPublic = Boolean(body.isPublic);
   const isRecurring = Boolean(body.isRecurring);
-  const recurrenceFreq = (body.recurrenceFreq ?? null) as "weekly" | "monthly" | null;
+  const VALID_FREQS = ["daily", "weekly", "monthly", "yearly"] as const;
+  const rawFreq = body.recurrenceFreq ?? null;
+  const recurrenceFreq = rawFreq && VALID_FREQS.includes(rawFreq) ? (rawFreq as typeof VALID_FREQS[number]) : null;
   const recurrenceInterval = parseInt(String(body.recurrenceInterval ?? "1"), 10);
   const recurrenceByDay = (body.recurrenceByDay ?? null) as string | null;
 

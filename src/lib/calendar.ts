@@ -4,9 +4,9 @@
  */
 
 interface RecurrenceInfo {
-  freq: "weekly" | "monthly";
+  freq: "daily" | "weekly" | "monthly" | "yearly";
   interval: number;
-  byDay?: string; // "MO" | "TU" etc.
+  byDay?: string; // "MO" | "TU" | "MO,WE,FR" etc.
 }
 
 interface CalendarEvent {
