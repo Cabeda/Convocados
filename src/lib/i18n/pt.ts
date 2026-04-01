@@ -311,6 +311,7 @@ const pt: TranslationKeys = {
   saveProfile: "Guardar",
   profileUpdated: "Perfil atualizado.",
   profileUpdateError: "Não foi possível atualizar o perfil.",
+  thisIsMe: "Sou eu",
   claimPlayer: "Assumir jogador",
   claimPlayerTitle: "Assumir jogador",
   claimPlayerDesc: "Associa este jogador anónimo à tua conta. O teu jogador atual (se existir) será desassociado.",

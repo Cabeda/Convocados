@@ -274,6 +274,7 @@ const fr: TranslationKeys = {
   saveProfile: "Enregistrer",
   profileUpdated: "Profil mis à jour.",
   profileUpdateError: "Impossible de mettre à jour le profil.",
+  thisIsMe: "C'est moi",
   claimPlayer: "Revendiquer ce joueur",
   claimPlayerTitle: "Revendiquer ce joueur",
   claimPlayerDesc: "Associe ce joueur anonyme à ton compte. Ton joueur actuel (s'il existe) sera dissocié.",
