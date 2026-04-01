@@ -147,4 +147,83 @@ describe("DELETE /api/events/[id]/purge-player", () => {
     const teamB = parsed.find((t: { team: string }) => t.team === "B");
     expect(teamB.players.map((p: { name: string }) => p.name)).toEqual(["Bob", "Charlie"]);
   });
+
+  it("scrubs player from paymentsSnapshot JSON", async () => {
+    await seedOwnerAndEvent();
+    const payments = JSON.stringify([
+      { playerName: "Alice", amount: 5, status: "pending", method: null },
+      { playerName: "Bob", amount: 5, status: "paid", method: "revolut" },
+    ]);
+    await prisma.gameHistory.create({
+      data: {
+        eventId: "e-purge", dateTime: new Date(), status: "played",
+        teamOneName: "A", teamTwoName: "B",
+        paymentsSnapshot: payments,
+        editableUntil: new Date(Date.now() + 86400000),
+      },
+    });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: "owner-purge", name: "Owner" } } } as any);
+
+    await DELETE(deleteCtx("e-purge", { name: "Alice" }));
+
+    const history = await prisma.gameHistory.findFirst({ where: { eventId: "e-purge" } });
+    const parsed = JSON.parse(history!.paymentsSnapshot!);
+    expect(parsed.map((p: { playerName: string }) => p.playerName)).not.toContain("Alice");
+    expect(parsed.map((p: { playerName: string }) => p.playerName)).toContain("Bob");
+  });
+
+  it("deletes PlayerPayment records for the player", async () => {
+    await seedOwnerAndEvent();
+    const cost = await prisma.eventCost.create({
+      data: { eventId: "e-purge", totalAmount: 10, currency: "EUR", createdAt: new Date(), updatedAt: new Date() },
+    });
+    await prisma.playerPayment.create({
+      data: { eventCostId: cost.id, playerName: "Alice", amount: 5, status: "pending", createdAt: new Date(), updatedAt: new Date() },
+    });
+    await prisma.playerPayment.create({
+      data: { eventCostId: cost.id, playerName: "Bob", amount: 5, status: "paid", createdAt: new Date(), updatedAt: new Date() },
+    });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: "owner-purge", name: "Owner" } } } as any);
+
+    await DELETE(deleteCtx("e-purge", { name: "Alice" }));
+
+    const payments = await prisma.playerPayment.findMany({ where: { eventCostId: cost.id } });
+    expect(payments.map((p) => p.playerName)).not.toContain("Alice");
+    expect(payments.map((p) => p.playerName)).toContain("Bob");
+  });
+
+  it("removes player from TeamMember records", async () => {
+    await seedOwnerAndEvent();
+    const team = await prisma.teamResult.create({
+      data: { name: "A", eventId: "e-purge" },
+    });
+    await prisma.teamMember.createMany({
+      data: [
+        { name: "Alice", order: 0, teamResultId: team.id },
+        { name: "Bob", order: 1, teamResultId: team.id },
+      ],
+    });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: "owner-purge", name: "Owner" } } } as any);
+
+    await DELETE(deleteCtx("e-purge", { name: "Alice" }));
+
+    const members = await prisma.teamMember.findMany({ where: { teamResultId: team.id } });
+    expect(members.map((m) => m.name)).not.toContain("Alice");
+    expect(members.map((m) => m.name)).toContain("Bob");
+  });
+
+  it("skips ELO recalculation when eloEnabled is false", async () => {
+    await seedOwnerAndEvent();
+    await prisma.event.update({ where: { id: "e-purge" }, data: { eloEnabled: false } });
+    await prisma.playerRating.create({
+      data: { eventId: "e-purge", name: "Alice", rating: 1200, gamesPlayed: 3, wins: 2, draws: 0, losses: 1, createdAt: new Date(), updatedAt: new Date() },
+    });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: "owner-purge", name: "Owner" } } } as any);
+
+    const res = await DELETE(deleteCtx("e-purge", { name: "Alice" }));
+    expect(res.status).toBe(200);
+    // Rating was deleted, no recalculation side effects
+    const rating = await prisma.playerRating.findFirst({ where: { eventId: "e-purge", name: "Alice" } });
+    expect(rating).toBeNull();
+  });
 });

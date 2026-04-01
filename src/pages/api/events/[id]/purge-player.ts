@@ -24,36 +24,64 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "name is required." }, { status: 400 });
   }
 
-  // 1. Delete Player record (if still on roster)
-  await prisma.player.deleteMany({ where: { eventId, name } });
-
-  // 2. Delete PlayerRating record
-  await prisma.playerRating.deleteMany({ where: { eventId, name } });
-
-  // 3. Scrub player name from all teamsSnapshot JSON blobs
+  // Fetch all game histories that need snapshot scrubbing
   const histories = await prisma.gameHistory.findMany({
-    where: { eventId, teamsSnapshot: { not: null } },
-    select: { id: true, teamsSnapshot: true },
+    where: { eventId },
+    select: { id: true, teamsSnapshot: true, paymentsSnapshot: true },
   });
 
-  for (const h of histories) {
-    if (!h.teamsSnapshot) continue;
-    const snapshot: { team: string; players: { name: string; order: number }[] }[] =
-      JSON.parse(h.teamsSnapshot);
-    const updated = snapshot.map((team) => ({
-      ...team,
-      players: team.players
-        .filter((p) => p.name !== name)
-        .map((p, i) => ({ ...p, order: i })),
-    }));
-    await prisma.gameHistory.update({
-      where: { id: h.id },
-      data: { teamsSnapshot: JSON.stringify(updated) },
-    });
-  }
+  // Build atomic transaction: delete records + scrub all JSON blobs
+  await prisma.$transaction([
+    // 1. Delete Player record (if still on roster)
+    prisma.player.deleteMany({ where: { eventId, name } }),
 
-  // 4. Recalculate ELO so ratings reflect the removal
-  await recalculateAllRatings(eventId);
+    // 2. Delete PlayerRating record
+    prisma.playerRating.deleteMany({ where: { eventId, name } }),
+
+    // 3. Delete PlayerPayment records keyed by playerName
+    prisma.playerPayment.deleteMany({
+      where: { eventCost: { eventId }, playerName: name },
+    }),
+
+    // 4. Scrub from TeamMember (live team assignments)
+    prisma.teamMember.deleteMany({
+      where: { name, team: { eventId } },
+    }),
+
+    // 5. Scrub teamsSnapshot and paymentsSnapshot JSON blobs
+    ...histories.flatMap((h) => {
+      const updates: Parameters<typeof prisma.gameHistory.update>[0]["data"] = {};
+
+      if (h.teamsSnapshot) {
+        const snapshot: { team: string; players: { name: string; order: number }[] }[] =
+          JSON.parse(h.teamsSnapshot);
+        updates.teamsSnapshot = JSON.stringify(
+          snapshot.map((team) => ({
+            ...team,
+            players: team.players
+              .filter((p) => p.name !== name)
+              .map((p, i) => ({ ...p, order: i })),
+          }))
+        );
+      }
+
+      if (h.paymentsSnapshot) {
+        const payments: { playerName: string; amount: number; status: string; method: string | null }[] =
+          JSON.parse(h.paymentsSnapshot);
+        updates.paymentsSnapshot = JSON.stringify(
+          payments.filter((p) => p.playerName !== name)
+        );
+      }
+
+      if (Object.keys(updates).length === 0) return [];
+      return [prisma.gameHistory.update({ where: { id: h.id }, data: updates })];
+    }),
+  ]);
+
+  // 6. Recalculate ELO only if enabled for this event
+  if (event.eloEnabled) {
+    await recalculateAllRatings(eventId);
+  }
 
   await logEvent(eventId, "player_removed", session?.user?.name ?? null, session?.user?.id ?? null, {
     playerName: name,

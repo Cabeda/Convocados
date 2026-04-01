@@ -99,8 +99,11 @@ export async function listUsers({ page, pageSize, search }: { page: number; page
   return { users, total };
 }
 
-export async function deleteUser(userId: string): Promise<void> {
+export async function deleteUser(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) return false;
   await prisma.user.delete({ where: { id: userId } });
+  return true;
 }
 
 /**

@@ -21,6 +21,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "adminCannotDeleteSelf" }, { status: 400 });
   }
 
-  await deleteUser(targetId);
+  const deleted = await deleteUser(targetId);
+  if (!deleted) return Response.json({ error: "User not found." }, { status: 404 });
   return Response.json({ ok: true });
 };

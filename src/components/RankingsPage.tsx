@@ -38,6 +38,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  const [canManage, setCanManage] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
   const [snack, setSnack] = useState<{ msg: string; severity: "success" | "error" } | null>(null);
 
@@ -66,6 +67,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     const isOwner = !!(session?.user && ev.ownerId && session.user.id === ev.ownerId);
     const hasEditPermission = isOwner || ev.isAdmin || !ev.ownerId;
     setCanEdit(hasEditPermission && !!ev.allowManualRating);
+    setCanManage(hasEditPermission);
     setLoading(false);
   }, [eventId, session]);
 
@@ -231,6 +233,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                         <TableCell align="center" sx={{ fontWeight: 700, color: "text.secondary" }}>{t("draws")}</TableCell>
                         <TableCell align="center" sx={{ fontWeight: 700, color: "error.main" }}>{t("losses")}</TableCell>
                         {canEdit && <TableCell sx={{ width: 48 }} />}
+                        {!canEdit && canManage && <TableCell sx={{ width: 48 }} />}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -296,18 +299,22 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                             <TableCell align="center">
                               <Typography variant="body2" color="error.main" fontWeight={600}>{r.losses}</Typography>
                             </TableCell>
-                            {canEdit && (
+                            {(canEdit || canManage) && (
                               <TableCell align="center" sx={{ px: 0.5 }}>
-                                <Tooltip title={t("setInitialRating")}>
-                                  <IconButton size="small" onClick={() => openEditDialog(r)}>
-                                    <EditIcon sx={{ fontSize: 16 }} />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title={t("purgePlayer")}>
-                                  <IconButton size="small" color="error" onClick={() => setPurgeTarget(r.name)}>
-                                    <DeleteIcon sx={{ fontSize: 16 }} />
-                                  </IconButton>
-                                </Tooltip>
+                                {canEdit && (
+                                  <Tooltip title={t("setInitialRating")}>
+                                    <IconButton size="small" onClick={() => openEditDialog(r)}>
+                                      <EditIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+                                {canManage && (
+                                  <Tooltip title={t("purgePlayer")}>
+                                    <IconButton size="small" color="error" onClick={() => setPurgeTarget(r.name)}>
+                                      <DeleteIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
                               </TableCell>
                             )}
                           </TableRow>
