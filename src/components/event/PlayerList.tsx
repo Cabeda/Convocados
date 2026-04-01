@@ -10,7 +10,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatReclineNormal";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ShieldIcon from "@mui/icons-material/Shield";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
@@ -271,9 +271,14 @@ export function PlayerList({
                       <ShieldIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5, flexShrink: 0 }} />
                     </Tooltip>
                   ) : canClaimPlayer ? (
-                    <Tooltip title={t("claimPlayerDesc")}>
-                      <SwapHorizIcon fontSize="small" sx={{ cursor: "pointer", mr: 0.5, flexShrink: 0 }} onClick={() => onOpenClaimPlayerDialog(player.id, player.name)} />
-                    </Tooltip>
+                    <Chip
+                      label={t("thisIsMe")}
+                      size="small"
+                      variant="outlined"
+                      color="info"
+                      onClick={() => onOpenClaimPlayerDialog(player.id, player.name)}
+                      sx={{ mr: 0.5, flexShrink: 0, cursor: "pointer", fontSize: "0.7rem", height: 22 }}
+                    />
                   ) : null}
                   <ListItemText
                     primary={player.userId ? (
@@ -338,9 +343,14 @@ export function PlayerList({
                           <ShieldIcon fontSize="small" sx={{ color: "warning.main", mr: 0.5, flexShrink: 0 }} />
                         </Tooltip>
                       ) : canClaimPlayer ? (
-                        <Tooltip title={t("claimPlayerDesc")}>
-                          <SwapHorizIcon fontSize="small" sx={{ cursor: "pointer", mr: 0.5, flexShrink: 0 }} onClick={() => onOpenClaimPlayerDialog(player.id, player.name)} />
-                        </Tooltip>
+                        <Chip
+                          label={t("thisIsMe")}
+                          size="small"
+                          variant="outlined"
+                          color="info"
+                          onClick={() => onOpenClaimPlayerDialog(player.id, player.name)}
+                          sx={{ mr: 0.5, flexShrink: 0, cursor: "pointer", fontSize: "0.7rem", height: 22 }}
+                        />
                       ) : null}
                       <ListItemText
                         primary={player.userId ? (
