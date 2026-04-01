@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Box, Typography, Stack, Switch, FormControlLabel, Slider, Button, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Alert, CircularProgress, IconButton, Tooltip, Divider,
   FormControl, Select, MenuItem, Card, CardContent, CardHeader,
   TextField, List, ListItem, ListItemText, ListItemSecondaryAction,
+  Autocomplete,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PublicIcon from "@mui/icons-material/Public";
@@ -22,6 +23,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import GroupIcon from "@mui/icons-material/Group";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import UnarchiveIcon from "@mui/icons-material/Unarchive";
+import EmailIcon from "@mui/icons-material/Email";
 import { useT } from "~/lib/useT";
 import { SPORT_PRESETS } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
@@ -112,9 +114,12 @@ export default function EventSettingsPage({ eventId }: Props) {
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   // Event admins
+  type AdminCandidate = { userId: string; name: string; email: string; source: "player" | "email" | "invite" };
   const [admins, setAdmins] = useState<{ id: string; userId: string; name: string; email: string }[]>([]);
-  const [adminEmail, setAdminEmail] = useState("");
+  const [adminCandidates, setAdminCandidates] = useState<AdminCandidate[]>([]);
+  const [adminSearchInput, setAdminSearchInput] = useState("");
   const [adminError, setAdminError] = useState<string | null>(null);
+  const adminSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchEvent = useCallback(async () => {
     try {
@@ -137,10 +142,11 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   const fetchAccessInfo = useCallback(async () => {
     try {
-      const [accessRes, invitesRes, adminsRes] = await Promise.all([
+      const [accessRes, invitesRes, adminsRes, candidatesRes] = await Promise.all([
         fetch(`/api/events/${eventId}/access`),
         fetch(`/api/events/${eventId}/access/invites`),
         fetch(`/api/events/${eventId}/admins`),
+        fetch(`/api/events/${eventId}/admins/candidates`),
       ]);
       if (accessRes.ok) {
         const data = await accessRes.json();
@@ -152,6 +158,9 @@ export default function EventSettingsPage({ eventId }: Props) {
       if (adminsRes.ok) {
         setAdmins(await adminsRes.json());
       }
+      if (candidatesRes.ok) {
+        setAdminCandidates(await candidatesRes.json());
+      }
     } catch { /* ignore */ }
   }, [eventId]);
 
@@ -160,6 +169,19 @@ export default function EventSettingsPage({ eventId }: Props) {
     fetchPriority();
     fetchAccessInfo();
   }, [fetchEvent, fetchPriority, fetchAccessInfo]);
+
+  // Debounced search for admin candidates when input contains "@"
+  useEffect(() => {
+    if (adminSearchTimer.current) clearTimeout(adminSearchTimer.current);
+    if (!adminSearchInput.includes("@")) return;
+    adminSearchTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/events/${eventId}/admins/candidates?q=${encodeURIComponent(adminSearchInput.trim())}`);
+        if (res.ok) setAdminCandidates(await res.json());
+      } catch { /* ignore */ }
+    }, 300);
+    return () => { if (adminSearchTimer.current) clearTimeout(adminSearchTimer.current); };
+  }, [adminSearchInput, eventId]);
 
   // Derived state
   const isAuthenticated = !!session?.user;
@@ -364,18 +386,27 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   // ── Admin handlers ────────────────────────────────────────────────────
 
-  const handleAddAdmin = async () => {
+  const handleAddAdmin = async (candidate: AdminCandidate) => {
     setAdminError(null);
-    if (!adminEmail.trim()) return;
+    if (candidate.source === "invite") {
+      // User doesn't exist yet — add by email so the API returns 404 with a clear message
+      // For now, we try to add by email; the API will return 404 if user doesn't exist
+      setAdminError(t("adminInviteEmail").replace("{email}", candidate.email));
+      return;
+    }
+    const body = candidate.userId
+      ? { userId: candidate.userId }
+      : { email: candidate.email };
     const res = await fetch(`/api/events/${eventId}/admins`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: adminEmail.trim() }),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
       const admin = await res.json();
       setAdmins((prev) => [...prev, admin]);
-      setAdminEmail("");
+      setAdminCandidates((prev) => prev.filter((c) => c.userId !== candidate.userId));
+      setAdminSearchInput("");
       setMessage({ type: "success", text: t("adminAdded") });
     } else {
       const data = await res.json();
@@ -392,7 +423,11 @@ export default function EventSettingsPage({ eventId }: Props) {
       body: JSON.stringify({ userId }),
     });
     if (res.ok) {
+      const removed = admins.find((a) => a.userId === userId);
       setAdmins((prev) => prev.filter((a) => a.userId !== userId));
+      if (removed) {
+        setAdminCandidates((prev) => [...prev, { userId: removed.userId, name: removed.name, email: removed.email, source: "player" as const }]);
+      }
       setMessage({ type: "success", text: t("adminRemoved") });
     }
   };
@@ -805,25 +840,70 @@ export default function EventSettingsPage({ eventId }: Props) {
               {t("eventAdminsDesc")}
             </Typography>
             <Stack direction="row" spacing={1} alignItems="center">
-              <TextField
+              <Autocomplete<AdminCandidate, false, false, true>
+                freeSolo
                 size="small"
-                type="email"
-                placeholder={t("adminByEmail")}
-                value={adminEmail}
-                onChange={(e) => { setAdminEmail(e.target.value); setAdminError(null); }}
-                error={!!adminError}
-                helperText={adminError}
+                options={adminCandidates}
+                getOptionLabel={(option) =>
+                  typeof option === "string" ? option : option.name
+                }
+                filterOptions={(options) => {
+                  if (!adminSearchInput.trim()) return options;
+                  const q = adminSearchInput.trim().toLowerCase();
+                  return options.filter(
+                    (o) =>
+                      o.name.toLowerCase().includes(q) ||
+                      o.email.toLowerCase().includes(q)
+                  );
+                }}
+                isOptionEqualToValue={(a, b) => a.userId === b.userId && a.source === b.source}
+                value={null}
+                inputValue={adminSearchInput}
+                onInputChange={(_, value, reason) => {
+                  if (reason === "reset") return;
+                  setAdminSearchInput(value);
+                  setAdminError(null);
+                }}
+                onChange={(_, value) => {
+                  if (!value || typeof value === "string") return;
+                  handleAddAdmin(value);
+                }}
+                renderOption={(props, option) => {
+                  const { key, ...otherProps } = props as any;
+                  if (option.source === "invite") {
+                    return (
+                      <li key={key} {...otherProps} style={{ minHeight: 40, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>
+                        <EmailIcon fontSize="small" color="action" />
+                        {t("adminInviteEmail").replace("{email}", option.email)}
+                      </li>
+                    );
+                  }
+                  return (
+                    <li key={key} {...otherProps} style={{ minHeight: 40, display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                      <span>{option.name}</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        {option.source === "email" && (
+                          <Chip label={t("adminEmailBadge")} size="small" color="info" variant="outlined" sx={{ fontSize: "0.65rem", height: 20 }} />
+                        )}
+                        {option.source === "player" && (
+                          <Chip label={t("adminPlayerBadge")} size="small" color="success" variant="outlined" sx={{ fontSize: "0.65rem", height: 20 }} />
+                        )}
+                        <span style={{ color: "gray", fontSize: "0.75rem", marginLeft: 4 }}>{option.email}</span>
+                      </span>
+                    </li>
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    placeholder={t("adminSearchPlaceholder")}
+                    error={!!adminError}
+                    helperText={adminError}
+                  />
+                )}
+                noOptionsText={t("noSuggestions")}
                 sx={{ flexGrow: 1 }}
               />
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<PersonAddIcon />}
-                onClick={handleAddAdmin}
-                disabled={!adminEmail.trim()}
-              >
-                {t("addAdmin")}
-              </Button>
             </Stack>
             {admins.length === 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
