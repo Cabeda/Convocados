@@ -18,6 +18,7 @@ import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PaymentIcon from "@mui/icons-material/Payment";
 import LoginIcon from "@mui/icons-material/Login";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -25,6 +26,8 @@ import { detectLocale } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
 import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
+import { ScoreRoller } from "./event/ScoreRoller";
+import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
 
 type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number }
@@ -55,6 +58,7 @@ interface HistoryEntry {
   editableUntil: string;
   editable: boolean;
   source: string;
+  eloProcessed: boolean;
   eloUpdates?: { name: string; delta: number }[] | null;
 }
 
@@ -90,6 +94,7 @@ interface AddHistoricalGameDialogProps {
   defaultTeamOneName: string;
   defaultTeamTwoName: string;
   knownPlayers: { name: string; gamesPlayed: number }[];
+  playerRatings: { name: string; rating: number; gamesPlayed: number }[];
   onSuccess: (entry: HistoryEntry) => void;
 }
 
@@ -100,6 +105,7 @@ function AddHistoricalGameDialog({
   defaultTeamOneName,
   defaultTeamTwoName,
   knownPlayers,
+  playerRatings,
   onSuccess,
 }: AddHistoricalGameDialogProps) {
   const t = useT();
@@ -133,6 +139,19 @@ function AddHistoricalGameDialog({
     }
   }, [open, defaultTeamOneName, defaultTeamTwoName]);
 
+  // ELO preview computation
+  const eloPreview: EloUpdate[] = useMemo(() => {
+    if (team1Players.length === 0 || team2Players.length === 0) return [];
+    const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
+    const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
+    if (s1 == null || s2 == null) return [];
+    const teams = [
+      { team: teamOneName, players: team1Players },
+      { team: teamTwoName, players: team2Players },
+    ];
+    return computeGameUpdates(playerRatings, teams, s1, s2);
+  }, [team1Players, team2Players, teamOneName, teamTwoName, scoreOne, scoreTwo, playerRatings]);
+
   const addPlayerToTeam = (teamIdx: number, playerName?: string) => {
     const name = (playerName ?? newPlayerInputs[teamIdx] ?? "").trim();
     if (!name) return;
@@ -156,9 +175,12 @@ function AddHistoricalGameDialog({
   };
 
   const handleSubmit = async () => {
-    if (!dateTime || !teamOneName || !teamTwoName || scoreOne === "" || scoreTwo === "" ||
-        team1Players.length === 0 || team2Players.length === 0) {
+    if (!dateTime || !teamOneName || !teamTwoName || scoreOne === "" || scoreTwo === "") {
       setError(t("errorPlayerNameRequired"));
+      return;
+    }
+    if (team1Players.length === 0 || team2Players.length === 0) {
+      setError(t("errorNeedMorePlayers"));
       return;
     }
 
@@ -247,27 +269,24 @@ function AddHistoricalGameDialog({
             />
           </Stack>
 
-          <Stack direction="row" spacing={2} alignItems="center">
-            <TextField
-              label={t("score")}
-              type="number"
+          <Box sx={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
+            py: 2, px: 3, borderRadius: 3,
+            backgroundColor: alpha(theme.palette.action.hover, 0.04),
+            border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+          }}>
+            <ScoreRoller
               value={scoreOne}
-              onChange={(e) => setScoreOne(e.target.value)}
-              inputProps={{ min: 0, max: 99 }}
-              size="small"
-              sx={{ width: 80 }}
+              onChange={setScoreOne}
+              teamName={teamOneName}
             />
-            <Typography variant="h6" color="text.secondary">:</Typography>
-            <TextField
-              label={t("score")}
-              type="number"
+            <Typography variant="h4" color="text.disabled" fontWeight={300}>:</Typography>
+            <ScoreRoller
               value={scoreTwo}
-              onChange={(e) => setScoreTwo(e.target.value)}
-              inputProps={{ min: 0, max: 99 }}
-              size="small"
-              sx={{ width: 80 }}
+              onChange={setScoreTwo}
+              teamName={teamTwoName}
             />
-          </Stack>
+          </Box>
 
           <Typography variant="subtitle2" fontWeight={700}>{t("selectPlayers")}</Typography>
 
@@ -293,60 +312,54 @@ function AddHistoricalGameDialog({
                     ))}
                   </Box>
                   <Box sx={{ mt: 1.5 }}>
-                    <Autocomplete<PlayerOption, false, false, true>
-                      freeSolo
-                      size="small"
-                      options={(() => {
-                        const inputValue = newPlayerInputs[idx] ?? "";
-                        const trimmed = inputValue.trim();
-                        const filtered: PlayerOption[] = getAvailableSuggestions(idx)
-                          .filter((s) => matchesWithName(s.name, trimmed))
-                          .map((s) => ({ type: "existing" as const, name: s.name, gamesPlayed: s.gamesPlayed }));
-                        if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
-                          filtered.push({ type: "create" as const, name: trimmed });
-                        }
-                        return filtered;
-                      })()}
-                      filterOptions={(options) => options}
-                      getOptionLabel={(option) => typeof option === "string" ? option : option.name}
-                      isOptionEqualToValue={(option, value) => option.type === value.type && option.name === value.name}
-                      value={null}
-                      inputValue={newPlayerInputs[idx] ?? ""}
-                      onInputChange={(_, newInputValue, reason) => {
-                        if (reason === "reset") return;
-                        setNewPlayerInputs((prev) => ({ ...prev, [idx]: newInputValue }));
-                      }}
-                      onChange={(_, newValue) => {
-                        if (!newValue) return;
-                        const name = typeof newValue === "string" ? newValue.trim() : newValue.name;
-                        if (name) { addPlayerToTeam(idx, name); setNewPlayerInputs((prev) => ({ ...prev, [idx]: "" })); }
-                      }}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          placeholder={t("addPlayerToTeam")}
-                          InputProps={{
-                            ...params.InputProps,
-                            endAdornment: (
-                              <InputAdornment position="end">
-                                <IconButton size="small" color="primary" edge="end"
-                                  disabled={!(newPlayerInputs[idx] ?? "").trim()}
-                                  onClick={() => { addPlayerToTeam(idx); setNewPlayerInputs((prev) => ({ ...prev, [idx]: "" })); }}>
-                                  <PersonAddIcon fontSize="small" />
-                                </IconButton>
-                              </InputAdornment>
-                            ),
-                          }}
-                          sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-                        />
-                      )}
-                      noOptionsText={t("noSuggestions")}
+                    <PlayerAutocomplete
+                      value={newPlayerInputs[idx] ?? ""}
+                      onChange={(val) => setNewPlayerInputs((prev) => ({ ...prev, [idx]: val }))}
+                      onAdd={(name) => addPlayerToTeam(idx, name)}
+                      suggestions={getAvailableSuggestions(idx)}
+                      disabled={saving}
+                      label={t("addPlayerToTeam")}
                     />
                   </Box>
                 </Box>
               </Grid2>
             ))}
           </Grid2>
+
+          {/* ELO Preview */}
+          {eloPreview.length > 0 && (
+            <Box sx={{
+              p: 2, borderRadius: 3,
+              backgroundColor: alpha(theme.palette.action.hover, 0.04),
+              border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+            }}>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
+                {t("ratings")} Preview
+              </Typography>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+                {eloPreview.map((update) => (
+                  <Box key={update.name} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Typography variant="body2">{update.name}</Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {update.oldRating}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        fontWeight={700}
+                        color={update.delta > 0 ? "success.main" : update.delta < 0 ? "error.main" : "text.primary"}
+                      >
+                        {update.delta > 0 ? "+" : ""}{update.delta}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        → {update.newRating}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
@@ -363,6 +376,7 @@ function HistoryCardFull({
   entry,
   eventId,
   onUpdate,
+  onDelete,
   isAuthenticated,
   knownPlayers,
   playerRatings,
@@ -371,6 +385,7 @@ function HistoryCardFull({
   entry: HistoryEntry;
   eventId: string;
   onUpdate: (updated: HistoryEntry) => void;
+  onDelete: (id: string) => void;
   isAuthenticated: boolean;
   knownPlayers: { name: string; gamesPlayed: number }[];
   playerRatings: { name: string; rating: number; gamesPlayed: number }[];
@@ -416,6 +431,35 @@ function HistoryCardFull({
     setUnlocking(false);
     if (!res.ok) { setError(json.error); return; }
     onUpdate(json);
+  };
+
+  const [approvingElo, setApprovingElo] = useState(false);
+  const handleApproveElo = async () => {
+    setApprovingElo(true);
+    setError(null);
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}/approve-elo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const json = await res.json();
+    setApprovingElo(false);
+    if (!res.ok) { setError(json.error); return; }
+    onUpdate(json);
+  };
+
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const handleDelete = async () => {
+    setDeleting(true);
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, { method: "DELETE" });
+    setDeleting(false);
+    setConfirmDelete(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json.error ?? "Failed to delete.");
+      return;
+    }
+    onDelete(entry.id);
   };
 
   // Live ELO preview: compute deltas from current editable teams + scores
@@ -586,6 +630,16 @@ function HistoryCardFull({
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
+          {entry.source === "historical" && (
+            <Chip
+              icon={<HistoryIcon />}
+              label={t("historicalGame")}
+              color="warning"
+              size="small"
+              variant="outlined"
+              sx={{ fontWeight: 600 }}
+            />
+          )}
           <Chip
             icon={isCancelled ? <CancelIcon /> : <CheckCircleIcon />}
             label={isCancelled ? t("statusCancelled") : t("statusPlayed")}
@@ -594,13 +648,20 @@ function HistoryCardFull({
             sx={{ fontWeight: 600 }}
           />
           {isOwner ? (
-            <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
-              <span>
-                <IconButton size="small" color={entry.editable ? "default" : "warning"} onClick={handleToggleLock} disabled={unlocking}>
-                  {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+            <>
+              <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
+                <span>
+                  <IconButton size="small" color={entry.editable ? "default" : "warning"} onClick={handleToggleLock} disabled={unlocking}>
+                    {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title={t("deleteGame")}>
+                <IconButton size="small" color="error" onClick={() => setConfirmDelete(true)} disabled={deleting}>
+                  <DeleteIcon fontSize="small" />
                 </IconButton>
-              </span>
-            </Tooltip>
+              </Tooltip>
+            </>
           ) : !entry.editable ? (
             <Tooltip title={t("notEditable")}>
               <LockIcon fontSize="small" color="disabled" />
@@ -608,6 +669,25 @@ function HistoryCardFull({
           ) : null}
         </Stack>
       </Box>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t("deleteGame")}</DialogTitle>
+        <DialogContent>
+          <Typography>{t("deleteHistoryConfirm")}</Typography>
+          {entry.eloProcessed && (
+            <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
+              {t("deleteHistoryEloWarning")}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)} disabled={deleting}>{t("cancel")}</Button>
+          <Button color="error" variant="contained" onClick={handleDelete} disabled={deleting}>
+            {deleting ? t("deleting") : t("deleteGame")}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Stack spacing={0} divider={<Divider sx={{ mx: 3 }} />}>
         {error && (
@@ -633,46 +713,71 @@ function HistoryCardFull({
                   py: 2, px: 3, borderRadius: 3,
                   backgroundColor: alpha(theme.palette.action.hover, 0.04),
                 }}>
-                {/* Team 1 */}
-                <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
-                  <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
-                    {entry.teamOneName}
-                  </Typography>
-                  {canEdit ? (
-                    <TextField
-                      size="small" type="number" value={scoreOne}
-                      onChange={(e) => setScoreOne(e.target.value)}
-                      inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem" } }}
-                      sx={{ width: 80, "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-                    />
-                  ) : (
-                    <Typography variant="h3" fontWeight={800} color="text.primary">
-                      {entry.scoreOne !== null ? entry.scoreOne : "—"}
-                    </Typography>
-                  )}
-                </Stack>
-
-                <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
-
-                {/* Team 2 */}
-                <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
-                  <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
-                    {entry.teamTwoName}
-                  </Typography>
-                  {canEdit ? (
-                    <TextField
-                      size="small" type="number" value={scoreTwo}
-                      onChange={(e) => setScoreTwo(e.target.value)}
-                      inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem" } }}
-                      sx={{ width: 80, "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-                    />
-                  ) : (
-                    <Typography variant="h3" fontWeight={800} color="text.primary">
-                      {entry.scoreTwo !== null ? entry.scoreTwo : "—"}
-                    </Typography>
-                  )}
-                </Stack>
+                {canEdit ? (
+                  <>
+                    <ScoreRoller value={scoreOne} onChange={setScoreOne} teamName={entry.teamOneName} />
+                    <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
+                    <ScoreRoller value={scoreTwo} onChange={setScoreTwo} teamName={entry.teamTwoName} />
+                  </>
+                ) : (
+                  <>
+                    {/* Team 1 */}
+                    <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
+                      <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
+                        {entry.teamOneName}
+                      </Typography>
+                      <Typography variant="h3" fontWeight={800} color="text.primary">
+                        {entry.scoreOne !== null ? entry.scoreOne : "—"}
+                      </Typography>
+                    </Stack>
+                    <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
+                    {/* Team 2 */}
+                    <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
+                      <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
+                        {entry.teamTwoName}
+                      </Typography>
+                      <Typography variant="h3" fontWeight={800} color="text.primary">
+                        {entry.scoreTwo !== null ? entry.scoreTwo : "—"}
+                      </Typography>
+                    </Stack>
+                  </>
+                )}
               </Stack>
+            </Section>
+          </Box>
+        )}
+
+        {/* ── ELO Approval for Historical Games ── */}
+        {entry.source === "historical" && !isCancelled && (
+          <Box sx={{ px: 3, py: 2.5 }}>
+            <Section
+              title={entry.eloProcessed ? t("eloApproved") : t("eloPending")}
+              icon={<EmojiEventsIcon fontSize="small" sx={{ color: entry.eloProcessed ? "success.main" : "warning.main" }} />}
+              action={
+                !entry.eloProcessed && isOwner ? (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disableElevation
+                    startIcon={<EmojiEventsIcon />}
+                    onClick={handleApproveElo}
+                    disabled={approvingElo}
+                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+                  >
+                    {approvingElo ? t("approvingElo") : t("approveElo")}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {entry.eloProcessed ? (
+                <Alert severity="success" sx={{ borderRadius: 2 }}>
+                  {t("eloApprovedSuccess")}
+                </Alert>
+              ) : (
+                <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                  {t("eloPending")}
+                </Alert>
+              )}
             </Section>
           </Box>
         )}
@@ -1016,12 +1121,24 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setHasMore(hist.hasMore);
     setLoading(false);
 
-    // Fetch known players and ratings in parallel (non-blocking)
+    // Fetch known players (historical) and ratings in parallel (non-blocking)
+    // Combine current event players with historical players for suggestions
+    const currentPlayers = (ev.players ?? []).map((p: any) => ({ name: p.name, gamesPlayed: -1 })); // -1 indicates current player
     Promise.all([
       fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).catch(() => ({ players: [] })),
       fetch(`/api/events/${eventId}/ratings`).then((r) => r.json()).catch(() => ({ data: [] })),
     ]).then(([kp, ratings]) => {
-      setKnownPlayers(kp.players ?? []);
+      // Combine current players with historical players, deduping by name
+      const allPlayersMap = new Map<string, { name: string; gamesPlayed: number }>();
+      // Current players first (they get priority)
+      currentPlayers.forEach((p: { name: string; gamesPlayed: number }) => allPlayersMap.set(p.name.toLowerCase(), p));
+      // Historical players (only if not already in current)
+      (kp.players ?? []).forEach((p: { name: string; gamesPlayed: number }) => {
+        if (!allPlayersMap.has(p.name.toLowerCase())) {
+          allPlayersMap.set(p.name.toLowerCase(), p);
+        }
+      });
+      setKnownPlayers(Array.from(allPlayersMap.values()));
       setPlayerRatings(
         (ratings.data ?? []).map((r: any) => ({ name: r.name, rating: r.rating, gamesPlayed: r.gamesPlayed }))
       );
@@ -1043,6 +1160,10 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
 
   const handleUpdate = (updated: HistoryEntry) => {
     setHistory((prev) => prev.map((h) => h.id === updated.id ? updated : h));
+  };
+
+  const handleDelete = (id: string) => {
+    setHistory((prev) => prev.filter((h) => h.id !== id));
   };
 
   const handleAddHistoricalSuccess = (newEntry: HistoryEntry) => {
@@ -1088,19 +1209,21 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
               </Box>
             </Box>
 
-            <Button variant="outlined" startIcon={<EmojiEventsIcon />}
-              href={`/events/${eventId}/rankings`} size="small"
-              sx={{ alignSelf: "flex-start", borderRadius: 2, textTransform: "none" }}>
-              {t("ratings")}
-            </Button>
-
-            {(isOwner || isAdmin) && (
-              <Button variant="contained" startIcon={<AddCircleIcon />}
-                onClick={() => setShowAddHistorical(true)} size="small"
-                sx={{ alignSelf: "flex-start", borderRadius: 2, textTransform: "none" }}>
-                {t("addHistoricalGame")}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+              <Button variant="outlined" startIcon={<EmojiEventsIcon />}
+                href={`/events/${eventId}/rankings`} size="small"
+                sx={{ borderRadius: 2, textTransform: "none" }}>
+                {t("ratings")}
               </Button>
-            )}
+
+              {(isOwner || isAdmin) && (
+                <Button variant="contained" startIcon={<AddCircleIcon />}
+                  onClick={() => setShowAddHistorical(true)} size="small"
+                  sx={{ borderRadius: 2, textTransform: "none" }}>
+                  {t("addHistoricalGame")}
+                </Button>
+              )}
+            </Box>
 
             {history.length === 0 ? (
               <Paper elevation={0} sx={{
@@ -1116,8 +1239,8 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
               <>
                 {history.map((entry) => (
                   <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} onUpdate={handleUpdate}
-                    isAuthenticated={isAuthenticated} knownPlayers={knownPlayers} playerRatings={playerRatings}
-                    isOwner={isOwner || isAdmin} />
+                    onDelete={handleDelete} isAuthenticated={isAuthenticated} knownPlayers={knownPlayers}
+                    playerRatings={playerRatings} isOwner={isOwner || isAdmin} />
                 ))}
                 {hasMore && (
                   <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
@@ -1138,6 +1261,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
             defaultTeamOneName={teamOneName}
             defaultTeamTwoName={teamTwoName}
             knownPlayers={knownPlayers}
+            playerRatings={playerRatings}
             onSuccess={handleAddHistoricalSuccess}
           />
         </Container>

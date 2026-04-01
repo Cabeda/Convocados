@@ -126,9 +126,9 @@ const pt: TranslationKeys = {
   historyTitle: "{title} — Histórico",
 
   // Historical Game Backfill
-  addHistoricalGame: "Adicionar jogo passado",
-  addHistoricalGameDesc: "Regista um jogo que aconteceu no passado. O ELO não será calculado automaticamente — podes aprovar depois.",
-  historicalGame: "Jogo passado",
+  addHistoricalGame: "Adicionar jogo manual",
+  addHistoricalGameDesc: "Regista um jogo manualmente. O ELO não será calculado automaticamente — podes aprovar depois.",
+  historicalGame: "Jogo manual",
   eloPending: "ELO pendente",
   eloApproved: "ELO aprovado",
   approveElo: "Aprovar ELO",
@@ -139,10 +139,14 @@ const pt: TranslationKeys = {
   pastGameTeam2Name: "Nome da Equipa 2",
   selectPlayers: "Selecionar jogadores",
   player: "Jogador",
-  createPastGame: "Registar jogo passado",
+  createPastGame: "Registar jogo manual",
   creatingPastGame: "A registar...",
-  addPastGameSuccess: "Jogo passado registado com sucesso!",
-  errorCreatingPastGame: "Falha ao registar jogo passado.",
+  addPastGameSuccess: "Jogo manual registado com sucesso!",
+  errorCreatingPastGame: "Falha ao registar jogo manual.",
+  deleteHistoryConfirm: "Tens a certeza que queres apagar este jogo? Esta ação não pode ser desfeita.",
+  deleteHistoryEloWarning: "O ELO já foi processado para este jogo. Apagá-lo irá recalcular todos os ratings.",
+  deleting: "A apagar...",
+  deleteGame: "Apagar jogo",
 
   // TeamPicker
   playerCount: "{n} jogador",
