@@ -198,7 +198,7 @@ describe("GET /api/users/[id]/stats", () => {
 
   it("returns 403 when stats are private and viewer is not the user", async () => {
     const user = await seedUser("Private User");
-    await prisma.user.update({ where: { id: user.id }, data: { publicStats: false } });
+    await prisma.user.update({ where: { id: user.id }, data: { publicStats: false, profileVisibility: "private" } });
     vi.mocked(getSession).mockResolvedValue({ user: { id: "other-user" } } as any);
     const res = await getUserStats(getCtx({ id: user.id }));
     expect(res.status).toBe(403);
@@ -206,7 +206,7 @@ describe("GET /api/users/[id]/stats", () => {
 
   it("allows user to view their own private stats", async () => {
     const user = await seedUser("Self User");
-    await prisma.user.update({ where: { id: user.id }, data: { publicStats: false } });
+    await prisma.user.update({ where: { id: user.id }, data: { publicStats: false, profileVisibility: "private" } });
     vi.mocked(getSession).mockResolvedValue({ user: { id: user.id } } as any);
     const res = await getUserStats(getCtx({ id: user.id }));
     expect(res.status).toBe(200);

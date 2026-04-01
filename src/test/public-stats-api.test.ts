@@ -35,10 +35,11 @@ function patchCtx(userId: string, body: unknown) {
 }
 
 async function seedUser(id: string, name: string, email: string, publicStats = false) {
+  const profileVisibility = publicStats ? "public" : "private";
   await prisma.user.upsert({
     where: { id },
-    create: { id, name, email, emailVerified: true, publicStats },
-    update: { publicStats },
+    create: { id, name, email, emailVerified: true, publicStats, profileVisibility },
+    update: { publicStats, profileVisibility },
   });
 }
 
@@ -124,6 +125,44 @@ describe("GET /api/users/[id]/stats", () => {
     mockGetSession.mockResolvedValueOnce(null);
     const res = await getUserStats(statsCtx("nonexistent"));
     expect(res.status).toBe(404);
+  });
+
+  it("returns 403 for participants-only when viewer shares no event", async () => {
+    await seedUser("user1", "Test User", "test@test.com", false);
+    await prisma.user.update({ where: { id: "user1" }, data: { profileVisibility: "participants" } });
+    await prisma.user.upsert({
+      where: { id: "viewer1" },
+      create: { id: "viewer1", name: "Viewer", email: "viewer@test.com", emailVerified: true },
+      update: {},
+    });
+    mockGetSession.mockResolvedValueOnce({ user: { id: "viewer1" } } as any);
+    const res = await getUserStats(statsCtx("user1"));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 200 for participants-only when viewer shares an event", async () => {
+    await seedUser("user1", "Test User", "test@test.com", false);
+    await prisma.user.update({ where: { id: "user1" }, data: { profileVisibility: "participants" } });
+    await prisma.user.upsert({
+      where: { id: "viewer1" },
+      create: { id: "viewer1", name: "Viewer", email: "viewer@test.com", emailVerified: true },
+      update: {},
+    });
+    // Create a shared event
+    const event = await prisma.event.create({ data: { title: "Shared", location: "X", dateTime: new Date() } });
+    await prisma.player.create({ data: { eventId: event.id, name: "Test User", userId: "user1", order: 0 } });
+    await prisma.player.create({ data: { eventId: event.id, name: "Viewer", userId: "viewer1", order: 1 } });
+    mockGetSession.mockResolvedValueOnce({ user: { id: "viewer1" } } as any);
+    const res = await getUserStats(statsCtx("user1"));
+    expect(res.status).toBe(200);
+  });
+
+  it("returns 403 for participants-only when viewer is unauthenticated", async () => {
+    await seedUser("user1", "Test User", "test@test.com", false);
+    await prisma.user.update({ where: { id: "user1" }, data: { profileVisibility: "participants" } });
+    mockGetSession.mockResolvedValueOnce(null);
+    const res = await getUserStats(statsCtx("user1"));
+    expect(res.status).toBe(403);
   });
 });
 

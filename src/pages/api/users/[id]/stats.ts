@@ -3,7 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
 import { calculateAttendance } from "../../../../lib/attendance";
 
-/** GET /api/users/[id]/stats — public stats for a user (if publicStats is enabled or viewer is the user) */
+/** GET /api/users/[id]/stats — public stats for a user (based on profileVisibility) */
 export const GET: APIRoute = async ({ params, request }) => {
   const userId = params.id!;
   const session = await getSession(request);
@@ -12,15 +12,38 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, publicStats: true },
+    select: { id: true, name: true, publicStats: true, profileVisibility: true },
   });
 
   if (!user) {
     return Response.json({ error: "User not found." }, { status: 404 });
   }
 
-  if (!user.publicStats && !isOwnProfile) {
-    return Response.json({ error: "Stats are private." }, { status: 403 });
+  // Resolve effective visibility:
+  // profileVisibility takes precedence; if not set, fall back to publicStats boolean
+  const visibility = user.profileVisibility === "public" ? "public"
+    : user.profileVisibility === "participants" ? "participants"
+    : user.profileVisibility === "private" ? "private"
+    : user.publicStats ? "public" : "private";
+
+  if (!isOwnProfile) {
+    if (visibility === "private") {
+      return Response.json({ error: "Stats are private." }, { status: 403 });
+    }
+    if (visibility === "participants" && viewerId) {
+      // Check if viewer shares any event with the profile user
+      const sharedEvent = await prisma.player.findFirst({
+        where: {
+          userId: viewerId,
+          event: { players: { some: { userId } } },
+        },
+      });
+      if (!sharedEvent) {
+        return Response.json({ error: "Stats are private." }, { status: 403 });
+      }
+    } else if (visibility === "participants" && !viewerId) {
+      return Response.json({ error: "Stats are private." }, { status: 403 });
+    }
   }
 
   const userName = user.name;
