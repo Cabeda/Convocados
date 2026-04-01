@@ -5,6 +5,7 @@ import { serializeRecurrenceRule, type RecurrenceRule } from "../../../lib/recur
 import { resolveLocation } from "../../../lib/geocode";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
+import { getDefaultDurationMinutes } from "../../../lib/sports";
 
 export const POST: APIRoute = async ({ request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -75,6 +76,7 @@ export const POST: APIRoute = async ({ request }) => {
   const event = await prisma.event.create({
     data: {
       title, location, dateTime, timezone, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
+      durationMinutes: getDefaultDurationMinutes(sport),
       latitude: geo?.latitude ?? null,
       longitude: geo?.longitude ?? null,
       ownerId: session?.user?.id ?? null,
