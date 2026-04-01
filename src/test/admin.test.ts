@@ -274,3 +274,54 @@ describe("getGrowthTimeline", () => {
     expect(timeline[0].users).toBe(2);
   });
 });
+
+describe("deleteUser", () => {
+  it("hard-deletes the user record", async () => {
+    await seedUser("del-1", "del1@test.com");
+
+    const { deleteUser } = await import("~/lib/admin.server");
+    await deleteUser("del-1");
+
+    const user = await prisma.user.findUnique({ where: { id: "del-1" } });
+    expect(user).toBeNull();
+  });
+
+  it("cascades to sessions and accounts", async () => {
+    await seedUser("del-2", "del2@test.com");
+    await prisma.session.create({
+      data: { id: "sess-del-2", userId: "del-2", token: "tok-del-2", expiresAt: new Date(Date.now() + 86400000), createdAt: new Date(), updatedAt: new Date() },
+    });
+
+    const { deleteUser } = await import("~/lib/admin.server");
+    await deleteUser("del-2");
+
+    const session = await prisma.session.findUnique({ where: { id: "sess-del-2" } });
+    expect(session).toBeNull();
+  });
+
+  it("sets ownerId to null on owned events", async () => {
+    await seedUser("del-3", "del3@test.com");
+    await seedEvent("evt-del-3", "del-3");
+
+    const { deleteUser } = await import("~/lib/admin.server");
+    await deleteUser("del-3");
+
+    const event = await prisma.event.findUnique({ where: { id: "evt-del-3" } });
+    expect(event?.ownerId).toBeNull();
+  });
+
+  it("sets userId to null on linked players", async () => {
+    await seedUser("del-4", "del4@test.com");
+    await seedEvent("evt-del-4", "del-4");
+    await prisma.player.create({
+      data: { name: "Player Del4", eventId: "evt-del-4", userId: "del-4", createdAt: new Date() },
+    });
+
+    const { deleteUser } = await import("~/lib/admin.server");
+    await deleteUser("del-4");
+
+    const players = await prisma.player.findMany({ where: { eventId: "evt-del-4" } });
+    expect(players[0].userId).toBeNull();
+    expect(players[0].name).toBe("Player Del4");
+  });
+});

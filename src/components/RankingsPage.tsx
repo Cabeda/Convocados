@@ -8,6 +8,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -44,6 +45,10 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const [editPlayer, setEditPlayer] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Purge player state
+  const [purgeTarget, setPurgeTarget] = useState<string | null>(null);
+  const [purging, setPurging] = useState(false);
 
   const load = useCallback(async () => {
     const [evRes, ratRes] = await Promise.all([
@@ -102,6 +107,28 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const openEditDialog = (player: PlayerRating) => {
     setEditPlayer(player.name);
     setEditValue(String(player.initialRating ?? Math.round(player.rating)));
+  };
+
+  const handlePurgePlayer = async () => {
+    if (!purgeTarget) return;
+    setPurging(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/purge-player`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: purgeTarget }),
+      });
+      if (res.ok) {
+        setSnack({ msg: t("purgePlayerSuccess"), severity: "success" });
+        setRatings((prev) => prev.filter((r) => r.name !== purgeTarget));
+        setPurgeTarget(null);
+      } else {
+        setSnack({ msg: t("purgePlayerError"), severity: "error" });
+      }
+    } catch {
+      setSnack({ msg: t("purgePlayerError"), severity: "error" });
+    }
+    setPurging(false);
   };
 
   const handleSaveInitialRating = async () => {
@@ -276,6 +303,11 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                                     <EditIcon sx={{ fontSize: 16 }} />
                                   </IconButton>
                                 </Tooltip>
+                                <Tooltip title={t("purgePlayer")}>
+                                  <IconButton size="small" color="error" onClick={() => setPurgeTarget(r.name)}>
+                                    <DeleteIcon sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                </Tooltip>
                               </TableCell>
                             )}
                           </TableRow>
@@ -296,6 +328,22 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
             )}
           </Stack>
         </Container>
+
+        {/* Purge player confirmation dialog */}
+        <Dialog open={!!purgeTarget} onClose={() => !purging && setPurgeTarget(null)} maxWidth="xs" fullWidth>
+          <DialogTitle>{t("purgePlayer")}</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2">
+              {t("purgePlayerConfirm", { name: purgeTarget ?? "" })}
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setPurgeTarget(null)} disabled={purging}>{t("cancel")}</Button>
+            <Button color="error" variant="contained" onClick={handlePurgePlayer} disabled={purging}>
+              {purging ? t("deleting") : t("purgePlayer")}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Edit initial rating dialog */}
         <Dialog open={!!editPlayer} onClose={() => setEditPlayer(null)} maxWidth="xs" fullWidth>
