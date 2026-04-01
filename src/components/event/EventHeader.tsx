@@ -31,6 +31,7 @@ import type { Imatch } from "~/lib/random";
 import { ShareBar } from "./ShareBar";
 import { NotifyButton } from "./NotifyButton";
 import { WatchScoreButton } from "./WatchScoreButton";
+import LocationAutocomplete from "../LocationAutocomplete";
 
 interface Props {
   eventId: string;
@@ -372,10 +373,12 @@ export function EventHeader({
                 </Box>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <LocationOnIcon fontSize="small" color="action" sx={{ flexShrink: 0 }} />
-                  <TextField
-                    size="small" value={locationDraft} fullWidth label={t("location")}
-                    onChange={(e) => setLocationDraft(e.target.value)}
-                    placeholder={t("locationPlaceholder")} inputProps={{ maxLength: 200 }}
+                  <LocationAutocomplete
+                    value={locationDraft}
+                    onChange={setLocationDraft}
+                    label={t("location")}
+                    placeholder={t("locationPlaceholder")}
+                    size="small"
                   />
                 </Box>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>

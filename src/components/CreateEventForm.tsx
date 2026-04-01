@@ -14,6 +14,7 @@ import PlaceIcon from "@mui/icons-material/Place";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import PlaytomicCourtFinder from "./PlaytomicCourtFinder";
+import LocationAutocomplete from "./LocationAutocomplete";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { SPORT_PRESETS, getDefaultMaxPlayers } from "~/lib/sports";
@@ -59,6 +60,7 @@ export default function CreateEventForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState("");
+  const [locationCoord, setLocationCoord] = useState<{ lat: number; lon: number } | undefined>();
   const [courtFinderOpen, setCourtFinderOpen] = useState(false);
   const [dateTime, setDateTime] = useState(nextHour);
   const [timezone, setTimezone] = useState(() => detectTimezone());
@@ -197,11 +199,13 @@ export default function CreateEventForm() {
                     </AccordionSummary>
                     <AccordionDetails>
                       <Stack spacing={3}>
-                        <TextField name="location" label={t("locationOptional")}
-                          placeholder={t("locationPlaceholder")} fullWidth
+                        <LocationAutocomplete
                           value={location}
-                          onChange={(e) => setLocation(e.target.value)}
-                          inputProps={{ maxLength: 200 }} />
+                          onChange={(v) => { setLocation(v); setLocationCoord(undefined); }}
+                          coordinate={locationCoord}
+                          label={t("locationOptional")}
+                          placeholder={t("locationPlaceholder")}
+                        />
 
                         {isPlaytomicSport(sport) && (
                           <Button
@@ -312,7 +316,10 @@ export default function CreateEventForm() {
           onClose={() => setCourtFinderOpen(false)}
           sport={sport}
           date={dateTime.split("T")[0] || new Date().toISOString().split("T")[0]}
-          onSelect={(loc) => setLocation(loc)}
+          onSelect={(loc, coord) => {
+            setLocation(loc);
+            setLocationCoord(coord ? { lat: coord.lat, lon: coord.lng } : undefined);
+          }}
         />
       </ResponsiveLayout>
     </ThemeModeProvider>
