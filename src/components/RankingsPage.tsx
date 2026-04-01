@@ -272,10 +272,11 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                                 <Chip
                                   label={Math.round(r.rating)}
                                   size="small"
+                                  variant="outlined"
                                   sx={{
                                     fontWeight: 700, fontSize: "0.8rem", minWidth: 52,
                                     bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                    color: theme.palette.text.primary,
+                                    borderColor: alpha(theme.palette.primary.main, 0.2),
                                   }}
                                 />
                                 {r.initialRating != null && (
