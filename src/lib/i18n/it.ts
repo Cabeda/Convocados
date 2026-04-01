@@ -545,7 +545,6 @@ const it: TranslationKeys = {
   // Event admins (#143)
   eventAdmins: "Amministratori",
   eventAdminsDesc: "Condividi i diritti di gestione con altri utenti. Gli admin possono gestire giocatori, impostazioni e costi — ma non possono aggiungere altri admin o trasferire la proprietà.",
-  adminByEmail: "Aggiungi admin per email",
   adminSearchPlaceholder: "Cerca per nome o email...",
   addAdmin: "Aggiungi",
   removeAdmin: "Rimuovi",
@@ -555,7 +554,6 @@ const it: TranslationKeys = {
   cannotAddOwnerAsAdmin: "Non è possibile aggiungere il proprietario dell'evento come admin.",
   adminBadge: "Admin",
   adminInviteEmail: "Invita {email} a creare un account",
-  adminInviteSent: "Invito inviato a {email}.",
   adminPlayerBadge: "Giocatore",
   adminEmailBadge: "Utente registrato",
 

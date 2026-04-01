@@ -1,6 +1,10 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { getSession } from "../../../../../lib/auth.helpers.server";
+import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_CANDIDATES = 30;
 
 /** GET — List admin candidates for an event (owner only).
  *
@@ -10,10 +14,13 @@ import { getSession } from "../../../../../lib/auth.helpers.server";
  *  With `?q=`, additionally searches all registered users by email.
  *  If the query looks like an email and matches a registered user who
  *  is not already a candidate, that user is appended with `source: "email"`.
- *  If no user is found for an email-like query, a placeholder with
+ *  If no user is found for a valid email query, a placeholder with
  *  `source: "invite"` is returned so the frontend can offer to send an invite.
  */
 export const GET: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "read");
+  if (limited) return limited;
+
   const eventId = params.id!;
   const event = await prisma.event.findUnique({
     where: { id: eventId },
@@ -64,8 +71,8 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   for (const [, p] of playerMap) {
     if (!p.user) continue;
-    // Apply name filter for display
-    if (queryLower && !p.user.name.toLowerCase().includes(queryLower)) continue;
+    // Apply name or email filter for display
+    if (queryLower && !p.user.name.toLowerCase().includes(queryLower) && !p.user.email.toLowerCase().includes(queryLower)) continue;
 
     candidates.push({
       userId: p.user.id,
@@ -79,9 +86,9 @@ export const GET: APIRoute = async ({ params, request }) => {
   // Sort alphabetically by name
   candidates.sort((a, b) => a.name.localeCompare(b.name));
 
-  // If query looks like an email, try to find a matching registered user
-  const isEmailLike = queryLower.includes("@");
-  if (isEmailLike) {
+  // If query looks like a valid email, try to find a matching registered user
+  const isValidEmail = EMAIL_RE.test(queryLower);
+  if (isValidEmail) {
     const emailUser = await prisma.user.findUnique({
       where: { email: queryLower },
       select: { id: true, name: true, email: true, image: true },
@@ -118,5 +125,5 @@ export const GET: APIRoute = async ({ params, request }) => {
     }
   }
 
-  return Response.json(candidates);
+  return Response.json(candidates.slice(0, MAX_CANDIDATES));
 };

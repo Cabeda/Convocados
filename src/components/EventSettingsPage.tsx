@@ -70,6 +70,13 @@ interface Props {
   eventId: string;
 }
 
+interface AdminCandidate {
+  userId: string;
+  name: string;
+  email: string;
+  source: "player" | "email" | "invite";
+}
+
 // ── Section Card ──────────────────────────────────────────────────────────────
 
 function SectionCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
@@ -114,7 +121,6 @@ export default function EventSettingsPage({ eventId }: Props) {
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   // Event admins
-  type AdminCandidate = { userId: string; name: string; email: string; source: "player" | "email" | "invite" };
   const [admins, setAdmins] = useState<{ id: string; userId: string; name: string; email: string }[]>([]);
   const [adminCandidates, setAdminCandidates] = useState<AdminCandidate[]>([]);
   const [adminSearchInput, setAdminSearchInput] = useState("");
@@ -142,11 +148,10 @@ export default function EventSettingsPage({ eventId }: Props) {
 
   const fetchAccessInfo = useCallback(async () => {
     try {
-      const [accessRes, invitesRes, adminsRes, candidatesRes] = await Promise.all([
+      const [accessRes, invitesRes, adminsRes] = await Promise.all([
         fetch(`/api/events/${eventId}/access`),
         fetch(`/api/events/${eventId}/access/invites`),
         fetch(`/api/events/${eventId}/admins`),
-        fetch(`/api/events/${eventId}/admins/candidates`),
       ]);
       if (accessRes.ok) {
         const data = await accessRes.json();
@@ -158,11 +163,23 @@ export default function EventSettingsPage({ eventId }: Props) {
       if (adminsRes.ok) {
         setAdmins(await adminsRes.json());
       }
-      if (candidatesRes.ok) {
-        setAdminCandidates(await candidatesRes.json());
-      }
     } catch { /* ignore */ }
   }, [eventId]);
+
+  const fetchAdminCandidates = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/admins/candidates`);
+      if (res.ok) setAdminCandidates(await res.json());
+    } catch { /* ignore */ }
+  }, [eventId]);
+
+  // Derived state (must be before effects that depend on them)
+  const isAuthenticated = !!session?.user;
+  const isOwner = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
+  const isAdmin = !!event?.isAdmin;
+  const isOwnerless = event && !event.ownerId;
+  const canEdit = isOwnerless || isOwner || isAdmin;
+  const userId = session?.user?.id;
 
   useEffect(() => {
     fetchEvent();
@@ -170,10 +187,21 @@ export default function EventSettingsPage({ eventId }: Props) {
     fetchAccessInfo();
   }, [fetchEvent, fetchPriority, fetchAccessInfo]);
 
-  // Debounced search for admin candidates when input contains "@"
+  // Fetch admin candidates only when the user is the owner
   useEffect(() => {
+    if (isOwner) fetchAdminCandidates();
+  }, [isOwner, fetchAdminCandidates]);
+
+  // Debounced search for admin candidates when input contains "@";
+  // re-fetch base candidates when "@" is removed from input.
+  useEffect(() => {
+    if (!isOwner) return;
     if (adminSearchTimer.current) clearTimeout(adminSearchTimer.current);
-    if (!adminSearchInput.includes("@")) return;
+    if (!adminSearchInput.includes("@")) {
+      // Input no longer has "@" — restore base candidate list
+      fetchAdminCandidates();
+      return;
+    }
     adminSearchTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/events/${eventId}/admins/candidates?q=${encodeURIComponent(adminSearchInput.trim())}`);
@@ -181,15 +209,7 @@ export default function EventSettingsPage({ eventId }: Props) {
       } catch { /* ignore */ }
     }, 300);
     return () => { if (adminSearchTimer.current) clearTimeout(adminSearchTimer.current); };
-  }, [adminSearchInput, eventId]);
-
-  // Derived state
-  const isAuthenticated = !!session?.user;
-  const isOwner = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
-  const isAdmin = !!event?.isAdmin;
-  const isOwnerless = event && !event.ownerId;
-  const canEdit = isOwnerless || isOwner || isAdmin;
-  const userId = session?.user?.id;
+  }, [adminSearchInput, eventId, isOwner, fetchAdminCandidates]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -389,9 +409,9 @@ export default function EventSettingsPage({ eventId }: Props) {
   const handleAddAdmin = async (candidate: AdminCandidate) => {
     setAdminError(null);
     if (candidate.source === "invite") {
-      // User doesn't exist yet — add by email so the API returns 404 with a clear message
-      // For now, we try to add by email; the API will return 404 if user doesn't exist
-      setAdminError(t("adminInviteEmail").replace("{email}", candidate.email));
+      // User doesn't exist yet — show info message, not error
+      setMessage({ type: "info" as any, text: t("adminInviteEmail").replace("{email}", candidate.email) });
+      setAdminSearchInput("");
       return;
     }
     const body = candidate.userId
@@ -423,11 +443,9 @@ export default function EventSettingsPage({ eventId }: Props) {
       body: JSON.stringify({ userId }),
     });
     if (res.ok) {
-      const removed = admins.find((a) => a.userId === userId);
       setAdmins((prev) => prev.filter((a) => a.userId !== userId));
-      if (removed) {
-        setAdminCandidates((prev) => [...prev, { userId: removed.userId, name: removed.name, email: removed.email, source: "player" as const }]);
-      }
+      // Re-fetch candidates so the removed admin appears with the correct source
+      await fetchAdminCandidates();
       setMessage({ type: "success", text: t("adminRemoved") });
     }
   };
@@ -847,15 +865,7 @@ export default function EventSettingsPage({ eventId }: Props) {
                 getOptionLabel={(option) =>
                   typeof option === "string" ? option : option.name
                 }
-                filterOptions={(options) => {
-                  if (!adminSearchInput.trim()) return options;
-                  const q = adminSearchInput.trim().toLowerCase();
-                  return options.filter(
-                    (o) =>
-                      o.name.toLowerCase().includes(q) ||
-                      o.email.toLowerCase().includes(q)
-                  );
-                }}
+                filterOptions={(options) => options}
                 isOptionEqualToValue={(a, b) => a.userId === b.userId && a.source === b.source}
                 value={null}
                 inputValue={adminSearchInput}

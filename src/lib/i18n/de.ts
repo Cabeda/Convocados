@@ -545,7 +545,6 @@ const de: TranslationKeys = {
   // Event admins (#143)
   eventAdmins: "Administratoren",
   eventAdminsDesc: "Teile Verwaltungsrechte mit anderen Nutzern. Admins können Spieler, Einstellungen und Kosten verwalten — aber keine anderen Admins hinzufügen oder die Eigentümerschaft übertragen.",
-  adminByEmail: "Admin per E-Mail hinzufügen",
   adminSearchPlaceholder: "Nach Name oder E-Mail suchen...",
   addAdmin: "Hinzufügen",
   removeAdmin: "Entfernen",
@@ -555,7 +554,6 @@ const de: TranslationKeys = {
   cannotAddOwnerAsAdmin: "Der Eventbesitzer kann nicht als Admin hinzugefügt werden.",
   adminBadge: "Admin",
   adminInviteEmail: "{email} einladen, ein Konto zu erstellen",
-  adminInviteSent: "Einladung an {email} gesendet.",
   adminPlayerBadge: "Spieler",
   adminEmailBadge: "Registrierter Nutzer",
 

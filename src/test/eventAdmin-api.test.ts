@@ -611,4 +611,41 @@ describe("Admin Candidates API", () => {
     // admin1 is already an admin — should not appear
     expect(data).toHaveLength(0);
   });
+
+  it("should not return invite for invalid email-like strings", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    // "@" alone or "not-an-email@" should not produce invite placeholders
+    for (const q of ["@", "not-an-email@", "@@"]) {
+      const searchReq = new Request(`http://localhost/api/test?q=${encodeURIComponent(q)}`, { method: "GET" });
+      const res = await GET({ request: searchReq, params: { id: event.id } } as any);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.filter((c: any) => c.source === "invite")).toHaveLength(0);
+    }
+  });
+
+  it("should find player candidates by email search", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+    await prisma.player.create({ data: { name: "Admin User", eventId: event.id, userId: "admin1" } });
+    await prisma.player.create({ data: { name: "Regular User", eventId: event.id, userId: "user1" } });
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    // Search by partial email — should match player by email
+    const searchReq = new Request("http://localhost/api/test?q=admin@", { method: "GET" });
+    const res = await GET({ request: searchReq, params: { id: event.id } } as any);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data).toHaveLength(1);
+    expect(data[0].userId).toBe("admin1");
+    expect(data[0].source).toBe("player");
+  });
 });
