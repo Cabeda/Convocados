@@ -8,6 +8,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -37,6 +38,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  const [canManage, setCanManage] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
   const [snack, setSnack] = useState<{ msg: string; severity: "success" | "error" } | null>(null);
 
@@ -44,6 +46,10 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const [editPlayer, setEditPlayer] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Purge player state
+  const [purgeTarget, setPurgeTarget] = useState<string | null>(null);
+  const [purging, setPurging] = useState(false);
 
   const load = useCallback(async () => {
     const [evRes, ratRes] = await Promise.all([
@@ -61,6 +67,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     const isOwner = !!(session?.user && ev.ownerId && session.user.id === ev.ownerId);
     const hasEditPermission = isOwner || ev.isAdmin || !ev.ownerId;
     setCanEdit(hasEditPermission && !!ev.allowManualRating);
+    setCanManage(hasEditPermission);
     setLoading(false);
   }, [eventId, session]);
 
@@ -102,6 +109,28 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const openEditDialog = (player: PlayerRating) => {
     setEditPlayer(player.name);
     setEditValue(String(player.initialRating ?? Math.round(player.rating)));
+  };
+
+  const handlePurgePlayer = async () => {
+    if (!purgeTarget) return;
+    setPurging(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/purge-player`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: purgeTarget }),
+      });
+      if (res.ok) {
+        setSnack({ msg: t("purgePlayerSuccess"), severity: "success" });
+        setRatings((prev) => prev.filter((r) => r.name !== purgeTarget));
+        setPurgeTarget(null);
+      } else {
+        setSnack({ msg: t("purgePlayerError"), severity: "error" });
+      }
+    } catch {
+      setSnack({ msg: t("purgePlayerError"), severity: "error" });
+    }
+    setPurging(false);
   };
 
   const handleSaveInitialRating = async () => {
@@ -204,6 +233,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                         <TableCell align="center" sx={{ fontWeight: 700, color: "text.secondary" }}>{t("draws")}</TableCell>
                         <TableCell align="center" sx={{ fontWeight: 700, color: "error.main" }}>{t("losses")}</TableCell>
                         {canEdit && <TableCell sx={{ width: 48 }} />}
+                        {!canEdit && canManage && <TableCell sx={{ width: 48 }} />}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -269,13 +299,22 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                             <TableCell align="center">
                               <Typography variant="body2" color="error.main" fontWeight={600}>{r.losses}</Typography>
                             </TableCell>
-                            {canEdit && (
+                            {(canEdit || canManage) && (
                               <TableCell align="center" sx={{ px: 0.5 }}>
-                                <Tooltip title={t("setInitialRating")}>
-                                  <IconButton size="small" onClick={() => openEditDialog(r)}>
-                                    <EditIcon sx={{ fontSize: 16 }} />
-                                  </IconButton>
-                                </Tooltip>
+                                {canEdit && (
+                                  <Tooltip title={t("setInitialRating")}>
+                                    <IconButton size="small" onClick={() => openEditDialog(r)}>
+                                      <EditIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+                                {canManage && (
+                                  <Tooltip title={t("purgePlayer")}>
+                                    <IconButton size="small" color="error" onClick={() => setPurgeTarget(r.name)}>
+                                      <DeleteIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
                               </TableCell>
                             )}
                           </TableRow>
@@ -296,6 +335,22 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
             )}
           </Stack>
         </Container>
+
+        {/* Purge player confirmation dialog */}
+        <Dialog open={!!purgeTarget} onClose={() => !purging && setPurgeTarget(null)} maxWidth="xs" fullWidth>
+          <DialogTitle>{t("purgePlayer")}</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2">
+              {t("purgePlayerConfirm", { name: purgeTarget ?? "" })}
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setPurgeTarget(null)} disabled={purging}>{t("cancel")}</Button>
+            <Button color="error" variant="contained" onClick={handlePurgePlayer} disabled={purging}>
+              {purging ? t("deleting") : t("purgePlayer")}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Edit initial rating dialog */}
         <Dialog open={!!editPlayer} onClose={() => setEditPlayer(null)} maxWidth="xs" fullWidth>

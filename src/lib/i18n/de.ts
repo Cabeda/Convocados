@@ -720,6 +720,13 @@ const de: TranslationKeys = {
   countdownHours: "in {n}h {m}m",
   countdownMinutes: "in {n}m",
   countdownNow: "Jetzt",
+  adminDeleteUser: "Benutzer löschen",
+  adminDeleteUserConfirm: "Sind Sie sicher, dass Sie diesen Benutzer dauerhaft löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+  adminDeleteUserError: "Benutzer konnte nicht gelöscht werden.",
+  purgePlayer: "Aus Ereignis entfernen",
+  purgePlayerConfirm: "\"{name}\" dauerhaft aus diesem Ereignis entfernen? Dadurch werden der Spielerdatensatz, die Bewertungen und alle Spielhistorieneinträge gelöscht. ELO wird neu berechnet. Diese Aktion kann nicht rückgängig gemacht werden.",
+  purgePlayerSuccess: "Spieler entfernt.",
+  purgePlayerError: "Spieler konnte nicht entfernt werden.",
 };
 
 export default de;

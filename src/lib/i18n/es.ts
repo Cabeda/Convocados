@@ -720,6 +720,13 @@ const es: TranslationKeys = {
   countdownHours: "en {n}h {m}m",
   countdownMinutes: "en {n}m",
   countdownNow: "Ahora",
+  adminDeleteUser: "Eliminar usuario",
+  adminDeleteUserConfirm: "¿Estás seguro de que quieres eliminar permanentemente este usuario? Esta acción no se puede deshacer.",
+  adminDeleteUserError: "No se pudo eliminar el usuario.",
+  purgePlayer: "Eliminar del evento",
+  purgePlayerConfirm: "¿Eliminar permanentemente a \"{name}\" de este evento? Esto borrará su registro de jugador, clasificaciones y lo eliminará de todo el historial de partidos. El ELO se recalculará. Esta acción no se puede deshacer.",
+  purgePlayerSuccess: "Jugador eliminado.",
+  purgePlayerError: "No se pudo eliminar al jugador.",
 };
 
 export default es;

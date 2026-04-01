@@ -637,6 +637,13 @@ const en = {
   adminRange1y: "1 year",
   adminRangeAll: "All time",
   adminNoGrowthData: "No growth data available yet.",
+  adminDeleteUser: "Delete user",
+  adminDeleteUserConfirm: "Are you sure you want to permanently delete this user? This cannot be undone.",
+  adminDeleteUserError: "Could not delete user.",
+  purgePlayer: "Remove from event",
+  purgePlayerConfirm: "Permanently remove \"{name}\" from this event? This will delete their player record, ratings, and remove them from all game history. ELO will be recalculated. This cannot be undone.",
+  purgePlayerSuccess: "Player removed.",
+  purgePlayerError: "Could not remove player.",
 
   // Event archive (#161)
   archiveEvent: "Archive event",
