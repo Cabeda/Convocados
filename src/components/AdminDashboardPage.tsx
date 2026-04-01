@@ -224,6 +224,10 @@ export default function AdminDashboardPage() {
     if (r.ok) {
       setDeleteTarget(null);
       fetchUsers(page, search);
+      // Refresh stats so totalUsers count is up to date
+      fetch("/api/admin/stats")
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => { if (data) setStats(data); });
     } else {
       setDeleteError(t("adminDeleteUserError"));
     }

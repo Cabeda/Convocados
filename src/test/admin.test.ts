@@ -324,4 +324,19 @@ describe("deleteUser", () => {
     expect(players[0].userId).toBeNull();
     expect(players[0].name).toBe("Player Del4");
   });
+
+  it("returns false for a non-existent user", async () => {
+    const { deleteUser } = await import("~/lib/admin.server");
+    const result = await deleteUser("does-not-exist");
+    expect(result).toBe(false);
+  });
+
+  it("returns true when user is successfully deleted", async () => {
+    await seedUser("del-5", "del5@test.com");
+    const { deleteUser } = await import("~/lib/admin.server");
+    const result = await deleteUser("del-5");
+    expect(result).toBe(true);
+    const user = await prisma.user.findUnique({ where: { id: "del-5" } });
+    expect(user).toBeNull();
+  });
 });
