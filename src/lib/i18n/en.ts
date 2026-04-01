@@ -173,6 +173,7 @@ const en = {
   annually: "Annually on {date}",
   customRecurrence: "Custom...",
   customRecurrenceTitle: "Custom recurrence",
+  done: "Done",
   repeatEvery: "Repeat every",
   days: "day(s)",
   years: "year(s)",

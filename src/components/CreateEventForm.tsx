@@ -33,6 +33,11 @@ function jsDayToDayCode(jsDay: number): string {
   return DAY_CODES[(jsDay + 6) % 7]; // Sun=0 → index 6, Mon=1 → index 0, etc.
 }
 
+/** Map JS getDay() (0=Sun) to our DAYS array index (0=Mon) */
+function jsDayToDayIndex(jsDay: number): number {
+  return (jsDay + 6) % 7;
+}
+
 type RecurrencePreset = "none" | "daily" | "weekly" | "monthly" | "yearly" | "custom";
 type RecurrenceFreq = "daily" | "weekly" | "monthly" | "yearly";
 
@@ -216,6 +221,53 @@ export default function CreateEventForm() {
                     </Select>
                   </FormControl>
 
+                  <FormControl fullWidth>
+                    <InputLabel>{t("recurrence")}</InputLabel>
+                    <Select
+                      value={recurrencePreset}
+                      label={t("recurrence")}
+                      renderValue={(val) => {
+                        if (val === "none") return t("doesNotRepeat");
+                        if (val === "daily") return t("daily");
+                        if (val === "weekly") return t("weeklyOnDay", { day: t(DAYS[jsDayToDayIndex(new Date(dateTime).getDay())].key) });
+                        if (val === "monthly") return t("monthlyOnDay", { day: String(new Date(dateTime).getDate()) });
+                        if (val === "yearly") return t("annually", { date: new Date(dateTime).toLocaleDateString(locale, { month: "short", day: "numeric" }) });
+                        if (val === "custom") return t("customRecurrence");
+                        return "";
+                      }}
+                      onChange={(e) => {
+                        const val = e.target.value as RecurrencePreset;
+                        if (val === "custom") {
+                          const eventDay = jsDayToDayCode(new Date(dateTime).getDay());
+                          if (customByDays.length === 0) setCustomByDays([eventDay]);
+                          setCustomDialogOpen(true);
+                        } else {
+                          setRecurrencePreset(val);
+                        }
+                      }}
+                    >
+                      <MenuItem value="none">{t("doesNotRepeat")}</MenuItem>
+                      <MenuItem value="daily">{t("daily")}</MenuItem>
+                      <MenuItem value="weekly">
+                        {t("weeklyOnDay", { day: t(DAYS[jsDayToDayIndex(new Date(dateTime).getDay())].key) })}
+                      </MenuItem>
+                      <MenuItem value="monthly">
+                        {t("monthlyOnDay", { day: String(new Date(dateTime).getDate()) })}
+                      </MenuItem>
+                      <MenuItem value="yearly">
+                        {t("annually", { date: new Date(dateTime).toLocaleDateString(locale, { month: "short", day: "numeric" }) })}
+                      </MenuItem>
+                      <Divider />
+                      <MenuItem value="custom">{t("customRecurrence")}</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  {recurrencePreset !== "none" && (
+                    <Alert severity="info" sx={{ fontSize: "0.85rem" }}>
+                      {t("recurrenceInfo")}
+                    </Alert>
+                  )}
+
                   {/* Advanced options */}
                   <Accordion disableGutters elevation={0} sx={{
                     border: "1px solid",
@@ -276,51 +328,6 @@ export default function CreateEventForm() {
                           </Grid2>
                         </Grid2>
 
-                        <Divider><Chip label={t("recurrence")} size="small" /></Divider>
-
-                        <FormControl fullWidth>
-                          <InputLabel>{t("recurrence")}</InputLabel>
-                          <Select
-                            value={recurrencePreset}
-                            label={t("recurrence")}
-                            onChange={(e) => {
-                              const val = e.target.value as RecurrencePreset;
-                              if (val === "custom") {
-                                // Pre-fill custom dialog from current event day
-                                const eventDay = jsDayToDayCode(new Date(dateTime).getDay());
-                                if (customByDays.length === 0) setCustomByDays([eventDay]);
-                                setCustomDialogOpen(true);
-                              } else {
-                                setRecurrencePreset(val);
-                              }
-                            }}
-                          >
-                            <MenuItem value="none">{t("doesNotRepeat")}</MenuItem>
-                            <MenuItem value="daily">{t("daily")}</MenuItem>
-                            <MenuItem value="weekly">
-                              {t("weeklyOnDay", { day: t(DAYS[((new Date(dateTime).getDay() + 6) % 7)].key) })}
-                            </MenuItem>
-                            <MenuItem value="monthly">
-                              {t("monthlyOnDay", { day: String(new Date(dateTime).getDate()) })}
-                            </MenuItem>
-                            <MenuItem value="yearly">
-                              {t("annually", { date: new Date(dateTime).toLocaleDateString(locale, { month: "short", day: "numeric" }) })}
-                            </MenuItem>
-                            {recurrencePreset === "custom" && (
-                              <MenuItem value="custom" sx={{ display: "none" }}>
-                                {t("customRecurrence")}
-                              </MenuItem>
-                            )}
-                            <Divider />
-                            <MenuItem value="custom">{t("customRecurrence")}</MenuItem>
-                          </Select>
-                        </FormControl>
-
-                        {recurrencePreset !== "none" && (
-                          <Alert severity="info" sx={{ fontSize: "0.85rem" }}>
-                            {t("recurrenceInfo")}
-                          </Alert>
-                        )}
                       </Stack>
                     </AccordionDetails>
                   </Accordion>
@@ -404,7 +411,7 @@ export default function CreateEventForm() {
                 setCustomDialogOpen(false);
               }}
             >
-              {t("saveLocation")}
+              {t("done")}
             </Button>
           </DialogActions>
         </Dialog>

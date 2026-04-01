@@ -174,6 +174,7 @@ const pt: TranslationKeys = {
   annually: "Anualmente a {date}",
   customRecurrence: "Personalizar...",
   customRecurrenceTitle: "Recorrência personalizada",
+  done: "Concluído",
   repeatEvery: "Repetir a cada",
   days: "dia(s)",
   years: "ano(s)",

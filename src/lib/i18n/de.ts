@@ -155,6 +155,7 @@ const de: TranslationKeys = {
   annually: "Jährlich am {date}",
   customRecurrence: "Benutzerdefiniert...",
   customRecurrenceTitle: "Benutzerdefinierte Wiederholung",
+  done: "Fertig",
   repeatEvery: "Wiederholen alle",
   days: "Tag(e)",
   years: "Jahr(e)",
