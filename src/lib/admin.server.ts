@@ -99,6 +99,10 @@ export async function listUsers({ page, pageSize, search }: { page: number; page
   return { users, total };
 }
 
+export async function deleteUser(userId: string): Promise<void> {
+  await prisma.user.delete({ where: { id: userId } });
+}
+
 /**
  * Returns accumulated (cumulative) user and event counts per day.
  * `range`: "30d" | "1y" | "all"

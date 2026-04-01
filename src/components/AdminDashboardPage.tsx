@@ -4,12 +4,14 @@ import {
   CircularProgress, Alert, TextField, Button,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   InputAdornment, Chip, ToggleButtonGroup, ToggleButton, useTheme,
+  IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
 } from "@mui/material";
 import PeopleIcon from "@mui/icons-material/People";
 import EventIcon from "@mui/icons-material/Event";
 import SportsScoreIcon from "@mui/icons-material/SportsScore";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import SearchIcon from "@mui/icons-material/Search";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from "recharts";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
@@ -170,6 +172,9 @@ export default function AdminDashboardPage() {
   const [growthRange, setGrowthRange] = useState<GrowthRange>("30d");
   const [growthData, setGrowthData] = useState<GrowthPoint[]>([]);
   const [loadingGrowth, setLoadingGrowth] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const PAGE_SIZE = 20;
 
@@ -210,6 +215,20 @@ export default function AdminDashboardPage() {
     if (!session?.user || forbidden) return;
     fetchUsers(page, search);
   }, [session?.user, page, search, forbidden, fetchUsers]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
+    const r = await fetch(`/api/admin/users/${deleteTarget.id}`, { method: "DELETE" });
+    if (r.ok) {
+      setDeleteTarget(null);
+      fetchUsers(page, search);
+    } else {
+      setDeleteError(t("adminDeleteUserError"));
+    }
+    setDeleting(false);
+  };
 
   if (sessionLoading) {
     return (
@@ -333,6 +352,7 @@ export default function AdminDashboardPage() {
                               <TableCell>{t("name")}</TableCell>
                               <TableCell>{t("email")}</TableCell>
                               <TableCell>Joined</TableCell>
+                              <TableCell />
                             </TableRow>
                           </TableHead>
                           <TableBody>
@@ -350,6 +370,18 @@ export default function AdminDashboardPage() {
                                 </TableCell>
                                 <TableCell>{u.email}</TableCell>
                                 <TableCell>{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                                <TableCell align="right">
+                                  {u.id !== session?.user?.id && (
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      aria-label={t("adminDeleteUser")}
+                                      onClick={() => { setDeleteError(null); setDeleteTarget(u); }}
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  )}
+                                </TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -372,6 +404,24 @@ export default function AdminDashboardPage() {
           </Stack>
         </Container>
       </ResponsiveLayout>
+      <Dialog open={!!deleteTarget} onClose={() => !deleting && setDeleteTarget(null)}>
+        <DialogTitle>{t("adminDeleteUser")}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>{t("adminDeleteUserConfirm")}</DialogContentText>
+          {deleteTarget && (
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              {deleteTarget.name} ({deleteTarget.email})
+            </Typography>
+          )}
+          {deleteError && <Alert severity="error" sx={{ mt: 1 }}>{deleteError}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)} disabled={deleting}>{t("cancel")}</Button>
+          <Button color="error" variant="contained" onClick={handleDeleteConfirm} disabled={deleting}>
+            {deleting ? t("deleting") : t("adminDeleteUser")}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </ThemeModeProvider>
   );
 }
