@@ -195,3 +195,41 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     eloUpdates,
   });
 };
+
+// DELETE /api/events/[id]/history/[historyId] — owner/admin only
+export const DELETE: APIRoute = async ({ params, request }) => {
+  const event = await prisma.event.findUnique({ where: { id: params.id } });
+  if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const session = await getSession(request);
+  if (!session?.user) {
+    return Response.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, params.id);
+  if (!isOwner && !isAdmin) {
+    return Response.json({ error: "Only the event owner or admin can delete history entries." }, { status: 403 });
+  }
+
+  const entry = await prisma.gameHistory.findUnique({
+    where: { id: params.historyId, eventId: params.id },
+  });
+  if (!entry) return Response.json({ error: "Not found." }, { status: 404 });
+
+  // If ELO was already processed, recalculate ratings after deletion
+  const needsRecalc = entry.eloProcessed;
+
+  await prisma.gameHistory.delete({ where: { id: params.historyId } });
+
+  if (needsRecalc) {
+    await recalculateAllRatings(params.id!);
+  }
+
+  const actor = session.user.name ?? session.user.email ?? "Unknown";
+  logEvent(params.id!, "history_status_updated", actor, session.user.id, {
+    historyId: params.historyId,
+    action: "deleted",
+  });
+
+  return new Response(null, { status: 204 });
+};

@@ -125,9 +125,9 @@ const en = {
   historyTitle: "{title} — History",
 
   // Historical Game Backfill
-  addHistoricalGame: "Add past game",
-  addHistoricalGameDesc: "Record a game that happened in the past. ELO will not be calculated automatically — you can approve it after.",
-  historicalGame: "Past game",
+  addHistoricalGame: "Add manual game",
+  addHistoricalGameDesc: "Record a game manually. ELO will not be calculated automatically — you can approve it after.",
+  historicalGame: "Manual game",
   eloPending: "ELO pending",
   eloApproved: "ELO approved",
   approveElo: "Approve ELO",
@@ -138,10 +138,14 @@ const en = {
   pastGameTeam2Name: "Team 2 name",
   selectPlayers: "Select players",
   player: "Player",
-  createPastGame: "Record past game",
+  createPastGame: "Record manual game",
   creatingPastGame: "Recording...",
-  addPastGameSuccess: "Past game recorded successfully!",
-  errorCreatingPastGame: "Failed to record past game.",
+  addPastGameSuccess: "Manual game recorded successfully!",
+  errorCreatingPastGame: "Failed to record manual game.",
+  deleteHistoryConfirm: "Are you sure you want to delete this game? This cannot be undone.",
+  deleteHistoryEloWarning: "ELO has already been processed for this game. Deleting it will recalculate all ratings.",
+  deleting: "Deleting...",
+  deleteGame: "Delete game",
 
   // TeamPicker
   playerCount: "{n} player",
