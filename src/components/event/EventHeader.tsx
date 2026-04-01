@@ -314,15 +314,13 @@ export function EventHeader({
                     {isPast ? t("eventEnded") : countdown}
                   </Typography>
                 </Box>
-                {isPast && (
-                  <Button
-                    size="small" variant="outlined" color="inherit"
-                    href={`/events/${eventId}/history`}
-                    sx={{ fontSize: "0.75rem", py: 0.25, color: "text.secondary", borderColor: "divider" }}
-                  >
-                    {t("viewResults")}
-                  </Button>
-                )}
+                <Button
+                  size="small" variant="outlined" color="inherit"
+                  href={`/events/${eventId}/history`}
+                  sx={{ fontSize: "0.75rem", py: 0.25, color: "text.secondary", borderColor: "divider" }}
+                >
+                  {t("viewResults")}
+                </Button>
               </Box>
             )}
 
@@ -512,12 +510,10 @@ export function EventHeader({
                     <ListItemText>{t("watchScore")}</ListItemText>
                   </MenuItem>
                 )}
-                {(isPast || event.isRecurring) && (
-                  <MenuItem component="a" href={`/events/${eventId}/history`} onClick={() => setAnchorEl(null)}>
-                    <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
-                    <ListItemText>{t("history")}</ListItemText>
-                  </MenuItem>
-                )}
+                <MenuItem component="a" href={`/events/${eventId}/history`} onClick={() => setAnchorEl(null)}>
+                  <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText>{t("history")}</ListItemText>
+                </MenuItem>
                 {(isPast || event.isRecurring) && (
                   <MenuItem component="a" href={`/events/${eventId}/attendance`} onClick={() => setAnchorEl(null)}>
                     <ListItemIcon><EmojiPeopleIcon fontSize="small" /></ListItemIcon>
