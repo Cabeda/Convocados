@@ -323,6 +323,33 @@ describe("Approve ELO for Historical Game API", () => {
     const res = await POST_APPROVE(ctx({ id: event.id, historyId: "any" }, {}));
     expect(res.status).toBe(401);
   });
+
+  it("returns 404 for non-existent event", async () => {
+    const res = await POST_APPROVE(ctx({ id: "nonexistent", historyId: "any" }, {}));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 when game has no teamsSnapshot", async () => {
+    const event = await seedEvent("owner1");
+
+    const game = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date("2024-01-15T10:00:00Z"),
+        teamOneName: "Team A",
+        teamTwoName: "Team B",
+        scoreOne: null,
+        scoreTwo: null,
+        teamsSnapshot: null, // Missing snapshot
+        source: "historical",
+        eloProcessed: false,
+        editableUntil: new Date(Date.now() + 86400_000),
+      },
+    });
+
+    const res = await POST_APPROVE(ctx({ id: event.id, historyId: game.id }, {}));
+    expect(res.status).toBe(400);
+  });
 });
 
 import { DELETE } from "~/pages/api/events/[id]/history/[historyId]";
@@ -434,6 +461,11 @@ describe("Delete Historical Game API", () => {
     const event = await seedEvent("owner1");
 
     const res = await DELETE(ctx({ id: event.id, historyId: "nonexistent" }, undefined, "DELETE"));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for non-existent event on delete", async () => {
+    const res = await DELETE(ctx({ id: "nonexistent", historyId: "any" }, undefined, "DELETE"));
     expect(res.status).toBe(404);
   });
 
