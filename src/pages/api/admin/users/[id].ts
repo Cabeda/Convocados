@@ -18,7 +18,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   }
 
   if (targetId === session.user.id) {
-    return Response.json({ error: "adminCannotDeleteSelf" }, { status: 400 });
+    return Response.json({ error: "Cannot delete your own account." }, { status: 400 });
   }
 
   const deleted = await deleteUser(targetId);
