@@ -731,6 +731,19 @@ const es: TranslationKeys = {
   gameDurationError: "La duración debe ser entre 0 y 600 minutos.",
   gameDurationSaved: "Duración del partido actualizada.",
 
+  // Post-game banner (#249)
+  postGameTitle: "Partido terminado! Cierra las cuentas",
+  postGameSubtitle: "Completa estas tareas para cerrar el partido y preparar el siguiente.",
+  postGameEnterScore: "Registrar el resultado",
+  postGameScoreDone: "Resultado registrado",
+  postGameScorePending: "Ve al Historial para añadir el resultado final",
+  postGameGoToScore: "Añadir resultado",
+  postGameCompletePayments: "Completar pagos",
+  postGamePaymentsDone: "Todos los pagos realizados",
+  postGamePaymentsPending: "Algunos jugadores aún necesitan pagar",
+  postGameGoToPayments: "Ver pagos",
+  postGameProgress: "{done} de {total} tareas completadas",
+
   adminDeleteUser: "Eliminar usuario",
   adminDeleteUserConfirm: "¿Estás seguro de que quieres eliminar permanentemente este usuario? Esta acción no se puede deshacer.",
   adminDeleteUserError: "No se pudo eliminar el usuario.",
