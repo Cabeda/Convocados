@@ -669,45 +669,35 @@ function HistoryCardFull({
                   py: 2, px: 3, borderRadius: 3,
                   backgroundColor: alpha(theme.palette.action.hover, 0.04),
                 }}>
-                {/* Team 1 */}
-                <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
-                  <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
-                    {entry.teamOneName}
-                  </Typography>
-                  {canEdit ? (
-                    <TextField
-                      size="small" type="number" value={scoreOne}
-                      onChange={(e) => setScoreOne(e.target.value)}
-                      inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem" } }}
-                      sx={{ width: 80, "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-                    />
-                  ) : (
-                    <Typography variant="h3" fontWeight={800} color="text.primary">
-                      {entry.scoreOne !== null ? entry.scoreOne : "—"}
-                    </Typography>
-                  )}
-                </Stack>
-
-                <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
-
-                {/* Team 2 */}
-                <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
-                  <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
-                    {entry.teamTwoName}
-                  </Typography>
-                  {canEdit ? (
-                    <TextField
-                      size="small" type="number" value={scoreTwo}
-                      onChange={(e) => setScoreTwo(e.target.value)}
-                      inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem" } }}
-                      sx={{ width: 80, "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-                    />
-                  ) : (
-                    <Typography variant="h3" fontWeight={800} color="text.primary">
-                      {entry.scoreTwo !== null ? entry.scoreTwo : "—"}
-                    </Typography>
-                  )}
-                </Stack>
+                {canEdit ? (
+                  <>
+                    <ScoreRoller value={scoreOne} onChange={setScoreOne} teamName={entry.teamOneName} />
+                    <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
+                    <ScoreRoller value={scoreTwo} onChange={setScoreTwo} teamName={entry.teamTwoName} />
+                  </>
+                ) : (
+                  <>
+                    {/* Team 1 */}
+                    <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
+                      <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
+                        {entry.teamOneName}
+                      </Typography>
+                      <Typography variant="h3" fontWeight={800} color="text.primary">
+                        {entry.scoreOne !== null ? entry.scoreOne : "—"}
+                      </Typography>
+                    </Stack>
+                    <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
+                    {/* Team 2 */}
+                    <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
+                      <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
+                        {entry.teamTwoName}
+                      </Typography>
+                      <Typography variant="h3" fontWeight={800} color="text.primary">
+                        {entry.scoreTwo !== null ? entry.scoreTwo : "—"}
+                      </Typography>
+                    </Stack>
+                  </>
+                )}
               </Stack>
             </Section>
           </Box>
