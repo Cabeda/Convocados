@@ -720,6 +720,13 @@ const fr: TranslationKeys = {
   countdownHours: "dans {n}h {m}m",
   countdownMinutes: "dans {n}m",
   countdownNow: "Maintenant",
+  adminDeleteUser: "Supprimer l'utilisateur",
+  adminDeleteUserConfirm: "Êtes-vous sûr de vouloir supprimer définitivement cet utilisateur ? Cette action est irréversible.",
+  adminDeleteUserError: "Impossible de supprimer l'utilisateur.",
+  purgePlayer: "Retirer de l'événement",
+  purgePlayerConfirm: "Retirer définitivement \"{name}\" de cet événement ? Cela supprimera son dossier de joueur, ses classements et le retirera de tout l'historique des matchs. L'ELO sera recalculé. Cette action est irréversible.",
+  purgePlayerSuccess: "Joueur retiré.",
+  purgePlayerError: "Impossible de retirer le joueur.",
 };
 
 export default fr;

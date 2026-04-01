@@ -99,6 +99,13 @@ export async function listUsers({ page, pageSize, search }: { page: number; page
   return { users, total };
 }
 
+export async function deleteUser(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) return false;
+  await prisma.user.delete({ where: { id: userId } });
+  return true;
+}
+
 /**
  * Returns accumulated (cumulative) user and event counts per day.
  * `range`: "30d" | "1y" | "all"
