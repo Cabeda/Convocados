@@ -1,9 +1,5 @@
-import React, { useRef, useCallback, useState, useEffect } from "react";
-import { Box, Typography, IconButton, useTheme } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import RemoveIcon from "@mui/icons-material/Remove";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import React, { useRef, useCallback, useEffect, useState } from "react";
+import { Box, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material";
 
 interface ScoreRollerProps {
@@ -14,153 +10,121 @@ interface ScoreRollerProps {
   max?: number;
 }
 
-// A single animated digit slot
-function DigitSlot({ digit, direction }: { digit: string; direction: "up" | "down" | null }) {
+const ITEM_HEIGHT = 52;
+const VISIBLE_ITEMS = 5; // must be odd
+const WHEEL_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
+
+export function ScoreRoller({ value, onChange, teamName, min = 0, max = 20 }: ScoreRollerProps) {
   const theme = useTheme();
-  const [animKey, setAnimKey] = useState(0);
-  const [prevDigit, setPrevDigit] = useState(digit);
-  const [currentDigit, setCurrentDigit] = useState(digit);
+  const numValue = Math.max(min, Math.min(max, parseInt(value || "0", 10)));
+  const items = Array.from({ length: max - min + 1 }, (_, i) => i + min);
 
-  useEffect(() => {
-    if (digit !== currentDigit) {
-      setPrevDigit(currentDigit);
-      setCurrentDigit(digit);
-      setAnimKey((k) => k + 1);
-    }
-  }, [digit, currentDigit]);
-
-  const exitAnim = direction === "up"
-    ? "slideOutUp 0.18s ease-in forwards"
-    : "slideOutDown 0.18s ease-in forwards";
-  const enterAnim = direction === "up"
-    ? "slideInUp 0.18s ease-out forwards"
-    : "slideInDown 0.18s ease-out forwards";
-
-  return (
-    <Box
-      sx={{
-        width: { xs: 32, sm: 44 },
-        height: { xs: 48, sm: 64 },
-        borderRadius: { xs: 1.5, sm: 2 },
-        backgroundColor: alpha(theme.palette.background.paper, 0.9),
-        border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
-        boxShadow: `0 2px 8px ${alpha(theme.palette.common.black, 0.12)}, inset 0 1px 0 ${alpha(theme.palette.common.white, 0.1)}`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-        position: "relative",
-        // Slot machine groove lines
-        "&::before, &::after": {
-          content: '""',
-          position: "absolute",
-          left: 0,
-          right: 0,
-          height: "1px",
-          backgroundColor: alpha(theme.palette.divider, 0.3),
-          zIndex: 1,
-        },
-        "&::before": { top: "30%" },
-        "&::after": { bottom: "30%" },
-        "@keyframes slideOutUp": {
-          from: { transform: "translateY(0)", opacity: 1 },
-          to: { transform: "translateY(-100%)", opacity: 0 },
-        },
-        "@keyframes slideInUp": {
-          from: { transform: "translateY(100%)", opacity: 0 },
-          to: { transform: "translateY(0)", opacity: 1 },
-        },
-        "@keyframes slideOutDown": {
-          from: { transform: "translateY(0)", opacity: 1 },
-          to: { transform: "translateY(100%)", opacity: 0 },
-        },
-        "@keyframes slideInDown": {
-          from: { transform: "translateY(-100%)", opacity: 0 },
-          to: { transform: "translateY(0)", opacity: 1 },
-        },
-      }}
-    >
-      {/* Exiting digit */}
-      {animKey > 0 && (
-        <Typography
-          key={`out-${animKey}`}
-          sx={{
-            position: "absolute",
-            fontSize: { xs: "1.75rem", sm: "2.5rem" },
-            fontWeight: 800,
-            lineHeight: 1,
-            fontVariantNumeric: "tabular-nums",
-            animation: exitAnim,
-          }}
-        >
-          {prevDigit}
-        </Typography>
-      )}
-      {/* Entering digit */}
-      <Typography
-        key={`in-${animKey}`}
-        sx={{
-          position: "absolute",
-          fontSize: { xs: "1.75rem", sm: "2.5rem" },
-          fontWeight: 800,
-          lineHeight: 1,
-          fontVariantNumeric: "tabular-nums",
-          animation: animKey > 0 ? enterAnim : "none",
-        }}
-      >
-        {currentDigit}
-      </Typography>
-    </Box>
-  );
-}
-
-export function ScoreRoller({ value, onChange, teamName, min = 0, max = 99 }: ScoreRollerProps) {
-  const theme = useTheme();
+  const listRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
-  const dragStartY = useRef(0);
-  const dragStartValue = useRef(0);
+  const startY = useRef(0);
+  const startScrollTop = useRef(0);
   const lastY = useRef(0);
-  const [direction, setDirection] = useState<"up" | "down" | null>(null);
+  const lastTime = useRef(0);
+  const velocity = useRef(0);
+  const rafId = useRef<number | null>(null);
   const [isDraggingState, setIsDraggingState] = useState(false);
 
-  const numValue = parseInt(value || "0", 10);
-  const displayValue = String(numValue).padStart(2, "0");
+  // Scroll to value without animation on mount
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = (numValue - min) * ITEM_HEIGHT;
+  }, []); // only on mount
 
-  const changeValue = useCallback((newVal: number, dir: "up" | "down") => {
-    const clamped = Math.max(min, Math.min(max, newVal));
-    if (clamped !== parseInt(value || "0", 10)) {
-      setDirection(dir);
-      onChange(String(clamped));
+  // Scroll to value with animation when value changes externally
+  const prevValue = useRef(numValue);
+  useEffect(() => {
+    if (prevValue.current === numValue) return;
+    prevValue.current = numValue;
+    const el = listRef.current;
+    if (!el || isDragging.current) return;
+    el.scrollTo({ top: (numValue - min) * ITEM_HEIGHT, behavior: "smooth" });
+  }, [numValue, min]);
+
+  const snapToNearest = useCallback((el: HTMLDivElement) => {
+    const rawIndex = el.scrollTop / ITEM_HEIGHT;
+    const index = Math.round(rawIndex);
+    const clamped = Math.max(0, Math.min(items.length - 1, index));
+    const newValue = items[clamped];
+    el.scrollTo({ top: clamped * ITEM_HEIGHT, behavior: "smooth" });
+    if (newValue !== parseInt(value || "0", 10)) {
+      onChange(String(newValue));
     }
-  }, [value, onChange, min, max]);
+  }, [items, value, onChange]);
+
+  const applyMomentum = useCallback((el: HTMLDivElement) => {
+    if (Math.abs(velocity.current) < 0.5) {
+      snapToNearest(el);
+      return;
+    }
+    el.scrollTop += velocity.current;
+    velocity.current *= 0.92;
+    rafId.current = requestAnimationFrame(() => applyMomentum(el));
+  }, [snapToNearest]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    const el = listRef.current;
+    if (!el) return;
     e.preventDefault();
+    if (rafId.current) cancelAnimationFrame(rafId.current);
     isDragging.current = true;
-    dragStartY.current = e.clientY;
-    dragStartValue.current = parseInt(value || "0", 10);
-    lastY.current = e.clientY;
     setIsDraggingState(true);
+    startY.current = e.clientY;
+    startScrollTop.current = el.scrollTop;
+    lastY.current = e.clientY;
+    lastTime.current = Date.now();
+    velocity.current = 0;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [value]);
+  }, []);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isDragging.current) return;
-    const deltaY = lastY.current - e.clientY;
+    const el = listRef.current;
+    if (!el) return;
+    const now = Date.now();
+    const dt = now - lastTime.current;
+    const dy = lastY.current - e.clientY;
+    if (dt > 0) velocity.current = dy / dt * 16; // normalize to ~60fps
     lastY.current = e.clientY;
-    if (Math.abs(deltaY) > 6) {
-      // Drag UP = increase, drag DOWN = decrease (natural slot machine feel)
-      const dir = deltaY > 0 ? "up" : "down";
-      const step = deltaY > 0 ? 1 : -1;
-      changeValue(parseInt(value || "0", 10) + step, dir);
-    }
-  }, [value, changeValue]);
+    lastTime.current = now;
+    el.scrollTop = startScrollTop.current + (startY.current - e.clientY);
+  }, []);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     if (!isDragging.current) return;
     isDragging.current = false;
     setIsDraggingState(false);
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    const el = listRef.current;
+    if (!el) return;
+    if (Math.abs(velocity.current) > 1) {
+      rafId.current = requestAnimationFrame(() => applyMomentum(el));
+    } else {
+      snapToNearest(el);
+    }
+  }, [applyMomentum, snapToNearest]);
+
+  // Snap on scroll end (for mouse wheel / keyboard)
+  const scrollTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleScroll = useCallback(() => {
+    if (isDragging.current) return;
+    if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+    scrollTimeout.current = setTimeout(() => {
+      const el = listRef.current;
+      if (el) snapToNearest(el);
+    }, 80);
+  }, [snapToNearest]);
+
+  useEffect(() => {
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+      if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+    };
   }, []);
 
   return (
@@ -174,91 +138,122 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 99 }: Sc
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
-          maxWidth: "100%",
-          mb: 0.5,
+          mb: 1,
         }}
       >
         {teamName}
       </Typography>
 
-      {/* Up arrow hint */}
-      <Box sx={{ display: "flex", justifyContent: "center", height: 20 }}>
-        <KeyboardArrowUpIcon
-          fontSize="small"
-          sx={{
-            color: isDraggingState ? "primary.main" : alpha(theme.palette.text.secondary, 0.4),
-            transition: "color 0.2s",
-          }}
-        />
-      </Box>
-
       <Box
+        sx={{
+          position: "relative",
+          height: WHEEL_HEIGHT,
+          borderRadius: 3,
+          overflow: "hidden",
+          border: `2px solid ${isDraggingState ? theme.palette.primary.main : alpha(theme.palette.divider, 0.3)}`,
+          transition: "border-color 0.15s",
+          backgroundColor: alpha(theme.palette.background.paper, 0.6),
+          cursor: isDraggingState ? "grabbing" : "grab",
+          userSelect: "none",
+          touchAction: "none",
+        }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: { xs: 0.5, sm: 1 },
-          py: { xs: 0.5, sm: 1 },
-          px: { xs: 1, sm: 1.5 },
-          borderRadius: { xs: 2, sm: 3 },
-          backgroundColor: isDraggingState
-            ? alpha(theme.palette.primary.main, 0.08)
-            : alpha(theme.palette.action.hover, 0.5),
-          cursor: isDraggingState ? "grabbing" : "grab",
-          userSelect: "none",
-          touchAction: "none",
-          transition: "background-color 0.15s",
-          border: `2px solid ${isDraggingState ? theme.palette.primary.main : "transparent"}`,
-        }}
       >
-        <IconButton
-          size="small"
-          onClick={() => changeValue(numValue - 1, "down")}
-          onPointerDown={(e) => e.stopPropagation()}
+        {/* Scrollable list */}
+        <Box
+          ref={listRef}
+          onScroll={handleScroll}
           sx={{
-            width: { xs: 36, sm: 32 },
-            height: { xs: 36, sm: 32 },
-            borderRadius: "50%",
-            border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
-            flexShrink: 0,
+            height: "100%",
+            overflowY: "scroll",
+            scrollbarWidth: "none",
+            "&::-webkit-scrollbar": { display: "none" },
+            // Padding so first/last items can center
+            "&::before": {
+              content: '""',
+              display: "block",
+              height: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
+            },
+            "&::after": {
+              content: '""',
+              display: "block",
+              height: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
+            },
           }}
         >
-          <RemoveIcon fontSize="small" />
-        </IconButton>
-
-        <Box sx={{ display: "flex", gap: { xs: 0.5, sm: 0.75 } }}>
-          {displayValue.split("").map((digit, idx) => (
-            <DigitSlot key={idx} digit={digit} direction={direction} />
-          ))}
+          {items.map((item) => {
+            const isSelected = item === numValue;
+            return (
+              <Box
+                key={item}
+                sx={{
+                  height: ITEM_HEIGHT,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "transform 0.1s",
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: isSelected ? "2.25rem" : "1.25rem",
+                    fontWeight: isSelected ? 800 : 400,
+                    color: isSelected ? "text.primary" : alpha(theme.palette.text.primary, 0.3),
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1,
+                    transition: "font-size 0.15s, font-weight 0.15s, color 0.15s",
+                    pointerEvents: "none",
+                  }}
+                >
+                  {String(item).padStart(2, "0")}
+                </Typography>
+              </Box>
+            );
+          })}
         </Box>
 
-        <IconButton
-          size="small"
-          onClick={() => changeValue(numValue + 1, "up")}
-          onPointerDown={(e) => e.stopPropagation()}
+        {/* Selection highlight */}
+        <Box
           sx={{
-            width: { xs: 36, sm: 32 },
-            height: { xs: 36, sm: 32 },
-            borderRadius: "50%",
-            border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
-            flexShrink: 0,
+            position: "absolute",
+            top: "50%",
+            left: 0,
+            right: 0,
+            height: ITEM_HEIGHT,
+            transform: "translateY(-50%)",
+            backgroundColor: alpha(theme.palette.primary.main, 0.08),
+            borderTop: `1px solid ${alpha(theme.palette.primary.main, 0.25)}`,
+            borderBottom: `1px solid ${alpha(theme.palette.primary.main, 0.25)}`,
+            pointerEvents: "none",
           }}
-        >
-          <AddIcon fontSize="small" />
-        </IconButton>
-      </Box>
+        />
 
-      {/* Down arrow hint */}
-      <Box sx={{ display: "flex", justifyContent: "center", height: 20 }}>
-        <KeyboardArrowDownIcon
-          fontSize="small"
+        {/* Top fade */}
+        <Box
           sx={{
-            color: isDraggingState ? "primary.main" : alpha(theme.palette.text.secondary, 0.4),
-            transition: "color 0.2s",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
+            background: `linear-gradient(to bottom, ${theme.palette.background.paper}, ${alpha(theme.palette.background.paper, 0)})`,
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Bottom fade */}
+        <Box
+          sx={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2),
+            background: `linear-gradient(to top, ${theme.palette.background.paper}, ${alpha(theme.palette.background.paper, 0)})`,
+            pointerEvents: "none",
           }}
         />
       </Box>
