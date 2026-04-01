@@ -310,6 +310,7 @@ const en = {
   saveProfile: "Save",
   profileUpdated: "Profile updated.",
   profileUpdateError: "Could not update profile.",
+  thisIsMe: "It's me",
   claimPlayer: "Claim as me",
   claimPlayerTitle: "Claim player",
   claimPlayerDesc: "Link this anonymous player to your account. Your current linked player (if any) will be unlinked.",

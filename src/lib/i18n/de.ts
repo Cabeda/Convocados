@@ -274,6 +274,7 @@ const de: TranslationKeys = {
   saveProfile: "Speichern",
   profileUpdated: "Profil aktualisiert.",
   profileUpdateError: "Profil konnte nicht aktualisiert werden.",
+  thisIsMe: "Das bin ich",
   claimPlayer: "Als mich beanspruchen",
   claimPlayerTitle: "Spieler beanspruchen",
   claimPlayerDesc: "Verknüpfe diesen anonymen Spieler mit deinem Konto. Dein aktueller verknüpfter Spieler (falls vorhanden) wird getrennt.",
