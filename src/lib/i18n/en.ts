@@ -591,7 +591,7 @@ const en = {
   // Event admins (#143)
   eventAdmins: "Event Admins",
   eventAdminsDesc: "Share management rights with other users. Admins can manage players, settings, and costs — but cannot add other admins or transfer ownership.",
-  adminByEmail: "Add admin by email",
+  adminSearchPlaceholder: "Search by name or email...",
   addAdmin: "Add",
   removeAdmin: "Remove",
   noAdmins: "No admins added yet.",
@@ -599,6 +599,9 @@ const en = {
   adminRemoved: "Admin removed.",
   cannotAddOwnerAsAdmin: "Cannot add the event owner as admin.",
   adminBadge: "Admin",
+  adminInviteEmail: "Invite {email} to create an account",
+  adminPlayerBadge: "Player",
+  adminEmailBadge: "Registered user",
 
   // Playtomic court finder
   playtomicFindCourt: "Find a court",

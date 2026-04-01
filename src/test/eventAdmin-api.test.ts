@@ -212,6 +212,46 @@ describe("Event Admin API", () => {
       const res = await POST(ctx({ id: event.id }, {}));
       expect(res.status).toBe(400);
     });
+
+    it("should add an admin by userId (owner only)", async () => {
+      await seedUsers();
+      const event = await seedOwnedEvent("owner1");
+
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+      const { POST } = await import("~/pages/api/events/[id]/admins");
+      const res = await POST(ctx({ id: event.id }, { userId: "admin1" }));
+      expect(res.status).toBe(201);
+
+      const data = await res.json();
+      expect(data.userId).toBe("admin1");
+      expect(data.name).toBe("Admin User");
+
+      const admins = await prisma.eventAdmin.findMany({ where: { eventId: event.id } });
+      expect(admins).toHaveLength(1);
+    });
+
+    it("should return 404 when adding admin by non-existent userId", async () => {
+      await seedUsers();
+      const event = await seedOwnedEvent("owner1");
+
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+      const { POST } = await import("~/pages/api/events/[id]/admins");
+      const res = await POST(ctx({ id: event.id }, { userId: "nonexistent" }));
+      expect(res.status).toBe(404);
+    });
+
+    it("should return 400 when adding owner by userId", async () => {
+      await seedUsers();
+      const event = await seedOwnedEvent("owner1");
+
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+      const { POST } = await import("~/pages/api/events/[id]/admins");
+      const res = await POST(ctx({ id: event.id }, { userId: "owner1" }));
+      expect(res.status).toBe(400);
+    });
   });
 
   // ── DELETE /api/events/[id]/admins ──────────────────────────────────
@@ -350,5 +390,262 @@ describe("Event Admin Authorization", () => {
     const { POST } = await import("~/pages/api/events/[id]/transfer");
     const res = await POST(ctx({ id: event.id }, { targetUserId: "user1" }));
     expect(res.status).toBe(403);
+  });
+});
+
+// ── GET /api/events/[id]/admins/candidates ──────────────────────────────────
+
+describe("Admin Candidates API", () => {
+  beforeEach(async () => {
+    await prisma.eventAdmin.deleteMany();
+    await prisma.player.deleteMany();
+    await prisma.event.deleteMany();
+    await prisma.user.deleteMany();
+    resetApiRateLimitStore();
+    mockGetSession.mockResolvedValue(null);
+  });
+
+  it("should return logged users who are players in the event", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+    // admin1 is a player linked to a user account
+    await prisma.player.create({ data: { name: "Admin User", eventId: event.id, userId: "admin1" } });
+    // user1 is a player linked to a user account
+    await prisma.player.create({ data: { name: "Regular User", eventId: event.id, userId: "user1" } });
+    // anonymous player (no userId) — should NOT appear
+    await prisma.player.create({ data: { name: "Anonymous", eventId: event.id } });
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const res = await GET(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data).toHaveLength(2);
+    expect(data.map((c: any) => c.userId).sort()).toEqual(["admin1", "user1"]);
+    expect(data[0]).toHaveProperty("name");
+    expect(data[0]).toHaveProperty("userId");
+    expect(data[0]).toHaveProperty("source");
+    expect(data.every((c: any) => c.source === "player")).toBe(true);
+  });
+
+  it("should exclude the event owner from candidates", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+    // Owner is also a player
+    await prisma.player.create({ data: { name: "Owner", eventId: event.id, userId: "owner1" } });
+    await prisma.player.create({ data: { name: "Admin User", eventId: event.id, userId: "admin1" } });
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const res = await GET(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data).toHaveLength(1);
+    expect(data[0].userId).toBe("admin1");
+  });
+
+  it("should exclude existing admins from candidates", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+    await prisma.player.create({ data: { name: "Admin User", eventId: event.id, userId: "admin1" } });
+    await prisma.player.create({ data: { name: "Regular User", eventId: event.id, userId: "user1" } });
+    // admin1 is already an admin
+    await prisma.eventAdmin.create({ data: { eventId: event.id, userId: "admin1" } });
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const res = await GET(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data).toHaveLength(1);
+    expect(data[0].userId).toBe("user1");
+  });
+
+  it("should return 403 for non-owner", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+
+    mockGetSession.mockResolvedValue({ user: { id: "user1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const res = await GET(ctx({ id: event.id }));
+    expect(res.status).toBe(403);
+  });
+
+  it("should return 404 for non-existent event", async () => {
+    await seedUsers();
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const res = await GET(ctx({ id: "nonexistent" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("should filter candidates by search query", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+    await prisma.player.create({ data: { name: "Admin User", eventId: event.id, userId: "admin1" } });
+    await prisma.player.create({ data: { name: "Regular User", eventId: event.id, userId: "user1" } });
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const searchReq = new Request("http://localhost/api/test?q=admin", { method: "GET" });
+    const res = await GET({ request: searchReq, params: { id: event.id } } as any);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data).toHaveLength(1);
+    expect(data[0].name).toBe("Admin User");
+  });
+
+  it("should exclude archived players from candidates", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+    // admin1 is archived
+    await prisma.player.create({ data: { name: "Admin User", eventId: event.id, userId: "admin1", archivedAt: new Date() } });
+    await prisma.player.create({ data: { name: "Regular User", eventId: event.id, userId: "user1" } });
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const res = await GET(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    // archived players should still appear — they played in the event
+    // The issue says "players that already played", so archived ones count
+    expect(data).toHaveLength(2);
+  });
+
+  it("should return a registered user when searching by email", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+    // user1 is NOT a player in this event, but is a registered user
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const searchReq = new Request("http://localhost/api/test?q=user@test.com", { method: "GET" });
+    const res = await GET({ request: searchReq, params: { id: event.id } } as any);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data).toHaveLength(1);
+    expect(data[0].userId).toBe("user1");
+    expect(data[0].source).toBe("email");
+  });
+
+  it("should not duplicate a player who is also found by email", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+    // admin1 is a player AND we search by their email
+    await prisma.player.create({ data: { name: "Admin User", eventId: event.id, userId: "admin1" } });
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const searchReq = new Request("http://localhost/api/test?q=admin@test.com", { method: "GET" });
+    const res = await GET({ request: searchReq, params: { id: event.id } } as any);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    // admin1 should appear only once (as player, not duplicated as email)
+    const admin1Entries = data.filter((c: any) => c.userId === "admin1");
+    expect(admin1Entries).toHaveLength(1);
+  });
+
+  it("should return invite placeholder for unknown email", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const searchReq = new Request("http://localhost/api/test?q=newperson@example.com", { method: "GET" });
+    const res = await GET({ request: searchReq, params: { id: event.id } } as any);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data).toHaveLength(1);
+    expect(data[0].source).toBe("invite");
+    expect(data[0].email).toBe("newperson@example.com");
+    expect(data[0].userId).toBe("");
+  });
+
+  it("should not return invite for owner email", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const searchReq = new Request("http://localhost/api/test?q=owner@test.com", { method: "GET" });
+    const res = await GET({ request: searchReq, params: { id: event.id } } as any);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    // Owner is excluded — should not appear as email match
+    expect(data).toHaveLength(0);
+  });
+
+  it("should not return invite for existing admin email", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+    await prisma.eventAdmin.create({ data: { eventId: event.id, userId: "admin1" } });
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    const searchReq = new Request("http://localhost/api/test?q=admin@test.com", { method: "GET" });
+    const res = await GET({ request: searchReq, params: { id: event.id } } as any);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    // admin1 is already an admin — should not appear
+    expect(data).toHaveLength(0);
+  });
+
+  it("should not return invite for invalid email-like strings", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    // "@" alone or "not-an-email@" should not produce invite placeholders
+    for (const q of ["@", "not-an-email@", "@@"]) {
+      const searchReq = new Request(`http://localhost/api/test?q=${encodeURIComponent(q)}`, { method: "GET" });
+      const res = await GET({ request: searchReq, params: { id: event.id } } as any);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.filter((c: any) => c.source === "invite")).toHaveLength(0);
+    }
+  });
+
+  it("should find player candidates by email search", async () => {
+    await seedUsers();
+    const event = await seedOwnedEvent("owner1");
+    await prisma.player.create({ data: { name: "Admin User", eventId: event.id, userId: "admin1" } });
+    await prisma.player.create({ data: { name: "Regular User", eventId: event.id, userId: "user1" } });
+
+    mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+    const { GET } = await import("~/pages/api/events/[id]/admins/candidates");
+    // Search by partial email — should match player by email
+    const searchReq = new Request("http://localhost/api/test?q=admin@", { method: "GET" });
+    const res = await GET({ request: searchReq, params: { id: event.id } } as any);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data).toHaveLength(1);
+    expect(data[0].userId).toBe("admin1");
+    expect(data[0].source).toBe("player");
   });
 });
