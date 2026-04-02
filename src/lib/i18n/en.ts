@@ -800,6 +800,7 @@ const en = {
   postGameProgress: "{done} of {total} tasks complete",
   postGameNoCostSet: "Cost not set yet — set the cost to enable payments",
   postGameSetCost: "Set cost",
+  postGameNotification: "Game over! Add the score and settle payments for {title}",
   postGamePaymentsLabel: "Payments for this game",
   upcomingGamePaymentsLabel: "Payments for the upcoming game",
 } as const;
