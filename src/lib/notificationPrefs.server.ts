@@ -28,6 +28,8 @@ export function wantsPushForJobType(prefs: NotificationPrefs, type: Notification
       return prefs.eventDetailsPush;
     case "reminder":
       return prefs.gameReminderPush;
+    case "post_game":
+      return prefs.gameReminderPush;
     default:
       return true;
   }

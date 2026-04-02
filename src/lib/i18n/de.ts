@@ -723,6 +723,32 @@ const de: TranslationKeys = {
   countdownHours: "in {n}h {m}m",
   countdownMinutes: "in {n}m",
   countdownNow: "Jetzt",
+
+  // Game duration (#249)
+  gameDuration: "Spieldauer",
+  gameDurationHelper: "Wie lange das Spiel dauert (in Minuten)",
+  gameDurationMinutes: "{n} min",
+  gameDurationError: "Die Dauer muss zwischen 0 und 600 Minuten liegen.",
+  gameDurationSaved: "Spieldauer aktualisiert.",
+
+  // Post-game banner (#249)
+  postGameTitle: "Spiel vorbei! Abschließen",
+  postGameSubtitle: "Erledige diese Aufgaben, um das Spiel abzuschließen und das nächste vorzubereiten.",
+  postGameEnterScore: "Spielergebnis eintragen",
+  postGameScoreDone: "Ergebnis eingetragen",
+  postGameScorePending: "Gehe zum Verlauf, um das Endergebnis einzutragen",
+  postGameGoToScore: "Ergebnis eintragen",
+  postGameCompletePayments: "Zahlungen abschließen",
+  postGamePaymentsDone: "Alle Zahlungen erledigt",
+  postGamePaymentsPending: "Einige Spieler müssen noch bezahlen",
+  postGameGoToPayments: "Zahlungen anzeigen",
+  postGameProgress: "{done} von {total} Aufgaben erledigt",
+  postGameNoCostSet: "Kosten noch nicht festgelegt — legen Sie die Kosten fest, um Zahlungen zu aktivieren",
+  postGameSetCost: "Kosten festlegen",
+  postGameNotification: "Spiel vorbei! Ergebnis eintragen und Zahlungen für {title} abschließen",
+  postGamePaymentsLabel: "Zahlungen für dieses Spiel",
+  upcomingGamePaymentsLabel: "Zahlungen für das nächste Spiel",
+
   adminDeleteUser: "Benutzer löschen",
   adminDeleteUserConfirm: "Sind Sie sicher, dass Sie diesen Benutzer dauerhaft löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
   adminDeleteUserError: "Benutzer konnte nicht gelöscht werden.",

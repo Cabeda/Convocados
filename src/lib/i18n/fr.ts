@@ -723,6 +723,32 @@ const fr: TranslationKeys = {
   countdownHours: "dans {n}h {m}m",
   countdownMinutes: "dans {n}m",
   countdownNow: "Maintenant",
+
+  // Game duration (#249)
+  gameDuration: "Durée du match",
+  gameDurationHelper: "Combien de temps dure le match (en minutes)",
+  gameDurationMinutes: "{n} min",
+  gameDurationError: "La durée doit être entre 0 et 600 minutes.",
+  gameDurationSaved: "Durée du match mise à jour.",
+
+  // Post-game banner (#249)
+  postGameTitle: "Match terminé ! Finalisez",
+  postGameSubtitle: "Complétez ces tâches pour clôturer le match et préparer le prochain.",
+  postGameEnterScore: "Saisir le score",
+  postGameScoreDone: "Score enregistré",
+  postGameScorePending: "Allez dans l'Historique pour ajouter le score final",
+  postGameGoToScore: "Ajouter le score",
+  postGameCompletePayments: "Compléter les paiements",
+  postGamePaymentsDone: "Tous les paiements effectués",
+  postGamePaymentsPending: "Certains joueurs doivent encore payer",
+  postGameGoToPayments: "Voir les paiements",
+  postGameProgress: "{done} sur {total} tâches terminées",
+  postGameNoCostSet: "Coût pas encore défini — définissez le coût pour activer les paiements",
+  postGameSetCost: "Définir le coût",
+  postGameNotification: "Match terminé ! Ajoutez le score et réglez les paiements de {title}",
+  postGamePaymentsLabel: "Paiements de ce match",
+  upcomingGamePaymentsLabel: "Paiements du prochain match",
+
   adminDeleteUser: "Supprimer l'utilisateur",
   adminDeleteUserConfirm: "Êtes-vous sûr de vouloir supprimer définitivement cet utilisateur ? Cette action est irréversible.",
   adminDeleteUserError: "Impossible de supprimer l'utilisateur.",

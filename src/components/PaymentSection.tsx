@@ -70,10 +70,16 @@ export function PaymentSection({
   eventId,
   canEdit,
   activePlayerCount,
+  expanded: controlledExpanded,
+  onExpandedChange,
+  onPaymentChange,
 }: {
   eventId: string;
   canEdit: boolean;
   activePlayerCount: number;
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
+  onPaymentChange?: () => void;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -100,6 +106,18 @@ export function PaymentSection({
     const id = setInterval(fetchCost, 10_000);
     return () => clearInterval(id);
   }, [fetchCost]);
+
+  const [accordionOpen, setAccordionOpen] = useState(false);
+
+  // Sync with external control — when controlledExpanded becomes true, open
+  useEffect(() => {
+    if (controlledExpanded === true) setAccordionOpen(true);
+  }, [controlledExpanded]);
+
+  // Auto-expand when cost data loads and there is a cost
+  useEffect(() => {
+    if (costData && costData.totalAmount > 0) setAccordionOpen(true);
+  }, [costData]);
 
   const hasCost = costData && costData.totalAmount > 0;
   const perPlayer = hasCost && activePlayerCount > 0
@@ -138,6 +156,7 @@ export function PaymentSection({
       body: JSON.stringify({ playerName, status: nextStatus }),
     });
     fetchCost();
+    onPaymentChange?.();
   };
 
   const handleCopy = async (text: string, id: string) => {
@@ -177,7 +196,11 @@ export function PaymentSection({
       <Accordion
         disableGutters
         elevation={0}
-        defaultExpanded={!!hasCost}
+        expanded={accordionOpen}
+        onChange={(_e, exp) => {
+          setAccordionOpen(exp);
+          onExpandedChange?.(exp);
+        }}
         sx={{ "&:before": { display: "none" }, backgroundColor: "transparent" }}
       >
         <AccordionSummary

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
+import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 // Use a separate Prisma client for test data setup (avoids mock interference)
 const testPrisma = new PrismaClient({
@@ -116,6 +117,7 @@ async function seedHistory(eventId: string, overrides: Record<string, unknown> =
 beforeEach(async () => {
   vi.clearAllMocks();
   mockAnonymous();
+  await resetApiRateLimitStore();
   await testPrisma.pushSubscription.deleteMany();
   await testPrisma.webhookSubscription.deleteMany();
   await testPrisma.playerRating.deleteMany();
@@ -780,6 +782,135 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(body.scoreOne).toBe(2);
   });
 
+  it("allows a claimed player to edit even if name doesn't match teamsSnapshot", async () => {
+    const owner = await seedUser();
+    const claimedUser = await seedUser({ name: "Different Name" });
+    mockAuth(claimedUser.id, "Different Name");
+    const id = await seedEvent({ ownerId: owner.id });
+    // Add a player claimed by this user
+    await testPrisma.player.create({
+      data: { name: "Alice", order: 0, eventId: id, userId: claimedUser.id },
+    });
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3, scoreTwo: 1 }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scoreOne).toBe(3);
+  });
+
+  it("returns 403 when participant tries to edit teams", async () => {
+    const owner = await seedUser();
+    const participant = await seedUser({ name: "Alice" });
+    mockAuth(participant.id, "Alice");
+    const id = await seedEvent({ ownerId: owner.id });
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
+    const newTeams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }, { name: "Charlie", order: 1 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { teamsSnapshot: newTeams }));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toContain("owner or admin");
+  });
+
+  it("returns 403 when participant tries to edit payments", async () => {
+    const owner = await seedUser();
+    const participant = await seedUser({ name: "Alice" });
+    mockAuth(participant.id, "Alice");
+    const id = await seedEvent({ ownerId: owner.id });
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, {
+      paymentsSnapshot: [{ playerName: "Alice", amount: 10, status: "paid" }],
+    }));
+    expect(res.status).toBe(403);
+  });
+
+  it("allows owner to edit teams", async () => {
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
+    const newTeams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }, { name: "Charlie", order: 1 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { teamsSnapshot: newTeams }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const parsed = JSON.parse(body.teamsSnapshot);
+    expect(parsed[0].players).toHaveLength(2);
+  });
+
+  it("auto-updates payments when teams change", async () => {
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+
+    // Set up cost with 2 players
+    const eventCost = await testPrisma.eventCost.create({
+      data: { eventId: id, totalAmount: 40, currency: "EUR" },
+    });
+    await testPrisma.playerPayment.createMany({
+      data: [
+        { eventCostId: eventCost.id, playerName: "Alice", amount: 20, status: "paid" },
+        { eventCostId: eventCost.id, playerName: "Bob", amount: 20, status: "pending" },
+      ],
+    });
+
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
+
+    // Update teams: add Charlie, remove Bob
+    const newTeams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }, { name: "Charlie", order: 1 }] },
+      { team: "B", players: [{ name: "Diana", order: 0 }] },
+    ];
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { teamsSnapshot: newTeams }));
+    expect(res.status).toBe(200);
+
+    // Verify payments were updated
+    const payments = await testPrisma.playerPayment.findMany({
+      where: { eventCostId: eventCost.id },
+      orderBy: { playerName: "asc" },
+    });
+
+    // Should have 3 players now (Alice, Charlie, Diana) — Bob removed
+    expect(payments).toHaveLength(3);
+    const names = payments.map((p) => p.playerName);
+    expect(names).toContain("Alice");
+    expect(names).toContain("Charlie");
+    expect(names).toContain("Diana");
+    expect(names).not.toContain("Bob");
+
+    // Each should have equal share: 40/3
+    const expectedShare = Math.round((40 / 3) * 100) / 100;
+    // Alice's existing "paid" status should be preserved
+    const alice = payments.find((p) => p.playerName === "Alice")!;
+    expect(alice.status).toBe("paid");
+    // Amount updated to new share
+    expect(Math.abs(alice.amount - expectedShare)).toBeLessThan(0.02);
+  });
+
   it("handles status change to cancelled", async () => {
     const user = await seedUser();
     mockAuth(user.id);
@@ -792,9 +923,9 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
   });
 
   it("updates paymentsSnapshot", async () => {
-    const user = await seedUser();
-    mockAuth(user.id);
-    const id = await seedEvent();
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
     const history = await seedHistory(id);
     const payments = [
       { playerName: "Alice", amount: 10, status: "paid", method: "revolut" },
@@ -812,9 +943,9 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
   });
 
   it("clears paymentsSnapshot when set to null", async () => {
-    const user = await seedUser();
-    mockAuth(user.id);
-    const id = await seedEvent();
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
     const payments = JSON.stringify([{ playerName: "Alice", amount: 10, status: "paid", method: null }]);
     const history = await seedHistory(id, { paymentsSnapshot: payments });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { paymentsSnapshot: null }));
@@ -876,9 +1007,9 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
   });
 
   it("updates teamsSnapshot", async () => {
-    const user = await seedUser();
-    mockAuth(user.id);
-    const id = await seedEvent();
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
     const history = await seedHistory(id);
     const newTeams = [
       { team: "Red", players: [{ name: "Alice", order: 0 }, { name: "Charlie", order: 1 }] },
@@ -894,9 +1025,9 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
   });
 
   it("recalculates ratings when teams are updated on an already-processed game", async () => {
-    const user = await seedUser();
-    mockAuth(user.id);
-    const id = await seedEvent();
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
 
     // Create players with initial ratings
     await testPrisma.playerRating.create({
@@ -961,6 +1092,39 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
   });
 });
 
+// ─── PUT /api/events/[id]/duration (auth check #249) ────────────────────────
+
+import { PUT as updateDuration } from "~/pages/api/events/[id]/duration";
+
+describe("PUT /api/events/[id]/duration", () => {
+  it("allows owner to update duration", async () => {
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    const res = await updateDuration(ctx({ id }, { durationMinutes: 90 }, "PUT"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.durationMinutes).toBe(90);
+  });
+
+  it("returns 403 when non-owner tries to update duration on owned event", async () => {
+    const owner = await seedUser();
+    const other = await seedUser({ name: "Other" });
+    mockAuth(other.id, "Other");
+    const id = await seedEvent({ ownerId: owner.id });
+    const res = await updateDuration(ctx({ id }, { durationMinutes: 90 }, "PUT"));
+    expect(res.status).toBe(403);
+  });
+
+  it("allows anyone to update duration on ownerless event", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const res = await updateDuration(ctx({ id }, { durationMinutes: 45 }, "PUT"));
+    expect(res.status).toBe(200);
+  });
+});
+
 // ─── PUT /api/events/[id]/split-costs (#192) ────────────────────────────────
 
 import { PUT as updateSplitCosts } from "~/pages/api/events/[id]/split-costs";
@@ -1007,8 +1171,6 @@ describe("PUT /api/events/[id]/split-costs", () => {
   });
 
   it("allows ownerless event to toggle split costs", async () => {
-    const { resetApiRateLimitStore: resetApi } = await import("~/lib/apiRateLimit.server");
-    await resetApi();
     const id = await seedEvent();
     mockAnonymous();
     const res = await updateSplitCosts(putCtx2({ id }, { splitCostsEnabled: false }));

@@ -778,6 +778,31 @@ const en = {
   countdownHours: "in {n}h {m}m",
   countdownMinutes: "in {n}m",
   countdownNow: "Now",
+
+  // Game duration (#249)
+  gameDuration: "Game duration",
+  gameDurationHelper: "How long the game lasts (in minutes)",
+  gameDurationMinutes: "{n} min",
+  gameDurationError: "Duration must be between 0 and 600 minutes.",
+  gameDurationSaved: "Game duration updated.",
+
+  // Post-game banner (#249)
+  postGameTitle: "Game over! Wrap it up",
+  postGameSubtitle: "Complete these tasks to close out the game and get ready for the next one.",
+  postGameEnterScore: "Enter the game score",
+  postGameScoreDone: "Score recorded",
+  postGameScorePending: "Go to History to add the final score",
+  postGameGoToScore: "Add score",
+  postGameCompletePayments: "Complete payments",
+  postGamePaymentsDone: "All payments settled",
+  postGamePaymentsPending: "Some players still need to pay",
+  postGameGoToPayments: "View payments",
+  postGameProgress: "{done} of {total} tasks complete",
+  postGameNoCostSet: "Cost not set yet — set the cost to enable payments",
+  postGameSetCost: "Set cost",
+  postGameNotification: "Game over! Add the score and settle payments for {title}",
+  postGamePaymentsLabel: "Payments for this game",
+  upcomingGamePaymentsLabel: "Payments for the upcoming game",
 } as const;
 
 export default en;

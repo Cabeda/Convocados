@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { getUpcomingReminders, markReminderSent } from "~/lib/reminders.server";
+import { getUpcomingReminders, getPostGameReminders, markReminderSent } from "~/lib/reminders.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 import { sendReminder, sendPaymentReminder } from "~/lib/email.server";
 import { getNotificationPrefs, wantsEmailReminder, wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
@@ -131,6 +131,31 @@ export const POST: APIRoute = async ({ request }) => {
     log.error({ err }, "Failed to process payment reminders");
   }
 
+  // ── Post-game reminders ───────────────────────────────────────────────────
+  // Notify players after the game ends to add the score and settle payments
+  const postGameRemindersSent: string[] = [];
+  const postGameRemindersToMark: string[] = [];
+  try {
+    const postGameReminders = await getPostGameReminders();
+    for (const r of postGameReminders) {
+      try {
+        enqueueNotification(r.eventId, "post_game", {
+          title: r.eventTitle,
+          key: "postGameNotification",
+          params: { title: r.eventTitle },
+          url: `/events/${r.eventId}`,
+          spotsLeft: 0,
+        });
+        postGameRemindersSent.push(r.eventId);
+        postGameRemindersToMark.push(r.eventId);
+      } catch (err) {
+        log.error({ eventId: r.eventId, err }, "Failed to process post-game reminder");
+      }
+    }
+  } catch (err) {
+    log.error({ err }, "Failed to process post-game reminders");
+  }
+
   // Cleanup expired rate limit entries
   let rateLimitsCleaned = 0;
   try {
@@ -157,16 +182,21 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   // Mark reminders as sent only after push delivery is complete
-  await Promise.allSettled(
-    remindersToMark.map(({ eventId, type }) =>
+  await Promise.allSettled([
+    ...remindersToMark.map(({ eventId, type }) =>
       markReminderSent(eventId, type).catch((err) =>
         log.error({ eventId, type, err }, "Failed to mark reminder sent"),
       ),
     ),
-  );
+    ...postGameRemindersToMark.map((eventId) =>
+      markReminderSent(eventId, "post-game").catch((err) =>
+        log.error({ eventId, type: "post-game", err }, "Failed to mark post-game reminder sent"),
+      ),
+    ),
+  ]);
 
   return new Response(
-    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, rateLimitsCleaned, priorityExpired, notificationJobsDrained }),
+    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, postGameRemindersSent, rateLimitsCleaned, priorityExpired, notificationJobsDrained }),
     { headers: { "Content-Type": "application/json" } },
   );
 };
