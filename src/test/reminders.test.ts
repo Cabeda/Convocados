@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { prisma } from "~/lib/db.server";
-import { getUpcomingReminders, markReminderSent } from "~/lib/reminders.server";
+import { getUpcomingReminders, getPostGameReminders, markReminderSent } from "~/lib/reminders.server";
 
 // Seed helpers
 async function seedUser(id = "user-rem-1") {
@@ -85,5 +85,71 @@ describe("markReminderSent", () => {
 
     const log = await prisma.reminderLog.findFirst({ where: { eventId, type: "24h" } });
     expect(log).not.toBeNull();
+  });
+});
+
+describe("getPostGameReminders", () => {
+  it("returns events where the game has ended", async () => {
+    const userId = await seedUser();
+    // Game started 2h ago with 60min duration → ended 1h ago
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const eventId = await seedEvent(userId, twoHoursAgo, "evt-post-game");
+    await prisma.player.create({ data: { name: "Player1", eventId, userId } });
+
+    const reminders = await getPostGameReminders();
+    expect(reminders.some((r) => r.eventId === eventId)).toBe(true);
+  });
+
+  it("does not return future events", async () => {
+    const userId = await seedUser();
+    const future = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    await seedEvent(userId, future, "evt-future");
+
+    const reminders = await getPostGameReminders();
+    expect(reminders.every((r) => r.eventId !== "evt-future")).toBe(true);
+  });
+
+  it("does not return events where game is still in progress", async () => {
+    const userId = await seedUser();
+    // Game started 30min ago with 60min duration → still in progress
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+    await seedEvent(userId, thirtyMinAgo, "evt-in-progress");
+
+    const reminders = await getPostGameReminders();
+    expect(reminders.every((r) => r.eventId !== "evt-in-progress")).toBe(true);
+  });
+
+  it("does not return events where post-game reminder was already sent", async () => {
+    const userId = await seedUser();
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const eventId = await seedEvent(userId, twoHoursAgo, "evt-already-sent");
+    await markReminderSent(eventId, "post-game");
+
+    const reminders = await getPostGameReminders();
+    expect(reminders.every((r) => r.eventId !== eventId)).toBe(true);
+  });
+
+  it("does not return events older than 4 hours", async () => {
+    const userId = await seedUser();
+    const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000);
+    await seedEvent(userId, fiveHoursAgo, "evt-old");
+
+    const reminders = await getPostGameReminders();
+    expect(reminders.every((r) => r.eventId !== "evt-old")).toBe(true);
+  });
+
+  it("includes player data in the reminder", async () => {
+    const userId = await seedUser();
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const eventId = await seedEvent(userId, twoHoursAgo, "evt-with-players");
+    await prisma.player.create({ data: { name: "Alice", eventId, userId } });
+    await prisma.player.create({ data: { name: "Bob", eventId, order: 1 } });
+
+    const reminders = await getPostGameReminders();
+    const reminder = reminders.find((r) => r.eventId === eventId);
+    expect(reminder).toBeDefined();
+    expect(reminder!.players).toHaveLength(2);
+    expect(reminder!.players.map((p) => p.name)).toContain("Alice");
+    expect(reminder!.players.map((p) => p.name)).toContain("Bob");
   });
 });
