@@ -1171,8 +1171,6 @@ describe("PUT /api/events/[id]/split-costs", () => {
   });
 
   it("allows ownerless event to toggle split costs", async () => {
-    const { resetApiRateLimitStore: resetApi } = await import("~/lib/apiRateLimit.server");
-    await resetApi();
     const id = await seedEvent();
     mockAnonymous();
     const res = await updateSplitCosts(putCtx2({ id }, { splitCostsEnabled: false }));
