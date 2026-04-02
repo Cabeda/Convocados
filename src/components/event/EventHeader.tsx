@@ -83,26 +83,8 @@ export function EventHeader({
   const [sportDraft, setSportDraft] = useState("");
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
-  // ── Sticky mini-header ───────────────────────────────────────────────────────
+  // ── Ref for the main card ────────────────────────────────────────────────────
   const cardRef = useRef<HTMLDivElement>(null);
-  const [showSticky, setShowSticky] = useState(false);
-  const stickyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        // Debounce to prevent jitter when scrolling near the threshold
-        if (stickyTimeout.current) clearTimeout(stickyTimeout.current);
-        stickyTimeout.current = setTimeout(() => {
-          setShowSticky(!entry.isIntersecting);
-        }, 50);
-      },
-      { threshold: 0, rootMargin: "-120px 0px 0px 0px" },
-    );
-    obs.observe(el);
-    return () => { obs.disconnect(); if (stickyTimeout.current) clearTimeout(stickyTimeout.current); };
-  }, []);
 
   // ── Keyboard shortcut `e` ────────────────────────────────────────────────────
   useEffect(() => {
@@ -201,34 +183,6 @@ export function EventHeader({
 
   return (
     <>
-      {/* ── Sticky mini-header — sits below the AppBar ── */}
-      {showSticky && (
-        <Box sx={{
-          position: "fixed",
-          top: { xs: "56px", sm: "64px" },
-          left: 0, right: 0,
-          zIndex: 1050,
-          bgcolor: "background.paper",
-          borderBottom: 1, borderColor: "divider",
-          px: 2, py: 1,
-          display: "flex", alignItems: "center", gap: 1.5,
-          boxShadow: 2,
-        }}>
-          <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ flex: 1, minWidth: 0 }}>
-            {event.title}
-          </Typography>
-          <Box sx={{
-            display: "inline-flex", alignItems: "center", gap: 0.5,
-            px: 1.5, py: 0.25, borderRadius: 2, backgroundColor: urgencyBg, flexShrink: 0,
-          }}>
-            <AccessTimeIcon sx={{ color: urgencyColor, fontSize: 14 }} />
-            <Typography variant="caption" fontWeight={700} sx={{ color: urgencyColor }}>
-              {isPast ? t("eventEnded") : countdown}
-            </Typography>
-          </Box>
-        </Box>
-      )}
-
       {/* ── Main card ── */}
       <Paper ref={cardRef} elevation={2} sx={{ borderRadius: 3, overflow: "hidden" }}>
 
