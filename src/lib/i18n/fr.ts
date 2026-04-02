@@ -743,6 +743,8 @@ const fr: TranslationKeys = {
   postGamePaymentsPending: "Certains joueurs doivent encore payer",
   postGameGoToPayments: "Voir les paiements",
   postGameProgress: "{done} sur {total} tâches terminées",
+  postGameNoCostSet: "Coût pas encore défini — définissez le coût pour activer les paiements",
+  postGameSetCost: "Définir le coût",
   postGamePaymentsLabel: "Paiements de ce match",
   upcomingGamePaymentsLabel: "Paiements du prochain match",
 

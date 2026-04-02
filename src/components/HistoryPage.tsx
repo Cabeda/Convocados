@@ -381,6 +381,7 @@ function HistoryCardFull({
   knownPlayers,
   playerRatings,
   isOwner,
+  userName,
 }: {
   entry: HistoryEntry;
   eventId: string;
@@ -390,6 +391,7 @@ function HistoryCardFull({
   knownPlayers: { name: string; gamesPlayed: number }[];
   playerRatings: { name: string; rating: number; gamesPlayed: number }[];
   isOwner: boolean;
+  userName: string | null;
 }) {
   const t = useT();
   const locale = detectLocale();
@@ -415,9 +417,16 @@ function HistoryCardFull({
   const [dragPlayer, setDragPlayer] = useState<{ name: string; fromTeam: number } | null>(null);
 
   // Gate editing on both time-based editability AND authentication
-  // Score: any authenticated user can edit (API enforces participant check)
+  // Score: owner/admin or participant can edit
   // Teams/payments: only owner/admin can edit
-  const canEditScore = entry.editable && isAuthenticated;
+  const isParticipantInGame = (() => {
+    if (isOwner) return true;
+    if (!userName) return false;
+    const teams: TeamSnapshot[] = entry.teamsSnapshot ? JSON.parse(entry.teamsSnapshot) : [];
+    const allNames = teams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
+    return allNames.includes(userName.toLowerCase());
+  })();
+  const canEditScore = entry.editable && isAuthenticated && isParticipantInGame;
   const canEditTeams = entry.editable && isAuthenticated && isOwner;
 
   const [unlocking, setUnlocking] = useState(false);
@@ -1243,7 +1252,8 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
                 {history.map((entry) => (
                   <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} onUpdate={handleUpdate}
                     onDelete={handleDelete} isAuthenticated={isAuthenticated} knownPlayers={knownPlayers}
-                    playerRatings={playerRatings} isOwner={isOwner || isAdmin} />
+                    playerRatings={playerRatings} isOwner={isOwner || isAdmin}
+                    userName={session?.user?.name ?? null} />
                 ))}
                 {hasMore && (
                   <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
