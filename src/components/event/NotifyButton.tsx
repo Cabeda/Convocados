@@ -32,9 +32,15 @@ export function NotifyButton({ eventId }: Props) {
       await navigator.serviceWorker.ready;
       const keyRes = await fetch("/api/push/vapid-public-key");
       const { publicKey } = await keyRes.json();
+      // Firefox requires a Uint8Array; Chrome accepts strings too
+      const padding = "=".repeat((4 - (publicKey.length % 4)) % 4);
+      const base64 = (publicKey + padding).replace(/-/g, "+").replace(/_/g, "/");
+      const raw = window.atob(base64);
+      const key = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) key[i] = raw.charCodeAt(i);
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: publicKey,
+        applicationServerKey: key,
       });
       await fetch(`/api/events/${eventId}/push`, {
         method: "POST",

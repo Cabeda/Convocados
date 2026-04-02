@@ -103,7 +103,11 @@ export const GET: APIRoute = async ({ params, request }) => {
           prisma.player.deleteMany({ where: { eventId: event.id } }),
           prisma.teamResult.deleteMany({ where: { eventId: event.id } }),
           // Clear payments for the new occurrence (keep EventCost settings)
-          ...(eventCost ? [prisma.playerPayment.deleteMany({ where: { eventCostId: eventCost.id } })] : []),
+          ...(eventCost ? [
+            prisma.playerPayment.deleteMany({ where: { eventCostId: eventCost.id } }),
+            // Clear temporary payment method override for the new week
+            prisma.eventCost.update({ where: { id: eventCost.id }, data: { tempPaymentMethods: null, tempPaymentDetails: null } }),
+          ] : []),
           prisma.event.update({
             where: { id: event.id },
             data: { dateTime: newDateTime },

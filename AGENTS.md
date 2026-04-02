@@ -32,6 +32,13 @@ Every change must include tests that prove the functionality works:
 
 ## Development Workflow
 
+### First-time setup
+After cloning, install the git hooks to catch CI failures before they reach the pipeline:
+```bash
+npm run setup-hooks
+```
+This installs a pre-push hook that runs `typecheck` and `vitest --coverage` before every push.
+
 ### Branch Naming
 ```
 feat/short-description    # New features

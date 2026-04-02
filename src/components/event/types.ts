@@ -20,7 +20,9 @@ export interface EventData {
   title: string;
   location: string;
   dateTime: string;
+  timezone: string;
   maxPlayers: number;
+  durationMinutes: number;
   teamOneName: string;
   teamTwoName: string;
   isRecurring: boolean;
@@ -38,6 +40,7 @@ export interface EventData {
   hasPassword?: boolean;
   locked?: boolean;
   archivedAt?: string | null;
+  isAdmin?: boolean;
 }
 
 export interface KnownPlayer {

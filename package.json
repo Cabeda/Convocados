@@ -1,6 +1,6 @@
 {
   "name": "convocados",
-  "version": "3.38.0",
+  "version": "3.51.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "start": "sh ./scripts/start.sh",
+    "setup-hooks": "sh ./scripts/install-hooks.sh",
     "lint": "eslint src/",
     "typecheck": "tsc",
     "test": "vitest run",
@@ -25,8 +26,8 @@
     "k6:sse": "k6 run k6/scripts/sse.js"
   },
   "dependencies": {
-    "@astrojs/node": "^10.0.2",
-    "@astrojs/react": "^5.0.0",
+    "@astrojs/node": "^10.0.4",
+    "@astrojs/react": "^5.0.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@fontsource/roboto": "^5.2.5",
@@ -34,11 +35,14 @@
     "@mui/material": "^6.4.6",
     "@prisma/client": "^6.5.0",
     "@types/web-push": "^3.6.4",
-    "astro": "^6.0.5",
+    "astro": "^6.1.1",
     "better-auth": "^1.5.5",
+    "leaflet": "^1.9.4",
+    "p-limit": "^7.3.0",
     "pino": "^10.3.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-leaflet": "^5.0.0",
     "recharts": "^3.8.0",
     "resend": "^6.9.4",
     "web-push": "^3.6.7"
@@ -48,9 +52,11 @@
     "@eslint/js": "^10.0.1",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.58.2",
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/leaflet": "^1.9.21",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@types/supertest": "^7.2.0",
@@ -61,7 +67,7 @@
     "pino-pretty": "^13.1.3",
     "prisma": "^6.5.0",
     "supertest": "^7.2.2",
-    "typescript": "^5.7.3",
+    "typescript": "^6.0.0",
     "typescript-eslint": "^8.57.2",
     "vitest": "^3.0.7"
   },

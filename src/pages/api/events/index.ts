@@ -5,6 +5,7 @@ import { serializeRecurrenceRule, type RecurrenceRule } from "../../../lib/recur
 import { resolveLocation } from "../../../lib/geocode";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
+import { getDefaultDurationMinutes } from "../../../lib/sports";
 
 export const POST: APIRoute = async ({ request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -26,6 +27,7 @@ export const POST: APIRoute = async ({ request }) => {
   const title = String(body.title ?? "").trim().slice(0, 100);
   const location = String(body.location ?? "").trim().slice(0, 200);
   const dateTimeRaw = String(body.dateTime ?? "");
+  const timezoneRaw = String(body.timezone ?? "UTC").trim().slice(0, 100);
   const teamOneName = String(body.teamOneName ?? "Ninjas").trim().slice(0, 50) || "Ninjas";
   const teamTwoName = String(body.teamTwoName ?? "Gunas").trim().slice(0, 50) || "Gunas";
   const maxPlayersRaw = parseInt(String(body.maxPlayers ?? "10"), 10);
@@ -33,7 +35,9 @@ export const POST: APIRoute = async ({ request }) => {
   const sport = String(body.sport ?? "football-5v5").trim().slice(0, 50) || "football-5v5";
   const isPublic = Boolean(body.isPublic);
   const isRecurring = Boolean(body.isRecurring);
-  const recurrenceFreq = (body.recurrenceFreq ?? null) as "weekly" | "monthly" | null;
+  const VALID_FREQS = ["daily", "weekly", "monthly", "yearly"] as const;
+  const rawFreq = body.recurrenceFreq ?? null;
+  const recurrenceFreq = rawFreq && VALID_FREQS.includes(rawFreq) ? (rawFreq as typeof VALID_FREQS[number]) : null;
   const recurrenceInterval = parseInt(String(body.recurrenceInterval ?? "1"), 10);
   const recurrenceByDay = (body.recurrenceByDay ?? null) as string | null;
 
@@ -43,6 +47,15 @@ export const POST: APIRoute = async ({ request }) => {
   const dateTime = new Date(dateTimeRaw);
   if (isNaN(dateTime.getTime())) return Response.json({ error: "Invalid date/time." }, { status: 400 });
   if (dateTime < new Date()) return Response.json({ error: "Event must be in the future." }, { status: 400 });
+
+  // Validate timezone
+  let timezone = "UTC";
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: timezoneRaw });
+    timezone = timezoneRaw;
+  } catch {
+    // fall back to UTC silently
+  }
 
   let recurrenceRule: string | null = null;
   let nextResetAt: Date | null = null;
@@ -62,7 +75,8 @@ export const POST: APIRoute = async ({ request }) => {
 
   const event = await prisma.event.create({
     data: {
-      title, location, dateTime, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
+      title, location, dateTime, timezone, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
+      durationMinutes: getDefaultDurationMinutes(sport),
       latitude: geo?.latitude ?? null,
       longitude: geo?.longitude ?? null,
       ownerId: session?.user?.id ?? null,
