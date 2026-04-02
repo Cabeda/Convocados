@@ -744,6 +744,7 @@ const es: TranslationKeys = {
   postGameGoToPayments: "Ver pagos",
   postGameProgress: "{done} de {total} tareas completadas",
   postGamePaymentsLabel: "Pagos de este partido",
+  upcomingGamePaymentsLabel: "Pagos del próximo partido",
 
   adminDeleteUser: "Eliminar usuario",
   adminDeleteUserConfirm: "¿Estás seguro de que quieres eliminar permanentemente este usuario? Esta acción no se puede deshacer.",

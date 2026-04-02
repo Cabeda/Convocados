@@ -127,6 +127,44 @@ describe("GET /api/events/:id/post-game-status", () => {
     expect(json.hasScore).toBe(false);
   });
 
+  it("returns hasScore=false when only older history has score but latest does not", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Recurring Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+      },
+    });
+    // Old game with score
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        scoreOne: 2,
+        scoreTwo: 1,
+        editableUntil: new Date(Date.now() - 1000),
+      },
+    });
+    // Latest game without score
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.hasScore).toBe(false);
+  });
+
   it("returns allPaid=true when no cost is set", async () => {
     const event = await prisma.event.create({
       data: {

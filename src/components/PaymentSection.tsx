@@ -71,11 +71,13 @@ export function PaymentSection({
   canEdit,
   activePlayerCount,
   expanded: controlledExpanded,
+  onExpandedChange,
 }: {
   eventId: string;
   canEdit: boolean;
   activePlayerCount: number;
   expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -192,7 +194,10 @@ export function PaymentSection({
         disableGutters
         elevation={0}
         expanded={accordionOpen}
-        onChange={(_e, exp) => setAccordionOpen(exp)}
+        onChange={(_e, exp) => {
+          setAccordionOpen(exp);
+          onExpandedChange?.(exp);
+        }}
         sx={{ "&:before": { display: "none" }, backgroundColor: "transparent" }}
       >
         <AccordionSummary

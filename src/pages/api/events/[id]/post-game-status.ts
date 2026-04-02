@@ -21,16 +21,13 @@ export const GET: APIRoute = async ({ params }) => {
 
   const gameEnded = isGameEnded(event.dateTime, event.durationMinutes);
 
-  // Check if any game history has a score recorded
-  const historyWithScore = await prisma.gameHistory.findFirst({
-    where: {
-      eventId: event.id,
-      scoreOne: { not: null },
-      scoreTwo: { not: null },
-    },
-    select: { id: true },
+  // Check if the most recent game history has a score recorded
+  const latestHistory = await prisma.gameHistory.findFirst({
+    where: { eventId: event.id },
+    orderBy: { dateTime: "desc" },
+    select: { scoreOne: true, scoreTwo: true },
   });
-  const hasScore = !!historyWithScore;
+  const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
 
   // Check payment status
   const eventCost = await prisma.eventCost.findUnique({

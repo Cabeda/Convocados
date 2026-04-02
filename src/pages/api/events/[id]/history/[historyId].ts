@@ -4,6 +4,9 @@ import { processGame, recalculateAllRatings } from "../../../../../lib/elo.serve
 import { computeGameUpdates } from "../../../../../lib/elo";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
+import { createLogger } from "../../../../../lib/logger.server";
+
+const log = createLogger("history-patch");
 
 // PATCH /api/events/[id]/history/[historyId]
 export const PATCH: APIRoute = async ({ params, request }) => {
@@ -179,7 +182,9 @@ export const PATCH: APIRoute = async ({ params, request }) => {
             playerName: { notIn: [...activeNames] },
           },
         });
-      } catch { /* best-effort payment sync */ }
+      } catch (err) {
+        log.error(`Failed to auto-sync payments after team update: eventId=${params.id} historyId=${params.historyId} error=${String(err)}`);
+      }
     }
   }
   if (status !== undefined) {

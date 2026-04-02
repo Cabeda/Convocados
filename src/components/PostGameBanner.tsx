@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Paper, Typography, Stack, Box, Chip, Button, alpha, useTheme,
+  Paper, Typography, Stack, Box, Button, alpha, useTheme,
   LinearProgress,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -29,16 +29,21 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
   const theme = useTheme();
   const [status, setStatus] = useState<PostGameStatus | null>(null);
 
+  // Use a ref for the callback to avoid resetting the polling interval
+  // when the parent re-renders with a new function reference
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
+
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch(`/api/events/${eventId}/post-game-status`);
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
-        onStatusChange?.(data);
+        onStatusChangeRef.current?.(data);
       }
     } catch { /* ignore */ }
-  }, [eventId, onStatusChange]);
+  }, [eventId]);
 
   useEffect(() => {
     fetchStatus();
