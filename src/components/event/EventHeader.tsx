@@ -86,15 +86,22 @@ export function EventHeader({
   // ── Sticky mini-header ───────────────────────────────────────────────────────
   const cardRef = useRef<HTMLDivElement>(null);
   const [showSticky, setShowSticky] = useState(false);
+  const stickyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const el = cardRef.current;
     if (!el) return;
     const obs = new IntersectionObserver(
-      ([entry]) => setShowSticky(!entry.isIntersecting),
+      ([entry]) => {
+        // Debounce to prevent jitter when scrolling near the threshold
+        if (stickyTimeout.current) clearTimeout(stickyTimeout.current);
+        stickyTimeout.current = setTimeout(() => {
+          setShowSticky(!entry.isIntersecting);
+        }, 50);
+      },
       { threshold: 0, rootMargin: "-120px 0px 0px 0px" },
     );
     obs.observe(el);
-    return () => obs.disconnect();
+    return () => { obs.disconnect(); if (stickyTimeout.current) clearTimeout(stickyTimeout.current); };
   }, []);
 
   // ── Keyboard shortcut `e` ────────────────────────────────────────────────────
