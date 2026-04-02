@@ -741,6 +741,7 @@ const es: TranslationKeys = {
   postGameCompletePayments: "Completar pagos",
   postGamePaymentsDone: "Todos los pagos realizados",
   postGamePaymentsPending: "Algunos jugadores aún necesitan pagar",
+  postGamePaymentsSummary: "{paid}/{total} pagados",
   postGameGoToPayments: "Ver pagos",
   postGameProgress: "{done} de {total} tareas completadas",
   postGameNoCostSet: "Coste aún no definido — define el coste para activar los pagos",
@@ -762,6 +763,15 @@ const es: TranslationKeys = {
   adminRoleRemovedSubject: "Acceso de admin eliminado para {title}",
   adminRoleAddedBody: "Has sido añadido como admin de {title}. Ahora puedes gestionar jugadores, ajustes y costes.",
   adminRoleRemovedBody: "Has sido eliminado como admin de {title}. Ya no tienes acceso de gestión.",
+
+  // Temporary payment method override (#256)
+  overridePaymentMethods: "Sustituir métodos de pago",
+  overridePaymentMethodsDesc: "Establece métodos de pago temporales para esta semana. Volverán al predeterminado tras el reinicio del partido.",
+  clearOverride: "Eliminar sustitución",
+  clearOverrideConfirm: "¿Volver a los métodos de pago predeterminados?",
+  temporaryOverride: "Temporal",
+  overrideSaved: "Métodos de pago temporales guardados.",
+  overrideCleared: "Se han restaurado los métodos de pago predeterminados.",
 };
 
 export default es;

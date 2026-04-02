@@ -40,6 +40,11 @@ interface CostData {
   currency: string;
   paymentDetails: string | null;
   paymentMethods: string | null;
+  effectivePaymentMethods: string | null;
+  effectivePaymentDetails: string | null;
+  hasOverride: boolean;
+  tempPaymentMethods: string | null;
+  tempPaymentDetails: string | null;
   payments: PaymentData[];
   summary: {
     paidCount: number;
@@ -92,6 +97,10 @@ export function PaymentSection({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const [costData, setCostData] = useState<CostData | null>(null);
+  const [overrideEditing, setOverrideEditing] = useState(false);
+  const [overrideMethodsDraft, setOverrideMethodsDraft] = useState<PaymentMethod[]>([]);
+  const [overrideDetailsDraft, setOverrideDetailsDraft] = useState("");
+  const [confirmClearOverride, setConfirmClearOverride] = useState(false);
 
   const fetchCost = useCallback(async () => {
     const r = await fetch(`/api/events/${eventId}/cost`);
@@ -123,7 +132,7 @@ export function PaymentSection({
   const perPlayer = hasCost && activePlayerCount > 0
     ? costData.totalAmount / activePlayerCount
     : 0;
-  const methods = hasCost ? parsePaymentMethods(costData.paymentMethods) : [];
+  const methods = hasCost ? parsePaymentMethods(costData.effectivePaymentMethods) : [];
 
   const handleSaveCost = async () => {
     const amount = parseFloat(costDraft);
@@ -183,6 +192,49 @@ export function PaymentSection({
 
   const removeMethod = (idx: number) => {
     setMethodsDraft((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // Override handlers
+  const startOverrideEditing = () => {
+    const current = hasCost && costData.hasOverride
+      ? parsePaymentMethods(costData.tempPaymentMethods)
+      : [];
+    setOverrideMethodsDraft(current.length > 0 ? current : [{ type: "mbway", value: "" }]);
+    setOverrideDetailsDraft(hasCost && costData.hasOverride ? costData.tempPaymentDetails ?? "" : "");
+    setOverrideEditing(true);
+  };
+
+  const handleSaveOverride = async () => {
+    setOverrideEditing(false);
+    await fetch(`/api/events/${eventId}/cost/override`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        paymentMethods: overrideMethodsDraft.filter((m) => m.value.trim()).length > 0
+          ? overrideMethodsDraft.filter((m) => m.value.trim())
+          : null,
+        paymentDetails: overrideDetailsDraft || null,
+      }),
+    });
+    fetchCost();
+  };
+
+  const handleClearOverride = async () => {
+    setConfirmClearOverride(false);
+    await fetch(`/api/events/${eventId}/cost/override`, { method: "DELETE" });
+    fetchCost();
+  };
+
+  const addOverrideMethod = () => {
+    setOverrideMethodsDraft((prev) => [...prev, { type: "mbway", value: "" }]);
+  };
+
+  const updateOverrideMethod = (idx: number, field: keyof PaymentMethod, val: string) => {
+    setOverrideMethodsDraft((prev) => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m));
+  };
+
+  const removeOverrideMethod = (idx: number) => {
+    setOverrideMethodsDraft((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const statusColor = (status: string) => {
@@ -435,8 +487,8 @@ export function PaymentSection({
                   </Stack>
                 )}
 
-                {/* Legacy payment details (fallback for old data) */}
-                {costData.paymentDetails && methods.length === 0 && (
+                {/* Payment details note — shown alongside methods or as standalone */}
+                {costData.effectivePaymentDetails && (
                   <Paper variant="outlined" sx={{
                     borderRadius: 2, p: 1, display: "flex", alignItems: "center", gap: 1,
                   }}>
@@ -444,17 +496,110 @@ export function PaymentSection({
                       flexGrow: 1, fontFamily: "monospace", fontSize: "0.8rem",
                       whiteSpace: "pre-wrap", wordBreak: "break-word",
                     }}>
-                      {costData.paymentDetails}
+                      {costData.effectivePaymentDetails}
                     </Typography>
                     <Tooltip title={copiedId === "legacy" ? t("paymentDetailsCopied") : t("copyPaymentDetails")}>
                       <IconButton
                         size="small"
                         color={copiedId === "legacy" ? "success" : "default"}
-                        onClick={() => handleCopy(costData.paymentDetails!, "legacy")}
+                        onClick={() => handleCopy(costData.effectivePaymentDetails!, "legacy")}
                       >
                         {copiedId === "legacy" ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
                       </IconButton>
                     </Tooltip>
+                  </Paper>
+                )}
+
+                {/* Temporary override indicator + admin controls */}
+                {canEdit && hasCost && !editing && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                    {costData.hasOverride && (
+                      <Chip label={t("temporaryOverride")} size="small" color="warning" variant="outlined" />
+                    )}
+                    {!overrideEditing && (
+                      <>
+                        <Button size="small" variant="text" onClick={startOverrideEditing}>
+                          {t("overridePaymentMethods")}
+                        </Button>
+                        {costData.hasOverride && (
+                          <Button size="small" variant="text" color="warning" onClick={() => setConfirmClearOverride(true)}>
+                            {t("clearOverride")}
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </Box>
+                )}
+
+                {/* Override editor */}
+                {overrideEditing && (
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, borderColor: "warning.main" }}>
+                    <Stack spacing={2}>
+                      <Typography variant="caption" color="text.secondary">
+                        {t("overridePaymentMethodsDesc")}
+                      </Typography>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block" }}>
+                          {t("paymentMethods")}
+                        </Typography>
+                        <Stack spacing={1}>
+                          {overrideMethodsDraft.map((m, idx) => (
+                            <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                              <FormControl size="small" sx={{ minWidth: 130 }}>
+                                <Select
+                                  value={m.type}
+                                  onChange={(e) => updateOverrideMethod(idx, "type", e.target.value)}
+                                >
+                                  {PAYMENT_METHOD_TYPES.map((pt) => (
+                                    <MenuItem key={pt} value={pt}>{t(LABEL_KEYS[pt])}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                              <TextField
+                                size="small"
+                                placeholder={t(PLACEHOLDER_KEYS[m.type])}
+                                value={m.value}
+                                onChange={(e) => updateOverrideMethod(idx, "value", e.target.value)}
+                                sx={{ flex: 1 }}
+                                InputProps={m.type === "revolut_tag" ? {
+                                  startAdornment: <InputAdornment position="start">@</InputAdornment>,
+                                } : undefined}
+                              />
+                              <IconButton size="small" color="error" onClick={() => removeOverrideMethod(idx)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                          ))}
+                          <Button
+                            size="small"
+                            variant="text"
+                            startIcon={<AddIcon />}
+                            onClick={addOverrideMethod}
+                            sx={{ alignSelf: "flex-start" }}
+                          >
+                            {t("addPaymentMethod")}
+                          </Button>
+                        </Stack>
+                      </Box>
+                      <TextField
+                        label={t("paymentDetails")}
+                        placeholder={t("paymentDetailsPlaceholder")}
+                        size="small"
+                        value={overrideDetailsDraft}
+                        onChange={(e) => setOverrideDetailsDraft(e.target.value.slice(0, 500))}
+                        multiline
+                        maxRows={3}
+                        inputProps={{ maxLength: 500 }}
+                      />
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        <Button variant="contained" size="small" color="warning" onClick={handleSaveOverride}>
+                          {t("overridePaymentMethods")}
+                        </Button>
+                        <Button variant="text" size="small" onClick={() => setOverrideEditing(false)}>
+                          {t("cancel")}
+                        </Button>
+                      </Box>
+                    </Stack>
                   </Paper>
                 )}
 
@@ -516,6 +661,18 @@ export function PaymentSection({
         <DialogActions>
           <Button onClick={() => setConfirmRemoveOpen(false)}>{t("cancel")}</Button>
           <Button onClick={handleRemoveCost} color="error" variant="contained">{t("removeCost")}</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Clear override confirmation */}
+      <Dialog open={confirmClearOverride} onClose={() => setConfirmClearOverride(false)}>
+        <DialogTitle>{t("clearOverride")}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>{t("clearOverrideConfirm")}</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmClearOverride(false)}>{t("cancel")}</Button>
+          <Button onClick={handleClearOverride} color="warning" variant="contained">{t("clearOverride")}</Button>
         </DialogActions>
       </Dialog>
     </>

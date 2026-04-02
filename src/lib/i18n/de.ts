@@ -741,6 +741,7 @@ const de: TranslationKeys = {
   postGameCompletePayments: "Zahlungen abschließen",
   postGamePaymentsDone: "Alle Zahlungen erledigt",
   postGamePaymentsPending: "Einige Spieler müssen noch bezahlen",
+  postGamePaymentsSummary: "{paid}/{total} bezahlt",
   postGameGoToPayments: "Zahlungen anzeigen",
   postGameProgress: "{done} von {total} Aufgaben erledigt",
   postGameNoCostSet: "Kosten noch nicht festgelegt — legen Sie die Kosten fest, um Zahlungen zu aktivieren",
@@ -762,6 +763,15 @@ const de: TranslationKeys = {
   adminRoleRemovedSubject: "Admin-Zugang entfernt für {title}",
   adminRoleAddedBody: "Du wurdest als Admin von {title} hinzugefügt. Du kannst jetzt Spieler, Einstellungen und Kosten verwalten.",
   adminRoleRemovedBody: "Du wurdest als Admin von {title} entfernt. Du hast keinen Verwaltungszugang mehr.",
+
+  // Temporary payment method override (#256)
+  overridePaymentMethods: "Zahlungsmethoden überschreiben",
+  overridePaymentMethodsDesc: "Lege temporäre Zahlungsmethoden für diese Woche fest. Sie werden nach dem Spielreset auf die Standardwerte zurückgesetzt.",
+  clearOverride: "Überschreibung entfernen",
+  clearOverrideConfirm: "Zu den Standard-Zahlungsmethoden zurückkehren?",
+  temporaryOverride: "Temporär",
+  overrideSaved: "Temporäre Zahlungsmethoden gespeichert.",
+  overrideCleared: "Auf Standard-Zahlungsmethoden zurückgesetzt.",
 };
 
 export default de;

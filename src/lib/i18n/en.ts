@@ -796,6 +796,7 @@ const en = {
   postGameCompletePayments: "Complete payments",
   postGamePaymentsDone: "All payments settled",
   postGamePaymentsPending: "Some players still need to pay",
+  postGamePaymentsSummary: "{paid}/{total} paid",
   postGameGoToPayments: "View payments",
   postGameProgress: "{done} of {total} tasks complete",
   postGameNoCostSet: "Cost not set yet — set the cost to enable payments",
@@ -809,6 +810,15 @@ const en = {
   adminRoleRemovedSubject: "Admin access removed for {title}",
   adminRoleAddedBody: "You've been added as an admin for {title}. You can now manage players, settings, and costs.",
   adminRoleRemovedBody: "You've been removed as an admin from {title}. You no longer have management access.",
+
+  // Temporary payment method override (#256)
+  overridePaymentMethods: "Override payment methods",
+  overridePaymentMethodsDesc: "Set temporary payment methods for this week. They'll revert to the default after the game resets.",
+  clearOverride: "Clear override",
+  clearOverrideConfirm: "Revert to default payment methods?",
+  temporaryOverride: "Temporary",
+  overrideSaved: "Temporary payment methods saved.",
+  overrideCleared: "Reverted to default payment methods.",
 } as const;
 
 export default en;

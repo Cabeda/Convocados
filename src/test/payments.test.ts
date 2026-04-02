@@ -7,6 +7,7 @@ import { PUT as setCost, GET as getCost, DELETE as deleteCost } from "~/pages/ap
 import { GET as getPayments, PUT as updatePayment } from "~/pages/api/events/[id]/payments";
 import { POST as addPlayer, DELETE as removePlayer } from "~/pages/api/events/[id]/players";
 import { GET as getEvent } from "~/pages/api/events/[id]/index";
+import { PUT as setOverride, DELETE as clearOverride } from "~/pages/api/events/[id]/cost/override";
 
 function ctx(params: Record<string, string>, body?: unknown) {
   const request = new Request("http://localhost/api/test", {
@@ -701,5 +702,172 @@ describe("Structured payment methods on EventCost", () => {
     expect(methods).toHaveLength(2);
     expect(methods[0].type).toBe("mbway");
     expect(methods[1].type).toBe("revolut_tag");
+  });
+});
+
+// ─── Temporary payment method override ──────────────────────────────────────
+
+describe("PUT /api/events/[id]/cost/override", () => {
+  it("sets temp override; GET /cost returns hasOverride and effective methods", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "mbway", value: "912345678" }],
+      paymentDetails: "Default details",
+    }));
+
+    const res = await setOverride(ctx({ id: eventId }, {
+      paymentMethods: [{ type: "revolut_tag", value: "temp_jose" }],
+      paymentDetails: "Temp details",
+    }));
+    expect(res.status).toBe(200);
+
+    const costRes = await getCost(ctx({ id: eventId }));
+    const cost = await costRes.json();
+    expect(cost.hasOverride).toBe(true);
+    // Effective methods should be the override
+    const effective = JSON.parse(cost.effectivePaymentMethods);
+    expect(effective).toHaveLength(1);
+    expect(effective[0].type).toBe("revolut_tag");
+    expect(cost.effectivePaymentDetails).toBe("Temp details");
+    // Raw defaults still returned
+    const raw = JSON.parse(cost.paymentMethods);
+    expect(raw[0].type).toBe("mbway");
+  });
+
+  it("rejects invalid payment methods in override", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    await setCost(ctx({ id: eventId }, { totalAmount: 50 }));
+
+    const res = await setOverride(ctx({ id: eventId }, {
+      paymentMethods: [{ type: "bitcoin", value: "abc" }],
+    }));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when no cost exists", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    const res = await setOverride(ctx({ id: eventId }, {
+      paymentMethods: [{ type: "mbway", value: "912345678" }],
+    }));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("DELETE /api/events/[id]/cost/override", () => {
+  it("clears temp override; effective methods revert to defaults", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "mbway", value: "912345678" }],
+      paymentDetails: "Default details",
+    }));
+    await setOverride(ctx({ id: eventId }, {
+      paymentMethods: [{ type: "revolut_tag", value: "temp_jose" }],
+      paymentDetails: "Temp details",
+    }));
+
+    const res = await clearOverride(deleteCtx({ id: eventId }));
+    expect(res.status).toBe(200);
+
+    const costRes = await getCost(ctx({ id: eventId }));
+    const cost = await costRes.json();
+    expect(cost.hasOverride).toBe(false);
+    const effective = JSON.parse(cost.effectivePaymentMethods);
+    expect(effective[0].type).toBe("mbway");
+    expect(cost.effectivePaymentDetails).toBe("Default details");
+  });
+
+  it("returns 404 when no cost exists", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    const res = await clearOverride(deleteCtx({ id: eventId }));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("Recurrence reset clears temp override", () => {
+  it("clears tempPaymentMethods and tempPaymentDetails on reset", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly Futsal",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 7200_000),
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
+        nextResetAt: new Date(Date.now() - 3600_000),
+      },
+    });
+    for (const name of ["Alice", "Bob"]) {
+      await prisma.player.create({
+        data: { name, eventId: event.id, order: ["Alice", "Bob"].indexOf(name) },
+      });
+    }
+    await setCost(ctx({ id: event.id }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "mbway", value: "912345678" }],
+    }));
+    // Set override
+    await setOverride(ctx({ id: event.id }, {
+      paymentMethods: [{ type: "revolut_tag", value: "temp_jose" }],
+      paymentDetails: "Temp for this week",
+    }));
+
+    // Verify override is set
+    let costRes = await getCost(ctx({ id: event.id }));
+    let cost = await costRes.json();
+    expect(cost.hasOverride).toBe(true);
+
+    // Trigger recurrence reset
+    await getEvent({ params: { id: event.id } } as any);
+
+    // Override should be cleared
+    costRes = await getCost(ctx({ id: event.id }));
+    cost = await costRes.json();
+    expect(cost.hasOverride).toBe(false);
+    // Effective should be the default
+    const effective = JSON.parse(cost.effectivePaymentMethods);
+    expect(effective[0].type).toBe("mbway");
+    expect(cost.effectivePaymentDetails).toBeNull();
+  });
+});
+
+describe("GET /cost without override returns defaults as effective", () => {
+  it("returns effectivePaymentMethods from defaults when no override", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    await setCost(ctx({ id: eventId }, {
+      totalAmount: 50,
+      paymentMethods: [{ type: "mbway", value: "912345678" }],
+      paymentDetails: "Default info",
+    }));
+
+    const costRes = await getCost(ctx({ id: eventId }));
+    const cost = await costRes.json();
+    expect(cost.hasOverride).toBe(false);
+    const effective = JSON.parse(cost.effectivePaymentMethods);
+    expect(effective[0].type).toBe("mbway");
+    expect(cost.effectivePaymentDetails).toBe("Default info");
+  });
+
+  it("returns override as effective even when no default payment methods are set", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    // Set cost WITHOUT any default payment methods
+    await setCost(ctx({ id: eventId }, { totalAmount: 50 }));
+
+    // Set override
+    await setOverride(ctx({ id: eventId }, {
+      paymentMethods: [{ type: "revolut_tag", value: "temp_jose" }],
+      paymentDetails: "Temp details only",
+    }));
+
+    const costRes = await getCost(ctx({ id: eventId }));
+    const cost = await costRes.json();
+    expect(cost.hasOverride).toBe(true);
+    expect(cost.paymentMethods).toBeNull(); // no default
+    expect(cost.effectivePaymentMethods).toBeTruthy(); // override is effective
+    const effective = JSON.parse(cost.effectivePaymentMethods);
+    expect(effective).toHaveLength(1);
+    expect(effective[0].type).toBe("revolut_tag");
+    expect(effective[0].value).toBe("temp_jose");
+    expect(cost.effectivePaymentDetails).toBe("Temp details only");
   });
 });

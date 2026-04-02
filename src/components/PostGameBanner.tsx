@@ -1,14 +1,22 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Paper, Typography, Stack, Box, Button, alpha, useTheme,
-  LinearProgress,
+  LinearProgress, Chip,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import CelebrationIcon from "@mui/icons-material/Celebration";
+import SaveIcon from "@mui/icons-material/Save";
 import { useT } from "~/lib/useT";
+
+interface PaymentEntry {
+  playerName: string;
+  amount: number;
+  status: "paid" | "pending" | "exempt";
+  method?: string | null;
+}
 
 export interface PostGameStatus {
   gameEnded: boolean;
@@ -17,23 +25,29 @@ export interface PostGameStatus {
   allPaid: boolean;
   allComplete: boolean;
   isParticipant: boolean;
+  latestHistoryId: string | null;
+  paymentsSnapshot: PaymentEntry[] | null;
+  costCurrency: string | null;
+  costAmount: number | null;
 }
 
 interface Props {
   eventId: string;
+  canEdit?: boolean;
   onScrollToScore?: () => void;
   onScrollToPayments?: () => void;
   onStatusChange?: (status: PostGameStatus | null) => void;
   refreshKey?: number;
 }
 
-export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey }: Props) {
+export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey }: Props) {
   const t = useT();
   const theme = useTheme();
   const [status, setStatus] = useState<PostGameStatus | null>(null);
+  const [editablePayments, setEditablePayments] = useState<PaymentEntry[]>([]);
+  const [paymentsDirty, setPaymentsDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Use a ref for the callback to avoid resetting the polling interval
-  // when the parent re-renders with a new function reference
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
 
@@ -44,9 +58,13 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
         const data = await res.json();
         setStatus(data);
         onStatusChangeRef.current?.(data);
+        // Reset editable payments from fresh data (only if not dirty)
+        if (data.paymentsSnapshot && !paymentsDirty) {
+          setEditablePayments(data.paymentsSnapshot);
+        }
       }
     } catch { /* ignore */ }
-  }, [eventId]);
+  }, [eventId, paymentsDirty]);
 
   useEffect(() => {
     fetchStatus();
@@ -54,16 +72,52 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
     return () => clearInterval(id);
   }, [fetchStatus]);
 
-  // Re-fetch immediately when refreshKey changes (e.g. after payment update)
   useEffect(() => {
     if (refreshKey !== undefined && refreshKey > 0) fetchStatus();
   }, [refreshKey, fetchStatus]);
+
+  // Sync editable payments when status loads for the first time
+  useEffect(() => {
+    if (status?.paymentsSnapshot && editablePayments.length === 0) {
+      setEditablePayments(status.paymentsSnapshot);
+    }
+  }, [status?.paymentsSnapshot]);
 
   // Don't show if game hasn't ended or everything is complete
   if (!status || !status.gameEnded || status.allComplete) return null;
 
   const completedCount = (status.hasScore ? 1 : 0) + (status.allPaid ? 1 : 0);
   const progressPct = (completedCount / 2) * 100;
+
+  const cyclePaymentStatus = (idx: number) => {
+    const order: Array<"paid" | "pending" | "exempt"> = ["pending", "paid", "exempt"];
+    setEditablePayments((prev) =>
+      prev.map((p, i) => {
+        if (i !== idx) return p;
+        const next = order[(order.indexOf(p.status) + 1) % order.length];
+        return { ...p, status: next };
+      }),
+    );
+    setPaymentsDirty(true);
+  };
+
+  const handleSavePayments = async () => {
+    if (!status.latestHistoryId) return;
+    setSaving(true);
+    try {
+      await fetch(`/api/events/${eventId}/history/${status.latestHistoryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentsSnapshot: editablePayments }),
+      });
+      setPaymentsDirty(false);
+      fetchStatus();
+    } catch { /* ignore */ }
+    setSaving(false);
+  };
+
+  const paidCount = editablePayments.filter((p) => p.status === "paid" || p.status === "exempt").length;
+  const hasPayments = editablePayments.length > 0;
 
   return (
     <Paper
@@ -149,14 +203,9 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
 
             {/* Payment task */}
             <Box
-              onClick={!status.hasCost ? undefined : onScrollToPayments}
               sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
                 p: 1.5,
                 borderRadius: 2,
-                cursor: status.allPaid ? "default" : status.hasCost ? "pointer" : "default",
                 bgcolor: status.allPaid
                   ? alpha(theme.palette.success.main, 0.08)
                   : !status.hasCost
@@ -164,43 +213,82 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
                     : alpha(theme.palette.action.hover, 0.04),
                 border: `1px solid ${status.allPaid ? alpha(theme.palette.success.main, 0.3) : !status.hasCost ? alpha(theme.palette.info.main, 0.3) : alpha(theme.palette.divider, 0.5)}`,
                 transition: "all 0.2s",
-                "&:hover": !status.allPaid && status.hasCost ? {
-                  bgcolor: alpha(theme.palette.primary.main, 0.08),
-                  borderColor: theme.palette.primary.main,
-                } : {},
               }}
             >
-              {status.allPaid ? (
-                <CheckCircleIcon sx={{ color: theme.palette.success.main }} />
-              ) : (
-                <RadioButtonUncheckedIcon sx={{ color: theme.palette.text.disabled }} />
-              )}
-              <PaymentsIcon fontSize="small" sx={{ color: status.allPaid ? theme.palette.success.main : theme.palette.text.secondary }} />
-              <Box sx={{ flex: 1 }}>
-                <Typography
-                  variant="body2"
-                  fontWeight={600}
-                  sx={{ textDecoration: status.allPaid ? "line-through" : "none" }}
-                >
-                  {t("postGameCompletePayments")}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {status.allPaid
-                    ? t("postGamePaymentsDone")
-                    : !status.hasCost
-                      ? t("postGameNoCostSet")
-                      : t("postGamePaymentsPending")}
-                </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                {status.allPaid ? (
+                  <CheckCircleIcon sx={{ color: theme.palette.success.main }} />
+                ) : (
+                  <RadioButtonUncheckedIcon sx={{ color: theme.palette.text.disabled }} />
+                )}
+                <PaymentsIcon fontSize="small" sx={{ color: status.allPaid ? theme.palette.success.main : theme.palette.text.secondary }} />
+                <Box sx={{ flex: 1 }}>
+                  <Typography
+                    variant="body2"
+                    fontWeight={600}
+                    sx={{ textDecoration: status.allPaid ? "line-through" : "none" }}
+                  >
+                    {t("postGameCompletePayments")}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {status.allPaid
+                      ? t("postGamePaymentsDone")
+                      : !status.hasCost
+                        ? t("postGameNoCostSet")
+                        : t("postGamePaymentsSummary")
+                            .replace("{paid}", String(paidCount))
+                            .replace("{total}", String(editablePayments.length))}
+                  </Typography>
+                </Box>
+                {!status.hasCost && (
+                  <Button size="small" variant="outlined" color="info" onClick={onScrollToPayments}>
+                    {t("postGameSetCost")}
+                  </Button>
+                )}
               </Box>
-              {!status.allPaid && status.hasCost && (
-                <Button size="small" variant="outlined" color="primary" onClick={onScrollToPayments}>
-                  {t("postGameGoToPayments")}
-                </Button>
-              )}
-              {!status.hasCost && (
-                <Button size="small" variant="outlined" color="info" onClick={onScrollToPayments}>
-                  {t("postGameSetCost")}
-                </Button>
+
+              {/* Inline payment chips */}
+              {hasPayments && !status.allPaid && (
+                <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}` }}>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                    {editablePayments.map((p, idx) => {
+                      const isPaid = p.status === "paid";
+                      const isExempt = p.status === "exempt";
+                      const chipColor = isPaid ? "success" : isExempt ? "default" : "warning";
+                      return (
+                        <Chip
+                          key={p.playerName}
+                          size="small"
+                          variant={isPaid ? "filled" : "outlined"}
+                          color={chipColor}
+                          label={`${p.playerName}  ${p.amount.toFixed(2)}`}
+                          onClick={canEdit ? () => cyclePaymentStatus(idx) : undefined}
+                          sx={{
+                            borderRadius: 2,
+                            fontWeight: isPaid ? 600 : 400,
+                            ...(canEdit ? { cursor: "pointer" } : {}),
+                          }}
+                        />
+                      );
+                    })}
+                  </Box>
+                  {canEdit && paymentsDirty && (
+                    <Box sx={{ mt: 1, display: "flex", justifyContent: "flex-end" }}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="warning"
+                        disableElevation
+                        startIcon={<SaveIcon />}
+                        onClick={handleSavePayments}
+                        disabled={saving}
+                        sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+                      >
+                        {t("savePayments")}
+                      </Button>
+                    </Box>
+                  )}
+                </Box>
               )}
             </Box>
           </Stack>
