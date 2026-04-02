@@ -103,10 +103,17 @@ export function PaymentSection({
     return () => clearInterval(id);
   }, [fetchCost]);
 
-  const [internalExpanded, setInternalExpanded] = useState<boolean | undefined>(undefined);
+  const [accordionOpen, setAccordionOpen] = useState(false);
 
-  // If controlled from outside, use that; otherwise use internal state
-  const isExpanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
+  // Sync with external control — when controlledExpanded becomes true, open
+  useEffect(() => {
+    if (controlledExpanded === true) setAccordionOpen(true);
+  }, [controlledExpanded]);
+
+  // Auto-expand when cost data loads and there is a cost
+  useEffect(() => {
+    if (costData && costData.totalAmount > 0) setAccordionOpen(true);
+  }, [costData]);
 
   const hasCost = costData && costData.totalAmount > 0;
   const perPlayer = hasCost && activePlayerCount > 0
@@ -184,9 +191,8 @@ export function PaymentSection({
       <Accordion
         disableGutters
         elevation={0}
-        expanded={isExpanded !== undefined ? isExpanded : undefined}
-        defaultExpanded={isExpanded === undefined ? !!hasCost : undefined}
-        onChange={(_e, exp) => setInternalExpanded(exp)}
+        expanded={accordionOpen}
+        onChange={(_e, exp) => setAccordionOpen(exp)}
         sx={{ "&:before": { display: "none" }, backgroundColor: "transparent" }}
       >
         <AccordionSummary
