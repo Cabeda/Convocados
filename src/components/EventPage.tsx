@@ -525,7 +525,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 setPaymentExpanded(true);
                 setTimeout(() => {
                   const el = document.getElementById("payment-section");
-                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                  if (el) {
+                    const y = el.getBoundingClientRect().top + window.scrollY - 80;
+                    window.scrollTo({ top: y, behavior: "smooth" });
+                  }
                 }, 100);
               }}
             />
