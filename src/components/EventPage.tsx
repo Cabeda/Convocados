@@ -24,6 +24,7 @@ import {
 } from "./event";
 import type { EventData, Player, KnownPlayer } from "./event";
 import { PostGameBanner } from "./PostGameBanner";
+import type { PostGameStatus } from "./PostGameBanner";
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -42,6 +43,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
   const [claimPlayerConfirmOpen, setClaimPlayerConfirmOpen] = useState(false);
   const [playerToClaim, setPlayerToClaim] = useState<{ id: string; name: string } | null>(null);
+  const [postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
 
   // ── ELO ratings for balanced mode ───────────────────────────────────────────
   const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
@@ -514,6 +516,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {/* Post-game banner — shown after game ends until tasks are complete */}
             <PostGameBanner
               eventId={eventId}
+              onStatusChange={setPostGameStatus}
               onScrollToScore={() => {
                 window.location.href = `/events/${eventId}/history`;
               }}
@@ -554,9 +557,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
               canRemovePlayer={canRemovePlayer}
             />
 
-            {/* Payment tracking */}
+            {/* Payment tracking — labeled for the ended game when banner is active */}
             {(event.splitCostsEnabled !== false) && (
               <Paper id="payment-section" elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+                {postGameStatus?.gameEnded && !postGameStatus.allComplete && (
+                  <Typography variant="subtitle2" fontWeight={700} color="warning.main" sx={{ mb: 1 }}>
+                    {t("postGamePaymentsLabel")}
+                  </Typography>
+                )}
                 <PaymentSection
                   eventId={eventId}
                   canEdit={canEditSettings}
