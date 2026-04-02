@@ -10,7 +10,7 @@ import PaymentsIcon from "@mui/icons-material/Payments";
 import CelebrationIcon from "@mui/icons-material/Celebration";
 import { useT } from "~/lib/useT";
 
-interface PostGameStatus {
+export interface PostGameStatus {
   gameEnded: boolean;
   hasScore: boolean;
   allPaid: boolean;
@@ -21,9 +21,10 @@ interface Props {
   eventId: string;
   onScrollToScore?: () => void;
   onScrollToPayments?: () => void;
+  onStatusChange?: (status: PostGameStatus | null) => void;
 }
 
-export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments }: Props) {
+export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, onStatusChange }: Props) {
   const t = useT();
   const theme = useTheme();
   const [status, setStatus] = useState<PostGameStatus | null>(null);
@@ -31,9 +32,13 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments }:
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch(`/api/events/${eventId}/post-game-status`);
-      if (res.ok) setStatus(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setStatus(data);
+        onStatusChange?.(data);
+      }
     } catch { /* ignore */ }
-  }, [eventId]);
+  }, [eventId, onStatusChange]);
 
   useEffect(() => {
     fetchStatus();

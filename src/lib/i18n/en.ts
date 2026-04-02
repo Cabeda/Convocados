@@ -798,6 +798,7 @@ const en = {
   postGamePaymentsPending: "Some players still need to pay",
   postGameGoToPayments: "View payments",
   postGameProgress: "{done} of {total} tasks complete",
+  postGamePaymentsLabel: "Payments for this game",
 } as const;
 
 export default en;

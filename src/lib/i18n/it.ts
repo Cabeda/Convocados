@@ -743,6 +743,7 @@ const it: TranslationKeys = {
   postGamePaymentsPending: "Alcuni giocatori devono ancora pagare",
   postGameGoToPayments: "Vedi pagamenti",
   postGameProgress: "{done} di {total} attività completate",
+  postGamePaymentsLabel: "Pagamenti di questa partita",
 
   adminDeleteUser: "Elimina utente",
   adminDeleteUserConfirm: "Sei sicuro di voler eliminare definitivamente questo utente? Questa azione non può essere annullata.",
