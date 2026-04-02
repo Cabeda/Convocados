@@ -798,6 +798,8 @@ const en = {
   postGamePaymentsPending: "Some players still need to pay",
   postGameGoToPayments: "View payments",
   postGameProgress: "{done} of {total} tasks complete",
+  postGameNoCostSet: "Cost not set yet — set the cost to enable payments",
+  postGameSetCost: "Set cost",
   postGamePaymentsLabel: "Payments for this game",
   upcomingGamePaymentsLabel: "Payments for the upcoming game",
 } as const;

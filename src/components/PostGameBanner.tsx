@@ -13,8 +13,10 @@ import { useT } from "~/lib/useT";
 export interface PostGameStatus {
   gameEnded: boolean;
   hasScore: boolean;
+  hasCost: boolean;
   allPaid: boolean;
   allComplete: boolean;
+  isParticipant: boolean;
 }
 
 interface Props {
@@ -141,20 +143,22 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
 
             {/* Payment task */}
             <Box
-              onClick={onScrollToPayments}
+              onClick={!status.hasCost ? undefined : onScrollToPayments}
               sx={{
                 display: "flex",
                 alignItems: "center",
                 gap: 1.5,
                 p: 1.5,
                 borderRadius: 2,
-                cursor: status.allPaid ? "default" : "pointer",
+                cursor: status.allPaid ? "default" : status.hasCost ? "pointer" : "default",
                 bgcolor: status.allPaid
                   ? alpha(theme.palette.success.main, 0.08)
-                  : alpha(theme.palette.action.hover, 0.04),
-                border: `1px solid ${status.allPaid ? alpha(theme.palette.success.main, 0.3) : alpha(theme.palette.divider, 0.5)}`,
+                  : !status.hasCost
+                    ? alpha(theme.palette.info.main, 0.06)
+                    : alpha(theme.palette.action.hover, 0.04),
+                border: `1px solid ${status.allPaid ? alpha(theme.palette.success.main, 0.3) : !status.hasCost ? alpha(theme.palette.info.main, 0.3) : alpha(theme.palette.divider, 0.5)}`,
                 transition: "all 0.2s",
-                "&:hover": !status.allPaid ? {
+                "&:hover": !status.allPaid && status.hasCost ? {
                   bgcolor: alpha(theme.palette.primary.main, 0.08),
                   borderColor: theme.palette.primary.main,
                 } : {},
@@ -175,12 +179,21 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
                   {t("postGameCompletePayments")}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {status.allPaid ? t("postGamePaymentsDone") : t("postGamePaymentsPending")}
+                  {status.allPaid
+                    ? t("postGamePaymentsDone")
+                    : !status.hasCost
+                      ? t("postGameNoCostSet")
+                      : t("postGamePaymentsPending")}
                 </Typography>
               </Box>
-              {!status.allPaid && (
+              {!status.allPaid && status.hasCost && (
                 <Button size="small" variant="outlined" color="primary" onClick={onScrollToPayments}>
                   {t("postGameGoToPayments")}
+                </Button>
+              )}
+              {!status.hasCost && (
+                <Button size="small" variant="outlined" color="info" onClick={onScrollToPayments}>
+                  {t("postGameSetCost")}
                 </Button>
               )}
             </Box>
