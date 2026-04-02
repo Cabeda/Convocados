@@ -61,6 +61,8 @@ const PLACEHOLDER_KEYS: Record<PaymentMethodType, TranslationKey> = {
   mbway: "paymentMethodMbwayPlaceholder",
   revolut_tag: "paymentMethodRevolutTagPlaceholder",
   revolut_link: "paymentMethodRevolutLinkPlaceholder",
+  cash: "paymentMethodCashPlaceholder",
+  other: "paymentMethodOtherPlaceholder",
 };
 
 /** Map method type to i18n key for the label */
@@ -69,6 +71,8 @@ const LABEL_KEYS: Record<PaymentMethodType, TranslationKey> = {
   mbway: "paymentMethodMbway",
   revolut_tag: "paymentMethodRevolutTag",
   revolut_link: "paymentMethodRevolutLink",
+  cash: "paymentMethodCash",
+  other: "paymentMethodOther",
 };
 
 export function PaymentSection({
@@ -317,7 +321,7 @@ export function PaymentSection({
                     </Typography>
                     <Stack spacing={1}>
                       {methodsDraft.map((m, idx) => (
-                        <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                        <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                           <FormControl size="small" sx={{ minWidth: 130 }}>
                             <Select
                               value={m.type}
@@ -333,10 +337,18 @@ export function PaymentSection({
                             placeholder={t(PLACEHOLDER_KEYS[m.type])}
                             value={m.value}
                             onChange={(e) => updateMethod(idx, "value", e.target.value)}
-                            sx={{ flex: 1 }}
+                            sx={{ flex: 1, minWidth: 150 }}
                             InputProps={m.type === "revolut_tag" ? {
                               startAdornment: <InputAdornment position="start">@</InputAdornment>,
                             } : undefined}
+                          />
+                          <TextField
+                            size="small"
+                            placeholder={t("paymentMethodLabelPlaceholder")}
+                            value={m.label ?? ""}
+                            onChange={(e) => updateMethod(idx, "label", e.target.value)}
+                            sx={{ flex: 0.7, minWidth: 120 }}
+                            inputProps={{ maxLength: 50 }}
                           />
                           <IconButton size="small" color="error" onClick={() => removeMethod(idx)}>
                             <DeleteIcon fontSize="small" />
@@ -426,7 +438,9 @@ export function PaymentSection({
                         }}>
                           <MethodIcon type={m.type} />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="caption" color="text.secondary">{label}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {label}{m.label ? ` — ${m.label}` : ""}
+                            </Typography>
                             <Typography variant="body2" sx={{
                               fontFamily: "monospace", fontSize: "0.85rem",
                               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -544,7 +558,7 @@ export function PaymentSection({
                         </Typography>
                         <Stack spacing={1}>
                           {overrideMethodsDraft.map((m, idx) => (
-                            <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                            <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                               <FormControl size="small" sx={{ minWidth: 130 }}>
                                 <Select
                                   value={m.type}
@@ -560,10 +574,18 @@ export function PaymentSection({
                                 placeholder={t(PLACEHOLDER_KEYS[m.type])}
                                 value={m.value}
                                 onChange={(e) => updateOverrideMethod(idx, "value", e.target.value)}
-                                sx={{ flex: 1 }}
+                                sx={{ flex: 1, minWidth: 150 }}
                                 InputProps={m.type === "revolut_tag" ? {
                                   startAdornment: <InputAdornment position="start">@</InputAdornment>,
                                 } : undefined}
+                              />
+                              <TextField
+                                size="small"
+                                placeholder={t("paymentMethodLabelPlaceholder")}
+                                value={m.label ?? ""}
+                                onChange={(e) => updateOverrideMethod(idx, "label", e.target.value)}
+                                sx={{ flex: 0.7, minWidth: 120 }}
+                                inputProps={{ maxLength: 50 }}
                               />
                               <IconButton size="small" color="error" onClick={() => removeOverrideMethod(idx)}>
                                 <DeleteIcon fontSize="small" />
@@ -690,5 +712,9 @@ function MethodIcon({ type }: { type: PaymentMethodType }) {
     case "revolut_tag":
     case "revolut_link":
       return <Box sx={{ ...sx, bgcolor: "#0075EB", color: "#fff" }}>R</Box>;
+    case "cash":
+      return <Box sx={{ ...sx, bgcolor: "#4caf50", color: "#fff" }}>$</Box>;
+    case "other":
+      return <Box sx={{ ...sx, bgcolor: "#9e9e9e", color: "#fff" }}>?</Box>;
   }
 }

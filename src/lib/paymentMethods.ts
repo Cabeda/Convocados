@@ -3,7 +3,7 @@
  * Shared between server (API validation) and client (deep link rendering).
  */
 
-export const PAYMENT_METHOD_TYPES = ["phone", "mbway", "revolut_tag", "revolut_link"] as const;
+export const PAYMENT_METHOD_TYPES = ["phone", "mbway", "revolut_tag", "revolut_link", "cash", "other"] as const;
 export type PaymentMethodType = (typeof PAYMENT_METHOD_TYPES)[number];
 
 export interface PaymentMethod {
@@ -44,6 +44,10 @@ export function validatePaymentMethod(m: unknown): string | null {
       }
       break;
     }
+    case "cash":
+    case "other":
+      // Free text — any non-empty value is valid
+      break;
   }
   return null;
 }
@@ -117,6 +121,9 @@ export function getDeepLink(
     }
     case "revolut_link":
       return method.value;
+    case "cash":
+    case "other":
+      return null;
     default:
       return null;
   }
@@ -129,6 +136,8 @@ export function getMethodTypeLabel(type: PaymentMethodType): string {
     case "mbway": return "MB Way";
     case "revolut_tag": return "Revolut";
     case "revolut_link": return "Revolut Link";
+    case "cash": return "Cash";
+    case "other": return "Other";
   }
 }
 

@@ -54,6 +54,23 @@ describe("validatePaymentMethod", () => {
     expect(validatePaymentMethod({ type: "revolut_link", value: "https://example.com/pay" })).toMatch(/revolut\.me/);
     expect(validatePaymentMethod({ type: "revolut_link", value: "not-a-url" })).toMatch(/revolut\.me/);
   });
+
+  it("validates cash type (any non-empty value)", () => {
+    expect(validatePaymentMethod({ type: "cash", value: "Pay José" })).toBeNull();
+    expect(validatePaymentMethod({ type: "cash", value: "At the game" })).toBeNull();
+    expect(validatePaymentMethod({ type: "cash", value: "" })).toMatch(/required/);
+  });
+
+  it("validates other type (free text)", () => {
+    expect(validatePaymentMethod({ type: "other", value: "Bizum +34612345678" })).toBeNull();
+    expect(validatePaymentMethod({ type: "other", value: "PayPal jose@email.com" })).toBeNull();
+    expect(validatePaymentMethod({ type: "other", value: "" })).toMatch(/required/);
+  });
+
+  it("preserves label field", () => {
+    expect(validatePaymentMethod({ type: "mbway", value: "912345678", label: "José's MB Way" })).toBeNull();
+    expect(validatePaymentMethod({ type: "cash", value: "At the game", label: "Pay to João" })).toBeNull();
+  });
 });
 
 describe("validatePaymentMethods", () => {
@@ -100,6 +117,23 @@ describe("normalizePaymentMethod", () => {
   it("trims revolut links", () => {
     const m = normalizePaymentMethod({ type: "revolut_link", value: "  https://revolut.me/jose  " });
     expect(m.value).toBe("https://revolut.me/jose");
+  });
+
+  it("trims cash value and label", () => {
+    const m = normalizePaymentMethod({ type: "cash", value: "  Pay José  ", label: "  At the pitch  " });
+    expect(m.value).toBe("Pay José");
+    expect(m.label).toBe("At the pitch");
+  });
+
+  it("trims other value and label", () => {
+    const m = normalizePaymentMethod({ type: "other", value: "  Bizum +34612345678  ", label: "  Spanish payment  " });
+    expect(m.value).toBe("Bizum +34612345678");
+    expect(m.label).toBe("Spanish payment");
+  });
+
+  it("trims label on all types", () => {
+    const m = normalizePaymentMethod({ type: "mbway", value: "912345678", label: "  José's MB Way  " });
+    expect(m.label).toBe("José's MB Way");
   });
 });
 
@@ -157,6 +191,14 @@ describe("getDeepLink", () => {
   it("returns the URL directly for revolut_link", () => {
     expect(getDeepLink({ type: "revolut_link", value: "https://revolut.me/jose" })).toBe("https://revolut.me/jose");
   });
+
+  it("returns null for cash", () => {
+    expect(getDeepLink({ type: "cash", value: "Pay José" })).toBeNull();
+  });
+
+  it("returns null for other", () => {
+    expect(getDeepLink({ type: "other", value: "Bizum +34612345678" })).toBeNull();
+  });
 });
 
 describe("getDisplayValue", () => {
@@ -171,6 +213,11 @@ describe("getDisplayValue", () => {
   it("returns value as-is for phone and mbway", () => {
     expect(getDisplayValue({ type: "phone", value: "+351912345678" })).toBe("+351912345678");
     expect(getDisplayValue({ type: "mbway", value: "912345678" })).toBe("912345678");
+  });
+
+  it("returns value as-is for cash and other", () => {
+    expect(getDisplayValue({ type: "cash", value: "Pay José" })).toBe("Pay José");
+    expect(getDisplayValue({ type: "other", value: "Bizum +34612345678" })).toBe("Bizum +34612345678");
   });
 });
 
