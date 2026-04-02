@@ -102,3 +102,60 @@ export async function sendPushToEvent(
     ),
   );
 }
+
+/**
+ * Send a push notification to all devices registered by a specific user.
+ * Unlike sendPushToEvent (which fans out to all event subscribers), this
+ * targets a single user across all their subscriptions — useful for
+ * account-level notifications like admin role changes.
+ */
+export async function sendPushToUser(
+  userId: string,
+  title: string,
+  body: string,
+  url: string,
+) {
+  if (
+    !(import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY) ||
+    !(import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY)
+  ) return;
+
+  await init();
+  const webpush = await getWebPush();
+
+  // Deduplicate by endpoint — a user may have subscribed the same device to multiple events
+  const allSubs = await prisma.pushSubscription.findMany({ where: { userId } });
+  const seen = new Set<string>();
+  const subs = allSubs.filter((s) => {
+    if (seen.has(s.endpoint)) return false;
+    seen.add(s.endpoint);
+    return true;
+  });
+
+  if (subs.length === 0) return;
+
+  const limit = pLimit(PUSH_CONCURRENCY);
+  const pushPayload = JSON.stringify({ title, body, url });
+
+  await Promise.allSettled(
+    subs.map((sub) =>
+      limit(async () => {
+        try {
+          await webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            pushPayload,
+          );
+          log.info({ endpoint: sub.endpoint.slice(0, 50), userId }, "User push sent");
+        } catch (err: any) {
+          log.error(
+            { endpoint: sub.endpoint.slice(0, 60), statusCode: err?.statusCode, err: err?.message, userId },
+            "User push failed",
+          );
+          if (err?.statusCode === 410 || err?.statusCode === 404) {
+            await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+          }
+        }
+      }),
+    ),
+  );
+}

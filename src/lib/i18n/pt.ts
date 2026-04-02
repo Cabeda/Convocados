@@ -802,6 +802,12 @@ const pt: TranslationKeys = {
   purgePlayerConfirm: "Remover permanentemente \"{name}\" deste evento? Isto irá eliminar o registo do jogador, as classificações e removê-lo de todo o histórico de jogos. O ELO será recalculado. Esta ação não pode ser desfeita.",
   purgePlayerSuccess: "Jogador removido.",
   purgePlayerError: "Não foi possível remover o jogador.",
+
+  // Admin role notifications
+  adminRoleAddedSubject: "És agora admin de {title}",
+  adminRoleRemovedSubject: "Acesso de admin removido para {title}",
+  adminRoleAddedBody: "Foste adicionado como admin de {title}. Agora podes gerir jogadores, definições e custos.",
+  adminRoleRemovedBody: "Foste removido como admin de {title}. Já não tens acesso de gestão.",
 };
 
 export default pt;

@@ -756,6 +756,12 @@ const fr: TranslationKeys = {
   purgePlayerConfirm: "Retirer définitivement \"{name}\" de cet événement ? Cela supprimera son dossier de joueur, ses classements et le retirera de tout l'historique des matchs. L'ELO sera recalculé. Cette action est irréversible.",
   purgePlayerSuccess: "Joueur retiré.",
   purgePlayerError: "Impossible de retirer le joueur.",
+
+  // Admin role notifications
+  adminRoleAddedSubject: "Vous êtes maintenant admin de {title}",
+  adminRoleRemovedSubject: "Accès admin retiré pour {title}",
+  adminRoleAddedBody: "Vous avez été ajouté comme admin de {title}. Vous pouvez maintenant gérer les joueurs, les paramètres et les coûts.",
+  adminRoleRemovedBody: "Vous avez été retiré comme admin de {title}. Vous n'avez plus accès à la gestion.",
 };
 
 export default fr;
