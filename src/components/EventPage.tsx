@@ -533,19 +533,23 @@ export default function EventPage({ eventId }: { eventId: string }) {
               }}
             />
 
-            {/* Payment tracking — when post-game banner is active, show before players */}
+            {/* Payment tracking — always labeled with game context */}
             {(event.splitCostsEnabled !== false) && (
               <Paper id="payment-section" elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
-                {postGameStatus?.gameEnded && !postGameStatus.allComplete && (
-                  <Typography variant="subtitle2" fontWeight={700} color="warning.main" sx={{ mb: 1 }}>
-                    {t("postGamePaymentsLabel")}
-                  </Typography>
-                )}
+                <Typography variant="subtitle2" fontWeight={700}
+                  color={postGameStatus?.gameEnded && !postGameStatus.allComplete ? "warning.main" : "text.secondary"}
+                  sx={{ mb: 1 }}
+                >
+                  {postGameStatus?.gameEnded && !postGameStatus.allComplete
+                    ? t("postGamePaymentsLabel")
+                    : t("upcomingGamePaymentsLabel")}
+                </Typography>
                 <PaymentSection
                   eventId={eventId}
                   canEdit={canEditSettings}
                   activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
                   expanded={paymentExpanded}
+                  onExpandedChange={(exp) => setPaymentExpanded(exp ? true : undefined)}
                 />
               </Paper>
             )}
