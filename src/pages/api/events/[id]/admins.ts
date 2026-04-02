@@ -4,9 +4,14 @@ import { getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { sendAdminRoleNotification } from "../../../../lib/email.server";
 import { getNotificationPrefs } from "../../../../lib/notificationPrefs.server";
+import { sendPushToUser } from "../../../../lib/push.server";
 import { createLogger } from "../../../../lib/logger.server";
 
 const log = createLogger("event-admins");
+
+function getAppUrl(): string {
+  return import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.fly.dev";
+}
 
 /** GET — List admins for an event (owner only). */
 export const GET: APIRoute = async ({ params, request }) => {
@@ -79,18 +84,28 @@ export const POST: APIRoute = async ({ params, request }) => {
     include: { user: { select: { id: true, name: true, email: true } } },
   });
 
-  // Send email notification (fire-and-forget, respects user prefs)
-  if (admin.user.email) {
-    const appUrl = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.fly.dev";
-    getNotificationPrefs(admin.userId).then((prefs) => {
-      if (!prefs.emailEnabled) return;
-      return sendAdminRoleNotification(admin.user.email!, {
+  // Send notifications (fire-and-forget, respects user prefs)
+  const appUrl = getAppUrl();
+  const eventUrl = `${appUrl}/events/${eventId}`;
+  getNotificationPrefs(admin.userId).then(async (prefs) => {
+    const promises: Promise<void>[] = [];
+    if (prefs.emailEnabled && admin.user.email) {
+      promises.push(sendAdminRoleNotification(admin.user.email, {
         eventTitle: event.title,
-        eventUrl: `${appUrl}/events/${eventId}`,
+        eventUrl,
         action: "added",
-      });
-    }).catch((err) => log.error({ err, userId: admin.userId, eventId }, "Failed to send admin-added email"));
-  }
+      }));
+    }
+    if (prefs.pushEnabled) {
+      promises.push(sendPushToUser(
+        admin.userId,
+        event.title,
+        `You've been added as an admin for ${event.title}`,
+        eventUrl,
+      ));
+    }
+    await Promise.all(promises);
+  }).catch((err) => log.error({ err, userId: admin.userId, eventId }, "Failed to send admin-added notification"));
 
   return Response.json({
     id: admin.id,
@@ -135,18 +150,28 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     where: { eventId, userId },
   });
 
-  // Send email notification (fire-and-forget, respects user prefs)
-  if (removedUser?.email) {
-    const appUrl = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.fly.dev";
-    getNotificationPrefs(userId).then((prefs) => {
-      if (!prefs.emailEnabled) return;
-      return sendAdminRoleNotification(removedUser.email!, {
+  // Send notifications (fire-and-forget, respects user prefs)
+  const appUrl = getAppUrl();
+  const eventUrl = `${appUrl}/events/${eventId}`;
+  getNotificationPrefs(userId).then(async (prefs) => {
+    const promises: Promise<void>[] = [];
+    if (prefs.emailEnabled && removedUser?.email) {
+      promises.push(sendAdminRoleNotification(removedUser.email, {
         eventTitle: event.title,
-        eventUrl: `${appUrl}/events/${eventId}`,
+        eventUrl,
         action: "removed",
-      });
-    }).catch((err) => log.error({ err, userId, eventId }, "Failed to send admin-removed email"));
-  }
+      }));
+    }
+    if (prefs.pushEnabled) {
+      promises.push(sendPushToUser(
+        userId,
+        event.title,
+        `You've been removed as admin from ${event.title}`,
+        appUrl,
+      ));
+    }
+    await Promise.all(promises);
+  }).catch((err) => log.error({ err, userId, eventId }, "Failed to send admin-removed notification"));
 
   return Response.json({ ok: true });
 };
