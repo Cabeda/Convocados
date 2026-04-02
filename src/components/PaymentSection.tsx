@@ -70,10 +70,12 @@ export function PaymentSection({
   eventId,
   canEdit,
   activePlayerCount,
+  expanded: controlledExpanded,
 }: {
   eventId: string;
   canEdit: boolean;
   activePlayerCount: number;
+  expanded?: boolean;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -100,6 +102,11 @@ export function PaymentSection({
     const id = setInterval(fetchCost, 10_000);
     return () => clearInterval(id);
   }, [fetchCost]);
+
+  const [internalExpanded, setInternalExpanded] = useState<boolean | undefined>(undefined);
+
+  // If controlled from outside, use that; otherwise use internal state
+  const isExpanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
 
   const hasCost = costData && costData.totalAmount > 0;
   const perPlayer = hasCost && activePlayerCount > 0
@@ -177,7 +184,9 @@ export function PaymentSection({
       <Accordion
         disableGutters
         elevation={0}
-        defaultExpanded={!!hasCost}
+        expanded={isExpanded !== undefined ? isExpanded : undefined}
+        defaultExpanded={isExpanded === undefined ? !!hasCost : undefined}
+        onChange={(_e, exp) => setInternalExpanded(exp)}
         sx={{ "&:before": { display: "none" }, backgroundColor: "transparent" }}
       >
         <AccordionSummary
