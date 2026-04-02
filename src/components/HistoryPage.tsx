@@ -415,7 +415,10 @@ function HistoryCardFull({
   const [dragPlayer, setDragPlayer] = useState<{ name: string; fromTeam: number } | null>(null);
 
   // Gate editing on both time-based editability AND authentication
-  const canEdit = entry.editable && isAuthenticated;
+  // Score: any authenticated user can edit (API enforces participant check)
+  // Teams/payments: only owner/admin can edit
+  const canEditScore = entry.editable && isAuthenticated;
+  const canEditTeams = entry.editable && isAuthenticated && isOwner;
 
   const [unlocking, setUnlocking] = useState(false);
   const handleToggleLock = async () => {
@@ -700,7 +703,7 @@ function HistoryCardFull({
         {!isCancelled && (
           <Box sx={{ px: 3, py: 2.5 }}>
             <Section title={t("score")} action={
-              canEdit ? (
+              canEditScore ? (
                 <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
                   onClick={handleSaveScore} disabled={saving}
                   sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
@@ -713,7 +716,7 @@ function HistoryCardFull({
                   py: 2, px: 3, borderRadius: 3,
                   backgroundColor: alpha(theme.palette.action.hover, 0.04),
                 }}>
-                {canEdit ? (
+                {canEditScore ? (
                   <>
                     <ScoreRoller value={scoreOne} onChange={setScoreOne} teamName={entry.teamOneName} />
                     <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
@@ -789,7 +792,7 @@ function HistoryCardFull({
               title={t("teams")}
               icon={<SportsIcon fontSize="small" sx={{ color: "text.secondary" }} />}
               action={
-                canEdit && teamsDirty ? (
+                canEditTeams && teamsDirty ? (
                   <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
                     onClick={handleSaveTeams} disabled={saving || duplicateNames.length > 0}
                     sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
@@ -804,19 +807,19 @@ function HistoryCardFull({
                 </Alert>
               )}
               <Grid2 container spacing={2}>
-                {(canEdit ? editableTeams : teams).map((team, teamIdx) => {
-                  const availableSuggestions = canEdit ? getAvailableSuggestions(teamIdx) : [];
+                {(canEditTeams ? editableTeams : teams).map((team, teamIdx) => {
+                  const availableSuggestions = canEditTeams ? getAvailableSuggestions(teamIdx) : [];
                   const inputValue = newPlayerInputs[teamIdx] ?? "";
                   return (
                   <Grid2 key={team.team} size={{ xs: 12, sm: 6 }}>
                     <Box
-                      onDragOver={canEdit ? handleDragOver : undefined}
-                      onDrop={canEdit ? () => handleDrop(teamIdx) : undefined}
+                      onDragOver={canEditTeams ? handleDragOver : undefined}
+                      onDrop={canEditTeams ? () => handleDrop(teamIdx) : undefined}
                       sx={{
                         p: 2, borderRadius: 3,
                         backgroundColor: alpha(theme.palette.action.hover, 0.04),
                         border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-                        ...(canEdit && dragPlayer && dragPlayer.fromTeam !== teamIdx ? {
+                        ...(canEditTeams && dragPlayer && dragPlayer.fromTeam !== teamIdx ? {
                           border: `2px dashed ${alpha(theme.palette.primary.main, 0.4)}`,
                           backgroundColor: alpha(theme.palette.primary.main, 0.04),
                         } : {}),
@@ -834,8 +837,8 @@ function HistoryCardFull({
                           return (
                             <Chip
                               key={p.name} size="small" variant="outlined"
-                              draggable={canEdit}
-                              onDragStart={canEdit ? () => handleDragStart(p.name, teamIdx) : undefined}
+                              draggable={canEditTeams}
+                              onDragStart={canEditTeams ? () => handleDragStart(p.name, teamIdx) : undefined}
                               color={isDuplicate ? "error" : "default"}
                               label={
                                 deltaLabel ? (
@@ -852,16 +855,16 @@ function HistoryCardFull({
                                   </span>
                                 ) : p.name
                               }
-                              onDelete={canEdit ? () => removePlayerFromTeam(teamIdx, p.name) : undefined}
+                              onDelete={canEditTeams ? () => removePlayerFromTeam(teamIdx, p.name) : undefined}
                               sx={{
                                 borderRadius: 2,
-                                ...(canEdit ? { cursor: "grab", "&:active": { cursor: "grabbing" } } : {}),
+                                ...(canEditTeams ? { cursor: "grab", "&:active": { cursor: "grabbing" } } : {}),
                               }}
                             />
                           );
                         })}
                       </Box>
-                      {canEdit && (
+                      {canEditTeams && (
                         <Box sx={{ mt: 1.5 }}>
                           <Autocomplete<PlayerOption, false, false, true>
                             freeSolo
@@ -975,7 +978,7 @@ function HistoryCardFull({
               title={t("historyPayments")}
               icon={<PaymentIcon fontSize="small" sx={{ color: "text.secondary" }} />}
               action={
-                canEdit && paymentsDirty ? (
+                canEditTeams && paymentsDirty ? (
                   <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
                     onClick={handleSavePayments} disabled={saving}
                     sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
@@ -990,7 +993,7 @@ function HistoryCardFull({
                 border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
               }}>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                  {(canEdit ? editablePayments : payments).map((p, idx) => {
+                  {(canEditTeams ? editablePayments : payments).map((p, idx) => {
                     const isPaid = p.status === "paid";
                     const isExempt = p.status === "exempt";
                     const chipColor = isPaid ? "success" : isExempt ? "default" : "warning";
@@ -1001,11 +1004,11 @@ function HistoryCardFull({
                         variant={isPaid ? "filled" : "outlined"}
                         color={chipColor}
                         label={`${p.playerName}  ${p.amount.toFixed(2)}`}
-                        onClick={canEdit ? () => cyclePaymentStatus(idx) : undefined}
+                        onClick={canEditTeams ? () => cyclePaymentStatus(idx) : undefined}
                         sx={{
                           borderRadius: 2,
                           fontWeight: isPaid ? 600 : 400,
-                          ...(canEdit ? { cursor: "pointer" } : {}),
+                          ...(canEditTeams ? { cursor: "pointer" } : {}),
                         }}
                       />
                     );
@@ -1031,7 +1034,7 @@ function HistoryCardFull({
         )}
 
         {/* ── Status + Editable info ── */}
-        {canEdit && (
+        {canEditScore && (
           <Box sx={{ px: 3, py: 2.5 }}>
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
               <Button

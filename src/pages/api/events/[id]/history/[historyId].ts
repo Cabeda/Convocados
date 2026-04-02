@@ -108,6 +108,14 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   if (event.ownerId && !isOwner && !isAdmin && !isParticipant) {
     return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });
   }
+
+  // Restrict team and payment edits to owner/admin only
+  if (body.teamsSnapshot !== undefined || body.paymentsSnapshot !== undefined) {
+    if (!isOwner && !isAdmin) {
+      return Response.json({ error: "Only the event owner or admin can edit teams and payments." }, { status: 403 });
+    }
+  }
+
   const status = ["played", "cancelled"].includes(body.status) ? body.status : undefined;
   const scoreOne = body.scoreOne !== undefined ? (body.scoreOne === null ? null : parseInt(String(body.scoreOne), 10)) : undefined;
   const scoreTwo = body.scoreTwo !== undefined ? (body.scoreTwo === null ? null : parseInt(String(body.scoreTwo), 10)) : undefined;
@@ -142,6 +150,37 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     logEvent(params.id!, "history_teams_updated", actor, actorId, {
       historyId: entry.id, date: historyDate,
     });
+
+    // Auto-update live event payments to reflect the new player list
+    const eventCost = await prisma.eventCost.findUnique({
+      where: { eventId: params.id },
+      include: { payments: true },
+    });
+    if (eventCost) {
+      try {
+        const newTeams = JSON.parse(updated.teamsSnapshot!) as Array<{ players: Array<{ name: string }> }>;
+        const newPlayerNames = newTeams.flatMap((t) => t.players.map((p) => p.name));
+        const share = newPlayerNames.length > 0 ? eventCost.totalAmount / newPlayerNames.length : 0;
+
+        // Upsert payments for current players
+        for (const name of newPlayerNames) {
+          await prisma.playerPayment.upsert({
+            where: { eventCostId_playerName: { eventCostId: eventCost.id, playerName: name } },
+            create: { eventCostId: eventCost.id, playerName: name, amount: share },
+            update: { amount: share },
+          });
+        }
+
+        // Remove payments for players no longer in teams
+        const activeNames = new Set(newPlayerNames);
+        await prisma.playerPayment.deleteMany({
+          where: {
+            eventCostId: eventCost.id,
+            playerName: { notIn: [...activeNames] },
+          },
+        });
+      } catch { /* best-effort payment sync */ }
+    }
   }
   if (status !== undefined) {
     logEvent(params.id!, "history_status_updated", actor, actorId, {
