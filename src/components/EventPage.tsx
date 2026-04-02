@@ -45,6 +45,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [playerToClaim, setPlayerToClaim] = useState<{ id: string; name: string } | null>(null);
   const [postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
   const [paymentExpanded, setPaymentExpanded] = useState<boolean | undefined>(undefined);
+  const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
 
   // ── ELO ratings for balanced mode ───────────────────────────────────────────
   const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
@@ -518,6 +519,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             <PostGameBanner
               eventId={eventId}
               onStatusChange={setPostGameStatus}
+              refreshKey={bannerRefreshKey}
               onScrollToScore={() => {
                 window.location.href = `/events/${eventId}/history`;
               }}
@@ -550,6 +552,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
                   expanded={paymentExpanded}
                   onExpandedChange={(exp) => setPaymentExpanded(exp ? true : undefined)}
+                  onPaymentChange={() => setBannerRefreshKey((k) => k + 1)}
                 />
               </Paper>
             )}
