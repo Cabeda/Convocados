@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { sendPushToEvent } from "../../../../lib/push.server";
-import { sendGameInvite } from "../../../../lib/email.server";
+import { enqueueNotification } from "../../../../lib/notificationQueue.server";
+import { sendGameInvite, sendPlayerJoinedOwnerNotification } from "../../../../lib/email.server";
 import { getNotificationPrefs, wantsGameInviteEmail } from "../../../../lib/notificationPrefs.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
@@ -143,9 +143,9 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   if (isOnBench) {
-    await sendPushToEvent(eventId, event.title, "notifyPlayerJoinedBench", { name: trimmed }, url, spotsLeft, senderClientId);
+    enqueueNotification(eventId, "player_joined_bench", { title: event.title, key: "notifyPlayerJoinedBench", params: { name: trimmed }, url, spotsLeft }, senderClientId);
   } else {
-    await sendPushToEvent(eventId, event.title, "notifyPlayerJoined", { name: trimmed }, url, spotsLeft, senderClientId);
+    enqueueNotification(eventId, "player_joined", { title: event.title, key: "notifyPlayerJoined", params: { name: trimmed }, url, spotsLeft }, senderClientId);
   }
 
   // Send game invite email to the joining player if they have a linked account
@@ -162,6 +162,26 @@ export const POST: APIRoute = async ({ params, request }) => {
       }
     } catch (err) {
       // Non-blocking — don't fail the join if email fails
+    }
+  }
+
+  // Notify the event owner when someone joins (skip if owner is the one joining)
+  if (event.ownerId && event.ownerId !== session?.user?.id) {
+    try {
+      const owner = await prisma.user.findUnique({ where: { id: event.ownerId }, select: { email: true, id: true } });
+      if (owner?.email) {
+        const ownerPrefs = await getNotificationPrefs(owner.id);
+        if (wantsGameInviteEmail(ownerPrefs)) {
+          await sendPlayerJoinedOwnerNotification(owner.email, {
+            eventTitle: event.title,
+            playerName: trimmed,
+            spotsLeft,
+            eventUrl: url,
+          });
+        }
+      }
+    } catch {
+      // Non-blocking
     }
   }
 
@@ -238,11 +258,11 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   const url = `${origin}/events/${eventId}`;
   if (!wasActive) {
-    await sendPushToEvent(eventId, event.title, "notifyPlayerLeftBench", { name: player.name }, url, spotsLeft, senderClientId);
+    enqueueNotification(eventId, "player_left_bench", { title: event.title, key: "notifyPlayerLeftBench", params: { name: player.name }, url, spotsLeft }, senderClientId);
   } else if (firstBench) {
-    await sendPushToEvent(eventId, event.title, "notifyPlayerLeftPromoted", { left: player.name, promoted: firstBench.name }, url, spotsLeft, senderClientId);
+    enqueueNotification(eventId, "player_left_promoted", { title: event.title, key: "notifyPlayerLeftPromoted", params: { left: player.name, promoted: firstBench.name }, url, spotsLeft }, senderClientId);
   } else {
-    await sendPushToEvent(eventId, event.title, "notifyPlayerLeft", { name: player.name }, url, spotsLeft, senderClientId);
+    enqueueNotification(eventId, "player_left", { title: event.title, key: "notifyPlayerLeft", params: { name: player.name }, url, spotsLeft }, senderClientId);
   }
 
   // Fire webhooks (non-blocking)

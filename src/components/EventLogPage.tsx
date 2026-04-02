@@ -60,6 +60,8 @@ const ACTION_COLORS: Record<string, "success" | "error" | "info" | "warning" | "
   rating_recalculated: "info",
   rating_manual_enabled: "warning",
   rating_manual_disabled: "warning",
+  override_set: "warning",
+  override_cleared: "info",
 };
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -81,6 +83,8 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
   rating_recalculated: <EmojiEventsIcon fontSize="small" />,
   rating_manual_enabled: <TuneIcon fontSize="small" />,
   rating_manual_disabled: <TuneIcon fontSize="small" />,
+  override_set: <PaymentIcon fontSize="small" />,
+  override_cleared: <PaymentIcon fontSize="small" />,
 };
 
 const ACTION_I18N: Record<string, string> = {
@@ -112,6 +116,8 @@ const ACTION_I18N: Record<string, string> = {
   rating_recalculated: "logRatingRecalculated",
   rating_manual_enabled: "logRatingManualEnabled",
   rating_manual_disabled: "logRatingManualDisabled",
+  override_set: "logOverrideSet",
+  override_cleared: "logOverrideCleared",
 };
 
 function LogEntryRow({ entry, currentUserId }: { entry: LogEntry; currentUserId?: string }) {

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
+import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { POST as resetPlayerOrder } from "~/pages/api/events/[id]/reset-player-order";
 
 // Stub auth — default: no session (anonymous)
@@ -26,6 +27,7 @@ async function seedEvent(ownerId?: string) {
 
 beforeEach(async () => {
   mockSession = null;
+  await resetApiRateLimitStore();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
   await prisma.session.deleteMany();

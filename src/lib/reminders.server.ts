@@ -44,6 +44,46 @@ export async function getUpcomingReminders(type: "24h" | "2h" | "1h"): Promise<U
   }));
 }
 
+/**
+ * Find events where the game has ended (dateTime + durationMinutes is in the past)
+ * and no "post-game" reminder has been sent yet.
+ * Only considers games that ended within the last 4 hours to avoid spamming old events.
+ */
+export async function getPostGameReminders(): Promise<UpcomingReminder[]> {
+  const now = Date.now();
+  const fourHoursAgo = new Date(now - 4 * 3600_000);
+
+  const events = await prisma.event.findMany({
+    where: {
+      // Game started at least durationMinutes ago — we can't filter by computed
+      // end time in Prisma, so we fetch recent past events and filter in JS
+      dateTime: { gte: fourHoursAgo, lte: new Date(now) },
+      reminderLogs: { none: { type: "post-game" } },
+    },
+    include: {
+      players: { include: { user: { select: { email: true } } } },
+    },
+  });
+
+  // Filter to events where dateTime + durationMinutes <= now
+  return events
+    .filter((e) => {
+      const endTime = new Date(e.dateTime.getTime() + e.durationMinutes * 60_000);
+      return endTime.getTime() <= now;
+    })
+    .map((e) => ({
+      eventId: e.id,
+      eventTitle: e.title,
+      dateTime: e.dateTime,
+      location: e.location,
+      players: e.players.map((p) => ({
+        name: p.name,
+        userId: p.userId,
+        email: p.user?.email ?? null,
+      })),
+    }));
+}
+
 /** Mark a reminder as sent so it won't fire again. */
 export async function markReminderSent(eventId: string, type: string) {
   await prisma.reminderLog.create({ data: { eventId, type } });

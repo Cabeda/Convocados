@@ -3,7 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
-const VALID_STATUSES = ["pending", "paid", "exempt"];
+const VALID_STATUSES = ["pending", "paid"];
 
 /** GET — list all payments with summary. */
 export const GET: APIRoute = async ({ params }) => {
@@ -19,13 +19,12 @@ export const GET: APIRoute = async ({ params }) => {
   if (!eventCost) {
     return Response.json({
       payments: [],
-      summary: { paidCount: 0, exemptCount: 0, pendingCount: 0, totalCount: 0, paidAmount: 0 },
+      summary: { paidCount: 0, pendingCount: 0, totalCount: 0, paidAmount: 0 },
     });
   }
 
   const payments = eventCost.payments;
   const paidCount = payments.filter((p) => p.status === "paid").length;
-  const exemptCount = payments.filter((p) => p.status === "exempt").length;
   const pendingCount = payments.filter((p) => p.status === "pending").length;
   const paidAmount = payments
     .filter((p) => p.status === "paid")
@@ -40,7 +39,6 @@ export const GET: APIRoute = async ({ params }) => {
     })),
     summary: {
       paidCount,
-      exemptCount,
       pendingCount,
       totalCount: payments.length,
       paidAmount,
@@ -83,7 +81,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     where: { id: payment.id },
     data: {
       status,
-      paidAt: status === "paid" ? new Date() : status === "pending" ? null : payment.paidAt,
+      paidAt: status === "paid" ? new Date() : null,
       ...(method !== undefined && { method }),
     },
   });
