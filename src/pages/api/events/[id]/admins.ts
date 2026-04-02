@@ -2,6 +2,11 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { sendAdminRoleNotification } from "../../../../lib/email.server";
+import { getNotificationPrefs } from "../../../../lib/notificationPrefs.server";
+import { createLogger } from "../../../../lib/logger.server";
+
+const log = createLogger("event-admins");
 
 /** GET — List admins for an event (owner only). */
 export const GET: APIRoute = async ({ params, request }) => {
@@ -40,7 +45,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const eventId = params.id!;
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { ownerId: true },
+    select: { ownerId: true, title: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -74,6 +79,19 @@ export const POST: APIRoute = async ({ params, request }) => {
     include: { user: { select: { id: true, name: true, email: true } } },
   });
 
+  // Send email notification (fire-and-forget, respects user prefs)
+  if (admin.user.email) {
+    const appUrl = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.fly.dev";
+    getNotificationPrefs(admin.userId).then((prefs) => {
+      if (!prefs.emailEnabled) return;
+      return sendAdminRoleNotification(admin.user.email!, {
+        eventTitle: event.title,
+        eventUrl: `${appUrl}/events/${eventId}`,
+        action: "added",
+      });
+    }).catch((err) => log.error({ err, userId: admin.userId, eventId }, "Failed to send admin-added email"));
+  }
+
   return Response.json({
     id: admin.id,
     userId: admin.userId,
@@ -91,7 +109,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const eventId = params.id!;
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { ownerId: true },
+    select: { ownerId: true, title: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -107,9 +125,28 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "userId required." }, { status: 400 });
   }
 
+  // Look up the user's email before deleting, so we can notify them
+  const removedUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+
   await prisma.eventAdmin.deleteMany({
     where: { eventId, userId },
   });
+
+  // Send email notification (fire-and-forget, respects user prefs)
+  if (removedUser?.email) {
+    const appUrl = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.fly.dev";
+    getNotificationPrefs(userId).then((prefs) => {
+      if (!prefs.emailEnabled) return;
+      return sendAdminRoleNotification(removedUser.email!, {
+        eventTitle: event.title,
+        eventUrl: `${appUrl}/events/${eventId}`,
+        action: "removed",
+      });
+    }).catch((err) => log.error({ err, userId, eventId }, "Failed to send admin-removed email"));
+  }
 
   return Response.json({ ok: true });
 };
