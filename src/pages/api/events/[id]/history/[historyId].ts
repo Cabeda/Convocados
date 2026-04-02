@@ -87,12 +87,22 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
   // Allow owner, admin, or any player who participated in this game
   let isParticipant = false;
+
+  // Check 1: match user's display name against the teamsSnapshot
   if (entry.teamsSnapshot && session.user.name) {
     try {
       const teams = JSON.parse(entry.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
       const allNames = teams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
       isParticipant = allNames.includes(session.user.name.toLowerCase());
     } catch { /* ignore parse errors */ }
+  }
+
+  // Check 2: match user's ID against claimed player spots in the event
+  if (!isParticipant) {
+    const claimedPlayer = await prisma.player.findFirst({
+      where: { eventId: params.id, userId: session.user.id, archivedAt: null },
+    });
+    if (claimedPlayer) isParticipant = true;
   }
 
   if (event.ownerId && !isOwner && !isAdmin && !isParticipant) {
