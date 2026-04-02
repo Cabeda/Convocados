@@ -526,38 +526,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               }}
             />
 
-            {/* Quick join — authenticated users only */}
-            {isAuthenticated && session?.user?.name && (
-              <QuickJoin
-                userName={session.user.name}
-                players={event.players}
-                maxPlayers={event.maxPlayers}
-                onJoin={addPlayer}
-                onLeave={removePlayer}
-              />
-            )}
-
-            {/* Players */}
-            <PlayerList
-              players={event.players}
-              maxPlayers={event.maxPlayers}
-              isOwner={isOwner}
-              canClaimPlayer={canClaimPlayer}
-              hasTeams={!!(localMatches && localMatches.length > 0)}
-              availableSuggestions={availableSuggestions}
-              playerError={playerError}
-              onPlayerErrorChange={setPlayerError}
-              onAddPlayer={addPlayer}
-              onRemovePlayer={removePlayer}
-              onReorderPlayers={reorderPlayers}
-              onResetPlayerOrder={resetPlayerOrder}
-              onRandomize={doRandomize}
-              onConfirmReRandomize={() => setConfirmOpen(true)}
-              onOpenClaimPlayerDialog={openClaimPlayerDialog}
-              canRemovePlayer={canRemovePlayer}
-            />
-
-            {/* Payment tracking — labeled for the ended game when banner is active */}
+            {/* Payment tracking — when post-game banner is active, show before players */}
             {(event.splitCostsEnabled !== false) && (
               <Paper id="payment-section" elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
                 {postGameStatus?.gameEnded && !postGameStatus.allComplete && (
@@ -599,6 +568,37 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 </Stack>
               </Paper>
             )}
+
+            {/* Quick join — authenticated users only */}
+            {isAuthenticated && session?.user?.name && (
+              <QuickJoin
+                userName={session.user.name}
+                players={event.players}
+                maxPlayers={event.maxPlayers}
+                onJoin={addPlayer}
+                onLeave={removePlayer}
+              />
+            )}
+
+            {/* Players */}
+            <PlayerList
+              players={event.players}
+              maxPlayers={event.maxPlayers}
+              isOwner={isOwner}
+              canClaimPlayer={canClaimPlayer}
+              hasTeams={!!(localMatches && localMatches.length > 0)}
+              availableSuggestions={availableSuggestions}
+              playerError={playerError}
+              onPlayerErrorChange={setPlayerError}
+              onAddPlayer={addPlayer}
+              onRemovePlayer={removePlayer}
+              onReorderPlayers={reorderPlayers}
+              onResetPlayerOrder={resetPlayerOrder}
+              onRandomize={doRandomize}
+              onConfirmReRandomize={() => setConfirmOpen(true)}
+              onOpenClaimPlayerDialog={openClaimPlayerDialog}
+              canRemovePlayer={canRemovePlayer}
+            />
 
           </Stack>
         </Container>
