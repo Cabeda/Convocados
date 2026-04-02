@@ -17,6 +17,7 @@ model User {
   image          String?
   role           String          @default("user") // "user" | "admin"
   publicStats    Boolean         @default(true)
+  profileVisibility String       @default("public") // "public" | "participants" | "private"
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   sessions       Session[]
@@ -30,6 +31,8 @@ model User {
   priorityConfirmations   PriorityConfirmation[]
   eventInvites            EventInvite[]
   adminEvents             EventAdmin[]  @relation("EventAdmins")
+  pushSubscriptions       PushSubscription[]
+  appPushTokens           AppPushToken[]
   oauthApps               OauthApplication[] @relation("OAuthApps")
   oauthTokens             OauthAccessToken[] @relation("OAuthTokens")
   oauthConsents           OauthConsent[]     @relation("OAuthConsents")
@@ -82,10 +85,12 @@ model Event {
   latitude       Float?
   longitude      Float?
   dateTime       DateTime
+  timezone       String                @default("UTC")
   maxPlayers     Int                   @default(10)
   teamOneName    String                @default("Ninjas")
   teamTwoName    String                @default("Gunas")
   sport          String                @default("football-5v5")
+  durationMinutes Int                  @default(60)
   isPublic       Boolean               @default(false)
   balanced       Boolean               @default(false)
   isRecurring    Boolean               @default(false)
@@ -106,6 +111,7 @@ model Event {
   priorityConfirmations PriorityConfirmation[]
   invites         EventInvite[]
   admins          EventAdmin[]
+  notificationJobs NotificationJob[]
 
   // Priority enrollment settings
   priorityEnabled       Boolean @default(false)
@@ -148,6 +154,7 @@ model GameHistory {
   paymentsSnapshot String? // JSON: [{playerName, amount, status, method}]
   editableUntil    DateTime
   eloProcessed     Boolean  @default(false)
+  source           String   @default("live") // "live" | "historical"
   createdAt        DateTime @default(now())
 }
 
@@ -210,9 +217,12 @@ model PushSubscription {
   auth      String
   locale    String   @default("en")
   clientId  String   @default("")
+  userId    String?  // linked when user is authenticated at subscribe time
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
 
   @@unique([eventId, endpoint])
+  @@index([userId])
 }
 
 model WebhookSubscription {
@@ -289,6 +299,8 @@ model EventCost {
   currency       String          @default("EUR")
   paymentDetails String? // deprecated: free text, kept for backward compat
   paymentMethods String? // JSON: [{ type: "mbway"|"revolut_tag"|"revolut_link"|"phone", value: "...", label?: "..." }]
+  tempPaymentMethods String? // JSON override, same format as paymentMethods — auto-cleared on recurrence reset
+  tempPaymentDetails String? // free-text override, same format as paymentDetails — auto-cleared on recurrence reset
   payments       PlayerPayment[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -300,7 +312,7 @@ model PlayerPayment {
   eventCost   EventCost @relation(fields: [eventCostId], references: [id], onDelete: Cascade)
   playerName  String
   amount      Float
-  status      String    @default("pending") // "pending" | "paid" | "exempt"
+  status      String    @default("pending") // "pending" | "paid"
   method      String? // free text: cash, revolut, mbway, transfer, etc.
   paidAt      DateTime?
   markedBy    String? // userId who marked it
@@ -317,17 +329,19 @@ model NotificationPreferences {
   userId               String   @unique
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Global toggles
-  emailEnabled         Boolean  @default(true)
+  // Global toggles — email off by default, push on (web + future app)
+  emailEnabled         Boolean  @default(false)
   pushEnabled          Boolean  @default(true)
 
   // Per-type toggles
-  gameInviteEmail      Boolean  @default(true)
+  gameInviteEmail      Boolean  @default(false)
   gameInvitePush       Boolean  @default(true)
-  gameReminderEmail    Boolean  @default(true)
+  gameReminderEmail    Boolean  @default(false)
   gameReminderPush     Boolean  @default(true)
+  playerActivityPush   Boolean  @default(true)   // player joined/left
+  eventDetailsPush     Boolean  @default(true)   // date/location/title changes
   weeklySummaryEmail   Boolean  @default(false)
-  paymentReminderEmail Boolean  @default(true)
+  paymentReminderEmail Boolean  @default(false)
   paymentReminderPush  Boolean  @default(true)
 
   // Reminder time preferences
@@ -337,6 +351,20 @@ model NotificationPreferences {
 
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+}
+
+// ── Mobile app push tokens (React Native / Expo) ──────────────────────────────
+
+model AppPushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique  // Expo push token or FCM/APNs token
+  platform  String            // "ios" | "android"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // ── Event activity log ────────────────────────────────────────────────────────
@@ -432,6 +460,31 @@ model PaymentReminderLog {
   @@index([eventId, userId])
 }
 
+// ── Notification job queue ────────────────────────────────────────────────────
+
+model NotificationJob {
+  id             String    @id @default(cuid())
+  eventId        String
+  event          Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type           String    // "player_joined" | "player_left" | "player_joined_bench" | "player_left_bench" | "player_left_promoted" | "event_details" | "reminder"
+  // NOTE(postgres): When adding Postgres support (#236), consider migrating this
+  // column to native Json type for better querying. The drain code does
+  // JSON.parse(job.payload) — if changed to Json, remove that parse call.
+  payload        String    @default("{}") // JSON string
+  senderClientId String?   // suppress sending back to originator
+  retryCount     Int       @default(0)
+  failedAt       DateTime? // set when all retries exhausted (dead-letter)
+  createdAt      DateTime  @default(now())
+  processedAt    DateTime?
+
+  // NOTE(postgres): Replace the $transaction claim approach with
+  // SELECT ... FOR UPDATE SKIP LOCKED when on Postgres (#236) to get
+  // true atomic claiming under READ COMMITTED isolation.
+  @@index([processedAt, createdAt])
+  @@index([failedAt])
+  @@index([eventId])
+}
+
 // ── OAuth 2.1 (better-auth oidcProvider plugin) ───────────────────────────────
 
 model OauthApplication {
@@ -488,5 +541,3 @@ model OauthConsent {
   @@index([clientId])
   @@index([userId])
 }
-
-// ── Rate limiting (in-memory, no DB model needed) ─────────────────────────────

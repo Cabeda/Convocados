@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button,
-  CircularProgress, Alert,
+  Alert, Skeleton,
 } from "@mui/material";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import { ThemeModeProvider } from "./ThemeModeProvider";
@@ -23,6 +23,8 @@ import {
   useCountdown,
 } from "./event";
 import type { EventData, Player, KnownPlayer } from "./event";
+import { PostGameBanner } from "./PostGameBanner";
+import type { PostGameStatus } from "./PostGameBanner";
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -41,6 +43,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
   const [claimPlayerConfirmOpen, setClaimPlayerConfirmOpen] = useState(false);
   const [playerToClaim, setPlayerToClaim] = useState<{ id: string; name: string } | null>(null);
+  const [postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
+  const [paymentExpanded, setPaymentExpanded] = useState<boolean | undefined>(undefined);
+  const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
 
   // ── ELO ratings for balanced mode ───────────────────────────────────────────
   const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
@@ -324,12 +329,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── Title & location save ───────────────────────────────────────────────────
 
   const handleSaveTitle = async (title: string) => {
-    await fetch(`/api/events/${eventId}/title`, {
+    // Optimistic update
+    setEvent((e) => e ? { ...e, title } : e);
+    const res = await fetch(`/api/events/${eventId}/title`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
     });
-    fetchEvent();
+    if (!res.ok) fetchEvent(); // revert on error
+    else fetchEvent();
   };
 
   const handleSaveLocation = async (location: string) => {
@@ -342,6 +350,24 @@ export default function EventPage({ eventId }: { eventId: string }) {
     if (location && !data.geocoded) {
       setSnackbar(t("locationNotGeocoded"));
     }
+    fetchEvent();
+  };
+
+  const handleSaveDateTime = async (dateTime: string, timezone: string) => {
+    await fetch(`/api/events/${eventId}/datetime`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dateTime, timezone }),
+    });
+    fetchEvent();
+  };
+
+  const handleSaveSport = async (sport: string) => {
+    await fetch(`/api/events/${eventId}/sport`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sport }),
+    });
     fetchEvent();
   };
 
@@ -372,12 +398,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const isAuthenticated = !!session?.user;
   const isOwner = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
   const isOwnerless = !event?.ownerId;
-  const canEditSettings = isOwnerless || isOwner;
+  const isAdmin = !!event?.isAdmin;
+  const canEditSettings = isOwnerless || isOwner || isAdmin;
   const userHasLinkedPlayer = isAuthenticated && (event?.players ?? []).some((p: any) => p.userId === session.user.id);
   const canClaimPlayer = isAuthenticated && !userHasLinkedPlayer;
 
   const canRemovePlayer = (player: Player) => {
-    if (isOwner) return true;
+    if (isOwner || isAdmin) return true;
     if (session?.user && player.userId === session.user.id) return true;
     if (!player.userId) return true;
     return false;
@@ -388,9 +415,42 @@ export default function EventPage({ eventId }: { eventId: string }) {
   if (isLoading) return (
     <ThemeModeProvider>
       <ResponsiveLayout>
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
-          <CircularProgress />
-        </Box>
+        <Container maxWidth="md" sx={{ py: 4 }}>
+          <Stack spacing={3}>
+            <Paper elevation={2} sx={{ borderRadius: 3, overflow: "hidden" }}>
+              <Skeleton variant="rectangular" height={3} />
+              <Box sx={{ p: { xs: 2, sm: 3 } }}>
+                <Stack spacing={2}>
+                  <Skeleton variant="text" width="60%" height={36} />
+                  <Skeleton variant="text" width="30%" height={20} />
+                  <Skeleton variant="rectangular" height={32} width={120} sx={{ borderRadius: 2 }} />
+                  <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 1 }} />
+                  <Stack spacing={0.75}>
+                    <Skeleton variant="text" width="45%" height={20} />
+                    <Skeleton variant="text" width="35%" height={20} />
+                  </Stack>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Skeleton variant="rounded" width={60} height={24} />
+                    <Skeleton variant="rounded" width={80} height={24} />
+                  </Box>
+                  <Skeleton variant="rectangular" height={1} />
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Skeleton variant="circular" width={40} height={40} />
+                    <Skeleton variant="circular" width={40} height={40} />
+                  </Box>
+                </Stack>
+              </Box>
+            </Paper>
+            <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+              <Skeleton variant="text" width="40%" height={28} sx={{ mb: 2 }} />
+              <Stack spacing={1}>
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} variant="rectangular" height={48} sx={{ borderRadius: 1 }} />
+                ))}
+              </Stack>
+            </Paper>
+          </Stack>
+        </Container>
       </ResponsiveLayout>
     </ThemeModeProvider>
   );
@@ -449,9 +509,52 @@ export default function EventPage({ eventId }: { eventId: string }) {
               localMatches={localMatches}
               onSaveTitle={handleSaveTitle}
               onSaveLocation={handleSaveLocation}
+              onSaveDateTime={handleSaveDateTime}
+              onSaveSport={handleSaveSport}
               onClaimOwnership={handleClaimOwnership}
               onSnackbar={setSnackbar}
             />
+
+            {/* Post-game banner — shown after game ends until tasks are complete */}
+            <PostGameBanner
+              eventId={eventId}
+              canEdit={canEditSettings}
+              onStatusChange={setPostGameStatus}
+              refreshKey={bannerRefreshKey}
+              onScrollToScore={() => {
+                window.location.href = `/events/${eventId}/history`;
+              }}
+              onScrollToPayments={() => {
+                setPaymentExpanded(true);
+                setTimeout(() => {
+                  const el = document.getElementById("payment-section");
+                  if (el) {
+                    const y = el.getBoundingClientRect().top + window.scrollY - 80;
+                    window.scrollTo({ top: y, behavior: "smooth" });
+                  }
+                }, 100);
+              }}
+            />
+
+            {/* Payment tracking — always for the upcoming/current game */}
+            {(event.splitCostsEnabled !== false) && (
+              <Paper id="payment-section" elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+                <Typography variant="subtitle2" fontWeight={700}
+                  color="text.secondary"
+                  sx={{ mb: 1 }}
+                >
+                  {t("upcomingGamePaymentsLabel")}
+                </Typography>
+                <PaymentSection
+                  eventId={eventId}
+                  canEdit={canEditSettings}
+                  activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
+                  expanded={paymentExpanded}
+                  onExpandedChange={(exp) => setPaymentExpanded(exp ? true : undefined)}
+                  onPaymentChange={() => setBannerRefreshKey((k) => k + 1)}
+                />
+              </Paper>
+            )}
 
             {/* Quick join — authenticated users only */}
             {isAuthenticated && session?.user?.name && (
@@ -484,18 +587,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               canRemovePlayer={canRemovePlayer}
             />
 
-            {/* Payment tracking */}
-            {(event.splitCostsEnabled !== false) && (
-              <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
-                <PaymentSection
-                  eventId={eventId}
-                  canEdit={canEditSettings}
-                  activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
-                />
-              </Paper>
-            )}
-
-            {/* Teams */}
+            {/* Teams — shown below players after randomization */}
             {localMatches && localMatches.length > 0 && (
               <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
                 <Stack spacing={3}>

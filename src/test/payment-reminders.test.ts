@@ -188,12 +188,12 @@ describe("getPlayersWithPendingPayments", () => {
     expect(results.every((r) => !(r.eventId === eventId && r.userId === userId))).toBe(true);
   });
 
-  it("excludes exempt players", async () => {
+  it("excludes paid players", async () => {
     const userId = await seedUser();
     const eventId = await seedEvent(userId);
     await seedGameHistory(eventId);
     await seedPlayer(eventId, "Pay User", userId);
-    await seedCostAndPayment(eventId, "Pay User", "exempt");
+    await seedCostAndPayment(eventId, "Pay User", "paid");
 
     const results = await getPlayersWithPendingPayments();
     expect(results.every((r) => !(r.eventId === eventId && r.userId === userId))).toBe(true);
@@ -279,6 +279,8 @@ describe("wantsPaymentReminderEmail", () => {
       gameReminderEmail: true,
       gameReminderPush: true,
       weeklySummaryEmail: false,
+      playerActivityPush: true,
+      eventDetailsPush: true,
       paymentReminderEmail: true,
       paymentReminderPush: true,
       reminder24h: true,
@@ -297,6 +299,8 @@ describe("wantsPaymentReminderEmail", () => {
       gameReminderEmail: true,
       gameReminderPush: true,
       weeklySummaryEmail: false,
+      playerActivityPush: true,
+      eventDetailsPush: true,
       paymentReminderEmail: true,
       paymentReminderPush: true,
       reminder24h: true,
@@ -315,6 +319,8 @@ describe("wantsPaymentReminderEmail", () => {
       gameReminderEmail: true,
       gameReminderPush: true,
       weeklySummaryEmail: false,
+      playerActivityPush: true,
+      eventDetailsPush: true,
       paymentReminderEmail: false,
       paymentReminderPush: true,
       reminder24h: true,

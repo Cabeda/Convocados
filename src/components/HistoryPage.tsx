@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Chip, Button, Divider,
   CircularProgress, Alert, TextField, Autocomplete, InputAdornment,
-  alpha, useTheme, IconButton, Tooltip, Grid2,
+  alpha, useTheme, IconButton, Tooltip, Grid2, Dialog, DialogTitle,
+  DialogContent, DialogActions, Snackbar,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import HistoryIcon from "@mui/icons-material/History";
@@ -16,6 +17,8 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PaymentIcon from "@mui/icons-material/Payment";
 import LoginIcon from "@mui/icons-material/Login";
+import AddCircleIcon from "@mui/icons-material/AddCircle";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -23,6 +26,8 @@ import { detectLocale } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
 import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
+import { ScoreRoller } from "./event/ScoreRoller";
+import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
 
 type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number }
@@ -36,7 +41,7 @@ interface TeamSnapshot {
 interface PaymentSnapshotEntry {
   playerName: string;
   amount: number;
-  status: "paid" | "pending" | "exempt";
+  status: "paid" | "pending";
   method?: string | null;
 }
 
@@ -52,6 +57,8 @@ interface HistoryEntry {
   paymentsSnapshot: string | null;
   editableUntil: string;
   editable: boolean;
+  source: string;
+  eloProcessed: boolean;
   eloUpdates?: { name: string; delta: number }[] | null;
 }
 
@@ -80,22 +87,311 @@ function Section({ icon, title, children, action }: {
   );
 }
 
+interface AddHistoricalGameDialogProps {
+  open: boolean;
+  onClose: () => void;
+  eventId: string;
+  defaultTeamOneName: string;
+  defaultTeamTwoName: string;
+  knownPlayers: { name: string; gamesPlayed: number }[];
+  playerRatings: { name: string; rating: number; gamesPlayed: number }[];
+  onSuccess: (entry: HistoryEntry) => void;
+}
+
+function AddHistoricalGameDialog({
+  open,
+  onClose,
+  eventId,
+  defaultTeamOneName,
+  defaultTeamTwoName,
+  knownPlayers,
+  playerRatings,
+  onSuccess,
+}: AddHistoricalGameDialogProps) {
+  const t = useT();
+  const theme = useTheme();
+  const [dateTime, setDateTime] = useState(() => {
+    const d = new Date();
+    d.setHours(d.getHours() - 1, 0, 0, 0);
+    return d.toISOString().slice(0, 16);
+  });
+  const [teamOneName, setTeamOneName] = useState(defaultTeamOneName);
+  const [teamTwoName, setTeamTwoName] = useState(defaultTeamTwoName);
+  const [scoreOne, setScoreOne] = useState("");
+  const [scoreTwo, setScoreTwo] = useState("");
+  const [team1Players, setTeam1Players] = useState<{ name: string; order: number }[]>([]);
+  const [team2Players, setTeam2Players] = useState<{ name: string; order: number }[]>([]);
+  const [newPlayerInputs, setNewPlayerInputs] = useState<Record<number, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setDateTime(new Date().toISOString().slice(0, 16));
+      setTeamOneName(defaultTeamOneName);
+      setTeamTwoName(defaultTeamTwoName);
+      setScoreOne("");
+      setScoreTwo("");
+      setTeam1Players([]);
+      setTeam2Players([]);
+      setNewPlayerInputs({});
+      setError(null);
+    }
+  }, [open, defaultTeamOneName, defaultTeamTwoName]);
+
+  // ELO preview computation
+  const eloPreview: EloUpdate[] = useMemo(() => {
+    if (team1Players.length === 0 || team2Players.length === 0) return [];
+    const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
+    const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
+    if (s1 == null || s2 == null) return [];
+    const teams = [
+      { team: teamOneName, players: team1Players },
+      { team: teamTwoName, players: team2Players },
+    ];
+    return computeGameUpdates(playerRatings, teams, s1, s2);
+  }, [team1Players, team2Players, teamOneName, teamTwoName, scoreOne, scoreTwo, playerRatings]);
+
+  const addPlayerToTeam = (teamIdx: number, playerName?: string) => {
+    const name = (playerName ?? newPlayerInputs[teamIdx] ?? "").trim();
+    if (!name) return;
+    const target = teamIdx === 0 ? team1Players : team2Players;
+    if (target.some((p) => p.name.toLowerCase() === name.toLowerCase())) return;
+    const newPlayer = { name, order: target.length };
+    if (teamIdx === 0) {
+      setTeam1Players([...team1Players, newPlayer]);
+    } else {
+      setTeam2Players([...team2Players, newPlayer]);
+    }
+    if (!playerName) setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+  };
+
+  const removePlayerFromTeam = (teamIdx: number, playerName: string) => {
+    if (teamIdx === 0) {
+      setTeam1Players(team1Players.filter((p) => p.name !== playerName).map((p, i) => ({ ...p, order: i })));
+    } else {
+      setTeam2Players(team2Players.filter((p) => p.name !== playerName).map((p, i) => ({ ...p, order: i })));
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!dateTime || !teamOneName || !teamTwoName || scoreOne === "" || scoreTwo === "") {
+      setError(t("errorPlayerNameRequired"));
+      return;
+    }
+    if (team1Players.length === 0 || team2Players.length === 0) {
+      setError(t("errorNeedMorePlayers"));
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    const teamsSnapshot = [
+      { team: teamOneName, players: team1Players },
+      { team: teamTwoName, players: team2Players },
+    ];
+
+    try {
+      const res = await fetch(`/api/events/${eventId}/history`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dateTime: new Date(dateTime).toISOString(),
+          teamOneName,
+          teamTwoName,
+          scoreOne: parseInt(scoreOne, 10),
+          scoreTwo: parseInt(scoreTwo, 10),
+          teamsSnapshot,
+        }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json();
+        setError(json.error || t("errorCreatingPastGame"));
+        setSaving(false);
+        return;
+      }
+
+      const newEntry = await res.json();
+      onSuccess(newEntry);
+      onClose();
+    } catch {
+      setError(t("errorCreatingPastGame"));
+    }
+    setSaving(false);
+  };
+
+  const getAvailableSuggestions = (teamIdx: number) => {
+    const currentNames = new Set(
+      (teamIdx === 0 ? team1Players : team2Players).map((p) => p.name.toLowerCase())
+    );
+    return knownPlayers.filter((kp) => !currentNames.has(kp.name.toLowerCase()));
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <AddCircleIcon color="primary" />
+          <Typography variant="h6" fontWeight={700}>{t("addHistoricalGame")}</Typography>
+        </Stack>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={3} sx={{ pt: 1 }}>
+          <Alert severity="info" sx={{ borderRadius: 2 }}>{t("addHistoricalGameDesc")}</Alert>
+
+          {error && <Alert severity="error" onClose={() => setError(null)} sx={{ borderRadius: 2 }}>{error}</Alert>}
+
+          <TextField
+            label={t("dateTime")}
+            type="datetime-local"
+            value={dateTime}
+            onChange={(e) => setDateTime(e.target.value)}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+
+          <Stack direction="row" spacing={2}>
+            <TextField
+              label={t("pastGameTeam1Name")}
+              value={teamOneName}
+              onChange={(e) => setTeamOneName(e.target.value)}
+              fullWidth
+              size="small"
+            />
+            <TextField
+              label={t("pastGameTeam2Name")}
+              value={teamTwoName}
+              onChange={(e) => setTeamTwoName(e.target.value)}
+              fullWidth
+              size="small"
+            />
+          </Stack>
+
+          <Box sx={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
+            py: 2, px: 3, borderRadius: 3,
+            backgroundColor: alpha(theme.palette.action.hover, 0.04),
+            border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+          }}>
+            <ScoreRoller
+              value={scoreOne}
+              onChange={setScoreOne}
+              teamName={teamOneName}
+            />
+            <Typography variant="h4" color="text.disabled" fontWeight={300}>:</Typography>
+            <ScoreRoller
+              value={scoreTwo}
+              onChange={setScoreTwo}
+              teamName={teamTwoName}
+            />
+          </Box>
+
+          <Typography variant="subtitle2" fontWeight={700}>{t("selectPlayers")}</Typography>
+
+          <Grid2 container spacing={2}>
+            {[{ label: teamOneName, players: team1Players, idx: 0 }, { label: teamTwoName, players: team2Players, idx: 1 }].map(({ label, players, idx }) => (
+              <Grid2 key={idx} size={{ xs: 12, sm: 6 }}>
+                <Box sx={{
+                  p: 2, borderRadius: 3,
+                  backgroundColor: alpha(theme.palette.action.hover, 0.04),
+                  border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+                }}>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>{label}</Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, minHeight: 32 }}>
+                    {players.map((p) => (
+                      <Chip
+                        key={p.name}
+                        size="small"
+                        variant="outlined"
+                        label={p.name}
+                        onDelete={() => removePlayerFromTeam(idx, p.name)}
+                        sx={{ borderRadius: 2 }}
+                      />
+                    ))}
+                  </Box>
+                  <Box sx={{ mt: 1.5 }}>
+                    <PlayerAutocomplete
+                      value={newPlayerInputs[idx] ?? ""}
+                      onChange={(val) => setNewPlayerInputs((prev) => ({ ...prev, [idx]: val }))}
+                      onAdd={(name) => addPlayerToTeam(idx, name)}
+                      suggestions={getAvailableSuggestions(idx)}
+                      disabled={saving}
+                      label={t("addPlayerToTeam")}
+                    />
+                  </Box>
+                </Box>
+              </Grid2>
+            ))}
+          </Grid2>
+
+          {/* ELO Preview */}
+          {eloPreview.length > 0 && (
+            <Box sx={{
+              p: 2, borderRadius: 3,
+              backgroundColor: alpha(theme.palette.action.hover, 0.04),
+              border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+            }}>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
+                {t("ratings")} Preview
+              </Typography>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+                {eloPreview.map((update) => (
+                  <Box key={update.name} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Typography variant="body2">{update.name}</Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {update.oldRating}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        fontWeight={700}
+                        color={update.delta > 0 ? "success.main" : update.delta < 0 ? "error.main" : "text.primary"}
+                      >
+                        {update.delta > 0 ? "+" : ""}{update.delta}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        → {update.newRating}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={onClose} disabled={saving}>{t("cancel")}</Button>
+        <Button variant="contained" onClick={handleSubmit} disabled={saving} startIcon={<SaveIcon />}>
+          {saving ? t("creatingPastGame") : t("createPastGame")}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function HistoryCardFull({
   entry,
   eventId,
   onUpdate,
+  onDelete,
   isAuthenticated,
   knownPlayers,
   playerRatings,
   isOwner,
+  userName,
 }: {
   entry: HistoryEntry;
   eventId: string;
   onUpdate: (updated: HistoryEntry) => void;
+  onDelete: (id: string) => void;
   isAuthenticated: boolean;
   knownPlayers: { name: string; gamesPlayed: number }[];
   playerRatings: { name: string; rating: number; gamesPlayed: number }[];
   isOwner: boolean;
+  userName: string | null;
 }) {
   const t = useT();
   const locale = detectLocale();
@@ -121,7 +417,17 @@ function HistoryCardFull({
   const [dragPlayer, setDragPlayer] = useState<{ name: string; fromTeam: number } | null>(null);
 
   // Gate editing on both time-based editability AND authentication
-  const canEdit = entry.editable && isAuthenticated;
+  // Score: owner/admin or participant can edit
+  // Teams/payments: only owner/admin can edit
+  const isParticipantInGame = (() => {
+    if (isOwner) return true;
+    if (!userName) return false;
+    const teams: TeamSnapshot[] = entry.teamsSnapshot ? JSON.parse(entry.teamsSnapshot) : [];
+    const allNames = teams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
+    return allNames.includes(userName.toLowerCase());
+  })();
+  const canEditScore = entry.editable && isAuthenticated && isParticipantInGame;
+  const canEditTeams = entry.editable && isAuthenticated && isOwner;
 
   const [unlocking, setUnlocking] = useState(false);
   const handleToggleLock = async () => {
@@ -137,6 +443,35 @@ function HistoryCardFull({
     setUnlocking(false);
     if (!res.ok) { setError(json.error); return; }
     onUpdate(json);
+  };
+
+  const [approvingElo, setApprovingElo] = useState(false);
+  const handleApproveElo = async () => {
+    setApprovingElo(true);
+    setError(null);
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}/approve-elo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const json = await res.json();
+    setApprovingElo(false);
+    if (!res.ok) { setError(json.error); return; }
+    onUpdate(json);
+  };
+
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const handleDelete = async () => {
+    setDeleting(true);
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, { method: "DELETE" });
+    setDeleting(false);
+    setConfirmDelete(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json.error ?? "Failed to delete.");
+      return;
+    }
+    onDelete(entry.id);
   };
 
   // Live ELO preview: compute deltas from current editable teams + scores
@@ -250,7 +585,7 @@ function HistoryCardFull({
   };
 
   const cyclePaymentStatus = (idx: number) => {
-    const order: Array<"paid" | "pending" | "exempt"> = ["pending", "paid", "exempt"];
+    const order: Array<"paid" | "pending"> = ["pending", "paid"];
     setEditablePayments((prev) =>
       prev.map((p, i) => {
         if (i !== idx) return p;
@@ -307,6 +642,16 @@ function HistoryCardFull({
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
+          {entry.source === "historical" && (
+            <Chip
+              icon={<HistoryIcon />}
+              label={t("historicalGame")}
+              color="warning"
+              size="small"
+              variant="outlined"
+              sx={{ fontWeight: 600 }}
+            />
+          )}
           <Chip
             icon={isCancelled ? <CancelIcon /> : <CheckCircleIcon />}
             label={isCancelled ? t("statusCancelled") : t("statusPlayed")}
@@ -315,13 +660,20 @@ function HistoryCardFull({
             sx={{ fontWeight: 600 }}
           />
           {isOwner ? (
-            <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
-              <span>
-                <IconButton size="small" color={entry.editable ? "default" : "warning"} onClick={handleToggleLock} disabled={unlocking}>
-                  {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+            <>
+              <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
+                <span>
+                  <IconButton size="small" color={entry.editable ? "default" : "warning"} onClick={handleToggleLock} disabled={unlocking}>
+                    {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title={t("deleteGame")}>
+                <IconButton size="small" color="error" onClick={() => setConfirmDelete(true)} disabled={deleting}>
+                  <DeleteIcon fontSize="small" />
                 </IconButton>
-              </span>
-            </Tooltip>
+              </Tooltip>
+            </>
           ) : !entry.editable ? (
             <Tooltip title={t("notEditable")}>
               <LockIcon fontSize="small" color="disabled" />
@@ -329,6 +681,25 @@ function HistoryCardFull({
           ) : null}
         </Stack>
       </Box>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t("deleteGame")}</DialogTitle>
+        <DialogContent>
+          <Typography>{t("deleteHistoryConfirm")}</Typography>
+          {entry.eloProcessed && (
+            <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
+              {t("deleteHistoryEloWarning")}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)} disabled={deleting}>{t("cancel")}</Button>
+          <Button color="error" variant="contained" onClick={handleDelete} disabled={deleting}>
+            {deleting ? t("deleting") : t("deleteGame")}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Stack spacing={0} divider={<Divider sx={{ mx: 3 }} />}>
         {error && (
@@ -341,7 +712,7 @@ function HistoryCardFull({
         {!isCancelled && (
           <Box sx={{ px: 3, py: 2.5 }}>
             <Section title={t("score")} action={
-              canEdit ? (
+              canEditScore ? (
                 <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
                   onClick={handleSaveScore} disabled={saving}
                   sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
@@ -354,46 +725,71 @@ function HistoryCardFull({
                   py: 2, px: 3, borderRadius: 3,
                   backgroundColor: alpha(theme.palette.action.hover, 0.04),
                 }}>
-                {/* Team 1 */}
-                <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
-                  <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
-                    {entry.teamOneName}
-                  </Typography>
-                  {canEdit ? (
-                    <TextField
-                      size="small" type="number" value={scoreOne}
-                      onChange={(e) => setScoreOne(e.target.value)}
-                      inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem" } }}
-                      sx={{ width: 80, "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-                    />
-                  ) : (
-                    <Typography variant="h3" fontWeight={800} color="text.primary">
-                      {entry.scoreOne !== null ? entry.scoreOne : "—"}
-                    </Typography>
-                  )}
-                </Stack>
-
-                <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
-
-                {/* Team 2 */}
-                <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
-                  <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
-                    {entry.teamTwoName}
-                  </Typography>
-                  {canEdit ? (
-                    <TextField
-                      size="small" type="number" value={scoreTwo}
-                      onChange={(e) => setScoreTwo(e.target.value)}
-                      inputProps={{ min: 0, max: 99, style: { textAlign: "center", fontWeight: 700, fontSize: "2rem" } }}
-                      sx={{ width: 80, "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-                    />
-                  ) : (
-                    <Typography variant="h3" fontWeight={800} color="text.primary">
-                      {entry.scoreTwo !== null ? entry.scoreTwo : "—"}
-                    </Typography>
-                  )}
-                </Stack>
+                {canEditScore ? (
+                  <>
+                    <ScoreRoller value={scoreOne} onChange={setScoreOne} teamName={entry.teamOneName} />
+                    <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
+                    <ScoreRoller value={scoreTwo} onChange={setScoreTwo} teamName={entry.teamTwoName} />
+                  </>
+                ) : (
+                  <>
+                    {/* Team 1 */}
+                    <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
+                      <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
+                        {entry.teamOneName}
+                      </Typography>
+                      <Typography variant="h3" fontWeight={800} color="text.primary">
+                        {entry.scoreOne !== null ? entry.scoreOne : "—"}
+                      </Typography>
+                    </Stack>
+                    <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
+                    {/* Team 2 */}
+                    <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
+                      <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
+                        {entry.teamTwoName}
+                      </Typography>
+                      <Typography variant="h3" fontWeight={800} color="text.primary">
+                        {entry.scoreTwo !== null ? entry.scoreTwo : "—"}
+                      </Typography>
+                    </Stack>
+                  </>
+                )}
               </Stack>
+            </Section>
+          </Box>
+        )}
+
+        {/* ── ELO Approval for Historical Games ── */}
+        {entry.source === "historical" && !isCancelled && (
+          <Box sx={{ px: 3, py: 2.5 }}>
+            <Section
+              title={entry.eloProcessed ? t("eloApproved") : t("eloPending")}
+              icon={<EmojiEventsIcon fontSize="small" sx={{ color: entry.eloProcessed ? "success.main" : "warning.main" }} />}
+              action={
+                !entry.eloProcessed && isOwner ? (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disableElevation
+                    startIcon={<EmojiEventsIcon />}
+                    onClick={handleApproveElo}
+                    disabled={approvingElo}
+                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+                  >
+                    {approvingElo ? t("approvingElo") : t("approveElo")}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {entry.eloProcessed ? (
+                <Alert severity="success" sx={{ borderRadius: 2 }}>
+                  {t("eloApprovedSuccess")}
+                </Alert>
+              ) : (
+                <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                  {t("eloPending")}
+                </Alert>
+              )}
             </Section>
           </Box>
         )}
@@ -405,7 +801,7 @@ function HistoryCardFull({
               title={t("teams")}
               icon={<SportsIcon fontSize="small" sx={{ color: "text.secondary" }} />}
               action={
-                canEdit && teamsDirty ? (
+                canEditTeams && teamsDirty ? (
                   <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
                     onClick={handleSaveTeams} disabled={saving || duplicateNames.length > 0}
                     sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
@@ -420,19 +816,19 @@ function HistoryCardFull({
                 </Alert>
               )}
               <Grid2 container spacing={2}>
-                {(canEdit ? editableTeams : teams).map((team, teamIdx) => {
-                  const availableSuggestions = canEdit ? getAvailableSuggestions(teamIdx) : [];
+                {(canEditTeams ? editableTeams : teams).map((team, teamIdx) => {
+                  const availableSuggestions = canEditTeams ? getAvailableSuggestions(teamIdx) : [];
                   const inputValue = newPlayerInputs[teamIdx] ?? "";
                   return (
                   <Grid2 key={team.team} size={{ xs: 12, sm: 6 }}>
                     <Box
-                      onDragOver={canEdit ? handleDragOver : undefined}
-                      onDrop={canEdit ? () => handleDrop(teamIdx) : undefined}
+                      onDragOver={canEditTeams ? handleDragOver : undefined}
+                      onDrop={canEditTeams ? () => handleDrop(teamIdx) : undefined}
                       sx={{
                         p: 2, borderRadius: 3,
                         backgroundColor: alpha(theme.palette.action.hover, 0.04),
                         border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-                        ...(canEdit && dragPlayer && dragPlayer.fromTeam !== teamIdx ? {
+                        ...(canEditTeams && dragPlayer && dragPlayer.fromTeam !== teamIdx ? {
                           border: `2px dashed ${alpha(theme.palette.primary.main, 0.4)}`,
                           backgroundColor: alpha(theme.palette.primary.main, 0.04),
                         } : {}),
@@ -450,8 +846,8 @@ function HistoryCardFull({
                           return (
                             <Chip
                               key={p.name} size="small" variant="outlined"
-                              draggable={canEdit}
-                              onDragStart={canEdit ? () => handleDragStart(p.name, teamIdx) : undefined}
+                              draggable={canEditTeams}
+                              onDragStart={canEditTeams ? () => handleDragStart(p.name, teamIdx) : undefined}
                               color={isDuplicate ? "error" : "default"}
                               label={
                                 deltaLabel ? (
@@ -468,16 +864,16 @@ function HistoryCardFull({
                                   </span>
                                 ) : p.name
                               }
-                              onDelete={canEdit ? () => removePlayerFromTeam(teamIdx, p.name) : undefined}
+                              onDelete={canEditTeams ? () => removePlayerFromTeam(teamIdx, p.name) : undefined}
                               sx={{
                                 borderRadius: 2,
-                                ...(canEdit ? { cursor: "grab", "&:active": { cursor: "grabbing" } } : {}),
+                                ...(canEditTeams ? { cursor: "grab", "&:active": { cursor: "grabbing" } } : {}),
                               }}
                             />
                           );
                         })}
                       </Box>
-                      {canEdit && (
+                      {canEditTeams && (
                         <Box sx={{ mt: 1.5 }}>
                           <Autocomplete<PlayerOption, false, false, true>
                             freeSolo
@@ -591,7 +987,7 @@ function HistoryCardFull({
               title={t("historyPayments")}
               icon={<PaymentIcon fontSize="small" sx={{ color: "text.secondary" }} />}
               action={
-                canEdit && paymentsDirty ? (
+                canEditTeams && paymentsDirty ? (
                   <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
                     onClick={handleSavePayments} disabled={saving}
                     sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
@@ -606,10 +1002,9 @@ function HistoryCardFull({
                 border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
               }}>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                  {(canEdit ? editablePayments : payments).map((p, idx) => {
+                  {(canEditTeams ? editablePayments : payments).map((p, idx) => {
                     const isPaid = p.status === "paid";
-                    const isExempt = p.status === "exempt";
-                    const chipColor = isPaid ? "success" : isExempt ? "default" : "warning";
+                    const chipColor = isPaid ? "success" : "warning";
                     return (
                       <Chip
                         key={p.playerName}
@@ -617,11 +1012,11 @@ function HistoryCardFull({
                         variant={isPaid ? "filled" : "outlined"}
                         color={chipColor}
                         label={`${p.playerName}  ${p.amount.toFixed(2)}`}
-                        onClick={canEdit ? () => cyclePaymentStatus(idx) : undefined}
+                        onClick={canEditTeams ? () => cyclePaymentStatus(idx) : undefined}
                         sx={{
                           borderRadius: 2,
                           fontWeight: isPaid ? 600 : 400,
-                          ...(canEdit ? { cursor: "pointer" } : {}),
+                          ...(canEditTeams ? { cursor: "pointer" } : {}),
                         }}
                       />
                     );
@@ -647,7 +1042,7 @@ function HistoryCardFull({
         )}
 
         {/* ── Status + Editable info ── */}
-        {canEdit && (
+        {canEditScore && (
           <Box sx={{ px: 3, py: 2.5 }}>
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
               <Button
@@ -704,6 +1099,8 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const { data: session } = useSession();
   const isAuthenticated = !!session?.user;
   const [title, setTitle] = useState("");
+  const [teamOneName, setTeamOneName] = useState("");
+  const [teamTwoName, setTeamTwoName] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -714,6 +1111,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [playerRatings, setPlayerRatings] = useState<{ name: string; rating: number; gamesPlayed: number }[]>([]);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showAddHistorical, setShowAddHistorical] = useState(false);
   const isOwner = !!(session?.user && ownerId && session.user.id === ownerId);
 
   const load = useCallback(async () => {
@@ -725,6 +1123,8 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     const ev = await evRes.json();
     const hist = await histRes.json();
     setTitle(ev.title);
+    setTeamOneName(ev.teamOneName ?? "Team A");
+    setTeamTwoName(ev.teamTwoName ?? "Team B");
     setOwnerId(ev.ownerId ?? null);
     setIsAdmin(!!ev.isAdmin);
     setHistory(hist.data);
@@ -732,12 +1132,24 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setHasMore(hist.hasMore);
     setLoading(false);
 
-    // Fetch known players and ratings in parallel (non-blocking)
+    // Fetch known players (historical) and ratings in parallel (non-blocking)
+    // Combine current event players with historical players for suggestions
+    const currentPlayers = (ev.players ?? []).map((p: any) => ({ name: p.name, gamesPlayed: -1 })); // -1 indicates current player
     Promise.all([
       fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).catch(() => ({ players: [] })),
       fetch(`/api/events/${eventId}/ratings`).then((r) => r.json()).catch(() => ({ data: [] })),
     ]).then(([kp, ratings]) => {
-      setKnownPlayers(kp.players ?? []);
+      // Combine current players with historical players, deduping by name
+      const allPlayersMap = new Map<string, { name: string; gamesPlayed: number }>();
+      // Current players first (they get priority)
+      currentPlayers.forEach((p: { name: string; gamesPlayed: number }) => allPlayersMap.set(p.name.toLowerCase(), p));
+      // Historical players (only if not already in current)
+      (kp.players ?? []).forEach((p: { name: string; gamesPlayed: number }) => {
+        if (!allPlayersMap.has(p.name.toLowerCase())) {
+          allPlayersMap.set(p.name.toLowerCase(), p);
+        }
+      });
+      setKnownPlayers(Array.from(allPlayersMap.values()));
       setPlayerRatings(
         (ratings.data ?? []).map((r: any) => ({ name: r.name, rating: r.rating, gamesPlayed: r.gamesPlayed }))
       );
@@ -759,6 +1171,14 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
 
   const handleUpdate = (updated: HistoryEntry) => {
     setHistory((prev) => prev.map((h) => h.id === updated.id ? updated : h));
+  };
+
+  const handleDelete = (id: string) => {
+    setHistory((prev) => prev.filter((h) => h.id !== id));
+  };
+
+  const handleAddHistoricalSuccess = (newEntry: HistoryEntry) => {
+    setHistory((prev) => [newEntry, ...prev]);
   };
 
   if (loading) return (
@@ -800,11 +1220,21 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
               </Box>
             </Box>
 
-            <Button variant="outlined" startIcon={<EmojiEventsIcon />}
-              href={`/events/${eventId}/rankings`} size="small"
-              sx={{ alignSelf: "flex-start", borderRadius: 2, textTransform: "none" }}>
-              {t("ratings")}
-            </Button>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+              <Button variant="outlined" startIcon={<EmojiEventsIcon />}
+                href={`/events/${eventId}/rankings`} size="small"
+                sx={{ borderRadius: 2, textTransform: "none" }}>
+                {t("ratings")}
+              </Button>
+
+              {(isOwner || isAdmin) && (
+                <Button variant="contained" startIcon={<AddCircleIcon />}
+                  onClick={() => setShowAddHistorical(true)} size="small"
+                  sx={{ borderRadius: 2, textTransform: "none" }}>
+                  {t("addHistoricalGame")}
+                </Button>
+              )}
+            </Box>
 
             {history.length === 0 ? (
               <Paper elevation={0} sx={{
@@ -820,8 +1250,9 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
               <>
                 {history.map((entry) => (
                   <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} onUpdate={handleUpdate}
-                    isAuthenticated={isAuthenticated} knownPlayers={knownPlayers} playerRatings={playerRatings}
-                    isOwner={isOwner || isAdmin} />
+                    onDelete={handleDelete} isAuthenticated={isAuthenticated} knownPlayers={knownPlayers}
+                    playerRatings={playerRatings} isOwner={isOwner || isAdmin}
+                    userName={session?.user?.name ?? null} />
                 ))}
                 {hasMore && (
                   <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
@@ -834,6 +1265,17 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
               </>
             )}
           </Stack>
+
+          <AddHistoricalGameDialog
+            open={showAddHistorical}
+            onClose={() => setShowAddHistorical(false)}
+            eventId={eventId}
+            defaultTeamOneName={teamOneName}
+            defaultTeamTwoName={teamTwoName}
+            knownPlayers={knownPlayers}
+            playerRatings={playerRatings}
+            onSuccess={handleAddHistoricalSuccess}
+          />
         </Container>
       </ResponsiveLayout>
     </ThemeModeProvider>

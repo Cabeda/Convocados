@@ -26,12 +26,16 @@ export type EventAction =
   | "history_payments_updated"
   | "history_unlocked"
   | "history_locked"
+  | "history_backfill_created"
+  | "history_elo_approved"
   | "rating_initial_set"
   | "rating_recalculated"
   | "rating_manual_enabled"
   | "rating_manual_disabled"
   | "player_archived"
-  | "player_unarchived";
+  | "player_unarchived"
+  | "override_set"
+  | "override_cleared";
 
 /**
  * Append an entry to the event activity log.
