@@ -44,6 +44,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [claimPlayerConfirmOpen, setClaimPlayerConfirmOpen] = useState(false);
   const [playerToClaim, setPlayerToClaim] = useState<{ id: string; name: string } | null>(null);
   const [postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
+  const [paymentExpanded, setPaymentExpanded] = useState<boolean | undefined>(undefined);
 
   // ── ELO ratings for balanced mode ───────────────────────────────────────────
   const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
@@ -521,8 +522,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 window.location.href = `/events/${eventId}/history`;
               }}
               onScrollToPayments={() => {
-                const el = document.getElementById("payment-section");
-                if (el) el.scrollIntoView({ behavior: "smooth" });
+                setPaymentExpanded(true);
+                setTimeout(() => {
+                  const el = document.getElementById("payment-section");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }, 100);
               }}
             />
 
@@ -538,6 +542,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   eventId={eventId}
                   canEdit={canEditSettings}
                   activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
+                  expanded={paymentExpanded}
                 />
               </Paper>
             )}
