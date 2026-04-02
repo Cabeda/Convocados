@@ -340,6 +340,43 @@ export async function sendPriorityDeadlineReminder(to: string, data: PriorityEnr
   if (result.error) throw new Error(`Failed to send priority deadline reminder: ${result.error.message}`);
 }
 
+// ── Admin role notification emails ────────────────────────────────────────────
+
+export interface AdminRoleNotificationData {
+  eventTitle: string;
+  eventUrl: string;
+  action: "added" | "removed";
+}
+
+export async function sendAdminRoleNotification(to: string, data: AdminRoleNotificationData) {
+  const resend = await getResend();
+  const isAdded = data.action === "added";
+  const subject = isAdded
+    ? `You're now an admin for ${data.eventTitle} — Convocados`
+    : `You've been removed as admin from ${data.eventTitle} — Convocados`;
+  const heading = isAdded
+    ? `You're now an admin`
+    : `Admin access removed`;
+  const body = isAdded
+    ? `You've been added as an admin for <strong>${data.eventTitle}</strong>. You can now manage players, settings, and costs for this event.`
+    : `You've been removed as an admin from <strong>${data.eventTitle}</strong>. You no longer have management access to this event.`;
+  const buttonText = isAdded ? "View event" : "Go to dashboard";
+  const buttonUrl = isAdded ? data.eventUrl : getAppUrl();
+  const result = await resend.emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject,
+    html: emailTemplate({
+      heading,
+      body,
+      buttonText,
+      buttonUrl,
+      footnote: `Don't want these emails? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+    }),
+  });
+  if (result.error) throw new Error(`Failed to send admin role notification: ${result.error.message}`);
+}
+
 export async function sendPrioritySpotReleased(to: string, data: { eventTitle: string; eventUrl: string }) {
   const resend = await getResend();
   const result = await resend.emails.send({

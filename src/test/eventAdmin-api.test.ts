@@ -9,10 +9,31 @@ vi.mock("~/lib/auth.helpers.server", () => ({
   checkEventAdmin: vi.fn(),
 }));
 
+// Mock email
+vi.mock("~/lib/email.server", () => ({
+  sendAdminRoleNotification: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Mock notification prefs
+vi.mock("~/lib/notificationPrefs.server", () => ({
+  getNotificationPrefs: vi.fn().mockResolvedValue({ emailEnabled: true, pushEnabled: true }),
+}));
+
+// Mock push
+vi.mock("~/lib/push.server", () => ({
+  sendPushToUser: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { getSession, checkOwnership, checkEventAdmin } from "~/lib/auth.helpers.server";
+import { sendAdminRoleNotification } from "~/lib/email.server";
+import { getNotificationPrefs } from "~/lib/notificationPrefs.server";
+import { sendPushToUser } from "~/lib/push.server";
 const mockGetSession = vi.mocked(getSession);
 const mockCheckOwnership = vi.mocked(checkOwnership);
 const mockCheckEventAdmin = vi.mocked(checkEventAdmin);
+const mockSendAdminRoleNotification = vi.mocked(sendAdminRoleNotification);
+const mockGetNotificationPrefs = vi.mocked(getNotificationPrefs);
+const mockSendPushToUser = vi.mocked(sendPushToUser);
 
 function ctx(params: Record<string, string>, body?: unknown, method?: string) {
   const request = new Request("http://localhost/api/test", {
@@ -66,6 +87,9 @@ describe("Event Admin API", () => {
     mockGetSession.mockResolvedValue(null);
     mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
     mockCheckEventAdmin.mockResolvedValue(false);
+    mockSendAdminRoleNotification.mockClear();
+    mockSendPushToUser.mockClear();
+    mockGetNotificationPrefs.mockResolvedValue({ emailEnabled: true, pushEnabled: true } as any);
   });
 
   // ── GET /api/events/[id]/admins ─────────────────────────────────────
@@ -293,6 +317,115 @@ describe("Event Admin API", () => {
       const { DELETE } = await import("~/pages/api/events/[id]/admins");
       const res = await DELETE(deleteCtx({ id: event.id }, {}));
       expect(res.status).toBe(400);
+    });
+  });
+
+  // ── Notifications for admin role changes ────────────────────────────
+
+  describe("Admin role notifications", () => {
+    it("should send email and push when adding an admin", async () => {
+      await seedUsers();
+      const event = await seedOwnedEvent("owner1");
+
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+      const { POST } = await import("~/pages/api/events/[id]/admins");
+      const res = await POST(ctx({ id: event.id }, { email: "admin@test.com" }));
+      expect(res.status).toBe(201);
+
+      // Allow fire-and-forget promise to resolve
+      await vi.waitFor(() => {
+        expect(mockSendAdminRoleNotification).toHaveBeenCalledWith(
+          "admin@test.com",
+          expect.objectContaining({
+            eventTitle: "Test Event",
+            action: "added",
+          }),
+        );
+        expect(mockSendPushToUser).toHaveBeenCalledWith(
+          "admin1",
+          "Test Event",
+          expect.stringContaining("added as an admin"),
+          expect.stringContaining(`/events/${event.id}`),
+        );
+      });
+    });
+
+    it("should send email and push when removing an admin", async () => {
+      await seedUsers();
+      const event = await seedOwnedEvent("owner1");
+      await prisma.eventAdmin.create({ data: { eventId: event.id, userId: "admin1" } });
+
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+      const { DELETE } = await import("~/pages/api/events/[id]/admins");
+      const res = await DELETE(deleteCtx({ id: event.id }, { userId: "admin1" }));
+      expect(res.status).toBe(200);
+
+      await vi.waitFor(() => {
+        expect(mockSendAdminRoleNotification).toHaveBeenCalledWith(
+          "admin@test.com",
+          expect.objectContaining({
+            eventTitle: "Test Event",
+            action: "removed",
+          }),
+        );
+        expect(mockSendPushToUser).toHaveBeenCalledWith(
+          "admin1",
+          "Test Event",
+          expect.stringContaining("removed as admin"),
+          expect.any(String),
+        );
+      });
+    });
+
+    it("should not send email when user has emailEnabled=false but still send push", async () => {
+      await seedUsers();
+      const event = await seedOwnedEvent("owner1");
+
+      mockGetNotificationPrefs.mockResolvedValue({ emailEnabled: false, pushEnabled: true } as any);
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+      const { POST } = await import("~/pages/api/events/[id]/admins");
+      const res = await POST(ctx({ id: event.id }, { email: "admin@test.com" }));
+      expect(res.status).toBe(201);
+
+      await vi.waitFor(() => {
+        expect(mockSendPushToUser).toHaveBeenCalled();
+      });
+      expect(mockSendAdminRoleNotification).not.toHaveBeenCalled();
+    });
+
+    it("should not send push when user has pushEnabled=false but still send email", async () => {
+      await seedUsers();
+      const event = await seedOwnedEvent("owner1");
+
+      mockGetNotificationPrefs.mockResolvedValue({ emailEnabled: true, pushEnabled: false } as any);
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+      const { POST } = await import("~/pages/api/events/[id]/admins");
+      const res = await POST(ctx({ id: event.id }, { email: "admin@test.com" }));
+      expect(res.status).toBe(201);
+
+      await vi.waitFor(() => {
+        expect(mockSendAdminRoleNotification).toHaveBeenCalled();
+      });
+      expect(mockSendPushToUser).not.toHaveBeenCalled();
+    });
+
+    it("should not send any notification on failed add (e.g. user not found)", async () => {
+      await seedUsers();
+      const event = await seedOwnedEvent("owner1");
+
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+
+      const { POST } = await import("~/pages/api/events/[id]/admins");
+      const res = await POST(ctx({ id: event.id }, { email: "nobody@test.com" }));
+      expect(res.status).toBe(404);
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(mockSendAdminRoleNotification).not.toHaveBeenCalled();
+      expect(mockSendPushToUser).not.toHaveBeenCalled();
     });
   });
 });
