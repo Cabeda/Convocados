@@ -18,6 +18,9 @@ import { getDefaultDurationMinutes } from "../src/lib/sports";
 
 const prisma = new PrismaClient();
 
+// Pre-computed scrypt hash for "demo123" (generated via better-auth's hashPassword)
+const DEMO_PASSWORD_HASH = "e85e17b8ccf0231ecc33406b98bf41b3:ac313125f11ad360382987c4c993c93d0346878a4ae3959669711822323fb8c5ac57f53975466b90b60f38ab5e81c263bbabcd821cab003641e4342f92e9dc45";
+
 const SPORTS = [
   "football-5v5",
   "football-7v7",
@@ -394,7 +397,38 @@ async function main() {
   // ── Guaranteed "just ended" event for post-game banner testing ────────────
   // This event ended ~30 minutes ago, has players, teams, cost with pending
   // payments, but NO score yet — so the post-game banner will appear.
+  // Owned by a demo user so the score can be edited after signing in.
   {
+    // Create (or reuse) a demo user for the just-ended event
+    const demoEmail = "demo@convocados.app";
+    const demoUser = await prisma.user.upsert({
+      where: { email: demoEmail },
+      update: {},
+      create: {
+        id: "demo-organizer-001",
+        name: "Demo Organizer",
+        email: demoEmail,
+        emailVerified: true,
+      },
+    });
+
+    // Create credential account so the demo user can sign in
+    const demoPassword = "demo123";
+    const existingAccount = await prisma.account.findFirst({
+      where: { userId: demoUser.id, providerId: "credential" },
+    });
+    if (!existingAccount) {
+      await prisma.account.create({
+        data: {
+          id: `account-${demoUser.id}`,
+          accountId: demoUser.id,
+          providerId: "credential",
+          userId: demoUser.id,
+          password: DEMO_PASSWORD_HASH,
+        },
+      });
+    }
+
     const justEndedDate = new Date(now - 90 * 60 * 1000); // started 90 min ago
     const justEndedSport = "football-5v5";
     const justEndedMaxPlayers = 10;
@@ -414,6 +448,7 @@ async function main() {
         isPublic: true,
         teamOneName: "Ninjas",
         teamTwoName: "Gunas",
+        ownerId: demoUser.id,
         players: {
           create: justEndedPlayers.map((name, order) => ({ name, order })),
         },
@@ -433,6 +468,27 @@ async function main() {
         name: "Gunas",
         eventId: justEndedEvent.id,
         members: { create: teamTwo.map((name, order) => ({ name, order })) },
+      },
+    });
+
+    // Create a GameHistory record WITHOUT scores — this is what the user
+    // needs to fill in. The post-game banner's "Add score" button links
+    // to the history page where this entry will be editable.
+    const teamsSnapshot = JSON.stringify([
+      { team: "Ninjas", players: teamOne.map((name, order) => ({ name, order })) },
+      { team: "Gunas", players: teamTwo.map((name, order) => ({ name, order })) },
+    ]);
+    await prisma.gameHistory.create({
+      data: {
+        eventId: justEndedEvent.id,
+        dateTime: justEndedDate,
+        status: "played",
+        scoreOne: null,
+        scoreTwo: null,
+        teamOneName: "Ninjas",
+        teamTwoName: "Gunas",
+        teamsSnapshot,
+        editableUntil: new Date(now + 7 * 86400_000),
       },
     });
 
@@ -462,6 +518,7 @@ async function main() {
     console.log(`     ${justEndedEvent.id}  "${justEndedEvent.title}"`);
     console.log(`     ${justEndedPlayers.length} players, €${totalAmount} cost, all payments pending, no score`);
     console.log(`     URL: /events/${justEndedEvent.id}`);
+    console.log(`     Sign in: ${demoEmail} / ${demoPassword}`);
   }
 
   const pastCount = await prisma.gameHistory.count();
