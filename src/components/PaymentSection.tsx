@@ -38,13 +38,10 @@ interface CostData {
   id: string;
   totalAmount: number;
   currency: string;
-  paymentDetails: string | null;
   paymentMethods: string | null;
   effectivePaymentMethods: string | null;
-  effectivePaymentDetails: string | null;
   hasOverride: boolean;
   tempPaymentMethods: string | null;
-  tempPaymentDetails: string | null;
   payments: PaymentData[];
   summary: {
     paidCount: number;
@@ -94,7 +91,6 @@ export function PaymentSection({
   const theme = useTheme();
   const [costDraft, setCostDraft] = useState("");
   const [currencyDraft, setCurrencyDraft] = useState("EUR");
-  const [detailsDraft, setDetailsDraft] = useState("");
   const [methodsDraft, setMethodsDraft] = useState<PaymentMethod[]>([]);
   const [editing, setEditing] = useState(false);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
@@ -103,7 +99,6 @@ export function PaymentSection({
   const [costData, setCostData] = useState<CostData | null>(null);
   const [overrideEditing, setOverrideEditing] = useState(false);
   const [overrideMethodsDraft, setOverrideMethodsDraft] = useState<PaymentMethod[]>([]);
-  const [overrideDetailsDraft, setOverrideDetailsDraft] = useState("");
   const [confirmClearOverride, setConfirmClearOverride] = useState(false);
 
   const fetchCost = useCallback(async () => {
@@ -148,7 +143,6 @@ export function PaymentSection({
       body: JSON.stringify({
         totalAmount: amount,
         currency: currencyDraft,
-        paymentDetails: detailsDraft || null,
         paymentMethods: methodsDraft.length > 0 ? methodsDraft : null,
       }),
     });
@@ -181,7 +175,6 @@ export function PaymentSection({
   const startEditing = () => {
     setCostDraft(hasCost ? String(costData.totalAmount) : "");
     setCurrencyDraft(hasCost ? costData.currency : "EUR");
-    setDetailsDraft(hasCost ? costData.paymentDetails ?? "" : "");
     setMethodsDraft(hasCost ? parsePaymentMethods(costData.paymentMethods) : []);
     setEditing(true);
   };
@@ -204,7 +197,6 @@ export function PaymentSection({
       ? parsePaymentMethods(costData.tempPaymentMethods)
       : [];
     setOverrideMethodsDraft(current.length > 0 ? current : [{ type: "mbway", value: "" }]);
-    setOverrideDetailsDraft(hasCost && costData.hasOverride ? costData.tempPaymentDetails ?? "" : "");
     setOverrideEditing(true);
   };
 
@@ -217,7 +209,6 @@ export function PaymentSection({
         paymentMethods: overrideMethodsDraft.filter((m) => m.value.trim()).length > 0
           ? overrideMethodsDraft.filter((m) => m.value.trim())
           : null,
-        paymentDetails: overrideDetailsDraft || null,
       }),
     });
     fetchCost();
@@ -367,18 +358,6 @@ export function PaymentSection({
                     </Stack>
                   </Box>
 
-                  {/* Legacy free-text field (collapsed, for backward compat) */}
-                  <TextField
-                    label={t("paymentDetails")}
-                    placeholder={t("paymentDetailsPlaceholder")}
-                    size="small"
-                    value={detailsDraft}
-                    onChange={(e) => setDetailsDraft(e.target.value.slice(0, 500))}
-                    multiline
-                    maxRows={3}
-                    inputProps={{ maxLength: 500 }}
-                  />
-
                   {activePlayerCount > 0 && costDraft && parseFloat(costDraft) > 0 && (
                     <Typography variant="body2" color="text.secondary">
                       {t("perPlayer", { amount: (parseFloat(costDraft) / activePlayerCount).toFixed(2) })}
@@ -501,29 +480,6 @@ export function PaymentSection({
                   </Stack>
                 )}
 
-                {/* Payment details note — shown alongside methods or as standalone */}
-                {costData.effectivePaymentDetails && (
-                  <Paper variant="outlined" sx={{
-                    borderRadius: 2, p: 1, display: "flex", alignItems: "center", gap: 1,
-                  }}>
-                    <Typography variant="body2" sx={{
-                      flexGrow: 1, fontFamily: "monospace", fontSize: "0.8rem",
-                      whiteSpace: "pre-wrap", wordBreak: "break-word",
-                    }}>
-                      {costData.effectivePaymentDetails}
-                    </Typography>
-                    <Tooltip title={copiedId === "legacy" ? t("paymentDetailsCopied") : t("copyPaymentDetails")}>
-                      <IconButton
-                        size="small"
-                        color={copiedId === "legacy" ? "success" : "default"}
-                        onClick={() => handleCopy(costData.effectivePaymentDetails!, "legacy")}
-                      >
-                        {copiedId === "legacy" ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
-                      </IconButton>
-                    </Tooltip>
-                  </Paper>
-                )}
-
                 {/* Temporary override indicator + admin controls */}
                 {canEdit && hasCost && !editing && (
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
@@ -603,16 +559,6 @@ export function PaymentSection({
                           </Button>
                         </Stack>
                       </Box>
-                      <TextField
-                        label={t("paymentDetails")}
-                        placeholder={t("paymentDetailsPlaceholder")}
-                        size="small"
-                        value={overrideDetailsDraft}
-                        onChange={(e) => setOverrideDetailsDraft(e.target.value.slice(0, 500))}
-                        multiline
-                        maxRows={3}
-                        inputProps={{ maxLength: 500 }}
-                      />
                       <Box sx={{ display: "flex", gap: 1 }}>
                         <Button variant="contained" size="small" color="warning" onClick={handleSaveOverride}>
                           {t("overridePaymentMethods")}
