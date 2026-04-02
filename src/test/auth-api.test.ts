@@ -780,6 +780,26 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(body.scoreOne).toBe(2);
   });
 
+  it("allows a claimed player to edit even if name doesn't match teamsSnapshot", async () => {
+    const owner = await seedUser();
+    const claimedUser = await seedUser({ name: "Different Name" });
+    mockAuth(claimedUser.id, "Different Name");
+    const id = await seedEvent({ ownerId: owner.id });
+    // Add a player claimed by this user
+    await testPrisma.player.create({
+      data: { name: "Alice", order: 0, eventId: id, userId: claimedUser.id },
+    });
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3, scoreTwo: 1 }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scoreOne).toBe(3);
+  });
+
   it("handles status change to cancelled", async () => {
     const user = await seedUser();
     mockAuth(user.id);
