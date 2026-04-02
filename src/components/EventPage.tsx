@@ -518,6 +518,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {/* Post-game banner — shown after game ends until tasks are complete */}
             <PostGameBanner
               eventId={eventId}
+              canEdit={canEditSettings}
               onStatusChange={setPostGameStatus}
               refreshKey={bannerRefreshKey}
               onScrollToScore={() => {
@@ -535,16 +536,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
               }}
             />
 
-            {/* Payment tracking — always labeled with game context */}
+            {/* Payment tracking — always for the upcoming/current game */}
             {(event.splitCostsEnabled !== false) && (
               <Paper id="payment-section" elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
                 <Typography variant="subtitle2" fontWeight={700}
-                  color={postGameStatus?.gameEnded && !postGameStatus.allComplete ? "warning.main" : "text.secondary"}
+                  color="text.secondary"
                   sx={{ mb: 1 }}
                 >
-                  {postGameStatus?.gameEnded && !postGameStatus.allComplete
-                    ? t("postGamePaymentsLabel")
-                    : t("upcomingGamePaymentsLabel")}
+                  {t("upcomingGamePaymentsLabel")}
                 </Typography>
                 <PaymentSection
                   eventId={eventId}
@@ -554,33 +553,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   onExpandedChange={(exp) => setPaymentExpanded(exp ? true : undefined)}
                   onPaymentChange={() => setBannerRefreshKey((k) => k + 1)}
                 />
-              </Paper>
-            )}
-
-            {/* Teams */}
-            {localMatches && localMatches.length > 0 && (
-              <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
-                <Stack spacing={3}>
-                  <Typography variant="h6" fontWeight={600}>{t("teams")}</Typography>
-                  <TeamPicker
-                    matches={localMatches.map((m) => ({
-                      ...m,
-                      team: m.team === event.teamOneName ? teamOneName
-                        : m.team === event.teamTwoName ? teamTwoName : m.team,
-                    }))}
-                    onResultChange={handleTeamChange}
-                    ratingsMap={balanced ? ratingsMap : undefined}
-                    onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
-                      if (teamIdx === 0) {
-                        setTeamOneName(newName);
-                        handleTeamNameSave(newName, teamTwoName);
-                      } else {
-                        setTeamTwoName(newName);
-                        handleTeamNameSave(teamOneName, newName);
-                      }
-                    } : undefined}
-                  />
-                </Stack>
               </Paper>
             )}
 
@@ -614,6 +586,33 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onOpenClaimPlayerDialog={openClaimPlayerDialog}
               canRemovePlayer={canRemovePlayer}
             />
+
+            {/* Teams — shown below players after randomization */}
+            {localMatches && localMatches.length > 0 && (
+              <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+                <Stack spacing={3}>
+                  <Typography variant="h6" fontWeight={600}>{t("teams")}</Typography>
+                  <TeamPicker
+                    matches={localMatches.map((m) => ({
+                      ...m,
+                      team: m.team === event.teamOneName ? teamOneName
+                        : m.team === event.teamTwoName ? teamTwoName : m.team,
+                    }))}
+                    onResultChange={handleTeamChange}
+                    ratingsMap={balanced ? ratingsMap : undefined}
+                    onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
+                      if (teamIdx === 0) {
+                        setTeamOneName(newName);
+                        handleTeamNameSave(newName, teamTwoName);
+                      } else {
+                        setTeamTwoName(newName);
+                        handleTeamNameSave(teamOneName, newName);
+                      }
+                    } : undefined}
+                  />
+                </Stack>
+              </Paper>
+            )}
 
           </Stack>
         </Container>

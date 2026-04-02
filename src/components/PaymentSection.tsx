@@ -38,8 +38,10 @@ interface CostData {
   id: string;
   totalAmount: number;
   currency: string;
-  paymentDetails: string | null;
   paymentMethods: string | null;
+  effectivePaymentMethods: string | null;
+  hasOverride: boolean;
+  tempPaymentMethods: string | null;
   payments: PaymentData[];
   summary: {
     paidCount: number;
@@ -56,6 +58,8 @@ const PLACEHOLDER_KEYS: Record<PaymentMethodType, TranslationKey> = {
   mbway: "paymentMethodMbwayPlaceholder",
   revolut_tag: "paymentMethodRevolutTagPlaceholder",
   revolut_link: "paymentMethodRevolutLinkPlaceholder",
+  cash: "paymentMethodCashPlaceholder",
+  other: "paymentMethodOtherPlaceholder",
 };
 
 /** Map method type to i18n key for the label */
@@ -64,6 +68,8 @@ const LABEL_KEYS: Record<PaymentMethodType, TranslationKey> = {
   mbway: "paymentMethodMbway",
   revolut_tag: "paymentMethodRevolutTag",
   revolut_link: "paymentMethodRevolutLink",
+  cash: "paymentMethodCash",
+  other: "paymentMethodOther",
 };
 
 export function PaymentSection({
@@ -85,13 +91,15 @@ export function PaymentSection({
   const theme = useTheme();
   const [costDraft, setCostDraft] = useState("");
   const [currencyDraft, setCurrencyDraft] = useState("EUR");
-  const [detailsDraft, setDetailsDraft] = useState("");
   const [methodsDraft, setMethodsDraft] = useState<PaymentMethod[]>([]);
   const [editing, setEditing] = useState(false);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const [costData, setCostData] = useState<CostData | null>(null);
+  const [overrideEditing, setOverrideEditing] = useState(false);
+  const [overrideMethodsDraft, setOverrideMethodsDraft] = useState<PaymentMethod[]>([]);
+  const [confirmClearOverride, setConfirmClearOverride] = useState(false);
 
   const fetchCost = useCallback(async () => {
     const r = await fetch(`/api/events/${eventId}/cost`);
@@ -123,7 +131,7 @@ export function PaymentSection({
   const perPlayer = hasCost && activePlayerCount > 0
     ? costData.totalAmount / activePlayerCount
     : 0;
-  const methods = hasCost ? parsePaymentMethods(costData.paymentMethods) : [];
+  const methods = hasCost ? parsePaymentMethods(costData.effectivePaymentMethods) : [];
 
   const handleSaveCost = async () => {
     const amount = parseFloat(costDraft);
@@ -135,7 +143,6 @@ export function PaymentSection({
       body: JSON.stringify({
         totalAmount: amount,
         currency: currencyDraft,
-        paymentDetails: detailsDraft || null,
         paymentMethods: methodsDraft.length > 0 ? methodsDraft : null,
       }),
     });
@@ -149,7 +156,7 @@ export function PaymentSection({
   };
 
   const handleTogglePayment = async (playerName: string, currentStatus: string) => {
-    const nextStatus = currentStatus === "pending" ? "paid" : currentStatus === "paid" ? "exempt" : "pending";
+    const nextStatus = currentStatus === "pending" ? "paid" : "pending";
     await fetch(`/api/events/${eventId}/payments`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -168,7 +175,6 @@ export function PaymentSection({
   const startEditing = () => {
     setCostDraft(hasCost ? String(costData.totalAmount) : "");
     setCurrencyDraft(hasCost ? costData.currency : "EUR");
-    setDetailsDraft(hasCost ? costData.paymentDetails ?? "" : "");
     setMethodsDraft(hasCost ? parsePaymentMethods(costData.paymentMethods) : []);
     setEditing(true);
   };
@@ -185,9 +191,49 @@ export function PaymentSection({
     setMethodsDraft((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Override handlers
+  const startOverrideEditing = () => {
+    const current = hasCost && costData.hasOverride
+      ? parsePaymentMethods(costData.tempPaymentMethods)
+      : [];
+    setOverrideMethodsDraft(current.length > 0 ? current : [{ type: "mbway", value: "" }]);
+    setOverrideEditing(true);
+  };
+
+  const handleSaveOverride = async () => {
+    setOverrideEditing(false);
+    await fetch(`/api/events/${eventId}/cost/override`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        paymentMethods: overrideMethodsDraft.filter((m) => m.value.trim()).length > 0
+          ? overrideMethodsDraft.filter((m) => m.value.trim())
+          : null,
+      }),
+    });
+    fetchCost();
+  };
+
+  const handleClearOverride = async () => {
+    setConfirmClearOverride(false);
+    await fetch(`/api/events/${eventId}/cost/override`, { method: "DELETE" });
+    fetchCost();
+  };
+
+  const addOverrideMethod = () => {
+    setOverrideMethodsDraft((prev) => [...prev, { type: "mbway", value: "" }]);
+  };
+
+  const updateOverrideMethod = (idx: number, field: keyof PaymentMethod, val: string) => {
+    setOverrideMethodsDraft((prev) => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m));
+  };
+
+  const removeOverrideMethod = (idx: number) => {
+    setOverrideMethodsDraft((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const statusColor = (status: string) => {
     if (status === "paid") return "success";
-    if (status === "exempt") return "info";
     return "default";
   };
 
@@ -265,7 +311,7 @@ export function PaymentSection({
                     </Typography>
                     <Stack spacing={1}>
                       {methodsDraft.map((m, idx) => (
-                        <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                        <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                           <FormControl size="small" sx={{ minWidth: 130 }}>
                             <Select
                               value={m.type}
@@ -281,10 +327,18 @@ export function PaymentSection({
                             placeholder={t(PLACEHOLDER_KEYS[m.type])}
                             value={m.value}
                             onChange={(e) => updateMethod(idx, "value", e.target.value)}
-                            sx={{ flex: 1 }}
+                            sx={{ flex: 1, minWidth: 150 }}
                             InputProps={m.type === "revolut_tag" ? {
                               startAdornment: <InputAdornment position="start">@</InputAdornment>,
                             } : undefined}
+                          />
+                          <TextField
+                            size="small"
+                            placeholder={t("paymentMethodLabelPlaceholder")}
+                            value={m.label ?? ""}
+                            onChange={(e) => updateMethod(idx, "label", e.target.value)}
+                            sx={{ flex: 0.7, minWidth: 120 }}
+                            inputProps={{ maxLength: 50 }}
                           />
                           <IconButton size="small" color="error" onClick={() => removeMethod(idx)}>
                             <DeleteIcon fontSize="small" />
@@ -302,18 +356,6 @@ export function PaymentSection({
                       </Button>
                     </Stack>
                   </Box>
-
-                  {/* Legacy free-text field (collapsed, for backward compat) */}
-                  <TextField
-                    label={t("paymentDetails")}
-                    placeholder={t("paymentDetailsPlaceholder")}
-                    size="small"
-                    value={detailsDraft}
-                    onChange={(e) => setDetailsDraft(e.target.value.slice(0, 500))}
-                    multiline
-                    maxRows={3}
-                    inputProps={{ maxLength: 500 }}
-                  />
 
                   {activePlayerCount > 0 && costDraft && parseFloat(costDraft) > 0 && (
                     <Typography variant="body2" color="text.secondary">
@@ -374,7 +416,9 @@ export function PaymentSection({
                         }}>
                           <MethodIcon type={m.type} />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="caption" color="text.secondary">{label}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {label}{m.label ? ` — ${m.label}` : ""}
+                            </Typography>
                             <Typography variant="body2" sx={{
                               fontFamily: "monospace", fontSize: "0.85rem",
                               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -435,26 +479,94 @@ export function PaymentSection({
                   </Stack>
                 )}
 
-                {/* Legacy payment details (fallback for old data) */}
-                {costData.paymentDetails && methods.length === 0 && (
-                  <Paper variant="outlined" sx={{
-                    borderRadius: 2, p: 1, display: "flex", alignItems: "center", gap: 1,
-                  }}>
-                    <Typography variant="body2" sx={{
-                      flexGrow: 1, fontFamily: "monospace", fontSize: "0.8rem",
-                      whiteSpace: "pre-wrap", wordBreak: "break-word",
-                    }}>
-                      {costData.paymentDetails}
-                    </Typography>
-                    <Tooltip title={copiedId === "legacy" ? t("paymentDetailsCopied") : t("copyPaymentDetails")}>
-                      <IconButton
-                        size="small"
-                        color={copiedId === "legacy" ? "success" : "default"}
-                        onClick={() => handleCopy(costData.paymentDetails!, "legacy")}
-                      >
-                        {copiedId === "legacy" ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
-                      </IconButton>
-                    </Tooltip>
+                {/* Temporary override indicator + admin controls */}
+                {canEdit && hasCost && !editing && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                    {costData.hasOverride && (
+                      <Chip label={t("temporaryOverride")} size="small" color="warning" variant="outlined" />
+                    )}
+                    {!overrideEditing && (
+                      <>
+                        <Button size="small" variant="text" onClick={startOverrideEditing}>
+                          {t("overridePaymentMethods")}
+                        </Button>
+                        {costData.hasOverride && (
+                          <Button size="small" variant="text" color="warning" onClick={() => setConfirmClearOverride(true)}>
+                            {t("clearOverride")}
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </Box>
+                )}
+
+                {/* Override editor */}
+                {overrideEditing && (
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, borderColor: "warning.main" }}>
+                    <Stack spacing={2}>
+                      <Typography variant="caption" color="text.secondary">
+                        {t("overridePaymentMethodsDesc")}
+                      </Typography>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block" }}>
+                          {t("paymentMethods")}
+                        </Typography>
+                        <Stack spacing={1}>
+                          {overrideMethodsDraft.map((m, idx) => (
+                            <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
+                              <FormControl size="small" sx={{ minWidth: 130 }}>
+                                <Select
+                                  value={m.type}
+                                  onChange={(e) => updateOverrideMethod(idx, "type", e.target.value)}
+                                >
+                                  {PAYMENT_METHOD_TYPES.map((pt) => (
+                                    <MenuItem key={pt} value={pt}>{t(LABEL_KEYS[pt])}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                              <TextField
+                                size="small"
+                                placeholder={t(PLACEHOLDER_KEYS[m.type])}
+                                value={m.value}
+                                onChange={(e) => updateOverrideMethod(idx, "value", e.target.value)}
+                                sx={{ flex: 1, minWidth: 150 }}
+                                InputProps={m.type === "revolut_tag" ? {
+                                  startAdornment: <InputAdornment position="start">@</InputAdornment>,
+                                } : undefined}
+                              />
+                              <TextField
+                                size="small"
+                                placeholder={t("paymentMethodLabelPlaceholder")}
+                                value={m.label ?? ""}
+                                onChange={(e) => updateOverrideMethod(idx, "label", e.target.value)}
+                                sx={{ flex: 0.7, minWidth: 120 }}
+                                inputProps={{ maxLength: 50 }}
+                              />
+                              <IconButton size="small" color="error" onClick={() => removeOverrideMethod(idx)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                          ))}
+                          <Button
+                            size="small"
+                            variant="text"
+                            startIcon={<AddIcon />}
+                            onClick={addOverrideMethod}
+                            sx={{ alignSelf: "flex-start" }}
+                          >
+                            {t("addPaymentMethod")}
+                          </Button>
+                        </Stack>
+                      </Box>
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        <Button variant="contained" size="small" color="warning" onClick={handleSaveOverride}>
+                          {t("overridePaymentMethods")}
+                        </Button>
+                        <Button variant="text" size="small" onClick={() => setOverrideEditing(false)}>
+                          {t("cancel")}
+                        </Button>
+                      </Box>
+                    </Stack>
                   </Paper>
                 )}
 
@@ -488,10 +600,6 @@ export function PaymentSection({
                     <Chip label="" size="small" variant="outlined" sx={{ width: 12, height: 12, minWidth: 12 }} />
                     <Typography variant="caption" color="text.secondary">{t("paymentStatusPending")}</Typography>
                   </Box>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                    <Chip label="" size="small" color="info" sx={{ width: 12, height: 12, minWidth: 12 }} />
-                    <Typography variant="caption" color="text.secondary">{t("paymentStatusExempt")}</Typography>
-                  </Box>
                 </Box>
               </Stack>
             ) : canEdit ? (
@@ -518,6 +626,18 @@ export function PaymentSection({
           <Button onClick={handleRemoveCost} color="error" variant="contained">{t("removeCost")}</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Clear override confirmation */}
+      <Dialog open={confirmClearOverride} onClose={() => setConfirmClearOverride(false)}>
+        <DialogTitle>{t("clearOverride")}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>{t("clearOverrideConfirm")}</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmClearOverride(false)}>{t("cancel")}</Button>
+          <Button onClick={handleClearOverride} color="warning" variant="contained">{t("clearOverride")}</Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }
@@ -533,5 +653,9 @@ function MethodIcon({ type }: { type: PaymentMethodType }) {
     case "revolut_tag":
     case "revolut_link":
       return <Box sx={{ ...sx, bgcolor: "#0075EB", color: "#fff" }}>R</Box>;
+    case "cash":
+      return <Box sx={{ ...sx, bgcolor: "#4caf50", color: "#fff" }}>$</Box>;
+    case "other":
+      return <Box sx={{ ...sx, bgcolor: "#9e9e9e", color: "#fff" }}>?</Box>;
   }
 }

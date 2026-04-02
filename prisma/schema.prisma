@@ -296,6 +296,8 @@ model EventCost {
   currency       String          @default("EUR")
   paymentDetails String? // deprecated: free text, kept for backward compat
   paymentMethods String? // JSON: [{ type: "mbway"|"revolut_tag"|"revolut_link"|"phone", value: "...", label?: "..." }]
+  tempPaymentMethods String? // JSON override, same format as paymentMethods — auto-cleared on recurrence reset
+  tempPaymentDetails String? // free-text override, same format as paymentDetails — auto-cleared on recurrence reset
   payments       PlayerPayment[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -307,7 +309,7 @@ model PlayerPayment {
   eventCost   EventCost @relation(fields: [eventCostId], references: [id], onDelete: Cascade)
   playerName  String
   amount      Float
-  status      String    @default("pending") // "pending" | "paid" | "exempt"
+  status      String    @default("pending") // "pending" | "paid"
   method      String? // free text: cash, revolut, mbway, transfer, etc.
   paidAt      DateTime?
   markedBy    String? // userId who marked it

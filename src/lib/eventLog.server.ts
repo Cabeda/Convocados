@@ -33,7 +33,9 @@ export type EventAction =
   | "rating_manual_enabled"
   | "rating_manual_disabled"
   | "player_archived"
-  | "player_unarchived";
+  | "player_unarchived"
+  | "override_set"
+  | "override_cleared";
 
 /**
  * Append an entry to the event activity log.

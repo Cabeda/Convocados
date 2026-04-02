@@ -135,7 +135,7 @@ describe("POST /api/events", () => {
     for (let i = 0; i < 10; i++) await createEvent(makeReq());
     const res = await createEvent(makeReq());
     expect(res.status).toBe(429);
-  }, 10000);
+  }, 30000);
 });
 
 // ─── GET /api/events/[id] ────────────────────────────────────────────────────

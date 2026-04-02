@@ -41,7 +41,7 @@ interface TeamSnapshot {
 interface PaymentSnapshotEntry {
   playerName: string;
   amount: number;
-  status: "paid" | "pending" | "exempt";
+  status: "paid" | "pending";
   method?: string | null;
 }
 
@@ -585,7 +585,7 @@ function HistoryCardFull({
   };
 
   const cyclePaymentStatus = (idx: number) => {
-    const order: Array<"paid" | "pending" | "exempt"> = ["pending", "paid", "exempt"];
+    const order: Array<"paid" | "pending"> = ["pending", "paid"];
     setEditablePayments((prev) =>
       prev.map((p, i) => {
         if (i !== idx) return p;
@@ -1004,8 +1004,7 @@ function HistoryCardFull({
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
                   {(canEditTeams ? editablePayments : payments).map((p, idx) => {
                     const isPaid = p.status === "paid";
-                    const isExempt = p.status === "exempt";
-                    const chipColor = isPaid ? "success" : isExempt ? "default" : "warning";
+                    const chipColor = isPaid ? "success" : "warning";
                     return (
                       <Chip
                         key={p.playerName}
