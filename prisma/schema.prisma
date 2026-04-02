@@ -309,7 +309,7 @@ model PlayerPayment {
   eventCost   EventCost @relation(fields: [eventCostId], references: [id], onDelete: Cascade)
   playerName  String
   amount      Float
-  status      String    @default("pending") // "pending" | "paid" | "exempt"
+  status      String    @default("pending") // "pending" | "paid"
   method      String? // free text: cash, revolut, mbway, transfer, etc.
   paidAt      DateTime?
   markedBy    String? // userId who marked it

@@ -156,7 +156,7 @@ export function PaymentSection({
   };
 
   const handleTogglePayment = async (playerName: string, currentStatus: string) => {
-    const nextStatus = currentStatus === "pending" ? "paid" : currentStatus === "paid" ? "exempt" : "pending";
+    const nextStatus = currentStatus === "pending" ? "paid" : "pending";
     await fetch(`/api/events/${eventId}/payments`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -234,7 +234,6 @@ export function PaymentSection({
 
   const statusColor = (status: string) => {
     if (status === "paid") return "success";
-    if (status === "exempt") return "info";
     return "default";
   };
 
@@ -600,10 +599,6 @@ export function PaymentSection({
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                     <Chip label="" size="small" variant="outlined" sx={{ width: 12, height: 12, minWidth: 12 }} />
                     <Typography variant="caption" color="text.secondary">{t("paymentStatusPending")}</Typography>
-                  </Box>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                    <Chip label="" size="small" color="info" sx={{ width: 12, height: 12, minWidth: 12 }} />
-                    <Typography variant="caption" color="text.secondary">{t("paymentStatusExempt")}</Typography>
                   </Box>
                 </Box>
               </Stack>

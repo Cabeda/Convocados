@@ -14,7 +14,7 @@ import { useT } from "~/lib/useT";
 interface PaymentEntry {
   playerName: string;
   amount: number;
-  status: "paid" | "pending" | "exempt";
+  status: "paid" | "pending";
   method?: string | null;
 }
 
@@ -91,7 +91,7 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   const progressPct = (completedCount / 2) * 100;
 
   const cyclePaymentStatus = (idx: number) => {
-    const order: Array<"paid" | "pending" | "exempt"> = ["pending", "paid", "exempt"];
+    const order: Array<"paid" | "pending"> = ["pending", "paid"];
     setEditablePayments((prev) =>
       prev.map((p, i) => {
         if (i !== idx) return p;
@@ -117,7 +117,7 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
     setSaving(false);
   };
 
-  const paidCount = editablePayments.filter((p) => p.status === "paid" || p.status === "exempt").length;
+  const paidCount = editablePayments.filter((p) => p.status === "paid").length;
   const hasPayments = editablePayments.length > 0;
 
   return (
@@ -254,8 +254,7 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
                     {editablePayments.map((p, idx) => {
                       const isPaid = p.status === "paid";
-                      const isExempt = p.status === "exempt";
-                      const chipColor = isPaid ? "success" : isExempt ? "default" : "warning";
+                      const chipColor = isPaid ? "success" : "warning";
                       return (
                         <Chip
                           key={p.playerName}

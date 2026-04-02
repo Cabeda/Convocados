@@ -206,7 +206,7 @@ describe("GET /api/events/:id/post-game-status", () => {
     expect(json.allPaid).toBe(false);
   });
 
-  it("returns allPaid=true when all payments are paid or exempt", async () => {
+  it("returns allPaid=true when all payments are paid", async () => {
     const event = await prisma.event.create({
       data: {
         title: "Past Game",
@@ -224,7 +224,7 @@ describe("GET /api/events/:id/post-game-status", () => {
       data: { eventCostId: cost.id, playerName: "Alice", amount: 25, status: "paid" },
     });
     await prisma.playerPayment.create({
-      data: { eventCostId: cost.id, playerName: "Bob", amount: 25, status: "exempt" },
+      data: { eventCostId: cost.id, playerName: "Bob", amount: 25, status: "paid" },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
     const json = await res.json();
@@ -367,7 +367,7 @@ describe("GET /api/events/:id/post-game-status", () => {
     expect(json.allComplete).toBe(false);
   });
 
-  it("returns allPaid=true when history snapshot has all paid/exempt", async () => {
+  it("returns allPaid=true when history snapshot has all paid", async () => {
     const event = await prisma.event.create({
       data: {
         title: "Recurring Game",
@@ -388,7 +388,7 @@ describe("GET /api/events/:id/post-game-status", () => {
         scoreTwo: 2,
         paymentsSnapshot: JSON.stringify([
           { playerName: "Alice", amount: 25, status: "paid", method: null },
-          { playerName: "Bob", amount: 25, status: "exempt", method: null },
+          { playerName: "Bob", amount: 25, status: "paid", method: null },
         ]),
         editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },

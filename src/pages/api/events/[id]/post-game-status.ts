@@ -10,7 +10,7 @@ import { getSession } from "../../../../lib/auth.helpers.server";
  * - gameEnded: whether dateTime + durationMinutes is in the past
  * - hasScore: whether the most recent GameHistory has scoreOne/scoreTwo set
  * - hasCost: whether an EventCost record exists with totalAmount > 0
- * - allPaid: whether all payments are paid/exempt (or no cost set)
+ * - allPaid: whether all payments are paid (or no cost set)
  * - allComplete: hasScore && allPaid
  * - isParticipant: whether the current user is a participant (name match or claimed spot)
  */
@@ -57,7 +57,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
       if (snapshot.length > 0) {
         allPaid = snapshot.every(
-          (p) => p.status === "paid" || p.status === "exempt",
+          (p) => p.status === "paid",
         );
       }
     } catch { /* ignore parse errors */ }
@@ -66,7 +66,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     // (game ended but recurrence hasn't reset yet)
     pastGameSource = "live";
     allPaid = eventCost.payments.every(
-      (p) => p.status === "paid" || p.status === "exempt",
+      (p) => p.status === "paid",
     );
   }
 
@@ -82,7 +82,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
       if (snapshot.length > 0) {
         hasPendingPastPayments = !snapshot.every(
-          (p) => p.status === "paid" || p.status === "exempt",
+          (p) => p.status === "paid",
         );
       }
     } catch { /* ignore */ }

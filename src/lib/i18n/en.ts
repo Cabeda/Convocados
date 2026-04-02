@@ -402,7 +402,6 @@ const en = {
   paymentSummary: "{paid}/{total} paid ({amount} {currency})",
   paymentStatusPaid: "Paid",
   paymentStatusPending: "Pending",
-  paymentStatusExempt: "Exempt",
   paymentMethod: "Method",
   setCost: "Set cost",
   updateCost: "Update",
@@ -825,6 +824,8 @@ const en = {
   temporaryOverride: "Temporary",
   overrideSaved: "Temporary payment methods saved.",
   overrideCleared: "Reverted to default payment methods.",
+  logOverrideSet: "{actor} set a temporary payment method override",
+  logOverrideCleared: "{actor} cleared the temporary payment method override",
 } as const;
 
 export default en;

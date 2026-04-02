@@ -356,7 +356,6 @@ const de: TranslationKeys = {
   paymentSummary: "{paid}/{total} bezahlt ({amount} {currency})",
   paymentStatusPaid: "Bezahlt",
   paymentStatusPending: "Ausstehend",
-  paymentStatusExempt: "Befreit",
   paymentMethod: "Methode",
   setCost: "Kosten festlegen",
   updateCost: "Aktualisieren",
@@ -778,6 +777,8 @@ const de: TranslationKeys = {
   temporaryOverride: "Temporär",
   overrideSaved: "Temporäre Zahlungsmethoden gespeichert.",
   overrideCleared: "Auf Standard-Zahlungsmethoden zurückgesetzt.",
+  logOverrideSet: "{actor} hat eine temporäre Überschreibung der Zahlungsmethoden festgelegt",
+  logOverrideCleared: "{actor} hat die temporäre Überschreibung der Zahlungsmethoden entfernt",
 };
 
 export default de;

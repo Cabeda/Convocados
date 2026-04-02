@@ -52,6 +52,28 @@ async function seedEvent(playerNames: string[] = []) {
   return event.id;
 }
 
+async function seedOwnedEvent(playerNames: string[] = []) {
+  const owner = await prisma.user.upsert({
+    where: { id: "owner-payments-test" },
+    update: {},
+    create: { id: "owner-payments-test", name: "Owner", email: "owner-pay@test.com", createdAt: new Date(), updatedAt: new Date() },
+  });
+  const event = await prisma.event.create({
+    data: {
+      title: "Owned Event",
+      location: "Pitch B",
+      dateTime: new Date(Date.now() + 86400_000),
+      ownerId: owner.id,
+    },
+  });
+  for (let i = 0; i < playerNames.length; i++) {
+    await prisma.player.create({
+      data: { name: playerNames[i], eventId: event.id, order: i },
+    });
+  }
+  return event.id;
+}
+
 beforeEach(async () => {
   await resetApiRateLimitStore();
   await prisma.playerPayment.deleteMany();
@@ -59,6 +81,7 @@ beforeEach(async () => {
   await prisma.gameHistory.deleteMany();
   await prisma.teamResult.deleteMany();
   await prisma.player.deleteMany();
+  await prisma.eventAdmin.deleteMany();
   await prisma.event.deleteMany();
 });
 
@@ -224,19 +247,7 @@ describe("PUT /api/events/[id]/payments", () => {
     expect(body.paidAt).toBeTruthy();
   });
 
-  it("marks a player as exempt", async () => {
-    const eventId = await seedEvent(["Alice"]);
-    await setCost(ctx({ id: eventId }, { totalAmount: 50 }));
-
-    const res = await updatePayment(ctx({ id: eventId }, {
-      playerName: "Alice",
-      status: "exempt",
-    }));
-    const body = await res.json();
-    expect(body.status).toBe("exempt");
-  });
-
-  it("toggles back to pending", async () => {
+  it("marks a player as paid and toggles back to pending", async () => {
     const eventId = await seedEvent(["Alice"]);
     await setCost(ctx({ id: eventId }, { totalAmount: 50 }));
     await updatePayment(ctx({ id: eventId }, { playerName: "Alice", status: "paid" }));
@@ -289,15 +300,13 @@ describe("GET /api/events/[id]/payments", () => {
     const eventId = await seedEvent(["Alice", "Bob", "Charlie"]);
     await setCost(ctx({ id: eventId }, { totalAmount: 60 }));
     await updatePayment(ctx({ id: eventId }, { playerName: "Alice", status: "paid" }));
-    await updatePayment(ctx({ id: eventId }, { playerName: "Bob", status: "exempt" }));
 
     const res = await getPayments(ctx({ id: eventId }));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.payments).toHaveLength(3);
     expect(body.summary.paidCount).toBe(1);
-    expect(body.summary.exemptCount).toBe(1);
-    expect(body.summary.pendingCount).toBe(1);
+    expect(body.summary.pendingCount).toBe(2);
     expect(body.summary.paidAmount).toBeCloseTo(20);
   });
 
@@ -752,6 +761,16 @@ describe("PUT /api/events/[id]/cost/override", () => {
     }));
     expect(res.status).toBe(404);
   });
+
+  it("returns 403 when non-owner tries to set override on owned event", async () => {
+    const eventId = await seedOwnedEvent(["Alice"]);
+    await setCost(ctx({ id: eventId }, { totalAmount: 50 }));
+
+    const res = await setOverride(ctx({ id: eventId }, {
+      paymentMethods: [{ type: "mbway", value: "912345678" }],
+    }));
+    expect(res.status).toBe(403);
+  });
 });
 
 describe("DELETE /api/events/[id]/cost/override", () => {
@@ -782,6 +801,23 @@ describe("DELETE /api/events/[id]/cost/override", () => {
     const eventId = await seedEvent(["Alice"]);
     const res = await clearOverride(deleteCtx({ id: eventId }));
     expect(res.status).toBe(404);
+  });
+
+  it("returns 403 when non-owner tries to clear override on owned event", async () => {
+    const eventId = await seedOwnedEvent(["Alice"]);
+    // setCost bypasses auth (no ownerId check in test helper context),
+    // so we set cost directly via prisma
+    await prisma.eventCost.create({
+      data: {
+        eventId,
+        totalAmount: 50,
+        currency: "EUR",
+        tempPaymentMethods: JSON.stringify([{ type: "mbway", value: "912345678" }]),
+      },
+    });
+
+    const res = await clearOverride(deleteCtx({ id: eventId }));
+    expect(res.status).toBe(403);
   });
 });
 
