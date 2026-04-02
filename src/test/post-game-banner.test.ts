@@ -668,4 +668,80 @@ describe("GET /api/events/:id/post-game-status", () => {
     expect(json.paymentsSnapshot[0].status).toBe("paid");
     expect(json.paymentsSnapshot[1].status).toBe("pending");
   });
+
+  it("shows banner when game has reset but history snapshot has unpaid items", async () => {
+    // After recurrence reset: event.dateTime is in the future (next game),
+    // but the latest history entry has unpaid payments.
+    // The banner should still show because the past game isn't settled.
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly Futsal",
+        location: "Pitch",
+        // Next game is in the future
+        dateTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+        isRecurring: true,
+      },
+    });
+    // History from the past game with unpaid snapshot
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        scoreOne: 3,
+        scoreTwo: 2,
+        paymentsSnapshot: JSON.stringify([
+          { playerName: "Alice", amount: 25, status: "paid", method: null },
+          { playerName: "Bob", amount: 25, status: "pending", method: null },
+        ]),
+        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    // gameEnded is false (next game is in the future), but banner should
+    // still indicate there are unsettled payments from the past game
+    expect(json.gameEnded).toBe(false);
+    expect(json.hasPendingPastPayments).toBe(true);
+    expect(json.allPaid).toBe(false);
+    expect(json.paymentsSnapshot).toHaveLength(2);
+    expect(json.latestHistoryId).toBeTruthy();
+  });
+
+  it("does not show hasPendingPastPayments when history is fully paid", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly Futsal",
+        location: "Pitch",
+        dateTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+        isRecurring: true,
+      },
+    });
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        scoreOne: 3,
+        scoreTwo: 2,
+        paymentsSnapshot: JSON.stringify([
+          { playerName: "Alice", amount: 25, status: "paid", method: null },
+          { playerName: "Bob", amount: 25, status: "paid", method: null },
+        ]),
+        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.gameEnded).toBe(false);
+    expect(json.hasPendingPastPayments).toBe(false);
+  });
 });

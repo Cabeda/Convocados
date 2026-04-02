@@ -72,6 +72,22 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const allComplete = hasScore && allPaid;
 
+  // Check if there are unsettled payments from a past game in history,
+  // even when the current event hasn't ended yet (post-reset scenario).
+  // This allows the banner to show for recurring events that have already
+  // reset to the next occurrence but still have unpaid past game payments.
+  let hasPendingPastPayments = false;
+  if (!gameEnded && latestHistory?.paymentsSnapshot) {
+    try {
+      const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
+      if (snapshot.length > 0) {
+        hasPendingPastPayments = !snapshot.every(
+          (p) => p.status === "paid" || p.status === "exempt",
+        );
+      }
+    } catch { /* ignore */ }
+  }
+
   // Build paymentsSnapshot for the banner to render inline.
   // Must match the same source used for allPaid above.
   let paymentsSnapshot: Array<{ playerName: string; amount: number; status: string; method?: string | null }> | null = null;
@@ -131,5 +147,6 @@ export const GET: APIRoute = async ({ params, request }) => {
   return Response.json({
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
+    hasPendingPastPayments,
   });
 };
