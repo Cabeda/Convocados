@@ -14,6 +14,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { computeGameUpdates } from "../src/lib/elo";
+import { getDefaultDurationMinutes } from "../src/lib/sports";
 
 const prisma = new PrismaClient();
 
@@ -168,6 +169,7 @@ async function main() {
         dateTime,
         maxPlayers,
         sport,
+        durationMinutes: getDefaultDurationMinutes(sport),
         isPublic,
         isRecurring,
         balanced,
@@ -387,6 +389,79 @@ async function main() {
         `  [${String(i + 1).padStart(3)}] ${event.id}  ${title.padEnd(40)} ${playerCount}/${maxPlayers} players  ${status}`
       );
     }
+  }
+
+  // ── Guaranteed "just ended" event for post-game banner testing ────────────
+  // This event ended ~30 minutes ago, has players, teams, cost with pending
+  // payments, but NO score yet — so the post-game banner will appear.
+  {
+    const justEndedDate = new Date(now - 90 * 60 * 1000); // started 90 min ago
+    const justEndedSport = "football-5v5";
+    const justEndedMaxPlayers = 10;
+    const justEndedPlayers = uniqueNames(justEndedMaxPlayers);
+    const half = Math.floor(justEndedPlayers.length / 2);
+    const teamOne = justEndedPlayers.slice(0, half);
+    const teamTwo = justEndedPlayers.slice(half);
+
+    const justEndedEvent = await prisma.event.create({
+      data: {
+        title: "Just Ended — Close the Game!",
+        location: "Riverside Astro, Pitch 1",
+        dateTime: justEndedDate,
+        maxPlayers: justEndedMaxPlayers,
+        sport: justEndedSport,
+        durationMinutes: getDefaultDurationMinutes(justEndedSport),
+        isPublic: true,
+        teamOneName: "Ninjas",
+        teamTwoName: "Gunas",
+        players: {
+          create: justEndedPlayers.map((name, order) => ({ name, order })),
+        },
+      },
+    });
+
+    // Create team results so the event page shows teams
+    await prisma.teamResult.create({
+      data: {
+        name: "Ninjas",
+        eventId: justEndedEvent.id,
+        members: { create: teamOne.map((name, order) => ({ name, order })) },
+      },
+    });
+    await prisma.teamResult.create({
+      data: {
+        name: "Gunas",
+        eventId: justEndedEvent.id,
+        members: { create: teamTwo.map((name, order) => ({ name, order })) },
+      },
+    });
+
+    // Add cost with ALL payments pending — banner will show both tasks
+    const totalAmount = 60;
+    const share = totalAmount / justEndedPlayers.length;
+    const justEndedCost = await prisma.eventCost.create({
+      data: {
+        eventId: justEndedEvent.id,
+        totalAmount,
+        currency: "EUR",
+        paymentDetails: "Revolut @jose / MB Way 912345678",
+      },
+    });
+    for (const name of justEndedPlayers) {
+      await prisma.playerPayment.create({
+        data: {
+          eventCostId: justEndedCost.id,
+          playerName: name,
+          amount: Math.round(share * 100) / 100,
+          status: "pending",
+        },
+      });
+    }
+
+    console.log(`\n  ** JUST ENDED EVENT (post-game banner demo):`);
+    console.log(`     ${justEndedEvent.id}  "${justEndedEvent.title}"`);
+    console.log(`     ${justEndedPlayers.length} players, €${totalAmount} cost, all payments pending, no score`);
+    console.log(`     URL: /events/${justEndedEvent.id}`);
   }
 
   const pastCount = await prisma.gameHistory.count();
