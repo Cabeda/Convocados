@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
+import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 // Use a separate Prisma client for test data setup (avoids mock interference)
 const testPrisma = new PrismaClient({
@@ -116,6 +117,7 @@ async function seedHistory(eventId: string, overrides: Record<string, unknown> =
 beforeEach(async () => {
   vi.clearAllMocks();
   mockAnonymous();
+  await resetApiRateLimitStore();
   await testPrisma.pushSubscription.deleteMany();
   await testPrisma.webhookSubscription.deleteMany();
   await testPrisma.playerRating.deleteMany();
