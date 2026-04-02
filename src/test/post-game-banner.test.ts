@@ -276,4 +276,55 @@ describe("GET /api/events/:id/post-game-status", () => {
     const json = await res.json();
     expect(json.allComplete).toBe(false);
   });
+
+  it("returns hasCost=false when no cost is set", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Past Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+      },
+    });
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.hasCost).toBe(false);
+  });
+
+  it("returns hasCost=true when cost is set", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Past Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+      },
+    });
+    await prisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 50, currency: "EUR" },
+    });
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.hasCost).toBe(true);
+  });
+
+  it("returns isParticipant=false for anonymous users", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Past Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+      },
+    });
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isParticipant).toBe(false);
+  });
 });

@@ -1090,6 +1090,39 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
   });
 });
 
+// ─── PUT /api/events/[id]/duration (auth check #249) ────────────────────────
+
+import { PUT as updateDuration } from "~/pages/api/events/[id]/duration";
+
+describe("PUT /api/events/[id]/duration", () => {
+  it("allows owner to update duration", async () => {
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    const res = await updateDuration(ctx({ id }, { durationMinutes: 90 }, "PUT"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.durationMinutes).toBe(90);
+  });
+
+  it("returns 403 when non-owner tries to update duration on owned event", async () => {
+    const owner = await seedUser();
+    const other = await seedUser({ name: "Other" });
+    mockAuth(other.id, "Other");
+    const id = await seedEvent({ ownerId: owner.id });
+    const res = await updateDuration(ctx({ id }, { durationMinutes: 90 }, "PUT"));
+    expect(res.status).toBe(403);
+  });
+
+  it("allows anyone to update duration on ownerless event", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const res = await updateDuration(ctx({ id }, { durationMinutes: 45 }, "PUT"));
+    expect(res.status).toBe(200);
+  });
+});
+
 // ─── PUT /api/events/[id]/split-costs (#192) ────────────────────────────────
 
 import { PUT as updateSplitCosts } from "~/pages/api/events/[id]/split-costs";
