@@ -264,7 +264,7 @@ async function main() {
           const share = totalAmount / gamePlayers.length;
           const paymentSnapshotData = gamePlayers.map((name) => {
             const roll = Math.random();
-            const pStatus = roll < 0.5 ? "paid" : roll < 0.7 ? "exempt" : "pending";
+            const pStatus = roll < 0.5 ? "paid" : "pending";
             return {
               playerName: name,
               amount: Math.round(share * 100) / 100,
@@ -370,7 +370,7 @@ async function main() {
 
         for (const name of activePlayers) {
           const roll = Math.random();
-          const pStatus = roll < 0.5 ? "paid" : roll < 0.7 ? "exempt" : "pending";
+          const pStatus = roll < 0.5 ? "paid" : "pending";
           await prisma.playerPayment.create({
             data: {
               eventCostId: eventCost.id,

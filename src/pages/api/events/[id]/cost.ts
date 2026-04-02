@@ -138,8 +138,13 @@ export const GET: APIRoute = async ({ params }) => {
     .filter((p) => p.status === "paid")
     .reduce((sum, p) => sum + p.amount, 0);
 
+  const hasOverride = !!(eventCost.tempPaymentMethods || eventCost.tempPaymentDetails);
+
   return Response.json({
     ...eventCost,
+    hasOverride,
+    effectivePaymentMethods: eventCost.tempPaymentMethods ?? eventCost.paymentMethods,
+    effectivePaymentDetails: eventCost.tempPaymentDetails ?? eventCost.paymentDetails,
     createdAt: eventCost.createdAt.toISOString(),
     updatedAt: eventCost.updatedAt.toISOString(),
     payments: eventCost.payments.map((p) => ({

@@ -3,7 +3,7 @@ import { prisma } from "./db.server";
 /**
  * Recalculate payment shares for an event after player changes.
  * If no EventCost exists, this is a no-op.
- * Preserves existing payment statuses (paid/exempt/pending).
+ * Preserves existing payment statuses (paid/pending).
  */
 export async function syncPaymentsForEvent(eventId: string): Promise<void> {
   const eventCost = await prisma.eventCost.findUnique({ where: { eventId } });
