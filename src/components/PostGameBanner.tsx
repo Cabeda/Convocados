@@ -24,9 +24,10 @@ interface Props {
   onScrollToScore?: () => void;
   onScrollToPayments?: () => void;
   onStatusChange?: (status: PostGameStatus | null) => void;
+  refreshKey?: number;
 }
 
-export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, onStatusChange }: Props) {
+export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey }: Props) {
   const t = useT();
   const theme = useTheme();
   const [status, setStatus] = useState<PostGameStatus | null>(null);
@@ -52,6 +53,11 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
     const id = setInterval(fetchStatus, 15_000);
     return () => clearInterval(id);
   }, [fetchStatus]);
+
+  // Re-fetch immediately when refreshKey changes (e.g. after payment update)
+  useEffect(() => {
+    if (refreshKey !== undefined && refreshKey > 0) fetchStatus();
+  }, [refreshKey, fetchStatus]);
 
   // Don't show if game hasn't ended or everything is complete
   if (!status || !status.gameEnded || status.allComplete) return null;

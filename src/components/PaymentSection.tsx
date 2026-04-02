@@ -72,12 +72,14 @@ export function PaymentSection({
   activePlayerCount,
   expanded: controlledExpanded,
   onExpandedChange,
+  onPaymentChange,
 }: {
   eventId: string;
   canEdit: boolean;
   activePlayerCount: number;
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
+  onPaymentChange?: () => void;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -154,6 +156,7 @@ export function PaymentSection({
       body: JSON.stringify({ playerName, status: nextStatus }),
     });
     fetchCost();
+    onPaymentChange?.();
   };
 
   const handleCopy = async (text: string, id: string) => {
