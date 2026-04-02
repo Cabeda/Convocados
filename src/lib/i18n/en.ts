@@ -803,6 +803,12 @@ const en = {
   postGameNotification: "Game over! Add the score and settle payments for {title}",
   postGamePaymentsLabel: "Payments for this game",
   upcomingGamePaymentsLabel: "Payments for the upcoming game",
+
+  // Admin role notifications
+  adminRoleAddedSubject: "You're now an admin for {title}",
+  adminRoleRemovedSubject: "Admin access removed for {title}",
+  adminRoleAddedBody: "You've been added as an admin for {title}. You can now manage players, settings, and costs.",
+  adminRoleRemovedBody: "You've been removed as an admin from {title}. You no longer have management access.",
 } as const;
 
 export default en;
