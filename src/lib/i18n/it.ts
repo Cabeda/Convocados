@@ -723,6 +723,32 @@ const it: TranslationKeys = {
   countdownHours: "tra {n}h {m}m",
   countdownMinutes: "tra {n}m",
   countdownNow: "Adesso",
+
+  // Game duration (#249)
+  gameDuration: "Durata della partita",
+  gameDurationHelper: "Quanto dura la partita (in minuti)",
+  gameDurationMinutes: "{n} min",
+  gameDurationError: "La durata deve essere tra 0 e 600 minuti.",
+  gameDurationSaved: "Durata della partita aggiornata.",
+
+  // Post-game banner (#249)
+  postGameTitle: "Partita finita! Chiudi i conti",
+  postGameSubtitle: "Completa queste attività per chiudere la partita e prepararti per la prossima.",
+  postGameEnterScore: "Inserisci il risultato",
+  postGameScoreDone: "Risultato registrato",
+  postGameScorePending: "Vai alla Cronologia per aggiungere il risultato finale",
+  postGameGoToScore: "Aggiungi risultato",
+  postGameCompletePayments: "Completa i pagamenti",
+  postGamePaymentsDone: "Tutti i pagamenti effettuati",
+  postGamePaymentsPending: "Alcuni giocatori devono ancora pagare",
+  postGameGoToPayments: "Vedi pagamenti",
+  postGameProgress: "{done} di {total} attività completate",
+  postGameNoCostSet: "Costo non ancora impostato — imposta il costo per abilitare i pagamenti",
+  postGameSetCost: "Imposta costo",
+  postGameNotification: "Partita finita! Aggiungi il risultato e chiudi i pagamenti di {title}",
+  postGamePaymentsLabel: "Pagamenti di questa partita",
+  upcomingGamePaymentsLabel: "Pagamenti della prossima partita",
+
   adminDeleteUser: "Elimina utente",
   adminDeleteUserConfirm: "Sei sicuro di voler eliminare definitivamente questo utente? Questa azione non può essere annullata.",
   adminDeleteUserError: "Impossibile eliminare l'utente.",

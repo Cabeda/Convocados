@@ -23,6 +23,8 @@ import {
   useCountdown,
 } from "./event";
 import type { EventData, Player, KnownPlayer } from "./event";
+import { PostGameBanner } from "./PostGameBanner";
+import type { PostGameStatus } from "./PostGameBanner";
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -41,6 +43,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
   const [claimPlayerConfirmOpen, setClaimPlayerConfirmOpen] = useState(false);
   const [playerToClaim, setPlayerToClaim] = useState<{ id: string; name: string } | null>(null);
+  const [postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
+  const [paymentExpanded, setPaymentExpanded] = useState<boolean | undefined>(undefined);
+  const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
 
   // ── ELO ratings for balanced mode ───────────────────────────────────────────
   const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
@@ -510,44 +515,44 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onSnackbar={setSnackbar}
             />
 
-            {/* Quick join — authenticated users only */}
-            {isAuthenticated && session?.user?.name && (
-              <QuickJoin
-                userName={session.user.name}
-                players={event.players}
-                maxPlayers={event.maxPlayers}
-                onJoin={addPlayer}
-                onLeave={removePlayer}
-              />
-            )}
-
-            {/* Players */}
-            <PlayerList
-              players={event.players}
-              maxPlayers={event.maxPlayers}
-              isOwner={isOwner}
-              canClaimPlayer={canClaimPlayer}
-              hasTeams={!!(localMatches && localMatches.length > 0)}
-              availableSuggestions={availableSuggestions}
-              playerError={playerError}
-              onPlayerErrorChange={setPlayerError}
-              onAddPlayer={addPlayer}
-              onRemovePlayer={removePlayer}
-              onReorderPlayers={reorderPlayers}
-              onResetPlayerOrder={resetPlayerOrder}
-              onRandomize={doRandomize}
-              onConfirmReRandomize={() => setConfirmOpen(true)}
-              onOpenClaimPlayerDialog={openClaimPlayerDialog}
-              canRemovePlayer={canRemovePlayer}
+            {/* Post-game banner — shown after game ends until tasks are complete */}
+            <PostGameBanner
+              eventId={eventId}
+              onStatusChange={setPostGameStatus}
+              refreshKey={bannerRefreshKey}
+              onScrollToScore={() => {
+                window.location.href = `/events/${eventId}/history`;
+              }}
+              onScrollToPayments={() => {
+                setPaymentExpanded(true);
+                setTimeout(() => {
+                  const el = document.getElementById("payment-section");
+                  if (el) {
+                    const y = el.getBoundingClientRect().top + window.scrollY - 80;
+                    window.scrollTo({ top: y, behavior: "smooth" });
+                  }
+                }, 100);
+              }}
             />
 
-            {/* Payment tracking */}
+            {/* Payment tracking — always labeled with game context */}
             {(event.splitCostsEnabled !== false) && (
-              <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+              <Paper id="payment-section" elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+                <Typography variant="subtitle2" fontWeight={700}
+                  color={postGameStatus?.gameEnded && !postGameStatus.allComplete ? "warning.main" : "text.secondary"}
+                  sx={{ mb: 1 }}
+                >
+                  {postGameStatus?.gameEnded && !postGameStatus.allComplete
+                    ? t("postGamePaymentsLabel")
+                    : t("upcomingGamePaymentsLabel")}
+                </Typography>
                 <PaymentSection
                   eventId={eventId}
                   canEdit={canEditSettings}
                   activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
+                  expanded={paymentExpanded}
+                  onExpandedChange={(exp) => setPaymentExpanded(exp ? true : undefined)}
+                  onPaymentChange={() => setBannerRefreshKey((k) => k + 1)}
                 />
               </Paper>
             )}
@@ -578,6 +583,37 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 </Stack>
               </Paper>
             )}
+
+            {/* Quick join — authenticated users only */}
+            {isAuthenticated && session?.user?.name && (
+              <QuickJoin
+                userName={session.user.name}
+                players={event.players}
+                maxPlayers={event.maxPlayers}
+                onJoin={addPlayer}
+                onLeave={removePlayer}
+              />
+            )}
+
+            {/* Players */}
+            <PlayerList
+              players={event.players}
+              maxPlayers={event.maxPlayers}
+              isOwner={isOwner}
+              canClaimPlayer={canClaimPlayer}
+              hasTeams={!!(localMatches && localMatches.length > 0)}
+              availableSuggestions={availableSuggestions}
+              playerError={playerError}
+              onPlayerErrorChange={setPlayerError}
+              onAddPlayer={addPlayer}
+              onRemovePlayer={removePlayer}
+              onReorderPlayers={reorderPlayers}
+              onResetPlayerOrder={resetPlayerOrder}
+              onRandomize={doRandomize}
+              onConfirmReRandomize={() => setConfirmOpen(true)}
+              onOpenClaimPlayerDialog={openClaimPlayerDialog}
+              canRemovePlayer={canRemovePlayer}
+            />
 
           </Stack>
         </Container>

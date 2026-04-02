@@ -19,7 +19,8 @@ export type NotificationJobType =
   | "player_left_bench"
   | "player_left_promoted"
   | "event_details"
-  | "reminder";
+  | "reminder"
+  | "post_game";
 
 export interface NotificationJobPayload {
   title: string;

@@ -566,6 +566,41 @@ export default function EventSettingsPage({ eventId }: Props) {
             </FormControl>
           </Box>
 
+          {/* Duration */}
+          <Box>
+            <Typography variant="body2" color="text.secondary" gutterBottom>{t("gameDuration")}</Typography>
+            <Typography variant="caption" color="text.secondary">{t("gameDurationHelper")}</Typography>
+            <TextField
+              size="small"
+              type="number"
+              inputProps={{ min: 0, max: 600, step: 5 }}
+              value={event.durationMinutes ?? 60}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val)) setEvent((ev: any) => ev ? { ...ev, durationMinutes: val } : ev);
+              }}
+              onBlur={async () => {
+                const val = event.durationMinutes ?? 60;
+                if (val < 0 || val > 600) {
+                  setMessage({ type: "error", text: t("gameDurationError") });
+                  return;
+                }
+                const res = await fetch(`/api/events/${eventId}/duration`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ durationMinutes: val }),
+                });
+                if (res.ok) {
+                  setMessage({ type: "success", text: t("gameDurationSaved") });
+                } else {
+                  setMessage({ type: "error", text: t("gameDurationError") });
+                }
+              }}
+              disabled={!canEdit}
+              sx={{ width: 120 }}
+            />
+          </Box>
+
         </Stack>
       </SectionCard>
 

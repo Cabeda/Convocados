@@ -22,6 +22,7 @@ export interface EventData {
   dateTime: string;
   timezone: string;
   maxPlayers: number;
+  durationMinutes: number;
   teamOneName: string;
   teamTwoName: string;
   isRecurring: boolean;
