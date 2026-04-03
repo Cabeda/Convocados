@@ -1,0 +1,27 @@
+meta {
+  name: Create Event
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/events
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "title": "Friday Football",
+    "location": "Pitch A",
+    "dateTime": "2026-04-10T20:00:00.000Z",
+    "maxPlayers": 10,
+    "sport": "football-5v5"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("eventId", res.body.id);
+  }
+}

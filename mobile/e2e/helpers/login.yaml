@@ -1,0 +1,6 @@
+appId: host.exp.Exponent
+---
+# Helper: authenticate via test-login deep link
+# Usage: include this flow or run standalone with CODE env var
+- openLink: "exp://localhost:8081/--/test-login?code=${CODE}"
+- waitForAnimationToEnd

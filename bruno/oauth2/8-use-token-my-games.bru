@@ -1,0 +1,39 @@
+meta {
+  name: 8. Use Token — My Games
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/me/games
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+}
+
+tests {
+  test("should return 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("should return owned array", function() {
+    expect(res.body.owned).to.be.an("array");
+  });
+  test("should return joined array", function() {
+    expect(res.body.joined).to.be.an("array");
+  });
+}
+
+docs {
+  Test the OAuth access token against a real API endpoint.
+  This calls /api/me/games using the Bearer token instead of a session cookie.
+
+  Requires scope: read:events
+  This is how the Android app would call the API.
+}

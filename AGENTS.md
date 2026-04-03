@@ -164,6 +164,69 @@ npm run db:migrate   # Run migrations
 npm run db:studio    # Open Prisma Studio
 ```
 
+## Dev Server Management (for AI agents)
+
+When running integration tests or Bruno API tests, the agent can manage the dev server:
+
+```bash
+# Start dev server in background
+pkill -f "astro dev" 2>/dev/null || true
+nohup npm run dev > /tmp/convocados-dev.log 2>&1 &
+echo $! > /tmp/convocados-dev.pid
+
+# Wait for server to be ready
+for i in $(seq 1 15); do
+  curl -s http://localhost:4321/api/health | grep -q '"ok"' && break
+  sleep 1
+done
+
+# Check server logs
+cat /tmp/convocados-dev.log
+
+# Restart server
+kill $(cat /tmp/convocados-dev.pid) 2>/dev/null; sleep 1
+nohup npm run dev > /tmp/convocados-dev.log 2>&1 &
+echo $! > /tmp/convocados-dev.pid
+
+# Stop server
+kill $(cat /tmp/convocados-dev.pid) 2>/dev/null
+```
+
+## Bruno API Testing
+
+The `bruno/` folder contains API test collections runnable via Bruno CLI.
+The OAuth flow uses a **trusted client** (configured via env vars) that skips
+the consent screen, allowing the full flow to run without a browser.
+
+```bash
+# Run from the bruno/ directory
+cd bruno
+
+# Run the full OAuth flow
+bru run auth/2-sign-in.bru \
+  oauth2/1-oidc-discovery.bru \
+  oauth2/3-generate-pkce.bru \
+  oauth2/4-authorize.bru \
+  oauth2/5-token-exchange.bru \
+  oauth2/6-userinfo.bru \
+  oauth2/7-introspect-token.bru \
+  oauth2/8-use-token-my-games.bru \
+  oauth2/9-use-token-my-stats.bru \
+  oauth2/10-refresh-token.bru \
+  oauth2/11-revoke-token.bru \
+  oauth2/12-verify-revoked.bru \
+  --env local
+
+# Run a single folder
+bru run oauth2 --env local
+
+# Run with verbose output
+bru run oauth2 --env local --verbose
+```
+
+The local callback endpoint (`/api/oauth-callback`) returns the auth code as
+JSON so Bruno CLI can capture it without needing a browser redirect.
+
 ## Common Patterns
 
 ### API Route Handler

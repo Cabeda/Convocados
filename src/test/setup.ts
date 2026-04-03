@@ -4,6 +4,18 @@ const TEST_DB_PATH = path.resolve(__dirname, "../../test.db");
 process.env.DATABASE_URL = `file:${TEST_DB_PATH}`;
 process.env.NODE_ENV = "test";
 
+// ── Trusted OAuth client for integration tests ────────────────────────────
+// Set before auth.server.ts is imported so buildTrustedClients() picks them up
+if (!process.env.TRUSTED_OAUTH_CLIENT_ID) {
+  process.env.TRUSTED_OAUTH_CLIENT_ID = "test-trusted-client";
+}
+if (!process.env.TRUSTED_OAUTH_CLIENT_SECRET) {
+  process.env.TRUSTED_OAUTH_CLIENT_SECRET = "test-trusted-secret";
+}
+if (!process.env.TRUSTED_OAUTH_REDIRECT_URIS) {
+  process.env.TRUSTED_OAUTH_REDIRECT_URIS = "https://oauth.usebruno.com/callback";
+}
+
 // ── jsdom helpers (no-op in node environment) ──────────────────────────────
 if (typeof window !== "undefined") {
   // MUI requires matchMedia

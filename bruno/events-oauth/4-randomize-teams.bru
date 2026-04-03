@@ -1,0 +1,26 @@
+meta {
+  name: Randomize Teams (OAuth)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/events/{{eventId}}/randomize
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+  req.setUrl(bru.getEnvVar("baseUrl") + "/api/events/" + bru.getEnvVar("eventId") + "/randomize");
+}
+
+tests {
+  test("should return 400 (need more players)", function() {
+    expect(res.status).to.equal(400);
+  });
+}

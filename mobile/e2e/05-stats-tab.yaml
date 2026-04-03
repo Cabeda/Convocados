@@ -1,0 +1,8 @@
+appId: host.exp.Exponent
+---
+# Happy path: Stats tab loads
+- tapOn: "Stats"
+- waitForAnimationToEnd
+- assertVisible: "Overview"
+- assertVisible: "Games"
+- assertVisible: "Wins"

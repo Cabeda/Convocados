@@ -1,0 +1,16 @@
+meta {
+  name: My Games
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/me/games
+  body: none
+  auth: none
+}
+
+docs {
+  Returns owned and joined games for the authenticated user.
+  Requires session cookie from sign-in.
+}

@@ -1,0 +1,28 @@
+meta {
+  name: 2. Sign In (Email)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/auth/sign-in/email
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{email}}",
+    "password": "{{password}}"
+  }
+}
+
+docs {
+  After sign-in, Bruno will store the session cookie automatically.
+  All subsequent requests will be authenticated.
+  
+  NOTE: If email verification is required, you need to either:
+  1. Disable requireEmailVerification temporarily in auth.server.ts
+  2. Or manually verify the email in the DB:
+     sqlite3 dev.db "UPDATE User SET emailVerified = 1 WHERE email = 'test@example.com'"
+}

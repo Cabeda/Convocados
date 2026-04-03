@@ -1,0 +1,21 @@
+meta {
+  name: 5. Google OAuth (Redirect)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/auth/sign-in/social?provider=google&callbackURL=/
+  body: none
+  auth: none
+}
+
+docs {
+  This initiates the Google OAuth flow.
+  Bruno will show the redirect URL to Google's consent screen.
+
+  You CANNOT complete this flow in Bruno — it requires a browser.
+  Use this only to verify the redirect URL is generated correctly.
+
+  To test the full OAuth flow, use a browser or Playwright e2e tests.
+}

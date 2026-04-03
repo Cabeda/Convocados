@@ -1,0 +1,84 @@
+meta {
+  name: 5. Token Exchange
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/auth/oauth2/token
+  body: form-urlencoded
+  auth: none
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded
+}
+
+body:form-urlencoded {
+  grant_type: authorization_code
+  code: {{authCode}}
+  redirect_uri: {{oauthRedirectUri}}
+  client_id: {{oauthClientId}}
+  client_secret: {{oauthClientSecret}}
+  code_verifier: {{pkceVerifier}}
+}
+
+script:pre-request {
+  var code = bru.getEnvVar("authCode");
+  var verifier = bru.getEnvVar("pkceVerifier");
+  console.log("authCode:", code);
+  console.log("pkceVerifier:", verifier);
+  // Ensure the body uses the latest values
+  req.setBody({
+    grant_type: "authorization_code",
+    code: code,
+    redirect_uri: bru.getEnvVar("oauthRedirectUri"),
+    client_id: bru.getEnvVar("oauthClientId"),
+    client_secret: bru.getEnvVar("oauthClientSecret"),
+    code_verifier: verifier
+  });
+}
+
+script:post-response {
+  if (res.status !== 200) {
+    console.log("Token exchange error:", JSON.stringify(res.body));
+  }
+  if (res.status === 200) {
+    bru.setEnvVar("accessToken", res.body.access_token);
+    bru.setEnvVar("refreshToken", res.body.refresh_token);
+    bru.setEnvVar("idToken", res.body.id_token);
+    console.log("Access Token:", res.body.access_token);
+    console.log("Refresh Token:", res.body.refresh_token);
+    console.log("Expires in:", res.body.expires_in, "seconds");
+    console.log("Scopes:", res.body.scope);
+  }
+}
+
+tests {
+  test("should return 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("should return access_token", function() {
+    expect(res.body.access_token).to.be.a("string");
+  });
+  test("should return refresh_token", function() {
+    expect(res.body.refresh_token).to.be.a("string");
+  });
+  test("should return id_token", function() {
+    expect(res.body.id_token).to.be.a("string");
+  });
+  test("should return Bearer token type", function() {
+    expect(res.body.token_type).to.equal("Bearer");
+  });
+}
+
+docs {
+  Exchange the authorization code for tokens.
+
+  Before running this:
+  1. Complete the authorize step in a browser
+  2. Set {{authCode}} to the code from the callback URL
+
+  Returns: access_token, refresh_token, id_token, expires_in, scope
+  Tokens are saved to variables automatically.
+}

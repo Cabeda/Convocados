@@ -1,0 +1,33 @@
+meta {
+  name: Set Cost (OAuth)
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/events/{{eventId}}/cost
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "totalAmount": 40,
+    "currency": "EUR"
+  }
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+  req.setUrl(bru.getEnvVar("baseUrl") + "/api/events/" + bru.getEnvVar("eventId") + "/cost");
+}
+
+tests {
+  test("should set cost", function() {
+    expect(res.status).to.equal(200);
+  });
+}
