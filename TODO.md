@@ -47,6 +47,25 @@
 
 ---
 
+## OAuth2 Epic — scope review fixes (in progress)
+
+### Implemented (this branch)
+- [x] Expo push delivery — `push.server.ts` now sends to mobile app tokens via Expo Push API
+- [x] Fix vitest picking up `mobile/node_modules` test files
+- [x] Add `.env.development` to `.gitignore`
+- [x] Verify Prisma migrations exist for AppPushToken and OAuth tables
+- [x] Android APK build in release workflow (`build-android` job)
+- [x] Update pnpm lockfile for mobile workspace
+
+### GitHub issues to create (non-blocking)
+- [ ] APK signing for release workflow (unsigned APK won't install on Android 14+)
+- [ ] CSRF posture review — `checkOrigin: false` disables protection for all routes
+- [ ] Stale push token cleanup (AppPushToken + PushSubscription accumulate forever)
+- [ ] Dockerfile monorepo handling (doesn't copy pnpm-workspace.yaml)
+- [ ] Add `push.server.ts` to test coverage (currently excluded in vitest.config.ts)
+- [ ] `redirectUrls` format inconsistency (comma-separated vs JSON array)
+- [ ] Real `google-services.json` for FCM in CI (currently uses placeholder)
+
 ## Mobile app — feature parity with web
 
 ### P0 — Blocks core workflows (implement first)

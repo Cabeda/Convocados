@@ -10,6 +10,12 @@ const log = createLogger("push");
 /** Max concurrent web-push sends per event to avoid overwhelming the connection pool */
 const PUSH_CONCURRENCY = 20;
 
+/** Expo push API endpoint */
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+
+/** Max tickets per Expo push request (Expo limit is 100) */
+const EXPO_BATCH_SIZE = 100;
+
 let initialized = false;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _webpush: any = null;
@@ -31,6 +37,139 @@ async function init() {
   webpush.setVapidDetails("mailto:admin@convocados.fly.dev", publicKey, privateKey);
 }
 
+// ── Expo Push (mobile app) ────────────────────────────────────────────────────
+
+interface ExpoPushMessage {
+  to: string;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  sound?: "default" | null;
+  channelId?: string;
+}
+
+interface ExpoPushTicket {
+  status: "ok" | "error";
+  id?: string;
+  message?: string;
+  details?: { error?: string };
+}
+
+/**
+ * Send push notifications to Expo push tokens in batches.
+ * Automatically removes invalid tokens (DeviceNotRegistered).
+ */
+export async function sendExpoPush(messages: ExpoPushMessage[]): Promise<void> {
+  if (messages.length === 0) return;
+
+  for (let i = 0; i < messages.length; i += EXPO_BATCH_SIZE) {
+    const batch = messages.slice(i, i + EXPO_BATCH_SIZE);
+    try {
+      const res = await fetch(EXPO_PUSH_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(batch),
+      });
+
+      if (!res.ok) {
+        log.error({ status: res.status, statusText: res.statusText }, "Expo push API error");
+        continue;
+      }
+
+      const { data: tickets } = (await res.json()) as { data: ExpoPushTicket[] };
+
+      // Clean up invalid tokens
+      for (let j = 0; j < tickets.length; j++) {
+        const ticket = tickets[j];
+        if (ticket.status === "error" && ticket.details?.error === "DeviceNotRegistered") {
+          const token = batch[j].to;
+          log.info({ token: token.slice(0, 30) }, "Removing invalid Expo push token");
+          await prisma.appPushToken.deleteMany({ where: { token } }).catch(() => {});
+        }
+      }
+    } catch (err: unknown) {
+      log.error({ err }, "Failed to send Expo push batch");
+    }
+  }
+}
+
+/**
+ * Send a push notification to a user's mobile devices via Expo push.
+ * Respects notification preferences.
+ */
+async function sendAppPushToUser(
+  userId: string,
+  title: string,
+  body: string,
+  url: string,
+): Promise<void> {
+  const tokens = await prisma.appPushToken.findMany({ where: { userId } });
+  if (tokens.length === 0) return;
+
+  const messages: ExpoPushMessage[] = tokens.map((t) => ({
+    to: t.token,
+    title,
+    body,
+    data: { url },
+    sound: "default" as const,
+    channelId: "default",
+  }));
+
+  await sendExpoPush(messages);
+}
+
+/**
+ * Send app push notifications to all users subscribed to an event.
+ * Looks up users via PushSubscription (linked userId) and AppPushToken.
+ */
+async function sendAppPushToEventUsers(
+  eventId: string,
+  title: string,
+  body: string,
+  url: string,
+  excludeUserIds: Set<string>,
+  jobType?: NotificationJobType,
+  reminderType?: "24h" | "2h" | "1h",
+  prefsMap?: Map<string, typeof DEFAULTS>,
+): Promise<void> {
+  // Find all users subscribed to this event (via web push subs with linked userId)
+  const subs = await prisma.pushSubscription.findMany({
+    where: { eventId, userId: { not: null } },
+    select: { userId: true },
+  });
+  const userIds = [...new Set(subs.map((s) => s.userId!).filter((id) => !excludeUserIds.has(id)))];
+  if (userIds.length === 0) return;
+
+  // Find app push tokens for these users
+  const tokens = await prisma.appPushToken.findMany({
+    where: { userId: { in: userIds } },
+  });
+  if (tokens.length === 0) return;
+
+  // Filter by notification preferences
+  const messages: ExpoPushMessage[] = [];
+  for (const token of tokens) {
+    if (prefsMap && jobType) {
+      const prefs = prefsMap.get(token.userId) ?? DEFAULTS;
+      if (!wantsPushForJobType(prefs, jobType)) continue;
+      if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) continue;
+    }
+    messages.push({
+      to: token.token,
+      title,
+      body,
+      data: { url },
+      sound: "default",
+      channelId: "default",
+    });
+  }
+
+  await sendExpoPush(messages);
+}
+
 export async function sendPushToEvent(
   eventId: string,
   title: string,
@@ -42,13 +181,10 @@ export async function sendPushToEvent(
   jobType?: NotificationJobType,
   reminderType?: "24h" | "2h" | "1h",
 ) {
-  if (
-    !(import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY) ||
-    !(import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY)
-  ) return;
-
-  await init();
-  const webpush = await getWebPush();
+  const hasVapid = !!(
+    (import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY) &&
+    (import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY)
+  );
 
   const subs = await prisma.pushSubscription.findMany({ where: { eventId } });
 
@@ -56,51 +192,77 @@ export async function sendPushToEvent(
     (sub) => !senderClientId || !sub.clientId || sub.clientId !== senderClientId,
   );
 
-  if (filtered.length === 0) return;
-
   // Batch-load notification prefs for all linked users in one query
-  // instead of N individual queries inside the fan-out loop.
-  const linkedUserIds = [...new Set(filtered.map((s) => s.userId).filter(Boolean) as string[])];
-  const prefsRows = linkedUserIds.length > 0
-    ? await prisma.notificationPreferences.findMany({ where: { userId: { in: linkedUserIds } } })
+  const allLinkedUserIds = [...new Set(
+    subs.map((s) => s.userId).filter(Boolean) as string[],
+  )];
+  const prefsRows = allLinkedUserIds.length > 0
+    ? await prisma.notificationPreferences.findMany({ where: { userId: { in: allLinkedUserIds } } })
     : [];
   const prefsMap = new Map(prefsRows.map((p) => [p.userId, { ...DEFAULTS, ...p }]));
 
-  const limit = pLimit(PUSH_CONCURRENCY);
+  // Build a default-locale body for the Expo push (mobile app tokens don't carry locale)
+  const defaultT = createT("en");
+  const defaultBody = defaultT(key, params);
+  const defaultSuffix = spotsLeft === 0 ? defaultT("notifyGameFull") : defaultT("notifySpotsLeft", { n: spotsLeft });
+  const appPushBody = `${defaultBody} · ${defaultSuffix}`;
 
-  await Promise.allSettled(
-    filtered.map((sub) =>
-      limit(async () => {
-        // Respect per-user granular prefs when the subscription is linked to a user
-        if (jobType && sub.userId) {
-          const prefs = prefsMap.get(sub.userId) ?? DEFAULTS;
-          if (!wantsPushForJobType(prefs, jobType)) return;
-          if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) return;
-        }
+  // Collect sender userIds so we can exclude them from app push too
+  const senderUserIds = new Set<string>();
+  if (senderClientId) {
+    for (const sub of subs) {
+      if (sub.clientId === senderClientId && sub.userId) senderUserIds.add(sub.userId);
+    }
+  }
 
-        const t = createT((sub.locale as Locale) ?? "en");
-        const body = t(key, params);
-        const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
-        const pushPayload = JSON.stringify({ title, body: `${body} · ${suffix}`, url });
+  const promises: Promise<unknown>[] = [];
 
-        try {
-          await webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            pushPayload,
-          );
-          log.info({ endpoint: sub.endpoint.slice(0, 50) }, "Push notification sent");
-        } catch (err: any) {
-          log.error(
-            { endpoint: sub.endpoint.slice(0, 60), statusCode: err?.statusCode, err: err?.message },
-            "Push notification failed",
-          );
-          if (err?.statusCode === 410 || err?.statusCode === 404) {
-            await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
-          }
-        }
-      }),
-    ),
+  // Expo app push fan-out (mobile devices) — always runs, no VAPID needed
+  promises.push(
+    sendAppPushToEventUsers(eventId, title, appPushBody, url, senderUserIds, jobType, reminderType, prefsMap),
   );
+
+  // Web push fan-out — requires VAPID keys
+  if (hasVapid && filtered.length > 0) {
+    await init();
+    const webpush = await getWebPush();
+    const limit = pLimit(PUSH_CONCURRENCY);
+
+    promises.push(
+      ...filtered.map((sub) =>
+        limit(async () => {
+          if (jobType && sub.userId) {
+            const prefs = prefsMap.get(sub.userId) ?? DEFAULTS;
+            if (!wantsPushForJobType(prefs, jobType)) return;
+            if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) return;
+          }
+
+          const t = createT((sub.locale as Locale) ?? "en");
+          const body = t(key, params);
+          const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
+          const pushPayload = JSON.stringify({ title, body: `${body} · ${suffix}`, url });
+
+          try {
+            await webpush.sendNotification(
+              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+              pushPayload,
+            );
+            log.info({ endpoint: sub.endpoint.slice(0, 50) }, "Push notification sent");
+          } catch (err: any) {
+            log.error(
+              { endpoint: sub.endpoint.slice(0, 60), statusCode: err?.statusCode, err: err?.message },
+              "Push notification failed",
+            );
+            if (err?.statusCode === 410 || err?.statusCode === 404) {
+              await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+            }
+          }
+        }),
+      ),
+    );
+  }
+
+  await Promise.allSettled(promises);
 }
 
 /**
@@ -108,6 +270,8 @@ export async function sendPushToEvent(
  * Unlike sendPushToEvent (which fans out to all event subscribers), this
  * targets a single user across all their subscriptions — useful for
  * account-level notifications like admin role changes.
+ *
+ * Sends to both web push (PushSubscription) and mobile app (AppPushToken).
  */
 export async function sendPushToUser(
   userId: string,
@@ -115,47 +279,56 @@ export async function sendPushToUser(
   body: string,
   url: string,
 ) {
+  // Send to mobile app tokens (Expo push) — no VAPID keys required
+  const appPushPromise = sendAppPushToUser(userId, title, body, url);
+
+  // Send to web push subscriptions — requires VAPID keys
+  let webPushPromise: Promise<void> = Promise.resolve();
   if (
-    !(import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY) ||
-    !(import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY)
-  ) return;
+    (import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY) &&
+    (import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY)
+  ) {
+    webPushPromise = (async () => {
+      await init();
+      const webpush = await getWebPush();
 
-  await init();
-  const webpush = await getWebPush();
+      // Deduplicate by endpoint — a user may have subscribed the same device to multiple events
+      const allSubs = await prisma.pushSubscription.findMany({ where: { userId } });
+      const seen = new Set<string>();
+      const subs = allSubs.filter((s) => {
+        if (seen.has(s.endpoint)) return false;
+        seen.add(s.endpoint);
+        return true;
+      });
 
-  // Deduplicate by endpoint — a user may have subscribed the same device to multiple events
-  const allSubs = await prisma.pushSubscription.findMany({ where: { userId } });
-  const seen = new Set<string>();
-  const subs = allSubs.filter((s) => {
-    if (seen.has(s.endpoint)) return false;
-    seen.add(s.endpoint);
-    return true;
-  });
+      if (subs.length === 0) return;
 
-  if (subs.length === 0) return;
+      const limit = pLimit(PUSH_CONCURRENCY);
+      const pushPayload = JSON.stringify({ title, body, url });
 
-  const limit = pLimit(PUSH_CONCURRENCY);
-  const pushPayload = JSON.stringify({ title, body, url });
+      await Promise.allSettled(
+        subs.map((sub) =>
+          limit(async () => {
+            try {
+              await webpush.sendNotification(
+                { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+                pushPayload,
+              );
+              log.info({ endpoint: sub.endpoint.slice(0, 50), userId }, "User push sent");
+            } catch (err: any) {
+              log.error(
+                { endpoint: sub.endpoint.slice(0, 60), statusCode: err?.statusCode, err: err?.message, userId },
+                "User push failed",
+              );
+              if (err?.statusCode === 410 || err?.statusCode === 404) {
+                await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+              }
+            }
+          }),
+        ),
+      );
+    })();
+  }
 
-  await Promise.allSettled(
-    subs.map((sub) =>
-      limit(async () => {
-        try {
-          await webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            pushPayload,
-          );
-          log.info({ endpoint: sub.endpoint.slice(0, 50), userId }, "User push sent");
-        } catch (err: any) {
-          log.error(
-            { endpoint: sub.endpoint.slice(0, 60), statusCode: err?.statusCode, err: err?.message, userId },
-            "User push failed",
-          );
-          if (err?.statusCode === 410 || err?.statusCode === 404) {
-            await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
-          }
-        }
-      }),
-    ),
-  );
+  await Promise.allSettled([webPushPromise, appPushPromise]);
 }

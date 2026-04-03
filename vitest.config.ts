@@ -6,7 +6,7 @@ export default defineConfig({
     globals: true,
     pool: "forks",
     poolOptions: { forks: { singleFork: true } },
-    exclude: ["node_modules", "dist", "e2e"],
+    exclude: ["node_modules", "dist", "e2e", "mobile"],
     alias: {
       "~": path.resolve(__dirname, "./src"),
     },
