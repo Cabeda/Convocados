@@ -1,0 +1,29 @@
+meta {
+  name: 1. OIDC Discovery
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/auth/.well-known/openid-configuration
+  body: none
+  auth: none
+}
+
+tests {
+  test("should return OIDC discovery document", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.issuer).to.be.a("string");
+    expect(res.body.authorization_endpoint).to.be.a("string");
+    expect(res.body.token_endpoint).to.be.a("string");
+  });
+}
+
+docs {
+  Fetches the OpenID Connect discovery document.
+  Use this to verify the OAuth 2.1 server is configured correctly
+  and to discover all endpoint URLs.
+  
+  Expected fields: authorization_endpoint, token_endpoint, userinfo_endpoint,
+  scopes_supported, response_types_supported, etc.
+}

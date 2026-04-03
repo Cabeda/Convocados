@@ -1,0 +1,20 @@
+meta {
+  name: Claim Ownership
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/events/{{eventId}}/claim
+  body: json
+  auth: none
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Claims ownership of an ownerless event.
+  Requires authentication (session cookie from sign-in).
+}

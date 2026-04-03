@@ -1,0 +1,24 @@
+appId: host.exp.Exponent
+---
+# Happy path: Open event detail, add a player, remove a player
+- tapOn: "Test Game"
+- waitForAnimationToEnd
+- assertVisible: "Test Game"
+- assertVisible: "PLAYING (2/10)"
+
+# Add a player
+- tapOn: "Add player name"
+- inputText: "Alice E2E"
+- tapOn: "Add"
+- waitForAnimationToEnd
+- assertVisible: "Alice E2E"
+- hideKeyboard
+
+# Remove the player (long press) — keyboard must be dismissed first
+- longPressOn: "Alice E2E"
+- waitForAnimationToEnd
+- tapOn: "Remove"
+- waitForAnimationToEnd
+
+# Go back
+- back

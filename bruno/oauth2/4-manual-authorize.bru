@@ -1,0 +1,65 @@
+meta {
+  name: 4-manual. Authorize (Manual)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/auth/oauth2/authorize?response_type=code&client_id={{oauthClientId}}&redirect_uri={{oauthRedirectUri}}&scope=openid profile email offline_access read:events read:ratings read:history&state={{oauthState}}&code_challenge={{pkceChallenge}}&code_challenge_method=S256
+  body: none
+  auth: none
+}
+
+script:post-response {
+  // Bruno follows the 302 redirect to the callback URL.
+  // If the callback URL is unreachable, the response URL contains the code.
+  // Try to extract from the response URL or Location header.
+  const location = res.headers?.["location"] || "";
+  const responseUrl = req?.url || "";
+
+  // Try Location header first (if Bruno didn't follow redirect)
+  let codeSource = location.includes("code=") ? location : "";
+
+  // Try response body if it contains a URL with code
+  if (!codeSource && typeof res.body === "string" && res.body.includes("code=")) {
+    codeSource = res.body;
+  }
+
+  if (codeSource) {
+    try {
+      const url = new URL(codeSource);
+      const code = url.searchParams.get("code");
+      if (code) {
+        bru.setEnvVar("authCode", code);
+        console.log("Auth code saved:", code);
+        console.log("Run step 5 (Token Exchange) next.");
+        return;
+      }
+    } catch(e) {}
+  }
+
+  // If we got here, the code wasn't auto-captured
+  console.log("Status:", res.status);
+  console.log("Check the browser URL bar for the callback URL.");
+  console.log("Copy the 'code' parameter and set it as authCode in the environment.");
+  console.log("Example: if URL is ...callback?code=ABC123&state=..., set authCode=ABC123");
+}
+
+docs {
+  Manual OAuth 2.1 Authorization fallback.
+
+  Use this if step 4 (System Browser) doesn't work.
+
+  Prerequisites:
+  1. Run step 3 (Generate PKCE) first
+  2. Be logged into Convocados (run auth/2-sign-in)
+
+  This calls the authorize endpoint directly. Since the trusted client
+  skips consent, it returns a 302 redirect with the auth code.
+
+  If the code isn't auto-captured:
+  1. Look at the response — the redirect URL contains ?code=...
+  2. Copy the code value
+  3. Set authCode in the Bruno environment
+  4. Run step 5 (Token Exchange)
+}

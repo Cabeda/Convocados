@@ -2,7 +2,7 @@
 
 Web app for organizing pickup sports games — manage events, randomize teams, track scores, and notify players.
 
-![Screenshot](./public/screenshot.png)
+![Dashboard](./docs/screenshots/web/03-dashboard.png)
 
 ## Features
 
@@ -13,18 +13,40 @@ Web app for organizing pickup sports games — manage events, randomize teams, t
 - Recurring events (weekly/monthly)
 - Game history with editable scores
 - Public events page with filters and map view
-- Push notifications (Web Push)
+- Push notifications (Web Push + mobile)
+- OAuth 2.1 / OIDC provider with PKCE, magic link, and Google SSO
 - Webhook integrations
 - Full REST API
+- Android mobile app (Expo)
+
+## Screenshots
+
+### Web
+
+| Landing | Dashboard | Event detail |
+|---------|-----------|--------------|
+| ![Landing](./docs/screenshots/web/01-landing.png) | ![Dashboard](./docs/screenshots/web/03-dashboard.png) | ![Event](./docs/screenshots/web/04-event-detail.png) |
+
+| Rankings | History | Public games |
+|----------|---------|--------------|
+| ![Rankings](./docs/screenshots/web/06-event-rankings.png) | ![History](./docs/screenshots/web/05-event-history.png) | ![Public](./docs/screenshots/web/11-public-games.png) |
+
+### Mobile (Android)
+
+| Games | Event detail | Stats | Profile |
+|-------|-------------|-------|---------|
+| ![Games](./docs/screenshots/mobile/01-games-tab.png) | ![Event](./docs/screenshots/mobile/02-event-detail.png) | ![Stats](./docs/screenshots/mobile/04-stats.png) | ![Profile](./docs/screenshots/mobile/05-profile.png) |
 
 ## Tech stack
 
 | Layer      | Technology                    |
 |------------|-------------------------------|
-| Framework  | Astro 5 (SSR, Node adapter)  |
+| Framework  | Astro 6 (SSR, Node adapter)  |
 | UI         | React 19 + MUI 6             |
+| Auth       | better-auth (OAuth 2.1 / OIDC) |
 | Database   | SQLite via Prisma 6           |
 | Testing    | Vitest + Supertest            |
+| Mobile     | Expo 53 (React Native)        |
 | Deployment | Docker on Fly.io              |
 
 ## Quick start

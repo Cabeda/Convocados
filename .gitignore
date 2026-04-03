@@ -45,3 +45,9 @@ yarn-error.log*
 /k6-results
 .tsbuildinfo
 package-lock.json
+
+# challenges venv
+challenges/.venv/
+challenges/__pycache__/
+challenges/**/__pycache__/
+challenges/.pytest_cache/

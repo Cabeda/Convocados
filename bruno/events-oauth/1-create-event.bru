@@ -1,0 +1,48 @@
+meta {
+  name: Create Event (OAuth)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/events
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "title": "Friday Football (OAuth)",
+    "location": "Pitch A",
+    "dateTime": "2026-04-10T20:00:00.000Z",
+    "maxPlayers": 10,
+    "sport": "football-5v5"
+  }
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("eventId", res.body.id);
+    console.log("Event created:", res.body.id);
+  }
+}
+
+tests {
+  test("should create event", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.id).to.be.a("string");
+  });
+}
+
+docs {
+  Create an event using OAuth bearer token instead of session cookie.
+  Requires: run the OAuth flow first (steps 1-5) to get an access token.
+}

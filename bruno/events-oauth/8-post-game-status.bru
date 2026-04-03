@@ -1,0 +1,26 @@
+meta {
+  name: Post-Game Status (OAuth)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/events/{{eventId}}/post-game-status
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+  req.setUrl(bru.getEnvVar("baseUrl") + "/api/events/" + bru.getEnvVar("eventId") + "/post-game-status");
+}
+
+tests {
+  test("should return post-game status", function() {
+    expect(res.status).to.equal(200);
+  });
+}
