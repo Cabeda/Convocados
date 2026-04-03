@@ -158,6 +158,106 @@ jobs:
         if: steps.version_bump.outputs.bump_type == 'none'
         run: echo "No conventional commits found since last release. Skipping."
 
+  build-android:
+    name: Build Android APK
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create placeholder assets if missing
+        working-directory: mobile
+        run: |
+          mkdir -p assets
+          # Create a 96x96 placeholder notification icon (1-pixel transparent PNG) if missing
+          if [ ! -f assets/notification-icon.png ]; then
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/notification-icon.png
+          fi
+          # Create a stub google-services.json if not present (required by expo prebuild)
+          if [ ! -f google-services.json ]; then
+            cat > google-services.json << 'GSEOF'
+          {
+            "project_info": { "project_number": "000000000000", "project_id": "placeholder", "storage_bucket": "placeholder.appspot.com" },
+            "client": [{ "client_info": { "mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": { "package_name": "dev.convocados.app" } }, "api_key": [{ "current_key": "placeholder" }] }],
+            "configuration_version": "1"
+          }
+          GSEOF
+          fi
+
+      - name: Update mobile app version
+        working-directory: mobile
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            app.expo.version = '$VERSION';
+            fs.writeFileSync('app.json', JSON.stringify(app, null, 2) + '\n');
+          "
+
+      - name: Generate native Android project
+        working-directory: mobile
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build APK with Gradle
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Upload APK to GitHub Release
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const version = '${{ needs.release.outputs.version }}';
+            const tag = `v${version}`;
+
+            // Find the release by tag
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag
+            });
+
+            // Find the APK file
+            const apkDir = 'mobile/android/app/build/outputs/apk/release';
+            const files = fs.readdirSync(apkDir);
+            const apk = files.find(f => f.endsWith('.apk'));
+            if (!apk) throw new Error('No APK found in ' + apkDir);
+
+            const apkPath = path.join(apkDir, apk);
+            const apkName = `convocados-${version}.apk`;
+
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              name: apkName,
+              data: fs.readFileSync(apkPath)
+            });
+
+            console.log(`Uploaded ${apkName} to release ${tag}`);
+
   deploy:
     name: Deploy
     needs: release
