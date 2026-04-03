@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Convocados",
+    "slug": "convocados",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "convocados",
+    "splash": {
+      "backgroundColor": "#1b6b4a"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.convocados.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1b6b4a"
+      },
+      "package": "dev.convocados.app",
+      "googleServicesFile": "./google-services.json"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#1b6b4a",
+          "defaultChannel": "default",
+          "sounds": []
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "convocados-mobile"
+      },
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}
+

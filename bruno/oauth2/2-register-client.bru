@@ -1,0 +1,44 @@
+meta {
+  name: 2. Register Client (Dynamic)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/auth/oauth2/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "client_name": "Bruno Test App",
+    "redirect_uris": ["{{oauthRedirectUri}}"],
+    "grant_types": ["authorization_code", "refresh_token"],
+    "response_types": ["code"],
+    "scope": "openid profile email offline_access read:events read:ratings read:history",
+    "token_endpoint_auth_method": "client_secret_post"
+  }
+}
+
+script:post-response {
+  if (res.status === 200 || res.status === 201) {
+    bru.setEnvVar("oauthClientId", res.body.client_id);
+    bru.setEnvVar("oauthClientSecret", res.body.client_secret);
+  }
+}
+
+docs {
+  RFC 7591 — Dynamic Client Registration.
+
+  NOTE: This step is OPTIONAL when using the trusted client.
+  The local environment already has oauthClientId/Secret pre-configured
+  from the TRUSTED_OAUTH_CLIENT_ID in .env, which skips consent.
+  Only run this if you need a separate dynamically-registered client.
+
+  Registers a new OAuth client. The response contains client_id and
+  client_secret which are saved to variables automatically.
+
+  For the Android app, you'd use token_endpoint_auth_method: "none"
+  (public client) since mobile apps can't keep secrets.
+}

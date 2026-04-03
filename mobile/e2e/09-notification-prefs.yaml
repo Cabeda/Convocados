@@ -1,0 +1,13 @@
+appId: host.exp.Exponent
+---
+# Happy path: Notification preferences
+- tapOn: "Profile"
+- waitForAnimationToEnd
+- tapOn: "Notifications"
+- waitForAnimationToEnd
+- assertVisible: "Push notifications"
+- assertVisible: "Email notifications"
+- assertVisible: "Reminder timing"
+- assertVisible: "Enable push"
+- assertVisible: "24 hours before"
+- back

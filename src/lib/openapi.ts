@@ -429,6 +429,157 @@ export const openApiSpec = {
         responses: { "200": { description: "Tokens revoked" }, "401": { description: "Unauthorized" } },
       },
     },
+
+    // ── OAuth 2.1 ─────────────────────────────────────────────────────────
+    "/.well-known/openid-configuration": {
+      get: {
+        summary: "OpenID Connect discovery document",
+        tags: ["OAuth"],
+        responses: { "200": { description: "OIDC metadata" } },
+      },
+    },
+    "/api/auth/oauth2/authorize": {
+      get: {
+        summary: "Authorization endpoint (OAuth 2.1 authorization code flow)",
+        tags: ["OAuth"],
+        parameters: [
+          { name: "client_id", in: "query", required: true, schema: { type: "string" } },
+          { name: "redirect_uri", in: "query", required: true, schema: { type: "string" } },
+          { name: "response_type", in: "query", required: true, schema: { type: "string", enum: ["code"] } },
+          { name: "scope", in: "query", schema: { type: "string" } },
+          { name: "state", in: "query", required: true, schema: { type: "string" } },
+          { name: "code_challenge", in: "query", required: true, schema: { type: "string" }, description: "PKCE code challenge (S256)" },
+          { name: "code_challenge_method", in: "query", required: true, schema: { type: "string", enum: ["S256"] } },
+        ],
+        responses: {
+          "302": { description: "Redirect to login or consent page" },
+          "400": { description: "Invalid request parameters" },
+        },
+      },
+    },
+    "/api/auth/oauth2/token": {
+      post: {
+        summary: "Token endpoint — exchange code for tokens or refresh",
+        tags: ["OAuth"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/x-www-form-urlencoded": {
+              schema: {
+                type: "object",
+                required: ["grant_type"],
+                properties: {
+                  grant_type: { type: "string", enum: ["authorization_code", "refresh_token"] },
+                  code: { type: "string", description: "Authorization code (for authorization_code grant)" },
+                  redirect_uri: { type: "string" },
+                  client_id: { type: "string" },
+                  client_secret: { type: "string" },
+                  code_verifier: { type: "string", description: "PKCE code verifier" },
+                  refresh_token: { type: "string", description: "Refresh token (for refresh_token grant)" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Access token, refresh token, and optional ID token" },
+          "400": { description: "Invalid grant or request" },
+          "401": { description: "Invalid client credentials" },
+          "429": { description: "Rate limited" },
+        },
+      },
+    },
+    "/api/auth/oauth2/register": {
+      post: {
+        summary: "Dynamic client registration (RFC 7591)",
+        tags: ["OAuth"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["redirect_uris"],
+                properties: {
+                  redirect_uris: { type: "array", items: { type: "string", format: "uri" } },
+                  client_name: { type: "string" },
+                  client_uri: { type: "string", format: "uri" },
+                  logo_uri: { type: "string", format: "uri" },
+                  scope: { type: "string" },
+                  token_endpoint_auth_method: { type: "string", enum: ["none", "client_secret_basic", "client_secret_post"] },
+                  grant_types: { type: "array", items: { type: "string" } },
+                  response_types: { type: "array", items: { type: "string" } },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Registered client with client_id and optional client_secret" },
+          "400": { description: "Invalid registration request" },
+          "429": { description: "Rate limited (5 registrations per hour)" },
+        },
+      },
+    },
+    "/api/auth/oauth2/userinfo": {
+      get: {
+        summary: "UserInfo endpoint — returns claims about the authenticated user",
+        tags: ["OAuth"],
+        security: [{ oauth2: ["openid"] }],
+        responses: {
+          "200": { description: "User claims (sub, email, name, picture)" },
+          "401": { description: "Invalid or missing bearer token" },
+        },
+      },
+    },
+    "/api/auth/oauth2/introspect": {
+      post: {
+        summary: "Token introspection (RFC 7662)",
+        tags: ["OAuth"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/x-www-form-urlencoded": {
+              schema: {
+                type: "object",
+                required: ["token"],
+                properties: {
+                  token: { type: "string", description: "The token to introspect" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Token metadata with active status" },
+          "429": { description: "Rate limited" },
+        },
+      },
+    },
+    "/api/auth/oauth2/revoke": {
+      post: {
+        summary: "Token revocation (RFC 7009)",
+        tags: ["OAuth"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/x-www-form-urlencoded": {
+              schema: {
+                type: "object",
+                required: ["token"],
+                properties: {
+                  token: { type: "string", description: "The token to revoke" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Token revoked (always returns 200 per RFC 7009)" },
+          "429": { description: "Rate limited" },
+        },
+      },
+    },
   },
   tags: [
     { name: "System", description: "Health and status" },
@@ -441,5 +592,45 @@ export const openApiSpec = {
     { name: "Push", description: "Push notification subscriptions" },
     { name: "Webhooks", description: "Webhook subscriptions and delivery" },
     { name: "Users", description: "User profiles and authentication" },
+    { name: "OAuth", description: "OAuth 2.1 authorization server endpoints" },
   ],
+  components: {
+    securitySchemes: {
+      oauth2: {
+        type: "oauth2",
+        description: "OAuth 2.1 authorization code flow with PKCE",
+        flows: {
+          authorizationCode: {
+            authorizationUrl: "/api/auth/oauth2/authorize",
+            tokenUrl: "/api/auth/oauth2/token",
+            scopes: {
+              openid: "Verify your identity",
+              profile: "View your basic profile",
+              email: "View your email address",
+              offline_access: "Stay signed in (refresh tokens)",
+              "read:profile": "View your profile",
+              "read:events": "View your events",
+              "write:events": "Modify event settings",
+              "create:events": "Create new events",
+              "manage:players": "Add and remove players",
+              "read:ratings": "View ELO ratings",
+              "read:history": "View game history",
+              "manage:teams": "Randomize and assign teams",
+              "manage:webhooks": "Manage webhooks",
+              "manage:push": "Manage push subscriptions",
+              "read:calendar": "Access calendar feeds",
+              "manage:payments": "Manage costs and payments",
+            },
+          },
+        },
+      },
+      apiKey: {
+        type: "apiKey",
+        in: "header",
+        name: "Authorization",
+        description: "API key authentication. Use `Bearer cvk_...` format.",
+      },
+    },
+  },
+  security: [{ oauth2: [] }, { apiKey: [] }],
 };

@@ -1,0 +1,39 @@
+meta {
+  name: 11. Revoke Token
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/auth/oauth2/revoke
+  body: form-urlencoded
+  auth: none
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded
+}
+
+body:form-urlencoded {
+  token: {{accessToken}}
+}
+
+script:pre-request {
+  req.setBody({ token: bru.getEnvVar("accessToken") });
+}
+
+tests {
+  test("should return 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  RFC 7009 — Token Revocation.
+
+  Revokes the access token (and its paired refresh token).
+  Always returns 200 per the spec, even if the token was already revoked.
+
+  This is what the Android app would call on logout.
+  After this, both the access and refresh tokens are invalidated.
+}

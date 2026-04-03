@@ -1,0 +1,14 @@
+appId: host.exp.Exponent
+---
+# Happy path: Event settings page (owner)
+- tapOn: "Test Game"
+- waitForAnimationToEnd
+- tapOn: "⚙️"
+- waitForAnimationToEnd
+- assertVisible: "Event settings"
+- assertVisible: "Game title"
+- assertVisible: "Max players"
+- assertVisible: "Public game"
+- assertVisible: "ELO ratings"
+- assertVisible: "Archive game"
+- back

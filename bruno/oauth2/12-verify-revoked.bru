@@ -1,0 +1,37 @@
+meta {
+  name: 12. Verify Revoked
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/auth/oauth2/introspect
+  body: form-urlencoded
+  auth: none
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded
+}
+
+body:form-urlencoded {
+  token: {{accessToken}}
+}
+
+script:pre-request {
+  req.setBody({ token: bru.getEnvVar("accessToken") });
+}
+
+tests {
+  test("should return 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("token should be inactive", function() {
+    expect(res.body.active).to.equal(false);
+  });
+}
+
+docs {
+  After revoking, introspect the same token to confirm it's inactive.
+  Expected: { "active": false }
+}

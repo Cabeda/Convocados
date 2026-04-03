@@ -33,6 +33,9 @@ model User {
   adminEvents             EventAdmin[]  @relation("EventAdmins")
   pushSubscriptions       PushSubscription[]
   appPushTokens           AppPushToken[]
+  oauthApps               OauthApplication[] @relation("OAuthApps")
+  oauthTokens             OauthAccessToken[] @relation("OAuthTokens")
+  oauthConsents           OauthConsent[]     @relation("OAuthConsents")
 }
 
 model Session {
@@ -480,4 +483,61 @@ model NotificationJob {
   @@index([processedAt, createdAt])
   @@index([failedAt])
   @@index([eventId])
+}
+
+// ── OAuth 2.1 (better-auth oidcProvider plugin) ───────────────────────────────
+
+model OauthApplication {
+  id                   String   @id @default(cuid())
+  name                 String
+  icon                 String?
+  metadata             String?  // JSON
+  clientId             String   @unique
+  clientSecret         String?
+  redirectUrls         String   // JSON array of redirect URIs
+  type                 String   @default("web") // "web" | "native" | "public" | "user-agent-based"
+  disabled             Boolean  @default(false)
+  userId               String?
+  user                 User?    @relation("OAuthApps", fields: [userId], references: [id], onDelete: Cascade)
+  authenticationScheme String   @default("client_secret_basic") // token_endpoint_auth_method
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  accessTokens OauthAccessToken[]
+  consents     OauthConsent[]
+
+  @@index([userId])
+}
+
+model OauthAccessToken {
+  id                    String   @id @default(cuid())
+  accessToken           String   @unique
+  refreshToken          String   @unique
+  accessTokenExpiresAt  DateTime
+  refreshTokenExpiresAt DateTime
+  clientId              String
+  client                OauthApplication @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  userId                String?
+  user                  User?    @relation("OAuthTokens", fields: [userId], references: [id], onDelete: Cascade)
+  scopes                String   // space-separated scopes
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([userId])
+}
+
+model OauthConsent {
+  id           String   @id @default(cuid())
+  clientId     String
+  client       OauthApplication @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  userId       String
+  user         User     @relation("OAuthConsents", fields: [userId], references: [id], onDelete: Cascade)
+  scopes       String   // space-separated scopes
+  consentGiven Boolean
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([userId])
 }

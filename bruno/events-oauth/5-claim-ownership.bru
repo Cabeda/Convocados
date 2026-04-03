@@ -1,0 +1,34 @@
+meta {
+  name: Claim Ownership (OAuth)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/events/{{eventId}}/claim
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {}
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+  req.setUrl(bru.getEnvVar("baseUrl") + "/api/events/" + bru.getEnvVar("eventId") + "/claim");
+}
+
+tests {
+  test("should return 409 (already owned by creator)", function() {
+    expect(res.status).to.equal(409);
+  });
+}
+
+docs {
+  Claims ownership of an ownerless event using OAuth bearer token.
+}

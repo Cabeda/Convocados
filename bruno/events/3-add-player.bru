@@ -1,0 +1,38 @@
+meta {
+  name: Add Player
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/events/{{eventId}}/players
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+body:json {
+  {
+    "name": "Alice",
+    "linkToAccount": false
+  }
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+  var eventId = bru.getEnvVar("eventId");
+  if (eventId) {
+    req.setUrl(bru.getEnvVar("baseUrl") + "/api/events/" + eventId + "/players");
+  }
+  // Remove session cookie so we test OAuth only
+  req.setHeader("Cookie", "");
+}
+
+tests {
+  test("should add player via OAuth", function() {
+    expect(res.status).to.equal(200);
+  });
+}

@@ -1,46 +1,14 @@
 # Implementation TODO
 
-## Existing branches (review, test, fix, PR, merge)
-- [x] #54 — PWA icons (PR #81 ✅ merged)
-- [x] #57 — OpenAPI 3.1 spec (PR #82 ✅ merged)
-- [x] #58 — Webhook v2 (PR #83 ✅ merged)
-- [x] #62 — API keys (PR #84 ✅ merged)
-- [x] #64 — More languages (PR #85 ✅ merged)
-- [x] #71 — SEO public games (PR #86 ✅ merged)
-
-## New features implemented (TDD)
-- [x] #55 — Email notifications (PR #87 ✅ merged)
-- [x] #50 — Scheduled game reminders (PR #88 ✅ merged)
-- [x] #66 — Real-time updates via SSE (PR #89 ✅ merged)
-- [x] #68 — Admin dashboard (PR #90 ✅ merged)
-
-## Recently completed
-- [x] #93 — Redirect to event page after login (PR #99 ✅ merged)
-- [x] #95 — Touch-friendly team picker (PR #98 ✅ merged)
-- [x] Max players input fix — allow empty field, validate on submit (PR #100 ✅ merged)
-- [x] Increase max players limit from 30 to 100 (PR #100 ✅ merged)
-- [x] Enable all available languages in language toggle (PR #100 ✅ merged)
-- [x] Teams only use active players (not bench) — test added (PR #100 ✅ merged)
-
-## Final verification
-- [x] All 463 tests pass on merged main
-- [x] All PRs merged to main
-
-## Infrastructure hardening (in progress)
-- [x] #123 — SQLite production hardening (PR #128 ✅ merged)
-- [x] #124 — Structured logging (PR #129 ✅ merged)
-- [x] #125 — E2E tests with Playwright
+## Infrastructure hardening
 - [ ] #126 — React component tests with Vitest + Testing Library
 - [ ] #127 — Persistent rate limiting backed by SQLite
 
-## CI migration to pnpm + incremental typecheck (#197)
-- [x] Enable incremental type checking with tsBuildInfoFile
-- [x] Migrate test.yml (ci, e2e, lighthouse) from npm to pnpm
-- [x] Migrate release.yml from npm to pnpm
-- [x] Migrate deploy.yml from npm to pnpm
-- [x] Migrate performance.yml from npm to pnpm
-- [x] Remove redundant install+test in deploy jobs
-- [x] Share build artifacts between ci → e2e/lighthouse
-- [x] Delete stale package-lock.json
-- [x] Create PR and merge (PR #198 ✅ merged)
-- [x] Verify deployment succeeds (v3.37.0 deployed, health check OK)
+## Open issues (from scope review)
+- [ ] #260 — CSRF posture review — `checkOrigin: false` disables protection for all routes
+- [ ] #261 — Add `push.server.ts` to test coverage
+- [ ] #262 — `redirectUrls` format inconsistency (comma-separated vs JSON array)
+- [ ] #263 — Dockerfile doesn't account for pnpm workspace
+- [ ] #264 — Stale push token cleanup
+- [ ] #265 — Real `google-services.json` for FCM in CI
+- [ ] #266 — APK signing for release workflow

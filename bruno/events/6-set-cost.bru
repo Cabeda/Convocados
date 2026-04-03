@@ -1,0 +1,18 @@
+meta {
+  name: Set Cost
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/events/{{eventId}}/cost
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "totalAmount": 40,
+    "currency": "EUR"
+  }
+}

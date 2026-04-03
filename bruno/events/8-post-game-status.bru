@@ -1,0 +1,11 @@
+meta {
+  name: Post-Game Status
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/events/{{eventId}}/post-game-status
+  body: none
+  auth: none
+}
