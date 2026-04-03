@@ -9,5 +9,5 @@
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo"
   },
-  "exclude": ["e2e"]
+  "exclude": ["e2e", "mobile"]
 }

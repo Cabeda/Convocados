@@ -1,0 +1,60 @@
+meta {
+  name: 10. Refresh Token
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/auth/oauth2/token
+  body: form-urlencoded
+  auth: none
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded
+}
+
+body:form-urlencoded {
+  grant_type: refresh_token
+  refresh_token: {{refreshToken}}
+  client_id: {{oauthClientId}}
+  client_secret: {{oauthClientSecret}}
+}
+
+script:pre-request {
+  req.setBody({
+    grant_type: "refresh_token",
+    refresh_token: bru.getEnvVar("refreshToken"),
+    client_id: bru.getEnvVar("oauthClientId"),
+    client_secret: bru.getEnvVar("oauthClientSecret")
+  });
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("accessToken", res.body.access_token);
+    if (res.body.refresh_token) {
+      bru.setEnvVar("refreshToken", res.body.refresh_token);
+    }
+    console.log("New Access Token:", res.body.access_token);
+    console.log("Expires in:", res.body.expires_in, "seconds");
+  }
+}
+
+tests {
+  test("should return 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("should return new access_token", function() {
+    expect(res.body.access_token).to.be.a("string");
+  });
+}
+
+docs {
+  Refresh an expired access token using the refresh token.
+
+  The access token expires in 1 hour, the refresh token in 7 days.
+  This is what the Android app would call when the access token expires.
+
+  The new tokens are saved to variables automatically.
+}

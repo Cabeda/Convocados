@@ -1,0 +1,30 @@
+meta {
+  name: 9. Use Token — My Stats
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/me/stats
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+}
+
+tests {
+  test("should return 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Test the OAuth access token against /api/me/stats.
+  Requires scope: read:profile
+}

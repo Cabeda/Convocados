@@ -1,0 +1,45 @@
+meta {
+  name: 4. Authorize
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/auth/oauth2/authorize?response_type=code&client_id={{oauthClientId}}&redirect_uri={{oauthRedirectUri}}&scope=openid+profile+email+offline_access+read:events+read:ratings+read:history&state={{oauthState}}&code_challenge={{pkceChallenge}}&code_challenge_method=S256
+  body: none
+  auth: none
+}
+
+script:post-response {
+  // The authorize endpoint redirects to our local callback endpoint
+  // which returns the code as JSON: { "code": "...", "state": "..." }
+  if (res.body && res.body.code) {
+    bru.setEnvVar("authCode", res.body.code);
+    console.log("Auth code captured:", res.body.code);
+  } else {
+    console.log("Status:", res.status);
+    console.log("Body:", JSON.stringify(res.body));
+    console.log("No code found. Are you signed in?");
+  }
+}
+
+tests {
+  test("should return auth code", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.code).to.be.a("string");
+  });
+}
+
+docs {
+  OAuth 2.1 Authorization — direct API call.
+
+  Prerequisites:
+  1. Run auth/2-sign-in first (session cookie needed)
+  2. Run step 3 (Generate PKCE)
+
+  The trusted client skips consent, so this returns a 302 redirect
+  directly to the callback URL with the auth code.
+
+  The post-response script auto-captures the code into {{authCode}}.
+  Then run step 5 (Token Exchange).
+}

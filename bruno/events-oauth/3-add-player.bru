@@ -1,0 +1,53 @@
+meta {
+  name: Add Player (OAuth)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/events/{{eventId}}/players
+  body: json
+  auth: oauth2
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+auth:oauth2 {
+  grant_type: authorization_code
+  callback_url: 
+  authorization_url: 
+  access_token_url: 
+  refresh_token_url: 
+  client_id: 
+  client_secret: 
+  scope: 
+  state: 
+  pkce: false
+  credentials_placement: body
+  credentials_id: credentials
+  token_source: access_token
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: false
+}
+
+body:json {
+  {
+    "name": "Alice",
+    "linkToAccount": false
+  }
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+  req.setUrl(bru.getEnvVar("baseUrl") + "/api/events/" + bru.getEnvVar("eventId") + "/players");
+}
+
+tests {
+  test("should add player", function() {
+    expect(res.status).to.equal(200);
+  });
+}

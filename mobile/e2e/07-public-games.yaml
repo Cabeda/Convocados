@@ -1,0 +1,9 @@
+appId: host.exp.Exponent
+---
+# Happy path: Public games page loads
+- tapOn: "Games"
+- waitForAnimationToEnd
+- tapOn: "🌍"
+- waitForAnimationToEnd
+- assertVisible: "Public Games"
+- back

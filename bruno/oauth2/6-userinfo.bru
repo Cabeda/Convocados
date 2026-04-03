@@ -1,0 +1,37 @@
+meta {
+  name: 6. UserInfo
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/auth/oauth2/userinfo
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+}
+
+tests {
+  test("should return 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("should return sub", function() {
+    expect(res.body.sub).to.be.a("string");
+  });
+  test("should return email", function() {
+    expect(res.body.email).to.be.a("string");
+  });
+}
+
+docs {
+  OIDC UserInfo endpoint.
+  Returns claims about the authenticated user: sub, name, email, picture.
+  Requires a valid access token with "openid" scope.
+}

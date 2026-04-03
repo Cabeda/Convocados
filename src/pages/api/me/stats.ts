@@ -1,16 +1,21 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
 import { getSession } from "../../../lib/auth.helpers.server";
+import { authenticateRequest } from "../../../lib/authenticate.server";
 import { calculateAttendance } from "../../../lib/attendance";
 
 export const GET: APIRoute = async ({ request }) => {
-  const session = await getSession(request);
-  if (!session?.user) {
+  // Support both OAuth bearer tokens and session cookies
+  const authCtx = await authenticateRequest(request);
+  const session = authCtx ? null : await getSession(request);
+  const userId = authCtx?.userId ?? session?.user?.id;
+  if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id;
-  const userName = session.user.name;
+  const userName = session?.user?.name
+    ?? (await prisma.user.findUnique({ where: { id: userId }, select: { name: true } }))?.name
+    ?? "";
 
   // Get all PlayerRating entries for this user across all events
   const ratings = await prisma.playerRating.findMany({

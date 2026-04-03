@@ -1,0 +1,25 @@
+meta {
+  name: 4. Send Magic Link
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/auth/magic-link/send-magic-link
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{email}}"
+  }
+}
+
+docs {
+  Sends a magic link to the given email address.
+  The user clicks the link to sign in without a password.
+
+  In dev, check the server console or your email provider
+  (Resend) for the magic link URL.
+}

@@ -1,0 +1,26 @@
+meta {
+  name: Get Payments (OAuth)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/events/{{eventId}}/payments
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+  req.setUrl(bru.getEnvVar("baseUrl") + "/api/events/" + bru.getEnvVar("eventId") + "/payments");
+}
+
+tests {
+  test("should return payments", function() {
+    expect(res.status).to.equal(200);
+  });
+}
