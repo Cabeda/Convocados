@@ -20,8 +20,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#1b6b4a"
       },
-      "package": "dev.convocados.app",
-      "googleServicesFile": "./google-services.json"
+      "package": "dev.convocados.app"
     },
     "plugins": [
       "expo-router",
