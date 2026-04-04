@@ -7,10 +7,10 @@ export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
   integrations: [react()],
-  // CSRF origin check is disabled at the Astro level because better-auth
-  // handles CSRF via trustedOrigins, and OAuth 2.1 endpoints must accept
-  // requests from external clients (mobile apps, API clients) that don't
-  // send a same-origin Origin header.
+  // Astro's built-in checkOrigin is disabled because it runs before middleware
+  // and cannot be bypassed per-route. CSRF protection is handled by custom
+  // middleware (src/middleware.ts) which validates Origin headers on session-
+  // authenticated mutations while allowing OAuth/Bearer-authenticated requests.
   security: { checkOrigin: false },
   server: { host: true },
   vite: {

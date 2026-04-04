@@ -6,3 +6,7 @@ dist
 *.db-wal
 test.db
 .tsbuildinfo
+mobile/node_modules
+mobile/android
+mobile/ios
+mobile/.expo

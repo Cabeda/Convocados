@@ -7,7 +7,7 @@
  * Note: Push notifications don't work in Expo Go (SDK 53+).
  * They require a development build. The hook gracefully degrades.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
