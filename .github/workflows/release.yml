@@ -192,6 +192,10 @@ jobs:
           if [ ! -f assets/notification-icon.png ]; then
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/notification-icon.png
           fi
+          # Create a splash image if missing (required by expo-splash-screen)
+          if [ ! -f assets/splash.png ]; then
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/splash.png
+          fi
           # Create a stub google-services.json if not present (required by expo prebuild)
           if [ ! -f google-services.json ]; then
             cat > google-services.json << 'GSEOF'
@@ -217,6 +221,22 @@ jobs:
       - name: Generate native Android project
         working-directory: mobile
         run: npx expo prebuild --platform android --no-install
+
+      - name: Fix missing splash screen drawable if needed
+        working-directory: mobile
+        run: |
+          # expo-splash-screen may reference splashscreen_logo drawable that doesn't exist
+          # when no splash image is provided. Create a 1x1 placeholder if missing.
+          for dir in android/app/src/main/res/drawable-*; do
+            if [ -d "$dir" ] && [ ! -f "$dir/splashscreen_logo.png" ]; then
+              cp assets/splash.png "$dir/splashscreen_logo.png"
+            fi
+          done
+          # Also check the base drawable directory
+          mkdir -p android/app/src/main/res/drawable
+          if [ ! -f android/app/src/main/res/drawable/splashscreen_logo.png ]; then
+            cp assets/splash.png android/app/src/main/res/drawable/splashscreen_logo.png
+          fi
 
       - name: Build APK with Gradle
         working-directory: mobile/android
