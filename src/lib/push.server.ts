@@ -16,6 +16,19 @@ const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 /** Max tickets per Expo push request (Expo limit is 100) */
 const EXPO_BATCH_SIZE = 100;
 
+/**
+ * ntfy server URL — defaults to the public ntfy.sh instance.
+ * Self-host with `docker run -p 8090:80 binwiederhier/ntfy serve`
+ * and set NTFY_URL=http://localhost:8090
+ */
+const NTFY_URL = process.env.NTFY_URL ?? "https://ntfy.sh";
+
+/**
+ * ntfy topic prefix — each user gets a topic like `convocados-<userId>`.
+ * Set NTFY_TOPIC_PREFIX to customize (e.g. for self-hosted instances).
+ */
+const NTFY_TOPIC_PREFIX = process.env.NTFY_TOPIC_PREFIX ?? "convocados";
+
 let initialized = false;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _webpush: any = null;
@@ -96,6 +109,81 @@ export async function sendExpoPush(messages: ExpoPushMessage[]): Promise<void> {
   }
 }
 
+// ── ntfy Push (FOSS — no Google dependency) ───────────────────────────────
+
+/**
+ * Build the ntfy topic name for a user.
+ * Each user gets a unique topic: `<prefix>-<userId>`
+ */
+function ntfyTopic(userId: string): string {
+  return `${NTFY_TOPIC_PREFIX}-${userId}`;
+}
+
+/**
+ * Send a push notification to a user via ntfy.
+ * Works without Google Play Services — the mobile app subscribes via SSE.
+ * Falls back gracefully if ntfy is unreachable.
+ */
+async function sendNtfyPush(
+  userId: string,
+  title: string,
+  body: string,
+  url: string,
+): Promise<void> {
+  const topic = ntfyTopic(userId);
+  try {
+    const res = await fetch(`${NTFY_URL}/${topic}`, {
+      method: "POST",
+      headers: {
+        Title: title,
+        Tags: "soccer",
+        Click: url,
+        "Content-Type": "text/plain",
+      },
+      body,
+    });
+    if (!res.ok) {
+      log.error({ status: res.status, topic }, "ntfy push failed");
+    } else {
+      log.info({ topic }, "ntfy push sent");
+    }
+  } catch (err: unknown) {
+    log.error({ err, topic }, "ntfy push error");
+  }
+}
+
+/**
+ * Get the ntfy topic URL for a user (used by the mobile app to subscribe).
+ */
+export function getNtfyTopicUrl(userId: string): string {
+  return `${NTFY_URL}/${ntfyTopic(userId)}`;
+}
+
+/**
+ * Clean up stale push tokens and subscriptions.
+ * Called from the cron endpoint.
+ *
+ * - Deletes AppPushToken records not updated in 90+ days
+ * - Deletes PushSubscription records not updated in 90+ days
+ */
+export async function cleanupStalePushTokens(): Promise<{ appTokens: number; webSubs: number }> {
+  const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+  const { count: appTokens } = await prisma.appPushToken.deleteMany({
+    where: { updatedAt: { lt: cutoff } },
+  });
+
+  const { count: webSubs } = await prisma.pushSubscription.deleteMany({
+    where: { createdAt: { lt: cutoff } },
+  });
+
+  if (appTokens > 0 || webSubs > 0) {
+    log.info({ appTokens, webSubs }, "Cleaned up stale push tokens");
+  }
+
+  return { appTokens, webSubs };
+}
+
 /**
  * Send a push notification to a user's mobile devices via Expo push.
  * Respects notification preferences.
@@ -107,18 +195,22 @@ async function sendAppPushToUser(
   url: string,
 ): Promise<void> {
   const tokens = await prisma.appPushToken.findMany({ where: { userId } });
-  if (tokens.length === 0) return;
 
-  const messages: ExpoPushMessage[] = tokens.map((t) => ({
-    to: t.token,
-    title,
-    body,
-    data: { url },
-    sound: "default" as const,
-    channelId: "default",
-  }));
+  // Send via Expo Push (for devices with Google Play Services)
+  if (tokens.length > 0) {
+    const messages: ExpoPushMessage[] = tokens.map((t) => ({
+      to: t.token,
+      title,
+      body,
+      data: { url },
+      sound: "default" as const,
+      channelId: "default",
+    }));
+    await sendExpoPush(messages);
+  }
 
-  await sendExpoPush(messages);
+  // Send via ntfy (FOSS — works without Google Play Services)
+  await sendNtfyPush(userId, title, body, url);
 }
 
 /**

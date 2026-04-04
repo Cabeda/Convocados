@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { getUpcomingReminders, getPostGameReminders, markReminderSent } from "~/lib/reminders.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
+import { cleanupStalePushTokens } from "~/lib/push.server";
 import { sendReminder, sendPaymentReminder } from "~/lib/email.server";
 import { getNotificationPrefs, wantsEmailReminder, wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
 import { getPlayersWithPendingPayments, shouldSendPaymentReminder, markPaymentReminderSent } from "~/lib/paymentReminders.server";
@@ -181,6 +182,14 @@ export const POST: APIRoute = async ({ request }) => {
     log.error({ err }, "Failed to drain notification queue");
   }
 
+  // Clean up stale push tokens (90+ days old)
+  let stalePushTokensCleaned = { appTokens: 0, webSubs: 0 };
+  try {
+    stalePushTokensCleaned = await cleanupStalePushTokens();
+  } catch (err) {
+    log.error({ err }, "Failed to clean up stale push tokens");
+  }
+
   // Mark reminders as sent only after push delivery is complete
   await Promise.allSettled([
     ...remindersToMark.map(({ eventId, type }) =>
@@ -196,7 +205,7 @@ export const POST: APIRoute = async ({ request }) => {
   ]);
 
   return new Response(
-    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, postGameRemindersSent, rateLimitsCleaned, priorityExpired, notificationJobsDrained }),
+    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, postGameRemindersSent, rateLimitsCleaned, priorityExpired, notificationJobsDrained, stalePushTokensCleaned }),
     { headers: { "Content-Type": "application/json" } },
   );
 };
