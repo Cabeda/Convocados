@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
+import Constants from "expo-constants";
 import { registerPushToken, unregisterPushToken } from "~/api/endpoints";
 import { useAuth } from "./useAuth";
 
@@ -54,7 +55,12 @@ async function getExpoPushToken(): Promise<string | null> {
       });
     }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync();
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined,
+    );
     return tokenData.data;
   } catch {
     // Push not supported in this environment (Expo Go SDK 53+)
