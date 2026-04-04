@@ -184,6 +184,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm install --legacy-peer-deps
+
       - name: Create placeholder assets if missing
         working-directory: mobile
         run: |
@@ -220,7 +224,7 @@ jobs:
 
       - name: Generate native Android project
         working-directory: mobile
-        run: npx expo prebuild --platform android --no-install
+        run: npx expo prebuild --platform android
 
       - name: Fix missing splash screen drawable if needed
         working-directory: mobile
