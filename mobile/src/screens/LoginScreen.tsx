@@ -80,6 +80,22 @@ export function LoginScreen() {
       {showServerConfig && (
         <View style={styles.serverBox}>
           <Text style={styles.serverLabel}>{t("serverUrl")}</Text>
+          <View style={styles.presets}>
+            {[
+              { label: "Production", url: "https://convocados.cabeda.dev" },
+              { label: "Localhost", url: "http://localhost:4321" },
+            ].map(({ label, url }) => (
+              <TouchableOpacity
+                key={url}
+                style={[styles.presetButton, serverInput === url && styles.presetButtonActive]}
+                onPress={() => setServerInput(url)}
+              >
+                <Text style={[styles.presetButtonText, serverInput === url && styles.presetButtonTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
           <TextInput
             style={styles.serverInput}
             value={serverInput}
@@ -87,7 +103,7 @@ export function LoginScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
-            placeholder="https://convocados.fly.dev"
+            placeholder="https://convocados.cabeda.dev"
             placeholderTextColor={colors.textMuted}
           />
           <TouchableOpacity
@@ -136,6 +152,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10,
     marginBottom: 12,
   },
+  presets: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  presetButton: {
+    flex: 1, borderRadius: 8, paddingVertical: 8, alignItems: "center",
+    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg,
+  },
+  presetButtonActive: { borderColor: colors.primary, backgroundColor: colors.primary + "22" },
+  presetButtonText: { color: colors.textMuted, fontSize: 13 },
+  presetButtonTextActive: { color: colors.primary, fontWeight: "700" },
   saveButton: {
     backgroundColor: colors.primary, borderRadius: 8,
     paddingVertical: 10, alignItems: "center",
