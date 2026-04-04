@@ -30,7 +30,6 @@ import type { EventData } from "./types";
 import type { Imatch } from "~/lib/random";
 import { ShareBar } from "./ShareBar";
 import { NotifyButton } from "./NotifyButton";
-import { WatchScoreButton } from "./WatchScoreButton";
 import LocationAutocomplete from "../LocationAutocomplete";
 
 interface Props {
@@ -458,7 +457,6 @@ export function EventHeader({
               ) : (
                 <>
                   <NotifyButton eventId={eventId} />
-                  {localMatches && localMatches.length > 0 && <WatchScoreButton eventId={eventId} />}
                   <Button variant="outlined" size="small" startIcon={<MoreVertIcon />}
                     onClick={(e) => setAnchorEl(e.currentTarget)}
                     sx={{ ml: "auto", flexShrink: 0 }}>
