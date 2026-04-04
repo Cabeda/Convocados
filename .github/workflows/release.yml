@@ -196,6 +196,16 @@ jobs:
           if [ ! -f assets/splash.png ]; then
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/splash.png
           fi
+          # Create a stub google-services.json if not present (required by expo-notifications plugin)
+          if [ ! -f google-services.json ]; then
+            cat > google-services.json << 'GSEOF'
+          {
+            "project_info": { "project_number": "000000000000", "project_id": "placeholder", "storage_bucket": "placeholder.appspot.com" },
+            "client": [{ "client_info": { "mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": { "package_name": "dev.convocados.app" } }, "api_key": [{ "current_key": "placeholder" }] }],
+            "configuration_version": "1"
+          }
+          GSEOF
+          fi
 
       - name: Update mobile app version
         working-directory: mobile
