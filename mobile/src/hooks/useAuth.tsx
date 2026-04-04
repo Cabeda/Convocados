@@ -26,14 +26,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<UserProfile | null>(null);
 
-  // Check for existing tokens on mount
+  // Check for existing tokens on mount — don't fetch user info, just check tokens
   useEffect(() => {
     (async () => {
       try {
         const tokens = await getTokens();
         if (tokens) {
-          const profile = await fetchUserInfo();
-          setUser(profile);
+          // Fetch user info with a timeout so we don't hang on startup
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 5000);
+          try {
+            const profile = await fetchUserInfo();
+            setUser(profile);
+          } catch {
+            // Network error or timeout — clear tokens and show login
+            await clearTokens();
+          } finally {
+            clearTimeout(timeout);
+          }
         }
       } catch {
         await clearTokens();
