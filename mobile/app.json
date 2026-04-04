@@ -21,7 +21,7 @@
         "backgroundColor": "#1b6b4a"
       },
       "package": "dev.convocados.app",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "$GOOGLE_SERVICES_JSON"
     },
     "plugins": [
       "expo-router",
