@@ -7,12 +7,15 @@ WORKDIR /app
 
 # ── deps (all, for build) ─────────────────────────────────────────────────────
 FROM base AS deps
-COPY package.json pnpm-lock.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+# Create minimal mobile workspace stub so pnpm can resolve the lockfile
+RUN mkdir -p mobile && echo '{"name":"convocados-mobile","version":"0.0.0","private":true}' > mobile/package.json
 RUN pnpm install --frozen-lockfile
 
 # ── prod-deps (no devDependencies) ───────────────────────────────────────────
 FROM base AS prod-deps
-COPY package.json pnpm-lock.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+RUN mkdir -p mobile && echo '{"name":"convocados-mobile","version":"0.0.0","private":true}' > mobile/package.json
 RUN pnpm install --frozen-lockfile --prod
 
 # ── build ─────────────────────────────────────────────────────────────────────

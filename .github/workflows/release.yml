@@ -196,7 +196,7 @@ jobs:
           if [ ! -f assets/splash.png ]; then
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/splash.png
           fi
-          # Create a stub google-services.json if not present (required by expo prebuild)
+          # Create a stub google-services.json if not present (required by expo-notifications plugin)
           if [ ! -f google-services.json ]; then
             cat > google-services.json << 'GSEOF'
           {
@@ -241,6 +241,32 @@ jobs:
       - name: Build APK with Gradle
         working-directory: mobile/android
         run: ./gradlew assembleRelease --no-daemon
+
+      - name: Sign APK
+        working-directory: mobile
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > /tmp/release.keystore
+          # Find the unsigned APK
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -z "$APK" ]; then echo "No APK found"; exit 1; fi
+          # Sign with apksigner (from Android SDK build-tools)
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner -type f 2>/dev/null | sort -V | tail -1)
+          if [ -n "$APKSIGNER" ]; then
+            $APKSIGNER sign \
+              --ks /tmp/release.keystore \
+              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+              --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
+              --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+              "$APK"
+          else
+            echo "apksigner not found, using jarsigner fallback"
+            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+              -keystore /tmp/release.keystore \
+              -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
+              -keypass "${{ secrets.KEY_PASSWORD }}" \
+              "$APK" "${{ secrets.KEY_ALIAS }}"
+          fi
+          rm -f /tmp/release.keystore
 
       - name: Upload APK to GitHub Release
         uses: actions/github-script@v8

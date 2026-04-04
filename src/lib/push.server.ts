@@ -97,6 +97,31 @@ export async function sendExpoPush(messages: ExpoPushMessage[]): Promise<void> {
 }
 
 /**
+ * Clean up stale push tokens and subscriptions.
+ * Called from the cron endpoint.
+ *
+ * - Deletes AppPushToken records not updated in 90+ days
+ * - Deletes PushSubscription records not updated in 90+ days
+ */
+export async function cleanupStalePushTokens(): Promise<{ appTokens: number; webSubs: number }> {
+  const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+  const { count: appTokens } = await prisma.appPushToken.deleteMany({
+    where: { updatedAt: { lt: cutoff } },
+  });
+
+  const { count: webSubs } = await prisma.pushSubscription.deleteMany({
+    where: { createdAt: { lt: cutoff } },
+  });
+
+  if (appTokens > 0 || webSubs > 0) {
+    log.info({ appTokens, webSubs }, "Cleaned up stale push tokens");
+  }
+
+  return { appTokens, webSubs };
+}
+
+/**
  * Send a push notification to a user's mobile devices via Expo push.
  * Respects notification preferences.
  */
