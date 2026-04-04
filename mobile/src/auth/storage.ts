@@ -4,8 +4,8 @@ import type { OAuthTokens } from "~/types/api";
 const TOKEN_KEY = "convocados_oauth_tokens";
 const SERVER_URL_KEY = "convocados_server_url";
 
-/** Default server URL — user can configure this */
-const DEFAULT_SERVER_URL = "http://localhost:4321";
+/** Default server URL — points to production by default */
+const DEFAULT_SERVER_URL = "https://convocados.fly.dev";
 
 export async function getServerUrl(): Promise<string> {
   const url = await SecureStore.getItemAsync(SERVER_URL_KEY);
