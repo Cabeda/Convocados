@@ -1,0 +1,5 @@
+# Exclude root-level package manager files that confuse EAS
+../pnpm-lock.yaml
+../pnpm-workspace.yaml
+../package.json
+../node_modules/
