@@ -5,7 +5,7 @@ const TOKEN_KEY = "convocados_oauth_tokens";
 const SERVER_URL_KEY = "convocados_server_url";
 
 /** Default server URL — points to production by default */
-const DEFAULT_SERVER_URL = "https://convocados.fly.dev";
+const DEFAULT_SERVER_URL = "https://convocados.cabeda.dev";
 
 export async function getServerUrl(): Promise<string> {
   const url = await SecureStore.getItemAsync(SERVER_URL_KEY);
