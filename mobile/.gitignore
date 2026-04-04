@@ -1,4 +1,5 @@
 node_modules/
+# package-lock.json is committed so EAS Build detects npm as package manager
 .expo/
 dist/
 android/
