@@ -61,10 +61,17 @@ export const onRequest = defineMiddleware((context, next) => {
     return new Response("Forbidden: missing Origin header", { status: 403 });
   }
 
-  // Compare origin to the request URL's origin
-  const requestOrigin = url.origin;
+  // Compare origin to the request URL's origin.
+  // Behind a reverse proxy (e.g. Fly.dev), url.origin is the internal address
+  // (http://localhost:3000), so we also derive the public origin from forwarded headers.
+  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
+  const publicOrigin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : null;
+
   const allowedOrigins = new Set([
-    requestOrigin,
+    url.origin,
+    // Public origin derived from proxy headers
+    ...(publicOrigin ? [publicOrigin] : []),
     // Allow configured trusted origins
     ...(process.env.TRUSTED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
   ]);
