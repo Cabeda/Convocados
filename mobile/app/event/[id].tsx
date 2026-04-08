@@ -371,6 +371,11 @@ export default function EventScreen() {
         <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/event/${id}/calendar`)}>
           <Text style={styles.actionBtnText}>📅</Text>
         </TouchableOpacity>
+        {isAuthenticated && (
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/notification-prefs")}>
+            <Text style={styles.actionBtnText}>🔔</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Quick Join */}
@@ -510,7 +515,7 @@ export default function EventScreen() {
       </View>
 
       {/* Post-game banner */}
-      {postGame && (postGame.gameEnded || postGame.hasPendingPastPayments) && !postGame.allComplete && (
+      {postGame && (postGame.gameEnded || postGame.hasPendingPastPayments) && (
         <View style={styles.postGameBanner}>
           <Text style={styles.postGameTitle}>🏁 Game ended</Text>
           {!postGame.hasScore && postGame.latestHistoryId && (
