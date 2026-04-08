@@ -11,4 +11,16 @@ config.resolver.nodeModulesPaths = [
   path.resolve(__dirname, "node_modules"),
 ];
 
+// Force React to always resolve from mobile's own node_modules.
+// Without this, Metro can pick up the root-level React in a monorepo,
+// resulting in two React instances and a "useMemo of null" crash.
+config.resolver.extraNodeModules = {
+  react: path.resolve(__dirname, "node_modules/react"),
+  "react-native": path.resolve(__dirname, "node_modules/react-native"),
+  "react-native/Libraries/Utilities/codegenNativeComponent": path.resolve(
+    __dirname,
+    "node_modules/react-native/Libraries/Utilities/codegenNativeComponent"
+  ),
+};
+
 module.exports = config;

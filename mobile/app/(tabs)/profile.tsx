@@ -47,7 +47,14 @@ export default function ProfileTab() {
   const handleLogout = () => {
     Alert.alert(t("signOut"), t("signOutConfirm"), [
       { text: t("cancel"), style: "cancel" },
-      { text: t("signOut"), style: "destructive", onPress: logout },
+      {
+        text: t("signOut"),
+        style: "destructive",
+        onPress: async () => {
+          await logout();
+          router.replace("/");
+        },
+      },
     ]);
   };
 

@@ -4,6 +4,7 @@ module.exports = {
   slug: "convocados",
   version: "1.0.0",
   orientation: "portrait",
+  icon: "./assets/icon.png",
   userInterfaceStyle: "automatic",
   scheme: "convocados",
   splash: {
@@ -18,6 +19,7 @@ module.exports = {
   },
   android: {
     adaptiveIcon: {
+      foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#1b6b4a",
     },
     package: "com.cabeda.convocados",
