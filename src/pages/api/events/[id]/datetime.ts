@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { enqueueNotification } from "../../../../lib/notificationQueue.server";
+import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -68,13 +68,16 @@ export const PUT: APIRoute = async ({ params, request }) => {
     const activePlayers = await prisma.player.count({ where: { eventId, archivedAt: null } });
     const spotsLeft = Math.max(0, event.maxPlayers - activePlayers);
     const url = `/events/${eventId}`;
-    enqueueNotification(eventId, "event_details", {
+    await enqueueNotification(eventId, "event_details", {
       title: event.title,
       key: "notifyEventDetailsChanged" as const,
       params: {},
       url,
       spotsLeft,
     });
+
+    // Drain notification queue immediately so push is sent in near-real-time
+    drainNotificationQueue().catch(() => {});
   }
 
   return Response.json({

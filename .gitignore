@@ -52,3 +52,16 @@ challenges/.venv/
 challenges/__pycache__/
 challenges/**/__pycache__/
 challenges/.pytest_cache/
+
+# Android app
+android-app/.gradle/
+android-app/app/build/
+android-app/build/
+android-app/local.properties
+
+# Old Expo mobile app (being removed)
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+mobile/google-services.json
