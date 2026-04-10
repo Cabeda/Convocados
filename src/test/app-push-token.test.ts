@@ -44,14 +44,14 @@ describe("POST /api/push/app-token", () => {
 
   it("should return 401 when not authenticated", async () => {
     mockAuthenticateRequest.mockResolvedValue(null);
-    const req = makeRequest("POST", { token: "ExponentPushToken[xxx]", platform: "ios" });
+    const req = makeRequest("POST", { token: "fcm-token-xxx", platform: "android" });
     const res = await POST({ request: req } as any);
     expect(res.status).toBe(401);
   });
 
   it("should return 400 when token is missing", async () => {
     mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
-    const req = makeRequest("POST", { platform: "ios" });
+    const req = makeRequest("POST", { platform: "android" });
     const res = await POST({ request: req } as any);
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -60,7 +60,7 @@ describe("POST /api/push/app-token", () => {
 
   it("should return 400 for invalid platform", async () => {
     mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
-    const req = makeRequest("POST", { token: "ExponentPushToken[xxx]", platform: "windows" });
+    const req = makeRequest("POST", { token: "fcm-token-xxx", platform: "windows" });
     const res = await POST({ request: req } as any);
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -70,14 +70,14 @@ describe("POST /api/push/app-token", () => {
   it("should upsert token on success", async () => {
     mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
     mockUpsert.mockResolvedValue({});
-    const req = makeRequest("POST", { token: "ExponentPushToken[xxx]", platform: "android" });
+    const req = makeRequest("POST", { token: "fcm-token-xxx", platform: "android" });
     const res = await POST({ request: req } as any);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(mockUpsert).toHaveBeenCalledWith({
-      where: { token: "ExponentPushToken[xxx]" },
-      create: { userId: "u1", token: "ExponentPushToken[xxx]", platform: "android", locale: "en" },
+      where: { token: "fcm-token-xxx" },
+      create: { userId: "u1", token: "fcm-token-xxx", platform: "android", locale: "en" },
       update: expect.objectContaining({ userId: "u1", platform: "android", locale: "en" }),
     });
   });
@@ -85,20 +85,20 @@ describe("POST /api/push/app-token", () => {
   it("should store locale when provided", async () => {
     mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
     mockUpsert.mockResolvedValue({});
-    const req = makeRequest("POST", { token: "ExponentPushToken[yyy]", platform: "ios", locale: "pt" });
+    const req = makeRequest("POST", { token: "fcm-token-yyy", platform: "android", locale: "pt" });
     const res = await POST({ request: req } as any);
     expect(res.status).toBe(200);
     expect(mockUpsert).toHaveBeenCalledWith({
-      where: { token: "ExponentPushToken[yyy]" },
-      create: { userId: "u1", token: "ExponentPushToken[yyy]", platform: "ios", locale: "pt" },
-      update: expect.objectContaining({ userId: "u1", platform: "ios", locale: "pt" }),
+      where: { token: "fcm-token-yyy" },
+      create: { userId: "u1", token: "fcm-token-yyy", platform: "android", locale: "pt" },
+      update: expect.objectContaining({ userId: "u1", platform: "android", locale: "pt" }),
     });
   });
 
   it("should default locale to 'en' when not provided", async () => {
     mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
     mockUpsert.mockResolvedValue({});
-    const req = makeRequest("POST", { token: "ExponentPushToken[zzz]", platform: "android" });
+    const req = makeRequest("POST", { token: "fcm-token-zzz", platform: "android" });
     const res = await POST({ request: req } as any);
     expect(res.status).toBe(200);
     expect(mockUpsert).toHaveBeenCalledWith(
@@ -112,27 +112,12 @@ describe("POST /api/push/app-token", () => {
   it("should truncate locale to 10 chars", async () => {
     mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
     mockUpsert.mockResolvedValue({});
-    const req = makeRequest("POST", { token: "ExponentPushToken[trunc]", platform: "android", locale: "en-US-extra-long" });
+    const req = makeRequest("POST", { token: "fcm-token-trunc", platform: "android", locale: "en-US-extra-long" });
     const res = await POST({ request: req } as any);
     expect(res.status).toBe(200);
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({ locale: "en-US-extr" }),
-      }),
-    );
-  });
-
-  it("should accept raw FCM tokens (not just Expo format)", async () => {
-    mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
-    mockUpsert.mockResolvedValue({});
-    const fcmToken = "dGVzdC1mY20tdG9rZW4:APA91bTestToken";
-    const req = makeRequest("POST", { token: fcmToken, platform: "android" });
-    const res = await POST({ request: req } as any);
-    expect(res.status).toBe(200);
-    expect(mockUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { token: fcmToken },
-        create: expect.objectContaining({ token: fcmToken, platform: "android" }),
       }),
     );
   });
@@ -145,7 +130,7 @@ describe("DELETE /api/push/app-token", () => {
 
   it("should return 401 when not authenticated", async () => {
     mockAuthenticateRequest.mockResolvedValue(null);
-    const req = makeRequest("DELETE", { token: "ExponentPushToken[xxx]" });
+    const req = makeRequest("DELETE", { token: "fcm-token-xxx" });
     const res = await DELETE({ request: req } as any);
     expect(res.status).toBe(401);
   });
@@ -160,13 +145,13 @@ describe("DELETE /api/push/app-token", () => {
   it("should delete token on success", async () => {
     mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
     mockDeleteMany.mockResolvedValue({ count: 1 });
-    const req = makeRequest("DELETE", { token: "ExponentPushToken[xxx]" });
+    const req = makeRequest("DELETE", { token: "fcm-token-xxx" });
     const res = await DELETE({ request: req } as any);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(mockDeleteMany).toHaveBeenCalledWith({
-      where: { token: "ExponentPushToken[xxx]", userId: "u1" },
+      where: { token: "fcm-token-xxx", userId: "u1" },
     });
   });
 });

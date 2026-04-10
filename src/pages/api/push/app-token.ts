@@ -4,7 +4,7 @@ import { authenticateRequest } from "../../../lib/authenticate.server";
 import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
 
 /**
- * POST /api/push/app-token — Register an Expo/FCM/APNs push token for the authenticated user.
+ * POST /api/push/app-token — Register an FCM push token for the authenticated user.
  * DELETE /api/push/app-token — Remove a push token (e.g. on sign-out).
  */
 export const POST: APIRoute = async ({ request }) => {

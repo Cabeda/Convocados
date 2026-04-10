@@ -17,7 +17,7 @@ Web app for organizing pickup sports games — manage events, randomize teams, t
 - OAuth 2.1 / OIDC provider with PKCE, magic link, and Google SSO
 - Webhook integrations
 - Full REST API
-- Android mobile app (Expo)
+- Android mobile app (native Kotlin/Compose)
 
 ## Screenshots
 
@@ -46,7 +46,7 @@ Web app for organizing pickup sports games — manage events, randomize teams, t
 | Auth       | better-auth (OAuth 2.1 / OIDC) |
 | Database   | SQLite via Prisma 6           |
 | Testing    | Vitest + Supertest            |
-| Mobile     | Expo 53 (React Native)        |
+| Mobile     | Native Android (Kotlin + Jetpack Compose) |
 | Deployment | Docker on Fly.io              |
 
 ## Quick start

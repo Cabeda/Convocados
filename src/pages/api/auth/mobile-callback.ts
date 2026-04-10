@@ -72,7 +72,7 @@ export const GET: APIRoute = async ({ request }) => {
     // Redirect to the app with the code
     // NOTE: Don't use `new URL(redirectUri)` because the URL constructor
     // normalizes "convocados://auth" to "convocados:///auth" (triple slash),
-    // which breaks expo-router's deep link matching on Android.
+    // which breaks Android deep link matching.
     const separator = redirectUri.includes("?") ? "&" : "?";
     const appUrl = `${redirectUri}${separator}code=${encodeURIComponent(code)}`;
     return Response.redirect(appUrl, 302);

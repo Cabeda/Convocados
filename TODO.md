@@ -5,7 +5,7 @@
 - [x] Fix #2 — await enqueueNotification before drainNotificationQueue to avoid race
 - [x] Fix #4 — sender self-notification on mobile (no clientId sent from mobile app)
 - [x] Fix #5 — notification tap deep linking (tapping notification does nothing)
-- [x] Fix #6 — Expo push body always English, ignores user locale
+- [x] Fix #6 — push body always English, ignores user locale
 - [x] Fix #7 — token refresh on app resume (only runs on auth change)
 
 ## Infrastructure hardening
@@ -16,7 +16,7 @@
 - [ ] #260 — CSRF posture review — `checkOrigin: false` disables protection for all routes
 - [ ] #261 — Add `push.server.ts` to test coverage
 - [ ] #262 — `redirectUrls` format inconsistency (comma-separated vs JSON array)
-- [ ] #263 — Dockerfile doesn't account for pnpm workspace
+- [x] #263 — Dockerfile doesn't account for pnpm workspace
 - [ ] #264 — Stale push token cleanup
 - [ ] #265 — Real `google-services.json` for FCM in CI
 - [ ] #266 — APK signing for release workflow

@@ -1,20 +1,37 @@
 /**
- * Tests for mobile push notification delivery via Expo push and FCM.
+ * Tests for mobile push notification delivery via FCM.
  *
  * Verifies that sendPushToEvent correctly delivers to mobile-only users
  * who have AppPushToken records but no web PushSubscription.
- * Also tests FCM routing, locale-based localization, sender exclusion
- * via userId, and sendPushToUser.
+ * Also tests locale-based localization, sender exclusion via userId,
+ * and sendPushToUser.
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { prisma } from "~/lib/db.server";
 
-// ── Mock fetch (Expo push API) ────────────────────────────────────────────────
-const mockFetch = vi.fn().mockResolvedValue({
-  ok: true,
-  json: async () => ({ data: [{ status: "ok" }] }),
+// ── Mock fetch (FCM API + OAuth token exchange) ──────────────────────────────
+const mockFetch = vi.fn().mockImplementation(async (url: string) => {
+  if (typeof url === "string" && url.includes("oauth2.googleapis.com")) {
+    // OAuth token exchange
+    return { ok: true, json: async () => ({ access_token: "mock-fcm-token", expires_in: 3600 }) };
+  }
+  if (typeof url === "string" && url.includes("fcm.googleapis.com")) {
+    // FCM send
+    return { ok: true, json: async () => ({ name: "projects/test/messages/123" }) };
+  }
+  return { ok: true, json: async () => ({}) };
 });
 vi.stubGlobal("fetch", mockFetch);
+
+// ── Set FCM service account so FCM code path is exercised ────────────────────
+// We need a real RSA key for crypto.createSign — generate a minimal one
+import { generateKeyPairSync } from "crypto";
+const { privateKey: testPrivateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+process.env.FCM_SERVICE_ACCOUNT_JSON = JSON.stringify({
+  project_id: "test-project",
+  client_email: "test@test.iam.gserviceaccount.com",
+  private_key: testPrivateKey.export({ type: "pkcs8", format: "pem" }),
+});
 
 // ── Mock web-push (not needed for these tests) ───────────────────────────────
 vi.mock("web-push", () => ({
@@ -50,31 +67,40 @@ async function seedEvent(ownerId: string, id = "evt-push-1") {
     create: {
       id,
       title: "Push Test Game",
-      location: "Test Field",
-      dateTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      location: "Test Pitch",
+      dateTime: new Date(Date.now() + 86400_000),
       maxPlayers: 10,
+      sport: "football-5v5",
       ownerId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     },
   });
   return id;
 }
 
-beforeEach(async () => {
-  vi.clearAllMocks();
-  // Re-stub fetch before each test (afterEach unstubs globals)
-  vi.stubGlobal("fetch", mockFetch);
-  mockFetch.mockResolvedValue({
-    ok: true,
-    json: async () => ({ data: [{ status: "ok" }] }),
-  });
+/** Get all FCM fetch calls (calls to fcm.googleapis.com) */
+function getFcmCalls() {
+  return mockFetch.mock.calls.filter(
+    (c: any[]) => typeof c[0] === "string" && c[0].includes("fcm.googleapis.com"),
+  );
+}
 
-  // Clean up in correct order to respect FK constraints
-  await prisma.appPushToken.deleteMany();
-  await prisma.pushSubscription.deleteMany();
+/** Extract FCM token from a fetch call body */
+function getFcmToken(call: any[]): string {
+  const body = JSON.parse(call[1].body);
+  return body.message?.token ?? "";
+}
+
+/** Extract all FCM tokens from all FCM calls */
+function getAllFcmTokens(): string[] {
+  return getFcmCalls().map(getFcmToken);
+}
+
+beforeEach(async () => {
+  mockFetch.mockClear();
   await prisma.notificationPreferences.deleteMany();
   await prisma.notificationJob.deleteMany();
+  await prisma.appPushToken.deleteMany();
+  await prisma.pushSubscription.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
   await prisma.session.deleteMany();
@@ -87,23 +113,18 @@ afterEach(() => {
 });
 
 describe("sendPushToEvent — mobile app push delivery", () => {
-  it("sends Expo push to mobile-only users who are players in the event", async () => {
-    // Setup: user with AppPushToken, player in event, but NO web PushSubscription
+  it("sends FCM push to mobile-only users who are players in the event", async () => {
     const ownerId = await seedUser("owner-1", "Owner");
     const playerId = await seedUser("player-1", "Mobile Player");
     const eventId = await seedEvent(ownerId);
 
-    // Player is in the event with linked userId
     await prisma.player.create({
       data: { name: "Mobile Player", eventId, userId: playerId, order: 0 },
     });
 
-    // Player has an Expo push token (registered via mobile app)
     await prisma.appPushToken.create({
-      data: { userId: playerId, token: "ExponentPushToken[mobile-1]", platform: "android" },
+      data: { userId: playerId, token: "fcm-token-mobile-1", platform: "android" },
     });
-
-    // No PushSubscription for this user — they only use the mobile app
 
     const { sendPushToEvent } = await import("~/lib/push.server");
     await sendPushToEvent(
@@ -115,27 +136,17 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       5,
     );
 
-    // Should have called Expo push API with the mobile player's token
     expect(mockFetch).toHaveBeenCalled();
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-    expect(expoCalls.length).toBeGreaterThanOrEqual(1);
-
-    // Verify the token was included in the push payload
-    const body = JSON.parse(expoCalls[0][1].body);
-    const tokens = Array.isArray(body) ? body.map((m: any) => m.to) : [body.to];
-    expect(tokens).toContain("ExponentPushToken[mobile-1]");
+    const tokens = getAllFcmTokens();
+    expect(tokens).toContain("fcm-token-mobile-1");
   });
 
-  it("sends Expo push to event owner even without web subscription", async () => {
+  it("sends FCM push to event owner even without web subscription", async () => {
     const ownerId = await seedUser("owner-2", "Owner");
     const eventId = await seedEvent(ownerId);
 
-    // Owner has an Expo push token but no web PushSubscription and is not a player
     await prisma.appPushToken.create({
-      data: { userId: ownerId, token: "ExponentPushToken[owner-1]", platform: "ios" },
+      data: { userId: ownerId, token: "fcm-token-owner-1", platform: "android" },
     });
 
     const { sendPushToEvent } = await import("~/lib/push.server");
@@ -149,23 +160,15 @@ describe("sendPushToEvent — mobile app push delivery", () => {
     );
 
     expect(mockFetch).toHaveBeenCalled();
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-    expect(expoCalls.length).toBeGreaterThanOrEqual(1);
-
-    const body = JSON.parse(expoCalls[0][1].body);
-    const tokens = Array.isArray(body) ? body.map((m: any) => m.to) : [body.to];
-    expect(tokens).toContain("ExponentPushToken[owner-1]");
+    const tokens = getAllFcmTokens();
+    expect(tokens).toContain("fcm-token-owner-1");
   });
 
-  it("excludes the sender from Expo push notifications", async () => {
+  it("excludes the sender from FCM push notifications", async () => {
     const ownerId = await seedUser("owner-3", "Owner");
     const senderId = await seedUser("sender-1", "Sender");
     const eventId = await seedEvent(ownerId, "evt-push-exclude");
 
-    // Both users are players
     await prisma.player.create({
       data: { name: "Owner", eventId, userId: ownerId, order: 0 },
     });
@@ -173,12 +176,11 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       data: { name: "Sender", eventId, userId: senderId, order: 1 },
     });
 
-    // Both have push tokens
     await prisma.appPushToken.create({
-      data: { userId: ownerId, token: "ExponentPushToken[owner-excl]", platform: "android" },
+      data: { userId: ownerId, token: "fcm-token-owner-excl", platform: "android" },
     });
     await prisma.appPushToken.create({
-      data: { userId: senderId, token: "ExponentPushToken[sender-excl]", platform: "android" },
+      data: { userId: senderId, token: "fcm-token-sender-excl", platform: "android" },
     });
 
     // Sender has a web push subscription with a clientId
@@ -186,7 +188,8 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       data: {
         eventId,
         endpoint: "https://push.example.com/sender",
-        p256dh: "key1",      auth: "auth1",
+        p256dh: "key1",
+        auth: "auth1",
         locale: "en",
         clientId: "sender-client-123",
         userId: senderId,
@@ -201,22 +204,12 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       { name: "Someone" },
       `/events/${eventId}`,
       5,
-      "sender-client-123", // senderClientId
+      "sender-client-123",
     );
 
-    // Should have called Expo push API
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-    expect(expoCalls.length).toBeGreaterThanOrEqual(1);
-
-    // Sender's token should NOT be in the push payload
-    const body = JSON.parse(expoCalls[0][1].body);
-    const tokens = Array.isArray(body) ? body.map((m: any) => m.to) : [body.to];
-    expect(tokens).not.toContain("ExponentPushToken[sender-excl]");
-    // Owner's token should be present
-    expect(tokens).toContain("ExponentPushToken[owner-excl]");
+    const tokens = getAllFcmTokens();
+    expect(tokens).not.toContain("fcm-token-sender-excl");
+    expect(tokens).toContain("fcm-token-owner-excl");
   });
 
   it("does not send duplicate pushes when user has both web sub and app token", async () => {
@@ -228,7 +221,6 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       data: { name: "Dual User", eventId, userId, order: 0 },
     });
 
-    // User has both web push subscription AND app push token
     await prisma.pushSubscription.create({
       data: {
         eventId,
@@ -241,7 +233,7 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       },
     });
     await prisma.appPushToken.create({
-      data: { userId, token: "ExponentPushToken[dual-1]", platform: "android" },
+      data: { userId, token: "fcm-token-dual-1", platform: "android" },
     });
 
     const { sendPushToEvent } = await import("~/lib/push.server");
@@ -254,25 +246,13 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       5,
     );
 
-    // Count how many times the Expo token appears across all Expo push calls
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-
-    let tokenCount = 0;
-    for (const call of expoCalls) {
-      const body = JSON.parse(call[1].body);
-      const messages = Array.isArray(body) ? body : [body];
-      tokenCount += messages.filter((m: any) => m.to === "ExponentPushToken[dual-1]").length;
-    }
-
-    // Token should appear exactly once — no duplicates
+    // FCM token should appear exactly once — no duplicates
+    const tokens = getAllFcmTokens();
+    const tokenCount = tokens.filter((t) => t === "fcm-token-dual-1").length;
     expect(tokenCount).toBe(1);
   });
 
   it("excludes sender when senderClientId is a userId (mobile app path)", async () => {
-    // Mobile app sends userId directly as senderClientId (no web push clientId)
     const ownerId = await seedUser("owner-uid", "Owner");
     const senderId = await seedUser("sender-uid", "Mobile Sender");
     const eventId = await seedEvent(ownerId, "evt-uid-exclude");
@@ -285,14 +265,13 @@ describe("sendPushToEvent — mobile app push delivery", () => {
     });
 
     await prisma.appPushToken.create({
-      data: { userId: ownerId, token: "ExponentPushToken[owner-uid]", platform: "android" },
+      data: { userId: ownerId, token: "fcm-token-owner-uid", platform: "android" },
     });
     await prisma.appPushToken.create({
-      data: { userId: senderId, token: "ExponentPushToken[sender-uid]", platform: "android" },
+      data: { userId: senderId, token: "fcm-token-sender-uid", platform: "android" },
     });
 
     const { sendPushToEvent } = await import("~/lib/push.server");
-    // Pass senderId directly as senderClientId (mobile app behavior)
     await sendPushToEvent(
       eventId,
       "Push Test Game",
@@ -303,18 +282,9 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       senderId, // userId used as senderClientId
     );
 
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-    expect(expoCalls.length).toBeGreaterThanOrEqual(1);
-
-    const body = JSON.parse(expoCalls[0][1].body);
-    const tokens = Array.isArray(body) ? body.map((m: any) => m.to) : [body.to];
-    // Sender should be excluded
-    expect(tokens).not.toContain("ExponentPushToken[sender-uid]");
-    // Owner should receive the notification
-    expect(tokens).toContain("ExponentPushToken[owner-uid]");
+    const tokens = getAllFcmTokens();
+    expect(tokens).not.toContain("fcm-token-sender-uid");
+    expect(tokens).toContain("fcm-token-owner-uid");
   });
 
   it("localizes push body using token locale", async () => {
@@ -326,9 +296,8 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       data: { name: "Portuguese User", eventId, userId: ptUserId, order: 0 },
     });
 
-    // Token with Portuguese locale
     await prisma.appPushToken.create({
-      data: { userId: ptUserId, token: "ExponentPushToken[pt-1]", platform: "android", locale: "pt" },
+      data: { userId: ptUserId, token: "fcm-token-pt-1", platform: "android", locale: "pt" },
     });
 
     const { sendPushToEvent } = await import("~/lib/push.server");
@@ -341,74 +310,19 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       5,
     );
 
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-    expect(expoCalls.length).toBeGreaterThanOrEqual(1);
+    const fcmCalls = getFcmCalls();
+    expect(fcmCalls.length).toBeGreaterThanOrEqual(1);
 
-    const body = JSON.parse(expoCalls[0][1].body);
-    const messages = Array.isArray(body) ? body : [body];
-    const ptMessage = messages.find((m: any) => m.to === "ExponentPushToken[pt-1]");
-    expect(ptMessage).toBeDefined();
-    // Portuguese body should NOT be the English text
-    // The Portuguese translation of "notifyPlayerJoined" should contain the player name
-    expect(ptMessage.body).toContain("Someone");
-    // Should include spots left suffix
-    expect(ptMessage.body).toContain("·");
-  });
+    // Find the call for our token
+    const ptCall = fcmCalls.find((c: any[]) => getFcmToken(c) === "fcm-token-pt-1");
+    expect(ptCall).toBeDefined();
 
-  it("sends to FCM when token is not an Expo token", async () => {
-    // FCM tokens don't start with "ExponentPushToken[" or "ExpoPushToken["
-    // Without FCM_SERVICE_ACCOUNT_JSON, FCM sends will silently fail (no crash)
-    // but the routing logic should still separate them from Expo tokens
-    const ownerId = await seedUser("owner-fcm", "Owner");
-    const fcmUserId = await seedUser("fcm-user", "FCM User");
-    const eventId = await seedEvent(ownerId, "evt-fcm");
-
-    await prisma.player.create({
-      data: { name: "FCM User", eventId, userId: fcmUserId, order: 0 },
-    });
-
-    // Raw FCM token (not Expo format)
-    await prisma.appPushToken.create({
-      data: { userId: fcmUserId, token: "dGVzdC1mY20tdG9rZW4:APA91bTest", platform: "android" },
-    });
-
-    // Also add an Expo token user to verify routing separation
-    const expoUserId = await seedUser("expo-user", "Expo User");
-    await prisma.player.create({
-      data: { name: "Expo User", eventId, userId: expoUserId, order: 1 },
-    });
-    await prisma.appPushToken.create({
-      data: { userId: expoUserId, token: "ExponentPushToken[expo-fcm-test]", platform: "android" },
-    });
-
-    const { sendPushToEvent } = await import("~/lib/push.server");
-    await sendPushToEvent(
-      eventId,
-      "Push Test Game",
-      "notifyPlayerJoined",
-      { name: "Someone" },
-      `/events/${eventId}`,
-      5,
-    );
-
-    // Expo push should only contain the Expo token, not the FCM token
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-
-    if (expoCalls.length > 0) {
-      const body = JSON.parse(expoCalls[0][1].body);
-      const messages = Array.isArray(body) ? body : [body];
-      const allTokens = messages.map((m: any) => m.to);
-      // FCM token should NOT be sent via Expo push
-      expect(allTokens).not.toContain("dGVzdC1mY20tdG9rZW4:APA91bTest");
-      // Expo token should be sent via Expo push
-      expect(allTokens).toContain("ExponentPushToken[expo-fcm-test]");
-    }
+    const body = JSON.parse(ptCall![1].body);
+    const notification = body.message?.notification;
+    expect(notification).toBeDefined();
+    // Body should contain the player name and spots left suffix
+    expect(notification.body).toContain("Someone");
+    expect(notification.body).toContain("·");
   });
 
   it("handles game full notification (spotsLeft = 0)", async () => {
@@ -420,7 +334,7 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       data: { name: "Player", eventId, userId: playerId, order: 0 },
     });
     await prisma.appPushToken.create({
-      data: { userId: playerId, token: "ExponentPushToken[full-1]", platform: "android" },
+      data: { userId: playerId, token: "fcm-token-full-1", platform: "android" },
     });
 
     const { sendPushToEvent } = await import("~/lib/push.server");
@@ -433,45 +347,40 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       0, // Game is full
     );
 
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-    expect(expoCalls.length).toBeGreaterThanOrEqual(1);
+    const fcmCalls = getFcmCalls();
+    expect(fcmCalls.length).toBeGreaterThanOrEqual(1);
 
-    const body = JSON.parse(expoCalls[0][1].body);
-    const messages = Array.isArray(body) ? body : [body];
-    const msg = messages.find((m: any) => m.to === "ExponentPushToken[full-1]");
-    expect(msg).toBeDefined();
-    // Body should contain the "game full" suffix, not "spots left"
-    expect(msg.body).toContain("·");
+    const fullCall = fcmCalls.find((c: any[]) => getFcmToken(c) === "fcm-token-full-1");
+    expect(fullCall).toBeDefined();
+
+    const body = JSON.parse(fullCall![1].body);
+    const notification = body.message?.notification;
+    expect(notification).toBeDefined();
+    expect(notification.body).toContain("·");
   });
 });
 
 describe("sendPushToUser — direct user push", () => {
-  it("sends Expo push to a specific user's devices", async () => {
+  it("sends FCM push to a specific user's devices", async () => {
     const userId = await seedUser("direct-user", "Direct User");
 
     await prisma.appPushToken.create({
-      data: { userId, token: "ExponentPushToken[direct-1]", platform: "ios" },
+      data: { userId, token: "fcm-token-direct-1", platform: "android" },
     });
 
     const { sendPushToUser } = await import("~/lib/push.server");
     await sendPushToUser(userId, "Test Title", "Test body message", "/test");
 
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-    expect(expoCalls.length).toBeGreaterThanOrEqual(1);
+    const fcmCalls = getFcmCalls();
+    expect(fcmCalls.length).toBeGreaterThanOrEqual(1);
 
-    const body = JSON.parse(expoCalls[0][1].body);
-    const messages = Array.isArray(body) ? body : [body];
-    const msg = messages.find((m: any) => m.to === "ExponentPushToken[direct-1]");
-    expect(msg).toBeDefined();
-    expect(msg.title).toBe("Test Title");
-    expect(msg.body).toBe("Test body message");
-    expect(msg.data.url).toBe("/test");
+    const directCall = fcmCalls.find((c: any[]) => getFcmToken(c) === "fcm-token-direct-1");
+    expect(directCall).toBeDefined();
+
+    const body = JSON.parse(directCall![1].body);
+    expect(body.message.notification.title).toBe("Test Title");
+    expect(body.message.notification.body).toBe("Test body message");
+    expect(body.message.data.url).toBe("/test");
   });
 
   it("does nothing when user has no push tokens", async () => {
@@ -480,38 +389,27 @@ describe("sendPushToUser — direct user push", () => {
     const { sendPushToUser } = await import("~/lib/push.server");
     await sendPushToUser(userId, "Test", "Body", "/test");
 
-    // No Expo push calls should be made
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-    expect(expoCalls.length).toBe(0);
+    // No FCM calls should be made
+    const fcmCalls = getFcmCalls();
+    expect(fcmCalls.length).toBe(0);
   });
 
   it("sends to multiple devices for the same user", async () => {
     const userId = await seedUser("multi-device", "Multi Device");
 
     await prisma.appPushToken.create({
-      data: { userId, token: "ExponentPushToken[dev-1]", platform: "ios" },
+      data: { userId, token: "fcm-token-dev-1", platform: "android" },
     });
     await prisma.appPushToken.create({
-      data: { userId, token: "ExponentPushToken[dev-2]", platform: "android" },
+      data: { userId, token: "fcm-token-dev-2", platform: "android" },
     });
 
     const { sendPushToUser } = await import("~/lib/push.server");
     await sendPushToUser(userId, "Multi", "Multi device test", "/multi");
 
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-    expect(expoCalls.length).toBeGreaterThanOrEqual(1);
-
-    const body = JSON.parse(expoCalls[0][1].body);
-    const messages = Array.isArray(body) ? body : [body];
-    const allTokens = messages.map((m: any) => m.to);
-    expect(allTokens).toContain("ExponentPushToken[dev-1]");
-    expect(allTokens).toContain("ExponentPushToken[dev-2]");
+    const tokens = getAllFcmTokens();
+    expect(tokens).toContain("fcm-token-dev-1");
+    expect(tokens).toContain("fcm-token-dev-2");
   });
 });
 
@@ -525,10 +423,9 @@ describe("sendPushToEvent — notification preferences", () => {
       data: { name: "Opt Out User", eventId, userId: optOutId, order: 0 },
     });
     await prisma.appPushToken.create({
-      data: { userId: optOutId, token: "ExponentPushToken[optout-1]", platform: "android" },
+      data: { userId: optOutId, token: "fcm-token-optout-1", platform: "android" },
     });
 
-    // User opts out of player_joined notifications
     await prisma.notificationPreferences.create({
       data: {
         userId: optOutId,
@@ -545,20 +442,10 @@ describe("sendPushToEvent — notification preferences", () => {
       `/events/${eventId}`,
       5,
       undefined,
-      "player_joined", // jobType
+      "player_joined",
     );
 
-    const calls = mockFetch.mock.calls;
-    const expoCalls = calls.filter(
-      (c: any[]) => typeof c[0] === "string" && c[0].includes("exp.host"),
-    );
-
-    // The opt-out user's token should not appear
-    for (const call of expoCalls) {
-      const body = JSON.parse(call[1].body);
-      const messages = Array.isArray(body) ? body : [body];
-      const tokens = messages.map((m: any) => m.to);
-      expect(tokens).not.toContain("ExponentPushToken[optout-1]");
-    }
+    const tokens = getAllFcmTokens();
+    expect(tokens).not.toContain("fcm-token-optout-1");
   });
 });
