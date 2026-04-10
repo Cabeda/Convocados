@@ -77,9 +77,64 @@ describe("POST /api/push/app-token", () => {
     expect(body.ok).toBe(true);
     expect(mockUpsert).toHaveBeenCalledWith({
       where: { token: "ExponentPushToken[xxx]" },
-      create: { userId: "u1", token: "ExponentPushToken[xxx]", platform: "android" },
-      update: expect.objectContaining({ userId: "u1", platform: "android" }),
+      create: { userId: "u1", token: "ExponentPushToken[xxx]", platform: "android", locale: "en" },
+      update: expect.objectContaining({ userId: "u1", platform: "android", locale: "en" }),
     });
+  });
+
+  it("should store locale when provided", async () => {
+    mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
+    mockUpsert.mockResolvedValue({});
+    const req = makeRequest("POST", { token: "ExponentPushToken[yyy]", platform: "ios", locale: "pt" });
+    const res = await POST({ request: req } as any);
+    expect(res.status).toBe(200);
+    expect(mockUpsert).toHaveBeenCalledWith({
+      where: { token: "ExponentPushToken[yyy]" },
+      create: { userId: "u1", token: "ExponentPushToken[yyy]", platform: "ios", locale: "pt" },
+      update: expect.objectContaining({ userId: "u1", platform: "ios", locale: "pt" }),
+    });
+  });
+
+  it("should default locale to 'en' when not provided", async () => {
+    mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
+    mockUpsert.mockResolvedValue({});
+    const req = makeRequest("POST", { token: "ExponentPushToken[zzz]", platform: "android" });
+    const res = await POST({ request: req } as any);
+    expect(res.status).toBe(200);
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ locale: "en" }),
+        update: expect.objectContaining({ locale: "en" }),
+      }),
+    );
+  });
+
+  it("should truncate locale to 10 chars", async () => {
+    mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
+    mockUpsert.mockResolvedValue({});
+    const req = makeRequest("POST", { token: "ExponentPushToken[trunc]", platform: "android", locale: "en-US-extra-long" });
+    const res = await POST({ request: req } as any);
+    expect(res.status).toBe(200);
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ locale: "en-US-extr" }),
+      }),
+    );
+  });
+
+  it("should accept raw FCM tokens (not just Expo format)", async () => {
+    mockAuthenticateRequest.mockResolvedValue({ userId: "u1", scopes: ["*"], authMethod: "oauth" });
+    mockUpsert.mockResolvedValue({});
+    const fcmToken = "dGVzdC1mY20tdG9rZW4:APA91bTestToken";
+    const req = makeRequest("POST", { token: fcmToken, platform: "android" });
+    const res = await POST({ request: req } as any);
+    expect(res.status).toBe(200);
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { token: fcmToken },
+        create: expect.objectContaining({ token: fcmToken, platform: "android" }),
+      }),
+    );
   });
 });
 
