@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
+// Increase default timeout — players API now awaits notification queue drain
+// which adds DB queries per player operation, slow on CI runners
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 // Use a separate Prisma client for test data setup (avoids mock interference)
 const testPrisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
@@ -131,7 +135,7 @@ beforeEach(async () => {
   await testPrisma.eventLog.deleteMany();
   await testPrisma.event.deleteMany();
   await testPrisma.user.deleteMany();
-}, 30_000);
+});
 
 // ─── POST /api/events/[id]/claim (authenticated) ────────────────────────────
 

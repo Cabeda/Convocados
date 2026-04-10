@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { POST as addPlayer } from "~/pages/api/events/[id]/players";
+
+// Increase default timeout — players API now awaits notification queue drain
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 function ctx(params: Record<string, string>, body: unknown) {
   const request = new Request("http://localhost/api/test", {
@@ -42,7 +45,7 @@ beforeEach(async () => {
 });
 
 describe("Bench player cap (#175)", () => {
-  it("allows players up to maxPlayers on the bench (2x maxPlayers total)", { timeout: 30_000 }, async () => {
+  it("allows players up to maxPlayers on the bench (2x maxPlayers total)", async () => {
     const eventId = await seedEvent(2); // 2 active + 2 bench = 4 total
     // Add 2 active players
     await addPlayers(eventId, 2);
@@ -59,7 +62,7 @@ describe("Bench player cap (#175)", () => {
     expect(body5.error).toContain("bench");
   });
 
-  it("rejects players when bench is full for larger events", { timeout: 30_000 }, async () => {
+  it("rejects players when bench is full for larger events", async () => {
     const eventId = await seedEvent(10); // 10 active + 10 bench = 20 total
     await addPlayers(eventId, 20); // fill all spots
 
@@ -69,7 +72,7 @@ describe("Bench player cap (#175)", () => {
     expect(body.error).toContain("bench");
   });
 
-  it("allows adding players when bench still has room", { timeout: 30_000 }, async () => {
+  it("allows adding players when bench still has room", async () => {
     const eventId = await seedEvent(3); // 3 active + 3 bench = 6 total
     await addPlayers(eventId, 5); // 3 active + 2 bench
 
