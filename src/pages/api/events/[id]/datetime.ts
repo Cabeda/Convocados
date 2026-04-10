@@ -77,7 +77,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     });
 
     // Drain notification queue immediately so push is sent in near-real-time
-    drainNotificationQueue().catch(() => {});
+    if (!process.env.VITEST) drainNotificationQueue().catch(() => {});
   }
 
   return Response.json({

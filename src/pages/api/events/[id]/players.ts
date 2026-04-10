@@ -149,7 +149,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   // Drain notification queue immediately so push is sent in near-real-time
-  drainNotificationQueue().catch(() => {});
+  if (!process.env.VITEST) drainNotificationQueue().catch(() => {});
 
   // Send game invite email to the joining player if they have a linked account
   if (shouldLink && session?.user?.email) {
@@ -269,7 +269,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   }
 
   // Drain notification queue immediately so push is sent in near-real-time
-  drainNotificationQueue().catch(() => {});
+  if (!process.env.VITEST) drainNotificationQueue().catch(() => {});
 
   // Fire webhooks (non-blocking)
   fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft }).catch(() => {});
