@@ -1,12 +1,6 @@
 # Mobile App
 
-Convocados has an Android app built with Expo (React Native). It connects to any self-hosted Convocados instance via OAuth 2.1 + PKCE.
-
-## Screenshots
-
-| Games | Event detail | Players | Stats | Profile |
-|-------|-------------|---------|-------|---------|
-| ![Games](./screenshots/mobile/01-games-tab.png) | ![Event](./screenshots/mobile/02-event-detail.png) | ![Players](./screenshots/mobile/03-event-detail-players.png) | ![Stats](./screenshots/mobile/04-stats.png) | ![Profile](./screenshots/mobile/05-profile.png) |
+Convocados has a native Android app built with Kotlin and Jetpack Compose. It connects to any self-hosted Convocados instance via OAuth 2.1 + PKCE.
 
 ## Features
 
@@ -14,13 +8,13 @@ Convocados has an Android app built with Expo (React Native). It connects to any
 - Join/leave events, add guest players
 - Team randomization with VS display
 - Player stats and ELO rankings
-- Push notifications (requires development build — see below)
+- Push notifications via Firebase Cloud Messaging (FCM)
 - Multi-language: English, Português, Español, Français, Deutsch, Italiano
 - Configurable server URL — connect to any Convocados instance
 
 ## Authentication
 
-The app authenticates via the Convocados OIDC provider using Authorization Code + PKCE. No password is stored on the device — tokens are kept in `expo-secure-store`.
+The app authenticates via the Convocados OIDC provider using Authorization Code + PKCE. Tokens are stored securely using Android's EncryptedSharedPreferences.
 
 The server must have the app's redirect URI registered as a trusted client:
 
@@ -33,66 +27,46 @@ TRUSTED_OAUTH_REDIRECT_URIS=convocados://callback
 ## Development setup
 
 ```bash
-cd mobile
-npm ci
-npm start          # starts Expo dev server
-npm run android    # opens on connected device / emulator
+cd android-app
+./gradlew assembleDebug    # Build debug APK
+./gradlew installDebug     # Install on connected device / emulator
 ```
-
-The app points to `http://10.0.2.2:4321` (Android emulator localhost) by default. Change it in Profile → Server URL.
 
 ## Push notifications
 
-Remote push notifications require a **development build** — they do not work in Expo Go since SDK 53.
-
-### Build a development client
-
-```bash
-# Using EAS (recommended)
-eas build --profile development --platform android
-
-# Or build locally (requires Android SDK)
-expo run:android
-```
+Push notifications use Firebase Cloud Messaging (FCM) HTTP v1 API.
 
 ### Required setup
 
 1. Create a Firebase project and download `google-services.json`
-2. Place it at `mobile/google-services.json`
-3. The `expo-notifications` plugin in `app.json` handles the rest
-
-### EAS project ID
-
-Update `extra.eas.projectId` in `mobile/app.json` with your EAS project ID:
-
-```bash
-eas init
-```
+2. Place it at `android-app/app/google-services.json`
+3. Set the `GOOGLE_SERVICE_ACCOUNT_JSON` environment variable on the server with your Firebase service account credentials
 
 ## Project structure
 
 ```
-mobile/
-├── app/
-│   ├── (tabs)/         # Bottom tab screens (Games, Stats, Profile)
-│   ├── event/[id]/     # Event detail and sub-screens
-│   ├── create.tsx      # Create event screen
-│   └── index.tsx       # Auth gate → redirect to tabs
-├── src/
-│   ├── auth/           # OAuth + token storage
-│   ├── hooks/          # useAuth, useT, etc.
-│   ├── screens/        # LoginScreen
-│   └── lib/            # Theme, i18n, API client
-├── e2e/                # Maestro E2E tests
-└── app.json            # Expo config
+android-app/
+├── app/src/main/java/dev/convocados/
+│   ├── data/
+│   │   ├── api/          # API client, models
+│   │   ├── auth/         # OAuth + token storage
+│   │   ├── datastore/    # Settings persistence
+│   │   └── push/         # FCM service + token manager
+│   └── ui/
+│       ├── navigation/   # App navigation routes
+│       ├── screen/       # All app screens
+│       └── theme/        # Material 3 theme
+├── build.gradle.kts
+└── settings.gradle.kts
 ```
 
-## E2E tests
+## Building a release APK
 
-Tests use [Maestro](https://maestro.mobile.dev). Run against a connected device or emulator:
+Release APKs are built automatically by the CI/CD pipeline on every release. To build locally:
 
 ```bash
-maestro test mobile/e2e/
+cd android-app
+./gradlew assembleRelease
 ```
 
-Requires a running dev server and a seeded test account.
+The unsigned APK will be at `app/build/outputs/apk/release/`.

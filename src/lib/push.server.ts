@@ -10,12 +10,6 @@ const log = createLogger("push");
 /** Max concurrent web-push sends per event to avoid overwhelming the connection pool */
 const PUSH_CONCURRENCY = 20;
 
-/** Expo push API endpoint */
-const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
-
-/** Max tickets per Expo push request (Expo limit is 100) */
-const EXPO_BATCH_SIZE = 100;
-
 /** FCM HTTP v1 API endpoint */
 const FCM_API_URL = "https://fcm.googleapis.com/v1/projects/{projectId}/messages:send";
 
@@ -167,70 +161,6 @@ async function sendFcmBatch(messages: { token: string; title: string; body: stri
   await Promise.allSettled(messages.map((m) => limit(() => sendFcmMessage(m.token, m.title, m.body, m.data))));
 }
 
-/** Check if a token is an Expo push token (vs a raw FCM token) */
-function isExpoToken(token: string): boolean {
-  return token.startsWith("ExponentPushToken[") || token.startsWith("ExpoPushToken[");
-}
-
-// ── Expo Push (mobile app) ────────────────────────────────────────────────────
-
-interface ExpoPushMessage {
-  to: string;
-  title: string;
-  body: string;
-  data?: Record<string, string>;
-  sound?: "default" | null;
-  channelId?: string;
-}
-
-interface ExpoPushTicket {
-  status: "ok" | "error";
-  id?: string;
-  message?: string;
-  details?: { error?: string };
-}
-
-/**
- * Send push notifications to Expo push tokens in batches.
- * Automatically removes invalid tokens (DeviceNotRegistered).
- */
-export async function sendExpoPush(messages: ExpoPushMessage[]): Promise<void> {
-  if (messages.length === 0) return;
-
-  for (let i = 0; i < messages.length; i += EXPO_BATCH_SIZE) {
-    const batch = messages.slice(i, i + EXPO_BATCH_SIZE);
-    try {
-      const res = await fetch(EXPO_PUSH_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(batch),
-      });
-
-      if (!res.ok) {
-        log.error({ status: res.status, statusText: res.statusText }, "Expo push API error");
-        continue;
-      }
-
-      const { data: tickets } = (await res.json()) as { data: ExpoPushTicket[] };
-
-      // Clean up invalid tokens
-      for (let j = 0; j < tickets.length; j++) {
-        const ticket = tickets[j];
-        if (ticket.status === "error" && ticket.details?.error === "DeviceNotRegistered") {
-          const token = batch[j].to;
-          log.info({ token: token.slice(0, 30) }, "Removing invalid Expo push token");
-          await prisma.appPushToken.deleteMany({ where: { token } }).catch(() => {});
-        }
-      }
-    } catch (err: unknown) {
-      log.error({ err }, "Failed to send Expo push batch");
-    }
-  }
-}
-
 /**
  * Clean up stale push tokens and subscriptions.
  * Called from the cron endpoint.
@@ -257,8 +187,7 @@ export async function cleanupStalePushTokens(): Promise<{ appTokens: number; web
 }
 
 /**
- * Send a push notification to a user's mobile devices.
- * Routes to Expo Push or FCM depending on the token format.
+ * Send a push notification to a user's mobile devices via FCM.
  */
 async function sendAppPushToUser(
   userId: string,
@@ -269,18 +198,8 @@ async function sendAppPushToUser(
   const tokens = await prisma.appPushToken.findMany({ where: { userId } });
   if (tokens.length === 0) return;
 
-  const expoMessages: ExpoPushMessage[] = [];
-  const fcmMessages: { token: string; title: string; body: string; data?: Record<string, string> }[] = [];
-
-  for (const t of tokens) {
-    if (isExpoToken(t.token)) {
-      expoMessages.push({ to: t.token, title, body, data: { url }, sound: "default", channelId: "default" });
-    } else {
-      fcmMessages.push({ token: t.token, title, body, data: { url } });
-    }
-  }
-
-  await Promise.allSettled([sendExpoPush(expoMessages), sendFcmBatch(fcmMessages)]);
+  const fcmMessages = tokens.map((t) => ({ token: t.token, title, body, data: { url } }));
+  await sendFcmBatch(fcmMessages);
 }
 
 /**
@@ -291,7 +210,6 @@ async function sendAppPushToUser(
  * 2. Player records linked to the event (players with userId)
  * 3. Event owner (ownerId)
  *
- * Routes to Expo Push or FCM depending on the token format.
  * Messages are localized per-token using the locale stored on AppPushToken.
  */
 async function sendAppPushToEventUsers(
@@ -343,7 +261,6 @@ async function sendAppPushToEventUsers(
   if (tokens.length === 0) return;
 
   // Filter by notification preferences and build localized messages
-  const expoMessages: ExpoPushMessage[] = [];
   const fcmMessages: { token: string; title: string; body: string; data?: Record<string, string> }[] = [];
 
   for (const token of tokens) {
@@ -358,21 +275,10 @@ async function sendAppPushToEventUsers(
     const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
     const fullBody = `${body} · ${suffix}`;
 
-    if (isExpoToken(token.token)) {
-      expoMessages.push({
-        to: token.token,
-        title,
-        body: fullBody,
-        data: { url },
-        sound: "default",
-        channelId: "default",
-      });
-    } else {
-      fcmMessages.push({ token: token.token, title, body: fullBody, data: { url } });
-    }
+    fcmMessages.push({ token: token.token, title, body: fullBody, data: { url } });
   }
 
-  await Promise.allSettled([sendExpoPush(expoMessages), sendFcmBatch(fcmMessages)]);
+  await sendFcmBatch(fcmMessages);
 }
 
 export async function sendPushToEvent(
@@ -437,7 +343,7 @@ export async function sendPushToEvent(
 
   const promises: Promise<unknown>[] = [];
 
-  // App push fan-out (mobile devices) — FCM for native, Expo for legacy
+  // App push fan-out (mobile devices via FCM)
   promises.push(
     sendAppPushToEventUsers(eventId, title, key, params, url, spotsLeft, senderUserIds, jobType, reminderType, prefsMap),
   );
@@ -499,7 +405,7 @@ export async function sendPushToUser(
   body: string,
   url: string,
 ) {
-  // Send to mobile app tokens (FCM for native, Expo for legacy)
+  // Send to mobile app tokens via FCM
   const appPushPromise = sendAppPushToUser(userId, title, body, url);
 
   // Send to web push subscriptions — requires VAPID keys
