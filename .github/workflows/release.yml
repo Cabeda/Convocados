@@ -164,6 +164,8 @@ jobs:
     needs: release
     if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE != '' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -200,7 +202,7 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Sign APK
-        if: ${{ secrets.ANDROID_KEYSTORE != '' }}
+        if: ${{ env.HAS_KEYSTORE == 'true' }}
         working-directory: android-app
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > /tmp/release.keystore
