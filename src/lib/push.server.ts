@@ -16,6 +16,9 @@ const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 /** Max tickets per Expo push request (Expo limit is 100) */
 const EXPO_BATCH_SIZE = 100;
 
+/** FCM HTTP v1 API endpoint */
+const FCM_API_URL = "https://fcm.googleapis.com/v1/projects/{projectId}/messages:send";
+
 let initialized = false;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _webpush: any = null;
@@ -35,6 +38,138 @@ async function init() {
   const publicKey = import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY!;
   const privateKey = import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY!;
   webpush.setVapidDetails("mailto:admin@convocados.fly.dev", publicKey, privateKey);
+}
+
+// ── FCM (Firebase Cloud Messaging) ────────────────────────────────────────────
+
+interface FcmServiceAccount {
+  project_id: string;
+  client_email: string;
+  private_key: string;
+}
+
+let _fcmAccessToken: { token: string; expiresAt: number } | null = null;
+let _fcmServiceAccount: FcmServiceAccount | null = null;
+
+function getFcmServiceAccount(): FcmServiceAccount | null {
+  if (_fcmServiceAccount) return _fcmServiceAccount;
+  const raw = import.meta.env.FCM_SERVICE_ACCOUNT_JSON ?? process.env.FCM_SERVICE_ACCOUNT_JSON;
+  if (!raw) return null;
+  try {
+    _fcmServiceAccount = JSON.parse(raw) as FcmServiceAccount;
+    return _fcmServiceAccount;
+  } catch {
+    log.error("Failed to parse FCM_SERVICE_ACCOUNT_JSON");
+    return null;
+  }
+}
+
+/** Get an OAuth2 access token for FCM using the service account JWT */
+async function getFcmAccessToken(): Promise<string | null> {
+  if (_fcmAccessToken && Date.now() < _fcmAccessToken.expiresAt - 60_000) {
+    return _fcmAccessToken.token;
+  }
+
+  const sa = getFcmServiceAccount();
+  if (!sa) return null;
+
+  try {
+    // Build JWT for Google OAuth2
+    const header = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+    const now = Math.floor(Date.now() / 1000);
+    const payload = btoa(JSON.stringify({
+      iss: sa.client_email,
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
+      aud: "https://oauth2.googleapis.com/token",
+      iat: now,
+      exp: now + 3600,
+    }));
+
+    const { createSign } = await import("crypto");
+    const sign = createSign("RSA-SHA256");
+    sign.update(`${header}.${payload}`);
+    const signature = sign.sign(sa.private_key, "base64url");
+
+    const jwt = `${header}.${payload}.${signature}`;
+
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+    });
+
+    if (!res.ok) {
+      log.error({ status: res.status }, "Failed to get FCM access token");
+      return null;
+    }
+
+    const data = await res.json() as { access_token: string; expires_in: number };
+    _fcmAccessToken = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
+    return _fcmAccessToken.token;
+  } catch (err) {
+    log.error({ err }, "Failed to get FCM access token");
+    return null;
+  }
+}
+
+/** Send a push notification via FCM HTTP v1 API */
+async function sendFcmMessage(token: string, title: string, body: string, data?: Record<string, string>): Promise<boolean> {
+  const sa = getFcmServiceAccount();
+  if (!sa) return false;
+
+  const accessToken = await getFcmAccessToken();
+  if (!accessToken) return false;
+
+  const url = FCM_API_URL.replace("{projectId}", sa.project_id);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          token,
+          notification: { title, body },
+          data: data ?? {},
+          android: {
+            notification: { channel_id: "default", sound: "default" },
+          },
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text();
+      // Token is invalid/expired — remove it
+      if (res.status === 404 || res.status === 400 || errBody.includes("UNREGISTERED")) {
+        log.info({ token: token.slice(0, 30) }, "Removing invalid FCM token");
+        await prisma.appPushToken.deleteMany({ where: { token } }).catch(() => {});
+      } else {
+        log.error({ status: res.status, body: errBody.slice(0, 200) }, "FCM send failed");
+      }
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    log.error({ err }, "FCM send error");
+    return false;
+  }
+}
+
+/** Send FCM messages in batch */
+async function sendFcmBatch(messages: { token: string; title: string; body: string; data?: Record<string, string> }[]): Promise<void> {
+  if (messages.length === 0) return;
+  const limit = pLimit(PUSH_CONCURRENCY);
+  await Promise.allSettled(messages.map((m) => limit(() => sendFcmMessage(m.token, m.title, m.body, m.data))));
+}
+
+/** Check if a token is an Expo push token (vs a raw FCM token) */
+function isExpoToken(token: string): boolean {
+  return token.startsWith("ExponentPushToken[") || token.startsWith("ExpoPushToken[");
 }
 
 // ── Expo Push (mobile app) ────────────────────────────────────────────────────
@@ -122,8 +257,8 @@ export async function cleanupStalePushTokens(): Promise<{ appTokens: number; web
 }
 
 /**
- * Send a push notification to a user's mobile devices via Expo push.
- * Respects notification preferences.
+ * Send a push notification to a user's mobile devices.
+ * Routes to Expo Push or FCM depending on the token format.
  */
 async function sendAppPushToUser(
   userId: string,
@@ -134,38 +269,71 @@ async function sendAppPushToUser(
   const tokens = await prisma.appPushToken.findMany({ where: { userId } });
   if (tokens.length === 0) return;
 
-  const messages: ExpoPushMessage[] = tokens.map((t) => ({
-    to: t.token,
-    title,
-    body,
-    data: { url },
-    sound: "default" as const,
-    channelId: "default",
-  }));
+  const expoMessages: ExpoPushMessage[] = [];
+  const fcmMessages: { token: string; title: string; body: string; data?: Record<string, string> }[] = [];
 
-  await sendExpoPush(messages);
+  for (const t of tokens) {
+    if (isExpoToken(t.token)) {
+      expoMessages.push({ to: t.token, title, body, data: { url }, sound: "default", channelId: "default" });
+    } else {
+      fcmMessages.push({ token: t.token, title, body, data: { url } });
+    }
+  }
+
+  await Promise.allSettled([sendExpoPush(expoMessages), sendFcmBatch(fcmMessages)]);
 }
 
 /**
- * Send app push notifications to all users subscribed to an event.
- * Looks up users via PushSubscription (linked userId) and AppPushToken.
+ * Send app push notifications to all users associated with an event.
+ *
+ * Finds users via three sources (deduplicated):
+ * 1. PushSubscription records linked to the event (web push subscribers)
+ * 2. Player records linked to the event (players with userId)
+ * 3. Event owner (ownerId)
+ *
+ * Routes to Expo Push or FCM depending on the token format.
+ * Messages are localized per-token using the locale stored on AppPushToken.
  */
 async function sendAppPushToEventUsers(
   eventId: string,
   title: string,
-  body: string,
+  key: TranslationKey,
+  params: Record<string, string>,
   url: string,
+  spotsLeft: number,
   excludeUserIds: Set<string>,
   jobType?: NotificationJobType,
   reminderType?: "24h" | "2h" | "1h",
   prefsMap?: Map<string, typeof DEFAULTS>,
 ): Promise<void> {
-  // Find all users subscribed to this event (via web push subs with linked userId)
+  // Source 1: users with web push subscriptions linked to this event
   const subs = await prisma.pushSubscription.findMany({
     where: { eventId, userId: { not: null } },
     select: { userId: true },
   });
-  const userIds = [...new Set(subs.map((s) => s.userId!).filter((id) => !excludeUserIds.has(id)))];
+
+  // Source 2: players in the event with linked accounts
+  const players = await prisma.player.findMany({
+    where: { eventId, userId: { not: null } },
+    select: { userId: true },
+  });
+
+  // Source 3: event owner
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { ownerId: true },
+  });
+
+  // Merge and deduplicate all user IDs, excluding the sender
+  const allUserIds = new Set<string>();
+  for (const s of subs) if (s.userId) allUserIds.add(s.userId);
+  for (const p of players) if (p.userId) allUserIds.add(p.userId);
+  if (event?.ownerId) allUserIds.add(event.ownerId);
+
+  // Remove excluded users (sender)
+  for (const id of excludeUserIds) allUserIds.delete(id);
+
+  const userIds = [...allUserIds];
   if (userIds.length === 0) return;
 
   // Find app push tokens for these users
@@ -174,25 +342,37 @@ async function sendAppPushToEventUsers(
   });
   if (tokens.length === 0) return;
 
-  // Filter by notification preferences
-  const messages: ExpoPushMessage[] = [];
+  // Filter by notification preferences and build localized messages
+  const expoMessages: ExpoPushMessage[] = [];
+  const fcmMessages: { token: string; title: string; body: string; data?: Record<string, string> }[] = [];
+
   for (const token of tokens) {
     if (prefsMap && jobType) {
       const prefs = prefsMap.get(token.userId) ?? DEFAULTS;
       if (!wantsPushForJobType(prefs, jobType)) continue;
       if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) continue;
     }
-    messages.push({
-      to: token.token,
-      title,
-      body,
-      data: { url },
-      sound: "default",
-      channelId: "default",
-    });
+    // Build localized body using the token's stored locale
+    const t = createT(((token as any).locale as Locale) ?? "en");
+    const body = t(key, params);
+    const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
+    const fullBody = `${body} · ${suffix}`;
+
+    if (isExpoToken(token.token)) {
+      expoMessages.push({
+        to: token.token,
+        title,
+        body: fullBody,
+        data: { url },
+        sound: "default",
+        channelId: "default",
+      });
+    } else {
+      fcmMessages.push({ token: token.token, title, body: fullBody, data: { url } });
+    }
   }
 
-  await sendExpoPush(messages);
+  await Promise.allSettled([sendExpoPush(expoMessages), sendFcmBatch(fcmMessages)]);
 }
 
 export async function sendPushToEvent(
@@ -217,24 +397,39 @@ export async function sendPushToEvent(
     (sub) => !senderClientId || !sub.clientId || sub.clientId !== senderClientId,
   );
 
-  // Batch-load notification prefs for all linked users in one query
-  const allLinkedUserIds = [...new Set(
+  // Collect ALL user IDs that will receive notifications (web + mobile + owner)
+  // so we can batch-load prefs for everyone in one query.
+  const webUserIds = new Set(
     subs.map((s) => s.userId).filter(Boolean) as string[],
-  )];
-  const prefsRows = allLinkedUserIds.length > 0
-    ? await prisma.notificationPreferences.findMany({ where: { userId: { in: allLinkedUserIds } } })
+  );
+  const players = await prisma.player.findMany({
+    where: { eventId, userId: { not: null } },
+    select: { userId: true },
+  });
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { ownerId: true },
+  });
+  const allUserIds = new Set(webUserIds);
+  for (const p of players) if (p.userId) allUserIds.add(p.userId);
+  if (event?.ownerId) allUserIds.add(event.ownerId);
+
+  const allUserIdList = [...allUserIds];
+  const prefsRows = allUserIdList.length > 0
+    ? await prisma.notificationPreferences.findMany({ where: { userId: { in: allUserIdList } } })
     : [];
   const prefsMap = new Map(prefsRows.map((p) => [p.userId, { ...DEFAULTS, ...p }]));
 
-  // Build a default-locale body for the Expo push (mobile app tokens don't carry locale)
-  const defaultT = createT("en");
-  const defaultBody = defaultT(key, params);
-  const defaultSuffix = spotsLeft === 0 ? defaultT("notifyGameFull") : defaultT("notifySpotsLeft", { n: spotsLeft });
-  const appPushBody = `${defaultBody} · ${defaultSuffix}`;
-
-  // Collect sender userIds so we can exclude them from app push too
+  // Collect sender userIds so we can exclude them from app push too.
+  // Sender is identified by senderClientId (web) or by userId from the
+  // request header x-sender-user-id (mobile).
   const senderUserIds = new Set<string>();
   if (senderClientId) {
+    // If senderClientId looks like a userId (not a web push clientId), add directly
+    if (allUserIds.has(senderClientId)) {
+      senderUserIds.add(senderClientId);
+    }
+    // Also check web push subscriptions for matching clientId
     for (const sub of subs) {
       if (sub.clientId === senderClientId && sub.userId) senderUserIds.add(sub.userId);
     }
@@ -242,9 +437,9 @@ export async function sendPushToEvent(
 
   const promises: Promise<unknown>[] = [];
 
-  // Expo app push fan-out (mobile devices) — always runs, no VAPID needed
+  // App push fan-out (mobile devices) — FCM for native, Expo for legacy
   promises.push(
-    sendAppPushToEventUsers(eventId, title, appPushBody, url, senderUserIds, jobType, reminderType, prefsMap),
+    sendAppPushToEventUsers(eventId, title, key, params, url, spotsLeft, senderUserIds, jobType, reminderType, prefsMap),
   );
 
   // Web push fan-out — requires VAPID keys
@@ -304,7 +499,7 @@ export async function sendPushToUser(
   body: string,
   url: string,
 ) {
-  // Send to mobile app tokens (Expo push) — no VAPID keys required
+  // Send to mobile app tokens (FCM for native, Expo for legacy)
   const appPushPromise = sendAppPushToUser(userId, title, body, url);
 
   // Send to web push subscriptions — requires VAPID keys

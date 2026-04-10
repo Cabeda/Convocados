@@ -1,5 +1,13 @@
 # Implementation TODO
 
+## Push notification fixes (critical)
+- [x] Fix #3 — prefsMap in sendPushToEvent only loads prefs for web push users, not mobile-only users
+- [x] Fix #2 — await enqueueNotification before drainNotificationQueue to avoid race
+- [x] Fix #4 — sender self-notification on mobile (no clientId sent from mobile app)
+- [x] Fix #5 — notification tap deep linking (tapping notification does nothing)
+- [x] Fix #6 — Expo push body always English, ignores user locale
+- [x] Fix #7 — token refresh on app resume (only runs on auth change)
+
 ## Infrastructure hardening
 - [ ] #126 — React component tests with Vitest + Testing Library
 - [ ] #127 — Persistent rate limiting backed by SQLite

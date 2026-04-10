@@ -41,6 +41,9 @@ beforeEach(async () => {
   await prisma.eventLog.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
+  await prisma.session.deleteMany();
+  await prisma.account.deleteMany();
+  await prisma.user.deleteMany();
 });
 
 // ── POST /api/events — timezone ───────────────────────────────────────────────
@@ -146,7 +149,6 @@ describe("PUT /api/events/[id]/datetime", () => {
     // No session cookie → treated as anonymous
     const res = await updateDateTime(putCtx({ id: event.id }, { timezone: "Europe/Paris" }));
     expect(res.status).toBe(403);
-    await prisma.user.delete({ where: { id: owner.id } });
   });
 
   it("creates an event log entry when dateTime is updated", async () => {
