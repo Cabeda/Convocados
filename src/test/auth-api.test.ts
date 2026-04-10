@@ -118,7 +118,9 @@ beforeEach(async () => {
   vi.clearAllMocks();
   mockAnonymous();
   await resetApiRateLimitStore();
+  await testPrisma.appPushToken.deleteMany();
   await testPrisma.pushSubscription.deleteMany();
+  await testPrisma.notificationJob.deleteMany();
   await testPrisma.webhookSubscription.deleteMany();
   await testPrisma.playerRating.deleteMany();
   await testPrisma.gameHistory.deleteMany();
@@ -129,7 +131,7 @@ beforeEach(async () => {
   await testPrisma.eventLog.deleteMany();
   await testPrisma.event.deleteMany();
   await testPrisma.user.deleteMany();
-});
+}, 30_000);
 
 // ─── POST /api/events/[id]/claim (authenticated) ────────────────────────────
 
