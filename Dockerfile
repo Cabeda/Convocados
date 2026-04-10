@@ -8,16 +8,12 @@ WORKDIR /app
 # ── deps (all, for build) ─────────────────────────────────────────────────────
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-# Copy real mobile/package.json so lockfile specifiers match, then install
-# only the root workspace package (skip mobile — not needed for server build)
-COPY mobile/package.json ./mobile/package.json
-RUN pnpm install --frozen-lockfile --filter=convocados
+RUN pnpm install --frozen-lockfile
 
 # ── prod-deps (no devDependencies) ───────────────────────────────────────────
 FROM base AS prod-deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY mobile/package.json ./mobile/package.json
-RUN pnpm install --frozen-lockfile --prod --filter=convocados
+RUN pnpm install --frozen-lockfile --prod
 
 # ── build ─────────────────────────────────────────────────────────────────────
 FROM base AS build

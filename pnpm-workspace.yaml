@@ -1,6 +1,5 @@
 packages:
   - "."
-  - "mobile"
 
 allowBuilds:
   '@prisma/client': true
