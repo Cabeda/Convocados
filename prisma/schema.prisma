@@ -361,6 +361,7 @@ model AppPushToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   token     String   @unique  // Expo push token or FCM/APNs token
   platform  String            // "ios" | "android"
+  locale    String   @default("en") // User's preferred locale for push messages
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -70,9 +70,12 @@ export const GET: APIRoute = async ({ request }) => {
     });
 
     // Redirect to the app with the code
-    const appUrl = new URL(redirectUri);
-    appUrl.searchParams.set("code", code);
-    return Response.redirect(appUrl.toString(), 302);
+    // NOTE: Don't use `new URL(redirectUri)` because the URL constructor
+    // normalizes "convocados://auth" to "convocados:///auth" (triple slash),
+    // which breaks expo-router's deep link matching on Android.
+    const separator = redirectUri.includes("?") ? "&" : "?";
+    const appUrl = `${redirectUri}${separator}code=${encodeURIComponent(code)}`;
+    return Response.redirect(appUrl, 302);
   } catch (err) {
     if (err instanceof Response) return err;
     console.error("[mobile-callback error]", err);

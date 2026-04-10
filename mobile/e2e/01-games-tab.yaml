@@ -1,6 +1,0 @@
-appId: host.exp.Exponent
----
-# Happy path: Games tab loads and shows game cards
-- assertVisible: "Games"
-- assertVisible: "Test Game"
-- assertVisible: "Test Field"

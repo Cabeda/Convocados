@@ -169,91 +169,42 @@ jobs:
         with:
           ref: v${{ needs.release.outputs.version }}
 
-      - uses: pnpm/action-setup@v5
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Install mobile dependencies
-        working-directory: mobile
-        run: npm install --legacy-peer-deps
-
-      - name: Create placeholder assets if missing
-        working-directory: mobile
+      - name: Create placeholder google-services.json
+        working-directory: android-app
         run: |
-          mkdir -p assets
-          # Create a 96x96 placeholder notification icon (1-pixel transparent PNG) if missing
-          if [ ! -f assets/notification-icon.png ]; then
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/notification-icon.png
-          fi
-          # Create a splash image if missing (required by expo-splash-screen)
-          if [ ! -f assets/splash.png ]; then
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > assets/splash.png
-          fi
-          # Create a stub google-services.json if not present (required by expo-notifications plugin)
-          if [ ! -f google-services.json ]; then
-            cat > google-services.json << 'GSEOF'
+          cat > app/google-services.json << 'EOF'
           {
             "project_info": { "project_number": "000000000000", "project_id": "placeholder", "storage_bucket": "placeholder.appspot.com" },
-            "client": [{ "client_info": { "mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": { "package_name": "dev.convocados.app" } }, "api_key": [{ "current_key": "placeholder" }] }],
+            "client": [{ "client_info": { "mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": { "package_name": "com.cabeda.convocados" } }, "api_key": [{ "current_key": "placeholder" }] }],
             "configuration_version": "1"
           }
-          GSEOF
-          fi
+          EOF
 
-      - name: Update mobile app version
-        working-directory: mobile
+      - name: Update app version
+        working-directory: android-app
         run: |
           VERSION="${{ needs.release.outputs.version }}"
-          node -e "
-            const fs = require('fs');
-            const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
-            app.expo.version = '$VERSION';
-            fs.writeFileSync('app.json', JSON.stringify(app, null, 2) + '\n');
-          "
+          sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" app/build.gradle.kts
 
-      - name: Generate native Android project
-        working-directory: mobile
-        run: npx expo prebuild --platform android
-
-      - name: Fix missing splash screen drawable if needed
-        working-directory: mobile
-        run: |
-          # expo-splash-screen may reference splashscreen_logo drawable that doesn't exist
-          # when no splash image is provided. Create a 1x1 placeholder if missing.
-          for dir in android/app/src/main/res/drawable-*; do
-            if [ -d "$dir" ] && [ ! -f "$dir/splashscreen_logo.png" ]; then
-              cp assets/splash.png "$dir/splashscreen_logo.png"
-            fi
-          done
-          # Also check the base drawable directory
-          mkdir -p android/app/src/main/res/drawable
-          if [ ! -f android/app/src/main/res/drawable/splashscreen_logo.png ]; then
-            cp assets/splash.png android/app/src/main/res/drawable/splashscreen_logo.png
-          fi
-
-      - name: Build APK with Gradle
-        working-directory: mobile/android
+      - name: Build release APK
+        working-directory: android-app
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Sign APK
-        working-directory: mobile
+        if: ${{ secrets.ANDROID_KEYSTORE != '' }}
+        working-directory: android-app
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > /tmp/release.keystore
-          # Find the unsigned APK
-          APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
           if [ -z "$APK" ]; then echo "No APK found"; exit 1; fi
-          # Sign with apksigner (from Android SDK build-tools)
           APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner -type f 2>/dev/null | sort -V | tail -1)
           if [ -n "$APKSIGNER" ]; then
             $APKSIGNER sign \
@@ -263,7 +214,6 @@ jobs:
               --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
               "$APK"
           else
-            echo "apksigner not found, using jarsigner fallback"
             jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
               -keystore /tmp/release.keystore \
               -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
@@ -282,15 +232,13 @@ jobs:
             const version = '${{ needs.release.outputs.version }}';
             const tag = `v${version}`;
 
-            // Find the release by tag
             const { data: release } = await github.rest.repos.getReleaseByTag({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag
             });
 
-            // Find the APK file
-            const apkDir = 'mobile/android/app/build/outputs/apk/release';
+            const apkDir = 'android-app/app/build/outputs/apk/release';
             const files = fs.readdirSync(apkDir);
             const apk = files.find(f => f.endsWith('.apk'));
             if (!apk) throw new Error('No APK found in ' + apkDir);

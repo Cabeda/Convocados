@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { enqueueNotification } from "../../../../lib/notificationQueue.server";
+import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
 import { sendGameInvite, sendPlayerJoinedOwnerNotification } from "../../../../lib/email.server";
 import { getNotificationPrefs, wantsGameInviteEmail } from "../../../../lib/notificationPrefs.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
@@ -83,8 +83,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.fly.dev";
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const origin = `${proto}://${host}`;
-  const senderClientId = request.headers.get("x-client-id") ?? undefined;
   const session = await getSession(request);
+  const senderClientId = request.headers.get("x-client-id") ?? session?.user?.id ?? undefined;
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     include: { players: { orderBy: { order: "asc" } } },
@@ -143,10 +143,13 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   if (isOnBench) {
-    enqueueNotification(eventId, "player_joined_bench", { title: event.title, key: "notifyPlayerJoinedBench", params: { name: trimmed }, url, spotsLeft }, senderClientId);
+    await enqueueNotification(eventId, "player_joined_bench", { title: event.title, key: "notifyPlayerJoinedBench", params: { name: trimmed }, url, spotsLeft }, senderClientId);
   } else {
-    enqueueNotification(eventId, "player_joined", { title: event.title, key: "notifyPlayerJoined", params: { name: trimmed }, url, spotsLeft }, senderClientId);
+    await enqueueNotification(eventId, "player_joined", { title: event.title, key: "notifyPlayerJoined", params: { name: trimmed }, url, spotsLeft }, senderClientId);
   }
+
+  // Drain notification queue immediately so push is sent in near-real-time
+  drainNotificationQueue().catch(() => {});
 
   // Send game invite email to the joining player if they have a linked account
   if (shouldLink && session?.user?.email) {
@@ -209,9 +212,9 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.fly.dev";
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const origin = `${proto}://${host}`;
-  const senderClientId = request.headers.get("x-client-id") ?? undefined;
   const { playerId } = await request.json();
   const session = await getSession(request);
+  const senderClientId = request.headers.get("x-client-id") ?? session?.user?.id ?? undefined;
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
@@ -258,12 +261,15 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   const url = `${origin}/events/${eventId}`;
   if (!wasActive) {
-    enqueueNotification(eventId, "player_left_bench", { title: event.title, key: "notifyPlayerLeftBench", params: { name: player.name }, url, spotsLeft }, senderClientId);
+    await enqueueNotification(eventId, "player_left_bench", { title: event.title, key: "notifyPlayerLeftBench", params: { name: player.name }, url, spotsLeft }, senderClientId);
   } else if (firstBench) {
-    enqueueNotification(eventId, "player_left_promoted", { title: event.title, key: "notifyPlayerLeftPromoted", params: { left: player.name, promoted: firstBench.name }, url, spotsLeft }, senderClientId);
+    await enqueueNotification(eventId, "player_left_promoted", { title: event.title, key: "notifyPlayerLeftPromoted", params: { left: player.name, promoted: firstBench.name }, url, spotsLeft }, senderClientId);
   } else {
-    enqueueNotification(eventId, "player_left", { title: event.title, key: "notifyPlayerLeft", params: { name: player.name }, url, spotsLeft }, senderClientId);
+    await enqueueNotification(eventId, "player_left", { title: event.title, key: "notifyPlayerLeft", params: { name: player.name }, url, spotsLeft }, senderClientId);
   }
+
+  // Drain notification queue immediately so push is sent in near-real-time
+  drainNotificationQueue().catch(() => {});
 
   // Fire webhooks (non-blocking)
   fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft }).catch(() => {});

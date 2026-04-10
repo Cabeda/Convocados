@@ -19,6 +19,7 @@ export const POST: APIRoute = async ({ request }) => {
   const body = await request.json();
   const token = String(body.token ?? "").trim();
   const platform = String(body.platform ?? "").trim();
+  const locale = typeof body.locale === "string" && body.locale.trim() ? body.locale.trim().slice(0, 10) : "en";
 
   if (!token) {
     return Response.json({ error: "Token is required." }, { status: 400 });
@@ -29,8 +30,8 @@ export const POST: APIRoute = async ({ request }) => {
 
   await prisma.appPushToken.upsert({
     where: { token },
-    create: { userId: authCtx.userId, token, platform },
-    update: { userId: authCtx.userId, platform, updatedAt: new Date() },
+    create: { userId: authCtx.userId, token, platform, locale },
+    update: { userId: authCtx.userId, platform, locale, updatedAt: new Date() },
   });
 
   return Response.json({ ok: true });
