@@ -74,6 +74,8 @@ export async function addPlayerToTeams(eventId: string, playerName: string) {
 /**
  * If teams have been generated, remove a player from their team.
  * If a promoted bench player name is given, slot them into the same team.
+ * If the event has balanced=true, check if swapping the promoted player
+ * to the other team (with one player swapping back) improves ELO balance.
  */
 export async function removePlayerFromTeams(eventId: string, playerName: string, promotedName?: string) {
   const teams = await prisma.teamResult.findMany({
@@ -81,6 +83,8 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
     include: { members: true },
   });
   if (teams.length === 0) return;
+
+  let promotedTeamId: string | null = null;
 
   for (const team of teams) {
     const member = team.members.find((m) => m.name === playerName);
@@ -108,10 +112,82 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
           teamResultId: team.id,
         },
       });
+      promotedTeamId = team.id;
     }
 
     break;
   }
+
+  // ELO-balanced swap: if the event is balanced and a player was promoted,
+  // check if swapping the promoted player with someone on the other team
+  // would reduce the ELO gap between teams.
+  if (promotedName && promotedTeamId) {
+    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true } });
+    if (event?.balanced) {
+      await tryBalancedSwap(eventId, promotedName, promotedTeamId);
+    }
+  }
+}
+
+/**
+ * After a promoted player is placed on a team, check if swapping them
+ * with a player on the other team would improve ELO balance.
+ * Only performs the swap if it strictly reduces the gap — at most 1 swap.
+ */
+async function tryBalancedSwap(eventId: string, promotedName: string, promotedTeamId: string) {
+  const teams = await prisma.teamResult.findMany({
+    where: { eventId },
+    include: { members: true },
+  });
+  if (teams.length !== 2) return;
+
+  const promotedTeam = teams.find(t => t.id === promotedTeamId)!;
+  const otherTeam = teams.find(t => t.id !== promotedTeamId)!;
+
+  // Get ELO ratings
+  const ratings = await prisma.playerRating.findMany({ where: { eventId } });
+  const ratingMap = new Map(ratings.map(r => [r.name, r.rating]));
+  const getRating = (name: string) => ratingMap.get(name) ?? 1000;
+
+  const promotedRating = getRating(promotedName);
+
+  // Current team totals
+  const promotedTeamTotal = promotedTeam.members.reduce((sum, m) => sum + getRating(m.name), 0);
+  const otherTeamTotal = otherTeam.members.reduce((sum, m) => sum + getRating(m.name), 0);
+  const currentGap = Math.abs(promotedTeamTotal - otherTeamTotal);
+
+  // Try swapping promoted player with each player on the other team
+  let bestSwap: { otherMember: typeof otherTeam.members[0]; newGap: number } | null = null;
+
+  for (const otherMember of otherTeam.members) {
+    const otherRating = getRating(otherMember.name);
+    // After swap: promoted goes to other team, otherMember goes to promoted team
+    const newPromotedTeamTotal = promotedTeamTotal - promotedRating + otherRating;
+    const newOtherTeamTotal = otherTeamTotal - otherRating + promotedRating;
+    const newGap = Math.abs(newPromotedTeamTotal - newOtherTeamTotal);
+
+    if (newGap < currentGap && (!bestSwap || newGap < bestSwap.newGap)) {
+      bestSwap = { otherMember, newGap };
+    }
+  }
+
+  if (!bestSwap) return; // No swap improves balance
+
+  // Perform the swap
+  const promotedMember = promotedTeam.members.find(m => m.name === promotedName)!;
+  const swapTarget = bestSwap.otherMember;
+
+  // Move promoted player to other team
+  await prisma.teamMember.update({
+    where: { id: promotedMember.id },
+    data: { teamResultId: otherTeam.id, order: swapTarget.order },
+  });
+
+  // Move swap target to promoted team
+  await prisma.teamMember.update({
+    where: { id: swapTarget.id },
+    data: { teamResultId: promotedTeam.id, order: promotedMember.order },
+  });
 }
 
 export const POST: APIRoute = async ({ params, request }) => {
