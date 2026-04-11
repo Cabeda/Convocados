@@ -61,7 +61,44 @@ export function enqueueNotification(
 }
 
 /**
- * Drain pending notification jobs — called by the cron endpoint.
+ * Singleton guard: if a drain is already in progress, new callers piggyback
+ * on the running drain instead of starting a concurrent one. This avoids
+ * SQLite BUSY errors and the race where concurrent drains both see 0 pending
+ * jobs because the first one already claimed them.
+ *
+ * After the running drain finishes, we do one more pass to pick up any jobs
+ * that were enqueued while the drain was in progress.
+ */
+let _drainInFlight: Promise<number> | null = null;
+let _drainAgain = false;
+
+export function drainNotificationQueue(): Promise<number> {
+  if (_drainInFlight) {
+    // A drain is already running — flag that we need another pass when it finishes
+    _drainAgain = true;
+    return _drainInFlight;
+  }
+
+  _drainInFlight = _doDrain()
+    .then(async (count) => {
+      // If new jobs were enqueued while we were draining, do one more pass
+      if (_drainAgain) {
+        _drainAgain = false;
+        const extra = await _doDrain();
+        return count + extra;
+      }
+      return count;
+    })
+    .finally(() => {
+      _drainInFlight = null;
+      _drainAgain = false;
+    });
+
+  return _drainInFlight;
+}
+
+/**
+ * Internal drain implementation.
  *
  * Claims each batch atomically via a transaction (SQLite-safe).
  * NOTE(postgres #236): Replace the $transaction claim with
@@ -72,7 +109,7 @@ export function enqueueNotification(
  * moved to dead-letter state (failedAt set). Dead-letter jobs older than
  * DEAD_LETTER_TTL_DAYS are pruned on each run.
  */
-export async function drainNotificationQueue(): Promise<number> {
+async function _doDrain(): Promise<number> {
   // Lazy import to avoid circular dependency
   const { sendPushToEvent } = await import("./push.server");
 
