@@ -2,12 +2,24 @@
 
 ## Project Overview
 
-**Convocados** is a sports event management application built with:
+**Convocados** is a sports event management application with a web app and a native Android app.
+
+### Web App (root `/`)
 - **Framework**: Astro 6.x with React 19
 - **Database**: Prisma with SQLite (WAL mode, Litestream backups in production)
 - **Styling**: Material-UI (MUI)
 - **Testing**: Vitest
 - **Language**: TypeScript
+
+### Android App (`android-app/`)
+- **Language**: Kotlin
+- **UI**: Jetpack Compose with Material 3
+- **DI**: Hilt (Dagger)
+- **Networking**: Ktor client
+- **Auth**: OAuth 2.1 via Custom Tabs (redirect scheme: `convocados://auth`)
+- **Push**: Firebase Cloud Messaging (FCM) via `firebase-messaging-ktx`
+- **Build**: Gradle with KSP, minSdk 26, targetSdk 35
+- **Package**: `com.cabeda.convocados` / namespace `dev.convocados`
 
 ## Core Principles
 
@@ -132,17 +144,34 @@ beforeEach(async () => {
 ## Project Structure
 
 ```
-src/
-├── components/     # React components (.tsx)
+src/                        # Web app source
+├── components/             # React components (.tsx)
 ├── pages/
-│   └── api/         # Astro API routes (.ts)
+│   └── api/               # Astro API routes (.ts)
 ├── lib/
-│   ├── i18n/        # Translations per locale
-│   ├── *.server.ts  # Server-side utilities
-│   └── *.ts         # Shared utilities
-├── test/            # Test files
+│   ├── i18n/              # Translations per locale
+│   ├── *.server.ts        # Server-side utilities
+│   └── *.ts               # Shared utilities
+├── test/                  # Test files
 └── prisma/
     └── schema.prisma
+
+android-app/               # Native Android app
+├── app/src/main/java/dev/convocados/
+│   ├── data/
+│   │   ├── api/           # ApiClient, ConvocadosApi, Models
+│   │   ├── auth/          # AuthManager, TokenStore (OAuth 2.1)
+│   │   ├── push/          # PushTokenManager, ConvocadosFcmService
+│   │   └── datastore/     # SettingsStore (preferences)
+│   ├── ui/
+│   │   ├── navigation/    # AppNavigation, Route definitions
+│   │   ├── screen/        # Feature screens (games, event, profile, etc.)
+│   │   └── theme/         # Material 3 theme & colors
+│   ├── ConvocadosApp.kt   # Hilt application class
+│   ├── MainActivity.kt    # Single activity entry point
+│   └── ConvocadosRoot.kt  # Root composable + RootViewModel
+├── app/build.gradle.kts   # App-level dependencies
+└── build.gradle.kts       # Project-level plugins
 ```
 
 ## Commands
