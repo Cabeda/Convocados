@@ -153,10 +153,19 @@ export function balanceTeams(
     { team: teamNames[1], players: [] },
   ];
   const totals = [0, 0];
+  const maxPerTeam = Math.ceil(sorted.length / 2);
 
-  // Snake draft: assign each player to the team with lower total ELO
+  // Snake draft: assign each player to the team with lower total ELO,
+  // but enforce a max team size so teams differ by at most 1 player.
   for (const player of sorted) {
-    const target = totals[0] <= totals[1] ? 0 : 1;
+    let target: number;
+    if (teams[0].players.length >= maxPerTeam) {
+      target = 1;
+    } else if (teams[1].players.length >= maxPerTeam) {
+      target = 0;
+    } else {
+      target = totals[0] <= totals[1] ? 0 : 1;
+    }
     teams[target].players.push({ name: player.name, order: teams[target].players.length });
     totals[target] += player.rating;
   }

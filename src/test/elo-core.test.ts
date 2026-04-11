@@ -6,6 +6,7 @@ import {
   computeGameUpdates,
   type EloUpdate,
 } from "~/lib/elo";
+import { balanceTeams } from "~/lib/elo.server";
 
 // ── expectedScore ─────────────────────────────────────────────────────────────
 
@@ -285,5 +286,49 @@ describe("computeGameUpdates", () => {
     for (let i = 1; i < deltas.length; i++) {
       expect(deltas[i]).toBeLessThanOrEqual(deltas[i - 1]);
     }
+  });
+});
+
+// ── balanceTeams ──────────────────────────────────────────────────────────────
+
+describe("balanceTeams", () => {
+  it("produces equal team sizes with even number of players", () => {
+    const players = Array.from({ length: 10 }, (_, i) => ({
+      name: `P${i}`,
+      rating: 1000,
+    }));
+    const result = balanceTeams(players, ["A", "B"]);
+    expect(result[0].players).toHaveLength(5);
+    expect(result[1].players).toHaveLength(5);
+  });
+
+  it("produces teams differing by at most 1 with odd number of players", () => {
+    const players = Array.from({ length: 11 }, (_, i) => ({
+      name: `P${i}`,
+      rating: 1000,
+    }));
+    const result = balanceTeams(players, ["A", "B"]);
+    const sizes = [result[0].players.length, result[1].players.length].sort();
+    expect(sizes).toEqual([5, 6]);
+  });
+
+  it("enforces equal sizes even with heavily skewed ratings", () => {
+    const players = [
+      { name: "Star", rating: 5000 },
+      ...Array.from({ length: 9 }, (_, i) => ({ name: `Avg${i}`, rating: 1000 })),
+    ];
+    const result = balanceTeams(players, ["A", "B"]);
+    expect(result[0].players).toHaveLength(5);
+    expect(result[1].players).toHaveLength(5);
+  });
+
+  it("all players are assigned to exactly one team", () => {
+    const players = Array.from({ length: 10 }, (_, i) => ({
+      name: `P${i}`,
+      rating: 1000 + i * 100,
+    }));
+    const result = balanceTeams(players, ["A", "B"]);
+    const allNames = [...result[0].players, ...result[1].players].map(p => p.name).sort();
+    expect(allNames).toEqual(players.map(p => p.name).sort());
   });
 });
