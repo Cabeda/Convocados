@@ -13,6 +13,42 @@ import { createLogger } from "../../../../lib/logger.server";
 const log = createLogger("players-api");
 
 /**
+ * Validate that all team members are active players (order < maxPlayers).
+ * Removes any invalid members from teams rather than clearing all teams.
+ * Returns true if any members were removed.
+ */
+export async function validateTeams(eventId: string, maxPlayers: number): Promise<boolean> {
+  const teams = await prisma.teamResult.findMany({
+    where: { eventId },
+    include: { members: true },
+  });
+  if (teams.length === 0) return false;
+
+  const activePlayers = await prisma.player.findMany({
+    where: { eventId },
+    orderBy: { order: "asc" },
+    take: maxPlayers,
+    select: { name: true },
+  });
+  const activeNames = new Set(activePlayers.map(p => p.name));
+
+  const idsToRemove: string[] = [];
+  for (const team of teams) {
+    for (const member of team.members) {
+      if (!activeNames.has(member.name)) {
+        idsToRemove.push(member.id);
+      }
+    }
+  }
+
+  if (idsToRemove.length > 0) {
+    await prisma.teamMember.deleteMany({ where: { id: { in: idsToRemove } } });
+    return true;
+  }
+  return false;
+}
+
+/**
  * If teams have been generated, add a player to the team with fewer members.
  */
 export async function addPlayerToTeams(eventId: string, playerName: string) {
@@ -145,6 +181,9 @@ export const POST: APIRoute = async ({ params, request }) => {
     await addPlayerToTeams(eventId, trimmed);
   }
 
+  // Validate teams: ensure no bench players are in teams
+  await validateTeams(eventId, event.maxPlayers);
+
   if (isOnBench) {
     await enqueueNotification(eventId, "player_joined_bench", { title: event.title, key: "notifyPlayerJoinedBench", params: { name: trimmed }, url, spotsLeft }, senderClientId);
   } else {
@@ -260,6 +299,9 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   if (wasActive) {
     await removePlayerFromTeams(eventId, player.name, firstBench?.name);
   }
+
+  // Validate teams: ensure no bench players are in teams after roster change
+  await validateTeams(eventId, event.maxPlayers);
 
   // spotsLeft after removal
   const activeAfter = wasActive
