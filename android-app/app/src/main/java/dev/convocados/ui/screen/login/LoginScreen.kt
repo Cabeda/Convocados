@@ -70,7 +70,7 @@ fun LoginScreen(
                 OutlinedTextField(
                     value = serverUrl,
                     onValueChange = { serverUrl = it },
-                    placeholder = { Text("https://convocados.cabeda.dev") },
+                    placeholder = { Text("https://convocados.fly.dev") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
