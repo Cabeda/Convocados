@@ -55,6 +55,10 @@ challenges/.pytest_cache/
 
 # Android app
 android-app/.gradle/
+android-app/.kotlin/
+android-app/.idea/
 android-app/app/build/
 android-app/build/
 android-app/local.properties
+android-app/app/google-services.json
+android-app/gradle/gradle-daemon-jvm.properties
