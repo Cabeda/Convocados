@@ -7,9 +7,10 @@ const PORT = 3001;
 const BASE_URL = `http://localhost:${PORT}`;
 const DB_PATH = path.resolve(__dirname, "e2e-test.db");
 
-// Test VAPID keys for web push e2e tests (generated via `npx web-push generate-vapid-keys`)
-const VAPID_PUBLIC_KEY = "BJ34_OulE3hyvRFANs6bXb8t-8qpffj90-dwfy8V1DD9B44ER-bP181iyp3hXw1wlkaq-VbeLcy_IuQh7aPUYjs";
-const VAPID_PRIVATE_KEY = "CiPrdEcokfW8WIFvj1bptu0y6ybCtS3YlWlBCjvAF8M";
+// Test VAPID keys for web push e2e tests — use env vars or fall back to
+// pre-generated test-only keys (these have no security value).
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ?? "BJ34_OulE3hyvRFANs6bXb8t-8qpffj90-dwfy8V1DD9B44ER-bP181iyp3hXw1wlkaq-VbeLcy_IuQh7aPUYjs";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? "CiPrdEcokfW8WIFvj1bptu0y6ybCtS3YlWlBCjvAF8M";
 
 export default defineConfig({
   testDir: "./e2e",

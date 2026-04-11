@@ -592,11 +592,6 @@ test.describe("Web push notification delivery", () => {
     );
     expect(parseInt(subCount)).toBeGreaterThanOrEqual(1);
 
-    // Get the subscriber's clientId from localStorage
-    const subscriberClientId = await subscriberPage.evaluate(() =>
-      localStorage.getItem("client_id"),
-    );
-
     // ── Browser B: actor adds a player (different context, different clientId) ──
     const actorIp = uniqueIp();
     const addRes = await request.post(`/api/events/${eventId}/players`, {

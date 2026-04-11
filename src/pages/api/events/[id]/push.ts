@@ -28,7 +28,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     });
   } catch (err: any) {
     log.error({ err: err?.message, code: err?.code, eventId, endpoint: endpoint?.slice(0, 60) }, "Failed to upsert push subscription");
-    return Response.json({ error: "Failed to save subscription.", detail: err?.message }, { status: 500 });
+    return Response.json({ error: "Failed to save subscription." }, { status: 500 });
   }
 
   return Response.json({ ok: true });
