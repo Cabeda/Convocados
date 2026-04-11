@@ -1,5 +1,8 @@
 package dev.convocados.ui.screen.publicgames
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -58,9 +61,15 @@ class PublicGamesViewModel @Inject constructor(private val api: ConvocadosApi) :
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
-fun PublicGamesScreen(onEventClick: (String) -> Unit, onBack: () -> Unit, viewModel: PublicGamesViewModel = hiltViewModel()) {
+fun PublicGamesScreen(
+    onEventClick: (String) -> Unit,
+    onBack: () -> Unit,
+    viewModel: PublicGamesViewModel = hiltViewModel(),
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+) {
     val events by viewModel.events.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
@@ -81,7 +90,20 @@ fun PublicGamesScreen(onEventClick: (String) -> Unit, onBack: () -> Unit, viewMo
                 }
             }
             items(events, key = { it.id }) { event ->
-                Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().clickable { onEventClick(event.id) }) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Surface),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onEventClick(event.id) }
+                        .then(
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    rememberSharedContentState(key = "item-container-${event.id}"),
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                            }
+                        )
+                ) {
                     Column(Modifier.padding(16.dp)) {
                         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                             Text(event.title, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
