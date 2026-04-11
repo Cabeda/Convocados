@@ -20,9 +20,12 @@ import dev.convocados.data.auth.AuthManager
 import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.push.PushTokenManager
+import dev.convocados.data.repository.UserRepository
 import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -35,19 +38,26 @@ val LOCALE_OPTIONS = listOf(
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
+    private val repository: UserRepository,
     private val api: ConvocadosApi,
     private val authManager: AuthManager,
     private val tokenStore: TokenStore,
     private val settingsStore: SettingsStore,
     private val pushTokenManager: PushTokenManager,
 ) : ViewModel() {
-    private val _user = MutableStateFlow<UserProfile?>(null)
-    val user: StateFlow<UserProfile?> = _user
+    val user: StateFlow<UserProfile?> = repository.userProfile
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val locale = settingsStore.locale
 
-    init { viewModelScope.launch { runCatching { _user.value = api.fetchUserInfo() } } }
+    init { viewModelScope.launch { repository.refreshUserProfile() } }
 
-    fun logout() { pushTokenManager.unregisterCurrentToken(); authManager.logout() }
+    fun logout() { 
+        viewModelScope.launch {
+            pushTokenManager.unregisterCurrentToken()
+            authManager.logout()
+            repository.clearUser()
+        }
+    }
     fun getServerUrl() = tokenStore.getServerUrl()
     fun setServerUrl(url: String) = tokenStore.setServerUrl(url)
     fun setLocale(code: String) { viewModelScope.launch { settingsStore.setLocale(code) } }

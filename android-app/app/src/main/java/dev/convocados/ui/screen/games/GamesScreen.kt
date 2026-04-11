@@ -1,5 +1,8 @@
 package dev.convocados.ui.screen.games
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,9 +26,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventSummary
 import dev.convocados.data.api.MyGamesResponse
+import dev.convocados.data.repository.EventRepository
 import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -34,46 +40,52 @@ import java.time.format.FormatStyle
 import javax.inject.Inject
 
 @HiltViewModel
-class GamesViewModel @Inject constructor(private val api: ConvocadosApi) : ViewModel() {
-    private val _state = MutableStateFlow<GamesState>(GamesState.Loading)
-    val state: StateFlow<GamesState> = _state
+class GamesViewModel @Inject constructor(
+    private val repository: EventRepository,
+    private val api: ConvocadosApi
+) : ViewModel() {
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing
 
-    init { load() }
+    val ownedGames = repository.getEventsByType("owned")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun load() {
-        viewModelScope.launch {
-            _state.value = GamesState.Loading
-            runCatching { api.fetchMyGames() }
-                .onSuccess { _state.value = GamesState.Success(it) }
-                .onFailure { _state.value = GamesState.Error(it.message ?: "Failed to load") }
-        }
-    }
+    val joinedGames = repository.getEventsByType("joined")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val archivedOwned = repository.getEventsByType("archivedOwned")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val archivedJoined = repository.getEventsByType("archivedJoined")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    init { refresh() }
 
     fun refresh() {
         viewModelScope.launch {
-            runCatching { api.fetchMyGames() }
-                .onSuccess { _state.value = GamesState.Success(it) }
+            _refreshing.value = true
+            repository.refreshMyGames()
+            _refreshing.value = false
         }
     }
 }
 
-sealed class GamesState {
-    data object Loading : GamesState()
-    data class Success(val data: MyGamesResponse) : GamesState()
-    data class Error(val message: String) : GamesState()
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun GamesScreen(
     onEventClick: (String) -> Unit,
     onCreateClick: () -> Unit,
     onPublicClick: () -> Unit,
     viewModel: GamesViewModel = hiltViewModel(),
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
 ) {
-    val state by viewModel.state.collectAsState()
+    val owned by viewModel.ownedGames.collectAsState()
+    val joined by viewModel.joinedGames.collectAsState()
+    val archivedOwned by viewModel.archivedOwned.collectAsState()
+    val archivedJoined by viewModel.archivedJoined.collectAsState()
+    val isRefreshing by viewModel.refreshing.collectAsState()
     var showArchived by remember { mutableStateOf(false) }
-    var isRefreshing by remember { mutableStateOf(false) }
 
     Scaffold(
         floatingActionButton = {
@@ -83,100 +95,103 @@ fun GamesScreen(
         },
         containerColor = Bg,
     ) { padding ->
-        when (val s = state) {
-            is GamesState.Loading -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                CircularProgressIndicator(color = Primary)
-            }
-            is GamesState.Error -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(s.message, color = Error, fontSize = 14.sp)
-                    Spacer(Modifier.height(12.dp))
-                    TextButton(onClick = { viewModel.load() }) { Text("Retry", color = Primary) }
+        val active = owned + joined
+        val archived = archivedOwned + archivedJoined
+        val games = if (showArchived) archived else active
+
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.fillMaxSize().padding(padding),
+        ) {
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Tab bar
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                        FilterChip(
+                            selected = !showArchived,
+                            onClick = { showArchived = false },
+                            label = { Text("My Games (${active.size})") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = PrimaryDark,
+                                selectedLabelColor = PrimaryContainer,
+                            ),
+                        )
+                        if (archived.isNotEmpty()) {
+                            FilterChip(
+                                selected = showArchived,
+                                onClick = { showArchived = true },
+                                label = { Text("Archived (${archived.size})") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = PrimaryDark,
+                                    selectedLabelColor = PrimaryContainer,
+                                ),
+                            )
+                        }
+                        FilterChip(
+                            selected = false,
+                            onClick = onPublicClick,
+                            label = { Text("\uD83C\uDF0D") },
+                        )
+                    }
                 }
-            }
-            is GamesState.Success -> {
-                val active = s.data.owned + s.data.joined
-                val archived = s.data.archivedOwned + s.data.archivedJoined
-                val games = if (showArchived) archived else active
 
-                PullToRefreshBox(
-                    isRefreshing = isRefreshing,
-                    onRefresh = {
-                        isRefreshing = true
-                        viewModel.refresh()
-                        isRefreshing = false
-                    },
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                ) {
-                    LazyColumn(
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        // Tab bar
-                        item {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-                                FilterChip(
-                                    selected = !showArchived,
-                                    onClick = { showArchived = false },
-                                    label = { Text("My Games (${active.size})") },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = PrimaryDark,
-                                        selectedLabelColor = PrimaryContainer,
-                                    ),
-                                )
-                                if (archived.isNotEmpty()) {
-                                    FilterChip(
-                                        selected = showArchived,
-                                        onClick = { showArchived = true },
-                                        label = { Text("Archived (${archived.size})") },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = PrimaryDark,
-                                            selectedLabelColor = PrimaryContainer,
-                                        ),
-                                    )
-                                }
-                                FilterChip(
-                                    selected = false,
-                                    onClick = onPublicClick,
-                                    label = { Text("\uD83C\uDF0D") },
-                                )
+                if (games.isEmpty() && !showArchived) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text("No games yet", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Spacer(Modifier.height(8.dp))
+                            Text("Create a game or join one to get started.", color = TextMuted, fontSize = 14.sp)
+                            Spacer(Modifier.height(20.dp))
+                            Button(
+                                onClick = onCreateClick,
+                                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                            ) {
+                                Text("+ Create a Game", color = OnPrimary, fontWeight = FontWeight.Bold)
                             }
-                        }
-
-                        if (games.isEmpty() && !showArchived) {
-                            item {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    Text("No games yet", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                    Spacer(Modifier.height(8.dp))
-                                    Text("Create a game or join one to get started.", color = TextMuted, fontSize = 14.sp)
-                                    Spacer(Modifier.height(20.dp))
-                                    Button(
-                                        onClick = onCreateClick,
-                                        colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                                    ) {
-                                        Text("+ Create a Game", color = OnPrimary, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-
-                        items(games, key = { it.id }) { game ->
-                            GameCard(game = game, onClick = { onEventClick(game.id) })
                         }
                     }
+                }
+
+                items(games, key = { it.id }) { game ->
+                    GameCard(
+                        game = game,
+                        onClick = { onEventClick(game.id) },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                    )
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun GameCard(game: EventSummary, onClick: () -> Unit) {
+fun GameCard(
+    game: EventSummary,
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .then(
+                with(sharedTransitionScope) {
+                    Modifier.sharedElement(
+                        rememberSharedContentState(key = "item-container-${game.id}"),
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
+                }
+            ),
         colors = CardDefaults.cardColors(containerColor = Surface),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

@@ -1,6 +1,9 @@
 package dev.convocados.ui.screen.event
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -14,6 +17,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -21,15 +25,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.*
 import dev.convocados.data.auth.TokenStore
+import dev.convocados.data.repository.EventRepository
 import dev.convocados.ui.screen.games.formatRelativeDate
 import dev.convocados.ui.theme.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -47,13 +61,36 @@ data class EventScreenState(
     val undoData: UndoData? = null,
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class EventDetailViewModel @Inject constructor(
+    private val repository: EventRepository,
     private val api: ConvocadosApi,
     private val tokenStore: TokenStore,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(EventScreenState())
-    val state: StateFlow<EventScreenState> = _state
+    private val _eventId = MutableStateFlow<String?>(null)
+
+    val event = _eventId.flatMapLatest { id ->
+        if (id == null) flowOf(null) else repository.getEventDetail(id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val players = _eventId.flatMapLatest { id ->
+        if (id == null) flowOf(emptyList()) else repository.getPlayers(id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val history = _eventId.flatMapLatest { id ->
+        if (id == null) flowOf(emptyList()) else repository.getHistory(id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _state = MutableStateFlow(EventScreenState(locked = true))
+    val state: StateFlow<EventScreenState> = combine(_state, event, history) { s, e, h ->
+        s.copy(
+            event = e,
+            history = h,
+            loading = s.loading && e == null,
+            locked = if (e?.locked == true) s.locked else false
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EventScreenState(locked = true))
 
     private val _user = MutableStateFlow<UserProfile?>(null)
     val user: StateFlow<UserProfile?> = _user
@@ -63,25 +100,11 @@ class EventDetailViewModel @Inject constructor(
     }
 
     fun load(eventId: String) {
+        _eventId.value = eventId
         viewModelScope.launch {
-            _state.value = _state.value.copy(loading = _state.value.event == null)
-            runCatching {
-                val ev = api.fetchEvent(eventId)
-                if (ev.locked) {
-                    _state.value = EventScreenState(loading = false, locked = true)
-                    return@launch
-                }
-                val hist = runCatching { api.fetchHistory(eventId) }.getOrElse { PaginatedHistory() }
-                val kp = runCatching { api.fetchKnownPlayers(eventId) }.getOrElse { KnownPlayersResponse() }
-                val pg = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
-                _state.value = _state.value.copy(
-                    loading = false, refreshing = false, event = ev,
-                    history = hist.data, historyHasMore = hist.hasMore, historyCursor = hist.nextCursor,
-                    knownPlayers = kp.players, postGame = pg, error = null,
-                )
-            }.onFailure {
-                _state.value = _state.value.copy(loading = false, refreshing = false, error = it.message)
-            }
+            _state.value = _state.value.copy(loading = event.value == null)
+            repository.refreshEventDetail(eventId)
+            _state.value = _state.value.copy(loading = false, refreshing = false)
         }
     }
 
@@ -92,22 +115,20 @@ class EventDetailViewModel @Inject constructor(
 
     fun addPlayer(eventId: String, name: String, link: Boolean = true) {
         viewModelScope.launch {
-            runCatching { api.addPlayer(eventId, name, link) }
-                .onSuccess { load(eventId) }
+            repository.addPlayer(eventId, name, link)
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
         }
     }
 
     fun removePlayer(eventId: String, playerId: String) {
         viewModelScope.launch {
-            runCatching { api.removePlayer(eventId, playerId) }
-                .onSuccess { res ->
-                    _state.value = _state.value.copy(undoData = res.undo)
-                    load(eventId)
-                    // Clear undo after 60s
+            repository.removePlayer(eventId, playerId)
+                .onSuccess { undo ->
+                    _state.value = _state.value.copy(undoData = undo)
                     delay(60_000)
                     _state.value = _state.value.copy(undoData = null)
                 }
+                .onFailure { _state.value = _state.value.copy(error = it.message) }
         }
     }
 
@@ -115,32 +136,38 @@ class EventDetailViewModel @Inject constructor(
         val undo = _state.value.undoData ?: return
         viewModelScope.launch {
             runCatching { api.undoRemovePlayer(eventId, undo) }
-                .onSuccess { _state.value = _state.value.copy(undoData = null); load(eventId) }
+                .onSuccess {
+                    _state.value = _state.value.copy(undoData = null)
+                    repository.refreshEventDetail(eventId)
+                }
         }
     }
 
     fun randomize(eventId: String, balanced: Boolean) {
         viewModelScope.launch {
-            runCatching { api.randomizeTeams(eventId, balanced) }.onSuccess { load(eventId) }
+            runCatching { api.randomizeTeams(eventId, balanced) }
+                .onSuccess { repository.refreshEventDetail(eventId) }
         }
     }
 
     fun claimPlayer(eventId: String, playerId: String) {
         viewModelScope.launch {
-            runCatching { api.claimPlayer(eventId, playerId) }.onSuccess { load(eventId) }
+            runCatching { api.claimPlayer(eventId, playerId) }
+                .onSuccess { repository.refreshEventDetail(eventId) }
         }
     }
 
     fun saveScore(eventId: String, historyId: String, s1: Int, s2: Int) {
         viewModelScope.launch {
-            runCatching { api.updateScore(eventId, historyId, s1, s2) }.onSuccess { load(eventId) }
+            runCatching { api.updateScore(eventId, historyId, s1, s2) }
+                .onSuccess { repository.refreshEventDetail(eventId) }
         }
     }
 
     fun verifyPassword(eventId: String, password: String) {
         viewModelScope.launch {
-            runCatching { api.verifyEventPassword(eventId, password) }
-                .onSuccess { _state.value = _state.value.copy(locked = false); load(eventId) }
+            repository.verifyPassword(eventId, password)
+                .onSuccess { _state.value = _state.value.copy(locked = false) }
                 .onFailure { _state.value = _state.value.copy(error = "Incorrect password") }
         }
     }
@@ -148,7 +175,7 @@ class EventDetailViewModel @Inject constructor(
     fun getShareUrl(eventId: String): String = "${tokenStore.getServerUrl()}/events/$eventId"
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun EventDetailScreen(
     eventId: String,
@@ -161,9 +188,14 @@ fun EventDetailScreen(
     onNotificationPrefs: () -> Unit,
     onUserClick: (String) -> Unit,
     viewModel: EventDetailViewModel = hiltViewModel(),
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
 ) {
-    val state by viewModel.state.collectAsState()
-    val user by viewModel.user.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val event by viewModel.event.collectAsStateWithLifecycle()
+    val players by viewModel.players.collectAsStateWithLifecycle()
+    val history by viewModel.history.collectAsStateWithLifecycle()
+    val user by viewModel.user.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var newPlayer by remember { mutableStateOf("") }
     var editingScoreId by remember { mutableStateOf<String?>(null) }
@@ -176,15 +208,21 @@ fun EventDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.event?.title ?: "Event", maxLines = 1) },
+                title = { Text(event?.title ?: "Event", maxLines = 1) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg),
             )
         },
         containerColor = Bg,
+        modifier = with(sharedTransitionScope) {
+            Modifier.sharedElement(
+                rememberSharedContentState(key = "item-container-$eventId"),
+                animatedVisibilityScope = animatedVisibilityScope
+            )
+        }
     ) { padding ->
         when {
-            state.loading -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
+            state.loading && event == null -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
                 CircularProgressIndicator(color = Primary)
             }
             state.locked -> {
