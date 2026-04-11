@@ -20,11 +20,10 @@ module.exports = {
     },
     assert: {
       assertions: {
-        "categories:accessibility": ["error", { minScore: 0.9 }],
-        "categories:best-practices": ["error", { minScore: 0.9 }],
-        "categories:seo": ["warn", { minScore: 0.9 }],
-        // Performance is unreliable on CI runners — warn only
-        "categories:performance": ["warn", { minScore: 0.5 }],
+        "categories:accessibility": ["error", { minScore: 0.95 }],
+        "categories:best-practices": ["error", { minScore: 0.95 }],
+        "categories:seo": ["error", { minScore: 0.95 }],
+        "categories:performance": ["error", { minScore: 0.9 }],
       },
     },
     upload: {
