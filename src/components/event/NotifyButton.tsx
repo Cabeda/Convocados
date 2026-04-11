@@ -31,7 +31,9 @@ export function NotifyButton({ eventId }: Props) {
               locale: navigator.language,
               clientId: localStorage.getItem("client_id") ?? "",
             }),
-          }).catch(() => {});
+          }).then((res) => {
+            if (!res.ok) setState("idle");
+          }).catch(() => setState("idle"));
         }
       });
     });
