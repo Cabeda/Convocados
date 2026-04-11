@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { validateTeams } from "./players";
 
 /** POST — reset player order to original signup order (createdAt). Owner-only. */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -22,39 +23,16 @@ export const POST: APIRoute = async ({ params, request }) => {
     players.map((p, i) => prisma.player.update({ where: { id: p.id }, data: { order: i } }))
   );
 
-  // Check if teams exist and validate membership after order reset
-  const existingTeams = await prisma.teamResult.findMany({
-    where: { eventId },
-    include: { members: true },
-  });
+  // Validate teams after order change — removes any bench players from teams
+  const teamsCleared = await validateTeams(eventId, event.maxPlayers);
 
-  if (existingTeams.length > 0) {
-    // Get updated player order
-    const updatedPlayers = await prisma.player.findMany({
-      where: { eventId },
-      orderBy: { order: "asc" },
+  if (teamsCleared) {
+    return Response.json({
+      ok: true,
+      teamsCleared: true,
+      message: "Player order reset. Teams have been updated because bench players were in active teams."
     });
-
-    // Check if any team members are bench players (order >= maxPlayers)
-    const activePlayerNames = new Set(
-      updatedPlayers.slice(0, event.maxPlayers).map(p => p.name)
-    );
-
-    const hasBenchPlayersInTeams = existingTeams.some(team =>
-      team.members.some(member => !activePlayerNames.has(member.name))
-    );
-
-    if (hasBenchPlayersInTeams) {
-      // Clear teams to force re-randomization
-      await prisma.teamResult.deleteMany({ where: { eventId } });
-      return Response.json({
-        ok: true,
-        teamsCleared: true,
-        message: "Player order reset. Teams have been cleared because bench players were in active teams. Please re-randomize."
-      });
-    }
   }
-
 
   return Response.json({ ok: true, teamsCleared: false });
 };

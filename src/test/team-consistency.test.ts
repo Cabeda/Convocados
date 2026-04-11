@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "../lib/db.server";
 import { resetApiRateLimitStore } from "../lib/apiRateLimit.server";
+import { validateTeams, removePlayerFromTeams } from "../pages/api/events/[id]/players";
 
 // Helper to create test user
 async function seedUser(email: string, name: string) {
@@ -10,7 +11,7 @@ async function seedUser(email: string, name: string) {
 }
 
 // Helper to create test event
-async function seedEvent(ownerId?: string) {
+async function seedEvent(opts: { ownerId?: string; balanced?: boolean } = {}) {
   return prisma.event.create({
     data: {
       title: "Test Event",
@@ -19,9 +20,28 @@ async function seedEvent(ownerId?: string) {
       maxPlayers: 10,
       teamOneName: "Ninjas",
       teamTwoName: "Gunas",
-      ownerId,
+      balanced: opts.balanced ?? false,
+      ownerId: opts.ownerId,
     },
   });
+}
+
+async function seedTeams(eventId: string, teamANames: string[], teamBNames: string[]) {
+  const teamA = await prisma.teamResult.create({
+    data: {
+      name: "Ninjas",
+      eventId,
+      members: { create: teamANames.map((name, i) => ({ name, order: i })) },
+    },
+  });
+  const teamB = await prisma.teamResult.create({
+    data: {
+      name: "Gunas",
+      eventId,
+      members: { create: teamBNames.map((name, i) => ({ name, order: i })) },
+    },
+  });
+  return [teamA, teamB];
 }
 
 describe("Team Consistency: Preventing Bench Players in Active Teams", () => {
@@ -204,5 +224,249 @@ describe("Team Consistency: Preventing Bench Players in Active Teams", () => {
         expect(activePlayerNames.has(member.name)).toBe(true);
       }
     }
+  });
+});
+
+describe("Team Roster Mutations: Minimal Movements", () => {
+  beforeEach(async () => {
+    await prisma.teamMember.deleteMany();
+    await prisma.teamResult.deleteMany();
+    await prisma.playerRating.deleteMany();
+    await prisma.player.deleteMany();
+    await prisma.event.deleteMany();
+    await prisma.user.deleteMany();
+    await resetApiRateLimitStore();
+  });
+
+  it("removePlayerFromTeams replaces leaving player with promoted bench player in same team", async () => {
+    const event = await seedEvent();
+
+    // 11 players: 10 active + 1 bench
+    for (let i = 0; i < 11; i++) {
+      await prisma.player.create({
+        data: { name: `P${i}`, eventId: event.id, order: i },
+      });
+    }
+
+    // Teams: Ninjas=[P0,P1,P2,P3,P4], Gunas=[P5,P6,P7,P8,P9]
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    // P3 leaves, P10 (bench) gets promoted into P3's team (Ninjas)
+    await removePlayerFromTeams(event.id, "P3", "P10");
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+
+    const ninjas = teams.find(t => t.name === "Ninjas")!;
+    const gunas = teams.find(t => t.name === "Gunas")!;
+
+    // P10 should be in Ninjas (same team as P3 was)
+    expect(ninjas.members.map(m => m.name)).toContain("P10");
+    expect(ninjas.members.map(m => m.name)).not.toContain("P3");
+    // Gunas should be unchanged
+    expect(gunas.members.map(m => m.name)).toEqual(["P5", "P6", "P7", "P8", "P9"]);
+    // Both teams should have 5 players
+    expect(ninjas.members).toHaveLength(5);
+    expect(gunas.members).toHaveLength(5);
+  });
+
+  it("removePlayerFromTeams with no bench keeps team short", async () => {
+    const event = await seedEvent();
+
+    for (let i = 0; i < 10; i++) {
+      await prisma.player.create({
+        data: { name: `P${i}`, eventId: event.id, order: i },
+      });
+    }
+
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    // P3 leaves, no bench player
+    await removePlayerFromTeams(event.id, "P3");
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+
+    const ninjas = teams.find(t => t.name === "Ninjas")!;
+    const gunas = teams.find(t => t.name === "Gunas")!;
+
+    // Ninjas should have 4 players (P3 removed, no replacement)
+    expect(ninjas.members).toHaveLength(4);
+    expect(ninjas.members.map(m => m.name)).not.toContain("P3");
+    // Gunas unchanged
+    expect(gunas.members).toHaveLength(5);
+  });
+
+  it("validateTeams removes bench players from teams without clearing valid members", async () => {
+    const event = await seedEvent();
+
+    // 12 players: 10 active + 2 bench
+    for (let i = 0; i < 12; i++) {
+      await prisma.player.create({
+        data: { name: `P${i}`, eventId: event.id, order: i },
+      });
+    }
+
+    // Teams with a bench player (P10) incorrectly in Ninjas
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P10"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    const cleared = await validateTeams(event.id, event.maxPlayers);
+    expect(cleared).toBe(true);
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+
+    const ninjas = teams.find(t => t.name === "Ninjas")!;
+    const gunas = teams.find(t => t.name === "Gunas")!;
+
+    // P10 should be removed, valid members kept
+    expect(ninjas.members.map(m => m.name)).not.toContain("P10");
+    expect(ninjas.members.map(m => m.name)).toEqual(expect.arrayContaining(["P0", "P1", "P2", "P3"]));
+    // Gunas unchanged
+    expect(gunas.members).toHaveLength(5);
+  });
+
+  it("validateTeams returns false when all team members are valid", async () => {
+    const event = await seedEvent();
+
+    for (let i = 0; i < 10; i++) {
+      await prisma.player.create({
+        data: { name: `P${i}`, eventId: event.id, order: i },
+      });
+    }
+
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    const cleared = await validateTeams(event.id, event.maxPlayers);
+    expect(cleared).toBe(false);
+
+    // Teams should be untouched
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: true },
+    });
+    expect(teams[0].members).toHaveLength(5);
+    expect(teams[1].members).toHaveLength(5);
+  });
+
+  it("removePlayerFromTeams with balanced event swaps promoted player to better team for ELO", async () => {
+    const event = await seedEvent({ balanced: true });
+
+    // Create 11 players with ratings
+    for (let i = 0; i < 11; i++) {
+      await prisma.player.create({
+        data: { name: `P${i}`, eventId: event.id, order: i },
+      });
+    }
+
+    // Ninjas: P0(1500), P1(1400), P2(1300), P3(1200), P4(1100) = total 6500
+    // Gunas: P5(900), P6(800), P7(700), P8(600), P9(500) = total 3500
+    // Gap = 3000
+    const ratings = [1500, 1400, 1300, 1200, 1100, 900, 800, 700, 600, 500, 1000];
+    for (let i = 0; i < 11; i++) {
+      await prisma.playerRating.create({
+        data: { eventId: event.id, name: `P${i}`, rating: ratings[i] },
+      });
+    }
+
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    // P4 (1100) leaves Ninjas, P10 (1000) promoted
+    // Without balancing: P10 goes to Ninjas → Ninjas=6400, Gunas=3500, gap=2900
+    // With balancing: check if swapping P10 with a Gunas player reduces gap
+    // Best swap: P10(1000) to Gunas, P5(900) to Ninjas → Ninjas=6300, Gunas=3600, gap=2700
+    // That's better, so the swap should happen
+    await removePlayerFromTeams(event.id, "P4", "P10");
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+
+    const ninjas = teams.find(t => t.name === "Ninjas")!;
+    const gunas = teams.find(t => t.name === "Gunas")!;
+
+    // Both teams should still have 5 players
+    expect(ninjas.members).toHaveLength(5);
+    expect(gunas.members).toHaveLength(5);
+
+    // P10 should have been swapped to Gunas (weaker team) for better balance
+    expect(gunas.members.map(m => m.name)).toContain("P10");
+    expect(ninjas.members.map(m => m.name)).not.toContain("P10");
+  });
+
+  it("removePlayerFromTeams with balanced event does NOT swap when it wouldn't improve balance", async () => {
+    const event = await seedEvent({ balanced: true });
+
+    // Create 11 players
+    for (let i = 0; i < 11; i++) {
+      await prisma.player.create({
+        data: { name: `P${i}`, eventId: event.id, order: i },
+      });
+    }
+
+    // Balanced teams: Ninjas and Gunas have similar ELO
+    // Ninjas: P0(1000), P1(1000), P2(1000), P3(1000), P4(1000) = 5000
+    // Gunas: P5(1000), P6(1000), P7(1000), P8(1000), P9(1000) = 5000
+    // P10 (bench) also 1000
+    for (let i = 0; i < 11; i++) {
+      await prisma.playerRating.create({
+        data: { eventId: event.id, name: `P${i}`, rating: 1000 },
+      });
+    }
+
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    // P4 leaves Ninjas, P10 promoted — all equal ratings, no swap needed
+    await removePlayerFromTeams(event.id, "P4", "P10");
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+
+    const ninjas = teams.find(t => t.name === "Ninjas")!;
+
+    // P10 should stay in Ninjas (same slot as P4) since swap wouldn't help
+    expect(ninjas.members.map(m => m.name)).toContain("P10");
+  });
+
+  it("removePlayerFromTeams without balanced flag does not attempt ELO swap", async () => {
+    const event = await seedEvent({ balanced: false });
+
+    for (let i = 0; i < 11; i++) {
+      await prisma.player.create({
+        data: { name: `P${i}`, eventId: event.id, order: i },
+      });
+    }
+
+    // Heavily skewed ratings — but balanced is off, so no swap
+    const ratings = [1500, 1400, 1300, 1200, 1100, 900, 800, 700, 600, 500, 1000];
+    for (let i = 0; i < 11; i++) {
+      await prisma.playerRating.create({
+        data: { eventId: event.id, name: `P${i}`, rating: ratings[i] },
+      });
+    }
+
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    // P4 leaves, P10 promoted — balanced is off, P10 stays in Ninjas
+    await removePlayerFromTeams(event.id, "P4", "P10");
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+
+    const ninjas = teams.find(t => t.name === "Ninjas")!;
+
+    // P10 should stay in Ninjas (no ELO balancing when balanced=false)
+    expect(ninjas.members.map(m => m.name)).toContain("P10");
   });
 });
