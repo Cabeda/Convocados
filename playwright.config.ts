@@ -7,6 +7,10 @@ const PORT = 3001;
 const BASE_URL = `http://localhost:${PORT}`;
 const DB_PATH = path.resolve(__dirname, "e2e-test.db");
 
+// Test VAPID keys for web push e2e tests (generated via `npx web-push generate-vapid-keys`)
+const VAPID_PUBLIC_KEY = "BJ34_OulE3hyvRFANs6bXb8t-8qpffj90-dwfy8V1DD9B44ER-bP181iyp3hXw1wlkaq-VbeLcy_IuQh7aPUYjs";
+const VAPID_PRIVATE_KEY = "CiPrdEcokfW8WIFvj1bptu0y6ybCtS3YlWlBCjvAF8M";
+
 export default defineConfig({
   testDir: "./e2e",
   globalSetup: "./e2e/global-setup.ts",
@@ -28,7 +32,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `DATABASE_URL=file:${DB_PATH} BETTER_AUTH_SECRET=e2e-test-secret-that-is-long-enough BETTER_AUTH_URL=${BASE_URL} HOST=0.0.0.0 PORT=${PORT} node dist/server/entry.mjs`,
+    command: `DATABASE_URL=file:${DB_PATH} BETTER_AUTH_SECRET=e2e-test-secret-that-is-long-enough BETTER_AUTH_URL=${BASE_URL} VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY} VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY} HOST=0.0.0.0 PORT=${PORT} node dist/server/entry.mjs`,
     port: PORT,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
