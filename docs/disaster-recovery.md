@@ -72,14 +72,14 @@ brew install litestream  # macOS
 ```yaml
 dbs:
   - path: ./restored.db
-    replicas:
-      - type: s3
-        bucket: convocados
-        endpoint: https://2ffa19ca2d5924a86dd7ea437f22e614.r2.cloudflarestorage.com
-        region: auto
-        force-path-style: true
-        access-key-id: <your-r2-access-key>
-        secret-access-key: <your-r2-secret-key>
+    replica:
+      type: s3
+      bucket: convocados
+      endpoint: https://2ffa19ca2d5924a86dd7ea437f22e614.r2.cloudflarestorage.com
+      region: auto
+      force-path-style: true
+      access-key-id: <your-r2-access-key>
+      secret-access-key: <your-r2-secret-key>
 ```
 
 ### 3. Restore
@@ -97,13 +97,13 @@ DATABASE_URL="file:./restored.db" npx prisma studio
 ## Listing Available Snapshots
 
 ```bash
-fly ssh console -C "litestream snapshots -config /app/litestream.yml /data/db.sqlite"
+fly ssh console -C "litestream snapshots -config /app/litestream.yml"
 ```
 
 ## Monitoring
 
 - Check replication is active: `fly logs | grep litestream`
-- Health endpoint reports WAL mode: `curl https://convocados.fly.dev/api/health`
+- Health endpoint reports WAL mode and Litestream status: `curl https://convocados.fly.dev/api/health`
 
 ## Fly.io Secrets Reference
 
@@ -134,6 +134,6 @@ fly secrets set \
 - [ ] Fly.io secrets set (see table above)
 - [ ] `fly deploy` succeeds
 - [ ] Logs show `Starting app with Litestream replication...`
-- [ ] `fly ssh console -C "litestream snapshots -config /app/litestream.yml /data/db.sqlite"` shows snapshots
+- [ ] `fly ssh console -C "litestream snapshots -config /app/litestream.yml"` shows snapshots
 - [ ] Destroy and recreate machine — DB restores automatically from R2
 - [ ] Health endpoint returns `journalMode: "wal"`

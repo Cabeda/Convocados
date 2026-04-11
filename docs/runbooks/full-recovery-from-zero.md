@@ -26,14 +26,14 @@ Create a local config file `litestream-local.yml` (if you don't already have one
 ```yaml
 dbs:
   - path: ./restored.db
-    replicas:
-      - type: s3
-        bucket: convocados
-        endpoint: https://2ffa19ca2d5924a86dd7ea437f22e614.r2.cloudflarestorage.com
-        region: auto
-        force-path-style: true
-        access-key-id: <your-r2-access-key>
-        secret-access-key: <your-r2-secret-key>
+    replica:
+      type: s3
+      bucket: convocados
+      endpoint: https://2ffa19ca2d5924a86dd7ea437f22e614.r2.cloudflarestorage.com
+      region: auto
+      force-path-style: true
+      access-key-id: <your-r2-access-key>
+      secret-access-key: <your-r2-secret-key>
 ```
 
 List available snapshots:
@@ -42,12 +42,12 @@ List available snapshots:
 litestream snapshots -config litestream-local.yml
 ```
 
-Expected output:
+Expected output (v0.5+ uses LTX format, no generations):
 
 ```
-replica  generation        index  size     created
-s3       xxxxxxxxxxxxxxxxx 0      4194304  2026-04-05T10:00:00Z
-s3       xxxxxxxxxxxxxxxxx 1      4194304  2026-04-06T10:00:00Z
+db        replica  type  snapshot  size      created
+/data/db  s3       ltx   xxxxxxxx  4194304   2026-04-05T10:00:00Z
+/data/db  s3       ltx   xxxxxxxx  4194304   2026-04-06T10:00:00Z
 ...
 ```
 
