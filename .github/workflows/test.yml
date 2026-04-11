@@ -61,6 +61,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm prisma generate
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
