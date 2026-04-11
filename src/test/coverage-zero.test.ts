@@ -59,6 +59,12 @@ describe("GET /api/health", () => {
     expect(body.db.writable).toBe(true);
     expect(body.db.journalMode).toBeTruthy();
   });
+
+  it("omits litestream field in non-production", async () => {
+    const res = await getHealth({ request: new Request("http://localhost/api/health"), params: {} } as any);
+    const body = await res.json();
+    expect(body.litestream).toBeUndefined();
+  });
 });
 
 // ─── GET /api/events/[id]/calendar.ics ───────────────────────────────────────

@@ -4,7 +4,7 @@ This document covers how Convocados backs up and restores its SQLite database us
 
 ## Architecture
 
-- **Database**: SQLite in WAL mode at `/data/prod.db` (Fly.io persistent volume)
+- **Database**: SQLite in WAL mode at `/data/db.sqlite` (Fly.io persistent volume)
 - **Replication**: Litestream continuously streams WAL changes to Cloudflare R2
 - **Config**: `/app/litestream.yml`
 - **Startup**: `scripts/start.sh` handles restore-on-boot + replicate-on-run
@@ -13,7 +13,7 @@ This document covers how Convocados backs up and restores its SQLite database us
 
 The startup script (`scripts/start.sh`) handles recovery automatically:
 
-1. Checks if `/data/prod.db` exists
+1. Checks if `/data/db.sqlite` exists
 2. If missing, runs `litestream restore -if-replica-exists` to pull the latest snapshot from R2
 3. Runs Prisma migrations to apply any pending schema changes
 4. Starts the app with Litestream replicating in the background
@@ -37,20 +37,20 @@ kill $(pgrep -f "node dist/server/entry.mjs")
 ### Restore latest backup
 
 ```bash
-litestream restore -config /app/litestream.yml /data/prod.db
+litestream restore -config /app/litestream.yml /data/db.sqlite
 ```
 
 ### Restore to a specific point in time
 
 ```bash
-litestream restore -config /app/litestream.yml -timestamp "2026-03-20T12:00:00Z" /data/prod.db
+litestream restore -config /app/litestream.yml -timestamp "2026-03-20T12:00:00Z" /data/db.sqlite
 ```
 
 ### Verify the restored database
 
 ```bash
-sqlite3 /data/prod.db "PRAGMA integrity_check;"
-sqlite3 /data/prod.db "SELECT count(*) FROM Event;"
+sqlite3 /data/db.sqlite "PRAGMA integrity_check;"
+sqlite3 /data/db.sqlite "SELECT count(*) FROM Event;"
 ```
 
 ### Restart the machine
@@ -72,14 +72,14 @@ brew install litestream  # macOS
 ```yaml
 dbs:
   - path: ./restored.db
-    replicas:
-      - type: s3
-        bucket: convocados
-        endpoint: https://2ffa19ca2d5924a86dd7ea437f22e614.r2.cloudflarestorage.com
-        region: auto
-        force-path-style: true
-        access-key-id: <your-r2-access-key>
-        secret-access-key: <your-r2-secret-key>
+    replica:
+      type: s3
+      bucket: convocados
+      endpoint: https://2ffa19ca2d5924a86dd7ea437f22e614.r2.cloudflarestorage.com
+      region: auto
+      force-path-style: true
+      access-key-id: <your-r2-access-key>
+      secret-access-key: <your-r2-secret-key>
 ```
 
 ### 3. Restore
@@ -97,13 +97,13 @@ DATABASE_URL="file:./restored.db" npx prisma studio
 ## Listing Available Snapshots
 
 ```bash
-fly ssh console -C "litestream snapshots -config /app/litestream.yml /data/prod.db"
+fly ssh console -C "litestream snapshots -config /app/litestream.yml"
 ```
 
 ## Monitoring
 
 - Check replication is active: `fly logs | grep litestream`
-- Health endpoint reports WAL mode: `curl https://convocados.fly.dev/api/health`
+- Health endpoint reports WAL mode and Litestream status: `curl https://convocados.fly.dev/api/health`
 
 ## Fly.io Secrets Reference
 
@@ -134,6 +134,6 @@ fly secrets set \
 - [ ] Fly.io secrets set (see table above)
 - [ ] `fly deploy` succeeds
 - [ ] Logs show `Starting app with Litestream replication...`
-- [ ] `fly ssh console -C "litestream snapshots -config /app/litestream.yml /data/prod.db"` shows snapshots
+- [ ] `fly ssh console -C "litestream snapshots -config /app/litestream.yml"` shows snapshots
 - [ ] Destroy and recreate machine — DB restores automatically from R2
 - [ ] Health endpoint returns `journalMode: "wal"`
