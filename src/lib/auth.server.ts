@@ -77,6 +77,7 @@ export async function ensureTrustedClientInDB() {
 }
 
 export const auth = betterAuth({
+  baseURL: baseUrl,
   database: prismaAdapter(prisma, { provider: "sqlite" }),
   emailAndPassword: {
     enabled: true,
