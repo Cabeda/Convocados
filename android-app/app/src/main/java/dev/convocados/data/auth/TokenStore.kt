@@ -1,11 +1,13 @@
 package dev.convocados.data.auth
 
 import android.content.Context
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.security.GeneralSecurityException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,7 +24,16 @@ class TokenStore @Inject constructor(@ApplicationContext context: Context) {
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
 
-    private val prefs = EncryptedSharedPreferences.create(
+    private val prefs = try {
+        createEncryptedPrefs(context)
+    } catch (e: Exception) {
+        Log.e("TokenStore", "Failed to initialize EncryptedSharedPreferences, clearing and retrying", e)
+        // Delete the corrupted preferences file and retry
+        context.deleteSharedPreferences("convocados_tokens")
+        createEncryptedPrefs(context)
+    }
+
+    private fun createEncryptedPrefs(context: Context) = EncryptedSharedPreferences.create(
         context,
         "convocados_tokens",
         masterKey,
