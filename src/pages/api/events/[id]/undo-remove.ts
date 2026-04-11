@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { addPlayerToTeams } from "./players";
+import { addPlayerToTeams, validateTeams } from "./players";
 
 const UNDO_WINDOW_MS = 60_000; // 60 seconds
 
@@ -54,6 +54,9 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (order < event.maxPlayers) {
     await addPlayerToTeams(eventId, name);
   }
+
+  // Validate teams: ensure no bench players are in teams after undo
+  await validateTeams(eventId, event.maxPlayers);
 
 
   return Response.json({ ok: true });
