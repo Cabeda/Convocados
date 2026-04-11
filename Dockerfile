@@ -26,6 +26,10 @@ RUN pnpm run build
 FROM base AS production
 ENV NODE_ENV=production
 
+# Install Litestream for continuous SQLite replication to S3/R2
+ADD https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64-static.tar.gz /tmp/litestream.tar.gz
+RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.gz
+
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
@@ -35,6 +39,7 @@ RUN mkdir -p node_modules/.bin && ln -sf ../prisma/build/index.js node_modules/.
 COPY package.json ./
 COPY prisma ./prisma
 COPY public ./public
+COPY litestream.yml ./litestream.yml
 COPY scripts/start.sh ./scripts/start.sh
 
 EXPOSE 3000
