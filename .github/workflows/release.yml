@@ -22,11 +22,16 @@ jobs:
       version: ${{ steps.bump_version.outputs.new_version }}
 
     steps:
+      - name: Setup SSH for deploy key
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
 
       - name: Get latest tag
         id: get_tag
@@ -100,6 +105,7 @@ jobs:
         if: steps.version_bump.outputs.bump_type != 'none'
         run: |
           NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
+          git remote set-url origin git@github.com:${{ github.repository }}.git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json
