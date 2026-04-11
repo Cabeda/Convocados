@@ -20,10 +20,24 @@ export function NotifyButton({ eventId }: Props) {
     if (Notification.permission === "denied") { setState("denied"); return; }
     navigator.serviceWorker.ready.then((reg) => {
       reg.pushManager.getSubscription().then((sub) => {
-        if (sub) setState("subscribed");
+        if (sub) {
+          setState("subscribed");
+          // Re-sync subscription to server in case it was cleaned up (e.g. 410 from push service)
+          fetch(`/api/events/${eventId}/push`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...sub.toJSON(),
+              locale: navigator.language,
+              clientId: localStorage.getItem("client_id") ?? "",
+            }),
+          }).then((res) => {
+            if (!res.ok) setState("idle");
+          }).catch(() => setState("idle"));
+        }
       });
     });
-  }, []);
+  }, [eventId]);
 
   const subscribe = async () => {
     setLoading(true);

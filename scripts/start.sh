@@ -6,22 +6,17 @@ export DATABASE_URL
 
 echo "[startup] Running database migrations..."
 
-# Check for failed migrations and resolve them before deploying
-MIGRATE_STATUS=$(./node_modules/.bin/prisma migrate status 2>&1) || true
-echo "[startup] migrate status:"
-echo "$MIGRATE_STATUS"
-
-# Extract failed migration names (lines matching the timestamp_name pattern)
-FAILED_MIGRATIONS=$(echo "$MIGRATE_STATUS" | grep -oE '[0-9]{14}_[a-zA-Z0-9_]+' | sort -u)
-
-if [ -n "$FAILED_MIGRATIONS" ] && echo "$MIGRATE_STATUS" | grep -qi "failed"; then
-  for MIGRATION in $FAILED_MIGRATIONS; do
-    echo "[startup] Marking failed migration as applied: $MIGRATION"
-    ./node_modules/.bin/prisma migrate resolve --applied "$MIGRATION" 2>&1 || true
-  done
+# Back up the database before migrating so we have a recovery path
+if [ -f /data/db.sqlite ]; then
+  cp /data/db.sqlite /data/db.sqlite.pre-migrate-backup
+  echo "[startup] Database backed up to /data/db.sqlite.pre-migrate-backup"
 fi
 
-# Now deploy migrations
+# Run migrations — if this fails, the deploy fails and Fly keeps the old machine.
+# Do NOT auto-resolve failed migrations. They require manual intervention to
+# understand why they failed before deciding how to fix them. The previous
+# auto-resolve logic caused tables to never be created because it marked
+# unexecuted migrations as "applied".
 ./node_modules/.bin/prisma migrate deploy
 
 echo "[startup] Starting app..."
