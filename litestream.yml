@@ -1,17 +1,16 @@
 # Litestream configuration for continuous SQLite replication.
-# Replicates the production database to an S3-compatible bucket.
+# Replicates the production database to an S3-compatible bucket (Cloudflare R2).
 # See: https://litestream.io/reference/config/
 
 dbs:
   - path: /data/db.sqlite
-    replicas:
-      - type: s3
-        bucket: ${LITESTREAM_REPLICA_BUCKET}
-        path: db
-        endpoint: ${LITESTREAM_REPLICA_ENDPOINT}
-        region: ${LITESTREAM_REPLICA_REGION}
-        force-path-style: true
-        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
-        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
-        retention: 168h  # 7 days
-        sync-interval: 1s
+    replica:
+      type: s3
+      bucket: ${LITESTREAM_REPLICA_BUCKET}
+      path: db
+      endpoint: ${LITESTREAM_REPLICA_ENDPOINT}
+      region: ${LITESTREAM_REPLICA_REGION}
+      force-path-style: true
+      access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+      secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+      retention: 168h  # 7 days
