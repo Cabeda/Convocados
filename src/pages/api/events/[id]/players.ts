@@ -8,6 +8,9 @@ import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server"
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { syncPaymentsForEvent } from "../../../../lib/payments.server";
 import { logEvent } from "../../../../lib/eventLog.server";
+import { createLogger } from "../../../../lib/logger.server";
+
+const log = createLogger("players-api");
 
 /**
  * If teams have been generated, add a player to the team with fewer members.
@@ -148,8 +151,13 @@ export const POST: APIRoute = async ({ params, request }) => {
     await enqueueNotification(eventId, "player_joined", { title: event.title, key: "notifyPlayerJoined", params: { name: trimmed }, url, spotsLeft }, senderClientId);
   }
 
-  // Drain notification queue immediately so push is sent in near-real-time
-  if (!process.env.VITEST) drainNotificationQueue().catch(() => {});
+  // Drain notification queue before responding so push is sent immediately.
+  // Must be awaited — fire-and-forget gets killed when the response completes.
+  if (!process.env.VITEST) {
+    await drainNotificationQueue().catch((err) => {
+      log.error({ eventId, err }, "Failed to drain notification queue");
+    });
+  }
 
   // Send game invite email to the joining player if they have a linked account
   if (shouldLink && session?.user?.email) {
@@ -268,8 +276,12 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     await enqueueNotification(eventId, "player_left", { title: event.title, key: "notifyPlayerLeft", params: { name: player.name }, url, spotsLeft }, senderClientId);
   }
 
-  // Drain notification queue immediately so push is sent in near-real-time
-  if (!process.env.VITEST) drainNotificationQueue().catch(() => {});
+  // Drain notification queue before responding so push is sent immediately.
+  if (!process.env.VITEST) {
+    await drainNotificationQueue().catch((err) => {
+      log.error({ eventId, err }, "Failed to drain notification queue");
+    });
+  }
 
   // Fire webhooks (non-blocking)
   fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft }).catch(() => {});

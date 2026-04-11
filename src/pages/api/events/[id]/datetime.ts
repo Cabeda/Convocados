@@ -3,6 +3,9 @@ import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
+import { createLogger } from "../../../../lib/logger.server";
+
+const log = createLogger("datetime-api");
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -76,8 +79,12 @@ export const PUT: APIRoute = async ({ params, request }) => {
       spotsLeft,
     });
 
-    // Drain notification queue immediately so push is sent in near-real-time
-    if (!process.env.VITEST) drainNotificationQueue().catch(() => {});
+    // Drain notification queue before responding so push is sent immediately.
+    if (!process.env.VITEST) {
+      await drainNotificationQueue().catch((err) => {
+        log.error({ eventId, err }, "Failed to drain notification queue");
+      });
+    }
   }
 
   return Response.json({
