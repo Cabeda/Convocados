@@ -115,17 +115,20 @@ export function PaymentSection({
     return () => clearInterval(id);
   }, [fetchCost]);
 
-  const [accordionOpen, setAccordionOpen] = useState(false);
+  const storageKey = `splitCosts_expanded_${eventId}`;
+  const [accordionOpen, setAccordionOpen] = useState(() => {
+    try { return localStorage.getItem(storageKey) === "true"; } catch { return false; }
+  });
+
+  // Persist accordion state to localStorage
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, String(accordionOpen)); } catch {}
+  }, [accordionOpen, storageKey]);
 
   // Sync with external control — when controlledExpanded becomes true, open
   useEffect(() => {
     if (controlledExpanded === true) setAccordionOpen(true);
   }, [controlledExpanded]);
-
-  // Auto-expand when cost data loads and there is a cost
-  useEffect(() => {
-    if (costData && costData.totalAmount > 0) setAccordionOpen(true);
-  }, [costData]);
 
   const hasCost = costData && costData.totalAmount > 0;
   const perPlayer = hasCost && activePlayerCount > 0
