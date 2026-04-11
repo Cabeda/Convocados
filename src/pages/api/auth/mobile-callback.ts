@@ -4,6 +4,7 @@ import { prisma } from "../../../lib/db.server";
 import crypto from "node:crypto";
 
 const MOBILE_CLIENT_ID = "convocados-mobile-app";
+const APP_BASE_URL = process.env.BETTER_AUTH_URL ?? "http://localhost:4321";
 
 /** Ensure the mobile OAuth application exists in the DB */
 let _mobileClientInitialized = false;
@@ -45,7 +46,7 @@ export const GET: APIRoute = async ({ request }) => {
       // Not logged in — redirect to sign-in page with return URL
       const returnUrl = `/api/auth/mobile-callback?redirect_uri=${encodeURIComponent(redirectUri)}`;
       return Response.redirect(
-        new URL(`/auth/signin?callbackURL=${encodeURIComponent(returnUrl)}`, url.origin).toString(),
+        new URL(`/auth/signin?callbackURL=${encodeURIComponent(returnUrl)}`, APP_BASE_URL).toString(),
         302,
       );
     }
