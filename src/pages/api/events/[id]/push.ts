@@ -1,6 +1,9 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
+import { createLogger } from "../../../../lib/logger.server";
+
+const log = createLogger("push-api");
 
 export const POST: APIRoute = async ({ params, request }) => {
   const eventId = params.id!;
@@ -17,11 +20,16 @@ export const POST: APIRoute = async ({ params, request }) => {
   const session = await getSession(request);
   const userId = session?.user?.id ?? null;
 
-  await prisma.pushSubscription.upsert({
-    where: { eventId_endpoint: { eventId, endpoint } },
-    create: { eventId, endpoint, p256dh: keys.p256dh, auth: keys.auth, locale: lang, clientId: cid, userId },
-    update: { p256dh: keys.p256dh, auth: keys.auth, locale: lang, clientId: cid, userId },
-  });
+  try {
+    await prisma.pushSubscription.upsert({
+      where: { eventId_endpoint: { eventId, endpoint } },
+      create: { eventId, endpoint, p256dh: keys.p256dh, auth: keys.auth, locale: lang, clientId: cid, userId },
+      update: { p256dh: keys.p256dh, auth: keys.auth, locale: lang, clientId: cid, userId },
+    });
+  } catch (err: any) {
+    log.error({ err: err?.message, code: err?.code, eventId, endpoint: endpoint?.slice(0, 60) }, "Failed to upsert push subscription");
+    return Response.json({ error: "Failed to save subscription." }, { status: 500 });
+  }
 
   return Response.json({ ok: true });
 };
