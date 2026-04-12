@@ -96,11 +96,15 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
     suspend inline fun <reified T> patch(path: String, body: Any? = null): T =
         authenticatedRequest(HttpMethod.Patch, path, body).body()
 
-    /** Exchange a Google ID token for Convocados OAuth tokens (unauthenticated). */
+    /**
+     * Exchange a Google ID token for Convocados OAuth tokens (unauthenticated).
+     * Uses better-auth's built-in social sign-in callback endpoint, which is
+     * already configured with GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET on the backend.
+     */
     suspend fun exchangeGoogleToken(idToken: String): OAuthTokenResponse {
-        val response = client.post("$baseUrl/api/auth/google/callback") {
+        val response = client.post("$baseUrl/api/auth/callback/google") {
             contentType(ContentType.Application.Json)
-            setBody(mapOf("idToken" to idToken, "clientId" to "mobile-app"))
+            setBody(mapOf("idToken" to idToken, "callbackURL" to "/"))
         }
         if (!response.status.isSuccess()) {
             val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
