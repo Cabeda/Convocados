@@ -19,6 +19,13 @@ androidxSplashscreen = "1.0.1"
 firebaseBom = "33.7.0"
 accompanist = "0.37.0"
 room = "2.6.1"
+wearCompose = "1.4.0"
+horologistComposeLayout = "0.6.20"
+playServicesWearable = "18.2.0"
+playServicesAuth = "21.3.0"
+googleIdIdentity = "1.1.1"
+workRuntime = "2.10.0"
+hiltWork = "1.2.0"
 turbine = "1.1.0"
 mockk = "1.13.13"
 kotlinxCoroutinesTest = "1.9.0"
@@ -56,6 +63,21 @@ accompanist-permissions = { group = "com.google.accompanist", name = "accompanis
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+# Wear OS
+wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wearCompose" }
+wear-compose-material = { group = "androidx.wear.compose", name = "compose-material", version.ref = "wearCompose" }
+wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "wearCompose" }
+horologist-compose-layout = { group = "com.google.android.horologist", name = "horologist-compose-layout", version.ref = "horologistComposeLayout" }
+play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
+google-id-identity = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleIdIdentity" }
+androidx-credentials = { group = "androidx.credentials", name = "credentials", version = "1.3.0" }
+androidx-credentials-play = { group = "androidx.credentials", name = "credentials-play-services-auth", version = "1.3.0" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntime" }
+androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWork" }
+androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltWork" }
+androidx-wear = { group = "androidx.wear", name = "wear", version = "1.3.0" }
 
 # Testing
 junit = { group = "junit", name = "junit", version = "4.13.2" }

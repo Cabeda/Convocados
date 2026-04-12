@@ -110,6 +110,29 @@ jobs:
           }
           EOF
 
-      - name: Build debug APK
+      - name: Build phone debug APK
         working-directory: android-app
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+  android-wear:
+    name: Wear OS Build
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(join(github.event.pull_request.*.filename, ' '), 'android-app/'))
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Wear OS debug APK
+        working-directory: android-app
+        run: ./gradlew :wear:assembleDebug --no-daemon
