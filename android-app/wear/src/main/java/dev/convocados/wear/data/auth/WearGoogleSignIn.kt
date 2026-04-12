@@ -16,7 +16,12 @@ import javax.inject.Singleton
 /**
  * Handles Google Sign-In directly on the Wear OS device.
  * Uses Credential Manager + Google Identity Services to get an ID token,
- * then exchanges it with the Convocados backend for OAuth tokens.
+ * then exchanges it with the Convocados backend via better-auth's
+ * existing social sign-in endpoint.
+ *
+ * The SERVER_CLIENT_ID must match the GOOGLE_CLIENT_ID env var configured
+ * on the backend (see .env.example). This is the *web* client ID from
+ * Google Cloud Console, NOT the Android client ID.
  *
  * This is the primary login method — prominent and seamless on the watch.
  * The Data Layer sync from the phone app is a secondary/fallback path.
@@ -31,7 +36,7 @@ class WearGoogleSignIn @Inject constructor(
 
     /**
      * Build the credential request for Google Sign-In.
-     * Uses the server client ID so the backend can verify the ID token.
+     * Uses the server (web) client ID so the backend can verify the ID token.
      */
     fun buildCredentialRequest(): GetCredentialRequest {
         val googleIdOption = GetGoogleIdOption.Builder()
@@ -47,7 +52,8 @@ class WearGoogleSignIn @Inject constructor(
 
     /**
      * Process the credential response from Google Sign-In.
-     * Extracts the ID token and exchanges it with the backend.
+     * Extracts the ID token and exchanges it with the backend using
+     * better-auth's social sign-in callback endpoint.
      */
     suspend fun handleSignInResult(result: GetCredentialResponse): Boolean {
         val credential = result.credential
@@ -80,8 +86,18 @@ class WearGoogleSignIn @Inject constructor(
     }
 
     companion object {
-        // This should match the Google OAuth client ID configured in the backend.
-        // In production, this would come from google-services.json or build config.
+        /**
+         * The Google OAuth *web* client ID — must match the GOOGLE_CLIENT_ID
+         * environment variable on the Convocados backend.
+         *
+         * To configure:
+         * 1. Go to Google Cloud Console → APIs & Services → Credentials
+         * 2. Use the "Web application" OAuth 2.0 Client ID
+         * 3. This is the same ID set in GOOGLE_CLIENT_ID in .env
+         *
+         * TODO: Move to BuildConfig field populated from google-services.json
+         *       or a local.properties value so it's not hardcoded.
+         */
         const val SERVER_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
     }
 }
