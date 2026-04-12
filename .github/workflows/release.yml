@@ -203,11 +203,11 @@ jobs:
           VERSION="${{ needs.release.outputs.version }}"
           sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" app/build.gradle.kts
 
-      - name: Build release APK
+      - name: Build phone release APK
         working-directory: android-app
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew :app:assembleRelease --no-daemon
 
-      - name: Sign APK
+      - name: Sign phone APK
         if: ${{ env.HAS_KEYSTORE == 'true' }}
         working-directory: android-app
         run: |
@@ -231,7 +231,7 @@ jobs:
           fi
           rm -f /tmp/release.keystore
 
-      - name: Upload APK to GitHub Release
+      - name: Upload phone APK to GitHub Release
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -254,6 +254,95 @@ jobs:
 
             const apkPath = path.join(apkDir, apk);
             const apkName = `convocados-${version}.apk`;
+
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              name: apkName,
+              data: fs.readFileSync(apkPath)
+            });
+
+            console.log(`Uploaded ${apkName} to release ${tag}`);
+
+  build-wear:
+    name: Build Wear OS APK
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE != '' }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Update wear version
+        working-directory: android-app
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" wear/build.gradle.kts
+
+      - name: Build Wear OS release APK
+        working-directory: android-app
+        run: ./gradlew :wear:assembleRelease --no-daemon
+
+      - name: Sign Wear OS APK
+        if: ${{ env.HAS_KEYSTORE == 'true' }}
+        working-directory: android-app
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > /tmp/release.keystore
+          APK=$(find wear/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -z "$APK" ]; then echo "No Wear APK found"; exit 1; fi
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner -type f 2>/dev/null | sort -V | tail -1)
+          if [ -n "$APKSIGNER" ]; then
+            $APKSIGNER sign \
+              --ks /tmp/release.keystore \
+              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+              --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
+              --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+              "$APK"
+          else
+            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+              -keystore /tmp/release.keystore \
+              -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
+              -keypass "${{ secrets.KEY_PASSWORD }}" \
+              "$APK" "${{ secrets.KEY_ALIAS }}"
+          fi
+          rm -f /tmp/release.keystore
+
+      - name: Upload Wear OS APK to GitHub Release
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const version = '${{ needs.release.outputs.version }}';
+            const tag = `v${version}`;
+
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag
+            });
+
+            const apkDir = 'android-app/wear/build/outputs/apk/release';
+            const files = fs.readdirSync(apkDir);
+            const apk = files.find(f => f.endsWith('.apk'));
+            if (!apk) throw new Error('No Wear APK found in ' + apkDir);
+
+            const apkPath = path.join(apkDir, apk);
+            const apkName = `convocados-wear-${version}.apk`;
 
             await github.rest.repos.uploadReleaseAsset({
               owner: context.repo.owner,
