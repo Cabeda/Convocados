@@ -5,20 +5,18 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.google.services)
 }
 
 android {
-    namespace = "dev.convocados"
+    namespace = "dev.convocados.wear"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.cabeda.convocados"
-        minSdk = 26
+        applicationId = "com.cabeda.convocados.wear"
+        minSdk = 30
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
-        manifestPlaceholders["appAuthRedirectScheme"] = "convocados"
     }
 
     buildTypes {
@@ -36,11 +34,6 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
-        freeCompilerArgs += listOf(
-            "-P",
-            "plugin:androidx.compose.compiler.plugins.kotlin:suppressKotlinVersionCompatibilityCheck=true",
-            "-opt-in=androidx.compose.animation.ExperimentalSharedTransitionApi"
-        )
     }
     buildFeatures {
         compose = true
@@ -48,13 +41,14 @@ android {
 }
 
 dependencies {
-    // Compose BOM
+    // Wear Compose
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.material3)
+    implementation(libs.wear.compose.foundation)
+    implementation(libs.wear.compose.material)
+    implementation(libs.wear.compose.navigation)
+    implementation(libs.horologist.compose.layout)
     implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material.icons.extended)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     // Core
@@ -62,56 +56,45 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
-
-    // Navigation
-    implementation(libs.androidx.navigation.compose)
-    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.wear)
 
     // Hilt DI
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
 
-    // Networking
+    // Networking (Ktor)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.client.auth)
-    implementation(libs.ktor.client.logging)
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)
 
-    // DataStore (preferences)
-    implementation(libs.androidx.datastore.preferences)
-
-    // Security (encrypted shared prefs for tokens)
-    implementation(libs.androidx.security.crypto)
-
-    // Browser (Custom Tabs for OAuth)
-    implementation(libs.androidx.browser)
-
-    // Splash screen
-    implementation(libs.androidx.core.splashscreen)
-
-    // Firebase
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.messaging.ktx)
-
-    // Accompanist (Permissions)
-    implementation(libs.accompanist.permissions)
-
-    // Wearable Data Layer (sync auth tokens to watch)
-    implementation(libs.play.services.wearable)
-
-    // Room
+    // Room (offline DB)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    // Testing
-    testImplementation(libs.junit)
-    testImplementation(libs.mockk)
-    testImplementation(libs.turbine)
-    testImplementation(libs.kotlinx.coroutines.test)
+    // WorkManager (sync queue)
+    implementation(libs.androidx.work.runtime.ktx)
+
+    // Wearable Data Layer (auth sync from phone)
+    implementation(libs.play.services.wearable)
+
+    // Google Sign-In (direct login on watch)
+    implementation(libs.play.services.auth)
+    implementation(libs.google.id.identity)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play)
+
+    // Security (encrypted prefs for tokens)
+    implementation(libs.androidx.security.crypto)
+
+    // DataStore
+    implementation(libs.androidx.datastore.preferences)
 }
