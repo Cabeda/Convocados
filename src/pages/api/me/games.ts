@@ -21,6 +21,7 @@ export const GET: APIRoute = async ({ request }) => {
     title: true,
     location: true,
     dateTime: true,
+    timezone: true,
     sport: true,
     maxPlayers: true,
     archivedAt: true,
