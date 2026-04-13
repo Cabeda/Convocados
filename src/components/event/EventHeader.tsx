@@ -137,7 +137,7 @@ export function EventHeader({
     if (titleDraft.trim() && titleDraft.trim() !== event.title) {
       promises.push(onSaveTitle(titleDraft.trim()));
     }
-    if (locationDraft !== event.location) {
+    if (locationDraft !== (event.location || "")) {
       promises.push(onSaveLocation(locationDraft));
     }
     if (dateTimeDraft !== toDateTimeLocalValue(new Date(event.dateTime), event.timezone || "UTC") || timezoneDraft !== (event.timezone || "UTC")) {
