@@ -57,7 +57,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     if (rule) {
       const currentNextResetAt = event.nextResetAt;
       const newDateTime = nextOccurrence(event.dateTime, rule, new Date());
-      const newNextResetAt = new Date(newDateTime.getTime() + 60 * 60 * 1000);
+      const newNextResetAt = new Date(newDateTime.getTime() + event.durationMinutes * 60 * 1000);
 
       // Atomically claim the reset — only one concurrent request will get count=1
       const claimed = await prisma.event.updateMany({

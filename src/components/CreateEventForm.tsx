@@ -21,7 +21,7 @@ import { detectLocale } from "~/lib/i18n";
 import { SPORT_PRESETS, getDefaultMaxPlayers } from "~/lib/sports";
 import { isPlaytomicSport } from "~/lib/playtomic";
 import { getRandomTitle, type TitleLocale } from "~/lib/randomTitles";
-import { COMMON_TIMEZONES, detectTimezone } from "~/lib/timezones";
+import { COMMON_TIMEZONES, detectTimezone, fromDateTimeLocalValue } from "~/lib/timezones";
 
 const DAY_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as const;
 const DAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
@@ -122,7 +122,7 @@ export default function CreateEventForm() {
     const body = {
       title: fd.get("title"),
       location: location || "",
-      dateTime: dateTime,
+      dateTime: fromDateTimeLocalValue(dateTime, timezone),
       timezone,
       teamOneName: fd.get("teamOneName"),
       teamTwoName: fd.get("teamTwoName"),
