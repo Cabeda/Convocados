@@ -113,6 +113,36 @@ describe("POST /api/events", () => {
     expect(event?.nextResetAt).toBeTruthy();
   });
 
+  it("sets nextResetAt to dateTime + durationMinutes (not hardcoded 1h)", async () => {
+    const res = await createEvent(ctx({}, {
+      title: "Padel Game", location: "Court 1", dateTime: future,
+      sport: "padel", // padel defaults to 90 min
+      isRecurring: true, recurrenceFreq: "weekly", recurrenceInterval: 1,
+    }));
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event).toBeTruthy();
+    // nextResetAt should be dateTime + 90 minutes (padel duration), not dateTime + 60 minutes
+    const expectedResetAt = new Date(event!.dateTime.getTime() + 90 * 60 * 1000);
+    expect(event!.nextResetAt!.getTime()).toBe(expectedResetAt.getTime());
+  });
+
+  it("converts datetime-local value using timezone on creation", async () => {
+    // Send a datetime-local value (no Z suffix) with a timezone
+    // 2030-07-15T20:00 in Europe/Lisbon (summer, UTC+1) should be stored as 2030-07-15T19:00:00Z
+    const res = await createEvent(ctx({}, {
+      title: "Lisbon Game", location: "Pitch",
+      dateTime: "2030-07-15T20:00",
+      timezone: "Europe/Lisbon",
+    }));
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event!.dateTime.toISOString()).toBe("2030-07-15T19:00:00.000Z");
+    expect(event!.timezone).toBe("Europe/Lisbon");
+  });
+
   it("uses default team names when not provided", async () => {
     const res = await createEvent(ctx({}, { title: "X", location: "Y", dateTime: future }));
     const { id } = await res.json();
@@ -171,6 +201,29 @@ describe("GET /api/events/[id]", () => {
     expect(body.wasReset).toBe(true);
     // dateTime should have advanced
     expect(new Date(body.dateTime).getTime()).toBeGreaterThan(event.dateTime.getTime());
+  });
+
+  it("sets nextResetAt to newDateTime + durationMinutes after recurrence reset", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Recurring Padel", location: "Court",
+        dateTime: new Date(Date.now() - 7200_000), // 2h ago
+        teamOneName: "A", teamTwoName: "B",
+        isRecurring: true,
+        durationMinutes: 90, // padel-length game
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
+        nextResetAt: new Date(Date.now() - 3600_000), // 1h ago
+      },
+    });
+    const res = await getEvent(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.wasReset).toBe(true);
+    // nextResetAt should be newDateTime + 90 minutes (durationMinutes), not + 60 minutes
+    const newDateTime = new Date(body.dateTime);
+    const expectedResetAt = new Date(newDateTime.getTime() + 90 * 60 * 1000);
+    const actualResetAt = new Date(body.nextResetAt);
+    expect(actualResetAt.getTime()).toBe(expectedResetAt.getTime());
   });
 });
 

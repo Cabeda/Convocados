@@ -6,6 +6,7 @@ import { resolveLocation } from "../../../lib/geocode";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
 import { getDefaultDurationMinutes } from "../../../lib/sports";
+import { fromDateTimeLocalValue } from "../../../lib/timezones";
 
 export const POST: APIRoute = async ({ request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -44,11 +45,7 @@ export const POST: APIRoute = async ({ request }) => {
   if (!title) return Response.json({ error: "Title is required." }, { status: 400 });
   if (!dateTimeRaw) return Response.json({ error: "Date and time are required." }, { status: 400 });
 
-  const dateTime = new Date(dateTimeRaw);
-  if (isNaN(dateTime.getTime())) return Response.json({ error: "Invalid date/time." }, { status: 400 });
-  if (dateTime < new Date()) return Response.json({ error: "Event must be in the future." }, { status: 400 });
-
-  // Validate timezone
+  // Validate timezone first — needed for dateTime conversion below
   let timezone = "UTC";
   try {
     Intl.DateTimeFormat(undefined, { timeZone: timezoneRaw });
@@ -57,8 +54,22 @@ export const POST: APIRoute = async ({ request }) => {
     // fall back to UTC silently
   }
 
+  // If the client sends a datetime-local value (no Z/offset suffix), convert
+  // it from the provided timezone to UTC. If it's already a UTC ISO string,
+  // new Date() handles it correctly.
+  let dateTime: Date;
+  const looksLikeUtc = /[Zz]$/.test(dateTimeRaw) || /[+-]\d{2}:\d{2}$/.test(dateTimeRaw);
+  if (!looksLikeUtc && timezone !== "UTC") {
+    dateTime = new Date(fromDateTimeLocalValue(dateTimeRaw, timezone));
+  } else {
+    dateTime = new Date(dateTimeRaw);
+  }
+  if (isNaN(dateTime.getTime())) return Response.json({ error: "Invalid date/time." }, { status: 400 });
+  if (dateTime < new Date()) return Response.json({ error: "Event must be in the future." }, { status: 400 });
+
   let recurrenceRule: string | null = null;
   let nextResetAt: Date | null = null;
+  const durationMinutes = getDefaultDurationMinutes(sport);
 
   if (isRecurring && recurrenceFreq) {
     const rule: RecurrenceRule = {
@@ -67,7 +78,7 @@ export const POST: APIRoute = async ({ request }) => {
       ...(recurrenceByDay ? { byDay: recurrenceByDay } : {}),
     };
     recurrenceRule = serializeRecurrenceRule(rule);
-    nextResetAt = new Date(dateTime.getTime() + 60 * 60 * 1000);
+    nextResetAt = new Date(dateTime.getTime() + durationMinutes * 60 * 1000);
   }
 
   // Geocode location (non-blocking failure — coordinates are optional)
@@ -76,7 +87,7 @@ export const POST: APIRoute = async ({ request }) => {
   const event = await prisma.event.create({
     data: {
       title, location, dateTime, timezone, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
-      durationMinutes: getDefaultDurationMinutes(sport),
+      durationMinutes,
       latitude: geo?.latitude ?? null,
       longitude: geo?.longitude ?? null,
       ownerId: session?.user?.id ?? null,
