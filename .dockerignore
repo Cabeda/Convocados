@@ -10,3 +10,13 @@ mobile/node_modules
 mobile/android
 mobile/ios
 mobile/.expo
+android-app
+bruno
+challenges
+coverage
+test-results
+.github
+.vscode
+.astro
+*.md
+!README.md

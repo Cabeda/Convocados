@@ -365,9 +365,25 @@ jobs:
         with:
           ref: v${{ needs.release.outputs.version }}
 
+      - uses: docker/setup-buildx-action@v3
+
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Authenticate to Fly registry
+        run: flyctl auth docker
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: registry.fly.io/convocados:${{ needs.release.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Deploy to Fly.io
-        run: flyctl deploy --remote-only
+        run: flyctl deploy --image registry.fly.io/convocados:${{ needs.release.outputs.version }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
