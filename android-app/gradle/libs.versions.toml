@@ -3,32 +3,32 @@ agp = "8.7.2"
 kotlin = "2.1.0"
 ksp = "2.1.0-1.0.29"
 googleServices = "4.4.2"
-hilt = "2.53"
-composeBom = "2024.12.01"
+hilt = "2.55"
+composeBom = "2025.02.00"
 androidxCore = "1.15.0"
 androidxLifecycle = "2.8.7"
-androidxActivity = "1.9.3"
-androidxNavigation = "2.8.5"
+androidxActivity = "1.10.0"
+androidxNavigation = "2.8.7"
 androidxHiltNavigation = "1.2.0"
-ktor = "3.0.3"
-kotlinxSerializationJson = "1.7.3"
-androidxDataStore = "1.1.1"
+ktor = "3.1.0"
+kotlinxSerializationJson = "1.8.0"
+androidxDataStore = "1.1.2"
 androidxSecurity = "1.1.0-alpha06"
 androidxBrowser = "1.8.0"
 androidxSplashscreen = "1.0.1"
-firebaseBom = "33.7.0"
+firebaseBom = "33.9.0"
 accompanist = "0.37.0"
 room = "2.6.1"
-wearCompose = "1.4.0"
-horologistComposeLayout = "0.6.20"
-playServicesWearable = "18.2.0"
+wearCompose = "1.6.1"
+horologistComposeLayout = "0.7.15"
+playServicesWearable = "19.0.0"
 playServicesAuth = "21.3.0"
 googleIdIdentity = "1.1.1"
 workRuntime = "2.10.0"
 hiltWork = "1.2.0"
-turbine = "1.1.0"
-mockk = "1.13.13"
-kotlinxCoroutinesTest = "1.9.0"
+turbine = "1.2.0"
+mockk = "1.13.16"
+kotlinxCoroutinesTest = "1.10.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCore" }
@@ -42,6 +42,7 @@ androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+wear-compose-ui-tooling = { group = "androidx.wear.compose", name = "compose-ui-tooling", version.ref = "wearCompose" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "androidxDataStore" }
@@ -67,6 +68,7 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 # Wear OS
 wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wearCompose" }
 wear-compose-material = { group = "androidx.wear.compose", name = "compose-material", version.ref = "wearCompose" }
+wear-compose-material3 = { group = "androidx.wear.compose", name = "compose-material3", version.ref = "wearCompose" }
 wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "wearCompose" }
 horologist-compose-layout = { group = "com.google.android.horologist", name = "horologist-compose-layout", version.ref = "horologistComposeLayout" }
 play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }

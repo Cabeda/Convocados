@@ -1,7 +1,6 @@
 package dev.convocados.wear.ui.screen.score
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -10,11 +9,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.wear.compose.material.*
+import androidx.wear.compose.material3.*
+import com.google.android.horologist.annotations.ExperimentalHorologistApi
+import com.google.android.horologist.compose.layout.ScreenScaffold
+import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.ui.theme.Success
 import dev.convocados.wear.ui.theme.TextMuted
 import dev.convocados.wear.ui.theme.Warning
 
+@OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun ScoreScreen(
     eventId: String,
@@ -24,46 +27,49 @@ fun ScoreScreen(
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
     val state by viewModel.uiState.collectAsState()
+    val columnState = rememberColumnState()
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        when {
-            state.isLoading -> {
-                CircularProgressIndicator()
-            }
-            state.history == null -> {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(16.dp),
-                ) {
-                    Text(
-                        text = "No game history",
-                        style = MaterialTheme.typography.body1,
-                        color = MaterialTheme.colors.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Start the game from\nthe phone app first",
-                        style = MaterialTheme.typography.caption3,
-                        color = TextMuted,
-                        textAlign = TextAlign.Center,
+    ScreenScaffold(scrollState = columnState) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            when {
+                state.isLoading -> {
+                    CircularProgressIndicator()
+                }
+                state.history == null -> {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(16.dp),
+                    ) {
+                        Text(
+                            text = "No game history",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Start the game from\nthe phone app first",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMuted,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+                state.saved -> {
+                    SavedConfirmation(
+                        isOfflineQueued = state.isOfflineQueued,
+                        onDone = onDone,
                     )
                 }
-            }
-            state.saved -> {
-                SavedConfirmation(
-                    isOfflineQueued = state.isOfflineQueued,
-                    onDone = onDone,
-                )
-            }
-            else -> {
-                ScoreEditor(
-                    state = state,
-                    onIncrementOne = viewModel::incrementScoreOne,
-                    onDecrementOne = viewModel::decrementScoreOne,
-                    onIncrementTwo = viewModel::incrementScoreTwo,
-                    onDecrementTwo = viewModel::decrementScoreTwo,
-                    onSave = viewModel::saveScore,
-                )
+                else -> {
+                    ScoreEditor(
+                        state = state,
+                        onIncrementOne = viewModel::incrementScoreOne,
+                        onDecrementOne = viewModel::decrementScoreOne,
+                        onIncrementTwo = viewModel::incrementScoreTwo,
+                        onDecrementTwo = viewModel::decrementScoreTwo,
+                        onSave = viewModel::saveScore,
+                    )
+                }
             }
         }
     }
@@ -88,8 +94,8 @@ private fun ScoreEditor(
         // Game title
         Text(
             text = state.game?.title ?: "Score",
-            style = MaterialTheme.typography.caption1,
-            color = MaterialTheme.colors.primary,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -112,9 +118,11 @@ private fun ScoreEditor(
 
             Text(
                 text = ":",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colors.onSurface,
+                style = MaterialTheme.typography.displaySmall.copy(
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
             )
 
             // Team 2 score
@@ -129,19 +137,21 @@ private fun ScoreEditor(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Save button
-        CompactChip(
+        Button(
             onClick = onSave,
-            label = {
-                Text(
-                    text = if (state.isSaving) "Saving..." else "Save",
-                    style = MaterialTheme.typography.caption1,
-                )
-            },
-            colors = ChipDefaults.chipColors(
-                backgroundColor = MaterialTheme.colors.primary,
-                contentColor = MaterialTheme.colors.onPrimary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
             ),
-        )
+        ) {
+            Text(
+                text = if (state.isSaving) "Saving..." else "Save",
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
     }
 }
 
@@ -159,37 +169,39 @@ private fun ScoreColumn(
         // Team name (truncated)
         Text(
             text = teamName,
-            style = MaterialTheme.typography.caption3,
-            color = MaterialTheme.colors.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = 60.dp),
         )
 
         // + button
-        Button(
+        IconButton(
             onClick = onIncrement,
             modifier = Modifier.size(32.dp),
-            colors = ButtonDefaults.secondaryButtonColors(),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(),
         ) {
-            Text("+", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text("+", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         }
 
         // Score display
         Text(
             text = "$score",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colors.onSurface,
+            style = MaterialTheme.typography.displaySmall.copy(
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
         )
 
         // - button
-        Button(
+        IconButton(
             onClick = onDecrement,
             modifier = Modifier.size(32.dp),
-            colors = ButtonDefaults.secondaryButtonColors(),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(),
         ) {
-            Text("-", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text("-", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -208,7 +220,7 @@ private fun SavedConfirmation(
     ) {
         Text(
             text = "Score saved!",
-            style = MaterialTheme.typography.title3,
+            style = MaterialTheme.typography.titleMedium,
             color = Success,
         )
 
@@ -216,7 +228,7 @@ private fun SavedConfirmation(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Will sync when online",
-                style = MaterialTheme.typography.caption3,
+                style = MaterialTheme.typography.labelSmall,
                 color = Warning,
                 textAlign = TextAlign.Center,
             )
@@ -224,10 +236,14 @@ private fun SavedConfirmation(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        CompactChip(
+        Button(
             onClick = onDone,
-            label = { Text("Done") },
-            colors = ChipDefaults.secondaryChipColors(),
-        )
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            colors = ButtonDefaults.filledTonalButtonColors(),
+        ) {
+            Text("Done")
+        }
     }
 }
