@@ -9,6 +9,7 @@ import androidx.credentials.GetCredentialResponse
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.convocados.wear.BuildConfig
 import dev.convocados.wear.data.api.WearApiClient
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -85,6 +86,10 @@ class WearGoogleSignIn @Inject constructor(
         return false
     }
 
+    suspend fun loginWithEmail(email: String, password: String): dev.convocados.wear.data.api.OAuthTokenResponse {
+        return apiClient.loginWithEmail(email, password)
+    }
+
     companion object {
         /**
          * The Google OAuth *web* client ID — must match the GOOGLE_CLIENT_ID
@@ -94,10 +99,12 @@ class WearGoogleSignIn @Inject constructor(
          * 1. Go to Google Cloud Console → APIs & Services → Credentials
          * 2. Use the "Web application" OAuth 2.0 Client ID
          * 3. This is the same ID set in GOOGLE_CLIENT_ID in .env
-         *
-         * TODO: Move to BuildConfig field populated from google-services.json
-         *       or a local.properties value so it's not hardcoded.
+         * 4. Set GOOGLE_SERVER_CLIENT_ID in local.properties
          */
-        const val SERVER_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+        val SERVER_CLIENT_ID: String = BuildConfig.GOOGLE_SERVER_CLIENT_ID.also {
+            require(it.isNotBlank()) {
+                "GOOGLE_SERVER_CLIENT_ID is not set. Add it to local.properties."
+            }
+        }
     }
 }

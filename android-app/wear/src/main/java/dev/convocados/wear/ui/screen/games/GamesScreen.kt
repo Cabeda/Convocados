@@ -4,15 +4,19 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
-import androidx.wear.compose.material.*
+import androidx.wear.compose.material3.*
+import com.google.android.horologist.annotations.ExperimentalHorologistApi
+import com.google.android.horologist.compose.layout.ScalingLazyColumn
+import com.google.android.horologist.compose.layout.ScalingLazyColumnDefaults
+import com.google.android.horologist.compose.layout.ScreenScaffold
+import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.ui.theme.Success
 import dev.convocados.wear.ui.theme.TextMuted
@@ -23,15 +27,25 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
+@OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun GamesScreen(
     viewModel: GamesViewModel,
     onGameSelected: (String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
-    val listState = rememberScalingLazyListState()
+    val columnState = rememberColumnState(
+        ScalingLazyColumnDefaults.responsive()
+    )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    val sortedGames = remember(state.games, state.suggestedGameId) {
+        state.games.sortedWith(
+            compareBy<WearGameEntity> { it.id != state.suggestedGameId }
+                .thenBy { parseInstant(it.dateTime)?.let { t -> kotlin.math.abs(ChronoUnit.MINUTES.between(Instant.now(), t)) } ?: Long.MAX_VALUE }
+        )
+    }
+
+    ScreenScaffold(scrollState = columnState) {
         when {
             state.isLoading && state.games.isEmpty() -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -42,58 +56,47 @@ fun GamesScreen(
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = "No games yet",
-                        style = MaterialTheme.typography.body1,
-                        color = MaterialTheme.colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
                 }
             }
             else -> {
-                // Sort: suggested game first, then by time proximity
-                val sortedGames = state.games.sortedWith(
-                    compareBy<WearGameEntity> { it.id != state.suggestedGameId }
-                        .thenBy { parseInstant(it.dateTime)?.let { t -> kotlin.math.abs(ChronoUnit.MINUTES.between(Instant.now(), t)) } ?: Long.MAX_VALUE }
-                )
-
                 ScalingLazyColumn(
-                    state = listState,
+                    columnState = columnState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        top = 32.dp,
-                        bottom = 16.dp,
-                        start = 8.dp,
-                        end = 8.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    // Header
                     item {
-                        Text(
-                            text = "Games",
-                            style = MaterialTheme.typography.title3,
-                            color = MaterialTheme.colors.primary,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
-                    }
-
-                    // Pending sync indicator
-                    if (state.pendingSyncCount > 0) {
-                        item {
+                        ListHeader {
                             Text(
-                                text = "${state.pendingSyncCount} score(s) pending sync",
-                                style = MaterialTheme.typography.caption3,
-                                color = Warning,
+                                text = "Games",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
                             )
                         }
                     }
 
-                    // Offline indicator
+                    if (state.pendingSyncCount > 0) {
+                        item {
+                            Text(
+                                text = "${state.pendingSyncCount} score(s) pending sync",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Warning,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
                     if (state.isOffline) {
                         item {
                             Text(
                                 text = "Offline — showing cached",
-                                style = MaterialTheme.typography.caption3,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = TextMuted,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -118,16 +121,10 @@ private fun GameChip(
     onClick: () -> Unit,
 ) {
     val timeLabel = formatRelativeTime(game.dateTime)
-    val chipColors = if (isSuggested) {
-        ChipDefaults.chipColors(
-            backgroundColor = MaterialTheme.colors.primary.copy(alpha = 0.2f),
-        )
-    } else {
-        ChipDefaults.secondaryChipColors()
-    }
-
-    Chip(
+    
+    Button(
         onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
         label = {
             Text(
                 text = game.title,
@@ -140,20 +137,25 @@ private fun GameChip(
                 if (isSuggested) {
                     Text(
                         text = "NOW ",
-                        style = MaterialTheme.typography.caption3,
+                        style = MaterialTheme.typography.labelSmall,
                         color = Success,
                     )
                 }
                 Text(
                     text = timeLabel,
-                    style = MaterialTheme.typography.caption3,
+                    style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         },
-        colors = chipColors,
-        modifier = Modifier.fillMaxWidth(),
+        colors = if (isSuggested) {
+            ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            )
+        } else {
+            ButtonDefaults.filledTonalButtonColors()
+        }
     )
 }
 

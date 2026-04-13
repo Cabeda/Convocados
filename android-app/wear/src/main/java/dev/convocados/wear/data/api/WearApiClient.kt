@@ -97,6 +97,21 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
         authenticatedRequest(HttpMethod.Patch, path, body).body()
 
     /**
+     * Exchange email/password for Convocados OAuth tokens.
+     */
+    suspend fun loginWithEmail(email: String, password: String): OAuthTokenResponse {
+        val response = client.post("$baseUrl/api/auth/sign-in/email") {
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("email" to email, "password" to password))
+        }
+        if (!response.status.isSuccess()) {
+            val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
+            throw ApiException(response.status.value, "Email login failed: $errorBody")
+        }
+        return response.body()
+    }
+
+    /**
      * Exchange a Google ID token for Convocados OAuth tokens (unauthenticated).
      * Uses better-auth's built-in social sign-in callback endpoint, which is
      * already configured with GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET on the backend.
