@@ -12,7 +12,7 @@ import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { addKnownName, getQjName } from "~/lib/knownNames";
-import { formatDateInTz } from "~/lib/timezones";
+import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
 import { useSession } from "~/lib/auth.client";
 
 import {
@@ -355,10 +355,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
   };
 
   const handleSaveDateTime = async (dateTime: string, timezone: string) => {
+    // Convert the datetime-local value (in the event's timezone) to a UTC ISO string
+    const utcIso = fromDateTimeLocalValue(dateTime, timezone);
     await fetch(`/api/events/${eventId}/datetime`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dateTime, timezone }),
+      body: JSON.stringify({ dateTime: utcIso, timezone }),
     });
     fetchEvent();
   };

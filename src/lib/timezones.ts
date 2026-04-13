@@ -93,3 +93,51 @@ export function toDateTimeLocalValue(date: Date, timezone: string): string {
   const hour = get("hour") === "24" ? "00" : get("hour");
   return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
 }
+
+/**
+ * Convert a `datetime-local` input value (YYYY-MM-DDTHH:mm) in a given IANA
+ * timezone back to a UTC ISO string suitable for the API.
+ *
+ * Uses a binary-search approach on the UTC offset: we create a candidate UTC
+ * Date, format it in the target timezone, and adjust until the formatted
+ * local time matches the desired input.
+ */
+export function fromDateTimeLocalValue(localValue: string, timezone: string): string {
+  const tz = timezone || "UTC";
+
+  // Parse the local value components
+  const [datePart, timePart] = localValue.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+
+  // Start with a naive UTC guess: treat the local value as if it were UTC
+  const naiveUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0));
+
+  // Format that guess in the target timezone to find the offset
+  const formatted = toDateTimeLocalValue(naiveUtc, tz);
+  const [fDatePart, fTimePart] = formatted.split("T");
+  const [fYear, fMonth, fDay] = fDatePart.split("-").map(Number);
+  const [fHour, fMinute] = fTimePart.split(":").map(Number);
+
+  // Compute the difference between what we got and what we wanted
+  const got = new Date(Date.UTC(fYear, fMonth - 1, fDay, fHour, fMinute, 0, 0));
+  const wanted = naiveUtc;
+  const offsetMs = got.getTime() - wanted.getTime();
+
+  // Adjust: if formatting added +1h (timezone is UTC+1), subtract that offset
+  const corrected = new Date(naiveUtc.getTime() - offsetMs);
+
+  // Verify the correction is accurate (handles DST edge cases)
+  const verify = toDateTimeLocalValue(corrected, tz);
+  if (verify !== localValue) {
+    // DST boundary edge case — try ±1h adjustments
+    for (const delta of [-3600000, 3600000]) {
+      const attempt = new Date(corrected.getTime() + delta);
+      if (toDateTimeLocalValue(attempt, tz) === localValue) {
+        return attempt.toISOString();
+      }
+    }
+  }
+
+  return corrected.toISOString();
+}
