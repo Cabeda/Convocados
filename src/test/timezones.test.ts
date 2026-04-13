@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDateInTz, toDateTimeLocalValue, detectTimezone } from "~/lib/timezones";
+import { formatDateInTz, toDateTimeLocalValue, fromDateTimeLocalValue, detectTimezone } from "~/lib/timezones";
 
 describe("formatDateInTz", () => {
   // 2024-07-15T19:00:00Z — summer, so Europe/Lisbon is UTC+1 (WEST)
@@ -108,5 +108,67 @@ describe("detectTimezone", () => {
     const tz = detectTimezone();
     expect(tz).toBeTruthy();
     expect(typeof tz).toBe("string");
+  });
+});
+
+describe("fromDateTimeLocalValue", () => {
+  it("converts Lisbon summer time to UTC (UTC+1 → subtract 1h)", () => {
+    // 20:00 Lisbon summer (UTC+1) → 19:00 UTC
+    const result = fromDateTimeLocalValue("2024-07-15T20:00", "Europe/Lisbon");
+    expect(result).toBe("2024-07-15T19:00:00.000Z");
+  });
+
+  it("converts Lisbon winter time to UTC (UTC+0 → same)", () => {
+    // 19:00 Lisbon winter (UTC+0) → 19:00 UTC
+    const result = fromDateTimeLocalValue("2024-01-15T19:00", "Europe/Lisbon");
+    expect(result).toBe("2024-01-15T19:00:00.000Z");
+  });
+
+  it("converts UTC to UTC (no change)", () => {
+    const result = fromDateTimeLocalValue("2024-07-15T19:00", "UTC");
+    expect(result).toBe("2024-07-15T19:00:00.000Z");
+  });
+
+  it("converts New York summer time to UTC (UTC-4 → add 4h)", () => {
+    // 15:00 EDT (UTC-4) → 19:00 UTC
+    const result = fromDateTimeLocalValue("2024-07-15T15:00", "America/New_York");
+    expect(result).toBe("2024-07-15T19:00:00.000Z");
+  });
+
+  it("handles date rollover (Tokyo UTC+9)", () => {
+    // 10:00 JST (UTC+9) → 01:00 UTC same day
+    const result = fromDateTimeLocalValue("2024-07-16T10:00", "Asia/Tokyo");
+    expect(result).toBe("2024-07-16T01:00:00.000Z");
+  });
+
+  it("handles date rollback (LA UTC-7 summer)", () => {
+    // 19:00 PDT (UTC-7) on Jul 15 → 02:00 UTC on Jul 16
+    const result = fromDateTimeLocalValue("2024-07-15T19:00", "America/Los_Angeles");
+    expect(result).toBe("2024-07-16T02:00:00.000Z");
+  });
+
+  it("falls back to UTC for empty timezone", () => {
+    const result = fromDateTimeLocalValue("2024-07-15T19:00", "");
+    expect(result).toBe("2024-07-15T19:00:00.000Z");
+  });
+
+  it("round-trips with toDateTimeLocalValue", () => {
+    const original = new Date("2024-07-15T19:00:00.000Z");
+    const timezones = ["Europe/Lisbon", "America/New_York", "Asia/Tokyo", "UTC", "America/Los_Angeles"];
+    for (const tz of timezones) {
+      const local = toDateTimeLocalValue(original, tz);
+      const backToUtc = fromDateTimeLocalValue(local, tz);
+      expect(backToUtc).toBe(original.toISOString());
+    }
+  });
+
+  it("round-trips winter dates correctly", () => {
+    const original = new Date("2024-01-15T19:00:00.000Z");
+    const timezones = ["Europe/Lisbon", "America/New_York", "Asia/Tokyo", "UTC"];
+    for (const tz of timezones) {
+      const local = toDateTimeLocalValue(original, tz);
+      const backToUtc = fromDateTimeLocalValue(local, tz);
+      expect(backToUtc).toBe(original.toISOString());
+    }
   });
 });
