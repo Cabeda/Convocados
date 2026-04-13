@@ -17,6 +17,7 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { getSportPreset } from "~/lib/sports";
+import { formatDateInTz } from "~/lib/timezones";
 
 interface PublicEvent {
   id: string;
@@ -26,6 +27,7 @@ interface PublicEvent {
   longitude: number | null;
   sport: string;
   dateTime: string;
+  timezone?: string;
   maxPlayers: number;
   playerCount: number;
   spotsLeft: number;
@@ -88,7 +90,7 @@ function CardView({ events, locale, t }: {
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                   <AccessTimeIcon fontSize="small" color="action" />
                   <Typography variant="body2" color="text.secondary">
-                    {date.toLocaleString(locale === "pt" ? "pt-PT" : "en-GB", {
+                    {formatDateInTz(date, locale === "pt" ? "pt-PT" : "en-GB", ev.timezone || "UTC", {
                       weekday: "short", month: "short", day: "numeric",
                       hour: "2-digit", minute: "2-digit",
                     })}
@@ -175,7 +177,7 @@ function TableView({ events, locale, t }: {
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" color="text.secondary" noWrap>
-                    {date.toLocaleString(locale === "pt" ? "pt-PT" : "en-GB", {
+                    {formatDateInTz(date, locale === "pt" ? "pt-PT" : "en-GB", ev.timezone || "UTC", {
                       weekday: "short", month: "short", day: "numeric",
                       hour: "2-digit", minute: "2-digit",
                     })}

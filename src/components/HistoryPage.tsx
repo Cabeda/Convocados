@@ -26,6 +26,7 @@ import { detectLocale } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
 import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
+import { formatDateInTz } from "~/lib/timezones";
 import { ScoreRoller } from "./event/ScoreRoller";
 import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
 
@@ -382,9 +383,11 @@ function HistoryCardFull({
   playerRatings,
   isOwner,
   userName,
+  timezone,
 }: {
   entry: HistoryEntry;
   eventId: string;
+  timezone: string;
   onUpdate: (updated: HistoryEntry) => void;
   onDelete: (id: string) => void;
   isAuthenticated: boolean;
@@ -633,12 +636,12 @@ function HistoryCardFull({
       }}>
         <Box>
           <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
-            {date.toLocaleDateString(localeStr, {
+            {formatDateInTz(date, localeStr, timezone, {
               weekday: "long", day: "numeric", month: "long", year: "numeric",
             })}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-            {date.toLocaleTimeString(localeStr, { hour: "2-digit", minute: "2-digit" })}
+            {formatDateInTz(date, localeStr, timezone, { hour: "2-digit", minute: "2-digit" })}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
@@ -1071,7 +1074,7 @@ function HistoryCardFull({
               </Button>
               <Typography variant="caption" color="text.disabled" sx={{ ml: "auto !important" }}>
                 {t("editableUntil", {
-                  date: editableUntil.toLocaleDateString(localeStr, {
+                  date: formatDateInTz(editableUntil, localeStr, timezone, {
                     day: "numeric", month: "short", year: "numeric",
                   }),
                 })}
@@ -1111,6 +1114,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [playerRatings, setPlayerRatings] = useState<{ name: string; rating: number; gamesPlayed: number }[]>([]);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [timezone, setTimezone] = useState("UTC");
   const [showAddHistorical, setShowAddHistorical] = useState(false);
   const isOwner = !!(session?.user && ownerId && session.user.id === ownerId);
 
@@ -1127,6 +1131,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setTeamTwoName(ev.teamTwoName ?? "Team B");
     setOwnerId(ev.ownerId ?? null);
     setIsAdmin(!!ev.isAdmin);
+    setTimezone(ev.timezone || "UTC");
     setHistory(hist.data);
     setNextCursor(hist.nextCursor);
     setHasMore(hist.hasMore);
@@ -1249,7 +1254,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
             ) : (
               <>
                 {history.map((entry) => (
-                  <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} onUpdate={handleUpdate}
+                  <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} timezone={timezone} onUpdate={handleUpdate}
                     onDelete={handleDelete} isAuthenticated={isAuthenticated} knownPlayers={knownPlayers}
                     playerRatings={playerRatings} isOwner={isOwner || isAdmin}
                     userName={session?.user?.name ?? null} />
