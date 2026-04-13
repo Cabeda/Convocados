@@ -20,6 +20,9 @@ import javax.inject.Inject
 data class AuthUiState(
     val isSigningIn: Boolean = false,
     val error: String? = null,
+    val showEmailLogin: Boolean = false,
+    val email: String = "",
+    val password: String = "",
 )
 
 @HiltViewModel
@@ -33,6 +36,45 @@ class AuthViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
+
+    fun onEmailChanged(email: String) {
+        _uiState.update { it.copy(email = email) }
+    }
+
+    fun onPasswordChanged(password: String) {
+        _uiState.update { it.copy(password = password) }
+    }
+
+    fun toggleEmailLogin() {
+        _uiState.update { it.copy(showEmailLogin = !it.showEmailLogin, error = null) }
+    }
+
+    fun loginWithEmail() {
+        val email = uiState.value.email
+        val password = uiState.value.password
+        if (email.isBlank() || password.isBlank()) {
+            _uiState.update { it.copy(error = "Please enter email and password") }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSigningIn = true, error = null) }
+            try {
+                val response = googleSignIn.loginWithEmail(email, password)
+                tokenStore.setTokens(
+                    dev.convocados.wear.data.auth.OAuthTokens(
+                        accessToken = response.accessToken,
+                        refreshToken = response.refreshToken ?: "",
+                        expiresAt = System.currentTimeMillis() + response.expiresIn * 1000
+                    )
+                )
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Login failed: ${e.message}") }
+            } finally {
+                _uiState.update { it.copy(isSigningIn = false) }
+            }
+        }
+    }
 
     /** Returns the credential request to launch from the Activity. */
     fun getGoogleSignInRequest(): GetCredentialRequest = googleSignIn.buildCredentialRequest()

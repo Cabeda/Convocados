@@ -60,5 +60,6 @@ android-app/.idea/
 android-app/app/build/
 android-app/build/
 android-app/local.properties
+android-app/wear/local.properties
 android-app/app/google-services.json
 android-app/gradle/gradle-daemon-jvm.properties
