@@ -66,15 +66,16 @@ export const PUT: APIRoute = async ({ params, request }) => {
     },
   });
 
-  // Notify subscribers if dateTime changed
-  if (updates.dateTime) {
+  // Notify subscribers only if dateTime actually changed
+  const dateTimeActuallyChanged = updates.dateTime && updates.dateTime.getTime() !== event.dateTime.getTime();
+  if (dateTimeActuallyChanged) {
     const activePlayers = await prisma.player.count({ where: { eventId, archivedAt: null } });
     const spotsLeft = Math.max(0, event.maxPlayers - activePlayers);
     const url = `/events/${eventId}`;
     await enqueueNotification(eventId, "event_details", {
       title: event.title,
       key: "notifyEventDetailsChanged" as const,
-      params: {},
+      params: { title: event.title },
       url,
       spotsLeft,
     });
