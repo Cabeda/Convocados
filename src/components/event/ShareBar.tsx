@@ -3,16 +3,18 @@ import { IconButton, Tooltip, Snackbar, Box, Typography } from "@mui/material";
 import ShareIcon from "@mui/icons-material/Share";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
+import { formatDateInTz } from "~/lib/timezones";
 
 interface Props {
   title: string;
   dateTime: Date;
+  timezone: string;
   location?: string | null;
   maxPlayers: number;
   playerCount: number;
 }
 
-export function ShareBar({ title, dateTime, location, maxPlayers, playerCount }: Props) {
+export function ShareBar({ title, dateTime, timezone, location, maxPlayers, playerCount }: Props) {
   const t = useT();
   const locale = detectLocale();
   const [snackbar, setSnackbar] = useState<string | null>(null);
@@ -20,7 +22,7 @@ export function ShareBar({ title, dateTime, location, maxPlayers, playerCount }:
   const spotsLeft = maxPlayers - playerCount;
   const url = typeof window !== "undefined" ? window.location.href : "";
 
-  const formattedDate = dateTime.toLocaleString(locale === "pt" ? "pt-PT" : "en-GB", {
+  const formattedDate = formatDateInTz(dateTime, locale === "pt" ? "pt-PT" : "en-GB", timezone, {
     weekday: "long",
     hour: "2-digit",
     minute: "2-digit",

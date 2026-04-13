@@ -24,6 +24,7 @@ export const GET: APIRoute = async ({ request }) => {
     longitude: e.longitude,
     sport: e.sport,
     dateTime: e.dateTime.toISOString(),
+    timezone: e.timezone,
     maxPlayers: e.maxPlayers,
     playerCount: e.players.length,
     spotsLeft: Math.max(0, e.maxPlayers - e.players.length),

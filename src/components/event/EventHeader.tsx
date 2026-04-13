@@ -25,7 +25,7 @@ import { detectLocale } from "~/lib/i18n";
 import { describeRecurrenceRule, parseRecurrenceRule } from "~/lib/recurrence";
 import { getSportPreset, SPORT_PRESETS } from "~/lib/sports";
 import { googleCalendarUrl } from "~/lib/calendar";
-import { COMMON_TIMEZONES } from "~/lib/timezones";
+import { COMMON_TIMEZONES, formatDateInTz, toDateTimeLocalValue } from "~/lib/timezones";
 import type { EventData } from "./types";
 import type { Imatch } from "~/lib/random";
 import { ShareBar } from "./ShareBar";
@@ -97,7 +97,7 @@ export function EventHeader({
           if (!prev) {
             setTitleDraft(event.title);
             setLocationDraft(event.location || "");
-            setDateTimeDraft(event.dateTime.slice(0, 16));
+            setDateTimeDraft(toDateTimeLocalValue(new Date(event.dateTime), event.timezone || "UTC"));
             setTimezoneDraft(event.timezone || "UTC");
             setSportDraft(sport);
           }
@@ -123,7 +123,7 @@ export function EventHeader({
   const openEdit = () => {
     setTitleDraft(event.title);
     setLocationDraft(event.location || "");
-    setDateTimeDraft(event.dateTime.slice(0, 16));
+    setDateTimeDraft(toDateTimeLocalValue(new Date(event.dateTime), event.timezone || "UTC"));
     setTimezoneDraft(event.timezone || "UTC");
     setSportDraft(sport);
     setEditMode(true);
@@ -140,7 +140,7 @@ export function EventHeader({
     if (locationDraft !== event.location) {
       promises.push(onSaveLocation(locationDraft));
     }
-    if (dateTimeDraft !== event.dateTime.slice(0, 16) || timezoneDraft !== (event.timezone || "UTC")) {
+    if (dateTimeDraft !== toDateTimeLocalValue(new Date(event.dateTime), event.timezone || "UTC") || timezoneDraft !== (event.timezone || "UTC")) {
       promises.push(onSaveDateTime(dateTimeDraft, timezoneDraft));
     }
     if (sportDraft && sportDraft !== sport) {
@@ -160,7 +160,7 @@ export function EventHeader({
   const progressPct = event.maxPlayers > 0 ? (activePlayers / event.maxPlayers) * 100 : 0;
   const isFull = activePlayers >= event.maxPlayers;
 
-  const formattedDate = gameDate.toLocaleString(locale === "pt" ? "pt-PT" : "en-GB", {
+  const formattedDate = formatDateInTz(gameDate, locale === "pt" ? "pt-PT" : "en-GB", event.timezone, {
     weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
 
@@ -438,7 +438,7 @@ export function EventHeader({
             {/* ── Row 6: Actions ── */}
             <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
               <ShareBar
-                title={event.title} dateTime={gameDate} location={event.location}
+                title={event.title} dateTime={gameDate} timezone={event.timezone} location={event.location}
                 maxPlayers={event.maxPlayers} playerCount={event.players.length}
               />
 
