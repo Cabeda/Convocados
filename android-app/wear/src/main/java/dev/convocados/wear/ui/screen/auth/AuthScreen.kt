@@ -1,11 +1,20 @@
 package dev.convocados.wear.ui.screen.auth
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -53,6 +62,8 @@ fun AuthScreen(
             if (uiState.showEmailLogin) {
                 // --- Email Login Form ---
                 item {
+                    val passwordFocusRequester = remember { FocusRequester() }
+
                     Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
                         Text(
                             text = "Email Sign In",
@@ -61,26 +72,83 @@ fun AuthScreen(
                         )
                         Spacer(Modifier.height(4.dp))
                         
-                        // Note: Material3 Wear doesn't have a standard TextField yet, 
-                        // so we use the basic one or a custom wrapper if available.
-                        // For simplicity in this UI, we'll use a Button that triggers 
-                        // remote input or a simplified layout.
+                        BasicTextField(
+                            value = uiState.email,
+                            onValueChange = { viewModel.onEmailChanged(it) },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    color = MaterialTheme.colorScheme.surfaceContainer,
+                                    shape = RoundedCornerShape(20.dp)
+                                )
+                                .padding(vertical = 10.dp, horizontal = 12.dp),
+                            textStyle = MaterialTheme.typography.labelMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Start
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                capitalization = KeyboardCapitalization.None,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next,
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { passwordFocusRequester.requestFocus() }
+                            ),
+                            decorationBox = { innerTextField ->
+                                if (uiState.email.isEmpty()) {
+                                    Text(
+                                        text = "Email",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
                         
-                        OutlinedButton(
-                            onClick = { /* In a real app, trigger RemoteInput or a keyboard screen */ },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(uiState.email.ifBlank { "Enter Email" }, maxLines = 1)
-                        }
+                        Spacer(Modifier.height(8.dp))
                         
-                        Spacer(Modifier.height(4.dp))
-                        
-                        OutlinedButton(
-                            onClick = { /* Trigger keyboard */ },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Enter Password", maxLines = 1)
-                        }
+                        BasicTextField(
+                            value = uiState.password,
+                            onValueChange = { viewModel.onPasswordChanged(it) },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(passwordFocusRequester)
+                                .background(
+                                    color = MaterialTheme.colorScheme.surfaceContainer,
+                                    shape = RoundedCornerShape(20.dp)
+                                )
+                                .padding(vertical = 10.dp, horizontal = 12.dp),
+                            textStyle = MaterialTheme.typography.labelMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Start
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Go,
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onGo = { viewModel.loginWithEmail() },
+                                onDone = { viewModel.loginWithEmail() },
+                                onSend = { viewModel.loginWithEmail() },
+                            ),
+                            decorationBox = { innerTextField ->
+                                if (uiState.password.isEmpty()) {
+                                    Text(
+                                        text = "Password",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
                     }
                 }
 
