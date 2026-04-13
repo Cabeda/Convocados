@@ -52,3 +52,44 @@ export function detectTimezone(): string {
     return "UTC";
   }
 }
+
+/**
+ * Format a Date in a specific IANA timezone using toLocaleString.
+ * Passes `timeZone` into the Intl options so the formatted output reflects
+ * the event's timezone rather than the browser's local timezone.
+ */
+export function formatDateInTz(
+  date: Date,
+  locale: string,
+  timezone: string,
+  options: Intl.DateTimeFormatOptions = {},
+): string {
+  return date.toLocaleString(locale, { ...options, timeZone: timezone || "UTC" });
+}
+
+/**
+ * Convert a UTC Date to a `datetime-local` input value (YYYY-MM-DDTHH:mm)
+ * in the given IANA timezone.
+ *
+ * We use Intl.DateTimeFormat to extract the date/time parts in the target
+ * timezone, then assemble them into the format expected by `<input type="datetime-local">`.
+ */
+export function toDateTimeLocalValue(date: Date, timezone: string): string {
+  const tz = timezone || "UTC";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "00";
+
+  // en-CA gives YYYY-MM-DD ordering; hour may be "24" at midnight in some engines
+  const hour = get("hour") === "24" ? "00" : get("hour");
+  return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
+}

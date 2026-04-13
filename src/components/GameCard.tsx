@@ -4,12 +4,14 @@ import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { detectLocale } from "~/lib/i18n";
 import { useT } from "~/lib/useT";
+import { formatDateInTz } from "~/lib/timezones";
 
 export interface GameSummary {
   id: string;
   title: string;
   location: string;
   dateTime: string;
+  timezone?: string;
   sport: string;
   maxPlayers: number;
   playerCount: number;
@@ -52,7 +54,7 @@ export function GameCard({ game, dimPast = false }: { game: GameSummary; dimPast
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <AccessTimeIcon fontSize="small" color="action" />
             <Typography variant="body2" color="text.secondary">
-              {date.toLocaleString(locale === "pt" ? "pt-PT" : "en-GB", {
+              {formatDateInTz(date, locale === "pt" ? "pt-PT" : "en-GB", game.timezone || "UTC", {
                 weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
               })}
             </Typography>

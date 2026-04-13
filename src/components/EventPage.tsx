@@ -12,6 +12,7 @@ import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { addKnownName, getQjName } from "~/lib/knownNames";
+import { formatDateInTz } from "~/lib/timezones";
 import { useSession } from "~/lib/auth.client";
 
 import {
@@ -488,7 +489,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {wasReset && (
               <Alert severity="info" icon={<EventRepeatIcon />}>
                 {t("recurringResetAlert", {
-                  date: gameDate.toLocaleDateString(locale === "pt" ? "pt-PT" : "en-GB", {
+                  date: formatDateInTz(gameDate, locale === "pt" ? "pt-PT" : "en-GB", event.timezone, {
                     weekday: "long", month: "long", day: "numeric",
                   }),
                 })}
