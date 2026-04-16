@@ -33,6 +33,7 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
         defaultRequest {
             contentType(ContentType.Application.Json)
         }
+        followRedirects = false
     }
 
     private val baseUrl: String get() = tokenStore.getServerUrl()
@@ -126,6 +127,50 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
             throw ApiException(response.status.value, "Google token exchange failed: $errorBody")
         }
         return response.body()
+    }
+
+    /**
+     * Sign in with email/password, then exchange the session for OAuth tokens
+     * via the mobile-callback flow. Used for local dev bypass on the watch.
+     */
+    suspend fun signInWithEmail(email: String, password: String): OAuthTokenResponse {
+        // Step 1: Sign in to get a session cookie
+        val signInResponse = client.post("$baseUrl/api/auth/sign-in/email") {
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("email" to email, "password" to password))
+        }
+        if (!signInResponse.status.isSuccess()) {
+            val errorBody = runCatching { signInResponse.bodyAsText() }.getOrDefault("")
+            throw ApiException(signInResponse.status.value, "Sign-in failed: $errorBody")
+        }
+
+        // Extract session cookie
+        val cookies = signInResponse.headers.getAll("Set-Cookie")
+            ?.joinToString("; ") { it.substringBefore(";") }
+            ?: throw ApiException(401, "No session cookie returned")
+
+        // Step 2: GET mobile-callback to get a one-time code
+        val callbackResponse = client.get("$baseUrl/api/auth/mobile-callback") {
+            header("Cookie", cookies)
+            parameter("redirect_uri", "convocados://auth")
+        }
+
+        val redirectLocation = callbackResponse.headers["Location"]
+            ?: throw ApiException(400, "No redirect from mobile-callback")
+
+        val code = redirectLocation.substringAfter("code=").substringBefore("&")
+        if (code.isBlank()) throw ApiException(400, "No code in redirect: $redirectLocation")
+
+        // Step 3: Exchange code for OAuth tokens
+        val tokenResponse = client.post("$baseUrl/api/auth/mobile-callback") {
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("code" to code))
+        }
+        if (!tokenResponse.status.isSuccess()) {
+            val errorBody = runCatching { tokenResponse.bodyAsText() }.getOrDefault("")
+            throw ApiException(tokenResponse.status.value, "Token exchange failed: $errorBody")
+        }
+        return tokenResponse.body()
     }
 }
 

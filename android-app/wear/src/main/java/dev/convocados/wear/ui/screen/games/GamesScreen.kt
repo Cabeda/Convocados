@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -17,14 +18,14 @@ import com.google.android.horologist.compose.layout.ScalingLazyColumn
 import com.google.android.horologist.compose.layout.ScalingLazyColumnDefaults
 import com.google.android.horologist.compose.layout.ScreenScaffold
 import com.google.android.horologist.compose.layout.rememberColumnState
+import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.ui.theme.Success
 import dev.convocados.wear.ui.theme.TextMuted
 import dev.convocados.wear.ui.theme.Warning
+import dev.convocados.wear.util.formatRelativeTime
+import dev.convocados.wear.util.parseInstant
 import java.time.Instant
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 @OptIn(ExperimentalHorologistApi::class)
@@ -32,6 +33,7 @@ import java.time.temporal.ChronoUnit
 fun GamesScreen(
     viewModel: GamesViewModel,
     onGameSelected: (String) -> Unit,
+    onSignOut: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
     val columnState = rememberColumnState(
@@ -54,12 +56,39 @@ fun GamesScreen(
             }
             state.games.isEmpty() -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "No games yet",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    ) {
+                        Text(
+                            text = stringResource(
+                                if (state.isOffline) R.string.offline_cached
+                                else R.string.no_games,
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                        state.error?.let { error ->
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = error,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (state.isOffline) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            CompactButton(
+                                onClick = { viewModel.refresh() },
+                            ) {
+                                Text(stringResource(R.string.retry))
+                            }
+                        }
+                    }
                 }
             }
             else -> {
@@ -70,7 +99,7 @@ fun GamesScreen(
                     item {
                         ListHeader {
                             Text(
-                                text = "Games",
+                                text = stringResource(R.string.games_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary,
                             )
@@ -80,7 +109,7 @@ fun GamesScreen(
                     if (state.pendingSyncCount > 0) {
                         item {
                             Text(
-                                text = "${state.pendingSyncCount} score(s) pending sync",
+                                text = stringResource(R.string.pending_sync, state.pendingSyncCount),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Warning,
                                 modifier = Modifier.fillMaxWidth(),
@@ -92,7 +121,7 @@ fun GamesScreen(
                     if (state.isOffline) {
                         item {
                             Text(
-                                text = "Offline — showing cached",
+                                text = stringResource(R.string.offline_cached),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextMuted,
                                 modifier = Modifier.fillMaxWidth(),
@@ -107,6 +136,18 @@ fun GamesScreen(
                             isSuggested = game.id == state.suggestedGameId,
                             onClick = { onGameSelected(game.id) },
                         )
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        CompactButton(
+                            onClick = onSignOut,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.sign_out),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
                     }
                 }
             }
@@ -136,7 +177,7 @@ private fun GameChip(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (isSuggested) {
                     Text(
-                        text = "NOW ",
+                        text = stringResource(R.string.now_label),
                         style = MaterialTheme.typography.labelSmall,
                         color = Success,
                     )
@@ -157,34 +198,4 @@ private fun GameChip(
             ButtonDefaults.filledTonalButtonColors()
         }
     )
-}
-
-private fun formatRelativeTime(dateTime: String): String {
-    val instant = parseInstant(dateTime) ?: return dateTime
-    val now = Instant.now()
-    val minutes = ChronoUnit.MINUTES.between(now, instant)
-
-    return when {
-        minutes in -120..0 -> "In progress"
-        minutes in 1..59 -> "In ${minutes}m"
-        minutes in 60..1440 -> "In ${minutes / 60}h ${minutes % 60}m"
-        minutes > 1440 -> {
-            val zoned = instant.atZone(ZoneId.systemDefault())
-            zoned.format(DateTimeFormatter.ofPattern("EEE HH:mm"))
-        }
-        minutes in -1440..-121 -> {
-            val ago = kotlin.math.abs(minutes)
-            "${ago / 60}h ago"
-        }
-        else -> {
-            val zoned = instant.atZone(ZoneId.systemDefault())
-            zoned.format(DateTimeFormatter.ofPattern("MMM d"))
-        }
-    }
-}
-
-private fun parseInstant(dateTime: String): Instant? = try {
-    ZonedDateTime.parse(dateTime, DateTimeFormatter.ISO_DATE_TIME).toInstant()
-} catch (_: Exception) {
-    try { Instant.parse(dateTime) } catch (_: Exception) { null }
 }

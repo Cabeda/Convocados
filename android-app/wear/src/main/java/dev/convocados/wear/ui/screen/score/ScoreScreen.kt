@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -13,6 +14,7 @@ import androidx.wear.compose.material3.*
 import com.google.android.horologist.annotations.ExperimentalHorologistApi
 import com.google.android.horologist.compose.layout.ScreenScaffold
 import com.google.android.horologist.compose.layout.rememberColumnState
+import dev.convocados.wear.R
 import dev.convocados.wear.ui.theme.Success
 import dev.convocados.wear.ui.theme.TextMuted
 import dev.convocados.wear.ui.theme.Warning
@@ -22,7 +24,7 @@ import dev.convocados.wear.ui.theme.Warning
 fun ScoreScreen(
     eventId: String,
     viewModel: ScoreViewModel,
-    onDone: () -> Unit,
+    onDone: () -> Unit = {},
 ) {
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
@@ -41,13 +43,13 @@ fun ScoreScreen(
                         modifier = Modifier.padding(16.dp),
                     ) {
                         Text(
-                            text = "No game history",
+                            text = stringResource(R.string.no_game_history),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Start the game from\nthe phone app first",
+                            text = stringResource(R.string.start_from_phone),
                             style = MaterialTheme.typography.labelSmall,
                             color = TextMuted,
                             textAlign = TextAlign.Center,
@@ -58,6 +60,17 @@ fun ScoreScreen(
                     SavedConfirmation(
                         isOfflineQueued = state.isOfflineQueued,
                         onDone = onDone,
+                    )
+                }
+                state.history?.editable == false -> {
+                    ScoreEditor(
+                        state = state,
+                        onIncrementOne = {},
+                        onDecrementOne = {},
+                        onIncrementTwo = {},
+                        onDecrementTwo = {},
+                        onSave = {},
+                        readOnly = true,
                     )
                 }
                 else -> {
@@ -83,6 +96,7 @@ private fun ScoreEditor(
     onIncrementTwo: () -> Unit,
     onDecrementTwo: () -> Unit,
     onSave: () -> Unit,
+    readOnly: Boolean = false,
 ) {
     Column(
         modifier = Modifier
@@ -93,20 +107,20 @@ private fun ScoreEditor(
     ) {
         // Game title
         Text(
-            text = state.game?.title ?: "Score",
+            text = state.game?.title ?: stringResource(R.string.score_title),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
-        // Score row: Team1 [-] score [+]  vs  Team2 [-] score [+]
+        // Score row
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth(),
         ) {
             // Team 1 score
             ScoreColumn(
@@ -114,6 +128,7 @@ private fun ScoreEditor(
                 score = state.scoreOne,
                 onIncrement = onIncrementOne,
                 onDecrement = onDecrementOne,
+                enabled = !readOnly,
             )
 
             Text(
@@ -131,26 +146,35 @@ private fun ScoreEditor(
                 score = state.scoreTwo,
                 onIncrement = onIncrementTwo,
                 onDecrement = onDecrementTwo,
+                enabled = !readOnly,
             )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Save button
-        Button(
-            onClick = onSave,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ),
-        ) {
+        if (readOnly) {
             Text(
-                text = if (state.isSaving) "Saving..." else "Save",
-                style = MaterialTheme.typography.labelMedium,
+                text = stringResource(R.string.score_read_only),
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
             )
+        } else {
+            // Save button
+            Button(
+                onClick = onSave,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
+            ) {
+                Text(
+                    text = if (state.isSaving) stringResource(R.string.saving) else stringResource(R.string.save),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
         }
     }
 }
@@ -161,6 +185,7 @@ private fun ScoreColumn(
     score: Int,
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
+    enabled: Boolean = true,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -181,6 +206,7 @@ private fun ScoreColumn(
             onClick = onIncrement,
             modifier = Modifier.size(32.dp),
             colors = IconButtonDefaults.filledTonalIconButtonColors(),
+            enabled = enabled,
         ) {
             Text("+", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         }
@@ -200,6 +226,7 @@ private fun ScoreColumn(
             onClick = onDecrement,
             modifier = Modifier.size(32.dp),
             colors = IconButtonDefaults.filledTonalIconButtonColors(),
+            enabled = enabled,
         ) {
             Text("-", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         }
@@ -219,7 +246,7 @@ private fun SavedConfirmation(
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "Score saved!",
+            text = stringResource(R.string.score_saved),
             style = MaterialTheme.typography.titleMedium,
             color = Success,
         )
@@ -227,7 +254,7 @@ private fun SavedConfirmation(
         if (isOfflineQueued) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Will sync when online",
+                text = stringResource(R.string.will_sync_online),
                 style = MaterialTheme.typography.labelSmall,
                 color = Warning,
                 textAlign = TextAlign.Center,
@@ -243,7 +270,7 @@ private fun SavedConfirmation(
                 .padding(horizontal = 16.dp),
             colors = ButtonDefaults.filledTonalButtonColors(),
         ) {
-            Text("Done")
+            Text(stringResource(R.string.done))
         }
     }
 }

@@ -22,43 +22,6 @@ data class MyGamesResponse(
 )
 
 @Serializable
-data class EventDetail(
-    val id: String,
-    val title: String,
-    val location: String = "",
-    val dateTime: String,
-    val maxPlayers: Int,
-    val teamOneName: String = "Team 1",
-    val teamTwoName: String = "Team 2",
-    val sport: String = "",
-    val durationMinutes: Int = 60,
-    val players: List<Player> = emptyList(),
-    val teamResults: List<TeamResult>? = null,
-)
-
-@Serializable
-data class Player(
-    val id: String,
-    val name: String,
-    val order: Int,
-    val userId: String? = null,
-)
-
-@Serializable
-data class TeamResult(
-    val id: String,
-    val name: String,
-    val members: List<TeamMember> = emptyList(),
-)
-
-@Serializable
-data class TeamMember(
-    val id: String,
-    val name: String,
-    val order: Int,
-)
-
-@Serializable
 data class GameHistory(
     val id: String,
     val dateTime: String,
@@ -76,17 +39,6 @@ data class PaginatedHistory(
     val nextCursor: String? = null,
     val hasMore: Boolean = false,
 )
-
-@Serializable
-data class PostGameStatus(
-    val gameEnded: Boolean = false,
-    val hasScore: Boolean = false,
-    val isParticipant: Boolean = false,
-    val latestHistoryId: String? = null,
-)
-
-@Serializable
-data class OkResponse(val ok: Boolean = true)
 
 @Serializable
 data class ScoreRequest(val scoreOne: Int, val scoreTwo: Int)

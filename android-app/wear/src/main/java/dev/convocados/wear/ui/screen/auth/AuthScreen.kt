@@ -13,6 +13,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -26,6 +27,8 @@ import com.google.android.horologist.annotations.ExperimentalHorologistApi
 import com.google.android.horologist.compose.layout.ScalingLazyColumn
 import com.google.android.horologist.compose.layout.ScreenScaffold
 import com.google.android.horologist.compose.layout.rememberColumnState
+import dev.convocados.wear.BuildConfig
+import dev.convocados.wear.R
 import dev.convocados.wear.ui.theme.TextMuted
 import kotlinx.coroutines.launch
 
@@ -52,7 +55,7 @@ fun AuthScreen(
         ) {
             item {
                 Text(
-                    text = "Convocados",
+                    text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 10.dp)
@@ -158,7 +161,7 @@ fun AuthScreen(
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         enabled = !uiState.isSigningIn
                     ) {
-                        Text("Sign In")
+                        Text(stringResource(R.string.sign_in_google).substringAfterLast(" ").let { "Sign In" })
                     }
                 }
 
@@ -190,7 +193,7 @@ fun AuthScreen(
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Sign in with Google") }
+                            label = { Text(stringResource(R.string.sign_in_google)) }
                         )
                     }
                 }
@@ -217,6 +220,11 @@ fun AuthScreen(
                 }
             }
 
+            // Dev-only: backend selector
+            if (BuildConfig.DEBUG) {
+                item { BackendSelector(viewModel) }
+            }
+
             item {
                 Text(
                     text = "or sign in on phone",
@@ -226,6 +234,50 @@ fun AuthScreen(
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 20.dp)
                 )
             }
+        }
+    }
+}
+
+/**
+ * Lets the user toggle between the production backend and localhost.
+ * Only shown in debug builds.
+ */
+@Composable
+private fun BackendSelector(viewModel: AuthViewModel) {
+    var expanded by remember { mutableStateOf(false) }
+    var serverUrl by remember { mutableStateOf(viewModel.getServerUrl()) }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        CompactButton(
+            onClick = { expanded = !expanded },
+        ) {
+            Text(
+                text = stringResource(R.string.server_settings),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+
+        if (expanded) {
+            Spacer(modifier = Modifier.height(4.dp))
+            val isLocal = serverUrl.contains("10.0.2.2") || serverUrl.contains("localhost")
+            CompactButton(
+                onClick = {
+                    val newUrl = if (isLocal) "https://convocados.fly.dev" else "http://10.0.2.2:4321"
+                    serverUrl = newUrl
+                    viewModel.setServerUrl(newUrl)
+                },
+            ) {
+                Text(
+                    text = stringResource(if (isLocal) R.string.set_to_prod else R.string.set_to_local),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            Text(
+                text = serverUrl,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
