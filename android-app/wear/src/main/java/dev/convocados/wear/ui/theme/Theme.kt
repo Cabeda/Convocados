@@ -1,17 +1,19 @@
 package dev.convocados.wear.ui.theme
 
 import androidx.compose.runtime.Composable
-import androidx.wear.compose.material.Colors
-import androidx.wear.compose.material.MaterialTheme
+import androidx.wear.compose.material3.ColorScheme
+import androidx.wear.compose.material3.MaterialTheme
 
-private val WearColors = Colors(
+private val WearColorScheme = ColorScheme(
     primary = Primary,
     onPrimary = OnPrimary,
-    secondary = PrimaryDark,
-    onSecondary = TextPrimary,
+    primaryContainer = PrimaryDark,
+    onPrimaryContainer = TextPrimary,
+    secondaryContainer = Surface,
+    onSecondaryContainer = TextPrimary,
     background = Bg,
     onBackground = TextPrimary,
-    surface = Surface,
+    surfaceContainer = Surface,
     onSurface = TextPrimary,
     onSurfaceVariant = TextSecondary,
     error = Error,
@@ -21,7 +23,7 @@ private val WearColors = Colors(
 @Composable
 fun ConvocadosWearTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colors = WearColors,
+        colorScheme = WearColorScheme,
         content = content,
     )
 }

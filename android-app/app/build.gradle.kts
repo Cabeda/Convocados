@@ -98,6 +98,7 @@ dependencies {
 
     // Wearable Data Layer (sync auth tokens to watch)
     implementation(libs.play.services.wearable)
+    wearApp(project(":wear"))
 
     // Room
     implementation(libs.androidx.room.runtime)

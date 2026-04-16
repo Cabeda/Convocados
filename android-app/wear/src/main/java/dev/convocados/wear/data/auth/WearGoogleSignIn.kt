@@ -86,4 +86,7 @@ class WearGoogleSignIn @Inject constructor(
         return false
     }
 
+    suspend fun loginWithEmail(email: String, password: String): dev.convocados.wear.data.api.OAuthTokenResponse {
+        return apiClient.loginWithEmail(email, password)
+    }
 }

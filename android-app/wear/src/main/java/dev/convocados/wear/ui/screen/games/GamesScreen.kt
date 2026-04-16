@@ -4,16 +4,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
-import androidx.wear.compose.material.*
+import androidx.wear.compose.material3.*
+import com.google.android.horologist.annotations.ExperimentalHorologistApi
+import com.google.android.horologist.compose.layout.ScalingLazyColumn
+import com.google.android.horologist.compose.layout.ScalingLazyColumnDefaults
+import com.google.android.horologist.compose.layout.ScreenScaffold
+import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.ui.theme.Success
@@ -24,6 +28,7 @@ import dev.convocados.wear.util.parseInstant
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+@OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun GamesScreen(
     viewModel: GamesViewModel,
@@ -31,9 +36,18 @@ fun GamesScreen(
     onSignOut: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
-    val listState = rememberScalingLazyListState()
+    val columnState = rememberColumnState(
+        ScalingLazyColumnDefaults.responsive()
+    )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    val sortedGames = remember(state.games, state.suggestedGameId) {
+        state.games.sortedWith(
+            compareBy<WearGameEntity> { it.id != state.suggestedGameId }
+                .thenBy { parseInstant(it.dateTime)?.let { t -> kotlin.math.abs(ChronoUnit.MINUTES.between(Instant.now(), t)) } ?: Long.MAX_VALUE }
+        )
+    }
+
+    ScreenScaffold(scrollState = columnState) {
         when {
             state.isLoading && state.games.isEmpty() -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -51,16 +65,16 @@ fun GamesScreen(
                                 if (state.isOffline) R.string.offline_cached
                                 else R.string.no_games,
                             ),
-                            style = MaterialTheme.typography.body1,
-                            color = MaterialTheme.colors.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                         )
                         state.error?.let { error ->
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = error,
-                                style = MaterialTheme.typography.caption3,
-                                color = MaterialTheme.colors.error,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
                                 textAlign = TextAlign.Center,
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
@@ -68,51 +82,38 @@ fun GamesScreen(
                         }
                         if (state.isOffline) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            CompactChip(
+                            CompactButton(
                                 onClick = { viewModel.refresh() },
-                                label = { Text(stringResource(R.string.retry)) },
-                                colors = ChipDefaults.primaryChipColors(),
-                            )
+                            ) {
+                                Text(stringResource(R.string.retry))
+                            }
                         }
                     }
                 }
             }
             else -> {
-                val sortedGames = state.games.sortedWith(
-                    compareBy<WearGameEntity> { it.id != state.suggestedGameId }
-                        .thenBy {
-                            parseInstant(it.dateTime)?.let { t ->
-                                kotlin.math.abs(ChronoUnit.MINUTES.between(Instant.now(), t))
-                            } ?: Long.MAX_VALUE
-                        }
-                )
-
                 ScalingLazyColumn(
-                    state = listState,
+                    columnState = columnState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        top = 32.dp,
-                        bottom = 16.dp,
-                        start = 8.dp,
-                        end = 8.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     item {
-                        Text(
-                            text = stringResource(R.string.games_title),
-                            style = MaterialTheme.typography.title3,
-                            color = MaterialTheme.colors.primary,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
+                        ListHeader {
+                            Text(
+                                text = stringResource(R.string.games_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
 
                     if (state.pendingSyncCount > 0) {
                         item {
                             Text(
                                 text = stringResource(R.string.pending_sync, state.pendingSyncCount),
-                                style = MaterialTheme.typography.caption3,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = Warning,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -121,8 +122,10 @@ fun GamesScreen(
                         item {
                             Text(
                                 text = stringResource(R.string.offline_cached),
-                                style = MaterialTheme.typography.caption3,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = TextMuted,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -137,16 +140,14 @@ fun GamesScreen(
 
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
-                        CompactChip(
+                        CompactButton(
                             onClick = onSignOut,
-                            label = {
-                                Text(
-                                    text = stringResource(R.string.sign_out),
-                                    style = MaterialTheme.typography.caption3,
-                                )
-                            },
-                            colors = ChipDefaults.secondaryChipColors(),
-                        )
+                        ) {
+                            Text(
+                                text = stringResource(R.string.sign_out),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
                     }
                 }
             }
@@ -161,16 +162,10 @@ private fun GameChip(
     onClick: () -> Unit,
 ) {
     val timeLabel = formatRelativeTime(game.dateTime)
-    val chipColors = if (isSuggested) {
-        ChipDefaults.chipColors(
-            backgroundColor = MaterialTheme.colors.primary.copy(alpha = 0.2f),
-        )
-    } else {
-        ChipDefaults.secondaryChipColors()
-    }
-
-    Chip(
+    
+    Button(
         onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
         label = {
             Text(
                 text = game.title,
@@ -183,19 +178,24 @@ private fun GameChip(
                 if (isSuggested) {
                     Text(
                         text = stringResource(R.string.now_label),
-                        style = MaterialTheme.typography.caption3,
+                        style = MaterialTheme.typography.labelSmall,
                         color = Success,
                     )
                 }
                 Text(
                     text = timeLabel,
-                    style = MaterialTheme.typography.caption3,
+                    style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         },
-        colors = chipColors,
-        modifier = Modifier.fillMaxWidth(),
+        colors = if (isSuggested) {
+            ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            )
+        } else {
+            ButtonDefaults.filledTonalButtonColors()
+        }
     )
 }
