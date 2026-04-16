@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,11 +11,6 @@ android {
     namespace = "dev.convocados.wear"
     compileSdk = 35
 
-    buildFeatures {
-        compose = true
-        buildConfig = true
-    }
-
     defaultConfig {
         applicationId = "com.cabeda.convocados.wear"
         minSdk = 30
@@ -26,6 +19,12 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "GOOGLE_SERVER_CLIENT_ID",
+            "\"45519759180-drrbd2j4sfa9dm2r0s1opmcgks9nb7qo.apps.googleusercontent.com\"",
+        )
     }
 
     testOptions {

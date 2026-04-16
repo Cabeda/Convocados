@@ -55,6 +55,12 @@ fun ScoreScreen(
                     )
                 }
             }
+            state.history?.editable == false -> {
+                ScoreEditor(
+                    state = state,
+                    onScoreChange = null,
+                )
+            }
             else -> {
                 ScoreEditor(
                     state = state,
@@ -69,9 +75,10 @@ fun ScoreScreen(
 @Composable
 private fun ScoreEditor(
     state: ScoreUiState,
-    onScoreChange: (Team, Int) -> Unit,
+    onScoreChange: ((Team, Int) -> Unit)?,
 ) {
     val haptic = LocalHapticFeedback.current
+    val isEditable = onScoreChange != null
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Top: game title + sync indicator
@@ -91,7 +98,7 @@ private fun ScoreEditor(
                 )
                 if (state.isSyncing) {
                     Text(
-                        text = "syncing…",
+                        text = stringResource(R.string.syncing),
                         style = MaterialTheme.typography.caption3,
                         color = TextMuted,
                     )
@@ -112,14 +119,18 @@ private fun ScoreEditor(
                 teamName = state.teamOneName,
                 score = state.scoreOne,
                 color = MaterialTheme.colors.primary.copy(alpha = 0.15f),
-                onTap = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onScoreChange(Team.ONE, 1)
-                },
-                onLongPress = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onScoreChange(Team.ONE, -1)
-                },
+                onTap = if (isEditable) {
+                    {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onScoreChange!!(Team.ONE, 1)
+                    }
+                } else null,
+                onLongPress = if (isEditable) {
+                    {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onScoreChange!!(Team.ONE, -1)
+                    }
+                } else null,
                 modifier = Modifier.weight(1f),
             )
 
@@ -128,14 +139,18 @@ private fun ScoreEditor(
                 teamName = state.teamTwoName,
                 score = state.scoreTwo,
                 color = MaterialTheme.colors.secondary.copy(alpha = 0.15f),
-                onTap = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onScoreChange(Team.TWO, 1)
-                },
-                onLongPress = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onScoreChange(Team.TWO, -1)
-                },
+                onTap = if (isEditable) {
+                    {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onScoreChange!!(Team.TWO, 1)
+                    }
+                } else null,
+                onLongPress = if (isEditable) {
+                    {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onScoreChange!!(Team.TWO, -1)
+                    }
+                } else null,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -148,7 +163,7 @@ private fun ScoreEditor(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "tap +1 · hold −1",
+                text = stringResource(if (isEditable) R.string.score_hint else R.string.score_read_only),
                 style = MaterialTheme.typography.caption3,
                 color = TextMuted,
             )
@@ -162,8 +177,8 @@ private fun ScoreHalf(
     teamName: String,
     score: Int,
     color: Color,
-    onTap: () -> Unit,
-    onLongPress: () -> Unit,
+    onTap: (() -> Unit)?,
+    onLongPress: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -171,9 +186,13 @@ private fun ScoreHalf(
             .fillMaxHeight()
             .clip(RoundedCornerShape(16.dp))
             .background(color)
-            .combinedClickable(
-                onClick = onTap,
-                onLongClick = onLongPress,
+            .then(
+                if (onTap != null || onLongPress != null) {
+                    Modifier.combinedClickable(
+                        onClick = onTap ?: {},
+                        onLongClick = onLongPress,
+                    )
+                } else Modifier
             ),
         contentAlignment = Alignment.Center,
     ) {
