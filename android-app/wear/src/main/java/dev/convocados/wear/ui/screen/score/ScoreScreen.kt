@@ -1,25 +1,31 @@
 package dev.convocados.wear.ui.screen.score
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.*
-import dev.convocados.wear.ui.theme.Success
+import dev.convocados.wear.R
 import dev.convocados.wear.ui.theme.TextMuted
-import dev.convocados.wear.ui.theme.Warning
 
 @Composable
 fun ScoreScreen(
     eventId: String,
     viewModel: ScoreViewModel,
-    onDone: () -> Unit,
 ) {
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
@@ -36,198 +42,159 @@ fun ScoreScreen(
                     modifier = Modifier.padding(16.dp),
                 ) {
                     Text(
-                        text = "No game history",
+                        text = stringResource(R.string.no_game_history),
                         style = MaterialTheme.typography.body1,
                         color = MaterialTheme.colors.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Start the game from\nthe phone app first",
+                        text = stringResource(R.string.start_from_phone),
                         style = MaterialTheme.typography.caption3,
                         color = TextMuted,
                         textAlign = TextAlign.Center,
                     )
                 }
             }
-            state.saved -> {
-                SavedConfirmation(
-                    isOfflineQueued = state.isOfflineQueued,
-                    onDone = onDone,
-                )
-            }
             else -> {
                 ScoreEditor(
                     state = state,
-                    onIncrementOne = viewModel::incrementScoreOne,
-                    onDecrementOne = viewModel::decrementScoreOne,
-                    onIncrementTwo = viewModel::incrementScoreTwo,
-                    onDecrementTwo = viewModel::decrementScoreTwo,
-                    onSave = viewModel::saveScore,
+                    onScoreChange = viewModel::updateScore,
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ScoreEditor(
     state: ScoreUiState,
-    onIncrementOne: () -> Unit,
-    onDecrementOne: () -> Unit,
-    onIncrementTwo: () -> Unit,
-    onDecrementTwo: () -> Unit,
-    onSave: () -> Unit,
+    onScoreChange: (Team, Int) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        // Game title
-        Text(
-            text = state.game?.title ?: "Score",
-            style = MaterialTheme.typography.caption1,
-            color = MaterialTheme.colors.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+    val haptic = LocalHapticFeedback.current
 
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Score row: Team1 [-] score [+]  vs  Team2 [-] score [+]
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Top: game title + sync indicator
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 24.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            // Team 1 score
-            ScoreColumn(
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = state.game?.title ?: "",
+                    style = MaterialTheme.typography.caption2,
+                    color = MaterialTheme.colors.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (state.isSyncing) {
+                    Text(
+                        text = "syncing…",
+                        style = MaterialTheme.typography.caption3,
+                        color = TextMuted,
+                    )
+                }
+            }
+        }
+
+        // Main: two halves — tap +1, long-press -1
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Team ONE (left half)
+            ScoreHalf(
                 teamName = state.teamOneName,
                 score = state.scoreOne,
-                onIncrement = onIncrementOne,
-                onDecrement = onDecrementOne,
+                color = MaterialTheme.colors.primary.copy(alpha = 0.15f),
+                onTap = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onScoreChange(Team.ONE, 1)
+                },
+                onLongPress = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onScoreChange(Team.ONE, -1)
+                },
+                modifier = Modifier.weight(1f),
             )
 
+            // Team TWO (right half)
+            ScoreHalf(
+                teamName = state.teamTwoName,
+                score = state.scoreTwo,
+                color = MaterialTheme.colors.secondary.copy(alpha = 0.15f),
+                onTap = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onScoreChange(Team.TWO, 1)
+                },
+                onLongPress = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onScoreChange(Team.TWO, -1)
+                },
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        // Bottom hint
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
             Text(
-                text = ":",
-                fontSize = 24.sp,
+                text = "tap +1 · hold −1",
+                style = MaterialTheme.typography.caption3,
+                color = TextMuted,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ScoreHalf(
+    teamName: String,
+    score: Int,
+    color: Color,
+    onTap: () -> Unit,
+    onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .clip(RoundedCornerShape(16.dp))
+            .background(color)
+            .combinedClickable(
+                onClick = onTap,
+                onLongClick = onLongPress,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = teamName,
+                style = MaterialTheme.typography.caption3,
+                color = MaterialTheme.colors.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 80.dp),
+            )
+            Text(
+                text = "$score",
+                fontSize = 40.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colors.onSurface,
             )
-
-            // Team 2 score
-            ScoreColumn(
-                teamName = state.teamTwoName,
-                score = state.scoreTwo,
-                onIncrement = onIncrementTwo,
-                onDecrement = onDecrementTwo,
-            )
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Save button
-        CompactChip(
-            onClick = onSave,
-            label = {
-                Text(
-                    text = if (state.isSaving) "Saving..." else "Save",
-                    style = MaterialTheme.typography.caption1,
-                )
-            },
-            colors = ChipDefaults.chipColors(
-                backgroundColor = MaterialTheme.colors.primary,
-                contentColor = MaterialTheme.colors.onPrimary,
-            ),
-        )
-    }
-}
-
-@Composable
-private fun ScoreColumn(
-    teamName: String,
-    score: Int,
-    onIncrement: () -> Unit,
-    onDecrement: () -> Unit,
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        // Team name (truncated)
-        Text(
-            text = teamName,
-            style = MaterialTheme.typography.caption3,
-            color = MaterialTheme.colors.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 60.dp),
-        )
-
-        // + button
-        Button(
-            onClick = onIncrement,
-            modifier = Modifier.size(32.dp),
-            colors = ButtonDefaults.secondaryButtonColors(),
-        ) {
-            Text("+", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
-
-        // Score display
-        Text(
-            text = "$score",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colors.onSurface,
-        )
-
-        // - button
-        Button(
-            onClick = onDecrement,
-            modifier = Modifier.size(32.dp),
-            colors = ButtonDefaults.secondaryButtonColors(),
-        ) {
-            Text("-", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun SavedConfirmation(
-    isOfflineQueued: Boolean,
-    onDone: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = "Score saved!",
-            style = MaterialTheme.typography.title3,
-            color = Success,
-        )
-
-        if (isOfflineQueued) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Will sync when online",
-                style = MaterialTheme.typography.caption3,
-                color = Warning,
-                textAlign = TextAlign.Center,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        CompactChip(
-            onClick = onDone,
-            label = { Text("Done") },
-            colors = ChipDefaults.secondaryChipColors(),
-        )
     }
 }

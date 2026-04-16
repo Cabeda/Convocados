@@ -98,6 +98,6 @@ class WearGoogleSignIn @Inject constructor(
          * TODO: Move to BuildConfig field populated from google-services.json
          *       or a local.properties value so it's not hardcoded.
          */
-        const val SERVER_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+        const val SERVER_CLIENT_ID = "45519759180-drrbd2j4sfa9dm2r0s1opmcgks9nb7qo.apps.googleusercontent.com"
     }
 }

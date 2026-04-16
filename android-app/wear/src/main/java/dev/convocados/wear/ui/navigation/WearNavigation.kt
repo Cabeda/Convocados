@@ -7,18 +7,17 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
+import dev.convocados.wear.data.auth.WearTokenStore
 import dev.convocados.wear.ui.screen.auth.AuthScreen
-import dev.convocados.wear.ui.screen.auth.AuthViewModel
 import dev.convocados.wear.ui.screen.games.GamesScreen
 import dev.convocados.wear.ui.screen.games.GamesViewModel
 import dev.convocados.wear.ui.screen.score.ScoreScreen
 import dev.convocados.wear.ui.screen.score.ScoreViewModel
 
 @Composable
-fun WearNavigation() {
+fun WearNavigation(tokenStore: WearTokenStore) {
     val navController = rememberSwipeDismissableNavController()
-    val authViewModel: AuthViewModel = hiltViewModel()
-    val isAuthenticated by authViewModel.isAuthenticated.collectAsState()
+    val isAuthenticated by tokenStore.isAuthenticated.collectAsState()
 
     val startDestination = if (isAuthenticated) WearRoutes.GAMES else WearRoutes.AUTH
 
@@ -43,6 +42,12 @@ fun WearNavigation() {
                 onGameSelected = { eventId ->
                     navController.navigate(WearRoutes.score(eventId))
                 },
+                onSignOut = {
+                    tokenStore.clearTokens()
+                    navController.navigate(WearRoutes.AUTH) {
+                        popUpTo(WearRoutes.GAMES) { inclusive = true }
+                    }
+                },
             )
         }
 
@@ -52,7 +57,6 @@ fun WearNavigation() {
             ScoreScreen(
                 eventId = eventId,
                 viewModel = viewModel,
-                onDone = { navController.popBackStack() },
             )
         }
     }

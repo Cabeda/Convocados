@@ -1,13 +1,13 @@
 package dev.convocados.wear.ui.screen.auth
 
-import android.app.Application
-import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.auth.OAuthTokens
 import dev.convocados.wear.data.auth.WearGoogleSignIn
 import dev.convocados.wear.data.auth.WearTokenStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,10 +24,10 @@ data class AuthUiState(
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    application: Application,
     private val tokenStore: WearTokenStore,
     private val googleSignIn: WearGoogleSignIn,
-) : AndroidViewModel(application) {
+    private val apiClient: WearApiClient,
+) : ViewModel() {
 
     val isAuthenticated: StateFlow<Boolean> = tokenStore.isAuthenticated
 
@@ -60,7 +60,36 @@ class AuthViewModel @Inject constructor(
         _uiState.update { it.copy(isSigningIn = false, error = message) }
     }
 
-    fun clearError() {
-        _uiState.update { it.copy(error = null) }
+    fun signOut() {
+        tokenStore.clearTokens()
+    }
+
+    fun getServerUrl() = tokenStore.getServerUrl()
+    fun setServerUrl(url: String) = tokenStore.setServerUrl(url)
+
+    /**
+     * Sign in with email/password via the mobile-callback OAuth flow.
+     * Uses the same flow as the phone app to get real tokens.
+     * For local dev: email=test@example.com, password=TestPassword123
+     */
+    fun signInWithEmail(email: String, password: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSigningIn = true, error = null) }
+            try {
+                val tokenResponse = apiClient.signInWithEmail(email, password)
+                tokenStore.setTokens(
+                    OAuthTokens(
+                        accessToken = tokenResponse.accessToken,
+                        refreshToken = tokenResponse.refreshToken ?: "",
+                        expiresAt = System.currentTimeMillis() + tokenResponse.expiresIn * 1000,
+                    )
+                )
+                _uiState.update { it.copy(isSigningIn = false, error = null) }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isSigningIn = false, error = "Sign-in failed: ${e.message}")
+                }
+            }
+        }
     }
 }
