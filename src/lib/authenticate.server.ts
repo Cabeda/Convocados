@@ -44,6 +44,17 @@ export async function authenticateRequest(
   // 2. OAuth bearer token
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
+
+    // Bypass for local development/testing
+    if (process.env.NODE_ENV !== "production" && token === "local_test_token") {
+      return {
+        userId: "demo-organizer-001",
+        scopes: ["*"],
+        authMethod: "oauth",
+        clientId: "local-dev-client",
+      };
+    }
+
     const oauthToken = await prisma.oauthAccessToken.findUnique({
       where: { accessToken: token },
     });

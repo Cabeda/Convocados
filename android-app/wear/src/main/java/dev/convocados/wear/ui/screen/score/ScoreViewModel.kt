@@ -1,16 +1,21 @@
 package dev.convocados.wear.ui.screen.score
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** Which team's score to change. */
+enum class Team { ONE, TWO }
 
 data class ScoreUiState(
     val game: WearGameEntity? = null,
@@ -20,22 +25,25 @@ data class ScoreUiState(
     val teamOneName: String = "Team 1",
     val teamTwoName: String = "Team 2",
     val isLoading: Boolean = true,
-    val isSaving: Boolean = false,
-    val saved: Boolean = false,
+    val isSyncing: Boolean = false,
     val error: String? = null,
-    val isOfflineQueued: Boolean = false,
 )
 
 @HiltViewModel
 class ScoreViewModel @Inject constructor(
-    private val application: Application,
     private val repository: WearGameRepository,
-) : AndroidViewModel(application) {
+    private val workManager: WorkManager,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ScoreUiState())
     val uiState: StateFlow<ScoreUiState> = _uiState.asStateFlow()
 
     private var eventId: String = ""
+    private var autoSaveJob: Job? = null
+
+    companion object {
+        private const val AUTO_SAVE_DELAY_MS = 1000L
+    }
 
     fun load(eventId: String) {
         if (this.eventId == eventId) return
@@ -44,13 +52,9 @@ class ScoreViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
-            // Load cached game info
             val game = repository.getGame(eventId)
-
-            // Try to refresh history from API
             repository.refreshHistory(eventId)
 
-            // Observe latest history
             repository.observeLatestHistory(eventId).collect { history ->
                 _uiState.update { state ->
                     state.copy(
@@ -67,50 +71,45 @@ class ScoreViewModel @Inject constructor(
         }
     }
 
-    fun incrementScoreOne() {
-        _uiState.update { it.copy(scoreOne = it.scoreOne + 1, saved = false) }
+    /**
+     * Increment or decrement a team's score.
+     * Auto-saves after a 1s debounce — no manual save needed.
+     */
+    fun updateScore(team: Team, delta: Int) {
+        _uiState.update {
+            when (team) {
+                Team.ONE -> it.copy(scoreOne = maxOf(0, it.scoreOne + delta))
+                Team.TWO -> it.copy(scoreTwo = maxOf(0, it.scoreTwo + delta))
+            }
+        }
+        scheduleAutoSave()
     }
 
-    fun decrementScoreOne() {
-        _uiState.update { it.copy(scoreOne = maxOf(0, it.scoreOne - 1), saved = false) }
+    private fun scheduleAutoSave() {
+        autoSaveJob?.cancel()
+        autoSaveJob = viewModelScope.launch {
+            delay(AUTO_SAVE_DELAY_MS)
+            persistScore()
+        }
     }
 
-    fun incrementScoreTwo() {
-        _uiState.update { it.copy(scoreTwo = it.scoreTwo + 1, saved = false) }
-    }
-
-    fun decrementScoreTwo() {
-        _uiState.update { it.copy(scoreTwo = maxOf(0, it.scoreTwo - 1), saved = false) }
-    }
-
-    fun saveScore() {
+    private suspend fun persistScore() {
         val state = _uiState.value
         val historyId = state.history?.id ?: return
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true, error = null) }
+        _uiState.update { it.copy(isSyncing = true, error = null) }
 
-            val result = repository.submitScore(
-                eventId = eventId,
-                historyId = historyId,
-                scoreOne = state.scoreOne,
-                scoreTwo = state.scoreTwo,
-                teamOneName = state.teamOneName,
-                teamTwoName = state.teamTwoName,
-            )
+        repository.submitScore(
+            eventId = eventId,
+            historyId = historyId,
+            scoreOne = state.scoreOne,
+            scoreTwo = state.scoreTwo,
+            teamOneName = state.teamOneName,
+            teamTwoName = state.teamTwoName,
+        )
 
-            // Trigger sync worker in case it was queued offline
-            ScoreSyncWorker.enqueueOneTime(application)
+        ScoreSyncWorker.enqueueOneTime(workManager)
 
-            _uiState.update {
-                it.copy(
-                    isSaving = false,
-                    saved = true,
-                    // If the repo caught an exception but queued it, it returns success
-                    // We detect offline queueing by checking if pending count increased
-                    isOfflineQueued = false, // Will be updated by observation
-                )
-            }
-        }
+        _uiState.update { it.copy(isSyncing = false) }
     }
 }

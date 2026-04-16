@@ -1,6 +1,5 @@
 package dev.convocados.wear.data.sync
 
-import android.content.Context
 import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
@@ -15,7 +14,7 @@ import java.util.concurrent.TimeUnit
  */
 @HiltWorker
 class ScoreSyncWorker @AssistedInject constructor(
-    @Assisted context: Context,
+    @Assisted context: android.content.Context,
     @Assisted params: WorkerParameters,
     private val repository: WearGameRepository,
 ) : CoroutineWorker(context, params) {
@@ -34,37 +33,31 @@ class ScoreSyncWorker @AssistedInject constructor(
     companion object {
         private const val UNIQUE_WORK_NAME = "score_sync"
 
+        private val connectedConstraint = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
         /** Enqueue a one-time sync attempt (e.g. after entering a score offline). */
-        fun enqueueOneTime(context: Context) {
+        fun enqueueOneTime(workManager: WorkManager) {
             val request = OneTimeWorkRequestBuilder<ScoreSyncWorker>()
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build()
-                )
+                .setConstraints(connectedConstraint)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                 .build()
 
-            WorkManager.getInstance(context)
-                .enqueueUniqueWork(UNIQUE_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
+            workManager.enqueueUniqueWork(UNIQUE_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
         }
 
         /** Schedule periodic sync every 15 minutes when connected. */
-        fun schedulePeriodic(context: Context) {
+        fun schedulePeriodic(workManager: WorkManager) {
             val request = PeriodicWorkRequestBuilder<ScoreSyncWorker>(15, TimeUnit.MINUTES)
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build()
-                )
+                .setConstraints(connectedConstraint)
                 .build()
 
-            WorkManager.getInstance(context)
-                .enqueueUniquePeriodicWork(
-                    "${UNIQUE_WORK_NAME}_periodic",
-                    ExistingPeriodicWorkPolicy.KEEP,
-                    request,
-                )
+            workManager.enqueueUniquePeriodicWork(
+                "${UNIQUE_WORK_NAME}_periodic",
+                ExistingPeriodicWorkPolicy.KEEP,
+                request,
+            )
         }
     }
 }
