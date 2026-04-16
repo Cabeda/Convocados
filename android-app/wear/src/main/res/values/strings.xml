@@ -26,10 +26,14 @@
     <string name="score_title">Score</string>
     <string name="no_game_history">No game history</string>
     <string name="start_from_phone">Start the game from\nthe phone app first</string>
+    <string name="syncing">syncing…</string>
+    <string name="score_hint">tap +1 · hold −1</string>
+    <string name="score_read_only">Scores are locked</string>
     <string name="saving">Saving…</string>
     <string name="save">Save</string>
     <string name="score_saved">Score saved!</string>
     <string name="will_sync_online">Will sync when online</string>
+    <string name="retry">Retry</string>
     <string name="done">Done</string>
     <string name="team_default_1">Team 1</string>
     <string name="team_default_2">Team 2</string>

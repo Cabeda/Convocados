@@ -43,11 +43,6 @@ class WearGameRepository @Inject constructor(
         Result.failure(e)
     }
 
-    /** Insert mock games for local testing. */
-    suspend fun insertMockGames(games: List<WearGameEntity>) {
-        gameDao.insertAll(games)
-    }
-
     /** Refresh history for a specific event. */
     suspend fun refreshHistory(eventId: String): Result<Unit> = try {
         val history = client.get<dev.convocados.wear.data.api.PaginatedHistory>("/api/events/$eventId/history")

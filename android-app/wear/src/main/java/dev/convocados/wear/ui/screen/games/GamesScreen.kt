@@ -70,7 +70,7 @@ fun GamesScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             CompactChip(
                                 onClick = { viewModel.refresh() },
-                                label = { Text("Retry") },
+                                label = { Text(stringResource(R.string.retry)) },
                                 colors = ChipDefaults.primaryChipColors(),
                             )
                         }

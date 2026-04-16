@@ -9,6 +9,7 @@ import androidx.credentials.GetCredentialResponse
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.convocados.wear.BuildConfig
 import dev.convocados.wear.data.api.WearApiClient
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -41,7 +42,7 @@ class WearGoogleSignIn @Inject constructor(
     fun buildCredentialRequest(): GetCredentialRequest {
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(SERVER_CLIENT_ID)
+            .setServerClientId(BuildConfig.GOOGLE_SERVER_CLIENT_ID)
             .setAutoSelectEnabled(true)
             .build()
 
@@ -85,19 +86,4 @@ class WearGoogleSignIn @Inject constructor(
         return false
     }
 
-    companion object {
-        /**
-         * The Google OAuth *web* client ID — must match the GOOGLE_CLIENT_ID
-         * environment variable on the Convocados backend.
-         *
-         * To configure:
-         * 1. Go to Google Cloud Console → APIs & Services → Credentials
-         * 2. Use the "Web application" OAuth 2.0 Client ID
-         * 3. This is the same ID set in GOOGLE_CLIENT_ID in .env
-         *
-         * TODO: Move to BuildConfig field populated from google-services.json
-         *       or a local.properties value so it's not hardcoded.
-         */
-        const val SERVER_CLIENT_ID = "45519759180-drrbd2j4sfa9dm2r0s1opmcgks9nb7qo.apps.googleusercontent.com"
-    }
 }

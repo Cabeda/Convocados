@@ -117,11 +117,9 @@ fun AuthScreen(
             }
         }
 
-        // Backend selector — always visible
-        item { BackendSelector(viewModel) }
-
-        // Dev-only: email/password sign-in
+        // Dev-only: backend selector and email/password sign-in
         if (BuildConfig.DEBUG) {
+            item { BackendSelector(viewModel) }
             item { EmailSignIn(viewModel) }
         }
     }
