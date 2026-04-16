@@ -2,6 +2,7 @@ package dev.convocados.wear.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.work.WorkManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -31,4 +32,9 @@ object WearDatabaseModule {
 
     @Provides
     fun providePendingScoreDao(db: WearDatabase): PendingScoreDao = db.pendingScoreDao()
+
+    @Provides
+    @Singleton
+    fun provideWorkManager(@ApplicationContext context: Context): WorkManager =
+        WorkManager.getInstance(context)
 }

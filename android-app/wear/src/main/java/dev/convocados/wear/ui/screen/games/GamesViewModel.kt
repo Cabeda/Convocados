@@ -1,17 +1,16 @@
 package dev.convocados.wear.ui.screen.games
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
+import dev.convocados.wear.util.parseInstant
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.Instant
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import kotlin.math.abs
@@ -22,20 +21,21 @@ data class GamesUiState(
     val isLoading: Boolean = true,
     val isOffline: Boolean = false,
     val pendingSyncCount: Int = 0,
+    val error: String? = null,
 )
 
 @HiltViewModel
 class GamesViewModel @Inject constructor(
-    application: Application,
     private val repository: WearGameRepository,
-) : AndroidViewModel(application) {
+    private val workManager: WorkManager,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GamesUiState())
     val uiState: StateFlow<GamesUiState> = _uiState.asStateFlow()
 
     init {
         // Schedule periodic sync
-        ScoreSyncWorker.schedulePeriodic(application)
+        ScoreSyncWorker.schedulePeriodic(workManager)
 
         // Observe cached games
         viewModelScope.launch {
@@ -56,12 +56,13 @@ class GamesViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, error = null) }
             val result = repository.refreshGames()
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     isOffline = result.isFailure,
+                    error = result.exceptionOrNull()?.message,
                 )
             }
         }
@@ -77,7 +78,7 @@ class GamesViewModel @Inject constructor(
         val now = Instant.now()
 
         return games.minByOrNull { game ->
-            val gameTime = parseDateTime(game.dateTime) ?: return@minByOrNull Long.MAX_VALUE
+            val gameTime = parseInstant(game.dateTime) ?: return@minByOrNull Long.MAX_VALUE
             val diffMinutes = ChronoUnit.MINUTES.between(now, gameTime)
 
             when {
@@ -90,16 +91,6 @@ class GamesViewModel @Inject constructor(
                 // Past games (ended more than 2h ago)
                 else -> abs(diffMinutes) * 3
             }
-        }
-    }
-
-    private fun parseDateTime(dateTime: String): Instant? = try {
-        ZonedDateTime.parse(dateTime, DateTimeFormatter.ISO_DATE_TIME).toInstant()
-    } catch (_: Exception) {
-        try {
-            Instant.parse(dateTime)
-        } catch (_: Exception) {
-            null
         }
     }
 }

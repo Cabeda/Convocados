@@ -1,4 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Convocados</string>
+
+    <!-- Auth screen -->
+    <string name="signing_in">Signing in…</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="sign_in_failed_retry">Sign-in failed. Try again.</string>
+    <string name="no_google_account">No Google account found</string>
+    <string name="sign_in_failed">Sign-in failed: %1$s</string>
+    <string name="server_settings">Server Settings</string>
+    <string name="set_to_prod">Set to Prod</string>
+    <string name="set_to_local">Set to Local (10.0.2.2)</string>
+    <string name="skip_to_games">Skip to Games (Local Dev)</string>
+
+    <!-- Games screen -->
+    <string name="games_title">Games</string>
+    <string name="no_games">No games yet</string>
+    <string name="now_label">NOW </string>
+    <string name="pending_sync">%1$d score(s) pending sync</string>
+    <string name="offline_cached">Offline — showing cached</string>
+    <string name="sign_out">Sign Out</string>
+    <string name="in_progress">In progress</string>
+
+    <!-- Score screen -->
+    <string name="score_title">Score</string>
+    <string name="no_game_history">No game history</string>
+    <string name="start_from_phone">Start the game from\nthe phone app first</string>
+    <string name="saving">Saving…</string>
+    <string name="save">Save</string>
+    <string name="score_saved">Score saved!</string>
+    <string name="will_sync_online">Will sync when online</string>
+    <string name="done">Done</string>
+    <string name="team_default_1">Team 1</string>
+    <string name="team_default_2">Team 2</string>
 </resources>

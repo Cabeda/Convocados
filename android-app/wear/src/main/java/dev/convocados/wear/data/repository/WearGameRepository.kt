@@ -1,7 +1,8 @@
 package dev.convocados.wear.data.repository
 
 import android.util.Log
-import dev.convocados.wear.data.api.WearApi
+import dev.convocados.wear.data.api.ScoreRequest
+import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
@@ -14,7 +15,7 @@ import javax.inject.Singleton
 
 @Singleton
 class WearGameRepository @Inject constructor(
-    private val api: WearApi,
+    private val client: WearApiClient,
     private val gameDao: WearGameDao,
     private val historyDao: WearHistoryDao,
     private val pendingScoreDao: PendingScoreDao,
@@ -31,7 +32,7 @@ class WearGameRepository @Inject constructor(
 
     /** Refresh games from the API, falling back to cache on failure. */
     suspend fun refreshGames(): Result<Unit> = try {
-        val response = api.fetchMyGames()
+        val response = client.get<dev.convocados.wear.data.api.MyGamesResponse>("/api/me/games")
         val owned = response.owned.map { it.toEntity("owned") }
         val joined = response.joined.map { it.toEntity("joined") }
         gameDao.refreshGames("owned", owned)
@@ -42,9 +43,14 @@ class WearGameRepository @Inject constructor(
         Result.failure(e)
     }
 
+    /** Insert mock games for local testing. */
+    suspend fun insertMockGames(games: List<WearGameEntity>) {
+        gameDao.insertAll(games)
+    }
+
     /** Refresh history for a specific event. */
     suspend fun refreshHistory(eventId: String): Result<Unit> = try {
-        val history = api.fetchHistory(eventId)
+        val history = client.get<dev.convocados.wear.data.api.PaginatedHistory>("/api/events/$eventId/history")
         historyDao.refreshHistory(
             eventId,
             history.data.map { it.toHistoryEntity(eventId) }
@@ -78,7 +84,10 @@ class WearGameRepository @Inject constructor(
         historyDao.updateScore(historyId, scoreOne, scoreTwo)
 
         return try {
-            api.updateScore(eventId, historyId, scoreOne, scoreTwo)
+            client.patch<dev.convocados.wear.data.api.GameHistory>(
+                "/api/events/$eventId/history/$historyId",
+                ScoreRequest(scoreOne, scoreTwo),
+            )
             Result.success(Unit)
         } catch (e: Exception) {
             Log.w("WearGameRepo", "Score submit failed, queuing for sync", e)
@@ -102,7 +111,10 @@ class WearGameRepository @Inject constructor(
         var synced = 0
         for (score in pending) {
             try {
-                api.updateScore(score.eventId, score.historyId, score.scoreOne, score.scoreTwo)
+                client.patch<dev.convocados.wear.data.api.GameHistory>(
+                    "/api/events/${score.eventId}/history/${score.historyId}",
+                    ScoreRequest(score.scoreOne, score.scoreTwo),
+                )
                 pendingScoreDao.delete(score)
                 synced++
             } catch (e: Exception) {
