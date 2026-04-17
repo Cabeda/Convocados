@@ -104,7 +104,8 @@ class EventDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = event.value == null)
             repository.refreshEventDetail(eventId)
-            _state.value = _state.value.copy(loading = false, refreshing = false)
+            val postGame = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
+            _state.value = _state.value.copy(loading = false, refreshing = false, postGame = postGame)
         }
     }
 
