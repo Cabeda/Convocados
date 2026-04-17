@@ -161,9 +161,11 @@ test.describe("Snackbar notifications", () => {
     await page.goto(`/events/${eventId}`);
     await expect(page.locator("text=AnonymousPlayer")).toBeVisible({ timeout: 10_000 });
 
-    // Look for the "It's me" / claim button on the anonymous player
-    // This appears as a small button or icon next to unclaimed players for authenticated users
-    const claimBtn = page.locator('button:has-text("It\'s me"), button[aria-label*="claim"], button[aria-label*="Claim"]').first();
+    // Look for the "Claim as me" button in the rankings page
+    await page.goto(`/events/${eventId}/rankings`);
+    await expect(page.locator("text=AnonymousPlayer")).toBeVisible({ timeout: 10_000 });
+
+    const claimBtn = page.locator('button:has-text("Claim as me"), button[aria-label*="claim"], button[aria-label*="Claim"]').first();
 
     if (await claimBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await claimBtn.click();

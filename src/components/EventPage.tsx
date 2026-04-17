@@ -42,8 +42,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [isPublic, setIsPublic] = useState(false);
   const [sport, setSport] = useState("football-5v5");
   const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
-  const [claimPlayerConfirmOpen, setClaimPlayerConfirmOpen] = useState(false);
-  const [playerToClaim, setPlayerToClaim] = useState<{ id: string; name: string } | null>(null);
   const [postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
   const [paymentExpanded, setPaymentExpanded] = useState<boolean | undefined>(undefined);
   const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
@@ -248,31 +246,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
     return () => clearTimeout(timer);
   }, [undoData]);
 
-  // ── Claim player ────────────────────────────────────────────────────────────
-
-  const handleClaimPlayerConfirm = async () => {
-    if (!playerToClaim) return;
-    setClaimPlayerConfirmOpen(false);
-    const res = await fetch(`/api/events/${eventId}/claim-player`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerId: playerToClaim.id }),
-    });
-    if (res.ok) {
-      setSnackbar(t("claimPlayerSuccess"));
-      fetchEvent();
-    } else {
-      const json = await res.json();
-      setPlayerError(json.error);
-    }
-    setPlayerToClaim(null);
-  };
-
-  const openClaimPlayerDialog = (playerId: string, playerName: string) => {
-    setPlayerToClaim({ id: playerId, name: playerName });
-    setClaimPlayerConfirmOpen(true);
-  };
-
   // ── Player reorder ──────────────────────────────────────────────────────────
 
   const reorderPlayers = useCallback(async (reorderedIds: string[]) => {
@@ -403,8 +376,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const isOwnerless = !event?.ownerId;
   const isAdmin = !!event?.isAdmin;
   const canEditSettings = isOwnerless || isOwner || isAdmin;
-  const userHasLinkedPlayer = isAuthenticated && (event?.players ?? []).some((p: any) => p.userId === session.user.id);
-  const canClaimPlayer = isAuthenticated && !userHasLinkedPlayer;
 
   const canRemovePlayer = (player: Player) => {
     if (isOwner || isAdmin) return true;
@@ -575,7 +546,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
               players={event.players}
               maxPlayers={event.maxPlayers}
               isOwner={isOwner}
-              canClaimPlayer={canClaimPlayer}
               hasTeams={!!(localMatches && localMatches.length > 0)}
               availableSuggestions={availableSuggestions}
               playerError={playerError}
@@ -586,7 +556,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onResetPlayerOrder={resetPlayerOrder}
               onRandomize={doRandomize}
               onConfirmReRandomize={() => setConfirmOpen(true)}
-              onOpenClaimPlayerDialog={openClaimPlayerDialog}
               canRemovePlayer={canRemovePlayer}
             />
 
@@ -627,10 +596,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
           relinquishConfirmOpen={relinquishConfirmOpen}
           onRelinquishClose={() => setRelinquishConfirmOpen(false)}
           onRelinquishConfirm={handleRelinquishOwnership}
-          claimPlayerConfirmOpen={claimPlayerConfirmOpen}
-          playerToClaim={playerToClaim}
-          onClaimPlayerClose={() => { setClaimPlayerConfirmOpen(false); setPlayerToClaim(null); }}
-          onClaimPlayerConfirm={handleClaimPlayerConfirm}
           snackbar={snackbar}
           onSnackbarClose={() => setSnackbar(null)}
           undoData={undoData}
