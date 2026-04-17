@@ -835,7 +835,7 @@ const en = {
   postGameProgress: "{done} of {total} tasks complete",
   postGameNoCostSet: "Cost not set yet — set the cost to enable payments",
   postGameSetCost: "Set cost",
-  postGameNotification: "Game over! Add the score and settle payments for {title}",
+  postGameNotification: "Game over! Add the score, settle payments, and vote for the MVP of {title}",
   postGamePaymentsLabel: "Payments for this game",
   upcomingGamePaymentsLabel: "Payments for the upcoming game",
 
@@ -865,6 +865,18 @@ const en = {
   landingFeatureNotifications: "Get push notifications",
   landingFeatureReminders: "Reminders to play and pay",
   landingOpenSource: "Open source · Free forever",
+
+  // MVP voting (#200)
+  voteMvp: "Vote MVP",
+  mvpVotingClosed: "MVP voting is closed",
+  mvpAlreadyVoted: "You already voted",
+  mvpVotedFor: "You voted for {name}",
+  mvpBadge: "MVP",
+  mvpAwards: "MVP awards",
+  totalMvpAwards: "Total MVP awards",
+  mvpNoVotesYet: "No votes yet",
+  mvpVoteSuccess: "Vote cast!",
+  mvpSelfVoteError: "You cannot vote for yourself",
 } as const;
 
 export default en;

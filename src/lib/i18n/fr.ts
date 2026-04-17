@@ -780,7 +780,7 @@ const fr: TranslationKeys = {
   postGameProgress: "{done} sur {total} tâches terminées",
   postGameNoCostSet: "Coût pas encore défini — définissez le coût pour activer les paiements",
   postGameSetCost: "Définir le coût",
-  postGameNotification: "Match terminé ! Ajoutez le score et réglez les paiements de {title}",
+  postGameNotification: "Match terminé ! Ajoutez le score, réglez les paiements et votez pour le MVP de {title}",
   postGamePaymentsLabel: "Paiements de ce match",
   upcomingGamePaymentsLabel: "Paiements du prochain match",
 
@@ -818,6 +818,18 @@ const fr: TranslationKeys = {
   landingFeatureNotifications: "Reçois des notifications push",
   landingFeatureReminders: "Rappels pour jouer et payer",
   landingOpenSource: "Open source · Gratuit pour toujours",
+
+  // MVP voting (#200)
+  voteMvp: "Voter MVP",
+  mvpVotingClosed: "Vote MVP fermé",
+  mvpAlreadyVoted: "Tu as déjà voté",
+  mvpVotedFor: "Tu as voté pour {name}",
+  mvpBadge: "MVP",
+  mvpAwards: "Prix MVP",
+  totalMvpAwards: "Total des prix MVP",
+  mvpNoVotesYet: "Pas encore de votes",
+  mvpVoteSuccess: "Vote enregistré !",
+  mvpSelfVoteError: "Tu ne peux pas voter pour toi-même",
 };
 
 export default fr;
