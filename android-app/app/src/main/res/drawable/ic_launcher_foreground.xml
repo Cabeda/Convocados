@@ -4,12 +4,26 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group android:translateX="27" android:translateY="27">
-        <path
-            android:fillColor="#7EDCAB"
-            android:pathData="M27,0C41.91,0 54,12.09 54,27C54,41.91 41.91,54 27,54C12.09,54 0,41.91 0,27C0,12.09 12.09,0 27,0Z"/>
-        <path
-            android:fillColor="#003822"
-            android:pathData="M37,18L17,18L17,36L37,36L37,31L22,31L22,23L37,23Z"/>
-    </group>
+    <!-- The "C" letter with people dots, matching the PWA icon.
+         Adaptive icon safe zone: 108x108 with 18dp inset on each side (72x72 visible).
+         Design centered in the 108x108 canvas. -->
+
+    <!-- Three people dots above the C -->
+    <!-- Center dot (top) -->
+    <path
+        android:fillColor="#AADBC6"
+        android:pathData="M54,30a2.8,2.8 0,1 0,0 -5.6a2.8,2.8 0,1 0,0 5.6z"/>
+    <!-- Left dot -->
+    <path
+        android:fillColor="#AADBC6"
+        android:pathData="M45.5,34a2.5,2.5 0,1 0,0 -5a2.5,2.5 0,1 0,0 5z"/>
+    <!-- Right dot -->
+    <path
+        android:fillColor="#AADBC6"
+        android:pathData="M62.5,34a2.5,2.5 0,1 0,0 -5a2.5,2.5 0,1 0,0 5z"/>
+
+    <!-- White "C" letter -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,36C43.51,36 35,44.51 35,55C35,65.49 43.51,74 54,74C60.08,74 65.5,71.08 69,66.6L69,66.6L63.2,62.4C60.9,65.4 57.7,67.2 54,67.2C47.27,67.2 41.8,61.73 41.8,55C41.8,48.27 47.27,42.8 54,42.8C57.7,42.8 60.9,44.6 63.2,47.6L69,43.4C65.5,38.92 60.08,36 54,36Z"/>
 </vector>
