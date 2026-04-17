@@ -2,8 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { getSession } from "../../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../../lib/apiRateLimit.server";
-
-const VOTING_WINDOW_DAYS = 7;
+import { MVP_VOTING_WINDOW_DAYS } from "../../../../../../lib/mvp.constants";
 
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -54,7 +53,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   // Check voting window: within 7 days of game creation
   const daysSinceCreation = (Date.now() - history.createdAt.getTime()) / 86400_000;
-  if (daysSinceCreation > VOTING_WINDOW_DAYS) {
+  if (daysSinceCreation > MVP_VOTING_WINDOW_DAYS) {
     return Response.json({ error: "Voting is closed — the 7-day window has expired." }, { status: 400 });
   }
 

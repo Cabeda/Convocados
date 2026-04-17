@@ -80,7 +80,7 @@ test.describe("MVP Voting — e2e", () => {
     expect(createRes.status()).toBe(200);
     const { id: eventId } = await createRes.json();
 
-    // ── Step 3: Add players (including linking the user to "MVP Voter") ──
+    // ── Step 3: Add players ──
     const players = ["MVP Voter", "Alice", "Bob", "Charlie"];
     for (const name of players) {
       const res = await api.post(`/api/events/${eventId}/players`, {
@@ -131,27 +131,44 @@ test.describe("MVP Voting — e2e", () => {
     const mvpData = await mvpRes.json();
     expect(mvpData.isVotingOpen).toBe(true);
     expect(mvpData.mvp).toBeNull();
+    expect(mvpData.hasVoted).toBe(false);
 
-    // ── Step 8: Navigate to history page and verify MVP voting UI ──
-    await page.goto(`/events/${eventId}/history`);
-    await expect(page.locator('[data-testid="mvp-voting"]')).toBeVisible({
-      timeout: 15_000,
+    // ── Step 8: Get a player to vote for (not the current user) ──
+    const eventPlayers = eventData.players as Array<{ id: string; name: string; userId: string | null }>;
+    const voteTarget = eventPlayers.find((p) => p.name !== userName);
+    expect(voteTarget).toBeTruthy();
+
+    // ── Step 9: Cast MVP vote via API ──
+    const voteRes = await api.post(`/api/events/${eventId}/history/${historyId}/mvp-vote`, {
+      data: { votedForPlayerId: voteTarget!.id },
     });
+    expect(voteRes.status()).toBe(200);
+    const voteBody = await voteRes.json();
+    expect(voteBody.ok).toBe(true);
+    expect(voteBody.vote.votedForName).toBe(voteTarget!.name);
 
-    // ── Step 9: Click on a player chip to vote ──
-    // Find a chip that is NOT the current user (vote for Alice, Bob, or Charlie)
-    const voteChip = page.locator('[data-testid="mvp-voting"] .MuiChip-root').filter({
-      hasNot: page.locator(`text="${userName}"`),
-    }).first();
-    await voteChip.click();
-
-    // ── Step 10: Verify success snackbar ──
-    await expect(page.locator('.MuiSnackbar-root')).toBeVisible({ timeout: 5_000 });
-
-    // ── Step 11: Verify MVP API now shows hasVoted ──
+    // ── Step 10: Verify MVP API now shows hasVoted and the vote ──
     const mvpRes2 = await api.get(`/api/events/${eventId}/history/${historyId}/mvp`);
     const mvpData2 = await mvpRes2.json();
     expect(mvpData2.hasVoted).toBe(true);
     expect(mvpData2.totalVotes).toBe(1);
+    expect(mvpData2.mvp).toHaveLength(1);
+    expect(mvpData2.mvp[0].playerName).toBe(voteTarget!.name);
+    expect(mvpData2.mvp[0].voteCount).toBe(1);
+
+    // ── Step 11: Verify duplicate vote is rejected ──
+    const dupeRes = await api.post(`/api/events/${eventId}/history/${historyId}/mvp-vote`, {
+      data: { votedForPlayerId: voteTarget!.id },
+    });
+    expect(dupeRes.status()).toBe(409);
+
+    // ── Step 12: Navigate to history page — MVP result should be visible ──
+    await page.goto(`/events/${eventId}/history`);
+    await expect(page.locator('[data-testid="mvp-result"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Verify the MVP name is shown
+    await expect(page.locator('[data-testid="mvp-result"]')).toContainText(voteTarget!.name);
   });
 });

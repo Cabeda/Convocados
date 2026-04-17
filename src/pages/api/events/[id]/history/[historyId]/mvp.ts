@@ -1,8 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { getSession } from "../../../../../../lib/auth.helpers.server";
-
-const VOTING_WINDOW_DAYS = 7;
+import { MVP_VOTING_WINDOW_DAYS } from "../../../../../../lib/mvp.constants";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
@@ -17,7 +16,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const gameEndTime = new Date(event.dateTime.getTime() + (event.durationMinutes ?? 60) * 60_000);
   const gameEnded = gameEndTime <= new Date();
   const daysSinceCreation = (Date.now() - history.createdAt.getTime()) / 86400_000;
-  const withinWindow = daysSinceCreation <= VOTING_WINDOW_DAYS;
+  const withinWindow = daysSinceCreation <= MVP_VOTING_WINDOW_DAYS;
 
   const newerGame = await prisma.gameHistory.findFirst({
     where: {
@@ -28,7 +27,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     select: { id: true },
   });
   const isLatestGame = !newerGame;
-  const isVotingOpen = gameEnded && isLatestGame && withinWindow && history.status === "played";
+  const isVotingOpen = gameEnded && isLatestGame && withinWindow && history.status === "played" && (event.mvpEnabled ?? true);
 
   // Get all votes for this game
   const votes = await prisma.mvpVote.findMany({
@@ -81,7 +80,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   return Response.json({
     mvp,
-    votes: votes.map((v) => ({
+    votes: votes.map((v: { voterName: string; votedForName: string }) => ({
       voterName: v.voterName,
       votedForName: v.votedForName,
     })),
