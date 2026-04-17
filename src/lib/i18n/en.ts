@@ -855,6 +855,16 @@ const en = {
   overrideCleared: "Reverted to default payment methods.",
   logOverrideSet: "{actor} set a temporary payment method override",
   logOverrideCleared: "{actor} cleared the temporary payment method override",
+
+  // Landing page (#203)
+  landingHeadline: "Organize your game in 30 seconds",
+  landingSubtitle: "Share a link, collect players, randomize teams — done.",
+  landingFeatureTeams: "Randomize balanced teams",
+  landingFeaturePayments: "Split costs with players",
+  landingFeatureRankings: "Track ELO rankings",
+  landingFeatureNotifications: "Get push notifications",
+  landingFeatureReminders: "Reminders to play and pay",
+  landingOpenSource: "Open source · Free forever",
 } as const;
 
 export default en;
