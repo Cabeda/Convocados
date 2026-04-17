@@ -8,8 +8,10 @@ import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import CelebrationIcon from "@mui/icons-material/Celebration";
+import HowToRegIcon from "@mui/icons-material/HowToReg";
 import SaveIcon from "@mui/icons-material/Save";
 import { useT } from "~/lib/useT";
+import { MvpVotingCard } from "./MvpVotingCard";
 
 interface PaymentEntry {
   playerName: string;
@@ -48,24 +50,31 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   const [editablePayments, setEditablePayments] = useState<PaymentEntry[]>([]);
   const [paymentsDirty, setPaymentsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [eventPlayers, setEventPlayers] = useState<{ id: string; name: string }[]>([]);
 
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/post-game-status`);
-      if (res.ok) {
-        const data = await res.json();
+      const [statusRes, eventRes] = await Promise.all([
+        fetch(`/api/events/${eventId}/post-game-status`),
+        eventPlayers.length === 0 ? fetch(`/api/events/${eventId}`) : null,
+      ]);
+      if (statusRes.ok) {
+        const data = await statusRes.json();
         setStatus(data);
         onStatusChangeRef.current?.(data);
-        // Reset editable payments from fresh data (only if not dirty)
         if (data.paymentsSnapshot && !paymentsDirty) {
           setEditablePayments(data.paymentsSnapshot);
         }
       }
+      if (eventRes?.ok) {
+        const ev = await eventRes.json();
+        setEventPlayers((ev.players ?? []).map((p: any) => ({ id: p.id, name: p.name })));
+      }
     } catch { /* ignore */ }
-  }, [eventId, paymentsDirty]);
+  }, [eventId, paymentsDirty, eventPlayers.length]);
 
   useEffect(() => {
     fetchStatus();
@@ -291,6 +300,29 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
                 </Box>
               )}
             </Box>
+
+            {/* MVP voting task */}
+            {status.latestHistoryId && status.hasScore && eventPlayers.length > 0 && (
+              <Box sx={{
+                p: 1.5,
+                borderRadius: 2,
+                bgcolor: alpha(theme.palette.action.hover, 0.04),
+                border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+              }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+                  <HowToRegIcon fontSize="small" sx={{ color: theme.palette.warning.main }} />
+                  <Typography variant="body2" fontWeight={600}>
+                    {t("voteMvp")}
+                  </Typography>
+                </Box>
+                <MvpVotingCard
+                  eventId={eventId}
+                  historyId={status.latestHistoryId}
+                  participants={eventPlayers}
+                  compact
+                />
+              </Box>
+            )}
           </Stack>
 
           {/* Progress summary */}
