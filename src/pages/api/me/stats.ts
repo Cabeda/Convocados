@@ -67,6 +67,7 @@ export const GET: APIRoute = async ({ request }) => {
   const uniqueRatings = Array.from(byEvent.values());
 
   // Count MVP awards per event and total — computed after playerNameByEvent is built (below)
+  // TODO: optimize — currently fetches ALL votes for all events; consider a DB-level aggregation
   const allEventIds = uniqueRatings.map((r) => r.eventId);
   const mvpVotes = allEventIds.length > 0
     ? await prisma.mvpVote.findMany({

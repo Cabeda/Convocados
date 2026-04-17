@@ -124,6 +124,7 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
             {participants.map((p) => (
               <Chip
                 key={p.id}
+                data-testid={`mvp-vote-chip-${p.name}`}
                 label={p.name}
                 size="small"
                 variant="outlined"
