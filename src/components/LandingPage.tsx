@@ -30,9 +30,8 @@ function HeroContent() {
       display: "flex",
       flexDirection: "column",
       justifyContent: "center",
-      py: isMobile ? 3 : 6,
+      py: isMobile ? 3 : 4,
       px: isMobile ? 2 : 4,
-      minHeight: isMobile ? undefined : "60vh",
     }}>
       <Typography
         variant={isMobile ? "h4" : "h3"}
@@ -103,7 +102,7 @@ export default function LandingPage() {
     <Box sx={{
       display: "flex",
       flexDirection: isMobile ? "column" : "row",
-      alignItems: isMobile ? "stretch" : "flex-start",
+      alignItems: isMobile ? "stretch" : "center",
       maxWidth: 1200,
       mx: "auto",
       width: "100%",
