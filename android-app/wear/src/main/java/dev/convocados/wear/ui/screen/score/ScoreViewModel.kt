@@ -8,8 +8,6 @@ import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -25,7 +23,9 @@ data class ScoreUiState(
     val teamOneName: String = "Team 1",
     val teamTwoName: String = "Team 2",
     val isLoading: Boolean = true,
-    val isSyncing: Boolean = false,
+    val isSaving: Boolean = false,
+    val saved: Boolean = false,
+    val isOfflineQueued: Boolean = false,
     val error: String? = null,
 )
 
@@ -39,11 +39,6 @@ class ScoreViewModel @Inject constructor(
     val uiState: StateFlow<ScoreUiState> = _uiState.asStateFlow()
 
     private var eventId: String = ""
-    private var autoSaveJob: Job? = null
-
-    companion object {
-        private const val AUTO_SAVE_DELAY_MS = 1000L
-    }
 
     fun load(eventId: String) {
         if (this.eventId == eventId) return
@@ -71,45 +66,47 @@ class ScoreViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Increment or decrement a team's score.
-     * Auto-saves after a 1s debounce — no manual save needed.
-     */
-    fun updateScore(team: Team, delta: Int) {
-        _uiState.update {
-            when (team) {
-                Team.ONE -> it.copy(scoreOne = maxOf(0, it.scoreOne + delta))
-                Team.TWO -> it.copy(scoreTwo = maxOf(0, it.scoreTwo + delta))
-            }
-        }
-        scheduleAutoSave()
+    fun incrementScoreOne() {
+        _uiState.update { it.copy(scoreOne = it.scoreOne + 1) }
     }
 
-    private fun scheduleAutoSave() {
-        autoSaveJob?.cancel()
-        autoSaveJob = viewModelScope.launch {
-            delay(AUTO_SAVE_DELAY_MS)
-            persistScore()
-        }
+    fun decrementScoreOne() {
+        _uiState.update { it.copy(scoreOne = maxOf(0, it.scoreOne - 1)) }
     }
 
-    private suspend fun persistScore() {
+    fun incrementScoreTwo() {
+        _uiState.update { it.copy(scoreTwo = it.scoreTwo + 1) }
+    }
+
+    fun decrementScoreTwo() {
+        _uiState.update { it.copy(scoreTwo = maxOf(0, it.scoreTwo - 1)) }
+    }
+
+    fun saveScore() {
         val state = _uiState.value
         val historyId = state.history?.id ?: return
 
-        _uiState.update { it.copy(isSyncing = true, error = null) }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true, error = null) }
 
-        repository.submitScore(
-            eventId = eventId,
-            historyId = historyId,
-            scoreOne = state.scoreOne,
-            scoreTwo = state.scoreTwo,
-            teamOneName = state.teamOneName,
-            teamTwoName = state.teamTwoName,
-        )
+            val result = repository.submitScore(
+                eventId = eventId,
+                historyId = historyId,
+                scoreOne = state.scoreOne,
+                scoreTwo = state.scoreTwo,
+                teamOneName = state.teamOneName,
+                teamTwoName = state.teamTwoName,
+            )
 
-        ScoreSyncWorker.enqueueOneTime(workManager)
+            ScoreSyncWorker.enqueueOneTime(workManager)
 
-        _uiState.update { it.copy(isSyncing = false) }
+            _uiState.update {
+                it.copy(
+                    isSaving = false,
+                    saved = true,
+                    isOfflineQueued = result.isFailure,
+                )
+            }
+        }
     }
 }

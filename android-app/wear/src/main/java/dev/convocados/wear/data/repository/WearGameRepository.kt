@@ -96,7 +96,7 @@ class WearGameRepository @Inject constructor(
                     teamTwoName = teamTwoName,
                 )
             )
-            Result.success(Unit) // Still "success" from user perspective — queued
+            Result.failure(e) // Queued for later — let UI know it's offline
         }
     }
 
