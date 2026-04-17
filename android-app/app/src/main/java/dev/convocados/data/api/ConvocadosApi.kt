@@ -141,6 +141,13 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     // ── Share URL ─────────────────────────────────────────────────────────
     fun getShareUrl(eventId: String): String =
         "${client.getLoginUrl("").substringBefore("/api")}/events/$eventId"
+
+    // ── MVP Voting ────────────────────────────────────────────────────────
+    suspend fun castMvpVote(eventId: String, historyId: String, votedForPlayerId: String): MvpVoteResponse =
+        client.post("/api/events/$eventId/history/$historyId/mvp-vote", MvpVoteRequest(votedForPlayerId))
+
+    suspend fun fetchMvp(eventId: String, historyId: String): MvpResponse =
+        client.get("/api/events/$eventId/history/$historyId/mvp")
 }
 
 // ── Request bodies ────────────────────────────────────────────────────────────
