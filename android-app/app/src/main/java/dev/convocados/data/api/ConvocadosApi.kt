@@ -73,6 +73,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updateElo(eventId: String, enabled: Boolean): OkResponse =
         client.put("/api/events/$eventId/elo", EloRequest(enabled))
 
+    suspend fun updateHideEloInTeams(eventId: String, hide: Boolean): OkResponse =
+        client.put("/api/events/$eventId/hide-elo-in-teams", HideEloInTeamsRequest(hide))
+
     suspend fun updateSplitCosts(eventId: String, enabled: Boolean): OkResponse =
         client.put("/api/events/$eventId/split-costs", SplitCostsRequest(enabled))
 
@@ -167,6 +170,7 @@ data class CreateEventRequest(
 @Serializable data class MaxPlayersRequest(val maxPlayers: Int)
 @Serializable data class VisibilityRequest(val isPublic: Boolean)
 @Serializable data class EloRequest(val eloEnabled: Boolean)
+@Serializable data class HideEloInTeamsRequest(val hideEloInTeams: Boolean)
 @Serializable data class SplitCostsRequest(val splitCostsEnabled: Boolean)
 @Serializable data class PasswordRequest(val password: String?)
 @Serializable data class PasswordVerifyRequest(val password: String)

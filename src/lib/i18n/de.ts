@@ -193,6 +193,8 @@ const de: TranslationKeys = {
   eloEnabledTooltip: "Spieler-Fähigkeitsbewertungen mit dem ELO-System verfolgen",
   balancedTeams: "ELO-ausgeglichene Teams",
   balancedTeamsTooltip: "ELO-Bewertungen verwenden, um Teams beim Zufallsmodus auszugleichen",
+  hideEloInTeams: "ELO in Teams ausblenden",
+  hideEloInTeamsTooltip: "ELO zum Ausgleichen verwenden, aber Bewertungen in der Teamansicht ausblenden",
   ratings: "Bewertungen",
   rating: "Rating",
   gamesPlayed: "Spiele",
@@ -319,6 +321,8 @@ const de: TranslationKeys = {
   eventSettings: "Event-Einstellungen",
   eventSettingsDesc: "Sichtbarkeit, Sportart, ausgeglichene Teams und Integrationen",
   eventSettingsGeneral: "Allgemein",
+  eventSettingsTeams: "Teams & Bewertungen",
+  eventSettingsFeatures: "Funktionen",
   settingsOwnerOnly: "Nur der Event-Besitzer kann auf die Einstellungen zugreifen.",
 
   // Access control

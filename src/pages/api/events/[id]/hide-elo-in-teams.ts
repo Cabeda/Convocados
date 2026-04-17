@@ -16,17 +16,12 @@ export const PUT: APIRoute = async ({ params, request }) => {
   }
 
   const body = await request.json();
-  const eloEnabled = Boolean(body.eloEnabled);
-
-  // When disabling ELO, also disable balanced teams and hide ELO in teams
-  const data: { eloEnabled: boolean; balanced?: boolean; hideEloInTeams?: boolean } = { eloEnabled };
-  if (!eloEnabled) { data.balanced = false; data.hideEloInTeams = false; }
+  const hideEloInTeams = Boolean(body.hideEloInTeams);
 
   await prisma.event.update({
     where: { id: params.id },
-    data,
+    data: { hideEloInTeams },
   });
 
-
-  return Response.json({ eloEnabled });
+  return Response.json({ hideEloInTeams });
 };
