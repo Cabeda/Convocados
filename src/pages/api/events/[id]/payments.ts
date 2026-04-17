@@ -66,7 +66,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const body = await request.json();
   const playerName = String(body.playerName ?? "").trim();
   const status = String(body.status ?? "");
-  const method = body.method != null ? String(body.method).trim().slice(0, 50) || null : undefined;
+  const method = body.method !== null ? String(body.method).trim().slice(0, 50) || null : undefined;
 
   if (!VALID_STATUSES.includes(status)) {
     return Response.json({ error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` }, { status: 400 });

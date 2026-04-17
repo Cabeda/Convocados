@@ -122,7 +122,7 @@ describe("Team Randomization with Claimed Players", () => {
 
     // User joins - this creates a new player with order 10
     // (this is what happens when linkToAccount is true)
-    const userPlayer = await addPlayer(event.id, user.name, 10, user.id);
+    const _userPlayer = await addPlayer(event.id, user.name, 10, user.id);
 
     // Get players for randomization
     const players = await prisma.player.findMany({
@@ -204,7 +204,7 @@ describe("Team Randomization with Claimed Players", () => {
 
     // Step 3: Test User claims one of the remaining players (player with high order)
     // Simulate: Test User joins and takes order 11 (would be bench)
-    const testUserPlayer = await addPlayer(event.id, "Test User1 (temp)", 11, user.id);
+    const _testUserPlayer = await addPlayer(event.id, "Test User1 (temp)", 11, user.id);
     
     // Now we have 12 players: 10 active + 2 bench
     players = await prisma.player.findMany({

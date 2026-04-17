@@ -16,7 +16,7 @@ vi.mock("~/lib/auth.helpers.server", async () => {
   };
 });
 
-import { getSession, checkOwnership } from "~/lib/auth.helpers.server";
+import { checkOwnership } from "~/lib/auth.helpers.server";
 
 function putCtx(params: Record<string, string>, body: unknown) {
   const request = new Request("http://localhost/api/test", {
