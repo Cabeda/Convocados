@@ -24,16 +24,22 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
 
-  const callbackURL = typeof window !== "undefined"
+  const rawCallback = typeof window !== "undefined"
     ? new URLSearchParams(window.location.search).get("callbackURL") || "/"
     : "/";
+
+  // Sanitize callbackURL: only allow relative paths to prevent open redirects
+  const callbackURL = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/";
+
+  // Compute the safe post-login destination
+  const postLoginURL = callbackURL === "/" ? "/dashboard" : callbackURL;
 
   // Redirect already-authenticated users
   React.useEffect(() => {
     if (!isPending && session?.user) {
-      window.location.href = callbackURL === "/" ? "/dashboard" : callbackURL;
+      window.location.href = postLoginURL;
     }
-  }, [isPending, session, callbackURL]);
+  }, [isPending, session, postLoginURL]);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +57,7 @@ export default function SignInPage() {
           setError(t("authError"));
         }
       } else {
-        window.location.href = callbackURL === "/" ? "/dashboard" : callbackURL;
+        window.location.href = postLoginURL;
       }
     } catch {
       setError(t("authError"));
