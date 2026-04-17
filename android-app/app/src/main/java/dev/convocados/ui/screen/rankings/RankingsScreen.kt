@@ -144,6 +144,9 @@ fun RankingsScreen(
     val rows = mergeRows(ratings, players)
     val userHasLinkedPlayer = user != null && players.any { it.userId == user?.id }
 
+    // Claim confirmation dialog state
+    var claimTarget by remember { mutableStateOf<RankingRow?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -203,9 +206,10 @@ fun RankingsScreen(
                                 Text("\u2014", color = TextMuted, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
                             }
                             if (canClaim) {
+                                Spacer(Modifier.width(8.dp))
                                 IconButton(
-                                    onClick = { viewModel.claimPlayer(eventId, r.playerId!!) },
-                                    modifier = Modifier.size(36.dp).padding(start = 8.dp),
+                                    onClick = { claimTarget = r },
+                                    modifier = Modifier.size(48.dp),
                                 ) {
                                     Icon(Icons.Default.HowToReg, "Claim as me", tint = Primary, modifier = Modifier.size(24.dp))
                                 }
@@ -215,5 +219,29 @@ fun RankingsScreen(
                 }
             }
         }
+    }
+
+    // Claim player confirmation dialog
+    claimTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { claimTarget = null },
+            title = { Text("Claim player", color = TextPrimary) },
+            text = {
+                Text(
+                    "Are you sure you want to claim \"${target.name}\"? This player will be linked to your account.",
+                    color = TextSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    target.playerId?.let { viewModel.claimPlayer(eventId, it) }
+                    claimTarget = null
+                }) { Text("Claim", color = Primary, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { claimTarget = null }) { Text("Cancel", color = TextMuted) }
+            },
+            containerColor = Surface,
+        )
     }
 }

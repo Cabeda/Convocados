@@ -326,7 +326,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                         <TableCell align="center" sx={{ fontWeight: 700, color: "success.main" }}>{t("wins")}</TableCell>
                         <TableCell align="center" sx={{ fontWeight: 700, color: "text.secondary" }}>{t("draws")}</TableCell>
                         <TableCell align="center" sx={{ fontWeight: 700, color: "error.main" }}>{t("losses")}</TableCell>
-                        {showActionsCol && <TableCell sx={{ width: 72 }} />}
+                        {showActionsCol && <TableCell sx={{ width: 110 }} />}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -399,28 +399,30 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                               <Typography variant="body2" color="error.main" fontWeight={600}>{r.losses}</Typography>
                             </TableCell>
                             {showActionsCol && (
-                              <TableCell align="center" sx={{ px: 0.5 }}>
-                                {isUnclaimed && r.playerId && (
-                                  <Tooltip title={t("claimPlayer")}>
-                                    <IconButton size="small" color="primary" onClick={() => setClaimTarget({ id: r.playerId!, name: r.name })}>
-                                      <HowToRegIcon sx={{ fontSize: 20 }} />
-                                    </IconButton>
-                                  </Tooltip>
-                                )}
-                                {canEdit && r.rating != null && (
-                                  <Tooltip title={t("setInitialRating")}>
-                                    <IconButton size="small" onClick={() => openEditDialog(r as PlayerRating)}>
-                                      <EditIcon sx={{ fontSize: 18 }} />
-                                    </IconButton>
-                                  </Tooltip>
-                                )}
-                                {canManage && (
-                                  <Tooltip title={t("purgePlayer")}>
-                                    <IconButton size="small" color="error" onClick={() => setPurgeTarget(r.name)}>
-                                      <DeleteIcon sx={{ fontSize: 18 }} />
-                                    </IconButton>
-                                  </Tooltip>
-                                )}
+                              <TableCell align="right" sx={{ px: 0.5 }}>
+                                <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>
+                                  {isUnclaimed && r.playerId && (
+                                    <Tooltip title={t("claimPlayer")}>
+                                      <IconButton size="small" color="primary" onClick={() => setClaimTarget({ id: r.playerId!, name: r.name })}>
+                                        <HowToRegIcon sx={{ fontSize: 20 }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
+                                  {canEdit && r.rating != null && (
+                                    <Tooltip title={t("setInitialRating")}>
+                                      <IconButton size="small" onClick={() => openEditDialog(r as PlayerRating)}>
+                                        <EditIcon sx={{ fontSize: 20 }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
+                                  {canManage && (
+                                    <Tooltip title={t("purgePlayer")}>
+                                      <IconButton size="small" color="error" sx={{ ml: 0.5 }} onClick={() => setPurgeTarget(r.name)}>
+                                        <DeleteIcon sx={{ fontSize: 20 }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
+                                </Box>
                               </TableCell>
                             )}
                           </TableRow>
