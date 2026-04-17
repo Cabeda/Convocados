@@ -1,6 +1,6 @@
 ---
 export const prerender = true;
-import CreateEventForm from "../components/CreateEventForm";
+import { LandingPageWithProviders } from "../components/LandingPage";
 ---
 
 <!doctype html>
@@ -8,14 +8,14 @@ import CreateEventForm from "../components/CreateEventForm";
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Convocados — Criar Jogo</title>
-    <meta name="description" content="Organise your sports game, divide teams, manage players." />
+    <title>Convocados — Organize your game in 30 seconds</title>
+    <meta name="description" content="Share a link, collect players, randomize balanced teams, split costs, and track ELO rankings. Free and open source." />
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#1b6b4a" />
   </head>
   <body>
-    <CreateEventForm client:only="react" />
+    <LandingPageWithProviders client:only="react" />
   </body>
 </html>
