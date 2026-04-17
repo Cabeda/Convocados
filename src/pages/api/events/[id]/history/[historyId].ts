@@ -203,8 +203,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   const finalScoreTwo = updated.scoreTwo;
   if (
     updated.status === "played" &&
-    finalScoreOne != null &&
-    finalScoreTwo != null &&
+    finalScoreOne !== null &&
+    finalScoreTwo !== null &&
     updated.teamsSnapshot &&
     !updated.eloProcessed
   ) {
@@ -227,8 +227,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   let eloUpdates = null;
   if (
     updated.status === "played" &&
-    finalScoreOne != null &&
-    finalScoreTwo != null &&
+    finalScoreOne !== null &&
+    finalScoreTwo !== null &&
     updated.teamsSnapshot
   ) {
     try {

@@ -44,7 +44,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "ELO has already been processed for this game." }, { status: 400 });
   }
 
-  if (!historyEntry.teamsSnapshot || historyEntry.scoreOne == null || historyEntry.scoreTwo == null) {
+  if (!historyEntry.teamsSnapshot || historyEntry.scoreOne === null || historyEntry.scoreTwo === null) {
     return Response.json(
       { error: "Cannot process ELO: missing teams or scores." },
       { status: 400 },

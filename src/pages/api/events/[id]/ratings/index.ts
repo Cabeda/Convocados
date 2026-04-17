@@ -55,7 +55,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   if (!name || typeof name !== "string") {
     return Response.json({ error: "Player name is required." }, { status: 400 });
   }
-  if (initialRating == null || typeof initialRating !== "number" || !isFinite(initialRating)) {
+  if (initialRating === null || typeof initialRating !== "number" || !isFinite(initialRating)) {
     return Response.json({ error: "initialRating must be a number." }, { status: 400 });
   }
 

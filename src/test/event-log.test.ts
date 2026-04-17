@@ -6,7 +6,7 @@ const testPrisma = new PrismaClient({
 });
 
 // Ensure route handlers and logEvent use the same prisma client
-const sharedPrisma = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
+const _sharedPrisma = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
 vi.mock("~/lib/db.server", () => {
   const { PrismaClient: PC } = require("@prisma/client");
   const p = new PC({ datasources: { db: { url: process.env.DATABASE_URL } } });

@@ -5,7 +5,7 @@ import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { PUT as updateDateTime } from "~/pages/api/events/[id]/datetime";
 import { POST as createEvent } from "~/pages/api/events/index";
 
-function putCtx(params: Record<string, string>, body: unknown, userId?: string) {
+function putCtx(params: Record<string, string>, body: unknown, _userId?: string) {
   const headers: Record<string, string> = { "content-type": "application/json" };
   const request = new Request("http://localhost/api/test", {
     method: "PUT",

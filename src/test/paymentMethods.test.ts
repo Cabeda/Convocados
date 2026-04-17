@@ -7,7 +7,6 @@ import {
   getDeepLink,
   getMbwayAppLink,
   getDisplayValue,
-  type PaymentMethod,
 } from "~/lib/paymentMethods";
 
 describe("validatePaymentMethod", () => {

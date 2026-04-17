@@ -100,7 +100,7 @@ beforeAll(async () => {
   await ensureTrustedClientInDB();
 
   // Sign up via better-auth to create User + Account (with hashed password)
-  const signUpRes = await authFetch(`${BASE}/api/auth/sign-up/email`, {
+  const _signUpRes = await authFetch(`${BASE}/api/auth/sign-up/email`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: BASE },
     body: JSON.stringify({
@@ -142,7 +142,7 @@ beforeAll(async () => {
 
 describe("OAuth 2.1 trusted client — full flow via auth.handler", () => {
   it("authorize skips consent for trusted client and returns code + state", async () => {
-    const { verifier, challenge } = generatePKCE();
+    const { verifier: _verifier2, challenge } = generatePKCE();
     const state = randomBytes(16).toString("hex");
 
     const res = await authFetch(
@@ -316,7 +316,7 @@ describe("OAuth 2.1 trusted client — full flow via auth.handler", () => {
   });
 
   it("token exchange fails with wrong code_verifier", async () => {
-    const { verifier, challenge } = generatePKCE();
+    const { verifier: _verifier, challenge } = generatePKCE();
     const state = randomBytes(16).toString("hex");
 
     const authRes = await authFetch(

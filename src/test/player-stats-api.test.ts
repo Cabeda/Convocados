@@ -135,7 +135,7 @@ describe("GET /api/me/stats", () => {
   it("includes per-event breakdown with event title", async () => {
     await seedUser("user1", "Test User", "test@test.com");
 
-    const event = await seedEventWithRatings(null, "Friday Footy", "user1", "Test User", {
+    const _event = await seedEventWithRatings(null, "Friday Footy", "user1", "Test User", {
       rating: 1200, gamesPlayed: 8, wins: 5, draws: 1, losses: 2,
     });
 

@@ -1,17 +1,17 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
-import { getSession, checkOwnership } from "../../../../../lib/auth.helpers.server";
+import { checkOwnership } from "../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import {
   getPrioritySettings,
   getEnrollments,
   updatePrioritySettings,
 } from "../../../../../lib/priority.server";
-import { calculateAttendance } from "../../../../../lib/attendance";
+import {} from "../../../../../lib/attendance";
 import { calculateEligibility, rankAndCap } from "../../../../../lib/priority";
 
 /** GET — list priority settings, enrollments, and eligibility preview */
-export const GET: APIRoute = async ({ params, request }) => {
+export const GET: APIRoute = async ({ params }) => {
   const event = await prisma.event.findUnique({
     where: { id: params.id },
     select: {
