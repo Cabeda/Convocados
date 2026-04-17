@@ -7,7 +7,7 @@ import EmailIcon from "@mui/icons-material/Email";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
-import { signIn } from "~/lib/auth.client";
+import { signIn, useSession } from "~/lib/auth.client";
 
 function TabPanel({ children, value, index }: { children: React.ReactNode; value: number; index: number }) {
   return value === index ? <Box>{children}</Box> : null;
@@ -15,6 +15,7 @@ function TabPanel({ children, value, index }: { children: React.ReactNode; value
 
 export default function SignInPage() {
   const t = useT();
+  const { data: session, isPending } = useSession();
   const [tab, setTab] = useState(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,6 +27,13 @@ export default function SignInPage() {
   const callbackURL = typeof window !== "undefined"
     ? new URLSearchParams(window.location.search).get("callbackURL") || "/"
     : "/";
+
+  // Redirect already-authenticated users
+  React.useEffect(() => {
+    if (!isPending && session?.user) {
+      window.location.href = callbackURL === "/" ? "/dashboard" : callbackURL;
+    }
+  }, [isPending, session, callbackURL]);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +51,7 @@ export default function SignInPage() {
           setError(t("authError"));
         }
       } else {
-        window.location.href = callbackURL;
+        window.location.href = callbackURL === "/" ? "/dashboard" : callbackURL;
       }
     } catch {
       setError(t("authError"));
