@@ -29,6 +29,7 @@ export interface EventData {
   isPublic: boolean;
   balanced: boolean;
   eloEnabled: boolean;
+  hideEloInTeams: boolean;
   splitCostsEnabled: boolean;
   sport: string;
   recurrenceRule: string | null;

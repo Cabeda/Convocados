@@ -221,6 +221,8 @@ const en = {
   eloEnabledTooltip: "Track player skill ratings using the ELO system",
   balancedTeams: "ELO-balanced teams",
   balancedTeamsTooltip: "Use ELO ratings to balance teams when randomizing",
+  hideEloInTeams: "Hide ELO in teams",
+  hideEloInTeamsTooltip: "Use ELO to balance teams but hide ratings from the team view",
   ratings: "Ratings",
   rating: "Rating",
   gamesPlayed: "Games",
@@ -365,6 +367,8 @@ const en = {
   eventSettings: "Event Settings",
   eventSettingsDesc: "Visibility, sport, balanced teams, and integrations",
   eventSettingsGeneral: "General",
+  eventSettingsTeams: "Teams & Ratings",
+  eventSettingsFeatures: "Features",
   settingsOwnerOnly: "Only the event owner can access settings.",
 
   // Access control

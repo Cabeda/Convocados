@@ -126,6 +126,7 @@ model Event {
 
   // Rating settings
   eloEnabled        Boolean @default(true)
+  hideEloInTeams    Boolean @default(false)
   allowManualRating Boolean @default(false)
 
   // Cost tracking
