@@ -31,7 +31,7 @@ import {
   markPaymentReminderSent,
   shouldSendPaymentReminder,
 } from "~/lib/paymentReminders.server";
-import { getNotificationPrefs, wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
+import { wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
 
 // ── Seed helpers ──────────────────────────────────────────────────────────────
 

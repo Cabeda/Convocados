@@ -218,7 +218,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const playerByName = new Map(players.map((p) => [p.name, p]));
 
   const tableRows: TableRowData[] = (() => {
-    const ratingByName = new Map(ratings.map((r) => [r.name, r]));
+    const _ratingByName = new Map(ratings.map((r) => [r.name, r]));
     const rows: TableRowData[] = [];
     const seen = new Set<string>();
 
@@ -331,7 +331,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                     </TableHead>
                     <TableBody>
                       {tableRows.map((r, i) => {
-                        const podiumColor = i < 3 && r.rating != null ? PODIUM_COLORS[i] : undefined;
+                        const podiumColor = i < 3 && r.rating !== null ? PODIUM_COLORS[i] : undefined;
                         const isUnclaimed = canClaimPlayer && r.playerId && !r.userId;
                         return (
                           <TableRow
@@ -363,7 +363,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                             </TableCell>
                             <TableCell align="center">
                               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5 }}>
-                                {r.rating != null ? (
+                                {r.rating !== null ? (
                                   <Chip
                                     label={Math.round(r.rating)}
                                     size="small"
@@ -377,7 +377,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                                 ) : (
                                   <Typography variant="body2" color="text.secondary">—</Typography>
                                 )}
-                                {r.initialRating != null && (
+                                {r.initialRating !== null && (
                                   <Tooltip title={`${t("initialRating")}: ${r.initialRating}`}>
                                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>
                                       ({r.initialRating})
@@ -408,7 +408,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                                       </IconButton>
                                     </Tooltip>
                                   )}
-                                  {canEdit && r.rating != null && (
+                                  {canEdit && r.rating !== null && (
                                     <Tooltip title={t("setInitialRating")}>
                                       <IconButton size="small" onClick={() => openEditDialog(r as PlayerRating)}>
                                         <EditIcon sx={{ fontSize: 20 }} />

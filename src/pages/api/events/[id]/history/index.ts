@@ -59,7 +59,7 @@ function computeHistoryDeltas(
   const sorted = [...history].sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 
   for (const game of sorted) {
-    if (game.status !== "played" || game.scoreOne == null || game.scoreTwo == null || !game.teamsSnapshot) continue;
+    if (game.status !== "played" || game.scoreOne === null || game.scoreTwo === null || !game.teamsSnapshot) continue;
 
     let teams: { team: string; players: { name: string }[] }[];
     try { teams = JSON.parse(game.teamsSnapshot); } catch { continue; }

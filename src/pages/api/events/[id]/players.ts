@@ -286,7 +286,7 @@ export const POST: APIRoute = async ({ params, request }) => {
           eventUrl: url,
         });
       }
-    } catch (err) {
+    } catch (_err) {
       // Non-blocking — don't fail the join if email fails
     }
   }

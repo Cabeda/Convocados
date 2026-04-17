@@ -28,7 +28,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "totalAmount must be a positive number." }, { status: 400 });
   }
   const currency = String(body.currency ?? "EUR").trim().slice(0, 10) || "EUR";
-  const paymentDetails = body.paymentDetails != null
+  const paymentDetails = body.paymentDetails !== null
     ? String(body.paymentDetails).trim().slice(0, 500) || null
     : undefined;
 

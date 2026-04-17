@@ -315,7 +315,7 @@ describe("GET /api/me/games (authenticated)", () => {
   it("returns owned and joined games", async () => {
     const user = await seedUser();
     mockAuth(user.id);
-    const ownedId = await seedEvent({ ownerId: user.id });
+    const _ownedId = await seedEvent({ ownerId: user.id });
     const joinedId = await seedEvent({ title: "Joined Game" });
     await testPrisma.player.create({ data: { name: user.name, eventId: joinedId, userId: user.id } });
     const res = await getMyGames(ctx({}));

@@ -216,10 +216,9 @@ interface GeoEvent extends PublicEvent {
   lng: number;
 }
 
-function MapView({ events, t, locale }: {
+function MapView({ events, t }: {
   events: PublicEvent[];
   t: any;
-  locale: string;
 }) {
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState(false);
@@ -240,7 +239,7 @@ function MapView({ events, t, locale }: {
   // Use stored coordinates — no client-side geocoding needed
   const geoEvents: GeoEvent[] = useMemo(() =>
     events
-      .filter((ev) => ev.latitude != null && ev.longitude != null)
+      .filter((ev) => ev.latitude !== null && ev.longitude !== null)
       .map((ev) => ({ ...ev, lat: ev.latitude!, lng: ev.longitude! })),
     [events],
   );
@@ -286,7 +285,7 @@ function buildMapHtml(
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>html,body,#map{margin:0;padding:0;width:100%;height:100%}</style>
 </head><body>
 <div id="map"></div>
@@ -305,7 +304,7 @@ ${events.map((ev) => {
     return `L.marker([${ev.lat},${ev.lng}]).addTo(map).bindPopup('${popupContent.replace(/'/g, "\\'")}');`;
   }).join("\n")}
 ${events.length > 1 ? `map.fitBounds([${events.map((e) => `[${e.lat},${e.lng}]`).join(",")}],{padding:[30,30]});` : ""}
-<\/script>
+</script>
 </body></html>`;
 
   return html;
@@ -315,7 +314,7 @@ ${events.length > 1 ? `map.fitBounds([${events.map((e) => `[${e.lat},${e.lng}]`)
 
 export default function PublicGamesPage() {
   const t = useT();
-  const theme = useTheme();
+  const _theme = useTheme();
   const locale = detectLocale();
 
   // Read initial state from URL params
@@ -494,7 +493,7 @@ export default function PublicGamesPage() {
             )}
 
             {!isLoading && filtered.length > 0 && viewMode === "map" && (
-              <MapView events={filtered} t={t} locale={locale} />
+              <MapView events={filtered} t={t} />
             )}
 
             {!isLoading && hasMore && (

@@ -38,7 +38,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     }
   }
 
-  const tempPaymentDetails = body.paymentDetails != null
+  const tempPaymentDetails = body.paymentDetails !== null
     ? String(body.paymentDetails).trim().slice(0, 500) || null
     : null;
 

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { IconButton, Tooltip, Snackbar, Box, Typography } from "@mui/material";
+import { IconButton, Snackbar } from "@mui/material";
 import ShareIcon from "@mui/icons-material/Share";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";

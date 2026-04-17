@@ -61,7 +61,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const session = await getSession(request);
   if (session?.user?.id) {
     // First try: find player linked by userId
-    let playerIds: string[] = [];
+    let playerIds: string[];
     const userPlayers = await prisma.player.findMany({
       where: { eventId: params.id, userId: session.user.id },
       select: { id: true },
