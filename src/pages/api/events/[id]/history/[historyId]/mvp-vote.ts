@@ -20,6 +20,10 @@ export const POST: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Event not found." }, { status: 404 });
 
+  if (!event.mvpEnabled) {
+    return Response.json({ error: "MVP voting is disabled for this event." }, { status: 400 });
+  }
+
   const history = await prisma.gameHistory.findUnique({
     where: { id: params.historyId, eventId: params.id },
   });

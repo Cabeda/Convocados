@@ -877,6 +877,8 @@ const en = {
   mvpNoVotesYet: "No votes yet",
   mvpVoteSuccess: "Vote cast!",
   mvpSelfVoteError: "You cannot vote for yourself",
+  mvpEnabled: "MVP voting",
+  mvpEnabledTooltip: "Allow players to vote for the most valuable player after each game",
 } as const;
 
 export default en;

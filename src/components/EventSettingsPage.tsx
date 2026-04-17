@@ -258,6 +258,11 @@ export default function EventSettingsPage({ eventId }: Props) {
     updateSetting("split-costs", { splitCostsEnabled: v });
   };
 
+  const handleToggleMvpEnabled = (v: boolean) => {
+    setEvent((e: any) => e ? { ...e, mvpEnabled: v } : e);
+    updateSetting("mvp-enabled", { mvpEnabled: v });
+  };
+
   const handleSportChange = (v: string) => {
     setEvent((e: any) => e ? { ...e, sport: v } : e);
     updateSetting("sport", { sport: v });
@@ -622,6 +627,12 @@ export default function EventSettingsPage({ eventId }: Props) {
             <FormControlLabel
               control={<Switch size="small" checked={event.splitCostsEnabled ?? true} onChange={(e) => handleToggleSplitCosts(e.target.checked)} disabled={!canEdit} />}
               label={<Typography variant="body2">{t("splitCostsEnabled")}</Typography>}
+            />
+          </Tooltip>
+          <Tooltip title={t("mvpEnabledTooltip")}>
+            <FormControlLabel
+              control={<Switch size="small" checked={event.mvpEnabled ?? true} onChange={(e) => handleToggleMvpEnabled(e.target.checked)} disabled={!canEdit} />}
+              label={<Typography variant="body2">{t("mvpEnabled")}</Typography>}
             />
           </Tooltip>
         </Stack>
