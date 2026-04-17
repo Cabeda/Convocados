@@ -80,8 +80,8 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
   const { mvp, isVotingOpen, hasVoted } = data;
   const canVote = isVotingOpen && isAuthenticated && hasVoted === false;
 
-  // Show MVP result badge
-  if (mvp && mvp.length > 0 && !canVote) {
+  // Show MVP result badge (voting closed with votes, or already voted and results available)
+  if (mvp && mvp.length > 0 && (!canVote || !isVotingOpen)) {
     return (
       <Box data-testid="mvp-result" sx={{
         display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap",
@@ -159,12 +159,18 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
     );
   }
 
-  // Voting closed or no votes
+  // Voting closed with no votes
   if (!isVotingOpen && !mvp) {
-    return compact ? null : (
-      <Typography variant="caption" color="text.disabled">
-        {t("mvpVotingClosed")}
-      </Typography>
+    return (
+      <Box data-testid="mvp-closed" sx={{
+        display: "flex", alignItems: "center", gap: 1,
+        ...(compact ? {} : { p: 1.5, borderRadius: 2, bgcolor: alpha(theme.palette.action.hover, 0.04), border: `1px solid ${alpha(theme.palette.divider, 0.3)}` }),
+      }}>
+        <EmojiEventsIcon sx={{ color: theme.palette.text.disabled, fontSize: compact ? 16 : 20 }} />
+        <Typography variant="caption" color="text.disabled">
+          {t("mvpNoVotesYet")}
+        </Typography>
+      </Box>
     );
   }
 
