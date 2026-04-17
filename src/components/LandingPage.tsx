@@ -30,16 +30,16 @@ function HeroContent() {
       display: "flex",
       flexDirection: "column",
       justifyContent: "center",
-      py: isMobile ? 3 : 4,
+      py: isMobile ? 2 : 4,
       px: isMobile ? 2 : 4,
     }}>
       <Typography
-        variant={isMobile ? "h4" : "h3"}
+        variant={isMobile ? "h5" : "h3"}
         component="h1"
         sx={{
           fontWeight: 800,
           lineHeight: 1.15,
-          mb: 1.5,
+          mb: 1,
           color: theme.palette.text.primary,
         }}
       >
@@ -47,11 +47,11 @@ function HeroContent() {
       </Typography>
 
       <Typography
-        variant={isMobile ? "body1" : "h6"}
+        variant={isMobile ? "body2" : "h6"}
         sx={{
           color: theme.palette.text.secondary,
           fontWeight: 400,
-          mb: 3,
+          mb: isMobile ? 1.5 : 3,
           maxWidth: 420,
         }}
       >
@@ -59,15 +59,15 @@ function HeroContent() {
       </Typography>
 
       {isMobile ? (
-        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1, mb: 2 }}>
+        <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.75, mb: 1 }}>
           {FEATURES.map(({ icon: Icon, key }) => (
             <Chip
               key={key}
-              icon={<Icon sx={{ fontSize: 16 }} />}
+              icon={<Icon sx={{ fontSize: 14 }} />}
               label={t(key as any)}
               size="small"
               variant="outlined"
-              sx={{ borderColor: theme.palette.primary.main, color: theme.palette.text.secondary, fontSize: "0.75rem" }}
+              sx={{ borderColor: theme.palette.primary.main, color: theme.palette.text.secondary, fontSize: "0.7rem", height: 26 }}
             />
           ))}
         </Stack>
@@ -84,12 +84,14 @@ function HeroContent() {
         </Stack>
       )}
 
-      <Typography
-        variant="caption"
-        sx={{ color: theme.palette.text.disabled, letterSpacing: 0.5 }}
-      >
-        {t("landingOpenSource")}
-      </Typography>
+      {!isMobile && (
+        <Typography
+          variant="caption"
+          sx={{ color: theme.palette.text.disabled, letterSpacing: 0.5 }}
+        >
+          {t("landingOpenSource")}
+        </Typography>
+      )}
     </Box>
   );
 }
@@ -103,14 +105,14 @@ export default function LandingPage() {
       display: "flex",
       flexDirection: isMobile ? "column" : "row",
       alignItems: isMobile ? "stretch" : "center",
+      justifyContent: "center",
+      minHeight: isMobile ? undefined : "calc(100vh - 130px)",
       maxWidth: 1200,
       mx: "auto",
       width: "100%",
     }}>
       <Box sx={{
         flex: isMobile ? "none" : "0 0 42%",
-        position: isMobile ? "static" : "sticky",
-        top: 64,
       }}>
         <HeroContent />
       </Box>

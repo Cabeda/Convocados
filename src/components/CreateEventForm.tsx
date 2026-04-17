@@ -152,7 +152,7 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
 
   const inner = (
     <>
-        <Container maxWidth="sm" sx={{ py: 6 }}>
+        <Container maxWidth="sm" sx={{ py: bare ? { xs: 1, md: 3 } : 6 }}>
           <Stack spacing={4}>
             {!bare && (
             <Box textAlign="center">
