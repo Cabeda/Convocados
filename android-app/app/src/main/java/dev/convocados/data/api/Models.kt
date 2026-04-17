@@ -333,6 +333,32 @@ data class PublicStats(
 @Serializable
 data class OkResponse(val ok: Boolean = true)
 
+// ── MVP Voting ──────────────────────────────────────────────────────────────
+
+@Serializable
+data class MvpVoteRequest(val votedForPlayerId: String)
+
+@Serializable
+data class MvpVoteResponse(val ok: Boolean = true, val vote: MvpVoteDetail? = null)
+
+@Serializable
+data class MvpVoteDetail(val id: String, val votedForName: String)
+
+@Serializable
+data class MvpCandidate(val playerId: String, val playerName: String, val voteCount: Int)
+
+@Serializable
+data class MvpVoteSummary(val voterName: String, val votedForName: String)
+
+@Serializable
+data class MvpResponse(
+    val mvp: List<MvpCandidate>? = null,
+    val votes: List<MvpVoteSummary> = emptyList(),
+    val isVotingOpen: Boolean = false,
+    val hasVoted: Boolean? = null,
+    val totalVotes: Int = 0,
+)
+
 @Serializable
 data class CreateEventResponse(val id: String)
 

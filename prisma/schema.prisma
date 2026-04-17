@@ -157,6 +157,22 @@ model GameHistory {
   eloProcessed     Boolean  @default(false)
   source           String   @default("live") // "live" | "historical"
   createdAt        DateTime @default(now())
+  mvpVotes         MvpVote[]
+}
+
+model MvpVote {
+  id               String      @id @default(cuid())
+  gameHistoryId    String
+  gameHistory      GameHistory  @relation(fields: [gameHistoryId], references: [id], onDelete: Cascade)
+  voterPlayerId    String      // Player.id at time of vote
+  voterName        String      // denormalized — resilient if Player record is later removed
+  votedForPlayerId String      // Player.id at time of vote
+  votedForName     String      // denormalized for the same reason
+  createdAt        DateTime    @default(now())
+
+  @@unique([gameHistoryId, voterPlayerId])
+  @@index([gameHistoryId])
+  @@index([votedForPlayerId])
 }
 
 model Player {

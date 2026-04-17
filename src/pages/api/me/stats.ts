@@ -66,6 +66,36 @@ export const GET: APIRoute = async ({ request }) => {
 
   const uniqueRatings = Array.from(byEvent.values());
 
+  // Count MVP awards per event and total — computed after playerNameByEvent is built (below)
+  const allEventIds = uniqueRatings.map((r) => r.eventId);
+  const mvpVotes = allEventIds.length > 0
+    ? await prisma.mvpVote.findMany({
+        where: {
+          gameHistory: { eventId: { in: allEventIds } },
+        },
+        select: {
+          votedForPlayerId: true,
+          votedForName: true,
+          gameHistoryId: true,
+          gameHistory: { select: { eventId: true } },
+        },
+      })
+    : [];
+
+  // Tally votes per game
+  const votesByGame = new Map<string, Map<string, { name: string; count: number; eventId: string }>>();
+  for (const v of mvpVotes) {
+    const gameId = v.gameHistoryId;
+    if (!votesByGame.has(gameId)) votesByGame.set(gameId, new Map());
+    const gameTally = votesByGame.get(gameId)!;
+    const existing = gameTally.get(v.votedForPlayerId);
+    if (existing) {
+      existing.count++;
+    } else {
+      gameTally.set(v.votedForPlayerId, { name: v.votedForName, count: 1, eventId: v.gameHistory.eventId });
+    }
+  }
+
   // Aggregate summary
   const totalGames = uniqueRatings.reduce((sum, r) => sum + r.gamesPlayed, 0);
   const totalWins = uniqueRatings.reduce((sum, r) => sum + r.wins, 0);
@@ -102,6 +132,22 @@ export const GET: APIRoute = async ({ request }) => {
     playerNameByEvent.set(r.eventId, r.name);
   }
 
+  // Compute MVP awards now that playerNameByEvent is available
+  const mvpAwardsByEvent = new Map<string, number>();
+  let totalMvpAwards = 0;
+  for (const [, gameTally] of votesByGame) {
+    const maxVotes = Math.max(...Array.from(gameTally.values()).map((t) => t.count));
+    if (maxVotes < 1) continue;
+    const mvps = Array.from(gameTally.values()).filter((t) => t.count === maxVotes);
+    for (const mvp of mvps) {
+      const playerName = playerNameByEvent.get(mvp.eventId);
+      if (playerName && mvp.name.toLowerCase() === playerName.toLowerCase()) {
+        totalMvpAwards++;
+        mvpAwardsByEvent.set(mvp.eventId, (mvpAwardsByEvent.get(mvp.eventId) ?? 0) + 1);
+      }
+    }
+  }
+
   const events = uniqueRatings
     .sort((a, b) => b.rating - a.rating)
     .map((r) => {
@@ -128,6 +174,7 @@ export const GET: APIRoute = async ({ request }) => {
               currentStreak: playerAttendance.currentStreak,
             }
           : null,
+        mvpAwards: mvpAwardsByEvent.get(r.eventId) ?? 0,
       };
     });
 
@@ -141,6 +188,7 @@ export const GET: APIRoute = async ({ request }) => {
       avgRating: Math.round(avgRating),
       bestRating: Math.round(bestRating),
       eventsPlayed: uniqueRatings.length,
+      totalMvpAwards,
     },
     events,
   });
