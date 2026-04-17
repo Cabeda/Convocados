@@ -29,6 +29,7 @@ import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
 import { formatDateInTz } from "~/lib/timezones";
 import { ScoreRoller } from "./event/ScoreRoller";
 import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
+import { MvpVotingCard } from "./MvpVotingCard";
 
 type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number }
@@ -384,6 +385,7 @@ function HistoryCardFull({
   isOwner,
   userName,
   timezone,
+  eventPlayers,
 }: {
   entry: HistoryEntry;
   eventId: string;
@@ -395,6 +397,7 @@ function HistoryCardFull({
   playerRatings: { name: string; rating: number; gamesPlayed: number }[];
   isOwner: boolean;
   userName: string | null;
+  eventPlayers: { id: string; name: string }[];
 }) {
   const t = useT();
   const locale = detectLocale();
@@ -1044,6 +1047,17 @@ function HistoryCardFull({
           </Box>
         )}
 
+        {/* ── MVP Voting ── */}
+        {!isCancelled && (
+          <Box sx={{ px: 3, py: 1.5 }}>
+            <MvpVotingCard
+              eventId={eventId}
+              historyId={entry.id}
+              participants={eventPlayers}
+            />
+          </Box>
+        )}
+
         {/* ── Status + Editable info ── */}
         {canEditScore && (
           <Box sx={{ px: 3, py: 2.5 }}>
@@ -1116,6 +1130,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [timezone, setTimezone] = useState("UTC");
   const [showAddHistorical, setShowAddHistorical] = useState(false);
+  const [eventPlayers, setEventPlayers] = useState<{ id: string; name: string }[]>([]);
   const isOwner = !!(session?.user && ownerId && session.user.id === ownerId);
 
   const load = useCallback(async () => {
@@ -1132,6 +1147,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setOwnerId(ev.ownerId ?? null);
     setIsAdmin(!!ev.isAdmin);
     setTimezone(ev.timezone || "UTC");
+    setEventPlayers((ev.players ?? []).map((p: any) => ({ id: p.id, name: p.name })));
     setHistory(hist.data);
     setNextCursor(hist.nextCursor);
     setHasMore(hist.hasMore);
@@ -1257,7 +1273,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
                   <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} timezone={timezone} onUpdate={handleUpdate}
                     onDelete={handleDelete} isAuthenticated={isAuthenticated} knownPlayers={knownPlayers}
                     playerRatings={playerRatings} isOwner={isOwner || isAdmin}
-                    userName={session?.user?.name ?? null} />
+                    userName={session?.user?.name ?? null} eventPlayers={eventPlayers} />
                 ))}
                 {hasMore && (
                   <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
