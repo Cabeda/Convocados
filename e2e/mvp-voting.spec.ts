@@ -84,7 +84,7 @@ test.describe("MVP Voting — e2e", () => {
     const players = ["MVP Voter", "Alice", "Bob", "Charlie"];
     for (const name of players) {
       const res = await api.post(`/api/events/${eventId}/players`, {
-        data: { name },
+        data: { name, linkToAccount: name === userName },
       });
       expect(res.status()).toBe(200);
     }
