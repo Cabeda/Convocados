@@ -48,6 +48,7 @@ class EventSettingsViewModel @Inject constructor(private val api: ConvocadosApi)
     fun saveSport(id: String, s: String) = exec { api.updateSport(id, s); load(id) }
     fun togglePublic(id: String, v: Boolean) = exec { api.updateVisibility(id, v); load(id) }
     fun toggleElo(id: String, v: Boolean) = exec { api.updateElo(id, v); load(id) }
+    fun toggleHideEloInTeams(id: String, v: Boolean) = exec { api.updateHideEloInTeams(id, v); load(id) }
     fun toggleSplitCosts(id: String, v: Boolean) = exec { api.updateSplitCosts(id, v); load(id) }
     fun savePassword(id: String, pw: String?) = exec { api.updatePassword(id, pw); load(id) }
     fun archive(id: String) = exec { api.archiveEvent(id) }
@@ -74,6 +75,7 @@ fun EventSettingsScreen(
     var sport by remember(event) { mutableStateOf(event?.sport ?: "") }
     var isPublic by remember(event) { mutableStateOf(event?.isPublic ?: false) }
     var eloEnabled by remember(event) { mutableStateOf(event?.eloEnabled ?: false) }
+    var hideEloInTeams by remember(event) { mutableStateOf(event?.hideEloInTeams ?: false) }
     var splitCosts by remember(event) { mutableStateOf(event?.splitCostsEnabled ?: false) }
     var showPassword by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
@@ -118,10 +120,17 @@ fun EventSettingsScreen(
                 }
             }
 
-            // Toggles
-            Spacer(Modifier.height(16.dp))
+            // General
+            SectionTitle("General")
             ToggleRow("Public game", isPublic) { isPublic = it; viewModel.togglePublic(eventId, it) }
+
+            // Teams & Ratings
+            SectionTitle("Teams & Ratings")
             ToggleRow("ELO ratings", eloEnabled) { eloEnabled = it; viewModel.toggleElo(eventId, it) }
+            ToggleRow("Hide ELO in teams", hideEloInTeams, enabled = ev.balanced) { hideEloInTeams = it; viewModel.toggleHideEloInTeams(eventId, it) }
+
+            // Features
+            SectionTitle("Features")
             ToggleRow("Split costs", splitCosts) { splitCosts = it; viewModel.toggleSplitCosts(eventId, it) }
 
             // Password
@@ -159,11 +168,11 @@ fun EventSettingsScreen(
 @Composable private fun NavButton(text: String, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = onClick) { Text(text, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(14.dp)) }
 
 @Composable
-private fun ToggleRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun ToggleRow(label: String, checked: Boolean, enabled: Boolean = true, onCheckedChange: (Boolean) -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, color = TextPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedThumbColor = Primary, checkedTrackColor = PrimaryDark))
+            Text(label, color = if (enabled) TextPrimary else TextSecondary, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled, colors = SwitchDefaults.colors(checkedThumbColor = Primary, checkedTrackColor = PrimaryDark))
         }
     }
 }

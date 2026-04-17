@@ -74,6 +74,7 @@ data class EventDetail(
     val isAdmin: Boolean = false,
     val hasPassword: Boolean = false,
     val eloEnabled: Boolean = false,
+    val hideEloInTeams: Boolean = false,
     val splitCostsEnabled: Boolean = false,
     val balanced: Boolean = false,
     val archivedAt: String? = null,
