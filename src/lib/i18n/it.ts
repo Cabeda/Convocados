@@ -830,6 +830,8 @@ const it: TranslationKeys = {
   mvpNoVotesYet: "Nessun voto ancora",
   mvpVoteSuccess: "Voto registrato!",
   mvpSelfVoteError: "Non puoi votare per te stesso",
+  mvpEnabled: "Voto MVP",
+  mvpEnabledTooltip: "Permettere ai giocatori di votare il miglior giocatore dopo ogni partita",
 };
 
 export default it;

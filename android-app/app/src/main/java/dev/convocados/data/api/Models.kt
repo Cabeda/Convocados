@@ -76,6 +76,7 @@ data class EventDetail(
     val eloEnabled: Boolean = false,
     val hideEloInTeams: Boolean = false,
     val splitCostsEnabled: Boolean = false,
+    val mvpEnabled: Boolean = true,
     val balanced: Boolean = false,
     val archivedAt: String? = null,
     val createdAt: String = "",
