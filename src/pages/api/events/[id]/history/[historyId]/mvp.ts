@@ -60,11 +60,30 @@ export const GET: APIRoute = async ({ params, request }) => {
   let hasVoted: boolean | null = null;
   const session = await getSession(request);
   if (session?.user?.id) {
+    // First try: find player linked by userId
+    let playerIds: string[] = [];
     const userPlayers = await prisma.player.findMany({
       where: { eventId: params.id, userId: session.user.id },
       select: { id: true },
     });
-    const playerIds = userPlayers.map((p) => p.id);
+    playerIds = userPlayers.map((p) => p.id);
+
+    // Fallback: match by name in teamsSnapshot (same logic as mvp-vote.ts)
+    if (playerIds.length === 0 && session.user.name && history.teamsSnapshot) {
+      const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
+      const allSnapshotPlayers = teams.flatMap((t) => t.players);
+      const nameMatch = allSnapshotPlayers.find(
+        (p) => p.name.toLowerCase() === (session.user!.name ?? "").toLowerCase(),
+      );
+      if (nameMatch) {
+        const playerByName = await prisma.player.findFirst({
+          where: { eventId: params.id, name: nameMatch.name },
+          select: { id: true },
+        });
+        if (playerByName) playerIds = [playerByName.id];
+      }
+    }
+
     if (playerIds.length > 0) {
       const existingVote = await prisma.mvpVote.findFirst({
         where: {
