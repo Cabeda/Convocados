@@ -808,6 +808,16 @@ const it: TranslationKeys = {
   overrideCleared: "Ripristinati i metodi di pagamento predefiniti.",
   logOverrideSet: "{actor} ha impostato una sostituzione temporanea dei metodi di pagamento",
   logOverrideCleared: "{actor} ha rimosso la sostituzione temporanea dei metodi di pagamento",
+
+  // Landing page (#203)
+  landingHeadline: "Organizza la tua partita in 30 secondi",
+  landingSubtitle: "Condividi un link, raccogli giocatori, sorteggia le squadre — fatto.",
+  landingFeatureTeams: "Sorteggia squadre bilanciate",
+  landingFeaturePayments: "Dividi i costi con i giocatori",
+  landingFeatureRankings: "Segui le classifiche ELO",
+  landingFeatureNotifications: "Ricevi notifiche push",
+  landingFeatureReminders: "Promemoria per giocare e pagare",
+  landingOpenSource: "Open source · Gratis per sempre",
 };
 
 export default it;

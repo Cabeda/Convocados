@@ -56,7 +56,7 @@ function minDateTime() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function CreateEventForm() {
+export default function CreateEventForm({ bare }: { bare?: boolean }) {
   const t = useT();
   const locale = detectLocale();
   const [title, setTitle] = useState(() => getRandomTitle(locale as TitleLocale));
@@ -150,11 +150,11 @@ export default function CreateEventForm() {
     window.location.href = `/events/${json.id}`;
   };
 
-  return (
-    <ThemeModeProvider>
-      <ResponsiveLayout>
-        <Container maxWidth="sm" sx={{ py: 6 }}>
+  const inner = (
+    <>
+        <Container maxWidth="sm" sx={{ py: bare ? { xs: 1, md: 3 } : 6 }}>
           <Stack spacing={4}>
+            {!bare && (
             <Box textAlign="center">
               <SportsIcon sx={{ fontSize: 56, color: "primary.main", mb: 1 }} />
               <Typography variant="h4" fontWeight={700}>{t("createGame")}</Typography>
@@ -162,6 +162,7 @@ export default function CreateEventForm() {
                 {t("createGameSubtitle")}
               </Typography>
             </Box>
+            )}
 
             <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 3, sm: 4 } }}>
               <form onSubmit={handleSubmit}>
@@ -425,6 +426,15 @@ export default function CreateEventForm() {
             setLocationCoord(coord ? { lat: coord.lat, lon: coord.lng } : undefined);
           }}
         />
+    </>
+  );
+
+  if (bare) return inner;
+
+  return (
+    <ThemeModeProvider>
+      <ResponsiveLayout>
+        {inner}
       </ResponsiveLayout>
     </ThemeModeProvider>
   );

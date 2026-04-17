@@ -808,6 +808,16 @@ const fr: TranslationKeys = {
   overrideCleared: "Retour aux moyens de paiement par défaut.",
   logOverrideSet: "{actor} a défini un remplacement temporaire des moyens de paiement",
   logOverrideCleared: "{actor} a supprimé le remplacement temporaire des moyens de paiement",
+
+  // Landing page (#203)
+  landingHeadline: "Organise ton match en 30 secondes",
+  landingSubtitle: "Partage un lien, rassemble les joueurs, tire les équipes au sort — c'est fait.",
+  landingFeatureTeams: "Tire des équipes équilibrées",
+  landingFeaturePayments: "Partage les frais avec les joueurs",
+  landingFeatureRankings: "Suis les classements ELO",
+  landingFeatureNotifications: "Reçois des notifications push",
+  landingFeatureReminders: "Rappels pour jouer et payer",
+  landingOpenSource: "Open source · Gratuit pour toujours",
 };
 
 export default fr;

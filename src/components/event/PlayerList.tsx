@@ -25,7 +25,6 @@ interface Props {
   players: Player[];
   maxPlayers: number;
   isOwner: boolean;
-  canClaimPlayer: boolean;
   hasTeams: boolean;
   availableSuggestions: PlayerSuggestion[];
   playerError: string | null;
@@ -36,15 +35,14 @@ interface Props {
   onResetPlayerOrder: () => Promise<void>;
   onRandomize: () => void;
   onConfirmReRandomize: () => void;
-  onOpenClaimPlayerDialog: (playerId: string, playerName: string) => void;
   canRemovePlayer: (player: Player) => boolean;
 }
 
 export function PlayerList({
-  players, maxPlayers, isOwner, canClaimPlayer, hasTeams,
+  players, maxPlayers, isOwner, hasTeams,
   availableSuggestions, playerError, onPlayerErrorChange,
   onAddPlayer, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
-  onRandomize, onConfirmReRandomize, onOpenClaimPlayerDialog, canRemovePlayer,
+  onRandomize, onConfirmReRandomize, canRemovePlayer,
 }: Props) {
   const t = useT();
   const theme = useTheme();
@@ -267,27 +265,18 @@ export function PlayerList({
                     <DragIndicatorIcon fontSize="small" sx={{ color: "text.disabled", mr: 0.5, flexShrink: 0 }} />
                   )}
                   {player.userId ? (
-                    <Tooltip title={t("protectedPlayer")}>
-                      <ShieldIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5, flexShrink: 0 }} />
-                    </Tooltip>
-                  ) : canClaimPlayer ? (
-                    <Chip
-                      label={t("thisIsMe")}
-                      size="small"
-                      variant="outlined"
-                      color="info"
-                      onClick={() => onOpenClaimPlayerDialog(player.id, player.name)}
-                      sx={{ mr: 0.5, flexShrink: 0, cursor: "pointer", fontSize: "0.7rem", height: 22 }}
-                    />
-                  ) : null}
-                  <ListItemText
-                    primary={player.userId ? (
-                      <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>
-                        {player.name}
-                      </a>
-                    ) : player.name}
-                    primaryTypographyProps={{ fontWeight: 500, fontSize: "0.9rem" }}
-                  />
+                     <Tooltip title={t("protectedPlayer")}>
+                       <ShieldIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5, flexShrink: 0 }} />
+                     </Tooltip>
+                   ) : null}
+                   <ListItemText
+                     primary={player.userId ? (
+                       <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>
+                         {player.name}
+                       </a>
+                     ) : player.name}
+                     primaryTypographyProps={{ fontWeight: 500, fontSize: "0.9rem" }}
+                   />
                 </ListItem>
               ))}
             </List>
@@ -342,15 +331,6 @@ export function PlayerList({
                         <Tooltip title={t("protectedPlayer")}>
                           <ShieldIcon fontSize="small" sx={{ color: "warning.main", mr: 0.5, flexShrink: 0 }} />
                         </Tooltip>
-                      ) : canClaimPlayer ? (
-                        <Chip
-                          label={t("thisIsMe")}
-                          size="small"
-                          variant="outlined"
-                          color="info"
-                          onClick={() => onOpenClaimPlayerDialog(player.id, player.name)}
-                          sx={{ mr: 0.5, flexShrink: 0, cursor: "pointer", fontSize: "0.7rem", height: 22 }}
-                        />
                       ) : null}
                       <ListItemText
                         primary={player.userId ? (

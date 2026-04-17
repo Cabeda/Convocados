@@ -7,7 +7,7 @@ import EmailIcon from "@mui/icons-material/Email";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
-import { signIn } from "~/lib/auth.client";
+import { signIn, useSession } from "~/lib/auth.client";
 
 function TabPanel({ children, value, index }: { children: React.ReactNode; value: number; index: number }) {
   return value === index ? <Box>{children}</Box> : null;
@@ -15,6 +15,7 @@ function TabPanel({ children, value, index }: { children: React.ReactNode; value
 
 export default function SignInPage() {
   const t = useT();
+  const { data: session, isPending } = useSession();
   const [tab, setTab] = useState(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,9 +24,22 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
 
-  const callbackURL = typeof window !== "undefined"
+  const rawCallback = typeof window !== "undefined"
     ? new URLSearchParams(window.location.search).get("callbackURL") || "/"
     : "/";
+
+  // Sanitize callbackURL: only allow relative paths to prevent open redirects
+  const callbackURL = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/";
+
+  // Compute the safe post-login destination
+  const postLoginURL = callbackURL === "/" ? "/dashboard" : callbackURL;
+
+  // Redirect already-authenticated users
+  React.useEffect(() => {
+    if (!isPending && session?.user) {
+      window.location.href = postLoginURL;
+    }
+  }, [isPending, session, postLoginURL]);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +57,7 @@ export default function SignInPage() {
           setError(t("authError"));
         }
       } else {
-        window.location.href = callbackURL;
+        window.location.href = postLoginURL;
       }
     } catch {
       setError(t("authError"));

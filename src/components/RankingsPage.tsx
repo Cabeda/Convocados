@@ -3,12 +3,13 @@ import {
   Container, Paper, Typography, Box, Stack, Chip, Button, Avatar,
   CircularProgress, alpha, useTheme, IconButton, Tooltip, Snackbar, Alert,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField,
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import HowToRegIcon from "@mui/icons-material/HowToReg";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -24,6 +25,24 @@ interface PlayerRating {
   losses: number;
 }
 
+interface EventPlayer {
+  id: string;
+  name: string;
+  userId: string | null;
+}
+
+interface TableRowData {
+  name: string;
+  rating: number | null;
+  initialRating: number | null;
+  gamesPlayed: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  playerId: string | null;
+  userId: string | null;
+}
+
 const PODIUM_COLORS = ["#FFD700", "#C0C0C0", "#CD7F32"] as const;
 
 export default function RankingsPage({ eventId }: { eventId: string }) {
@@ -32,6 +51,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const { data: session } = useSession();
   const [title, setTitle] = useState("");
   const [ratings, setRatings] = useState<PlayerRating[]>([]);
+  const [players, setPlayers] = useState<EventPlayer[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -51,6 +71,10 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const [purgeTarget, setPurgeTarget] = useState<string | null>(null);
   const [purging, setPurging] = useState(false);
 
+  // Claim player state
+  const [claimTarget, setClaimTarget] = useState<{ id: string; name: string } | null>(null);
+  const [claiming, setClaiming] = useState(false);
+
   const load = useCallback(async () => {
     const [evRes, ratRes] = await Promise.all([
       fetch(`/api/events/${eventId}`),
@@ -63,7 +87,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     setRatings(rat.data);
     setNextCursor(rat.nextCursor);
     setHasMore(rat.hasMore);
-    // Owner or admin can edit ratings (only if allowManualRating is enabled)
+    setPlayers((ev.players ?? []).map((p: any) => ({ id: p.id, name: p.name, userId: p.userId ?? null })));
     const isOwner = !!(session?.user && ev.ownerId && session.user.id === ev.ownerId);
     const hasEditPermission = isOwner || ev.isAdmin || !ev.ownerId;
     setCanEdit(hasEditPermission && !!ev.allowManualRating);
@@ -91,7 +115,6 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
       const data = await res.json();
       if (res.ok) {
         setSnack({ msg: t("ratingsRecalculated", { n: data.gamesProcessed }), severity: "success" });
-        // Reload ratings
         const ratRes = await fetch(`/api/events/${eventId}/ratings`);
         const rat = ratRes.ok ? await ratRes.json() : { data: [], nextCursor: null, hasMore: false };
         setRatings(rat.data);
@@ -148,7 +171,6 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
       if (res.ok) {
         const msg = data.needsRecalculate ? t("initialRatingNeedsRecalculate") : t("initialRatingSaved");
         setSnack({ msg, severity: "success" });
-        // Update local state
         setRatings((prev) => prev.map((r) =>
           r.name === editPlayer
             ? { ...r, rating: data.rating, initialRating: data.initialRating }
@@ -163,6 +185,77 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     }
     setSaving(false);
   };
+
+  const handleClaimPlayer = async () => {
+    if (!claimTarget) return;
+    setClaiming(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/claim-player`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId: claimTarget.id }),
+      });
+      if (res.ok) {
+        setSnack({ msg: t("claimPlayerSuccess"), severity: "success" });
+        setClaimTarget(null);
+        load();
+      } else {
+        const data = await res.json();
+        setSnack({ msg: data.error || "Error", severity: "error" });
+        setClaimTarget(null);
+      }
+    } catch {
+      setSnack({ msg: "Error", severity: "error" });
+      setClaimTarget(null);
+    }
+    setClaiming(false);
+  };
+
+  const isAuthenticated = !!session?.user;
+  const userHasLinkedPlayer = isAuthenticated && players.some((p) => p.userId === session!.user!.id);
+  const canClaimPlayer = isAuthenticated && !userHasLinkedPlayer;
+
+  const playerByName = new Map(players.map((p) => [p.name, p]));
+
+  const tableRows: TableRowData[] = (() => {
+    const ratingByName = new Map(ratings.map((r) => [r.name, r]));
+    const rows: TableRowData[] = [];
+    const seen = new Set<string>();
+
+    for (const r of ratings) {
+      const p = playerByName.get(r.name);
+      rows.push({
+        name: r.name,
+        rating: r.rating,
+        initialRating: r.initialRating,
+        gamesPlayed: r.gamesPlayed,
+        wins: r.wins,
+        draws: r.draws,
+        losses: r.losses,
+        playerId: p?.id ?? null,
+        userId: p?.userId ?? null,
+      });
+      seen.add(r.name.toLowerCase());
+    }
+
+    for (const p of players) {
+      if (!seen.has(p.name.toLowerCase())) {
+        rows.push({
+          name: p.name,
+          rating: null,
+          initialRating: null,
+          gamesPlayed: 0,
+          wins: 0,
+          draws: 0,
+          losses: 0,
+          playerId: p.id,
+          userId: p.userId,
+        });
+      }
+    }
+
+    return rows;
+  })();
 
   if (loading) return (
     <ThemeModeProvider>
@@ -186,6 +279,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   );
 
   const editError = editValue !== "" && (isNaN(parseInt(editValue, 10)) || parseInt(editValue, 10) < 500 || parseInt(editValue, 10) > 1500);
+  const showActionsCol = canEdit || canManage || canClaimPlayer;
 
   return (
     <ThemeModeProvider>
@@ -214,7 +308,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
               )}
             </Box>
 
-            {ratings.length === 0 ? (
+            {tableRows.length === 0 ? (
               <Paper elevation={2} sx={{ borderRadius: 3, p: 4, textAlign: "center" }}>
                 <EmojiEventsIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
                 <Typography variant="h6" color="text.secondary">{t("noRatings")}</Typography>
@@ -232,26 +326,26 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                         <TableCell align="center" sx={{ fontWeight: 700, color: "success.main" }}>{t("wins")}</TableCell>
                         <TableCell align="center" sx={{ fontWeight: 700, color: "text.secondary" }}>{t("draws")}</TableCell>
                         <TableCell align="center" sx={{ fontWeight: 700, color: "error.main" }}>{t("losses")}</TableCell>
-                        {canEdit && <TableCell sx={{ width: 48 }} />}
-                        {!canEdit && canManage && <TableCell sx={{ width: 48 }} />}
+                        {showActionsCol && <TableCell sx={{ width: 110 }} />}
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {ratings.map((r, i) => {
-                        const podiumColor = i < 3 ? PODIUM_COLORS[i] : undefined;
+                      {tableRows.map((r, i) => {
+                        const podiumColor = i < 3 && r.rating != null ? PODIUM_COLORS[i] : undefined;
+                        const isUnclaimed = canClaimPlayer && r.playerId && !r.userId;
                         return (
                           <TableRow
                             key={r.name}
                             sx={{
                               "&:last-child td": { borderBottom: 0 },
-                              bgcolor: i < 3 ? alpha(podiumColor!, 0.06) : undefined,
+                              bgcolor: podiumColor ? alpha(podiumColor, 0.06) : undefined,
                             }}
                           >
                             <TableCell>
-                              {i < 3 ? (
+                              {podiumColor ? (
                                 <Avatar sx={{
                                   width: 28, height: 28, fontSize: "0.8rem", fontWeight: 700,
-                                  bgcolor: alpha(podiumColor!, 0.25),
+                                  bgcolor: alpha(podiumColor, 0.25),
                                   color: theme.palette.text.primary,
                                 }}>
                                   {i + 1}
@@ -263,22 +357,26 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                               )}
                             </TableCell>
                             <TableCell>
-                              <Typography variant="body2" fontWeight={i < 3 ? 700 : 500}>
+                              <Typography variant="body2" fontWeight={podiumColor ? 700 : 500}>
                                 {r.name}
                               </Typography>
                             </TableCell>
                             <TableCell align="center">
                               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5 }}>
-                                <Chip
-                                  label={Math.round(r.rating)}
-                                  size="small"
-                                  variant="outlined"
-                                  sx={{
-                                    fontWeight: 700, fontSize: "0.8rem", minWidth: 52,
-                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                    borderColor: alpha(theme.palette.primary.main, 0.2),
-                                  }}
-                                />
+                                {r.rating != null ? (
+                                  <Chip
+                                    label={Math.round(r.rating)}
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{
+                                      fontWeight: 700, fontSize: "0.8rem", minWidth: 52,
+                                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                      borderColor: alpha(theme.palette.primary.main, 0.2),
+                                    }}
+                                  />
+                                ) : (
+                                  <Typography variant="body2" color="text.secondary">—</Typography>
+                                )}
                                 {r.initialRating != null && (
                                   <Tooltip title={`${t("initialRating")}: ${r.initialRating}`}>
                                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem" }}>
@@ -300,22 +398,31 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                             <TableCell align="center">
                               <Typography variant="body2" color="error.main" fontWeight={600}>{r.losses}</Typography>
                             </TableCell>
-                            {(canEdit || canManage) && (
-                              <TableCell align="center" sx={{ px: 0.5 }}>
-                                {canEdit && (
-                                  <Tooltip title={t("setInitialRating")}>
-                                    <IconButton size="small" onClick={() => openEditDialog(r)}>
-                                      <EditIcon sx={{ fontSize: 16 }} />
-                                    </IconButton>
-                                  </Tooltip>
-                                )}
-                                {canManage && (
-                                  <Tooltip title={t("purgePlayer")}>
-                                    <IconButton size="small" color="error" onClick={() => setPurgeTarget(r.name)}>
-                                      <DeleteIcon sx={{ fontSize: 16 }} />
-                                    </IconButton>
-                                  </Tooltip>
-                                )}
+                            {showActionsCol && (
+                              <TableCell align="right" sx={{ px: 0.5 }}>
+                                <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>
+                                  {isUnclaimed && r.playerId && (
+                                    <Tooltip title={t("claimPlayer")}>
+                                      <IconButton size="small" color="primary" onClick={() => setClaimTarget({ id: r.playerId!, name: r.name })}>
+                                        <HowToRegIcon sx={{ fontSize: 20 }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
+                                  {canEdit && r.rating != null && (
+                                    <Tooltip title={t("setInitialRating")}>
+                                      <IconButton size="small" onClick={() => openEditDialog(r as PlayerRating)}>
+                                        <EditIcon sx={{ fontSize: 20 }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
+                                  {canManage && (
+                                    <Tooltip title={t("purgePlayer")}>
+                                      <IconButton size="small" color="error" sx={{ ml: 0.5 }} onClick={() => setPurgeTarget(r.name)}>
+                                        <DeleteIcon sx={{ fontSize: 20 }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
+                                </Box>
                               </TableCell>
                             )}
                           </TableRow>
@@ -336,6 +443,22 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
             )}
           </Stack>
         </Container>
+
+        {/* Claim player confirmation dialog */}
+        <Dialog open={!!claimTarget} onClose={() => !claiming && setClaimTarget(null)} maxWidth="xs" fullWidth>
+          <DialogTitle>{t("claimPlayerTitle")}</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              {t("claimPlayerConfirmDesc", { name: claimTarget?.name ?? "" })}
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setClaimTarget(null)} disabled={claiming}>{t("cancel")}</Button>
+            <Button variant="contained" onClick={handleClaimPlayer} disabled={claiming}>
+              {t("claimPlayer")}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Purge player confirmation dialog */}
         <Dialog open={!!purgeTarget} onClose={() => !purging && setPurgeTarget(null)} maxWidth="xs" fullWidth>
