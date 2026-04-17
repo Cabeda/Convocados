@@ -250,7 +250,6 @@ fun EventDetailScreen(
                 val isOwner = user?.id == event.ownerId
                 val myPlayer = user?.let { u -> event.players.find { it.name.equals(u.name, true) } }
                 val isOnBench = myPlayer != null && event.players.indexOf(myPlayer) >= event.maxPlayers
-                val canClaim = user != null && event.players.none { it.userId == user?.id }
                 val currentNames = event.players.map { it.name.lowercase() }.toSet()
                 val suggestions = state.knownPlayers.filter { it.name.lowercase() !in currentNames }.take(5)
 
@@ -393,9 +392,8 @@ fun EventDetailScreen(
                         SectionTitle("Playing (${activePlayers.size}/${event.maxPlayers})")
                         activePlayers.forEach { p ->
                             PlayerRow(
-                                player = p, isMe = p.userId == user?.id, canClaim = canClaim && p.userId == null,
+                                player = p, isMe = p.userId == user?.id,
                                 onRemove = { viewModel.removePlayer(eventId, p.id) },
-                                onClaim = { viewModel.claimPlayer(eventId, p.id) },
                                 canRemove = isOwner || p.userId == user?.id || p.userId == null,
                             )
                         }
@@ -468,8 +466,8 @@ fun SectionTitle(text: String) {
 @Composable
 fun PlayerRow(
     player: Player, isMe: Boolean = false, isBench: Boolean = false,
-    canClaim: Boolean = false, canRemove: Boolean = false,
-    onRemove: () -> Unit = {}, onClaim: () -> Unit = {},
+    canRemove: Boolean = false,
+    onRemove: () -> Unit = {},
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Surface),
@@ -481,9 +479,6 @@ fun PlayerRow(
                 color = if (isBench) TextMuted else TextPrimary, fontSize = 14.sp,
                 modifier = Modifier.weight(1f),
             )
-            if (canClaim) {
-                TextButton(onClick = onClaim) { Text("Claim", color = TextMuted, fontSize = 11.sp) }
-            }
             if (canRemove) {
                 IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.Close, "Remove", tint = TextMuted, modifier = Modifier.size(16.dp))

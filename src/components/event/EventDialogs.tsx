@@ -14,11 +14,6 @@ interface Props {
   relinquishConfirmOpen: boolean;
   onRelinquishClose: () => void;
   onRelinquishConfirm: () => void;
-  // Claim player
-  claimPlayerConfirmOpen: boolean;
-  playerToClaim: { id: string; name: string } | null;
-  onClaimPlayerClose: () => void;
-  onClaimPlayerConfirm: () => void;
   // Snackbar
   snackbar: string | null;
   onSnackbarClose: () => void;
@@ -31,7 +26,6 @@ interface Props {
 export function EventDialogs({
   confirmOpen, onConfirmClose, onConfirmRandomize,
   relinquishConfirmOpen, onRelinquishClose, onRelinquishConfirm,
-  claimPlayerConfirmOpen, playerToClaim, onClaimPlayerClose, onClaimPlayerConfirm,
   snackbar, onSnackbarClose,
   undoData, onUndoDismiss, onUndo,
 }: Props) {
@@ -60,22 +54,6 @@ export function EventDialogs({
           <Button onClick={onRelinquishClose}>{t("cancelEdit")}</Button>
           <Button onClick={onRelinquishConfirm} color="warning" variant="contained">
             {t("relinquishOwnership")}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Claim player confirmation */}
-      <Dialog open={claimPlayerConfirmOpen} onClose={onClaimPlayerClose}>
-        <DialogTitle>{t("claimPlayerTitle")}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {t("claimPlayerConfirmDesc", { name: playerToClaim?.name || "" })}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClaimPlayerClose}>{t("cancel")}</Button>
-          <Button onClick={onClaimPlayerConfirm} variant="contained">
-            {t("claimPlayer")}
           </Button>
         </DialogActions>
       </Dialog>

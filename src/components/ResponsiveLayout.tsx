@@ -403,7 +403,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                 <Button
                   color="inherit"
                   component="a"
-                  href={`/auth/signin?callbackURL=${encodeURIComponent(window.location.pathname + window.location.search)}`}
+                  href={`/auth/signin?callbackURL=${encodeURIComponent(window.location.pathname === "/" ? "/dashboard" : window.location.pathname + window.location.search)}`}
                   size="small"
                   sx={{ textTransform: "none", fontWeight: 600 }}
                 >
