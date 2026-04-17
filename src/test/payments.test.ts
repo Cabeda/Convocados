@@ -863,7 +863,7 @@ describe("Recurrence reset clears temp override", () => {
     // Effective should be the default
     const effective = JSON.parse(cost.effectivePaymentMethods);
     expect(effective[0].type).toBe("mbway");
-    expect(cost.effectivePaymentDetails ?? null).toBeNull();
+    expect(cost.effectivePaymentDetails).toBeNull();
   });
 });
 

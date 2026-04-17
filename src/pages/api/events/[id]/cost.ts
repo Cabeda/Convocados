@@ -28,7 +28,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "totalAmount must be a positive number." }, { status: 400 });
   }
   const currency = String(body.currency ?? "EUR").trim().slice(0, 10) || "EUR";
-  const paymentDetails = body.paymentDetails !== null
+  const paymentDetails = body.paymentDetails !== null && body.paymentDetails !== undefined
     ? String(body.paymentDetails).trim().slice(0, 500) || null
     : undefined;
 
@@ -143,8 +143,8 @@ export const GET: APIRoute = async ({ params }) => {
   return Response.json({
     ...eventCost,
     hasOverride,
-    effectivePaymentMethods: eventCost.tempPaymentMethods ?? eventCost.paymentMethods,
-    effectivePaymentDetails: eventCost.tempPaymentDetails ?? eventCost.paymentDetails,
+    effectivePaymentMethods: eventCost.tempPaymentMethods ?? eventCost.paymentMethods ?? null,
+    effectivePaymentDetails: eventCost.tempPaymentDetails ?? eventCost.paymentDetails ?? null,
     createdAt: eventCost.createdAt.toISOString(),
     updatedAt: eventCost.updatedAt.toISOString(),
     payments: eventCost.payments.map((p) => ({
