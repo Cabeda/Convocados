@@ -3,11 +3,11 @@ import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 vi.mock("~/lib/auth.helpers.server");
-import { checkOwnership, getSession, checkEventAdmin } from "~/lib/auth.helpers.server";
+import { checkOwnership, getSession } from "~/lib/auth.helpers.server";
 
 import { PUT as reorderPlayers } from "~/pages/api/events/[id]/reorder-players";
 import { POST as randomize } from "~/pages/api/events/[id]/randomize";
-import { GET as getStatus } from "~/pages/api/events/[id]/status";
+import { GET as _getStatus } from "~/pages/api/events/[id]/status";
 import { GET as getUserStats } from "~/pages/api/users/[id]/stats";
 
 function putCtx(params: Record<string, string>, body: unknown) {

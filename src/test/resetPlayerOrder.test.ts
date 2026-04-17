@@ -7,7 +7,7 @@ import { POST as resetPlayerOrder } from "~/pages/api/events/[id]/reset-player-o
 let mockSession: any = null;
 vi.mock("~/lib/auth.helpers.server", () => ({
   checkOwnership: vi.fn(async (_req: Request, ownerId: string | null) => ({
-    isOwner: mockSession?.user?.id != null && mockSession.user.id === ownerId,
+    isOwner: mockSession?.user?.id !== null && mockSession.user.id === ownerId,
   })),
   getSession: vi.fn(async () => mockSession),
 }));
@@ -51,9 +51,9 @@ describe("POST /api/events/[id]/reset-player-order", () => {
     mockSession = { user: { id: ownerId } };
 
     // Create players with staggered createdAt, then scramble order
-    const p1 = await prisma.player.create({ data: { name: "First", eventId: event.id, order: 2, createdAt: new Date("2026-01-01T10:00:00Z") } });
-    const p2 = await prisma.player.create({ data: { name: "Second", eventId: event.id, order: 0, createdAt: new Date("2026-01-01T11:00:00Z") } });
-    const p3 = await prisma.player.create({ data: { name: "Third", eventId: event.id, order: 1, createdAt: new Date("2026-01-01T12:00:00Z") } });
+    const _p1 = await prisma.player.create({ data: { name: "First", eventId: event.id, order: 2, createdAt: new Date("2026-01-01T10:00:00Z") } });
+    const _p2 = await prisma.player.create({ data: { name: "Second", eventId: event.id, order: 0, createdAt: new Date("2026-01-01T11:00:00Z") } });
+    const _p3 = await prisma.player.create({ data: { name: "Third", eventId: event.id, order: 1, createdAt: new Date("2026-01-01T12:00:00Z") } });
 
     const res = await resetPlayerOrder(ctx({ id: event.id }));
     expect(res.status).toBe(200);

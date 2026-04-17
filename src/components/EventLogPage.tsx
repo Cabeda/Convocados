@@ -122,7 +122,7 @@ const ACTION_I18N: Record<string, string> = {
 
 function LogEntryRow({ entry, currentUserId }: { entry: LogEntry; currentUserId?: string }) {
   const t = useT();
-  const theme = useTheme();
+  const _theme = useTheme();
   const color = ACTION_COLORS[entry.action] ?? "default";
   const icon = ACTION_ICONS[entry.action] ?? <HistoryIcon fontSize="small" />;
   const i18nKey = ACTION_I18N[entry.action];

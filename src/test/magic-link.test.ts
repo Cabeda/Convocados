@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 
-const testPrisma = new PrismaClient({
+const _testPrisma = new PrismaClient({
   datasources: { db: { url: process.env.DATABASE_URL } },
 });
 

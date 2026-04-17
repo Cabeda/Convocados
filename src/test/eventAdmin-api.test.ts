@@ -449,7 +449,7 @@ describe("Event Admin Authorization", () => {
     await prisma.eventAdmin.create({ data: { eventId: event.id, userId: "admin1" } });
 
     // Use the real checkOwnership (not mocked) for this test
-    const { checkOwnership: realCheckOwnership } = await vi.importActual<typeof import("~/lib/auth.helpers.server")>("~/lib/auth.helpers.server");
+    const { checkOwnership: _realCheckOwnership } = await vi.importActual<typeof import("~/lib/auth.helpers.server")>("~/lib/auth.helpers.server");
 
     // We can't easily test the real function without a real session,
     // but we can verify the EventAdmin record exists

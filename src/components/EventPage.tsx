@@ -39,10 +39,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [balanced, setBalanced] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
+  const [_isPublic, setIsPublic] = useState(false);
   const [sport, setSport] = useState("football-5v5");
   const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
-  const [postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
+  const [_postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
   const [paymentExpanded, setPaymentExpanded] = useState<boolean | undefined>(undefined);
   const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
 
@@ -92,7 +92,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
         setLockedEvent(null);
         setFetchError(null);
       }
-    } catch (e) {
+    } catch (_e) {
       setFetchError({});
     } finally {
       setIsLoading(false);

@@ -3,7 +3,7 @@ import {
   Container, Paper, Typography, Box, Stack, Chip, Button, Divider,
   CircularProgress, Alert, TextField, Autocomplete, InputAdornment,
   alpha, useTheme, IconButton, Tooltip, Grid2, Dialog, DialogTitle,
-  DialogContent, DialogActions, Snackbar,
+  DialogContent, DialogActions,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import HistoryIcon from "@mui/icons-material/History";
@@ -146,7 +146,7 @@ function AddHistoricalGameDialog({
     if (team1Players.length === 0 || team2Players.length === 0) return [];
     const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
     const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
-    if (s1 == null || s2 == null) return [];
+    if (s1 === null || s2 === null) return [];
     const teams = [
       { team: teamOneName, players: team1Players },
       { team: teamTwoName, players: team2Players },
@@ -485,7 +485,7 @@ function HistoryCardFull({
     if (isCancelled || editableTeams.length !== 2) return [];
     const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
     const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
-    if (s1 == null || s2 == null || isNaN(s1) || isNaN(s2)) return [];
+    if (s1 === null || s2 === null || isNaN(s1) || isNaN(s2)) return [];
     return computeGameUpdates(playerRatings, editableTeams, s1, s2);
   }, [editableTeams, scoreOne, scoreTwo, playerRatings, isCancelled]);
 
@@ -1116,7 +1116,7 @@ function HistoryCardFull({
 
 export default function HistoryPage({ eventId }: { eventId: string }) {
   const t = useT();
-  const locale = detectLocale();
+  const _locale = detectLocale();
   const { data: session } = useSession();
   const isAuthenticated = !!session?.user;
   const [title, setTitle] = useState("");
