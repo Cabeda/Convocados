@@ -602,7 +602,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         : m.team === event.teamTwoName ? teamTwoName : m.team,
                     }))}
                     onResultChange={handleTeamChange}
-                    ratingsMap={balanced ? ratingsMap : undefined}
+                    ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
                     onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
                       if (teamIdx === 0) {
                         setTeamOneName(newName);

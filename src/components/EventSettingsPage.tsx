@@ -239,13 +239,18 @@ export default function EventSettingsPage({ eventId }: Props) {
   };
 
   const handleToggleElo = (v: boolean) => {
-    setEvent((e: any) => e ? { ...e, eloEnabled: v, ...(v ? {} : { balanced: false }) } : e);
+    setEvent((e: any) => e ? { ...e, eloEnabled: v, ...(v ? {} : { balanced: false, hideEloInTeams: false }) } : e);
     updateSetting("elo", { eloEnabled: v });
   };
 
   const handleToggleManualRating = (v: boolean) => {
     setEvent((e: any) => e ? { ...e, allowManualRating: v } : e);
     updateSetting("manual-rating", { allowManualRating: v });
+  };
+
+  const handleToggleHideEloInTeams = (v: boolean) => {
+    setEvent((e: any) => e ? { ...e, hideEloInTeams: v } : e);
+    updateSetting("hide-elo-in-teams", { hideEloInTeams: v });
   };
 
   const handleToggleSplitCosts = (v: boolean) => {
@@ -528,30 +533,6 @@ export default function EventSettingsPage({ eventId }: Props) {
                 label={<Typography variant="body2">{t("makePublic")}</Typography>}
               />
             </Tooltip>
-            <Tooltip title={t("eloEnabledTooltip")}>
-              <FormControlLabel
-                control={<Switch size="small" checked={event.eloEnabled ?? true} onChange={(e) => handleToggleElo(e.target.checked)} disabled={!canEdit} />}
-                label={<Typography variant="body2">{t("eloEnabled")}</Typography>}
-              />
-            </Tooltip>
-            <Tooltip title={t("balancedTeamsTooltip")}>
-              <FormControlLabel
-                control={<Switch size="small" checked={event.balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
-                label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("balancedTeams")}</Typography>}
-              />
-            </Tooltip>
-            <Tooltip title={t("splitCostsEnabledTooltip")}>
-              <FormControlLabel
-                control={<Switch size="small" checked={event.splitCostsEnabled ?? true} onChange={(e) => handleToggleSplitCosts(e.target.checked)} disabled={!canEdit} />}
-                label={<Typography variant="body2">{t("splitCostsEnabled")}</Typography>}
-              />
-            </Tooltip>
-            <Tooltip title={t("allowManualRatingTooltip")}>
-              <FormControlLabel
-                control={<Switch size="small" checked={event.allowManualRating ?? false} onChange={(e) => handleToggleManualRating(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
-                label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("allowManualRating")}</Typography>}
-              />
-            </Tooltip>
           </Box>
           <Box>
             <Typography variant="body2" color="text.secondary" gutterBottom>{t("sport")}</Typography>
@@ -601,6 +582,48 @@ export default function EventSettingsPage({ eventId }: Props) {
             />
           </Box>
 
+        </Stack>
+      </SectionCard>
+
+      {/* ── Teams & Ratings ── */}
+      <SectionCard title={t("eventSettingsTeams")} icon={<StarIcon color="action" />}>
+        <Stack spacing={1}>
+          <Tooltip title={t("eloEnabledTooltip")}>
+            <FormControlLabel
+              control={<Switch size="small" checked={event.eloEnabled ?? true} onChange={(e) => handleToggleElo(e.target.checked)} disabled={!canEdit} />}
+              label={<Typography variant="body2">{t("eloEnabled")}</Typography>}
+            />
+          </Tooltip>
+          <Tooltip title={t("balancedTeamsTooltip")}>
+            <FormControlLabel
+              control={<Switch size="small" checked={event.balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
+              label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("balancedTeams")}</Typography>}
+            />
+          </Tooltip>
+          <Tooltip title={t("hideEloInTeamsTooltip")}>
+            <FormControlLabel
+              control={<Switch size="small" checked={event.hideEloInTeams ?? false} onChange={(e) => handleToggleHideEloInTeams(e.target.checked)} disabled={!canEdit || !event.balanced} />}
+              label={<Typography variant="body2" color={!event.balanced ? "text.disabled" : undefined}>{t("hideEloInTeams")}</Typography>}
+            />
+          </Tooltip>
+          <Tooltip title={t("allowManualRatingTooltip")}>
+            <FormControlLabel
+              control={<Switch size="small" checked={event.allowManualRating ?? false} onChange={(e) => handleToggleManualRating(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
+              label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("allowManualRating")}</Typography>}
+            />
+          </Tooltip>
+        </Stack>
+      </SectionCard>
+
+      {/* ── Features ── */}
+      <SectionCard title={t("eventSettingsFeatures")} icon={<IntegrationInstructionsIcon color="action" />}>
+        <Stack spacing={1}>
+          <Tooltip title={t("splitCostsEnabledTooltip")}>
+            <FormControlLabel
+              control={<Switch size="small" checked={event.splitCostsEnabled ?? true} onChange={(e) => handleToggleSplitCosts(e.target.checked)} disabled={!canEdit} />}
+              label={<Typography variant="body2">{t("splitCostsEnabled")}</Typography>}
+            />
+          </Tooltip>
         </Stack>
       </SectionCard>
 

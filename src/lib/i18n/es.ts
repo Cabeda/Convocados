@@ -193,6 +193,8 @@ const es: TranslationKeys = {
   eloEnabledTooltip: "Seguir las clasificaciones de habilidad de los jugadores usando el sistema ELO",
   balancedTeams: "Equipos equilibrados por ELO",
   balancedTeamsTooltip: "Usar clasificaciones ELO para equilibrar equipos al sortear",
+  hideEloInTeams: "Ocultar ELO en equipos",
+  hideEloInTeamsTooltip: "Usar ELO para equilibrar equipos pero ocultar las clasificaciones en la vista de equipos",
   ratings: "Clasificaciones",
   rating: "Rating",
   gamesPlayed: "Juegos",
@@ -319,6 +321,8 @@ const es: TranslationKeys = {
   eventSettings: "Configuración del Evento",
   eventSettingsDesc: "Visibilidad, deporte, equipos equilibrados e integraciones",
   eventSettingsGeneral: "General",
+  eventSettingsTeams: "Equipos y clasificaciones",
+  eventSettingsFeatures: "Funciones",
   settingsOwnerOnly: "Solo el propietario del evento puede acceder a la configuración.",
 
   // Access control
