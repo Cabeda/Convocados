@@ -838,6 +838,7 @@ const en = {
   postGameNotification: "Game over! Add the score, settle payments, and vote for the MVP of {title}",
   postGamePaymentsLabel: "Payments for this game",
   upcomingGamePaymentsLabel: "Payments for the upcoming game",
+  postGamePaymentsLocked: "Payments can't be saved — the result is locked. Unlock it from History to continue.",
 
   // Admin role notifications
   adminRoleAddedSubject: "You're now an admin for {title}",
