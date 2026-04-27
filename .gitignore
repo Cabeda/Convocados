@@ -63,3 +63,6 @@ android-app/local.properties
 android-app/wear/local.properties
 android-app/app/google-services.json
 android-app/gradle/gradle-daemon-jvm.properties
+android-app/wear/build
+android-app/wear/.gradle
+android-app/wear/.idea
