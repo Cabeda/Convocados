@@ -120,6 +120,18 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 20 }: Sc
     }, 80);
   }, [snapToNearest]);
 
+  // Block mouse wheel / trackpad scroll from changing the score.
+  // On non-touch devices the score should only change via click-and-drag.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const blockWheel = (e: WheelEvent) => {
+      e.preventDefault();
+    };
+    el.addEventListener("wheel", blockWheel, { passive: false });
+    return () => el.removeEventListener("wheel", blockWheel);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (rafId.current) cancelAnimationFrame(rafId.current);
