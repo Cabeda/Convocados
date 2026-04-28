@@ -21,7 +21,35 @@ export const GET: APIRoute = async ({ params, request }) => {
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
-  return Response.json(buildPaginatedResponse(ratings, limit));
+  // Compute MVP awards per player for this event
+  const votes = await prisma.mvpVote.findMany({
+    where: { gameHistory: { eventId: params.id } },
+    select: { gameHistoryId: true, votedForName: true },
+  });
+  const mvpCounts = new Map<string, number>();
+  if (votes.length > 0) {
+    // Group votes by game, find winner(s) per game
+    const byGame = new Map<string, Map<string, number>>();
+    for (const v of votes) {
+      let game = byGame.get(v.gameHistoryId);
+      if (!game) { game = new Map(); byGame.set(v.gameHistoryId, game); }
+      game.set(v.votedForName, (game.get(v.votedForName) ?? 0) + 1);
+    }
+    for (const [, tally] of byGame) {
+      const max = Math.max(...tally.values());
+      if (max < 1) continue;
+      for (const [name, count] of tally) {
+        if (count === max) mvpCounts.set(name.toLowerCase(), (mvpCounts.get(name.toLowerCase()) ?? 0) + 1);
+      }
+    }
+  }
+
+  const ratingsWithMvp = ratings.map((r) => ({
+    ...r,
+    mvpAwards: mvpCounts.get(r.name.toLowerCase()) ?? 0,
+  }));
+
+  return Response.json(buildPaginatedResponse(ratingsWithMvp, limit));
 };
 
 /**
