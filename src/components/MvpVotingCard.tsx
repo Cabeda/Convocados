@@ -19,6 +19,7 @@ interface MvpData {
   isVotingOpen: boolean;
   hasVoted: boolean | null;
   totalVotes: number;
+  participants?: { id: string; name: string }[];
 }
 
 interface Props {
@@ -79,6 +80,7 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
 
   const { mvp, isVotingOpen, hasVoted } = data;
   const canVote = isVotingOpen && isAuthenticated && hasVoted === false;
+  const voteCandidates = participants.length > 0 ? participants : (data.participants ?? []);
 
   // Show MVP result badge (voting closed with votes, or already voted and results available)
   if (mvp && mvp.length > 0 && (!canVote || !isVotingOpen)) {
@@ -121,7 +123,7 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
             </Typography>
           </Box>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-            {participants.map((p) => (
+            {voteCandidates.map((p) => (
               <Chip
                 key={p.id}
                 data-testid={`mvp-vote-chip-${p.name}`}

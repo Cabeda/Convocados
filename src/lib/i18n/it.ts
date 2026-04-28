@@ -783,6 +783,7 @@ const it: TranslationKeys = {
   postGameNotification: "Partita finita! Aggiungi il risultato, chiudi i pagamenti e vota il MVP di {title}",
   postGamePaymentsLabel: "Pagamenti di questa partita",
   upcomingGamePaymentsLabel: "Pagamenti della prossima partita",
+  postGamePaymentsLocked: "Impossibile salvare i pagamenti — il risultato è bloccato. Sbloccalo dalla Cronologia per continuare.",
 
   adminDeleteUser: "Elimina utente",
   adminDeleteUserConfirm: "Sei sicuro di voler eliminare definitivamente questo utente? Questa azione non può essere annullata.",
