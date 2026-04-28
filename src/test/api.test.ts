@@ -225,6 +225,33 @@ describe("GET /api/events/[id]", () => {
     const actualResetAt = new Date(body.nextResetAt);
     expect(actualResetAt.getTime()).toBe(expectedResetAt.getTime());
   });
+
+  it("creates history entry with editableUntil based on now, not old dateTime", async () => {
+    const oldDateTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly Game", location: "Pitch",
+        dateTime: oldDateTime,
+        teamOneName: "A", teamTwoName: "B",
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
+        nextResetAt: new Date(Date.now() - 3600_000),
+      },
+    });
+    const res = await getEvent(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.wasReset).toBe(true);
+
+    const history = await prisma.gameHistory.findFirst({ where: { eventId: event.id } });
+    expect(history).toBeTruthy();
+    // editableUntil should be ~7 days from now, not 7 days from oldDateTime (which would be ~now)
+    const sevenDaysFromNow = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const editableUntil = history?.editableUntil.getTime() ?? 0;
+    expect(editableUntil).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+    expect(editableUntil).toBeLessThanOrEqual(sevenDaysFromNow + 5000);
+    expect(editableUntil > Date.now()).toBe(true);
+  });
 });
 
 // ─── POST /api/events/[id]/players ──────────────────────────────────────────
