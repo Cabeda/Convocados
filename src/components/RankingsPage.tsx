@@ -23,6 +23,7 @@ interface PlayerRating {
   wins: number;
   draws: number;
   losses: number;
+  mvpAwards: number;
 }
 
 interface EventPlayer {
@@ -39,6 +40,7 @@ interface TableRowData {
   wins: number;
   draws: number;
   losses: number;
+  mvpAwards: number;
   playerId: string | null;
   userId: string | null;
 }
@@ -232,6 +234,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
         wins: r.wins,
         draws: r.draws,
         losses: r.losses,
+        mvpAwards: r.mvpAwards ?? 0,
         playerId: p?.id ?? null,
         userId: p?.userId ?? null,
       });
@@ -248,6 +251,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
           wins: 0,
           draws: 0,
           losses: 0,
+          mvpAwards: 0,
           playerId: p.id,
           userId: p.userId,
         });
@@ -326,6 +330,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                         <TableCell align="center" sx={{ fontWeight: 700, color: "success.main" }}>{t("wins")}</TableCell>
                         <TableCell align="center" sx={{ fontWeight: 700, color: "text.secondary" }}>{t("draws")}</TableCell>
                         <TableCell align="center" sx={{ fontWeight: 700, color: "error.main" }}>{t("losses")}</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 700, color: "warning.main" }}>🏆</TableCell>
                         {showActionsCol && <TableCell sx={{ width: 110 }} />}
                       </TableRow>
                     </TableHead>
@@ -397,6 +402,11 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                             </TableCell>
                             <TableCell align="center">
                               <Typography variant="body2" color="error.main" fontWeight={600}>{r.losses}</Typography>
+                            </TableCell>
+                            <TableCell align="center">
+                              {r.mvpAwards > 0 && (
+                                <Typography variant="body2" color="warning.main" fontWeight={700}>{r.mvpAwards}</Typography>
+                              )}
                             </TableCell>
                             {showActionsCol && (
                               <TableCell align="right" sx={{ px: 0.5 }}>
