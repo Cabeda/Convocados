@@ -808,7 +808,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(body.scoreOne).toBe(3);
   });
 
-  it("returns 403 when participant tries to edit teams", async () => {
+  it("allows participant to edit teams", async () => {
     const owner = await seedUser();
     const participant = await seedUser({ name: "Alice" });
     mockAuth(participant.id, "Alice");
@@ -823,9 +823,9 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
       { team: "B", players: [{ name: "Bob", order: 0 }] },
     ];
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { teamsSnapshot: newTeams }));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.error).toContain("owner or admin");
+    expect(body.teamsSnapshot).toBeDefined();
   });
 
   it("returns 403 when participant tries to edit payments", async () => {
@@ -842,6 +842,8 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
       paymentsSnapshot: [{ playerName: "Alice", amount: 10, status: "paid" }],
     }));
     expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toContain("owner or admin");
   });
 
   it("allows owner to edit teams", async () => {
