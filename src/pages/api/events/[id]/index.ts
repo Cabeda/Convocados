@@ -66,7 +66,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       });
 
       if (claimed.count === 1) {
-        const editableUntil = new Date(event.dateTime.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const editableUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
         const teamsSnapshot = event.teamResults.length > 0
           ? JSON.stringify(event.teamResults.map((tr) => ({
               team: tr.name,

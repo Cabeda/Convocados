@@ -33,7 +33,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   // Check voting window: game must have ended
-  const gameEndTime = new Date(event.dateTime.getTime() + (event.durationMinutes ?? 60) * 60_000);
+  const gameEndTime = new Date(history.dateTime.getTime() + (event.durationMinutes ?? 60) * 60_000);
   if (gameEndTime > new Date()) {
     return Response.json({ error: "Voting is not open yet — game has not ended." }, { status: 400 });
   }
@@ -67,21 +67,19 @@ export const POST: APIRoute = async ({ params, request }) => {
   let voterPlayerId = voterPlayer?.id;
 
   if (!voterPlayer) {
-    // Check if user's name appears in the teamsSnapshot
+    // Check if user's name appears in the teamsSnapshot (Player records may be gone after reset)
     const userName = session.user?.name;
     if (userName && history.teamsSnapshot) {
       const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
       const allPlayers = teams.flatMap((t) => t.players);
       const match = allPlayers.find((p) => p.name.toLowerCase() === userName.toLowerCase());
       if (match) {
-        // Find the player record by name
         const playerByName = await prisma.player.findFirst({
           where: { eventId: params.id, name: match.name },
         });
-        if (playerByName) {
-          voterName = playerByName.name;
-          voterPlayerId = playerByName.id;
-        }
+        // Use Player record if it exists, otherwise fall back to name-based ID
+        voterName = match.name;
+        voterPlayerId = playerByName?.id ?? `name:${match.name}`;
       }
     }
   }
@@ -92,22 +90,48 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   // Parse body
   const body = await request.json();
-  const { votedForPlayerId } = body;
-  if (!votedForPlayerId) {
-    return Response.json({ error: "votedForPlayerId is required." }, { status: 400 });
+  const { votedForPlayerId, votedForName: votedForNameBody } = body;
+  if (!votedForPlayerId && !votedForNameBody) {
+    return Response.json({ error: "votedForPlayerId or votedForName is required." }, { status: 400 });
   }
 
-  // Validate target player exists in this event
-  const targetPlayer = await prisma.player.findFirst({
-    where: { id: votedForPlayerId, eventId: params.id },
-  });
-  if (!targetPlayer) {
-    return Response.json({ error: "Target player not found in this event." }, { status: 400 });
-  }
+  // Resolve target player — by ID first, then by name in teamsSnapshot
+  let targetPlayerId: string;
+  let targetPlayerName: string;
 
-  // Prevent self-vote: check by userId or by playerId
-  if (targetPlayer.userId === userId || targetPlayer.id === voterPlayerId) {
-    return Response.json({ error: "You cannot vote for yourself." }, { status: 400 });
+  if (votedForPlayerId && !votedForPlayerId.startsWith("name:")) {
+    const targetPlayer = await prisma.player.findFirst({
+      where: { id: votedForPlayerId, eventId: params.id },
+    });
+    if (!targetPlayer) {
+      return Response.json({ error: "Target player not found in this event." }, { status: 400 });
+    }
+    targetPlayerId = targetPlayer.id;
+    targetPlayerName = targetPlayer.name;
+
+    // Prevent self-vote: check by userId or by playerId
+    if (targetPlayer.userId === userId || targetPlayer.id === voterPlayerId) {
+      return Response.json({ error: "You cannot vote for yourself." }, { status: 400 });
+    }
+  } else {
+    // Name-based voting (Player records may have been deleted after recurrence reset)
+    const nameToVoteFor = votedForNameBody || (votedForPlayerId?.startsWith("name:") ? votedForPlayerId.slice(5) : null);
+    if (!nameToVoteFor || !history.teamsSnapshot) {
+      return Response.json({ error: "Target player not found." }, { status: 400 });
+    }
+    const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
+    const allNames = teams.flatMap((t) => t.players.map((p) => p.name));
+    const match = allNames.find((n) => n.toLowerCase() === nameToVoteFor.toLowerCase());
+    if (!match) {
+      return Response.json({ error: "Target player not found in this game." }, { status: 400 });
+    }
+    targetPlayerId = `name:${match}`;
+    targetPlayerName = match;
+
+    // Prevent self-vote by name
+    if (voterName && match.toLowerCase() === voterName.toLowerCase()) {
+      return Response.json({ error: "You cannot vote for yourself." }, { status: 400 });
+    }
   }
 
   // Create vote (unique constraint prevents duplicates)
@@ -116,14 +140,14 @@ export const POST: APIRoute = async ({ params, request }) => {
       data: {
         gameHistoryId: history.id,
         voterPlayerId,
-        voterName,
-        votedForPlayerId: targetPlayer.id,
-        votedForName: targetPlayer.name,
+        voterName: voterName as string,
+        votedForPlayerId: targetPlayerId,
+        votedForName: targetPlayerName,
       },
     });
     return Response.json({ ok: true, vote: { id: vote.id, votedForName: vote.votedForName } });
-  } catch (err: any) {
-    if (err?.code === "P2002") {
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
       return Response.json({ error: "You have already voted for this game." }, { status: 409 });
     }
     throw err;
