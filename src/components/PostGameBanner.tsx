@@ -32,6 +32,7 @@ export interface PostGameStatus {
   costCurrency: string | null;
   costAmount: number | null;
   hasPendingPastPayments: boolean;
+  mvpEnabled: boolean;
 }
 
 interface Props {
@@ -313,7 +314,7 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
             </Box>
 
             {/* MVP voting task */}
-            {status.latestHistoryId && status.hasScore && (
+            {status.mvpEnabled && status.latestHistoryId && status.hasScore && (
               <Box sx={{
                 p: 1.5,
                 borderRadius: 2,
