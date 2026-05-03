@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Paper, Typography, Stack, Box, Button, alpha, useTheme,
-  LinearProgress, Chip,
+  LinearProgress, Chip, Alert,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
@@ -50,6 +50,7 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   const [editablePayments, setEditablePayments] = useState<PaymentEntry[]>([]);
   const [paymentsDirty, setPaymentsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [eventPlayers, setEventPlayers] = useState<{ id: string; name: string }[]>([]);
 
   const onStatusChangeRef = useRef(onStatusChange);
@@ -114,14 +115,19 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   const handleSavePayments = async () => {
     if (!status.latestHistoryId) return;
     setSaving(true);
+    setSaveError(null);
     try {
-      await fetch(`/api/events/${eventId}/history/${status.latestHistoryId}`, {
+      const res = await fetch(`/api/events/${eventId}/history/${status.latestHistoryId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paymentsSnapshot: editablePayments }),
       });
-      setPaymentsDirty(false);
-      fetchStatus();
+      if (!res.ok) {
+        setSaveError(res.status === 403 ? t("postGamePaymentsLocked") : t("somethingWentWrong"));
+      } else {
+        setPaymentsDirty(false);
+        fetchStatus();
+      }
     } catch { /* ignore */ }
     setSaving(false);
   };
@@ -297,12 +303,17 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
                       </Button>
                     </Box>
                   )}
+                  {saveError && (
+                    <Alert severity="warning" sx={{ mt: 1, borderRadius: 2 }} onClose={() => setSaveError(null)}>
+                      {saveError}
+                    </Alert>
+                  )}
                 </Box>
               )}
             </Box>
 
             {/* MVP voting task */}
-            {status.latestHistoryId && status.hasScore && eventPlayers.length > 0 && (
+            {status.latestHistoryId && status.hasScore && (
               <Box sx={{
                 p: 1.5,
                 borderRadius: 2,

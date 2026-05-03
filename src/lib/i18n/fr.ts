@@ -783,6 +783,7 @@ const fr: TranslationKeys = {
   postGameNotification: "Match terminé ! Ajoutez le score, réglez les paiements et votez pour le MVP de {title}",
   postGamePaymentsLabel: "Paiements de ce match",
   upcomingGamePaymentsLabel: "Paiements du prochain match",
+  postGamePaymentsLocked: "Impossible d'enregistrer les paiements — le résultat est verrouillé. Déverrouillez-le depuis l'Historique pour continuer.",
 
   adminDeleteUser: "Supprimer l'utilisateur",
   adminDeleteUserConfirm: "Êtes-vous sûr de vouloir supprimer définitivement cet utilisateur ? Cette action est irréversible.",

@@ -783,6 +783,7 @@ const es: TranslationKeys = {
   postGameNotification: "Partido terminado! Añade el resultado, cierra los pagos y vota al MVP de {title}",
   postGamePaymentsLabel: "Pagos de este partido",
   upcomingGamePaymentsLabel: "Pagos del próximo partido",
+  postGamePaymentsLocked: "No se pueden guardar los pagos — el resultado está bloqueado. Desbloquéalo desde el Historial para continuar.",
 
   adminDeleteUser: "Eliminar usuario",
   adminDeleteUserConfirm: "¿Estás seguro de que quieres eliminar permanentemente este usuario? Esta acción no se puede deshacer.",

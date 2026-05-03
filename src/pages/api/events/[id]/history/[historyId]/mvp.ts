@@ -13,7 +13,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   if (!history) return Response.json({ error: "Game not found." }, { status: 404 });
 
   // Compute isVotingOpen
-  const gameEndTime = new Date(event.dateTime.getTime() + (event.durationMinutes ?? 60) * 60_000);
+  const gameEndTime = new Date(history.dateTime.getTime() + (event.durationMinutes ?? 60) * 60_000);
   const gameEnded = gameEndTime <= new Date();
   const daysSinceCreation = (Date.now() - history.createdAt.getTime()) / 86400_000;
   const withinWindow = daysSinceCreation <= MVP_VOTING_WINDOW_DAYS;
@@ -73,7 +73,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
       const allSnapshotPlayers = teams.flatMap((t) => t.players);
       const nameMatch = allSnapshotPlayers.find(
-        (p) => p.name.toLowerCase() === (session.user!.name ?? "").toLowerCase(),
+        (p) => p.name.toLowerCase() === (session.user?.name ?? "").toLowerCase(),
       );
       if (nameMatch) {
         const playerByName = await prisma.player.findFirst({
@@ -97,6 +97,30 @@ export const GET: APIRoute = async ({ params, request }) => {
     }
   }
 
+  // Extract participants from teamsSnapshot for the voting UI
+  let participants: Array<{ id: string; name: string }> = [];
+  if (history.teamsSnapshot) {
+    try {
+      const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
+      const names = teams.flatMap((t) => t.players.map((p) => p.name));
+      // Try to resolve Player IDs; fall back to name-based IDs
+      const players = await prisma.player.findMany({
+        where: { eventId: params.id, name: { in: names } },
+        select: { id: true, name: true },
+      });
+      const byName = new Map(players.map((p) => [p.name.toLowerCase(), p]));
+      const seen = new Set<string>();
+      participants = names.reduce<Array<{ id: string; name: string }>>((acc, n) => {
+        const key = n.toLowerCase();
+        if (seen.has(key)) return acc;
+        seen.add(key);
+        const match = byName.get(key);
+        acc.push(match ? { id: match.id, name: match.name } : { id: `name:${n}`, name: n });
+        return acc;
+      }, []);
+    } catch { /* ignore */ }
+  }
+
   return Response.json({
     mvp,
     votes: votes.map((v: { voterName: string; votedForName: string }) => ({
@@ -106,5 +130,6 @@ export const GET: APIRoute = async ({ params, request }) => {
     isVotingOpen,
     hasVoted,
     totalVotes: votes.length,
+    participants,
   });
 };

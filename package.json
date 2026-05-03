@@ -1,6 +1,6 @@
 {
   "name": "convocados",
-  "version": "3.62.1",
+  "version": "3.63.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -35,7 +35,7 @@
     "@mui/material": "^6.4.6",
     "@prisma/client": "^6.5.0",
     "@types/web-push": "^3.6.4",
-    "astro": "^6.1.1",
+    "astro": "^6.1.6",
     "better-auth": "^1.5.5",
     "leaflet": "^1.9.4",
     "p-limit": "^7.3.0",
