@@ -424,7 +424,8 @@ function HistoryCardFull({
 
   // Gate editing on both time-based editability AND authentication
   // Score: owner/admin or participant can edit
-  // Teams/payments: only owner/admin can edit
+  // Teams: owner/admin or participant can edit
+  // Payments: only owner/admin can edit
   const isParticipantInGame = (() => {
     if (isOwner) return true;
     if (!userName) return false;
@@ -433,7 +434,8 @@ function HistoryCardFull({
     return allNames.includes(userName.toLowerCase());
   })();
   const canEditScore = entry.editable && isAuthenticated && isParticipantInGame;
-  const canEditTeams = entry.editable && isAuthenticated && isOwner;
+  const canEditTeams = entry.editable && isAuthenticated && (isOwner || isParticipantInGame);
+  const canEditPayments = entry.editable && isAuthenticated && isOwner;
 
   const [unlocking, setUnlocking] = useState(false);
   const handleToggleLock = async () => {
@@ -993,7 +995,7 @@ function HistoryCardFull({
               title={t("historyPayments")}
               icon={<PaymentIcon fontSize="small" sx={{ color: "text.secondary" }} />}
               action={
-                canEditTeams && paymentsDirty ? (
+                canEditPayments && paymentsDirty ? (
                   <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
                     onClick={handleSavePayments} disabled={saving}
                     sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
@@ -1008,7 +1010,7 @@ function HistoryCardFull({
                 border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
               }}>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                  {(canEditTeams ? editablePayments : payments).map((p, idx) => {
+                  {(canEditPayments ? editablePayments : payments).map((p, idx) => {
                     const isPaid = p.status === "paid";
                     const chipColor = isPaid ? "success" : "warning";
                     return (
@@ -1018,11 +1020,11 @@ function HistoryCardFull({
                         variant={isPaid ? "filled" : "outlined"}
                         color={chipColor}
                         label={`${p.playerName}  ${p.amount.toFixed(2)}`}
-                        onClick={canEditTeams ? () => cyclePaymentStatus(idx) : undefined}
+                        onClick={canEditPayments ? () => cyclePaymentStatus(idx) : undefined}
                         sx={{
                           borderRadius: 2,
                           fontWeight: isPaid ? 600 : 400,
-                          ...(canEditTeams ? { cursor: "pointer" } : {}),
+                          ...(canEditPayments ? { cursor: "pointer" } : {}),
                         }}
                       />
                     );
