@@ -25,6 +25,7 @@ fun ScoreScreen(
     eventId: String,
     viewModel: ScoreViewModel,
     onDone: () -> Unit = {},
+    onTeams: (String) -> Unit = {},
 ) {
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
@@ -91,6 +92,7 @@ fun ScoreScreen(
                         onIncrementTwo = {},
                         onDecrementTwo = {},
                         onSave = {},
+                        onTeams = { onTeams(eventId) },
                         readOnly = true,
                     )
                 }
@@ -102,6 +104,7 @@ fun ScoreScreen(
                         onIncrementTwo = viewModel::incrementScoreTwo,
                         onDecrementTwo = viewModel::decrementScoreTwo,
                         onSave = viewModel::saveScore,
+                        onTeams = { onTeams(eventId) },
                     )
                 }
             }
@@ -117,6 +120,7 @@ private fun ScoreEditor(
     onIncrementTwo: () -> Unit,
     onDecrementTwo: () -> Unit,
     onSave: () -> Unit,
+    onTeams: () -> Unit = {},
     readOnly: Boolean = false,
 ) {
     Column(
@@ -172,6 +176,21 @@ private fun ScoreEditor(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+
+        // Teams chip (always visible)
+        OutlinedButton(
+            onClick = onTeams,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.teams_chip),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
 
         if (readOnly) {
             Text(

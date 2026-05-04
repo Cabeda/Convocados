@@ -9,11 +9,11 @@ import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
 import dev.convocados.wear.util.canScoreGame
+import dev.convocados.wear.util.tickFlow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Which team's score to change. */
 enum class Team { ONE, TWO }
 
 data class ScoreUiState(
@@ -40,6 +40,9 @@ class ScoreViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ScoreUiState())
     val uiState: StateFlow<ScoreUiState> = _uiState.asStateFlow()
 
+    @Volatile
+    var tickProvider: () -> Flow<java.time.Instant> = { tickFlow() }
+
     private var eventId: String = ""
 
     fun load(eventId: String) {
@@ -52,7 +55,12 @@ class ScoreViewModel @Inject constructor(
             val game = repository.getGame(eventId)
             repository.refreshHistory(eventId)
 
-            repository.observeLatestHistory(eventId).collect { history ->
+            combine(
+                repository.observeLatestHistory(eventId),
+                tickProvider(),
+            ) { history, _ ->
+                history
+            }.collect { history ->
                 _uiState.update { state ->
                     state.copy(
                         game = game,

@@ -6,9 +6,11 @@ import dev.convocados.wear.data.api.GameHistory
 import dev.convocados.wear.data.api.MyGamesResponse
 import dev.convocados.wear.data.api.PaginatedHistory
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
+import dev.convocados.wear.data.local.dao.WearPlayerDao
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
@@ -25,12 +27,14 @@ class WearGameRepositoryTest {
     private val gameDao = mockk<WearGameDao>(relaxed = true)
     private val historyDao = mockk<WearHistoryDao>(relaxed = true)
     private val pendingScoreDao = mockk<PendingScoreDao>(relaxed = true)
+    private val playerDao = mockk<WearPlayerDao>(relaxed = true)
+    private val pendingRosterChangeDao = mockk<PendingRosterChangeDao>(relaxed = true)
 
     private lateinit var repository: WearGameRepository
 
     @Before
     fun setup() {
-        repository = WearGameRepository(client, gameDao, historyDao, pendingScoreDao)
+        repository = WearGameRepository(client, gameDao, historyDao, pendingScoreDao, playerDao, pendingRosterChangeDao)
     }
 
     // ── observeGames ─────────────────────────────────────────────────────

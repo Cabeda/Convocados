@@ -42,4 +42,12 @@
     <string name="done">Done</string>
     <string name="team_default_1">Team 1</string>
     <string name="team_default_2">Team 2</string>
+
+    <!-- Teams screen -->
+    <string name="teams_title">Teams</string>
+    <string name="teams_chip">Teams ↑</string>
+    <string name="no_players">No players</string>
+    <string name="unassigned">Unassigned</string>
+    <string name="bench">Bench</string>
+    <string name="move_to_team">→ Team %1$s</string>
 </resources>

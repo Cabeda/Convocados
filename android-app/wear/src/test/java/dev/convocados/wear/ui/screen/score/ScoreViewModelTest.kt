@@ -4,11 +4,13 @@ import app.cash.turbine.test
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
+import dev.convocados.wear.util.canScoreGame
 import androidx.work.WorkManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.*
@@ -36,6 +38,12 @@ class ScoreViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private fun makeViewModel(): ScoreViewModel {
+        val vm = ScoreViewModel(repository, workManager)
+        vm.tickProvider = { flowOf(Instant.now()) }
+        return vm
+    }
+
     @Test
     fun `initial state is loading`() = runTest {
         val viewModel = ScoreViewModel(repository, workManager)
@@ -58,7 +66,7 @@ class ScoreViewModelTest {
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
         coEvery { repository.observeLatestHistory("e1") } returns flowOf(history)
 
-        val viewModel = ScoreViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         viewModel.load("e1")
         advanceUntilIdle()
 
@@ -81,7 +89,7 @@ class ScoreViewModelTest {
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
         coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
 
-        val viewModel = ScoreViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         viewModel.load("e1")
         viewModel.load("e1")
         advanceUntilIdle()
@@ -95,7 +103,7 @@ class ScoreViewModelTest {
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
         coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
 
-        val viewModel = ScoreViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         viewModel.load("e1")
         advanceUntilIdle()
 
@@ -113,7 +121,7 @@ class ScoreViewModelTest {
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
         coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
 
-        val viewModel = ScoreViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         viewModel.load("e1")
         advanceUntilIdle()
 
@@ -131,7 +139,7 @@ class ScoreViewModelTest {
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
         coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
 
-        val viewModel = ScoreViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         viewModel.load("e1")
         advanceUntilIdle()
 
@@ -151,10 +159,11 @@ class ScoreViewModelTest {
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
         coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
 
-        val viewModel = ScoreViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         viewModel.load("e1")
         advanceUntilIdle()
 
+        assertTrue(canScoreGame(game.dateTime))
         viewModel.uiState.test {
             assertTrue(awaitItem().canScore)
             cancelAndIgnoreRemainingEvents()
@@ -168,10 +177,11 @@ class ScoreViewModelTest {
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
         coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
 
-        val viewModel = ScoreViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         viewModel.load("e1")
         advanceUntilIdle()
 
+        assertFalse(canScoreGame(game.dateTime))
         viewModel.uiState.test {
             assertFalse(awaitItem().canScore)
             cancelAndIgnoreRemainingEvents()
