@@ -66,3 +66,7 @@ android-app/gradle/gradle-daemon-jvm.properties
 android-app/wear/build
 android-app/wear/.gradle
 android-app/wear/.idea
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+.beads-credential-key
