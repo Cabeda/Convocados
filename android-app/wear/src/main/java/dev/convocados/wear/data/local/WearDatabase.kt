@@ -15,7 +15,7 @@ import dev.convocados.wear.data.local.entity.WearHistoryEntity
         PendingScoreEntity::class,
         WearHistoryEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class WearDatabase : RoomDatabase() {

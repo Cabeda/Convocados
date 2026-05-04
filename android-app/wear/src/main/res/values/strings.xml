@@ -5,6 +5,7 @@
     <!-- Auth screen -->
     <string name="signing_in">Signing in…</string>
     <string name="sign_in_google">Sign in with Google</string>
+    <string name="sign_in_email">Sign In</string>
     <string name="sign_in_failed_retry">Sign-in failed. Try again.</string>
     <string name="no_google_account">No Google account found</string>
     <string name="sign_in_failed">Sign-in failed: %1$s</string>
@@ -21,6 +22,9 @@
     <string name="offline_cached">Offline — showing cached</string>
     <string name="sign_out">Sign Out</string>
     <string name="in_progress">In progress</string>
+    <string name="show_past_games">Past Games</string>
+    <string name="hide_past_games">Hide Past</string>
+    <string name="no_past_games">No past games</string>
 
     <!-- Score screen -->
     <string name="score_title">Score</string>
@@ -29,6 +33,7 @@
     <string name="syncing">syncing…</string>
     <string name="score_hint">tap +1 · hold −1</string>
     <string name="score_read_only">Scores are locked</string>
+    <string name="score_not_yet">Scoring available\n1h before kickoff</string>
     <string name="saving">Saving…</string>
     <string name="save">Save</string>
     <string name="score_saved">Score saved!</string>

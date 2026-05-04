@@ -37,6 +37,27 @@ fun ScoreScreen(
                 state.isLoading -> {
                     CircularProgressIndicator()
                 }
+                !state.canScore -> {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(16.dp),
+                    ) {
+                        Text(
+                            text = state.game?.title ?: stringResource(R.string.score_title),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.score_not_yet),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
                 state.history == null -> {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,

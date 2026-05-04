@@ -7,6 +7,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
+import dev.convocados.wear.util.canScoreGame
+import dev.convocados.wear.util.isStalePastGame
 import dev.convocados.wear.util.parseInstant
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -17,11 +19,15 @@ import kotlin.math.abs
 
 data class GamesUiState(
     val games: List<WearGameEntity> = emptyList(),
+    val pastGames: List<WearGameEntity> = emptyList(),
     val suggestedGameId: String? = null,
     val isLoading: Boolean = true,
     val isOffline: Boolean = false,
     val pendingSyncCount: Int = 0,
     val error: String? = null,
+    val canScoreGameIds: Set<String> = emptySet(),
+    val showPastGames: Boolean = false,
+    val visiblePastCount: Int = 5,
 )
 
 @HiltViewModel
@@ -34,23 +40,28 @@ class GamesViewModel @Inject constructor(
     val uiState: StateFlow<GamesUiState> = _uiState.asStateFlow()
 
     init {
-        // Schedule periodic sync
         ScoreSyncWorker.schedulePeriodic(workManager)
 
-        // Observe cached games
         viewModelScope.launch {
-            repository.observeGames().combine(repository.observePendingCount()) { games, pending ->
-                val suggested = findBestGame(games)
-                _uiState.value = _uiState.value.copy(
-                    games = games,
-                    suggestedGameId = suggested?.id,
-                    isLoading = false,
-                    pendingSyncCount = pending,
-                )
-            }.collect()
+            repository.observeGames()
+                .combine(repository.observeArchivedGames()) { games, archived ->
+                    games to archived
+                }
+                .combine(repository.observePendingCount()) { (games, archived), pending ->
+                    val upcoming = games.filter { !isStalePastGame(it.dateTime, it.isRecurring) }
+                    val suggested = findBestGame(upcoming)
+                    val scorable = upcoming.filter { canScoreGame(it.dateTime) }.map { it.id }.toSet()
+                    _uiState.value = _uiState.value.copy(
+                        games = upcoming,
+                        pastGames = archived,
+                        suggestedGameId = suggested?.id,
+                        isLoading = false,
+                        pendingSyncCount = pending,
+                        canScoreGameIds = scorable,
+                    )
+                }.collect()
         }
 
-        // Initial refresh
         refresh()
     }
 
@@ -68,11 +79,14 @@ class GamesViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Smart game selection: pick the game whose dateTime is closest to "now".
-     * Prefers games that are currently happening (within duration window)
-     * or about to start (within next 2 hours).
-     */
+    fun togglePastGames() {
+        _uiState.update { it.copy(showPastGames = !it.showPastGames, visiblePastCount = 5) }
+    }
+
+    fun loadMorePast() {
+        _uiState.update { it.copy(visiblePastCount = it.visiblePastCount + 5) }
+    }
+
     private fun findBestGame(games: List<WearGameEntity>): WearGameEntity? {
         if (games.isEmpty()) return null
         val now = Instant.now()
@@ -82,13 +96,9 @@ class GamesViewModel @Inject constructor(
             val diffMinutes = ChronoUnit.MINUTES.between(now, gameTime)
 
             when {
-                // Currently happening (started within last 120 min)
                 diffMinutes in -120..0 -> abs(diffMinutes)
-                // Starting soon (next 2 hours) — slight preference
                 diffMinutes in 1..120 -> diffMinutes + 10
-                // Future games
                 diffMinutes > 120 -> diffMinutes * 2
-                // Past games (ended more than 2h ago)
                 else -> abs(diffMinutes) * 3
             }
         }
