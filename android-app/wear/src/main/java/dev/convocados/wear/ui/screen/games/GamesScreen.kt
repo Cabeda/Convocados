@@ -144,7 +144,6 @@ fun GamesScreen(
                         )
                     }
 
-                    // Past games section
                     if (state.pastGames.isNotEmpty()) {
                         item {
                             Spacer(modifier = Modifier.height(4.dp))
@@ -178,7 +177,7 @@ fun GamesScreen(
                                         onClick = { viewModel.loadMorePast() },
                                     ) {
                                         Text(
-                                            text = "Load more",
+                                            text = stringResource(R.string.load_more),
                                             style = MaterialTheme.typography.labelSmall,
                                         )
                                     }
@@ -212,7 +211,7 @@ private fun GameChip(
     onClick: () -> Unit,
 ) {
     val timeLabel = formatRelativeTime(game.dateTime)
-    
+
     Button(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),

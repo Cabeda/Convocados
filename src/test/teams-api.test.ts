@@ -305,7 +305,7 @@ describe("PATCH /api/events/[id]/teams", () => {
 	it("leaves players unassigned when not in either team", async () => {
 		const p1 = await prisma.player.create({ data: { name: "Alice", eventId: event.id, order: 0 } });
 		const p2 = await prisma.player.create({ data: { name: "Bob", eventId: event.id, order: 1 } });
-		const p3 = await prisma.player.create({ data: { name: "Charlie", eventId: event.id, order: 2 } });
+		const _p3 = await prisma.player.create({ data: { name: "Charlie", eventId: event.id, order: 2 } });
 		await prisma.teamResult.create({ data: { name: "Red", eventId: event.id } });
 		await prisma.teamResult.create({ data: { name: "Blue", eventId: event.id } });
 
@@ -434,8 +434,8 @@ describe("PATCH /api/events/[id]/teams", () => {
 it("rejects bench players from team assignment", async () => {
 		await prisma.event.update({ where: { id: event.id }, data: { maxPlayers: 2 } });
 		// Create 3 players: 2 active + 1 bench (order >= maxPlayers)
-		const p1 = await prisma.player.create({ data: { name: "Alice", eventId: event.id, order: 0 } });
-		const p2 = await prisma.player.create({ data: { name: "Bob", eventId: event.id, order: 1 } });
+		const _p1 = await prisma.player.create({ data: { name: "Alice", eventId: event.id, order: 0 } });
+		const _p2 = await prisma.player.create({ data: { name: "Bob", eventId: event.id, order: 1 } });
 		const benchPlayer = await prisma.player.create({ data: { name: "Carol", eventId: event.id, order: 2 } });
 		await prisma.teamResult.create({ data: { name: "Red", eventId: event.id } });
 		await prisma.teamResult.create({ data: { name: "Blue", eventId: event.id } });

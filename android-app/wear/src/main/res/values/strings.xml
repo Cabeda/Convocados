@@ -24,6 +24,7 @@
     <string name="in_progress">In progress</string>
     <string name="show_past_games">Past Games</string>
     <string name="hide_past_games">Hide Past</string>
+    <string name="load_more">Load more</string>
     <string name="no_past_games">No past games</string>
 
     <!-- Score screen -->
@@ -33,7 +34,8 @@
     <string name="syncing">syncing…</string>
     <string name="score_hint">tap +1 · hold −1</string>
     <string name="score_read_only">Scores are locked</string>
-    <string name="score_not_yet">Scoring available\n1h before kickoff</string>
+    <string name="score_not_yet">Scoring available 1h before kickoff</string>
+    <string name="manage_teams">Teams</string>
     <string name="saving">Saving…</string>
     <string name="save">Save</string>
     <string name="score_saved">Score saved!</string>
