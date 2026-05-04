@@ -62,49 +62,57 @@ class TeamsViewModel @Inject constructor(
 
     fun movePlayerToTeamOne(player: WearPlayerEntity) {
         val current = _uiState.value
-        val teamOneIds = (current.teamOnePlayers + player).map { it.id }
-        val teamTwoIds = current.teamTwoPlayers.map { it.id }
+        val optimisticState = current.copy(
+            teamOnePlayers = (current.teamOnePlayers + player.copy(teamAssignment = "teamOne")).sortedBy { it.order },
+            unassigned = current.unassigned.filter { it.id != player.id },
+            teamTwoPlayers = current.teamTwoPlayers.filter { it.id != player.id },
+            isSaving = true,
+            error = null,
+        )
+        _uiState.value = optimisticState
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true, error = null) }
-            val result = repository.updateTeams(eventId, teamOneIds, teamTwoIds)
-            ScoreSyncWorker.enqueueOneTime(workManager)
-            _uiState.update {
-                it.copy(
-                    isSaving = false,
-                    saved = result.isSuccess,
-                    error = result.exceptionOrNull()?.message,
-                )
-            }
-        }
+        val teamOneIds = optimisticState.teamOnePlayers.map { it.id }
+        val teamTwoIds = optimisticState.teamTwoPlayers.map { it.id }
+
+        syncRoster(teamOneIds, teamTwoIds)
     }
 
     fun movePlayerToTeamTwo(player: WearPlayerEntity) {
         val current = _uiState.value
-        val teamOneIds = current.teamOnePlayers.map { it.id }
-        val teamTwoIds = (current.teamTwoPlayers + player).map { it.id }
+        val optimisticState = current.copy(
+            teamTwoPlayers = (current.teamTwoPlayers + player.copy(teamAssignment = "teamTwo")).sortedBy { it.order },
+            unassigned = current.unassigned.filter { it.id != player.id },
+            teamOnePlayers = current.teamOnePlayers.filter { it.id != player.id },
+            isSaving = true,
+            error = null,
+        )
+        _uiState.value = optimisticState
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true, error = null) }
-            val result = repository.updateTeams(eventId, teamOneIds, teamTwoIds)
-            ScoreSyncWorker.enqueueOneTime(workManager)
-            _uiState.update {
-                it.copy(
-                    isSaving = false,
-                    saved = result.isSuccess,
-                    error = result.exceptionOrNull()?.message,
-                )
-            }
-        }
+        val teamOneIds = optimisticState.teamOnePlayers.map { it.id }
+        val teamTwoIds = optimisticState.teamTwoPlayers.map { it.id }
+
+        syncRoster(teamOneIds, teamTwoIds)
     }
 
     fun movePlayerToUnassigned(player: WearPlayerEntity) {
         val current = _uiState.value
-        val teamOneIds = current.teamOnePlayers.filter { it.id != player.id }.map { it.id }
-        val teamTwoIds = current.teamTwoPlayers.filter { it.id != player.id }.map { it.id }
+        val optimisticState = current.copy(
+            unassigned = (current.unassigned + player.copy(teamAssignment = "unassigned")).sortedBy { it.order },
+            teamOnePlayers = current.teamOnePlayers.filter { it.id != player.id },
+            teamTwoPlayers = current.teamTwoPlayers.filter { it.id != player.id },
+            isSaving = true,
+            error = null,
+        )
+        _uiState.value = optimisticState
 
+        val teamOneIds = optimisticState.teamOnePlayers.map { it.id }
+        val teamTwoIds = optimisticState.teamTwoPlayers.map { it.id }
+
+        syncRoster(teamOneIds, teamTwoIds)
+    }
+
+    private fun syncRoster(teamOneIds: List<String>, teamTwoIds: List<String>) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true, error = null) }
             val result = repository.updateTeams(eventId, teamOneIds, teamTwoIds)
             ScoreSyncWorker.enqueueOneTime(workManager)
             _uiState.update {

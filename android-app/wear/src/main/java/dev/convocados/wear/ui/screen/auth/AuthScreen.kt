@@ -260,10 +260,16 @@ fun AuthScreen(
 private fun BackendSelector(viewModel: AuthViewModel) {
     var expanded by remember { mutableStateOf(false) }
     var serverUrl by remember { mutableStateOf(viewModel.getServerUrl()) }
+    val isLocal = serverUrl.contains("10.0.2.2") || serverUrl.contains("localhost")
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        CompactButton(
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(bottom = 16.dp),
+    ) {
+        Button(
             onClick = { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.filledTonalButtonColors(),
         ) {
             Text(
                 text = stringResource(R.string.server_settings),
@@ -272,20 +278,21 @@ private fun BackendSelector(viewModel: AuthViewModel) {
         }
 
         if (expanded) {
-            Spacer(modifier = Modifier.height(4.dp))
-            val isLocal = serverUrl.contains("10.0.2.2") || serverUrl.contains("localhost")
-            CompactButton(
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
                 onClick = {
                     val newUrl = if (isLocal) "https://convocados.fly.dev" else "http://10.0.2.2:4321"
                     serverUrl = newUrl
                     viewModel.setServerUrl(newUrl)
                 },
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
                     text = stringResource(if (isLocal) R.string.set_to_prod else R.string.set_to_local),
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = serverUrl,
                 style = MaterialTheme.typography.labelSmall,

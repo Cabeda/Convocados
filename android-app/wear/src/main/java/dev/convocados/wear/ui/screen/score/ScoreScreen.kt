@@ -1,9 +1,12 @@
 package dev.convocados.wear.ui.screen.score
 
+import android.view.HapticFeedbackConstants
+import android.view.View
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -244,6 +247,9 @@ private fun ScoreColumn(
     onDecrement: () -> Unit,
     enabled: Boolean = true,
 ) {
+    val view = LocalView.current
+    val hapticEnabled = enabled
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -258,7 +264,10 @@ private fun ScoreColumn(
         )
 
         IconButton(
-            onClick = onIncrement,
+            onClick = {
+                if (hapticEnabled) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                onIncrement()
+            },
             modifier = Modifier.size(32.dp),
             colors = IconButtonDefaults.filledTonalIconButtonColors(),
             enabled = enabled,
@@ -276,7 +285,10 @@ private fun ScoreColumn(
         )
 
         IconButton(
-            onClick = onDecrement,
+            onClick = {
+                if (hapticEnabled) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                onDecrement()
+            },
             modifier = Modifier.size(32.dp),
             colors = IconButtonDefaults.filledTonalIconButtonColors(),
             enabled = enabled,

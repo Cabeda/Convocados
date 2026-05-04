@@ -226,13 +226,33 @@ private fun UnassignedPlayerChip(
     onMoveToOne: () -> Unit,
     onMoveToTwo: () -> Unit,
 ) {
-    Text(
-        text = player.name,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurface,
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = player.name,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(top = 2.dp),
+        ) {
+            CompactButton(onClick = onMoveToOne) {
+                Text(
+                    text = stringResource(R.string.move_to_team, "1"),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            CompactButton(onClick = onMoveToTwo) {
+                Text(
+                    text = stringResource(R.string.move_to_team, "2"),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        }
+    }
 }
