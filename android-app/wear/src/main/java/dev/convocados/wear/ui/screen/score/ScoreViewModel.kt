@@ -8,6 +8,7 @@ import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
+import dev.convocados.wear.util.canScoreGame
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -26,6 +27,7 @@ data class ScoreUiState(
     val isSaving: Boolean = false,
     val saved: Boolean = false,
     val isOfflineQueued: Boolean = false,
+    val canScore: Boolean = false,
     val error: String? = null,
 )
 
@@ -59,6 +61,7 @@ class ScoreViewModel @Inject constructor(
                         scoreTwo = history?.scoreTwo ?: state.scoreTwo,
                         teamOneName = history?.teamOneName ?: game?.teamOneName ?: "Team 1",
                         teamTwoName = history?.teamTwoName ?: game?.teamTwoName ?: "Team 2",
+                        canScore = game?.let { canScoreGame(it.dateTime) } ?: false,
                         isLoading = false,
                     )
                 }

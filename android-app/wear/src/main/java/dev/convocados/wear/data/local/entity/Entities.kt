@@ -16,7 +16,8 @@ data class WearGameEntity(
     val teamOneName: String,
     val teamTwoName: String,
     val isRecurring: Boolean,
-    val type: String, // "owned" | "joined"
+    val archivedAt: String? = null,
+    val type: String, // "owned" | "joined" | "archived_owned" | "archived_joined"
     val cachedAt: Long = System.currentTimeMillis(),
 )
 

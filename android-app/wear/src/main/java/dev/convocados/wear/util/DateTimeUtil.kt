@@ -14,6 +14,22 @@ fun parseInstant(dateTime: String): Instant? = try {
     try { Instant.parse(dateTime) } catch (_: Exception) { null }
 }
 
+/** Whether a game can be scored: within 1 hour before start, or any time after. */
+fun canScoreGame(dateTime: String): Boolean {
+    val instant = parseInstant(dateTime) ?: return false
+    val minutesUntil = ChronoUnit.MINUTES.between(Instant.now(), instant)
+    return minutesUntil <= 60
+}
+
+/** Whether a past game should be hidden from the main list.
+ *  Non-recurring games older than 1 day are hidden from the upcoming view. */
+fun isStalePastGame(dateTime: String, isRecurring: Boolean): Boolean {
+    if (isRecurring) return false
+    val instant = parseInstant(dateTime) ?: return true
+    val minutesAgo = ChronoUnit.MINUTES.between(instant, Instant.now())
+    return minutesAgo > 1440 // more than 1 day ago
+}
+
 /** Human-friendly relative time label for wear UI. */
 fun formatRelativeTime(dateTime: String): String {
     val instant = parseInstant(dateTime) ?: return dateTime

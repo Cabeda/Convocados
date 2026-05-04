@@ -13,6 +13,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -43,9 +44,16 @@ fun AuthScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val columnState = rememberColumnState()
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated) onAuthenticated()
+    }
+
+    LaunchedEffect(uiState.error) {
+        if (uiState.error != null) {
+            keyboardController?.hide()
+        }
     }
 
     ScreenScaffold(scrollState = columnState) {
@@ -65,7 +73,12 @@ fun AuthScreen(
             if (uiState.showEmailLogin) {
                 // --- Email Login Form ---
                 item {
+                    val emailFocusRequester = remember { FocusRequester() }
                     val passwordFocusRequester = remember { FocusRequester() }
+
+                    LaunchedEffect(Unit) {
+                        emailFocusRequester.requestFocus()
+                    }
 
                     Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
                         Text(
@@ -74,13 +87,14 @@ fun AuthScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(4.dp))
-                        
+
                         BasicTextField(
                             value = uiState.email,
                             onValueChange = { viewModel.onEmailChanged(it) },
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .focusRequester(emailFocusRequester)
                                 .background(
                                     color = MaterialTheme.colorScheme.surfaceContainer,
                                     shape = RoundedCornerShape(20.dp)
@@ -111,9 +125,9 @@ fun AuthScreen(
                                 innerTextField()
                             }
                         )
-                        
+
                         Spacer(Modifier.height(8.dp))
-                        
+
                         BasicTextField(
                             value = uiState.password,
                             onValueChange = { viewModel.onPasswordChanged(it) },
@@ -161,7 +175,7 @@ fun AuthScreen(
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         enabled = !uiState.isSigningIn
                     ) {
-                        Text(stringResource(R.string.sign_in_google).substringAfterLast(" ").let { "Sign In" })
+                        Text(stringResource(R.string.sign_in_email))
                     }
                 }
 
