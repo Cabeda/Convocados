@@ -41,6 +41,7 @@
             android:name=".ui.WearActivity"
             android:exported="true"
             android:taskAffinity=""
+            android:windowSoftInputMode="adjustResize"
             android:theme="@android:style/Theme.DeviceDefault">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

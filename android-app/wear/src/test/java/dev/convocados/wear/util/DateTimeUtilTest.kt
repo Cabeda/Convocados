@@ -91,4 +91,98 @@ class DateTimeUtilTest {
     fun `formatRelativeTime returns raw string for unparseable input`() {
         assertEquals("garbage", formatRelativeTime("garbage"))
     }
+
+    // ── canScoreGame ──────────────────────────────────────────────────────
+
+    @Test
+    fun `canScoreGame returns true for game starting now`() {
+        val instant = Instant.now()
+        val input = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC)
+            .format(DateTimeFormatter.ISO_DATE_TIME)
+        assertTrue(canScoreGame(input))
+    }
+
+    @Test
+    fun `canScoreGame returns true for game starting in 30 minutes`() {
+        val instant = Instant.now().plus(30, ChronoUnit.MINUTES)
+        val input = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC)
+            .format(DateTimeFormatter.ISO_DATE_TIME)
+        assertTrue(canScoreGame(input))
+    }
+
+    @Test
+    fun `canScoreGame returns true for game starting in exactly 60 minutes`() {
+        val instant = Instant.now().plus(60, ChronoUnit.MINUTES)
+        val input = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC)
+            .format(DateTimeFormatter.ISO_DATE_TIME)
+        assertTrue(canScoreGame(input))
+    }
+
+    @Test
+    fun `canScoreGame returns false for game well over 1 hour away`() {
+        val instant = Instant.now().plus(90, ChronoUnit.MINUTES)
+        val input = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC)
+            .format(DateTimeFormatter.ISO_DATE_TIME)
+        assertFalse(canScoreGame(input))
+    }
+
+    @Test
+    fun `canScoreGame returns false for game starting in 2 hours`() {
+        val instant = Instant.now().plus(120, ChronoUnit.MINUTES)
+        val input = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC)
+            .format(DateTimeFormatter.ISO_DATE_TIME)
+        assertFalse(canScoreGame(input))
+    }
+
+    @Test
+    fun `canScoreGame returns true for game that already started`() {
+        val instant = Instant.now().minus(30, ChronoUnit.MINUTES)
+        val input = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC)
+            .format(DateTimeFormatter.ISO_DATE_TIME)
+        assertTrue(canScoreGame(input))
+    }
+
+    @Test
+    fun `canScoreGame returns false for unparseable input`() {
+        assertFalse(canScoreGame("garbage"))
+    }
+
+    // ── isStalePastGame ──────────────────────────────────────────────────
+
+    @Test
+    fun `isStalePastGame returns false for recurring game regardless of age`() {
+        val instant = Instant.now().minus(7, ChronoUnit.DAYS)
+        val input = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC)
+            .format(DateTimeFormatter.ISO_DATE_TIME)
+        assertFalse(isStalePastGame(input, true))
+    }
+
+    @Test
+    fun `isStalePastGame returns false for non-recurring game less than 1 day old`() {
+        val instant = Instant.now().minus(30, ChronoUnit.MINUTES)
+        val input = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC)
+            .format(DateTimeFormatter.ISO_DATE_TIME)
+        assertFalse(isStalePastGame(input, false))
+    }
+
+    @Test
+    fun `isStalePastGame returns true for non-recurring game more than 1 day old`() {
+        val instant = Instant.now().minus(2, ChronoUnit.DAYS)
+        val input = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC)
+            .format(DateTimeFormatter.ISO_DATE_TIME)
+        assertTrue(isStalePastGame(input, false))
+    }
+
+    @Test
+    fun `isStalePastGame returns false for future game`() {
+        val instant = Instant.now().plus(1, ChronoUnit.HOURS)
+        val input = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC)
+            .format(DateTimeFormatter.ISO_DATE_TIME)
+        assertFalse(isStalePastGame(input, false))
+    }
+
+    @Test
+    fun `isStalePastGame returns true for unparseable input`() {
+        assertTrue(isStalePastGame("garbage", false))
+    }
 }

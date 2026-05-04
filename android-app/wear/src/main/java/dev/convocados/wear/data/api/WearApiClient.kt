@@ -12,8 +12,13 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import javax.inject.Inject
 import javax.inject.Singleton
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 @Singleton
 class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) {
@@ -34,6 +39,17 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
             contentType(ContentType.Application.Json)
         }
         followRedirects = false
+        if (dev.convocados.wear.BuildConfig.DEBUG) {
+            engine {
+                config {
+                    sslSocketFactory(
+                        trustAllSslContext.socketFactory,
+                        trustAllCerts[0] as X509TrustManager,
+                    )
+                    hostnameVerifier { _, _ -> true }
+                }
+            }
+        }
     }
 
     private val baseUrl: String get() = tokenStore.getServerUrl()
@@ -175,3 +191,15 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
 }
 
 class ApiException(val code: Int, message: String) : Exception(message)
+
+private val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+    override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+    override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+})
+
+private val trustAllSslContext: SSLContext by lazy {
+    SSLContext.getInstance("TLS").apply {
+        init(null, trustAllCerts, SecureRandom())
+    }
+}

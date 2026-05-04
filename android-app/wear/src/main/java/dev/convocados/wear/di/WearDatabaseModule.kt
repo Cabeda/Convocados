@@ -22,6 +22,7 @@ object WearDatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): WearDatabase =
         Room.databaseBuilder(context, WearDatabase::class.java, "convocados_wear.db")
+            .fallbackToDestructiveMigration()
             .build()
 
     @Provides

@@ -51,8 +51,8 @@ class WearGameRepositoryTest {
     @Test
     fun `refreshGames fetches from API and updates dao`() = runTest {
         val response = MyGamesResponse(
-            owned = listOf(EventSummary("1", "Game 1", "Field A", "2025-01-01T10:00:00Z", "Soccer", 10, 5, false)),
-            joined = listOf(EventSummary("2", "Game 2", "Field B", "2025-01-02T10:00:00Z", "Basketball", 8, 4, false)),
+            owned = listOf(EventSummary("1", "Game 1", "Field A", "2025-01-01T10:00:00Z", "Soccer", 10, 5, false, null)),
+            joined = listOf(EventSummary("2", "Game 2", "Field B", "2025-01-02T10:00:00Z", "Basketball", 8, 4, false, null)),
         )
         coEvery { client.get<MyGamesResponse>(any()) } returns response
 
@@ -199,6 +199,7 @@ class WearGameRepositoryTest {
         teamOneName = "Team 1",
         teamTwoName = "Team 2",
         isRecurring = false,
+        archivedAt = null,
         type = "owned",
     )
 }

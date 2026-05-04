@@ -8,8 +8,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface WearGameDao {
-    @Query("SELECT * FROM wear_games ORDER BY dateTime ASC")
+    @Query("SELECT * FROM wear_games WHERE type NOT LIKE 'archived_%' ORDER BY dateTime ASC")
     fun getAllGames(): Flow<List<WearGameEntity>>
+
+    @Query("SELECT * FROM wear_games WHERE type LIKE 'archived_%' ORDER BY dateTime DESC")
+    fun getArchivedGames(): Flow<List<WearGameEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(games: List<WearGameEntity>)
