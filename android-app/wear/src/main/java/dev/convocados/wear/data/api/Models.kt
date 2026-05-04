@@ -56,3 +56,31 @@ data class OAuthTokenResponse(
     @SerialName("refresh_token") val refreshToken: String? = null,
     @SerialName("expires_in") val expiresIn: Long,
 )
+
+@Serializable
+data class TeamPlayer(
+    val id: String,
+    val name: String,
+    val order: Int,
+)
+
+@Serializable
+data class TeamInfo(
+    val name: String,
+    val players: List<TeamPlayer> = emptyList(),
+)
+
+@Serializable
+data class TeamsResponse(
+    val teamOne: TeamInfo,
+    val teamTwo: TeamInfo,
+    val unassigned: List<TeamPlayer> = emptyList(),
+    val bench: List<TeamPlayer> = emptyList(),
+    val maxPlayers: Int,
+)
+
+@Serializable
+data class UpdateTeamsRequest(
+    val teamOnePlayerIds: List<String>,
+    val teamTwoPlayerIds: List<String>,
+)

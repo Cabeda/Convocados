@@ -147,6 +147,31 @@ class DateTimeUtilTest {
         assertFalse(canScoreGame("garbage"))
     }
 
+    @Test
+    fun `canScoreGame returns true for JS toISOString format with milliseconds`() {
+        // JavaScript's toISOString() produces "2025-01-15T14:30:00.000Z"
+        val instant = Instant.now().plus(30, ChronoUnit.MINUTES)
+        val jsFormat = instant.toString() // Produces "2025-01-15T14:30:00.000Z"
+        assertTrue(canScoreGame(jsFormat))
+    }
+
+    @Test
+    fun `canScoreGame handles UTC Z suffix correctly`() {
+        // Simulate a game in 30 minutes, sent as UTC ISO string (what the API returns)
+        val gameTime = Instant.now().plus(30, ChronoUnit.MINUTES)
+        val apiString = gameTime.toString() // e.g., "2025-06-15T13:30:00.123Z"
+        assertTrue("Expected scorable for game 30min away: $apiString", canScoreGame(apiString))
+    }
+
+    @Test
+    fun `canScoreGame handles timezone offset format`() {
+        // Some APIs might send offsets like "+01:00" instead of "Z"
+        val instant = Instant.now().plus(30, ChronoUnit.MINUTES)
+        val zoned = ZonedDateTime.ofInstant(instant, ZoneOffset.ofHours(1))
+        val offsetString = zoned.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+        assertTrue("Expected scorable for offset format: $offsetString", canScoreGame(offsetString))
+    }
+
     // ── isStalePastGame ──────────────────────────────────────────────────
 
     @Test

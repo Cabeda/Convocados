@@ -2,6 +2,7 @@ package dev.convocados.wear.ui.screen.games
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.util.Log
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.local.entity.WearGameEntity
@@ -10,6 +11,7 @@ import dev.convocados.wear.data.sync.ScoreSyncWorker
 import dev.convocados.wear.util.canScoreGame
 import dev.convocados.wear.util.isStalePastGame
 import dev.convocados.wear.util.parseInstant
+import dev.convocados.wear.util.tickFlow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -39,27 +41,33 @@ class GamesViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(GamesUiState())
     val uiState: StateFlow<GamesUiState> = _uiState.asStateFlow()
 
+    @Volatile
+    var tickProvider: () -> Flow<Instant> = { tickFlow() }
+
     init {
         ScoreSyncWorker.schedulePeriodic(workManager)
 
         viewModelScope.launch {
-            repository.observeGames()
-                .combine(repository.observeArchivedGames()) { games, archived ->
-                    games to archived
-                }
-                .combine(repository.observePendingCount()) { (games, archived), pending ->
-                    val upcoming = games.filter { !isStalePastGame(it.dateTime, it.isRecurring) }
-                    val suggested = findBestGame(upcoming)
-                    val scorable = upcoming.filter { canScoreGame(it.dateTime) }.map { it.id }.toSet()
-                    _uiState.value = _uiState.value.copy(
-                        games = upcoming,
-                        pastGames = archived,
-                        suggestedGameId = suggested?.id,
-                        isLoading = false,
-                        pendingSyncCount = pending,
-                        canScoreGameIds = scorable,
-                    )
-                }.collect()
+            combine(
+                repository.observeGames(),
+                repository.observeArchivedGames(),
+                repository.observePendingCount(),
+                tickProvider(),
+            ) { games, archived, pending, _ ->
+                Triple(games, archived, pending)
+            }.collect { (games, archived, pending) ->
+                val upcoming = games.filter { !isStalePastGame(it.dateTime, it.isRecurring) }
+                val suggested = findBestGame(upcoming)
+                val scorable = upcoming.filter { canScoreGame(it.dateTime) }.map { it.id }.toSet()
+                _uiState.value = _uiState.value.copy(
+                    games = upcoming,
+                    pastGames = archived,
+                    suggestedGameId = suggested?.id,
+                    isLoading = false,
+                    pendingSyncCount = pending,
+                    canScoreGameIds = scorable,
+                )
+            }
         }
 
         refresh()

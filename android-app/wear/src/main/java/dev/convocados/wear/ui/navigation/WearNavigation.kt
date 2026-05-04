@@ -13,6 +13,8 @@ import dev.convocados.wear.ui.screen.games.GamesScreen
 import dev.convocados.wear.ui.screen.games.GamesViewModel
 import dev.convocados.wear.ui.screen.score.ScoreScreen
 import dev.convocados.wear.ui.screen.score.ScoreViewModel
+import dev.convocados.wear.ui.screen.teams.TeamsScreen
+import dev.convocados.wear.ui.screen.teams.TeamsViewModel
 
 import com.google.android.horologist.compose.layout.AppScaffold
 import com.google.android.horologist.compose.layout.ScreenScaffold
@@ -60,6 +62,17 @@ fun WearNavigation(tokenStore: WearTokenStore) {
                 val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
                 val viewModel: ScoreViewModel = hiltViewModel()
                 ScoreScreen(
+                    eventId = eventId,
+                    viewModel = viewModel,
+                    onDone = { navController.popBackStack() },
+                    onTeams = { id -> navController.navigate(WearRoutes.teams(id)) },
+                )
+            }
+
+            composable(WearRoutes.TEAMS) { backStackEntry ->
+                val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
+                val viewModel: TeamsViewModel = hiltViewModel()
+                TeamsScreen(
                     eventId = eventId,
                     viewModel = viewModel,
                     onDone = { navController.popBackStack() },

@@ -1,9 +1,11 @@
 package dev.convocados.wear.data.local.dao
 
 import androidx.room.*
+import dev.convocados.wear.data.local.entity.PendingRosterChangeEntity
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
+import dev.convocados.wear.data.local.entity.WearPlayerEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -72,5 +74,41 @@ interface PendingScoreDao {
     suspend fun incrementRetry(id: Long)
 
     @Query("DELETE FROM pending_scores WHERE retryCount >= 5")
+    suspend fun deleteStale()
+}
+
+@Dao
+interface WearPlayerDao {
+    @Query("SELECT * FROM wear_players WHERE eventId = :eventId ORDER BY `order` ASC")
+    fun observePlayers(eventId: String): Flow<List<WearPlayerEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(players: List<WearPlayerEntity>)
+
+    @Query("DELETE FROM wear_players WHERE eventId = :eventId")
+    suspend fun deleteByEvent(eventId: String)
+
+    @Transaction
+    suspend fun refreshPlayers(eventId: String, players: List<WearPlayerEntity>) {
+        deleteByEvent(eventId)
+        insertAll(players)
+    }
+}
+
+@Dao
+interface PendingRosterChangeDao {
+    @Query("SELECT * FROM pending_roster_changes ORDER BY createdAt ASC")
+    suspend fun getAll(): List<PendingRosterChangeEntity>
+
+    @Insert
+    suspend fun insert(change: PendingRosterChangeEntity)
+
+    @Delete
+    suspend fun delete(change: PendingRosterChangeEntity)
+
+    @Query("UPDATE pending_roster_changes SET retryCount = retryCount + 1 WHERE id = :id")
+    suspend fun incrementRetry(id: Long)
+
+    @Query("DELETE FROM pending_roster_changes WHERE retryCount >= 5")
     suspend fun deleteStale()
 }

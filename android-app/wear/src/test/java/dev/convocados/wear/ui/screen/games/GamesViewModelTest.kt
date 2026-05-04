@@ -8,6 +8,7 @@ import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.*
@@ -35,13 +36,19 @@ class GamesViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private fun makeViewModel(): GamesViewModel {
+        val vm = GamesViewModel(repository, workManager)
+        vm.tickProvider = { flowOf(Instant.now()) }
+        return vm
+    }
+
     @Test
     fun `initial state is loading`() = runTest {
         coEvery { repository.observeGames() } returns flowOf(emptyList())
         coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
         coEvery { repository.observePendingCount() } returns flowOf(0)
 
-        val viewModel = GamesViewModel(repository, workManager)
+        val viewModel = makeViewModel()
 
         viewModel.uiState.test {
             val initial = awaitItem()
@@ -59,7 +66,7 @@ class GamesViewModelTest {
         coEvery { repository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
-        val viewModel = GamesViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         advanceUntilIdle()
 
         viewModel.uiState.test {
@@ -77,10 +84,9 @@ class GamesViewModelTest {
         coEvery { repository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.failure(Exception("No network"))
 
-        val viewModel = GamesViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         advanceUntilIdle()
 
-        // Verify the refresh was attempted and error state is set
         coVerify { repository.refreshGames() }
     }
 
@@ -91,7 +97,7 @@ class GamesViewModelTest {
         coEvery { repository.observePendingCount() } returns flowOf(5)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
-        val viewModel = GamesViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         advanceUntilIdle()
 
         viewModel.uiState.test {
@@ -112,7 +118,7 @@ class GamesViewModelTest {
         coEvery { repository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
-        val viewModel = GamesViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         advanceUntilIdle()
 
         viewModel.uiState.test {
@@ -129,7 +135,7 @@ class GamesViewModelTest {
         coEvery { repository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
-        val viewModel = GamesViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         advanceUntilIdle()
 
         viewModel.refresh()
@@ -150,7 +156,7 @@ class GamesViewModelTest {
         coEvery { repository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
-        val viewModel = GamesViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         advanceUntilIdle()
 
         viewModel.uiState.test {
@@ -174,7 +180,7 @@ class GamesViewModelTest {
         coEvery { repository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
-        val viewModel = GamesViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         advanceUntilIdle()
 
         viewModel.uiState.test {
@@ -196,7 +202,7 @@ class GamesViewModelTest {
         coEvery { repository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
-        val viewModel = GamesViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         advanceUntilIdle()
 
         viewModel.uiState.test {
@@ -209,7 +215,7 @@ class GamesViewModelTest {
 
     @Test
     fun `togglePastGames toggles showPastGames`() {
-        val viewModel = GamesViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         assertFalse(viewModel.uiState.value.showPastGames)
         viewModel.togglePastGames()
         assertTrue(viewModel.uiState.value.showPastGames)
@@ -219,7 +225,7 @@ class GamesViewModelTest {
 
     @Test
     fun `loadMorePast increases visiblePastCount`() {
-        val viewModel = GamesViewModel(repository, workManager)
+        val viewModel = makeViewModel()
         assertEquals(5, viewModel.uiState.value.visiblePastCount)
         viewModel.loadMorePast()
         assertEquals(10, viewModel.uiState.value.visiblePastCount)

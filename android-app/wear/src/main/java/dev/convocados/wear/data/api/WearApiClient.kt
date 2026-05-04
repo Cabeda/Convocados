@@ -113,6 +113,12 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
     suspend inline fun <reified T> patch(path: String, body: Any? = null): T =
         authenticatedRequest(HttpMethod.Patch, path, body).body()
 
+    suspend fun getTeams(eventId: String): TeamsResponse =
+        get("/api/events/$eventId/teams")
+
+    suspend fun updateTeams(eventId: String, request: UpdateTeamsRequest): TeamsResponse =
+        patch("/api/events/$eventId/teams", request)
+
     /**
      * Exchange email/password for Convocados OAuth tokens.
      */
