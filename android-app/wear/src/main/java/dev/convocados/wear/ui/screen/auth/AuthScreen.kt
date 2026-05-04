@@ -56,6 +56,11 @@ fun AuthScreen(
         }
     }
 
+    // Dev-only: prefill credentials from .env.wear
+    val devEmail = if (BuildConfig.DEBUG) BuildConfig.WEAR_DEV_EMAIL else ""
+    val devPassword = if (BuildConfig.DEBUG) BuildConfig.WEAR_DEV_PASSWORD else ""
+    val hasDevCreds = devEmail.isNotBlank() && devPassword.isNotBlank()
+
     ScreenScaffold(scrollState = columnState) {
         ScalingLazyColumn(
             columnState = columnState,
@@ -176,6 +181,26 @@ fun AuthScreen(
                         enabled = !uiState.isSigningIn
                     ) {
                         Text(stringResource(R.string.sign_in_email))
+                    }
+                }
+
+                // Dev-only: one-tap login with pre-filled credentials
+                if (hasDevCreds) {
+                    item {
+                        CompactButton(
+                            onClick = {
+                                viewModel.onEmailChanged(devEmail)
+                                viewModel.onPasswordChanged(devPassword)
+                                viewModel.loginWithEmail()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = "Dev Login",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
                 }
 

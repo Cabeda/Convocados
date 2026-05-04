@@ -70,3 +70,4 @@ android-app/wear/.idea
 # Beads / Dolt files (added by bd init)
 .dolt/
 .beads-credential-key
+.env.wear.local
