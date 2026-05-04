@@ -64,8 +64,10 @@ fun WearNavigation(tokenStore: WearTokenStore) {
                 ScoreScreen(
                     eventId = eventId,
                     viewModel = viewModel,
+                    onTeams = {
+                        navController.navigate(WearRoutes.teams(eventId))
+                    },
                     onDone = { navController.popBackStack() },
-                    onTeams = { id -> navController.navigate(WearRoutes.teams(id)) },
                 )
             }
 

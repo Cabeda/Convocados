@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { authenticateRequest } from "../../../../lib/authenticate.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import type { Imatch } from "../../../../lib/random";
+
 
 /**
  * GET /api/events/[id]/teams
@@ -139,7 +139,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
 	await prisma.teamResult.deleteMany({ where: { eventId: event.id } });
 
 	for (const match of body.matches) {
-		const teamResult = await prisma.teamResult.create({
+		await prisma.teamResult.create({
 			data: {
 				name: match.team,
 				eventId: event.id,
