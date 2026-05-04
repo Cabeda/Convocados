@@ -123,8 +123,8 @@ class WearGameRepositoryTest {
 
         val result = repository.submitScore("e1", "h1", 5, 3, "Red", "Blue")
 
-        // Still returns success (queued for later)
-        assertTrue(result.isSuccess)
+        // Returns failure to signal offline, but score is queued for later sync
+        assertTrue(result.isFailure)
         coVerify { pendingScoreDao.insert(match { it.eventId == "e1" && it.scoreOne == 5 }) }
     }
 
