@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "Convocados",
+  "project_id": "4cdd1a19-f565-403f-9377-76fbb71123ff"
+}

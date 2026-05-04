@@ -1,0 +1,56 @@
+#!/bin/sh
+# Pre-push hook: run lint, typecheck and tests before pushing to catch CI failures early
+# Install: npm run setup-hooks (or run scripts/install-hooks.sh)
+
+echo "Running pre-push checks..."
+
+# Lint (zero errors allowed; warnings tracked but not blocking)
+echo "→ Linting..."
+npx eslint src/ --max-warnings 530
+if [ $? -ne 0 ]; then
+  echo "✗ Lint failed. Push aborted."
+  exit 1
+fi
+
+# Type check
+echo "→ Type checking..."
+npm run typecheck
+if [ $? -ne 0 ]; then
+  echo "✗ Type check failed. Push aborted."
+  exit 1
+fi
+
+# Tests with coverage
+echo "→ Running tests with coverage..."
+npx vitest run --coverage
+if [ $? -ne 0 ]; then
+  echo "✗ Tests failed. Push aborted."
+  exit 1
+fi
+
+echo "✓ All checks passed."
+exit 0
+
+# --- BEGIN BEADS INTEGRATION v1.0.3 ---
+# This section is managed by beads. Do not remove these markers.
+if command -v bd >/dev/null 2>&1; then
+  export BD_GIT_HOOK=1
+  _bd_timeout=${BEADS_HOOK_TIMEOUT:-300}
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$_bd_timeout" bd hooks run pre-push "$@"
+    _bd_exit=$?
+    if [ $_bd_exit -eq 124 ]; then
+      echo >&2 "beads: hook 'pre-push' timed out after ${_bd_timeout}s — continuing without beads"
+      _bd_exit=0
+    fi
+  else
+    bd hooks run pre-push "$@"
+    _bd_exit=$?
+  fi
+  if [ $_bd_exit -eq 3 ]; then
+    echo >&2 "beads: database not initialized — skipping hook 'pre-push'"
+    _bd_exit=0
+  fi
+  if [ $_bd_exit -ne 0 ]; then exit $_bd_exit; fi
+fi
+# --- END BEADS INTEGRATION v1.0.3 ---
