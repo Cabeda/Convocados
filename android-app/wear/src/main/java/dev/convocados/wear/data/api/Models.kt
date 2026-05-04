@@ -13,12 +13,19 @@ data class EventSummary(
     val maxPlayers: Int,
     val playerCount: Int,
     val isRecurring: Boolean = false,
+    val archivedAt: String? = null,
 )
 
 @Serializable
 data class MyGamesResponse(
     val owned: List<EventSummary> = emptyList(),
     val joined: List<EventSummary> = emptyList(),
+    val archivedOwned: List<EventSummary> = emptyList(),
+    val archivedJoined: List<EventSummary> = emptyList(),
+    val ownedNextCursor: String? = null,
+    val ownedHasMore: Boolean = false,
+    val joinedNextCursor: String? = null,
+    val joinedHasMore: Boolean = false,
 )
 
 @Serializable

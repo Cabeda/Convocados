@@ -23,6 +23,9 @@ class WearGameRepository @Inject constructor(
     /** Observable list of all cached games, sorted by dateTime. */
     fun observeGames(): Flow<List<WearGameEntity>> = gameDao.getAllGames()
 
+    /** Observable list of archived games, most recent first. */
+    fun observeArchivedGames(): Flow<List<WearGameEntity>> = gameDao.getArchivedGames()
+
     /** Observable latest history for a game. */
     fun observeLatestHistory(eventId: String): Flow<WearHistoryEntity?> =
         historyDao.observeLatestHistory(eventId)
@@ -35,8 +38,12 @@ class WearGameRepository @Inject constructor(
         val response = client.get<dev.convocados.wear.data.api.MyGamesResponse>("/api/me/games")
         val owned = response.owned.map { it.toEntity("owned") }
         val joined = response.joined.map { it.toEntity("joined") }
+        val archivedOwned = response.archivedOwned.map { it.toEntity("archived_owned") }
+        val archivedJoined = response.archivedJoined.map { it.toEntity("archived_joined") }
         gameDao.refreshGames("owned", owned)
         gameDao.refreshGames("joined", joined)
+        gameDao.refreshGames("archived_owned", archivedOwned)
+        gameDao.refreshGames("archived_joined", archivedJoined)
         Result.success(Unit)
     } catch (e: Exception) {
         Log.w("WearGameRepo", "Failed to refresh games", e)
@@ -134,6 +141,7 @@ class WearGameRepository @Inject constructor(
         teamOneName = "Team 1",
         teamTwoName = "Team 2",
         isRecurring = isRecurring,
+        archivedAt = archivedAt,
         type = type,
     )
 
