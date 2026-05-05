@@ -387,3 +387,22 @@ jobs:
         run: flyctl deploy --image registry.fly.io/convocados:${{ needs.release.outputs.version }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
+
+  deploy-scheduler:
+    name: Deploy Scheduler Worker
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy scheduler worker to Fly.io
+        working-directory: scheduler
+        run: flyctl deploy --app convocados-scheduler
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
