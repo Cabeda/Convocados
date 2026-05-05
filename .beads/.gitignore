@@ -59,6 +59,9 @@ backup/
 # Per-project environment file (Dolt connection config, GH#2520)
 .env
 
+# Config files may contain secrets (GitHub tokens, etc.)
+config.yaml
+
 # Legacy files (from pre-Dolt versions)
 *.db
 *.db?*
