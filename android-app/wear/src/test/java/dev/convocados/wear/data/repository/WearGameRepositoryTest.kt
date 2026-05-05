@@ -6,9 +6,11 @@ import dev.convocados.wear.data.api.GameHistory
 import dev.convocados.wear.data.api.MyGamesResponse
 import dev.convocados.wear.data.api.PaginatedHistory
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
+import dev.convocados.wear.data.local.dao.WearPlayerDao
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
@@ -25,12 +27,14 @@ class WearGameRepositoryTest {
     private val gameDao = mockk<WearGameDao>(relaxed = true)
     private val historyDao = mockk<WearHistoryDao>(relaxed = true)
     private val pendingScoreDao = mockk<PendingScoreDao>(relaxed = true)
+    private val playerDao = mockk<WearPlayerDao>(relaxed = true)
+    private val pendingRosterChangeDao = mockk<PendingRosterChangeDao>(relaxed = true)
 
     private lateinit var repository: WearGameRepository
 
     @Before
     fun setup() {
-        repository = WearGameRepository(client, gameDao, historyDao, pendingScoreDao)
+        repository = WearGameRepository(client, gameDao, historyDao, pendingScoreDao, playerDao, pendingRosterChangeDao)
     }
 
     // ── observeGames ─────────────────────────────────────────────────────
@@ -51,8 +55,8 @@ class WearGameRepositoryTest {
     @Test
     fun `refreshGames fetches from API and updates dao`() = runTest {
         val response = MyGamesResponse(
-            owned = listOf(EventSummary("1", "Game 1", "Field A", "2025-01-01T10:00:00Z", "Soccer", 10, 5, false)),
-            joined = listOf(EventSummary("2", "Game 2", "Field B", "2025-01-02T10:00:00Z", "Basketball", 8, 4, false)),
+            owned = listOf(EventSummary("1", "Game 1", "Field A", "2025-01-01T10:00:00Z", "Soccer", 10, 5, false, null)),
+            joined = listOf(EventSummary("2", "Game 2", "Field B", "2025-01-02T10:00:00Z", "Basketball", 8, 4, false, null)),
         )
         coEvery { client.get<MyGamesResponse>(any()) } returns response
 
@@ -119,8 +123,8 @@ class WearGameRepositoryTest {
 
         val result = repository.submitScore("e1", "h1", 5, 3, "Red", "Blue")
 
-        // Still returns success (queued for later)
-        assertTrue(result.isSuccess)
+        // Returns failure to signal offline, but score is queued for later sync
+        assertTrue(result.isFailure)
         coVerify { pendingScoreDao.insert(match { it.eventId == "e1" && it.scoreOne == 5 }) }
     }
 
@@ -199,6 +203,7 @@ class WearGameRepositoryTest {
         teamOneName = "Team 1",
         teamTwoName = "Team 2",
         isRecurring = false,
+        archivedAt = null,
         type = "owned",
     )
 }

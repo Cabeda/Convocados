@@ -60,12 +60,12 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSigningIn = true, error = null) }
             try {
-                val response = googleSignIn.loginWithEmail(email, password)
+                val tokenResponse = apiClient.signInWithEmail(email, password)
                 tokenStore.setTokens(
-                    dev.convocados.wear.data.auth.OAuthTokens(
-                        accessToken = response.accessToken,
-                        refreshToken = response.refreshToken ?: "",
-                        expiresAt = System.currentTimeMillis() + response.expiresIn * 1000
+                    OAuthTokens(
+                        accessToken = tokenResponse.accessToken,
+                        refreshToken = tokenResponse.refreshToken ?: "",
+                        expiresAt = System.currentTimeMillis() + tokenResponse.expiresIn * 1000,
                     )
                 )
             } catch (e: Exception) {
@@ -108,30 +108,4 @@ class AuthViewModel @Inject constructor(
 
     fun getServerUrl() = tokenStore.getServerUrl()
     fun setServerUrl(url: String) = tokenStore.setServerUrl(url)
-
-    /**
-     * Sign in with email/password via the mobile-callback OAuth flow.
-     * Uses the same flow as the phone app to get real tokens.
-     * For local dev: email=test@example.com, password=TestPassword123
-     */
-    fun signInWithEmail(email: String, password: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSigningIn = true, error = null) }
-            try {
-                val tokenResponse = apiClient.signInWithEmail(email, password)
-                tokenStore.setTokens(
-                    OAuthTokens(
-                        accessToken = tokenResponse.accessToken,
-                        refreshToken = tokenResponse.refreshToken ?: "",
-                        expiresAt = System.currentTimeMillis() + tokenResponse.expiresIn * 1000,
-                    )
-                )
-                _uiState.update { it.copy(isSigningIn = false, error = null) }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(isSigningIn = false, error = "Sign-in failed: ${e.message}")
-                }
-            }
-        }
-    }
 }

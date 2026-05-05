@@ -21,8 +21,9 @@ class ScoreSyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         return try {
-            val synced = repository.syncPendingScores()
-            Log.d("ScoreSyncWorker", "Synced $synced pending scores")
+            val syncedScores = repository.syncPendingScores()
+            val syncedRosters = repository.syncPendingRosterChanges()
+            Log.d("ScoreSyncWorker", "Synced $syncedScores scores, $syncedRosters roster changes")
             Result.success()
         } catch (e: Exception) {
             Log.e("ScoreSyncWorker", "Sync failed", e)
