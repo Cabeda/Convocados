@@ -6,7 +6,8 @@ echo "Running pre-push checks..."
 
 # Lint (zero errors allowed; warnings tracked but not blocking)
 echo "→ Linting..."
-npx eslint src/ --max-warnings 521
+npx eslint src/ --max-warnings 372
+
 if [ $? -ne 0 ]; then
   echo "✗ Lint failed. Push aborted."
   exit 1
