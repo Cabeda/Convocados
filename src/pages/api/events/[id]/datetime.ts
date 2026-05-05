@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
+import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/scheduler.server";
 import { createLogger } from "../../../../lib/logger.server";
 
 const log = createLogger("datetime-api");
@@ -49,7 +50,19 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
   await prisma.event.update({ where: { id: params.id as string }, data: updates });
 
+  // Reschedule reminder jobs if dateTime changed
   const eventId = params.id as string;
+  if (updates.dateTime) {
+    const updatedEvent = await prisma.event.findUnique({ where: { id: eventId } });
+    if (updatedEvent) {
+      await cancelEventJobs(eventId);
+      try {
+        await scheduleEventReminders(eventId, updatedEvent.dateTime, updatedEvent.durationMinutes);
+      } catch {
+        // ignore scheduling failures
+      }
+    }
+  }
   const actor = session?.user?.name ?? null;
   const actorId = session?.user?.id ?? null;
 
