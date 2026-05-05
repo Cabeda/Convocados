@@ -181,11 +181,13 @@ async function _processReminderJob(job: { id: string; eventId: string | null; ty
     }
   }
 
-  // Mark reminder as sent
+  // Mark reminder as sent (idempotent — handles retries / duplicates gracefully)
   const logType = JOB_TO_LOG_TYPE[job.type];
   if (logType) {
-    await prisma.reminderLog.create({
-      data: { eventId: event.id, type: logType },
+    await prisma.reminderLog.upsert({
+      where: { eventId_type: { eventId: event.id, type: logType } },
+      create: { eventId: event.id, type: logType },
+      update: {},
     });
   }
 }
@@ -213,7 +215,9 @@ async function _processPostGameJob(job: { id: string; eventId: string | null }) 
   });
   await drainNotificationQueue();
 
-  await prisma.reminderLog.create({
-    data: { eventId: event.id, type: "post-game" },
+  await prisma.reminderLog.upsert({
+    where: { eventId_type: { eventId: event.id, type: "post-game" } },
+    create: { eventId: event.id, type: "post-game" },
+    update: {},
   });
 }
