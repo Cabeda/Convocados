@@ -170,6 +170,39 @@ describe("POST mvp-vote", () => {
     expect(res.status).toBe(409);
   });
 
+  it("sets hasVoted=true after voting via GET mvp endpoint", async () => {
+    const user = await seedUser("Alice");
+    mockAuth(user.id, "Alice");
+    const event = await seedEvent();
+    await seedPlayer(event.id, "Alice", user.id);
+    const bob = await seedPlayer(event.id, "Bob");
+    const history = await seedHistory(event.id);
+
+    await castMvpVote(postCtx(
+      { id: event.id, historyId: history.id },
+      { votedForPlayerId: bob.id },
+    ));
+
+    const mvpRes = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    const mvpBody = await mvpRes.json();
+    expect(mvpBody.hasVoted).toBe(true);
+    expect(mvpBody.totalVotes).toBe(1);
+  });
+
+  it("get mvp shows hasVoted=false before voting", async () => {
+    const user = await seedUser("Alice");
+    mockAuth(user.id, "Alice");
+    const event = await seedEvent();
+    await seedPlayer(event.id, "Alice", user.id);
+    await seedPlayer(event.id, "Bob");
+    const history = await seedHistory(event.id);
+
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    const body = await res.json();
+    expect(body.hasVoted).toBe(false);
+    expect(body.totalVotes).toBe(0);
+  });
+
   it("rejects non-participant", async () => {
     const user = await seedUser("Outsider");
     mockAuth(user.id, "Outsider");

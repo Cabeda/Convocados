@@ -112,10 +112,15 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });
   }
 
-  // Restrict team and payment edits to owner/admin only
-  if (body.teamsSnapshot !== undefined || body.paymentsSnapshot !== undefined) {
+  // Restrict team edits to owner/admin/participant; payment edits to owner/admin only
+  if (body.paymentsSnapshot !== undefined) {
     if (!isOwner && !isAdmin) {
-      return Response.json({ error: "Only the event owner or admin can edit teams and payments." }, { status: 403 });
+      return Response.json({ error: "Only the event owner or admin can edit payments." }, { status: 403 });
+    }
+  }
+  if (body.teamsSnapshot !== undefined) {
+    if (!isOwner && !isAdmin && !isParticipant) {
+      return Response.json({ error: "Only the event owner, admin, or a participant can edit teams." }, { status: 403 });
     }
   }
 
