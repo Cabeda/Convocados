@@ -1,12 +1,13 @@
 #!/bin/sh
-# Pre-push hook: run typecheck and tests before pushing to catch CI failures early
+# Pre-push hook: run lint, typecheck and tests before pushing to catch CI failures early
 # Install: npm run setup-hooks (or run scripts/install-hooks.sh)
 
 echo "Running pre-push checks..."
 
-# Lint
+# Lint (zero errors allowed; warnings tracked but not blocking)
 echo "→ Linting..."
-npx eslint src/ --max-warnings 521
+npx eslint src/ --max-warnings 372
+
 if [ $? -ne 0 ]; then
   echo "✗ Lint failed. Push aborted."
   exit 1

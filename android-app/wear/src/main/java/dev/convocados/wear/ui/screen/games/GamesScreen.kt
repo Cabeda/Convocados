@@ -47,6 +47,10 @@ fun GamesScreen(
         )
     }
 
+    val visiblePastGames = remember(state.pastGames, state.visiblePastCount) {
+        state.pastGames.take(state.visiblePastCount)
+    }
+
     ScreenScaffold(scrollState = columnState) {
         when {
             state.isLoading && state.games.isEmpty() -> {
@@ -54,7 +58,7 @@ fun GamesScreen(
                     CircularProgressIndicator()
                 }
             }
-            state.games.isEmpty() -> {
+            state.games.isEmpty() && state.pastGames.isEmpty() -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -131,11 +135,55 @@ fun GamesScreen(
                     }
 
                     items(sortedGames, key = { it.id }) { game ->
+                        val canScore = game.id in state.canScoreGameIds
                         GameChip(
                             game = game,
                             isSuggested = game.id == state.suggestedGameId,
+                            canScore = canScore,
                             onClick = { onGameSelected(game.id) },
                         )
+                    }
+
+                    if (state.pastGames.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            CompactButton(
+                                onClick = { viewModel.togglePastGames() },
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        if (state.showPastGames) R.string.hide_past_games
+                                        else R.string.show_past_games
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+
+                        if (state.showPastGames) {
+                            items(visiblePastGames, key = { "past-${it.id}" }) { game ->
+                                val canScore = game.id in state.canScoreGameIds
+                                GameChip(
+                                    game = game,
+                                    isSuggested = false,
+                                    canScore = canScore,
+                                    onClick = { onGameSelected(game.id) },
+                                )
+                            }
+
+                            if (state.visiblePastCount < state.pastGames.size) {
+                                item {
+                                    CompactButton(
+                                        onClick = { viewModel.loadMorePast() },
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.load_more),
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     item {
@@ -159,10 +207,11 @@ fun GamesScreen(
 private fun GameChip(
     game: WearGameEntity,
     isSuggested: Boolean,
+    canScore: Boolean,
     onClick: () -> Unit,
 ) {
     val timeLabel = formatRelativeTime(game.dateTime)
-    
+
     Button(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -175,7 +224,7 @@ private fun GameChip(
         },
         secondaryLabel = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isSuggested) {
+                if (isSuggested && canScore) {
                     Text(
                         text = stringResource(R.string.now_label),
                         style = MaterialTheme.typography.labelSmall,
@@ -190,12 +239,14 @@ private fun GameChip(
                 )
             }
         },
-        colors = if (isSuggested) {
-            ButtonDefaults.buttonColors(
+        colors = when {
+            isSuggested && canScore -> ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
             )
-        } else {
-            ButtonDefaults.filledTonalButtonColors()
+            canScore -> ButtonDefaults.filledTonalButtonColors()
+            else -> ButtonDefaults.filledTonalButtonColors(
+                contentColor = TextMuted,
+            )
         }
     )
 }
