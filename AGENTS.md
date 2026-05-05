@@ -49,7 +49,7 @@ After cloning, install the git hooks to catch CI failures before they reach the 
 ```bash
 npm run setup-hooks
 ```
-This installs a pre-push hook that runs `typecheck` and `vitest --coverage` before every push.
+This installs a pre-push hook that runs `lint`, `typecheck` and `vitest --coverage` before every push.
 
 ### Branch Naming
 ```
@@ -289,6 +289,7 @@ export function MyComponent() {
 ## Reviewing Checklist
 
 Before submitting a PR:
+- [ ] Lint passes (`npm run lint -- --max-warnings 521`)
 - [ ] All tests pass (`npm run test`)
 - [ ] Type checking passes (`npm run typecheck`)
 - [ ] i18n strings added to all 6 locales
