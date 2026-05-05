@@ -156,4 +156,32 @@ describe("POST /api/internal/jobs/:id/process", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("returns 500 when job processing fails", async () => {
+    const user = await seedUser();
+    const eventDate = new Date(Date.now() + 25 * 60 * 60 * 1000);
+    const event = await seedEvent(user.id, eventDate, "evt-process-fail");
+    await prisma.player.create({ data: { name: "Player1", eventId: event.id, userId: user.id } });
+    await scheduleEventReminders(event.id, eventDate, 60);
+
+    // Create a duplicate reminderLog to trigger unique constraint violation
+    await prisma.reminderLog.create({
+      data: { eventId: event.id, type: "24h" },
+    });
+
+    const job = await prisma.scheduledJob.findFirst({
+      where: { eventId: event.id, type: "reminder_24h" },
+    });
+    expect(job).not.toBeNull();
+
+    const res = await processJob(
+      ctxWithParams("POST", `/api/internal/jobs/${job!.id}/process`, { id: job!.id }, {
+        authorization: "Bearer test-scheduler-secret",
+      })
+    );
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain("Unique constraint failed");
+  });
 });
