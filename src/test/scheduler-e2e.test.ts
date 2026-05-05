@@ -20,6 +20,8 @@ vi.mock("~/lib/notificationQueue.server", () => ({
   drainNotificationQueue: vi.fn().mockResolvedValue(0),
 }));
 
+import * as notificationQueue from "~/lib/notificationQueue.server";
+
 const OLD_SCHEDULER_SECRET = process.env.SCHEDULER_SECRET;
 
 beforeEach(async () => {
@@ -141,11 +143,6 @@ describe("Scheduler end-to-end flow", () => {
 
     await scheduleEventReminders(event.id, eventDate, 60);
 
-    // Create a duplicate reminderLog to force unique constraint violation
-    await prisma.reminderLog.create({
-      data: { eventId: event.id, type: "24h" },
-    });
-
     await prisma.scheduledJob.updateMany({
       where: { eventId: event.id },
       data: { runAt: new Date(Date.now() - 1000) },
@@ -158,6 +155,11 @@ describe("Scheduler end-to-end flow", () => {
     const { jobs } = await dueRes.json();
     const job24h = jobs.find((j: { type: string }) => j.type === "reminder_24h");
     expect(job24h).toBeDefined();
+
+    // Make notification queue fail to simulate a processing error
+    vi.mocked(notificationQueue.enqueueNotification).mockRejectedValueOnce(
+      new Error("Queue full")
+    );
 
     // Process via API — should return 500
     const processRes = await processJob(
@@ -183,11 +185,6 @@ describe("Scheduler end-to-end flow", () => {
 
     await scheduleEventReminders(event.id, eventDate, 60);
 
-    // Create a duplicate reminderLog to force failure
-    await prisma.reminderLog.create({
-      data: { eventId: event.id, type: "24h" },
-    });
-
     const job = await prisma.scheduledJob.findFirst({
       where: { eventId: event.id, type: "reminder_24h" },
     });
@@ -199,7 +196,11 @@ describe("Scheduler end-to-end flow", () => {
       data: { retryCount: 2, runAt: new Date(Date.now() - 1000) },
     });
 
-    // Call API — this is the 3rd failure
+    // Make notification queue fail — this is the 3rd failure
+    vi.mocked(notificationQueue.enqueueNotification).mockRejectedValueOnce(
+      new Error("Queue full")
+    );
+
     const processRes = await processJob(
       ctxWithParams("POST", `/api/internal/jobs/${job!.id}/process`, { id: job!.id }, {
         authorization: "Bearer test-scheduler-secret",
@@ -229,17 +230,17 @@ describe("Scheduler end-to-end flow", () => {
 
     await scheduleEventReminders(event.id, eventDate, 60);
 
-    // Create duplicate log to trigger failure
-    await prisma.reminderLog.create({
-      data: { eventId: event.id, type: "24h" },
-    });
-
     const job = await prisma.scheduledJob.findFirst({
       where: { eventId: event.id, type: "reminder_24h" },
     });
     expect(job).not.toBeNull();
 
-    await expect(processJobDirect(job!.id)).rejects.toThrow();
+    // Make notification queue fail
+    vi.mocked(notificationQueue.enqueueNotification).mockRejectedValueOnce(
+      new Error("Queue full")
+    );
+
+    await expect(processJobDirect(job!.id)).rejects.toThrow("Queue full");
 
     const updated = await prisma.scheduledJob.findUnique({ where: { id: job!.id } });
     expect(updated!.processedAt).toBeNull();
