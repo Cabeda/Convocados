@@ -9,6 +9,6 @@ primary_region = "cdg"
   POLL_INTERVAL_MS = "10000"
 
 [[vm]]
-  memory = "128mb"
+  memory = "256mb"
   cpu_kind = "shared"
   cpus = 1
