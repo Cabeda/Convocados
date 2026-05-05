@@ -14,6 +14,14 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+val wearEnv = Properties().apply {
+    // Read from .env.wear.local (gitignored, personal creds) or .env.wear (template)
+    val localEnv = rootProject.file(".env.wear.local")
+    val templateEnv = rootProject.file(".env.wear")
+    val envFile = if (localEnv.exists()) localEnv else templateEnv
+    if (envFile.exists()) envFile.inputStream().use { load(it) }
+}
+
 android {
     namespace = "dev.convocados.wear"
     compileSdk = 35
@@ -31,6 +39,16 @@ android {
             "String",
             "GOOGLE_SERVER_CLIENT_ID",
             "\"${localProperties.getProperty("GOOGLE_SERVER_CLIENT_ID", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "WEAR_DEV_EMAIL",
+            "\"${wearEnv.getProperty("WEAR_DEV_EMAIL", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "WEAR_DEV_PASSWORD",
+            "\"${wearEnv.getProperty("WEAR_DEV_PASSWORD", "")}\""
         )
     }
 

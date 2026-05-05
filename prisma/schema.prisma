@@ -277,10 +277,25 @@ model ReminderLog {
   id      String   @id @default(cuid())
   eventId String
   event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  type    String // "24h" | "2h" | "1h"
+  type    String // "24h" | "2h" | "1h" | "post-game"
   sentAt  DateTime @default(now())
 
   @@unique([eventId, type])
+}
+
+model ScheduledJob {
+  id          String    @id @default(cuid())
+  eventId     String?
+  type        String    // "reminder_24h" | "reminder_2h" | "reminder_1h" | "post_game" | ...
+  payload     String    @default("{}") // JSON
+  runAt       DateTime
+  processedAt DateTime?
+  failedAt    DateTime?
+  retryCount  Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([runAt, processedAt])
+  @@index([eventId])
 }
 
 model CalendarToken {

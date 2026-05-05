@@ -7,6 +7,7 @@ import { getSession } from "../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
 import { getDefaultDurationMinutes } from "../../../lib/sports";
 import { fromDateTimeLocalValue } from "../../../lib/timezones";
+import { scheduleEventReminders } from "../../../lib/scheduler.server";
 
 export const POST: APIRoute = async ({ request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -93,6 +94,13 @@ export const POST: APIRoute = async ({ request }) => {
       ownerId: session?.user?.id ?? null,
     },
   });
+
+  // Schedule reminder jobs — wrapped in try/catch so event creation never fails because of scheduling
+  try {
+    await scheduleEventReminders(event.id, event.dateTime, event.durationMinutes);
+  } catch {
+    // ignore scheduling failures
+  }
 
   return Response.json({ id: event.id });
 };

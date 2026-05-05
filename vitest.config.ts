@@ -2,19 +2,44 @@ import { defineConfig } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "~": path.resolve(__dirname, "./src"),
+    },
+  },
   test: {
     globals: true,
     pool: "forks",
     poolOptions: { forks: { singleFork: true } },
     exclude: ["node_modules", "dist", "e2e", "mobile"],
-    alias: {
-      "~": path.resolve(__dirname, "./src"),
-    },
     environment: "node",
     globalSetup: ["./src/test/globalSetup.ts"],
     setupFiles: ["./src/test/setup.ts"],
-    environmentMatchGlobs: [
-      ["src/test/components/**", "jsdom"],
+    projects: [
+      {
+        resolve: {
+          alias: {
+            "~": path.resolve(__dirname, "./src"),
+          },
+        },
+        test: {
+          name: "node",
+          include: ["src/test/**/*.test.ts"],
+          exclude: ["src/test/components/**"],
+        },
+      },
+      {
+        resolve: {
+          alias: {
+            "~": path.resolve(__dirname, "./src"),
+          },
+        },
+        test: {
+          name: "jsdom",
+          include: ["src/test/components/**/*.test.ts"],
+          environment: "jsdom",
+        },
+      },
     ],
     coverage: {
       provider: "v8",
