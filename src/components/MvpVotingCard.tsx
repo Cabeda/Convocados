@@ -66,6 +66,7 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
         setSnack({ msg: t("mvpSelfVoteError"), severity: "error" });
       } else if (res.status === 409) {
         setSnack({ msg: t("mvpAlreadyVoted"), severity: "error" });
+        fetchMvp();
       } else {
         setSnack({ msg: body.error || "Error", severity: "error" });
       }

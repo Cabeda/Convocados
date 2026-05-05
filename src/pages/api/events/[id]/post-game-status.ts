@@ -17,7 +17,7 @@ import { getSession } from "../../../../lib/auth.helpers.server";
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
     where: { id: params.id },
-    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true },
+    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true },
   });
 
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
@@ -147,6 +147,6 @@ export const GET: APIRoute = async ({ params, request }) => {
   return Response.json({
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
-    hasPendingPastPayments,
+    hasPendingPastPayments, mvpEnabled: event.mvpEnabled,
   });
 };
