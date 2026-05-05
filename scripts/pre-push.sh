@@ -4,6 +4,14 @@
 
 echo "Running pre-push checks..."
 
+# Lint
+echo "→ Linting..."
+npx eslint src/ --max-warnings 521
+if [ $? -ne 0 ]; then
+  echo "✗ Lint failed. Push aborted."
+  exit 1
+fi
+
 # Type check
 echo "→ Type checking..."
 npm run typecheck
