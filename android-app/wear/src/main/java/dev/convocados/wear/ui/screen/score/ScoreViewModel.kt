@@ -8,11 +8,12 @@ import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
+import dev.convocados.wear.util.canScoreGame
+import dev.convocados.wear.util.tickFlow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Which team's score to change. */
 enum class Team { ONE, TWO }
 
 data class ScoreUiState(
@@ -26,6 +27,7 @@ data class ScoreUiState(
     val isSaving: Boolean = false,
     val saved: Boolean = false,
     val isOfflineQueued: Boolean = false,
+    val canScore: Boolean = false,
     val error: String? = null,
 )
 
@@ -37,6 +39,9 @@ class ScoreViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ScoreUiState())
     val uiState: StateFlow<ScoreUiState> = _uiState.asStateFlow()
+
+    @Volatile
+    var tickProvider: () -> Flow<java.time.Instant> = { tickFlow() }
 
     private var eventId: String = ""
 
@@ -50,7 +55,12 @@ class ScoreViewModel @Inject constructor(
             val game = repository.getGame(eventId)
             repository.refreshHistory(eventId)
 
-            repository.observeLatestHistory(eventId).collect { history ->
+            combine(
+                repository.observeLatestHistory(eventId),
+                tickProvider(),
+            ) { history, _ ->
+                history
+            }.collect { history ->
                 _uiState.update { state ->
                     state.copy(
                         game = game,
@@ -59,6 +69,7 @@ class ScoreViewModel @Inject constructor(
                         scoreTwo = history?.scoreTwo ?: state.scoreTwo,
                         teamOneName = history?.teamOneName ?: game?.teamOneName ?: "Team 1",
                         teamTwoName = history?.teamTwoName ?: game?.teamTwoName ?: "Team 2",
+                        canScore = game?.let { canScoreGame(it.dateTime) } ?: false,
                         isLoading = false,
                     )
                 }

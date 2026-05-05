@@ -16,7 +16,8 @@ data class WearGameEntity(
     val teamOneName: String,
     val teamTwoName: String,
     val isRecurring: Boolean,
-    val type: String, // "owned" | "joined"
+    val archivedAt: String? = null,
+    val type: String, // "owned" | "joined" | "archived_owned" | "archived_joined"
     val cachedAt: Long = System.currentTimeMillis(),
 )
 
@@ -45,4 +46,25 @@ data class WearHistoryEntity(
     val teamOneName: String,
     val teamTwoName: String,
     val editable: Boolean,
+)
+
+/** Cached team player for a specific event. */
+@Entity(tableName = "wear_players", foreignKeys = [])
+data class WearPlayerEntity(
+    @PrimaryKey val id: String,
+    val eventId: String,
+    val name: String,
+    val order: Int,
+    val teamAssignment: String, // "teamOne" | "teamTwo" | "unassigned" | "bench"
+)
+
+/** Pending roster change queued for sync when online. */
+@Entity(tableName = "pending_roster_changes")
+data class PendingRosterChangeEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val eventId: String,
+    val teamOnePlayerIds: String, // JSON array serialized as string
+    val teamTwoPlayerIds: String, // JSON array serialized as string
+    val createdAt: Long = System.currentTimeMillis(),
+    val retryCount: Int = 0,
 )
