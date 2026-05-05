@@ -25,6 +25,9 @@ vi.mock("~/lib/notificationQueue.server", () => ({
   drainNotificationQueue: vi.fn().mockResolvedValue(0),
 }));
 
+// Import mocked modules so we can control their behavior in failure tests
+import * as notificationQueue from "~/lib/notificationQueue.server";
+
 async function seedUser(id = "user-sched-1") {
   return prisma.user.create({
     data: {
@@ -248,5 +251,64 @@ describe("processJob", () => {
 
   it("does nothing for non-existent job", async () => {
     await expect(processJob("non-existent-id")).resolves.not.toThrow();
+  });
+
+  it("throws and increments retryCount on failure", async () => {
+    const user = await seedUser();
+    const eventDate = new Date(Date.now() + 25 * 60 * 60 * 1000);
+    const event = await seedEvent(user.id, eventDate, "evt-retry");
+    await prisma.player.create({
+      data: { name: "Player1", eventId: event.id, userId: user.id },
+    });
+
+    await scheduleEventReminders(event.id, eventDate, 60);
+    const job = await prisma.scheduledJob.findFirst({
+      where: { eventId: event.id, type: "reminder_24h" },
+    });
+    expect(job).not.toBeNull();
+
+    // Make notification queue fail
+    vi.mocked(notificationQueue.enqueueNotification).mockRejectedValueOnce(
+      new Error("Queue full")
+    );
+
+    await expect(processJob(job!.id)).rejects.toThrow("Queue full");
+
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job!.id } });
+    expect(updated!.processedAt).toBeNull();
+    expect(updated!.failedAt).toBeNull();
+    expect(updated!.retryCount).toBe(1);
+  });
+
+  it("marks job as failed after 3 retries", async () => {
+    const user = await seedUser();
+    const eventDate = new Date(Date.now() + 25 * 60 * 60 * 1000);
+    const event = await seedEvent(user.id, eventDate, "evt-fail");
+    await prisma.player.create({
+      data: { name: "Player1", eventId: event.id, userId: user.id },
+    });
+
+    await scheduleEventReminders(event.id, eventDate, 60);
+    const job = await prisma.scheduledJob.findFirst({
+      where: { eventId: event.id, type: "reminder_24h" },
+    });
+    expect(job).not.toBeNull();
+
+    // Pre-set retry count to 2 so next failure exhausts retries
+    await prisma.scheduledJob.update({
+      where: { id: job!.id },
+      data: { retryCount: 2 },
+    });
+
+    vi.mocked(notificationQueue.enqueueNotification).mockRejectedValueOnce(
+      new Error("Queue full")
+    );
+
+    await expect(processJob(job!.id)).rejects.toThrow("Queue full");
+
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job!.id } });
+    expect(updated!.processedAt).toBeNull();
+    expect(updated!.failedAt).not.toBeNull();
+    expect(updated!.retryCount).toBe(2); // stays at 2, failedAt is set
   });
 });

@@ -114,11 +114,13 @@ export async function processJob(jobId: string): Promise<void> {
         where: { id: jobId },
         data: { failedAt: new Date(), processedAt: null },
       });
+      throw err;
     } else {
       await prisma.scheduledJob.update({
         where: { id: jobId },
         data: { retryCount: nextRetry },
       });
+      throw err;
     }
   }
 }
