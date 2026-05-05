@@ -1,0 +1,14 @@
+app = "convocados-scheduler"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_URL = "https://convocados.fly.dev"
+  POLL_INTERVAL_MS = "10000"
+
+[[vm]]
+  memory = "128mb"
+  cpu_kind = "shared"
+  cpus = 1
