@@ -35,6 +35,16 @@ describe("generateEventJsonLd", () => {
     const parsed = JSON.parse(generateEventJsonLd(event));
     expect(parsed.eventStatus).toBe("https://schema.org/EventScheduled");
   });
+
+  it("uses TBD when location is empty", () => {
+    const parsed = JSON.parse(generateEventJsonLd({ ...event, location: "" }));
+    expect(parsed.location.name).toBe("TBD");
+  });
+
+  it("caps remainingAttendeeCapacity at 0", () => {
+    const parsed = JSON.parse(generateEventJsonLd({ ...event, playerCount: 15 }));
+    expect(parsed.remainingAttendeeCapacity).toBe(0);
+  });
 });
 
 describe("generateEventMetaTags", () => {

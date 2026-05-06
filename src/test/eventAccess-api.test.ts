@@ -160,6 +160,25 @@ describe("Event Access Control API", () => {
       const res = await verifyAccess(ctx({ id: event.id }, { password: "test" }));
       expect(res.status).toBe(400);
     });
+
+    it("should return 404 for non-existent event", async () => {
+      const res = await verifyAccess(ctx({ id: "non-existent" }, { password: "test" }));
+      expect(res.status).toBe(404);
+    });
+
+    it("should return 400 when password is missing", async () => {
+      const event = await seedOwnedEvent("owner1");
+      await prisma.event.update({ where: { id: event.id }, data: { accessPassword: hashPassword("mypass") } });
+      const res = await verifyAccess(ctx({ id: event.id }, {}));
+      expect(res.status).toBe(400);
+    });
+
+    it("should return 400 when password is not a string", async () => {
+      const event = await seedOwnedEvent("owner1");
+      await prisma.event.update({ where: { id: event.id }, data: { accessPassword: hashPassword("mypass") } });
+      const res = await verifyAccess(ctx({ id: event.id }, { password: 123 }));
+      expect(res.status).toBe(400);
+    });
   });
 
   // ── Invite management ────────────────────────────────────────────────
@@ -219,8 +238,57 @@ describe("Event Access Control API", () => {
       const listRes = await getInvites(ctx({ id: event.id }));
       expect(listRes.status).toBe(403);
 
-      const addRes = await addInvite(ctx({ id: event.id }, { email: "x@test.com" }));
+      const addRes = await addInvite(ctx({ id: event.id }, { email: "player@test.com" }));
       expect(addRes.status).toBe(403);
+
+      const removeRes = await removeInvite(deleteCtx({ id: event.id }, { userId: "user2" }));
+      expect(removeRes.status).toBe(403);
+    });
+
+    it("should return 404 for GET on non-existent event", async () => {
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+      const res = await getInvites(ctx({ id: "non-existent" }));
+      expect(res.status).toBe(404);
+    });
+
+    it("should return 404 for POST on non-existent event", async () => {
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+      const res = await addInvite(ctx({ id: "non-existent" }, { email: "test@test.com" }));
+      expect(res.status).toBe(404);
+    });
+
+    it("should return 400 for POST when email is missing", async () => {
+      const event = await seedOwnedEvent("owner1");
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+      const res = await addInvite(ctx({ id: event.id }, {}));
+      expect(res.status).toBe(400);
+    });
+
+    it("should return 400 for POST when email is not a string", async () => {
+      const event = await seedOwnedEvent("owner1");
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+      const res = await addInvite(ctx({ id: event.id }, { email: 123 }));
+      expect(res.status).toBe(400);
+    });
+
+    it("should return 404 for DELETE on non-existent event", async () => {
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+      const res = await removeInvite(deleteCtx({ id: "non-existent" }, { userId: "user2" }));
+      expect(res.status).toBe(404);
+    });
+
+    it("should return 400 for DELETE when userId is missing", async () => {
+      const event = await seedOwnedEvent("owner1");
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+      const res = await removeInvite(deleteCtx({ id: event.id }, {}));
+      expect(res.status).toBe(400);
+    });
+
+    it("should return 400 for DELETE when userId is not a string", async () => {
+      const event = await seedOwnedEvent("owner1");
+      mockGetSession.mockResolvedValue({ user: { id: "owner1" } } as any);
+      const res = await removeInvite(deleteCtx({ id: event.id }, { userId: 123 }));
+      expect(res.status).toBe(400);
     });
 
     it("should handle duplicate invites gracefully (upsert)", async () => {

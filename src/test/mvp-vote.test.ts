@@ -274,6 +274,74 @@ describe("POST mvp-vote", () => {
     ));
     expect(res.status).toBe(400);
   });
+
+  it("returns 404 for non-existent event", async () => {
+    const user = await seedUser("Alice");
+    mockAuth(user.id, "Alice");
+    const res = await castMvpVote(postCtx(
+      { id: "non-existent", historyId: "hist-1" },
+      { votedForPlayerId: "player-1" },
+    ));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 when mvp is disabled", async () => {
+    const user = await seedUser("Alice");
+    mockAuth(user.id, "Alice");
+    const event = await seedEvent({ mvpEnabled: false });
+    await seedPlayer(event.id, "Alice", user.id);
+    const bob = await seedPlayer(event.id, "Bob");
+    const history = await seedHistory(event.id);
+
+    const res = await castMvpVote(postCtx(
+      { id: event.id, historyId: history.id },
+      { votedForPlayerId: bob.id },
+    ));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when game has not ended", async () => {
+    const user = await seedUser("Alice");
+    mockAuth(user.id, "Alice");
+    const event = await seedEvent({ dateTime: new Date(Date.now() + 3600_000), durationMinutes: 60 });
+    await seedPlayer(event.id, "Alice", user.id);
+    const bob = await seedPlayer(event.id, "Bob");
+    const history = await seedHistory(event.id, { dateTime: new Date(Date.now() + 3600_000) });
+
+    const res = await castMvpVote(postCtx(
+      { id: event.id, historyId: history.id },
+      { votedForPlayerId: bob.id },
+    ));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when votedForPlayerId and votedForName are both missing", async () => {
+    const user = await seedUser("Alice");
+    mockAuth(user.id, "Alice");
+    const event = await seedEvent();
+    await seedPlayer(event.id, "Alice", user.id);
+    const history = await seedHistory(event.id);
+
+    const res = await castMvpVote(postCtx(
+      { id: event.id, historyId: history.id },
+      {},
+    ));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when target player by ID is not found", async () => {
+    const user = await seedUser("Alice");
+    mockAuth(user.id, "Alice");
+    const event = await seedEvent();
+    await seedPlayer(event.id, "Alice", user.id);
+    const history = await seedHistory(event.id);
+
+    const res = await castMvpVote(postCtx(
+      { id: event.id, historyId: history.id },
+      { votedForPlayerId: "non-existent" },
+    ));
+    expect(res.status).toBe(400);
+  });
 });
 
 // ─── GET /api/events/[id]/history/[historyId]/mvp ───────────────────────────
@@ -402,6 +470,93 @@ describe("GET mvp", () => {
     const body = await res.json();
     expect(body.participants).toBeDefined();
     expect(body.participants.map((p: any) => p.name).sort()).toEqual(["Alice", "Bob", "Charlie", "Dave"]);
+  });
+
+  it("returns 404 for non-existent event", async () => {
+    const res = await getMvp(getCtx({ id: "non-existent", historyId: "hist-1" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for non-existent history", async () => {
+    const event = await seedEvent();
+    const res = await getMvp(getCtx({ id: event.id, historyId: "non-existent" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns isVotingOpen=false when game has not ended", async () => {
+    const event = await seedEvent({ dateTime: new Date(Date.now() + 3600_000) });
+    const history = await seedHistory(event.id, { dateTime: new Date(Date.now() + 3600_000) });
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    const body = await res.json();
+    expect(body.isVotingOpen).toBe(false);
+  });
+
+  it("returns isVotingOpen=false when newer game exists", async () => {
+    const event = await seedEvent({ dateTime: new Date(Date.now() - 2 * 86400_000) });
+    const history = await seedHistory(event.id, { dateTime: new Date(Date.now() - 2 * 86400_000) });
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date(Date.now() - 86400_000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        status: "played",
+        editableUntil: new Date(Date.now() + 7 * 86400_000),
+      },
+    });
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    const body = await res.json();
+    expect(body.isVotingOpen).toBe(false);
+  });
+
+  it("returns isVotingOpen=false when history status is not played", async () => {
+    const event = await seedEvent({ dateTime: new Date(Date.now() - 3600_000) });
+    const history = await seedHistory(event.id, { dateTime: new Date(Date.now() - 3600_000), status: "cancelled" });
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    const body = await res.json();
+    expect(body.isVotingOpen).toBe(false);
+  });
+
+  it("returns isVotingOpen=false when mvpEnabled is false", async () => {
+    const event = await seedEvent({ dateTime: new Date(Date.now() - 3600_000), mvpEnabled: false });
+    const history = await seedHistory(event.id, { dateTime: new Date(Date.now() - 3600_000) });
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    const body = await res.json();
+    expect(body.isVotingOpen).toBe(false);
+  });
+
+  it("returns hasVoted=null for anonymous user", async () => {
+    const event = await seedEvent();
+    const history = await seedHistory(event.id);
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    const body = await res.json();
+    expect(body.hasVoted).toBeNull();
+  });
+
+  it("returns hasVoted=false when no player match", async () => {
+    const user = await seedUser("Unknown");
+    mockAuth(user.id, "Unknown");
+    const event = await seedEvent();
+    const history = await seedHistory(event.id);
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    const body = await res.json();
+    expect(body.hasVoted).toBe(false);
+  });
+
+  it("returns empty participants when teamsSnapshot is missing", async () => {
+    const event = await seedEvent();
+    const history = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date(),
+        teamOneName: "A",
+        teamTwoName: "B",
+        editableUntil: new Date(Date.now() + 7 * 86400_000),
+      },
+    });
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    const body = await res.json();
+    expect(body.participants).toEqual([]);
   });
 });
 
