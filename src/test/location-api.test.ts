@@ -62,7 +62,7 @@ describe("PUT /api/events/[id]/location", () => {
     const owner = await seedUser("owner-1");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
 
     const res = await PUT(ctx(event.id, { location: "New Place" }));
     expect(res.status).toBe(403);
@@ -72,7 +72,7 @@ describe("PUT /api/events/[id]/location", () => {
     const owner = await seedUser("owner-2");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
     vi.mocked(resolveLocation).mockResolvedValue({ latitude: 38.7, longitude: -9.1 });
 
     const res = await PUT(ctx(event.id, { location: "Lisbon" }));
@@ -96,7 +96,7 @@ describe("PUT /api/events/[id]/location", () => {
       data: { latitude: 38.7, longitude: -9.1 },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await PUT(ctx(event.id, { location: "" }));
     expect(res.status).toBe(200);
@@ -111,7 +111,7 @@ describe("PUT /api/events/[id]/location", () => {
     const owner = await seedUser("owner-4");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: true });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: true, session: null } as any);
     vi.mocked(resolveLocation).mockResolvedValue(null);
 
     const res = await PUT(ctx(event.id, { location: "Unknown Place" }));
@@ -123,7 +123,7 @@ describe("PUT /api/events/[id]/location", () => {
       data: { id: "evt-no-owner", title: "No Owner", location: "Old", dateTime: new Date(), maxPlayers: 10 },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
     vi.mocked(resolveLocation).mockResolvedValue({ latitude: 40.7, longitude: -74 });
 
     const res = await PUT(ctx(event.id, { location: "New York" }));

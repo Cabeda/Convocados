@@ -350,7 +350,7 @@ describe("processJob", () => {
     vi.mocked(notificationQueue.drainNotificationQueue).mockResolvedValueOnce(0);
 
     const { sendReminder } = await vi.importMock("~/lib/email.server");
-    vi.mocked(sendReminder).mockRejectedValueOnce(new Error("SMTP error"));
+    vi.mocked(sendReminder as any).mockRejectedValueOnce(new Error("SMTP error"));
 
     await processJob(job!.id);
 

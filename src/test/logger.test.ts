@@ -23,7 +23,7 @@ describe("logger", () => {
     process.env.NODE_ENV = "test";
     vi.resetModules();
     await import("~/lib/logger.server");
-    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1];
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
     expect(call[0].level).toBe("silent");
   });
 
@@ -31,7 +31,7 @@ describe("logger", () => {
     process.env.NODE_ENV = "production";
     vi.resetModules();
     await import("~/lib/logger.server");
-    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1];
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
     expect(call[0].level).toBe("info");
   });
 
@@ -39,7 +39,7 @@ describe("logger", () => {
     process.env.NODE_ENV = "development";
     vi.resetModules();
     await import("~/lib/logger.server");
-    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1];
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
     expect(call[0].level).toBe("debug");
   });
 
@@ -48,7 +48,7 @@ describe("logger", () => {
     process.env.LOG_LEVEL = "warn";
     vi.resetModules();
     await import("~/lib/logger.server");
-    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1];
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
     expect(call[0].level).toBe("warn");
   });
 
@@ -56,7 +56,7 @@ describe("logger", () => {
     process.env.NODE_ENV = "development";
     vi.resetModules();
     await import("~/lib/logger.server");
-    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1];
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
     expect(call[0].transport).toBeDefined();
   });
 
@@ -64,7 +64,7 @@ describe("logger", () => {
     process.env.NODE_ENV = "production";
     vi.resetModules();
     await import("~/lib/logger.server");
-    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1];
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
     expect(call[0].transport).toBeUndefined();
   });
 });

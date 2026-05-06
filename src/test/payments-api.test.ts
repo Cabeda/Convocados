@@ -109,7 +109,7 @@ describe("PUT /api/events/[id]/payments", () => {
     const owner = await seedUser("owner-1");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
 
     const res = await PUT(putCtx(event.id, { playerName: "Alice", status: "paid" }));
     expect(res.status).toBe(403);
@@ -119,7 +119,7 @@ describe("PUT /api/events/[id]/payments", () => {
     const owner = await seedUser("owner-2");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await PUT(putCtx(event.id, { playerName: "Alice", status: "paid" }));
     expect(res.status).toBe(404);
@@ -132,7 +132,7 @@ describe("PUT /api/events/[id]/payments", () => {
       data: { eventId: event.id, totalAmount: 100, currency: "EUR" },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await PUT(putCtx(event.id, { playerName: "Alice", status: "invalid" }));
     expect(res.status).toBe(400);
@@ -145,7 +145,7 @@ describe("PUT /api/events/[id]/payments", () => {
       data: { eventId: event.id, totalAmount: 100, currency: "EUR" },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await PUT(putCtx(event.id, { playerName: "NonExistent", status: "paid" }));
     expect(res.status).toBe(404);
@@ -161,7 +161,7 @@ describe("PUT /api/events/[id]/payments", () => {
       data: { eventCostId: eventCost.id, playerName: "Alice", amount: 10, status: "pending" },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await PUT(putCtx(event.id, { playerName: "Alice", status: "paid" }));
     expect(res.status).toBe(200);
@@ -180,7 +180,7 @@ describe("PUT /api/events/[id]/payments", () => {
       data: { eventCostId: eventCost.id, playerName: "Bob", amount: 10, status: "paid", paidAt: new Date() },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await PUT(putCtx(event.id, { playerName: "Bob", status: "pending" }));
     expect(res.status).toBe(200);
@@ -199,7 +199,7 @@ describe("PUT /api/events/[id]/payments", () => {
       data: { eventCostId: eventCost.id, playerName: "Charlie", amount: 10, status: "pending" },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await PUT(putCtx(event.id, { playerName: "Charlie", status: "paid", method: "MBWay" }));
     expect(res.status).toBe(200);

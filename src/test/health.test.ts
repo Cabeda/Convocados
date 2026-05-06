@@ -62,7 +62,7 @@ describe("GET /api/health", () => {
     const oldNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
     const { execSync } = await import("node:child_process");
-    const spy = vi.spyOn(execSync as any, "constructor").mockImplementation(() => {});
+    const _spy = vi.spyOn(execSync as any, "constructor").mockImplementation(() => {});
     // Actually, execSync is a function. We need to mock the module import.
     // Let's use vi.doMock instead, but it's tricky with dynamic import.
     // Alternative: mock the module before importing health.

@@ -105,7 +105,7 @@ describe("GET /api/me/stats", () => {
 
   it("handles OAuth bearer token authentication", async () => {
     const user = await seedUser();
-    vi.mocked(authenticateRequest).mockResolvedValue({ userId: user.id, client: {} as any });
+    vi.mocked(authenticateRequest).mockResolvedValue({ userId: user.id, clientId: "test", scopes: ["*"], authMethod: "oauth" as const });
     vi.mocked(getSession).mockResolvedValue(null);
 
     const res = await GET(ctx(user.id));

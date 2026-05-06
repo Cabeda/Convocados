@@ -66,7 +66,7 @@ describe("GET /api/events/[id]/webhooks", () => {
     const owner = await seedUser("owner-1");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
 
     const res = await GET(getCtx(event.id));
     expect(res.status).toBe(403);
@@ -76,7 +76,7 @@ describe("GET /api/events/[id]/webhooks", () => {
     const owner = await seedUser("owner-2");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await GET(getCtx(event.id));
     expect(res.status).toBe(200);
@@ -91,7 +91,7 @@ describe("GET /api/events/[id]/webhooks", () => {
       data: { eventId: event.id, url: "https://example.com/hook" },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await GET(getCtx(event.id));
     expect(res.status).toBe(200);
@@ -111,7 +111,7 @@ describe("POST /api/events/[id]/webhooks", () => {
     const owner = await seedUser("owner-1");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
 
     const res = await POST(postCtx(event.id, { url: "https://example.com" }));
     expect(res.status).toBe(403);
@@ -121,7 +121,7 @@ describe("POST /api/events/[id]/webhooks", () => {
     const owner = await seedUser("owner-2");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await POST(postCtx(event.id, {}));
     expect(res.status).toBe(400);
@@ -131,7 +131,7 @@ describe("POST /api/events/[id]/webhooks", () => {
     const owner = await seedUser("owner-3");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await POST(postCtx(event.id, { url: "not-a-url" }));
     expect(res.status).toBe(400);
@@ -141,7 +141,7 @@ describe("POST /api/events/[id]/webhooks", () => {
     const owner = await seedUser("owner-4");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await POST(postCtx(event.id, { url: "https://example.com/webhook", events: ["player_joined"] }));
     expect(res.status).toBe(200);
@@ -157,7 +157,7 @@ describe("POST /api/events/[id]/webhooks", () => {
       data: { eventId: event.id, url: "https://example.com/webhook" },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await POST(postCtx(event.id, { url: "https://example.com/webhook" }));
     expect(res.status).toBe(409);
@@ -172,7 +172,7 @@ describe("POST /api/events/[id]/webhooks", () => {
       });
     }
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await POST(postCtx(event.id, { url: "https://example.com/extra" }));
     expect(res.status).toBe(429);
@@ -182,7 +182,7 @@ describe("POST /api/events/[id]/webhooks", () => {
     const owner = await seedUser("owner-7");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await POST(postCtx(event.id, { url: "https://example.com/webhook", events: ["player_joined", "invalid_event"] }));
     expect(res.status).toBe(200);
@@ -194,7 +194,7 @@ describe("POST /api/events/[id]/webhooks", () => {
     const owner = await seedUser("owner-8");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: true });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: true, session: null } as any);
 
     const res = await POST(postCtx(event.id, { url: "https://example.com/webhook" }));
     expect(res.status).toBe(200);
