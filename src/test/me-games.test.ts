@@ -65,7 +65,7 @@ describe("GET /api/me/games", () => {
 
   it("uses OAuth auth context when available", async () => {
     const user = await seedUser();
-    mockAuthenticateRequest.mockResolvedValue({ userId: user.id, client: {} as any });
+    mockAuthenticateRequest.mockResolvedValue({ userId: user.id, clientId: "test", scopes: ["*"], authMethod: "oauth" as const });
     mockGetSession.mockResolvedValue(null);
     await seedEvent(user.id);
     const res = await GET(ctx());
@@ -90,9 +90,9 @@ describe("GET /api/me/games", () => {
     mockAuthenticateRequest.mockResolvedValue(null);
     mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
     // Use distinct dateTimes so cursor ordering is deterministic
-    const event1 = await seedEvent(user.id, { title: "Game 1" });
+    const _event1 = await seedEvent(user.id, { title: "Game 1" });
     const event2 = await seedEvent(user.id, { title: "Game 2" });
-    const event3 = await seedEvent(user.id, { title: "Game 3" });
+    const _event3 = await seedEvent(user.id, { title: "Game 3" });
 
     // First page without cursor returns all 3
     const resAll = await GET(ctx(`?limit=10`));
@@ -114,9 +114,9 @@ describe("GET /api/me/games", () => {
     const event1 = await seedEvent(undefined, { title: "Game 1" });
     const event2 = await seedEvent(undefined, { title: "Game 2" });
     const event3 = await seedEvent(undefined, { title: "Game 3" });
-    const player1 = await prisma.player.create({ data: { name: user.name, eventId: event1.id, userId: user.id } });
+    await prisma.player.create({ data: { name: user.name, eventId: event1.id, userId: user.id } });
     const player2 = await prisma.player.create({ data: { name: user.name, eventId: event2.id, userId: user.id } });
-    const player3 = await prisma.player.create({ data: { name: user.name, eventId: event3.id, userId: user.id } });
+    await prisma.player.create({ data: { name: user.name, eventId: event3.id, userId: user.id } });
 
     // First page without cursor returns all 3
     const resAll = await GET(ctx(`?limit=10`));

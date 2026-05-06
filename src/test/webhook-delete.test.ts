@@ -56,7 +56,7 @@ describe("DELETE /api/events/[id]/webhooks/[webhookId]", () => {
     const owner = await seedUser("owner-1");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
 
     const res = await DELETE(ctx(event.id, "wh-1"));
     expect(res.status).toBe(403);
@@ -66,7 +66,7 @@ describe("DELETE /api/events/[id]/webhooks/[webhookId]", () => {
     const owner = await seedUser("owner-2");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await DELETE(ctx(event.id, "wh-nonexistent"));
     expect(res.status).toBe(404);
@@ -79,7 +79,7 @@ describe("DELETE /api/events/[id]/webhooks/[webhookId]", () => {
       data: { eventId: event.id, url: "https://example.com/webhook" },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await DELETE(ctx(event.id, webhook.id));
     expect(res.status).toBe(200);
@@ -97,7 +97,7 @@ describe("DELETE /api/events/[id]/webhooks/[webhookId]", () => {
       data: { eventId: event.id, url: "https://example.com/webhook" },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: true });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: true, session: null } as any);
 
     const res = await DELETE(ctx(event.id, webhook.id));
     expect(res.status).toBe(200);
@@ -111,7 +111,7 @@ describe("DELETE /api/events/[id]/webhooks/[webhookId]", () => {
       data: { eventId: event.id, url: "https://example.com/webhook" },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
 
     const res = await DELETE(ctx(event.id, webhook.id));
     expect(res.status).toBe(200);

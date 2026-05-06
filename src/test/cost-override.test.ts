@@ -26,7 +26,7 @@ beforeEach(async () => {
   resetApiRateLimitStore();
   vi.clearAllMocks();
   mockGetSession.mockResolvedValue({ user: { id: "u1", name: "Owner" } } as any);
-  mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false });
+  mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 });
 
 function ctx(eventId: string, body: any, method = "PUT") {
@@ -61,7 +61,7 @@ describe("PUT /api/events/[id]/cost/override", () => {
 
   it("returns 403 when not owner or admin", async () => {
     const { event } = await seedEventWithCost();
-    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false });
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
     const res = await PUT(ctx(event.id, { paymentMethods: null }));
     expect(res.status).toBe(403);
   });
@@ -115,7 +115,7 @@ describe("DELETE /api/events/[id]/cost/override", () => {
 
   it("returns 403 when not owner or admin", async () => {
     const { event } = await seedEventWithCost();
-    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false });
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
     const res = await DELETE(ctx(event.id, {}, "DELETE"));
     expect(res.status).toBe(403);
   });

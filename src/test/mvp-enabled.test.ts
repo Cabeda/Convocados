@@ -52,7 +52,7 @@ describe("PUT /api/events/[id]/mvp-enabled", () => {
     const user = await seedUser();
     const event = await seedEvent(user.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
 
     const res = await PUT(ctx(event.id, { mvpEnabled: false }));
     expect(res.status).toBe(200);
@@ -72,7 +72,7 @@ describe("PUT /api/events/[id]/mvp-enabled", () => {
     const owner = await seedUser("owner-1");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
 
     const res = await PUT(ctx(event.id, { mvpEnabled: true }));
     expect(res.status).toBe(403);
@@ -82,7 +82,7 @@ describe("PUT /api/events/[id]/mvp-enabled", () => {
     const owner = await seedUser("owner-2");
     const event = await seedEvent(owner.id);
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: true });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: true, session: null } as any);
 
     const res = await PUT(ctx(event.id, { mvpEnabled: false }));
     expect(res.status).toBe(200);
@@ -95,7 +95,7 @@ describe("PUT /api/events/[id]/mvp-enabled", () => {
       data: { id: "evt-no-owner", title: "No Owner", location: "Pitch", dateTime: new Date(), maxPlayers: 10 },
     });
 
-    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
 
     const res = await PUT(ctx(event.id, { mvpEnabled: false }));
     expect(res.status).toBe(200);

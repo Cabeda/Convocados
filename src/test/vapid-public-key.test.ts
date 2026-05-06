@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { GET } from "~/pages/api/push/vapid-public-key";
 
 describe("GET /api/push/vapid-public-key", () => {
