@@ -311,4 +311,115 @@ describe("processJob", () => {
     expect(updated!.failedAt).not.toBeNull();
     expect(updated!.retryCount).toBe(2); // stays at 2, failedAt is set
   });
+
+  it("processes unknown job type without error and marks processed", async () => {
+    const user = await seedUser();
+    const event = await seedEvent(user.id, new Date(Date.now() + 25 * 60 * 60 * 1000), "evt-unknown");
+
+    const job = await prisma.scheduledJob.create({
+      data: {
+        eventId: event.id,
+        type: "unknown_type",
+        runAt: new Date(Date.now() - 1000),
+        payload: "{}",
+      },
+    });
+
+    await processJob(job.id);
+
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.processedAt).not.toBeNull();
+  });
+
+  it("handles email send failure gracefully in reminder job", async () => {
+    const user = await seedUser();
+    const eventDate = new Date(Date.now() + 25 * 60 * 60 * 1000);
+    const event = await seedEvent(user.id, eventDate, "evt-email-fail");
+    await prisma.player.create({
+      data: { name: "Player1", eventId: event.id, userId: user.id },
+    });
+
+    await scheduleEventReminders(event.id, eventDate, 60);
+    const job = await prisma.scheduledJob.findFirst({
+      where: { eventId: event.id, type: "reminder_24h" },
+    });
+    expect(job).not.toBeNull();
+
+    // Make enqueue succeed but email send fail
+    vi.mocked(notificationQueue.enqueueNotification).mockResolvedValueOnce(undefined);
+    vi.mocked(notificationQueue.drainNotificationQueue).mockResolvedValueOnce(0);
+
+    const { sendReminder } = await vi.importMock("~/lib/email.server");
+    vi.mocked(sendReminder).mockRejectedValueOnce(new Error("SMTP error"));
+
+    await processJob(job!.id);
+
+    // Job should still be marked processed because email failure is caught internally
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job!.id } });
+    expect(updated!.processedAt).not.toBeNull();
+  });
+
+  it("skips already processed job", async () => {
+    const user = await seedUser();
+    const event = await seedEvent(user.id, new Date(Date.now() + 25 * 60 * 60 * 1000), "evt-processed");
+    const job = await prisma.scheduledJob.create({
+      data: { eventId: event.id, type: "reminder_24h", runAt: new Date(), processedAt: new Date() },
+    });
+
+    await processJob(job.id);
+
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.processedAt).not.toBeNull();
+    expect(updated!.retryCount).toBe(0);
+  });
+
+  it("skips already failed job", async () => {
+    const user = await seedUser();
+    const event = await seedEvent(user.id, new Date(Date.now() + 25 * 60 * 60 * 1000), "evt-failed");
+    const job = await prisma.scheduledJob.create({
+      data: { eventId: event.id, type: "reminder_24h", runAt: new Date(), failedAt: new Date() },
+    });
+
+    await processJob(job.id);
+
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.failedAt).not.toBeNull();
+    expect(updated!.retryCount).toBe(0);
+  });
+
+  it("reminder job returns early when eventId is null", async () => {
+    const job = await prisma.scheduledJob.create({
+      data: { eventId: null, type: "reminder_24h", runAt: new Date(), payload: "{}" },
+    });
+    await processJob(job.id);
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.processedAt).not.toBeNull();
+  });
+
+  it("reminder job returns early when event is not found", async () => {
+    const job = await prisma.scheduledJob.create({
+      data: { eventId: "non-existent", type: "reminder_24h", runAt: new Date(), payload: "{}" },
+    });
+    await processJob(job.id);
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.processedAt).not.toBeNull();
+  });
+
+  it("post-game job returns early when eventId is null", async () => {
+    const job = await prisma.scheduledJob.create({
+      data: { eventId: null, type: "post_game", runAt: new Date(), payload: "{}" },
+    });
+    await processJob(job.id);
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.processedAt).not.toBeNull();
+  });
+
+  it("post-game job returns early when event is not found", async () => {
+    const job = await prisma.scheduledJob.create({
+      data: { eventId: "non-existent", type: "post_game", runAt: new Date(), payload: "{}" },
+    });
+    await processJob(job.id);
+    const updated = await prisma.scheduledJob.findUnique({ where: { id: job.id } });
+    expect(updated!.processedAt).not.toBeNull();
+  });
 });

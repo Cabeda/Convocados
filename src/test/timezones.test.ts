@@ -109,6 +109,34 @@ describe("detectTimezone", () => {
     expect(tz).toBeTruthy();
     expect(typeof tz).toBe("string");
   });
+
+  it("falls back to UTC when Intl.DateTimeFormat throws", () => {
+    const original = Intl.DateTimeFormat;
+    // @ts-expect-error - mocking Intl.DateTimeFormat to throw
+    Intl.DateTimeFormat = function () {
+      throw new Error("Timezone not supported");
+    };
+    try {
+      const tz = detectTimezone();
+      expect(tz).toBe("UTC");
+    } finally {
+      Intl.DateTimeFormat = original;
+    }
+  });
+
+  it("falls back to UTC when resolvedOptions returns no timeZone", () => {
+    const original = Intl.DateTimeFormat;
+    // @ts-expect-error - mocking resolvedOptions
+    Intl.DateTimeFormat = function () {
+      return { resolvedOptions: () => ({ timeZone: undefined }) };
+    };
+    try {
+      const tz = detectTimezone();
+      expect(tz).toBe("UTC");
+    } finally {
+      Intl.DateTimeFormat = original;
+    }
+  });
 });
 
 describe("fromDateTimeLocalValue", () => {
@@ -170,5 +198,13 @@ describe("fromDateTimeLocalValue", () => {
       const backToUtc = fromDateTimeLocalValue(local, tz);
       expect(backToUtc).toBe(original.toISOString());
     }
+  });
+
+  it("handles DST boundary edge case with ±1h adjustments", () => {
+    // Spring forward: 2024-03-31T02:30 in Europe/Lisbon does not exist
+    // The function should find the correct UTC time by adjusting
+    const result = fromDateTimeLocalValue("2024-03-31T02:30", "Europe/Lisbon");
+    expect(result).toBeTruthy();
+    expect(result).toContain("T");
   });
 });
