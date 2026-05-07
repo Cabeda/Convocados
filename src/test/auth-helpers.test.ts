@@ -5,13 +5,19 @@ import { auth } from "~/lib/auth.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
-vi.mock("~/lib/auth.server", () => ({
-  auth: {
-    api: {
-      getSession: vi.fn(),
+vi.mock("~/lib/auth.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/lib/auth.server")>();
+  return {
+    ...actual,
+    auth: {
+      ...actual.auth,
+      api: {
+        ...actual.auth.api,
+        getSession: vi.fn(),
+      },
     },
-  },
-}));
+  };
+});
 
 beforeEach(async () => {
   await prisma.eventAdmin.deleteMany();
