@@ -16,7 +16,6 @@ import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.repository.WearScoreRepository
-import dev.convocados.wear.data.repository.WearScoreRepository
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.okhttp.*
@@ -82,7 +81,6 @@ class ScoreUpdateE2ETest {
     private lateinit var historyDao: WearHistoryDao
     private lateinit var pendingScoreDao: PendingScoreDao
     private lateinit var repository: WearGameRepository
-    private lateinit var scoreRepository: WearScoreRepository
     private lateinit var scoreRepository: WearScoreRepository
 
     private val json = Json {
