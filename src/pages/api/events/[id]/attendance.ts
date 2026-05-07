@@ -3,7 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { calculateAttendance } from "../../../../lib/attendance";
 
 export const GET: APIRoute = async ({ params }) => {
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },

@@ -70,6 +70,23 @@ interface Props {
   eventId: string;
 }
 
+interface EventSettings {
+  title: string;
+  ownerId: string | null;
+  isPublic: boolean;
+  balanced: boolean;
+  eloEnabled: boolean;
+  hideEloInTeams: boolean;
+  allowManualRating: boolean;
+  splitCostsEnabled: boolean;
+  mvpEnabled: boolean;
+  sport: string;
+  isRecurring: boolean;
+  durationMinutes: number | null;
+  archivedAt: string | null;
+  isAdmin: boolean;
+}
+
 interface AdminCandidate {
   userId: string;
   name: string;
@@ -101,9 +118,9 @@ export default function EventSettingsPage({ eventId }: Props) {
   const { data: session } = useSession();
 
   // Event data
-  const [event, setEvent] = useState<any>(null);
+  const [event, setEvent] = useState<EventSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
 
   // Priority data
   const [priorityData, setPriorityData] = useState<PriorityData | null>(null);
@@ -229,42 +246,42 @@ export default function EventSettingsPage({ eventId }: Props) {
   };
 
   const handleTogglePublic = (v: boolean) => {
-    setEvent((e: any) => e ? { ...e, isPublic: v } : e);
+    setEvent((e) => e ? { ...e, isPublic: v } : e);
     updateSetting("visibility", { isPublic: v });
   };
 
   const handleToggleBalanced = (v: boolean) => {
-    setEvent((e: any) => e ? { ...e, balanced: v } : e);
+    setEvent((e) => e ? { ...e, balanced: v } : e);
     updateSetting("balanced", { balanced: v });
   };
 
   const handleToggleElo = (v: boolean) => {
-    setEvent((e: any) => e ? { ...e, eloEnabled: v, ...(v ? {} : { balanced: false, hideEloInTeams: false }) } : e);
+    setEvent((e) => e ? { ...e, eloEnabled: v, ...(v ? {} : { balanced: false, hideEloInTeams: false }) } : e);
     updateSetting("elo", { eloEnabled: v });
   };
 
   const handleToggleManualRating = (v: boolean) => {
-    setEvent((e: any) => e ? { ...e, allowManualRating: v } : e);
+    setEvent((e) => e ? { ...e, allowManualRating: v } : e);
     updateSetting("manual-rating", { allowManualRating: v });
   };
 
   const handleToggleHideEloInTeams = (v: boolean) => {
-    setEvent((e: any) => e ? { ...e, hideEloInTeams: v } : e);
+    setEvent((e) => e ? { ...e, hideEloInTeams: v } : e);
     updateSetting("hide-elo-in-teams", { hideEloInTeams: v });
   };
 
   const handleToggleSplitCosts = (v: boolean) => {
-    setEvent((e: any) => e ? { ...e, splitCostsEnabled: v } : e);
+    setEvent((e) => e ? { ...e, splitCostsEnabled: v } : e);
     updateSetting("split-costs", { splitCostsEnabled: v });
   };
 
   const handleToggleMvpEnabled = (v: boolean) => {
-    setEvent((e: any) => e ? { ...e, mvpEnabled: v } : e);
+    setEvent((e) => e ? { ...e, mvpEnabled: v } : e);
     updateSetting("mvp-enabled", { mvpEnabled: v });
   };
 
   const handleSportChange = (v: string) => {
-    setEvent((e: any) => e ? { ...e, sport: v } : e);
+    setEvent((e) => e ? { ...e, sport: v } : e);
     updateSetting("sport", { sport: v });
   };
 
@@ -420,7 +437,7 @@ export default function EventSettingsPage({ eventId }: Props) {
     setAdminError(null);
     if (candidate.source === "invite") {
       // User doesn't exist yet — show info message, not error
-      setMessage({ type: "info" as any, text: t("adminInviteEmail").replace("{email}", candidate.email) });
+      setMessage({ type: "info", text: t("adminInviteEmail").replace("{email}", candidate.email) });
       setAdminSearchInput("");
       return;
     }
@@ -463,7 +480,7 @@ export default function EventSettingsPage({ eventId }: Props) {
   // ── Archive handler ───────────────────────────────────────────────────
 
   const handleArchiveToggle = async () => {
-    const archive = !event.archivedAt;
+    const archive = !event?.archivedAt;
     const res = await fetch(`/api/events/${eventId}/archive`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -545,7 +562,7 @@ export default function EventSettingsPage({ eventId }: Props) {
               <Select value={event.sport} onChange={(e) => handleSportChange(e.target.value)} sx={{ fontSize: "0.85rem" }}>
                 {SPORT_PRESETS.map((s) => (
                   <MenuItem key={s.id} value={s.id} sx={{ fontSize: "0.85rem" }}>
-                    {t(s.labelKey as any)}
+                    {t(s.labelKey as Parameters<typeof t>[0])}
                   </MenuItem>
                 ))}
               </Select>
@@ -563,7 +580,7 @@ export default function EventSettingsPage({ eventId }: Props) {
               value={event.durationMinutes ?? 60}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
-                if (!isNaN(val)) setEvent((ev: any) => ev ? { ...ev, durationMinutes: val } : ev);
+                if (!isNaN(val)) setEvent((ev) => ev ? { ...ev, durationMinutes: val } : ev);
               }}
               onBlur={async () => {
                 const val = event.durationMinutes ?? 60;
@@ -948,7 +965,7 @@ export default function EventSettingsPage({ eventId }: Props) {
                   handleAddAdmin(value);
                 }}
                 renderOption={(props, option) => {
-                  const { key, ...otherProps } = props as any;
+                  const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key: string };
                   if (option.source === "invite") {
                     return (
                       <li key={key} {...otherProps} style={{ minHeight: 40, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>
