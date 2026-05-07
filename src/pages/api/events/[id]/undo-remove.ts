@@ -10,7 +10,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const { name, order, userId, removedAt } = await request.json();
 
   if (!name || typeof order !== "number" || !removedAt) {

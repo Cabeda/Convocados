@@ -15,7 +15,7 @@ import MapIcon from "@mui/icons-material/Map";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
-import { detectLocale } from "~/lib/i18n";
+import { detectLocale, type TFunction } from "~/lib/i18n";
 import { getSportPreset } from "~/lib/sports";
 import { formatDateInTz } from "~/lib/timezones";
 
@@ -46,7 +46,7 @@ type ViewMode = "cards" | "table" | "map";
 function CardView({ events, locale, t }: {
   events: PublicEvent[];
   locale: string;
-  t: any;
+  t: TFunction;
 }) {
   return (
     <Grid2 container spacing={2}>
@@ -70,7 +70,7 @@ function CardView({ events, locale, t }: {
                   {ev.title}
                 </Typography>
                 <Chip
-                  label={t(sportPreset.labelKey as any)}
+                  label={t(sportPreset.labelKey as Parameters<typeof t>[0])}
                   size="small"
                   variant="outlined"
                   color="primary"
@@ -137,7 +137,7 @@ function CardView({ events, locale, t }: {
 function TableView({ events, locale, t }: {
   events: PublicEvent[];
   locale: string;
-  t: any;
+  t: TFunction;
 }) {
   return (
     <TableContainer component={Paper} elevation={2} sx={{ borderRadius: 3 }}>
@@ -167,7 +167,7 @@ function TableView({ events, locale, t }: {
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" noWrap>
-                    {t(sportPreset.labelKey as any)}
+                    {t(sportPreset.labelKey as Parameters<typeof t>[0])}
                   </Typography>
                 </TableCell>
                 <TableCell>
@@ -218,7 +218,7 @@ interface GeoEvent extends PublicEvent {
 
 function MapView({ events, t }: {
   events: PublicEvent[];
-  t: any;
+  t: TFunction;
 }) {
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState(false);
@@ -240,7 +240,7 @@ function MapView({ events, t }: {
   const geoEvents: GeoEvent[] = useMemo(() =>
     events
       .filter((ev) => ev.latitude !== null && ev.longitude !== null)
-      .map((ev) => ({ ...ev, lat: ev.latitude!, lng: ev.longitude! })),
+      .map((ev) => ({ ...ev, lat: ev.latitude ?? 0, lng: ev.longitude ?? 0 })),
     [events],
   );
 
@@ -275,7 +275,7 @@ function MapView({ events, t }: {
 function buildMapHtml(
   center: [number, number],
   events: GeoEvent[],
-  t: any,
+  t: TFunction,
 ): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -297,7 +297,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
 ${events.map((ev) => {
     const sportPreset = getSportPreset(ev.sport);
     const title = ev.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-    const sportLabel = t(sportPreset.labelKey as any);
+    const sportLabel = t(sportPreset.labelKey as Parameters<typeof t>[0]);
     const joinLabel = t("joinGame");
     const eventUrl = `${origin}/events/${ev.id}`;
     const popupContent = `<b>${title}</b><br/>${sportLabel} — ${ev.playerCount}/${ev.maxPlayers}<br/><a href="#" onclick="window.top.location.href='${eventUrl}';return false;">${joinLabel}</a>`;
@@ -424,7 +424,7 @@ export default function PublicGamesPage() {
                     >
                       <MenuItem value="">{t("allSports")}</MenuItem>
                       {availableSports.map((s) => (
-                        <MenuItem key={s.id} value={s.id}>{t(s.labelKey as any)}</MenuItem>
+                        <MenuItem key={s.id} value={s.id}>{t(s.labelKey as Parameters<typeof t>[0])}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>

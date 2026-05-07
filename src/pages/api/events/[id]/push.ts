@@ -6,7 +6,7 @@ import { createLogger } from "../../../../lib/logger.server";
 const log = createLogger("push-api");
 
 export const POST: APIRoute = async ({ params, request }) => {
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -26,8 +26,9 @@ export const POST: APIRoute = async ({ params, request }) => {
       create: { eventId, endpoint, p256dh: keys.p256dh, auth: keys.auth, locale: lang, clientId: cid, userId },
       update: { p256dh: keys.p256dh, auth: keys.auth, locale: lang, clientId: cid, userId },
     });
-  } catch (err: any) {
-    log.error({ err: err?.message, code: err?.code, eventId, endpoint: endpoint?.slice(0, 60) }, "Failed to upsert push subscription");
+  } catch (err: unknown) {
+    const e = err instanceof Error ? err : null;
+    log.error({ err: e?.message, code: (err as { code?: string })?.code, eventId, endpoint: endpoint?.slice(0, 60) }, "Failed to upsert push subscription");
     return Response.json({ error: "Failed to save subscription." }, { status: 500 });
   }
 
@@ -35,7 +36,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, request }) => {
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const { endpoint } = await request.json();
   if (!endpoint) return Response.json({ error: "Missing endpoint." }, { status: 400 });
 

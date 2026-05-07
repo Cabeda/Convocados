@@ -282,29 +282,30 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 			teamResults: { include: { members: { orderBy: { order: "asc" } } } },
 		},
 	});
+	if (!updatedEvent) return Response.json({ error: "Not found." }, { status: 404 });
 
-	const activeUpdated = updatedEvent!.players.slice(0, updatedEvent!.maxPlayers);
-	const benchUpdated = updatedEvent!.players.slice(updatedEvent!.maxPlayers);
+	const activeUpdated = updatedEvent.players.slice(0, updatedEvent.maxPlayers);
+	const benchUpdated = updatedEvent.players.slice(updatedEvent.maxPlayers);
 
 	const updatedMemberLookup = new Map<string, string>();
-	for (const team of updatedEvent!.teamResults) {
+	for (const team of updatedEvent.teamResults) {
 		for (const member of team.members) {
 			updatedMemberLookup.set(member.name, team.id);
 		}
 	}
 
-	const t1Id = updatedEvent!.teamResults[0]?.id;
-	const t2Id = updatedEvent!.teamResults[1]?.id;
+	const t1Id = updatedEvent.teamResults[0]?.id;
+	const t2Id = updatedEvent.teamResults[1]?.id;
 
 	return Response.json({
 		teamOne: {
-			name: updatedEvent!.teamOneName || "Team 1",
+			name: updatedEvent.teamOneName || "Team 1",
 			players: activeUpdated
 				.filter((p) => t1Id && updatedMemberLookup.get(p.name) === t1Id)
 				.map((p) => ({ id: p.id, name: p.name, order: p.order })),
 		},
 		teamTwo: {
-			name: updatedEvent!.teamTwoName || "Team 2",
+			name: updatedEvent.teamTwoName || "Team 2",
 			players: activeUpdated
 				.filter((p) => t2Id && updatedMemberLookup.get(p.name) === t2Id)
 				.map((p) => ({ id: p.id, name: p.name, order: p.order })),
@@ -313,6 +314,6 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 			.filter((p) => !updatedMemberLookup.has(p.name))
 			.map((p) => ({ id: p.id, name: p.name, order: p.order })),
 		bench: benchUpdated.map((p) => ({ id: p.id, name: p.name, order: p.order })),
-		maxPlayers: updatedEvent!.maxPlayers,
+		maxPlayers: updatedEvent.maxPlayers,
 	});
 };

@@ -89,7 +89,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     setRatings(rat.data);
     setNextCursor(rat.nextCursor);
     setHasMore(rat.hasMore);
-    setPlayers((ev.players ?? []).map((p: any) => ({ id: p.id, name: p.name, userId: p.userId ?? null })));
+    setPlayers((ev.players ?? []).map((p: { id: string; name: string; userId?: string | null }) => ({ id: p.id, name: p.name, userId: p.userId ?? null })));
     const isOwner = !!(session?.user && ev.ownerId && session.user.id === ev.ownerId);
     const hasEditPermission = isOwner || ev.isAdmin || !ev.ownerId;
     setCanEdit(hasEditPermission && !!ev.allowManualRating);
@@ -214,7 +214,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   };
 
   const isAuthenticated = !!session?.user;
-  const userHasLinkedPlayer = isAuthenticated && players.some((p) => p.userId === session!.user!.id);
+  const userHasLinkedPlayer = isAuthenticated && players.some((p) => p.userId === session?.user?.id);
   const canClaimPlayer = isAuthenticated && !userHasLinkedPlayer;
 
   const playerByName = new Map(players.map((p) => [p.name, p]));
@@ -413,7 +413,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                                 <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>
                                   {isUnclaimed && r.playerId && (
                                     <Tooltip title={t("claimPlayer")}>
-                                      <IconButton size="small" color="primary" onClick={() => setClaimTarget({ id: r.playerId!, name: r.name })}>
+                                      <IconButton size="small" color="primary" onClick={() => setClaimTarget({ id: r.playerId ?? "", name: r.name })}>
                                         <HowToRegIcon sx={{ fontSize: 20 }} />
                                       </IconButton>
                                     </Tooltip>

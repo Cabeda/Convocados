@@ -21,7 +21,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "read");
   if (limited) return limited;
 
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { ownerId: true },

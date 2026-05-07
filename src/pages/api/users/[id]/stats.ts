@@ -5,7 +5,7 @@ import { calculateAttendance } from "../../../../lib/attendance";
 
 /** GET /api/users/[id]/stats — public stats for a user (based on profileVisibility) */
 export const GET: APIRoute = async ({ params, request }) => {
-  const userId = params.id!;
+  const userId = params.id ?? "";
   const session = await getSession(request);
   const viewerId = session?.user?.id ?? null;
   const isOwnProfile = viewerId === userId;
