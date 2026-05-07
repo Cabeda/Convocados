@@ -3,8 +3,8 @@ import { prisma } from "../../../../../../lib/db.server";
 
 /** GET — list delivery logs for a webhook */
 export const GET: APIRoute = async ({ params }) => {
-  const eventId = params.id!;
-  const webhookId = params.webhookId!;
+  const eventId = params.id ?? "";
+  const webhookId = params.webhookId ?? "";
 
   const webhook = await prisma.webhookSubscription.findFirst({
     where: { id: webhookId, eventId },

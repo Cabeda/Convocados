@@ -4,7 +4,7 @@ import { getSession } from "../../../../lib/auth.helpers.server";
 
 /** POST — claim ownership of an ownerless event (atomic) */
 export const POST: APIRoute = async ({ params, request }) => {
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const session = await getSession(request);
   if (!session?.user) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
 /** DELETE — relinquish ownership (owner only), event becomes ownerless */
 export const DELETE: APIRoute = async ({ params, request }) => {
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const session = await getSession(request);
   if (!session?.user) {
     return Response.json({ error: "Authentication required." }, { status: 401 });

@@ -25,7 +25,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     where: { eventId: params.id },
     orderBy: { dateTime: "asc" },
   });
-  const eloMap = computeHistoryDeltas(params.id!, allHistory);
+  const eloMap = computeHistoryDeltas(params.id ?? "", allHistory);
 
   const mapped = history.map((h) => ({
     id: h.id,
@@ -146,7 +146,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const history = await prisma.gameHistory.create({
     data: {
-      eventId: params.id!,
+      eventId: params.id ?? "",
       dateTime: new Date(dateTime),
       teamOneName,
       teamTwoName,
@@ -162,7 +162,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const actor = session.user.name ?? session.user.email ?? "Unknown";
   const actorId = session.user.id;
-  logEvent(params.id!, "history_backfill_created", actor, actorId, {
+  logEvent(params.id ?? "", "history_backfill_created", actor, actorId, {
     historyId: history.id,
     date: new Date(dateTime).toISOString().slice(0, 10),
   });

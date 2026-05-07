@@ -6,7 +6,7 @@ const MAX_WEBHOOKS_PER_EVENT = 10;
 
 /** POST — subscribe a webhook */
 export const POST: APIRoute = async ({ params, request }) => {
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -63,7 +63,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
 /** GET — list webhooks for an event */
 export const GET: APIRoute = async ({ params, request }) => {
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 

@@ -4,8 +4,8 @@ import { signPayload } from "../../../../../../lib/webhook.server";
 
 /** POST — send a test payload to a webhook */
 export const POST: APIRoute = async ({ params }) => {
-  const eventId = params.id!;
-  const webhookId = params.webhookId!;
+  const eventId = params.id ?? "";
+  const webhookId = params.webhookId ?? "";
 
   const webhook = await prisma.webhookSubscription.findFirst({
     where: { id: webhookId, eventId },
@@ -54,8 +54,8 @@ export const POST: APIRoute = async ({ params }) => {
         data: { status: "failed", attempts: 1, lastAttempt: new Date(), error: `HTTP ${res.status}` },
       });
     }
-  } catch (err: any) {
-    const errMsg = err?.name === "AbortError" ? "Timeout" : (err?.message ?? "Unknown error");
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? (err.name === "AbortError" ? "Timeout" : err.message) : "Unknown error";
     await prisma.webhookDelivery.update({
       where: { id: delivery.id },
       data: { status: "failed", attempts: 1, lastAttempt: new Date(), error: errMsg },
@@ -63,15 +63,16 @@ export const POST: APIRoute = async ({ params }) => {
   }
 
   const updated = await prisma.webhookDelivery.findUnique({ where: { id: delivery.id } });
+  if (!updated) return Response.json({ error: "Not found." }, { status: 404 });
 
   return Response.json({
     delivery: {
-      id: updated!.id,
-      eventType: updated!.eventType,
-      status: updated!.status,
-      error: updated!.error,
-      deliveredAt: updated!.deliveredAt?.toISOString() ?? null,
-      createdAt: updated!.createdAt.toISOString(),
+      id: updated.id,
+      eventType: updated.eventType,
+      status: updated.status,
+      error: updated.error,
+      deliveredAt: updated.deliveredAt?.toISOString() ?? null,
+      createdAt: updated.createdAt.toISOString(),
     },
   });
 };
