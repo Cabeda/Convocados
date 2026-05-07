@@ -7,6 +7,7 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.repository.WearGameRepository
+import dev.convocados.wear.data.repository.WearScoreRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
 import dev.convocados.wear.util.canScoreGame
 import dev.convocados.wear.util.isStalePastGame
@@ -35,6 +36,7 @@ data class GamesUiState(
 @HiltViewModel
 class GamesViewModel @Inject constructor(
     private val repository: WearGameRepository,
+    private val scoreRepository: WearScoreRepository,
     private val workManager: WorkManager,
 ) : ViewModel() {
 
@@ -51,10 +53,15 @@ class GamesViewModel @Inject constructor(
             combine(
                 repository.observeGames(),
                 repository.observeArchivedGames(),
-                repository.observePendingCount(),
+                scoreRepository.observePendingCount(),
                 tickProvider(),
-            ) { games, archived, pending, _ ->
-                Triple(games, archived, pending)
+            ) { values ->
+                @Suppress("UNCHECKED_CAST")
+                Triple(
+                    values[0] as List<WearGameEntity>,
+                    values[1] as List<WearGameEntity>,
+                    values[2] as Int,
+                )
             }.collect { (games, archived, pending) ->
                 val upcoming = games.filter { !isStalePastGame(it.dateTime, it.isRecurring) }
                 val suggested = findBestGame(upcoming)

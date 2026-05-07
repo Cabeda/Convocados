@@ -3,6 +3,7 @@ package dev.convocados.wear.ui.screen.games
 import app.cash.turbine.test
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.repository.WearGameRepository
+import dev.convocados.wear.data.repository.WearScoreRepository
 import androidx.work.WorkManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,7 @@ import java.time.temporal.ChronoUnit
 class GamesViewModelTest {
 
     private val repository = mockk<WearGameRepository>(relaxed = true)
+    private val scoreRepository = mockk<WearScoreRepository>(relaxed = true)
     private val workManager = mockk<WorkManager>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
@@ -37,7 +39,7 @@ class GamesViewModelTest {
     }
 
     private fun makeViewModel(): GamesViewModel {
-        val vm = GamesViewModel(repository, workManager)
+        val vm = GamesViewModel(repository, scoreRepository, workManager)
         vm.tickProvider = { flowOf(Instant.now()) }
         return vm
     }
@@ -46,7 +48,7 @@ class GamesViewModelTest {
     fun `initial state is loading`() = runTest {
         coEvery { repository.observeGames() } returns flowOf(emptyList())
         coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
-        coEvery { repository.observePendingCount() } returns flowOf(0)
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
 
         val viewModel = makeViewModel()
 
@@ -63,7 +65,7 @@ class GamesViewModelTest {
         val games = listOf(makeGame("1"), makeGame("2"))
         coEvery { repository.observeGames() } returns flowOf(games)
         coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
-        coEvery { repository.observePendingCount() } returns flowOf(0)
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
         val viewModel = makeViewModel()
@@ -81,7 +83,7 @@ class GamesViewModelTest {
     fun `refresh sets isOffline on failure`() = runTest {
         coEvery { repository.observeGames() } returns flowOf(emptyList())
         coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
-        coEvery { repository.observePendingCount() } returns flowOf(0)
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.failure(Exception("No network"))
 
         val viewModel = makeViewModel()
@@ -94,7 +96,7 @@ class GamesViewModelTest {
     fun `pending sync count is observed`() = runTest {
         coEvery { repository.observeGames() } returns flowOf(emptyList())
         coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
-        coEvery { repository.observePendingCount() } returns flowOf(5)
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(5)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
         val viewModel = makeViewModel()
@@ -115,7 +117,7 @@ class GamesViewModelTest {
 
         coEvery { repository.observeGames() } returns flowOf(listOf(soonGame, laterGame))
         coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
-        coEvery { repository.observePendingCount() } returns flowOf(0)
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
         val viewModel = makeViewModel()
@@ -132,7 +134,7 @@ class GamesViewModelTest {
     fun `refresh calls repository refreshGames`() = runTest {
         coEvery { repository.observeGames() } returns flowOf(emptyList())
         coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
-        coEvery { repository.observePendingCount() } returns flowOf(0)
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
         val viewModel = makeViewModel()
@@ -153,7 +155,7 @@ class GamesViewModelTest {
 
         coEvery { repository.observeGames() } returns flowOf(listOf(scorableGame, futureGame, pastGame))
         coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
-        coEvery { repository.observePendingCount() } returns flowOf(0)
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
         val viewModel = makeViewModel()
@@ -177,7 +179,7 @@ class GamesViewModelTest {
 
         coEvery { repository.observeGames() } returns flowOf(listOf(recentPast, stalePast, staleRecurring))
         coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
-        coEvery { repository.observePendingCount() } returns flowOf(0)
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
         val viewModel = makeViewModel()
@@ -199,7 +201,7 @@ class GamesViewModelTest {
 
         coEvery { repository.observeGames() } returns flowOf(emptyList())
         coEvery { repository.observeArchivedGames() } returns flowOf(listOf(archivedGame))
-        coEvery { repository.observePendingCount() } returns flowOf(0)
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
         coEvery { repository.refreshGames() } returns Result.success(Unit)
 
         val viewModel = makeViewModel()

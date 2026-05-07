@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
+import dev.convocados.wear.data.repository.WearScoreRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
 import dev.convocados.wear.util.canScoreGame
 import dev.convocados.wear.util.tickFlow
@@ -34,6 +35,7 @@ data class ScoreUiState(
 @HiltViewModel
 class ScoreViewModel @Inject constructor(
     private val repository: WearGameRepository,
+    private val scoreRepository: WearScoreRepository,
     private val workManager: WorkManager,
 ) : ViewModel() {
 
@@ -100,7 +102,7 @@ class ScoreViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, error = null) }
 
-            val result = repository.submitScore(
+            val result = scoreRepository.submitScore(
                 eventId = eventId,
                 historyId = historyId,
                 scoreOne = state.scoreOne,
