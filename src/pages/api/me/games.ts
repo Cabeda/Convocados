@@ -25,7 +25,13 @@ export const GET: APIRoute = async ({ request }) => {
     sport: true,
     maxPlayers: true,
     archivedAt: true,
+    isRecurring: true,
     _count: { select: { players: true } },
+    history: {
+      select: { scoreOne: true, scoreTwo: true },
+      orderBy: { dateTime: "desc" as const },
+      take: 1,
+    },
   } as const;
 
   const [ownedEvents, joinedPlayers] = await Promise.all([
@@ -70,6 +76,8 @@ export const GET: APIRoute = async ({ request }) => {
     dateTime: e.dateTime.toISOString(),
     archivedAt: e.archivedAt?.toISOString() ?? null,
     playerCount: e._count.players,
+    lastScoreOne: e.history[0]?.scoreOne ?? null,
+    lastScoreTwo: e.history[0]?.scoreTwo ?? null,
   });
 
   const allOwned = ownedSlice.map(mapGame);
@@ -78,6 +86,8 @@ export const GET: APIRoute = async ({ request }) => {
     dateTime: p.event.dateTime.toISOString(),
     archivedAt: p.event.archivedAt?.toISOString() ?? null,
     playerCount: p.event._count.players,
+    lastScoreOne: p.event.history[0]?.scoreOne ?? null,
+    lastScoreTwo: p.event.history[0]?.scoreTwo ?? null,
   }));
 
   return Response.json({

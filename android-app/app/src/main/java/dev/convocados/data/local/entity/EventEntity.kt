@@ -15,6 +15,8 @@ data class EventEntity(
     val playerCount: Int,
     val archivedAt: String?,
     val isRecurring: Boolean,
+    val lastScoreOne: Int?,
+    val lastScoreTwo: Int?,
     val type: String // "owned", "joined", "archivedOwned", "archivedJoined"
 )
 
@@ -27,7 +29,9 @@ fun EventEntity.toSummary() = EventSummary(
     maxPlayers = maxPlayers,
     playerCount = playerCount,
     archivedAt = archivedAt,
-    isRecurring = isRecurring
+    isRecurring = isRecurring,
+    lastScoreOne = lastScoreOne,
+    lastScoreTwo = lastScoreTwo,
 )
 
 fun EventSummary.toEntity(type: String) = EventEntity(
@@ -40,5 +44,7 @@ fun EventSummary.toEntity(type: String) = EventEntity(
     playerCount = playerCount,
     archivedAt = archivedAt,
     isRecurring = isRecurring,
+    lastScoreOne = lastScoreOne,
+    lastScoreTwo = lastScoreTwo,
     type = type
 )
