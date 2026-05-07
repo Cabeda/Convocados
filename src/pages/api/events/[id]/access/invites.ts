@@ -5,7 +5,7 @@ import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 
 /** GET — List invited users for an event (owner only). */
 export const GET: APIRoute = async ({ params, request }) => {
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { ownerId: true },
@@ -37,7 +37,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { ownerId: true },
@@ -88,7 +88,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { ownerId: true },

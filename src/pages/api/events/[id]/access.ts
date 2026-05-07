@@ -9,7 +9,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { ownerId: true },
@@ -50,7 +50,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
 /** GET — Check if event has password protection (public info). */
 export const GET: APIRoute = async ({ params }) => {
   const event = await prisma.event.findUnique({
-    where: { id: params.id! },
+    where: { id: params.id ?? "" },
     select: { accessPassword: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
