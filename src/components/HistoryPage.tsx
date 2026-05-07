@@ -862,8 +862,8 @@ function HistoryCardFull({
                                   <span>
                                     {p.name}{" "}
                                     <span style={{
-                                      color: elo!.delta > 0 ? theme.palette.success.main
-                                        : elo!.delta < 0 ? theme.palette.error.main
+                                      color: (elo?.delta ?? 0) > 0 ? theme.palette.success.main
+                                        : (elo?.delta ?? 0) < 0 ? theme.palette.error.main
                                         : theme.palette.text.secondary,
                                       fontWeight: 700, fontSize: "0.75rem",
                                     }}>
@@ -955,7 +955,7 @@ function HistoryCardFull({
                               />
                             )}
                             renderOption={(props, option) => {
-                              const { key, ...otherProps } = props as any;
+                              const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key: string };
                               if (option.type === "create") {
                                 return (
                                   <li key={key} {...otherProps} style={{ minHeight: 40, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1153,7 +1153,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setOwnerId(ev.ownerId ?? null);
     setIsAdmin(!!ev.isAdmin);
     setTimezone(ev.timezone || "UTC");
-    setEventPlayers((ev.players ?? []).map((p: any) => ({ id: p.id, name: p.name })));
+    setEventPlayers((ev.players ?? []).map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
     setHistory(hist.data);
     setNextCursor(hist.nextCursor);
     setHasMore(hist.hasMore);
@@ -1161,7 +1161,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
 
     // Fetch known players (historical) and ratings in parallel (non-blocking)
     // Combine current event players with historical players for suggestions
-    const currentPlayers = (ev.players ?? []).map((p: any) => ({ name: p.name, gamesPlayed: -1 })); // -1 indicates current player
+    const currentPlayers = (ev.players ?? []).map((p: { name: string }) => ({ name: p.name, gamesPlayed: -1 })); // -1 indicates current player
     Promise.all([
       fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).catch(() => ({ players: [] })),
       fetch(`/api/events/${eventId}/ratings`).then((r) => r.json()).catch(() => ({ data: [] })),
@@ -1178,7 +1178,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
       });
       setKnownPlayers(Array.from(allPlayersMap.values()));
       setPlayerRatings(
-        (ratings.data ?? []).map((r: any) => ({ name: r.name, rating: r.rating, gamesPlayed: r.gamesPlayed }))
+        (ratings.data ?? []).map((r: { name: string; rating: number; gamesPlayed: number }) => ({ name: r.name, rating: r.rating, gamesPlayed: r.gamesPlayed }))
       );
     });
   }, [eventId]);

@@ -5,7 +5,7 @@ const PAGE_SIZE = 50;
 
 /** GET /api/events/:id/log?cursor=<id>&limit=<n> — paginated activity log */
 export const GET: APIRoute = async ({ params, request }) => {
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },

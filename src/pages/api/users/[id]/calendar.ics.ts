@@ -10,7 +10,7 @@ import { parseRecurrenceRule } from "../../../../lib/recurrence";
  * Authenticated via private feed token (query param).
  */
 export const GET: APIRoute = async ({ params, request }) => {
-  const userId = params.id!;
+  const userId = params.id ?? "";
   const url = new URL(request.url);
   const token = url.searchParams.get("token");
 

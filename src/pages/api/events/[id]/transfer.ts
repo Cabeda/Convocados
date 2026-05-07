@@ -4,7 +4,7 @@ import { checkOwnership } from "../../../../lib/auth.helpers.server";
 
 /** POST — transfer ownership to another authenticated player */
 export const POST: APIRoute = async ({ params, request }) => {
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     include: { players: true },

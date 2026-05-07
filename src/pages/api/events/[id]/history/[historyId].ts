@@ -42,7 +42,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     const actor = session.user.name ?? session.user.email ?? "Unknown";
     const actorId = session.user.id;
     const historyDate = entry.dateTime.toISOString().slice(0, 10);
-    logEvent(params.id!, "history_unlocked", actor, actorId, {
+    logEvent((params.id ?? ""), "history_unlocked", actor, actorId, {
       historyId: entry.id, date: historyDate,
     });
 
@@ -70,7 +70,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     const actor = session.user.name ?? session.user.email ?? "Unknown";
     const actorId = session.user.id;
     const historyDate = entry.dateTime.toISOString().slice(0, 10);
-    logEvent(params.id!, "history_locked", actor, actorId, {
+    logEvent((params.id ?? ""), "history_locked", actor, actorId, {
       historyId: entry.id, date: historyDate,
     });
 
@@ -149,13 +149,13 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   const historyDate = entry.dateTime.toISOString().slice(0, 10);
 
   if (scoreOne !== undefined || scoreTwo !== undefined) {
-    logEvent(params.id!, "history_score_updated", actor, actorId, {
+    logEvent((params.id ?? ""), "history_score_updated", actor, actorId, {
       historyId: entry.id, date: historyDate,
       scoreOne: updated.scoreOne, scoreTwo: updated.scoreTwo,
     });
   }
   if (teamsSnapshot !== undefined) {
-    logEvent(params.id!, "history_teams_updated", actor, actorId, {
+    logEvent((params.id ?? ""), "history_teams_updated", actor, actorId, {
       historyId: entry.id, date: historyDate,
     });
 
@@ -166,7 +166,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     });
     if (eventCost) {
       try {
-        const newTeams = JSON.parse(updated.teamsSnapshot!) as Array<{ players: Array<{ name: string }> }>;
+        const newTeams = JSON.parse(updated.teamsSnapshot ?? "[]") as Array<{ players: Array<{ name: string }> }>;
         const newPlayerNames = newTeams.flatMap((t) => t.players.map((p) => p.name));
         const share = newPlayerNames.length > 0 ? eventCost.totalAmount / newPlayerNames.length : 0;
 
@@ -193,12 +193,12 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     }
   }
   if (status !== undefined) {
-    logEvent(params.id!, "history_status_updated", actor, actorId, {
+    logEvent((params.id ?? ""), "history_status_updated", actor, actorId, {
       historyId: entry.id, date: historyDate, status: updated.status,
     });
   }
   if (paymentsSnapshot !== undefined) {
-    logEvent(params.id!, "history_payments_updated", actor, actorId, {
+    logEvent((params.id ?? ""), "history_payments_updated", actor, actorId, {
       historyId: entry.id, date: historyDate,
     });
   }
@@ -214,7 +214,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     !updated.eloProcessed
   ) {
     try {
-      await processGame(params.id!, updated.id, JSON.parse(updated.teamsSnapshot), finalScoreOne, finalScoreTwo);
+      await processGame((params.id ?? ""), updated.id, JSON.parse(updated.teamsSnapshot), finalScoreOne, finalScoreTwo);
     } catch { /* ELO processing is best-effort */ }
   }
 
@@ -224,7 +224,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     (teamsSnapshot !== undefined || scoreOne !== undefined || scoreTwo !== undefined)
   ) {
     try {
-      await recalculateAllRatings(params.id!);
+      await recalculateAllRatings((params.id ?? ""));
     } catch { /* recalculation is best-effort */ }
   }
 
@@ -281,11 +281,11 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   await prisma.gameHistory.delete({ where: { id: params.historyId } });
 
   if (needsRecalc) {
-    await recalculateAllRatings(params.id!);
+    await recalculateAllRatings((params.id ?? ""));
   }
 
   const actor = session.user.name ?? session.user.email ?? "Unknown";
-  logEvent(params.id!, "history_status_updated", actor, session.user.id, {
+  logEvent((params.id ?? ""), "history_status_updated", actor, session.user.id, {
     historyId: params.historyId,
     action: "deleted",
   });

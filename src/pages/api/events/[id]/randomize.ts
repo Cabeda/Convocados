@@ -12,7 +12,7 @@ export const POST: APIRoute = async ({ params, url, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
