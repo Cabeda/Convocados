@@ -52,10 +52,9 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   // Process the ELO update
-  const eventId = params.id ?? "";
   const teamsSnapshot = JSON.parse(historyEntry.teamsSnapshot);
   await processGame(
-    eventId,
+    (params.id ?? ""),
     historyEntry.id,
     teamsSnapshot,
     historyEntry.scoreOne,
@@ -64,7 +63,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const actor = session.user.name ?? session.user.email ?? "Unknown";
   const actorId = session.user.id;
-  logEvent(eventId, "history_elo_approved", actor, actorId, {
+  logEvent((params.id ?? ""), "history_elo_approved", actor, actorId, {
     historyId: historyEntry.id,
     date: historyEntry.dateTime.toISOString().slice(0, 10),
   });

@@ -1,7 +1,7 @@
 package dev.convocados.wear.data.repository
 
 import dev.convocados.wear.data.api.TeamsResponse
-import dev.convocados.wear.data.api.TeamGroup
+import dev.convocados.wear.data.api.TeamInfo
 import dev.convocados.wear.data.api.TeamPlayer
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
@@ -27,15 +27,14 @@ class WearTeamRepositoryTest {
         repository = WearTeamRepository(client, playerDao, pendingRosterChangeDao)
     }
 
-    // ── refreshTeams ─────────────────────────────────────────────────────
-
     @Test
     fun `refreshTeams fetches and caches players`() = runTest {
         val response = TeamsResponse(
-            teamOne = TeamGroup(players = listOf(TeamPlayer("p1", "Alice", 0))),
-            teamTwo = TeamGroup(players = listOf(TeamPlayer("p2", "Bob", 0))),
+            teamOne = TeamInfo(name = "Team 1", players = listOf(TeamPlayer("p1", "Alice", 0))),
+            teamTwo = TeamInfo(name = "Team 2", players = listOf(TeamPlayer("p2", "Bob", 0))),
             unassigned = listOf(TeamPlayer("p3", "Charlie", 0)),
             bench = emptyList(),
+            maxPlayers = 10,
         )
         coEvery { client.getTeams("e1") } returns response
 
@@ -54,8 +53,6 @@ class WearTeamRepositoryTest {
         assertTrue(result.isFailure)
     }
 
-    // ── updateTeams ──────────────────────────────────────────────────────
-
     @Test
     fun `updateTeams updates local cache optimistically`() = runTest {
         val players = listOf(
@@ -63,12 +60,19 @@ class WearTeamRepositoryTest {
             WearPlayerEntity("p2", "e1", "Bob", 0, "unassigned"),
         )
         coEvery { playerDao.observePlayers("e1") } returns flowOf(players)
-        coEvery { client.updateTeams(any(), any()) } returns Unit
-        coEvery { client.getTeams("e1") } returns TeamsResponse(
-            teamOne = TeamGroup(players = listOf(TeamPlayer("p1", "Alice", 0))),
-            teamTwo = TeamGroup(players = listOf(TeamPlayer("p2", "Bob", 0))),
+        coEvery { client.updateTeams(any(), any()) } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1", players = listOf(TeamPlayer("p1", "Alice", 0))),
+            teamTwo = TeamInfo(name = "Team 2", players = listOf(TeamPlayer("p2", "Bob", 0))),
             unassigned = emptyList(),
             bench = emptyList(),
+            maxPlayers = 10,
+        )
+        coEvery { client.getTeams("e1") } returns TeamsResponse(
+            teamOne = TeamInfo(name = "Team 1", players = listOf(TeamPlayer("p1", "Alice", 0))),
+            teamTwo = TeamInfo(name = "Team 2", players = listOf(TeamPlayer("p2", "Bob", 0))),
+            unassigned = emptyList(),
+            bench = emptyList(),
+            maxPlayers = 10,
         )
 
         val result = repository.updateTeams("e1", listOf("p1"), listOf("p2"))

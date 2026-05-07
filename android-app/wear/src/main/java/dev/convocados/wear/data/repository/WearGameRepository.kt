@@ -63,8 +63,6 @@ class WearGameRepository @Inject constructor(
     /** Get a cached game by ID. */
     suspend fun getGame(eventId: String): WearGameEntity? = gameDao.getGame(eventId)
 
-    // ── Mappers ──────────────────────────────────────────────────────────
-
     private fun dev.convocados.wear.data.api.EventSummary.toEntity(type: String) = WearGameEntity(
         id = id,
         title = title,

@@ -4,7 +4,7 @@ import app.cash.turbine.test
 import dev.convocados.wear.data.api.TeamInfo
 import dev.convocados.wear.data.api.TeamsResponse
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
-import dev.convocados.wear.data.repository.WearGameRepository
+import dev.convocados.wear.data.repository.WearTeamRepository
 import androidx.work.WorkManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +19,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class TeamsViewModelTest {
 
-    private val repository = mockk<WearGameRepository>(relaxed = true)
+    private val repository = mockk<WearTeamRepository>(relaxed = true)
     private val workManager = mockk<WorkManager>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 

@@ -27,7 +27,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const actorName = session?.user?.name ?? null;
   const actorId = session?.user?.id ?? null;
   logEvent(
-    params.id!,
+    params.id ?? "",
     allowManualRating ? "rating_manual_enabled" : "rating_manual_disabled",
     actorName,
     actorId,

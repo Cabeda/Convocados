@@ -8,7 +8,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const session = await getSession(request);
   if (!session?.user) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
@@ -100,8 +100,8 @@ export const POST: APIRoute = async ({ params, request }) => {
         } catch { /* malformed JSON — skip */ }
       }
     });
-  } catch (err: any) {
-    if (err?.message === "CLAIM_RACE") {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "CLAIM_RACE") {
       return Response.json({ error: "This player was already claimed by someone else." }, { status: 409 });
     }
     throw err;

@@ -17,11 +17,11 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 
-  const processed = await recalculateAllRatings(params.id!);
+  const processed = await recalculateAllRatings(params.id ?? "");
 
   const actorName = session?.user?.name ?? null;
   const actorId = session?.user?.id ?? null;
-  logEvent(params.id!, "rating_recalculated", actorName, actorId, {
+  logEvent(params.id ?? "", "rating_recalculated", actorName, actorId, {
     gamesProcessed: processed,
   });
 

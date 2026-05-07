@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
+import dev.convocados.wear.data.repository.WearScoreRepository
 import dev.convocados.wear.util.canScoreGame
 import androidx.work.WorkManager
 import io.mockk.*
@@ -25,6 +26,7 @@ import java.time.temporal.ChronoUnit
 class ScoreViewModelTest {
 
     private val repository = mockk<WearGameRepository>(relaxed = true)
+    private val scoreRepository = mockk<WearScoreRepository>(relaxed = true)
     private val workManager = mockk<WorkManager>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
@@ -39,14 +41,14 @@ class ScoreViewModelTest {
     }
 
     private fun makeViewModel(): ScoreViewModel {
-        val vm = ScoreViewModel(repository, workManager)
+        val vm = ScoreViewModel(repository, scoreRepository, workManager)
         vm.tickProvider = { flowOf(Instant.now()) }
         return vm
     }
 
     @Test
     fun `initial state is loading`() = runTest {
-        val viewModel = ScoreViewModel(repository, workManager)
+        val viewModel = ScoreViewModel(repository, scoreRepository, workManager)
 
         viewModel.uiState.test {
             val state = awaitItem()

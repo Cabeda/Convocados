@@ -4,7 +4,7 @@ import { getSession } from "../../../../lib/auth.helpers.server";
 
 /** GET — user profile with game history, filtered by viewer permissions */
 export const GET: APIRoute = async ({ params, request }) => {
-  const userId = params.id!;
+  const userId = params.id ?? "";
   const session = await getSession(request);
   const viewerId = session?.user?.id ?? null;
   const isOwnProfile = viewerId === userId;
@@ -121,7 +121,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
 /** PATCH — update own profile (name only; email changes should go through better-auth) */
 export const PATCH: APIRoute = async ({ params, request }) => {
-  const userId = params.id!;
+  const userId = params.id ?? "";
   const session = await getSession(request);
 
   if (!session?.user || session.user.id !== userId) {

@@ -16,13 +16,8 @@ class WearScoreRepository @Inject constructor(
     private val historyDao: WearHistoryDao,
     private val pendingScoreDao: PendingScoreDao,
 ) {
-    /** Observable count of pending (unsynced) scores. */
     fun observePendingCount(): Flow<Int> = pendingScoreDao.observeCount()
 
-    /**
-     * Submit a score. Tries the API first; if offline, queues it locally.
-     * Updates the local cache optimistically either way.
-     */
     suspend fun submitScore(
         eventId: String,
         historyId: String,
@@ -32,7 +27,6 @@ class WearScoreRepository @Inject constructor(
         teamTwoName: String,
     ): Result<Unit> {
         historyDao.updateScore(historyId, scoreOne, scoreTwo)
-
         return try {
             client.patch<dev.convocados.wear.data.api.GameHistory>(
                 "/api/events/$eventId/history/$historyId",
@@ -55,7 +49,6 @@ class WearScoreRepository @Inject constructor(
         }
     }
 
-    /** Sync all pending scores. Returns number of successfully synced items. */
     suspend fun syncPendingScores(): Int {
         val pending = pendingScoreDao.getAll()
         var synced = 0

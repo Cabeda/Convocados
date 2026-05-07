@@ -3,6 +3,7 @@ import { createT, type Locale, type TranslationKey } from "./i18n";
 import { createLogger } from "./logger.server";
 import { DEFAULTS, wantsPushForJobType, wantsPushReminder } from "./notificationPrefs.server";
 import type { NotificationJobType } from "./notificationQueue.server";
+import type webpush from "web-push";
 import pLimit from "p-limit";
 
 const log = createLogger("push");
@@ -14,23 +15,22 @@ const PUSH_CONCURRENCY = 20;
 const FCM_API_URL = "https://fcm.googleapis.com/v1/projects/{projectId}/messages:send";
 
 let initialized = false;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _webpush: any = null;
+let _webpush: typeof webpush | null = null;
 
-async function getWebPush(): Promise<typeof import("web-push")> {
+async function getWebPush(): Promise<typeof webpush> {
   if (!_webpush) {
     const mod = await import("web-push");
-    _webpush = (mod as any).default ?? mod;
+    _webpush = (mod as { default?: typeof webpush }).default ?? mod;
   }
-  return _webpush;
+  return _webpush as typeof webpush;
 }
 
 async function init() {
   if (initialized) return;
   initialized = true;
   const webpush = await getWebPush();
-  const publicKey = import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY!;
-  const privateKey = import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY!;
+  const publicKey = import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY ?? "";
+  const privateKey = import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY ?? "";
   webpush.setVapidDetails("mailto:admin@convocados.fly.dev", publicKey, privateKey);
 }
 
@@ -270,7 +270,7 @@ async function sendAppPushToEventUsers(
       if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) continue;
     }
     // Build localized body using the token's stored locale
-    const t = createT(((token as any).locale as Locale) ?? "en");
+    const t = createT((token.locale as Locale) ?? "en");
     const body = t(key, params);
     const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
     const fullBody = `${body} · ${suffix}`;
@@ -374,12 +374,13 @@ export async function sendPushToEvent(
               pushPayload,
             );
             log.info({ endpoint: sub.endpoint.slice(0, 50) }, "Push notification sent");
-          } catch (err: any) {
+          } catch (err: unknown) {
+            const pushErr = err as { statusCode?: number; message?: string };
             log.error(
-              { endpoint: sub.endpoint.slice(0, 60), statusCode: err?.statusCode, err: err?.message },
+              { endpoint: sub.endpoint.slice(0, 60), statusCode: pushErr?.statusCode, err: pushErr?.message },
               "Push notification failed",
             );
-            if (err?.statusCode === 410 || err?.statusCode === 404) {
+            if (pushErr?.statusCode === 410 || pushErr?.statusCode === 404) {
               await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
             }
           }
@@ -441,12 +442,13 @@ export async function sendPushToUser(
                 pushPayload,
               );
               log.info({ endpoint: sub.endpoint.slice(0, 50), userId }, "User push sent");
-            } catch (err: any) {
+            } catch (err: unknown) {
+              const pushErr = err as { statusCode?: number; message?: string };
               log.error(
-                { endpoint: sub.endpoint.slice(0, 60), statusCode: err?.statusCode, err: err?.message, userId },
+                { endpoint: sub.endpoint.slice(0, 60), statusCode: pushErr?.statusCode, err: pushErr?.message, userId },
                 "User push failed",
               );
-              if (err?.statusCode === 410 || err?.statusCode === 404) {
+              if (pushErr?.statusCode === 410 || pushErr?.statusCode === 404) {
                 await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
               }
             }

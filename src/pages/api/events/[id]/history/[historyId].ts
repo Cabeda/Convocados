@@ -10,8 +10,7 @@ const log = createLogger("history-patch");
 
 // PATCH /api/events/[id]/history/[historyId]
 export const PATCH: APIRoute = async ({ params, request }) => {
-  const eventId = params.id ?? "";
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   // Require authentication for all history edits
@@ -20,10 +19,10 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, params.id);
 
   const entry = await prisma.gameHistory.findUnique({
-    where: { id: params.historyId, eventId },
+    where: { id: params.historyId, eventId: params.id },
   });
   if (!entry) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -43,7 +42,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     const actor = session.user.name ?? session.user.email ?? "Unknown";
     const actorId = session.user.id;
     const historyDate = entry.dateTime.toISOString().slice(0, 10);
-    logEvent(eventId, "history_unlocked", actor, actorId, {
+    logEvent((params.id ?? ""), "history_unlocked", actor, actorId, {
       historyId: entry.id, date: historyDate,
     });
 
@@ -71,7 +70,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     const actor = session.user.name ?? session.user.email ?? "Unknown";
     const actorId = session.user.id;
     const historyDate = entry.dateTime.toISOString().slice(0, 10);
-    logEvent(eventId, "history_locked", actor, actorId, {
+    logEvent((params.id ?? ""), "history_locked", actor, actorId, {
       historyId: entry.id, date: historyDate,
     });
 
@@ -104,7 +103,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   // Check 2: match user's ID against claimed player spots in the event
   if (!isParticipant) {
     const claimedPlayer = await prisma.player.findFirst({
-      where: { eventId, userId: session.user.id, archivedAt: null },
+      where: { eventId: params.id, userId: session.user.id, archivedAt: null },
     });
     if (claimedPlayer) isParticipant = true;
   }
@@ -150,24 +149,24 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   const historyDate = entry.dateTime.toISOString().slice(0, 10);
 
   if (scoreOne !== undefined || scoreTwo !== undefined) {
-    logEvent(eventId, "history_score_updated", actor, actorId, {
+    logEvent((params.id ?? ""), "history_score_updated", actor, actorId, {
       historyId: entry.id, date: historyDate,
       scoreOne: updated.scoreOne, scoreTwo: updated.scoreTwo,
     });
   }
   if (teamsSnapshot !== undefined) {
-    logEvent(eventId, "history_teams_updated", actor, actorId, {
+    logEvent((params.id ?? ""), "history_teams_updated", actor, actorId, {
       historyId: entry.id, date: historyDate,
     });
 
     // Auto-update live event payments to reflect the new player list
     const eventCost = await prisma.eventCost.findUnique({
-      where: { eventId },
+      where: { eventId: params.id },
       include: { payments: true },
     });
     if (eventCost) {
       try {
-        const newTeams = JSON.parse(updated.teamsSnapshot!) as Array<{ players: Array<{ name: string }> }>;
+        const newTeams = JSON.parse(updated.teamsSnapshot ?? "[]") as Array<{ players: Array<{ name: string }> }>;
         const newPlayerNames = newTeams.flatMap((t) => t.players.map((p) => p.name));
         const share = newPlayerNames.length > 0 ? eventCost.totalAmount / newPlayerNames.length : 0;
 
@@ -194,12 +193,12 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     }
   }
   if (status !== undefined) {
-    logEvent(eventId, "history_status_updated", actor, actorId, {
+    logEvent((params.id ?? ""), "history_status_updated", actor, actorId, {
       historyId: entry.id, date: historyDate, status: updated.status,
     });
   }
   if (paymentsSnapshot !== undefined) {
-    logEvent(eventId, "history_payments_updated", actor, actorId, {
+    logEvent((params.id ?? ""), "history_payments_updated", actor, actorId, {
       historyId: entry.id, date: historyDate,
     });
   }
@@ -215,7 +214,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     !updated.eloProcessed
   ) {
     try {
-      await processGame(eventId, updated.id, JSON.parse(updated.teamsSnapshot), finalScoreOne, finalScoreTwo);
+      await processGame((params.id ?? ""), updated.id, JSON.parse(updated.teamsSnapshot), finalScoreOne, finalScoreTwo);
     } catch { /* ELO processing is best-effort */ }
   }
 
@@ -225,7 +224,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     (teamsSnapshot !== undefined || scoreOne !== undefined || scoreTwo !== undefined)
   ) {
     try {
-      await recalculateAllRatings(eventId);
+      await recalculateAllRatings((params.id ?? ""));
     } catch { /* recalculation is best-effort */ }
   }
 
@@ -239,7 +238,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   ) {
     try {
       const snapshot = JSON.parse(updated.teamsSnapshot);
-      const ratings = await prisma.playerRating.findMany({ where: { eventId } });
+      const ratings = await prisma.playerRating.findMany({ where: { eventId: params.id } });
       const playerInfos = ratings.map((r) => ({ name: r.name, rating: r.rating, gamesPlayed: r.gamesPlayed }));
       eloUpdates = computeGameUpdates(playerInfos, snapshot, finalScoreOne, finalScoreTwo)
         .map((u) => ({ name: u.name, delta: u.delta }));
@@ -258,8 +257,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
 // DELETE /api/events/[id]/history/[historyId] — owner/admin only
 export const DELETE: APIRoute = async ({ params, request }) => {
-  const eventId = params.id ?? "";
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const session = await getSession(request);
@@ -267,13 +265,13 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, params.id);
   if (!isOwner && !isAdmin) {
     return Response.json({ error: "Only the event owner or admin can delete history entries." }, { status: 403 });
   }
 
   const entry = await prisma.gameHistory.findUnique({
-    where: { id: params.historyId, eventId },
+    where: { id: params.historyId, eventId: params.id },
   });
   if (!entry) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -283,11 +281,11 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   await prisma.gameHistory.delete({ where: { id: params.historyId } });
 
   if (needsRecalc) {
-    await recalculateAllRatings(eventId);
+    await recalculateAllRatings((params.id ?? ""));
   }
 
   const actor = session.user.name ?? session.user.email ?? "Unknown";
-  logEvent(eventId, "history_status_updated", actor, session.user.id, {
+  logEvent((params.id ?? ""), "history_status_updated", actor, session.user.id, {
     historyId: params.historyId,
     action: "deleted",
   });

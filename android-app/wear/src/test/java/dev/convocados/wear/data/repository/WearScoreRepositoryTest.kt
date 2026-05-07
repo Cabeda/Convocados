@@ -26,8 +26,6 @@ class WearScoreRepositoryTest {
         repository = WearScoreRepository(client, historyDao, pendingScoreDao)
     }
 
-    // ── observePendingCount ──────────────────────────────────────────────
-
     @Test
     fun `observePendingCount delegates to pendingScoreDao`() = runTest {
         coEvery { pendingScoreDao.observeCount() } returns flowOf(3)
@@ -37,8 +35,6 @@ class WearScoreRepositoryTest {
             awaitComplete()
         }
     }
-
-    // ── submitScore ──────────────────────────────────────────────────────
 
     @Test
     fun `submitScore updates local cache optimistically`() = runTest {
@@ -61,8 +57,6 @@ class WearScoreRepositoryTest {
         assertTrue(result.isFailure)
         coVerify { pendingScoreDao.insert(match { it.eventId == "e1" && it.scoreOne == 5 }) }
     }
-
-    // ── syncPendingScores ────────────────────────────────────────────────
 
     @Test
     fun `syncPendingScores syncs all pending and deletes them`() = runTest {

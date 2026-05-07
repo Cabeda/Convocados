@@ -22,11 +22,9 @@ class WearTeamRepository @Inject constructor(
     private val playerDao: WearPlayerDao,
     private val pendingRosterChangeDao: PendingRosterChangeDao,
 ) {
-    /** Observable players for an event. */
     fun observePlayers(eventId: String): Flow<List<WearPlayerEntity>> =
         playerDao.observePlayers(eventId)
 
-    /** Refresh teams from the API and cache locally. */
     suspend fun refreshTeams(eventId: String): Result<TeamsResponse> = try {
         val response = client.getTeams(eventId)
         val players = mutableListOf<WearPlayerEntity>()
@@ -41,10 +39,6 @@ class WearTeamRepository @Inject constructor(
         Result.failure(e)
     }
 
-    /**
-     * Update team assignments. Tries the API first; if offline, queues locally.
-     * Updates local cache optimistically.
-     */
     suspend fun updateTeams(
         eventId: String,
         teamOnePlayerIds: List<String>,
@@ -80,7 +74,6 @@ class WearTeamRepository @Inject constructor(
         }
     }
 
-    /** Sync all pending roster changes. Returns number of successfully synced items. */
     suspend fun syncPendingRosterChanges(): Int {
         val pending = pendingRosterChangeDao.getAll()
         val json = kotlinx.serialization.json.Json

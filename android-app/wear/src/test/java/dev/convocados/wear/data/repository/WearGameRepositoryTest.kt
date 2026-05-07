@@ -6,14 +6,9 @@ import dev.convocados.wear.data.api.GameHistory
 import dev.convocados.wear.data.api.MyGamesResponse
 import dev.convocados.wear.data.api.PaginatedHistory
 import dev.convocados.wear.data.api.WearApiClient
-import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
-import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
-import dev.convocados.wear.data.local.dao.WearPlayerDao
-import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
-import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -34,8 +29,6 @@ class WearGameRepositoryTest {
         repository = WearGameRepository(client, gameDao, historyDao)
     }
 
-    // ── observeGames ─────────────────────────────────────────────────────
-
     @Test
     fun `observeGames delegates to gameDao`() = runTest {
         val games = listOf(makeGame("1"), makeGame("2"))
@@ -46,8 +39,6 @@ class WearGameRepositoryTest {
             awaitComplete()
         }
     }
-
-    // ── refreshGames ─────────────────────────────────────────────────────
 
     @Test
     fun `refreshGames fetches from API and updates dao`() = runTest {
@@ -74,8 +65,6 @@ class WearGameRepositoryTest {
         assertEquals("Network error", result.exceptionOrNull()?.message)
     }
 
-    // ── refreshHistory ───────────────────────────────────────────────────
-
     @Test
     fun `refreshHistory fetches and caches history`() = runTest {
         val history = PaginatedHistory(
@@ -100,8 +89,6 @@ class WearGameRepositoryTest {
         assertTrue(result.isFailure)
     }
 
-    // ── getGame ──────────────────────────────────────────────────────────
-
     @Test
     fun `getGame returns cached game`() = runTest {
         val game = makeGame("e1")
@@ -116,8 +103,6 @@ class WearGameRepositoryTest {
 
         assertNull(repository.getGame("missing"))
     }
-
-    // ── Helpers ──────────────────────────────────────────────────────────
 
     private fun makeGame(id: String) = WearGameEntity(
         id = id,
