@@ -8,7 +8,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
 
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     include: { players: { orderBy: { order: "asc" } } },

@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 
 export const GET: APIRoute = async ({ params }) => {
-  const eventId = params.id!;
+  const eventId = params.id ?? "";
   
   const event = await prisma.event.findUnique({
     where: { id: eventId },

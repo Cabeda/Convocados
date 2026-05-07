@@ -4,8 +4,8 @@ import { checkOwnership } from "../../../../../../lib/auth.helpers.server";
 
 /** DELETE — unsubscribe a webhook */
 export const DELETE: APIRoute = async ({ params, request }) => {
-  const eventId = params.id!;
-  const webhookId = params.webhookId!;
+  const eventId = params.id ?? "";
+  const webhookId = params.webhookId ?? "";
 
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
