@@ -19,7 +19,7 @@ import dev.convocados.data.local.entity.UserProfileEntity
         PlayerEntity::class,
         GameHistoryEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
