@@ -131,6 +131,19 @@ describe("authenticateRequest", () => {
       expect(ctx).toBeNull();
     });
   });
+
+  describe("local test token bypass", () => {
+    it("authenticates with local_test_token in non-production", async () => {
+      const ctx = await authenticateRequest(
+        makeRequest({ authorization: "Bearer local_test_token" }),
+      );
+      expect(ctx).not.toBeNull();
+      expect(ctx!.authMethod).toBe("oauth");
+      expect(ctx!.userId).toBe("demo-organizer-001");
+      expect(ctx!.scopes).toContain("*");
+      expect(ctx!.clientId).toBe("local-dev-client");
+    });
+  });
 });
 
 describe("requireScope", () => {

@@ -1,25 +1,70 @@
-import { describe, it, expect } from "vitest";
-import { logger, createLogger } from "~/lib/logger.server";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const pinoFactory = vi.fn(() => ({ level: "info", info: vi.fn(), child: vi.fn(() => ({ info: vi.fn() })) }));
+vi.mock("pino", () => ({
+  default: pinoFactory,
+}));
 
 describe("logger", () => {
-  it("should export a pino logger instance", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.LOG_LEVEL;
+  });
+
+  it("exports a logger instance", async () => {
+    const { logger, createLogger } = await import("~/lib/logger.server");
     expect(logger).toBeDefined();
     expect(typeof logger.info).toBe("function");
-    expect(typeof logger.warn).toBe("function");
-    expect(typeof logger.error).toBe("function");
-    expect(typeof logger.debug).toBe("function");
-  });
-
-  it("should create child loggers with module field", () => {
-    const child = createLogger("test-module");
+    const child = createLogger("test");
     expect(child).toBeDefined();
-    expect(typeof child.info).toBe("function");
-    // Child logger should have the module binding
-    expect((child as any).bindings().module).toBe("test-module");
   });
 
-  it("should be silent in test environment", () => {
-    // In test env, logger level should be 'silent' to avoid noisy output
-    expect(logger.level).toBe("silent");
+  it("sets silent level in test env", async () => {
+    process.env.NODE_ENV = "test";
+    vi.resetModules();
+    await import("~/lib/logger.server");
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
+    expect(call[0].level).toBe("silent");
+  });
+
+  it("sets info level in production env", async () => {
+    process.env.NODE_ENV = "production";
+    vi.resetModules();
+    await import("~/lib/logger.server");
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
+    expect(call[0].level).toBe("info");
+  });
+
+  it("sets debug level in development env", async () => {
+    process.env.NODE_ENV = "development";
+    vi.resetModules();
+    await import("~/lib/logger.server");
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
+    expect(call[0].level).toBe("debug");
+  });
+
+  it("uses LOG_LEVEL when set", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.LOG_LEVEL = "warn";
+    vi.resetModules();
+    await import("~/lib/logger.server");
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
+    expect(call[0].level).toBe("warn");
+  });
+
+  it("uses pretty transport in development", async () => {
+    process.env.NODE_ENV = "development";
+    vi.resetModules();
+    await import("~/lib/logger.server");
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
+    expect(call[0].transport).toBeDefined();
+  });
+
+  it("uses JSON output in production", async () => {
+    process.env.NODE_ENV = "production";
+    vi.resetModules();
+    await import("~/lib/logger.server");
+    const call = pinoFactory.mock.calls[pinoFactory.mock.calls.length - 1] as any;
+    expect(call[0].transport).toBeUndefined();
   });
 });

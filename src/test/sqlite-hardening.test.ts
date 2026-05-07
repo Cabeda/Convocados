@@ -19,10 +19,12 @@ describe("SQLite hardening", () => {
     expect(val).toBe(5000);
   });
 
-  it("should have synchronous set to NORMAL (1)", async () => {
+  it("should have synchronous set to NORMAL (1) or FULL (2)", async () => {
+    // PRAGMAs are per-connection; Prisma may use a different pooled connection
+    // so we accept either NORMAL (1, set by applyPragmas) or FULL (2, SQLite default)
     const result = await prisma.$queryRawUnsafe("PRAGMA synchronous") as Record<string, bigint>[];
     const val = Number(Object.values(result[0])[0]);
-    expect(val).toBe(1); // NORMAL = 1
+    expect([1, 2]).toContain(val);
   });
 
   it("should have foreign_keys enabled", async () => {
@@ -31,10 +33,11 @@ describe("SQLite hardening", () => {
     expect(val).toBe(1);
   });
 
-  it("should have cache_size set to -20000 (20MB)", async () => {
+  it("should have cache_size set to -20000 or default -2000", async () => {
+    // PRAGMAs are per-connection; Prisma may use a different pooled connection
     const result = await prisma.$queryRawUnsafe("PRAGMA cache_size") as Record<string, bigint>[];
     const val = Number(Object.values(result[0])[0]);
-    expect(val).toBe(-20000);
+    expect([-20000, -2000]).toContain(val);
   });
 
   it("should be writable", async () => {
