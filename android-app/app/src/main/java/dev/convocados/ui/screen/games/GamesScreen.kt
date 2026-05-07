@@ -201,6 +201,13 @@ fun GameCard(
                 "${formatRelativeDate(game.dateTime)} · ${game.playerCount}/${game.maxPlayers} players${if (game.isRecurring) " · \uD83D\uDD01" else ""}",
                 color = TextSecondary, fontSize = 13.sp,
             )
+            if (game.lastScoreOne != null && game.lastScoreTwo != null) {
+                Text(
+                    "\u26BD ${game.lastScoreOne}:${game.lastScoreTwo}",
+                    color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
             if (game.location.isNotBlank()) {
                 Text(game.location, color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
             }

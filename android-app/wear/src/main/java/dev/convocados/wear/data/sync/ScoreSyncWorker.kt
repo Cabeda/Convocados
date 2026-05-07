@@ -5,7 +5,8 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import dev.convocados.wear.data.repository.WearGameRepository
+import dev.convocados.wear.data.repository.WearScoreRepository
+import dev.convocados.wear.data.repository.WearTeamRepository
 import java.util.concurrent.TimeUnit
 
 /**
@@ -16,13 +17,14 @@ import java.util.concurrent.TimeUnit
 class ScoreSyncWorker @AssistedInject constructor(
     @Assisted context: android.content.Context,
     @Assisted params: WorkerParameters,
-    private val repository: WearGameRepository,
+    private val scoreRepository: WearScoreRepository,
+    private val teamRepository: WearTeamRepository,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         return try {
-            val syncedScores = repository.syncPendingScores()
-            val syncedRosters = repository.syncPendingRosterChanges()
+            val syncedScores = scoreRepository.syncPendingScores()
+            val syncedRosters = teamRepository.syncPendingRosterChanges()
             Log.d("ScoreSyncWorker", "Synced $syncedScores scores, $syncedRosters roster changes")
             Result.success()
         } catch (e: Exception) {

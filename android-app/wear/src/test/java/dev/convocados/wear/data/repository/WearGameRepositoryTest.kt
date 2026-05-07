@@ -26,15 +26,12 @@ class WearGameRepositoryTest {
     private val client = mockk<WearApiClient>()
     private val gameDao = mockk<WearGameDao>(relaxed = true)
     private val historyDao = mockk<WearHistoryDao>(relaxed = true)
-    private val pendingScoreDao = mockk<PendingScoreDao>(relaxed = true)
-    private val playerDao = mockk<WearPlayerDao>(relaxed = true)
-    private val pendingRosterChangeDao = mockk<PendingRosterChangeDao>(relaxed = true)
 
     private lateinit var repository: WearGameRepository
 
     @Before
     fun setup() {
-        repository = WearGameRepository(client, gameDao, historyDao, pendingScoreDao, playerDao, pendingRosterChangeDao)
+        repository = WearGameRepository(client, gameDao, historyDao)
     }
 
     // ── observeGames ─────────────────────────────────────────────────────
@@ -101,76 +98,6 @@ class WearGameRepositoryTest {
         val result = repository.refreshHistory("event1")
 
         assertTrue(result.isFailure)
-    }
-
-    // ── submitScore ──────────────────────────────────────────────────────
-
-    @Test
-    fun `submitScore updates local cache optimistically`() = runTest {
-        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
-            "h1", "2025-01-01T10:00:00Z", "played", 5, 3, "Red", "Blue", true,
-        )
-
-        val result = repository.submitScore("e1", "h1", 5, 3, "Red", "Blue")
-
-        assertTrue(result.isSuccess)
-        coVerify { historyDao.updateScore("h1", 5, 3) }
-    }
-
-    @Test
-    fun `submitScore queues pending score on network failure`() = runTest {
-        coEvery { client.patch<GameHistory>(any(), any()) } throws Exception("Offline")
-
-        val result = repository.submitScore("e1", "h1", 5, 3, "Red", "Blue")
-
-        // Returns failure to signal offline, but score is queued for later sync
-        assertTrue(result.isFailure)
-        coVerify { pendingScoreDao.insert(match { it.eventId == "e1" && it.scoreOne == 5 }) }
-    }
-
-    // ── syncPendingScores ────────────────────────────────────────────────
-
-    @Test
-    fun `syncPendingScores syncs all pending and deletes them`() = runTest {
-        val pending = listOf(
-            PendingScoreEntity(1, "e1", "h1", 3, 2, "A", "B"),
-            PendingScoreEntity(2, "e2", "h2", 1, 0, "C", "D"),
-        )
-        coEvery { pendingScoreDao.getAll() } returns pending
-        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
-            "h1", "2025-01-01T10:00:00Z", "played", 3, 2, "A", "B", true,
-        )
-
-        val synced = repository.syncPendingScores()
-
-        assertEquals(2, synced)
-        coVerify(exactly = 2) { pendingScoreDao.delete(any()) }
-        coVerify { pendingScoreDao.deleteStale() }
-    }
-
-    @Test
-    fun `syncPendingScores increments retry on failure`() = runTest {
-        val pending = listOf(PendingScoreEntity(1, "e1", "h1", 3, 2, "A", "B"))
-        coEvery { pendingScoreDao.getAll() } returns pending
-        coEvery { client.patch<GameHistory>(any(), any()) } throws Exception("Still offline")
-
-        val synced = repository.syncPendingScores()
-
-        assertEquals(0, synced)
-        coVerify { pendingScoreDao.incrementRetry(1) }
-        coVerify { pendingScoreDao.deleteStale() }
-    }
-
-    // ── observePendingCount ──────────────────────────────────────────────
-
-    @Test
-    fun `observePendingCount delegates to pendingScoreDao`() = runTest {
-        coEvery { pendingScoreDao.observeCount() } returns flowOf(3)
-
-        repository.observePendingCount().test {
-            assertEquals(3, awaitItem())
-            awaitComplete()
-        }
     }
 
     // ── getGame ──────────────────────────────────────────────────────────
