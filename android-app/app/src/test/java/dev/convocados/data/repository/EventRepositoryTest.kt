@@ -26,7 +26,7 @@ class EventRepositoryTest {
     @Test
     fun `getEventsByType returns mapped summaries from dao`() = runTest {
         val entities = listOf(
-            EventEntity("1", "Title", "Loc", "2024-01-01", "Soccer", 10, 5, null, false, "owned")
+            EventEntity("1", "Title", "Loc", "2024-01-01", "Soccer", 10, 5, null, false, null, null, "owned")
         )
         coEvery { dao.getEventsByType("owned") } returns flowOf(entities)
 
