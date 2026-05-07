@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
-import dev.convocados.wear.data.repository.WearGameRepository
+import dev.convocados.wear.data.repository.WearTeamRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -26,7 +26,7 @@ data class TeamsUiState(
 
 @HiltViewModel
 class TeamsViewModel @Inject constructor(
-    private val repository: WearGameRepository,
+    private val repository: WearTeamRepository,
     private val workManager: WorkManager,
 ) : ViewModel() {
 
