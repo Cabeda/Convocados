@@ -2,6 +2,7 @@ package dev.convocados.wear.ui.preview
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.material3.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Alignment
