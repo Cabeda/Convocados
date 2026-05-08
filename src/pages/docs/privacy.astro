@@ -1,0 +1,118 @@
+---
+export const prerender = true;
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Privacy Policy" description="Privacy Policy for Convocados app and services.">
+  <h1>Privacy Policy</h1>
+  <p class="subtitle">Last updated: May 8, 2026</p>
+
+  <h2>Introduction</h2>
+  <p>
+    Convocados ("we", "our", or "the app") is a sports event management application.
+    This privacy policy explains how we collect, use, and protect your information when
+    you use our web application, Android app, or Wear OS app.
+  </p>
+
+  <h2>Information We Collect</h2>
+
+  <h3>Account Information</h3>
+  <ul>
+    <li><strong>Email address</strong> — used for authentication and optional game notifications</li>
+    <li><strong>Display name</strong> — shown to other players in your games</li>
+    <li><strong>Profile picture</strong> — if you sign in with Google, we store your Google profile image URL</li>
+  </ul>
+
+  <h3>Game Data</h3>
+  <ul>
+    <li>Events you create or join (title, location, date/time, sport type)</li>
+    <li>Player lists and team assignments</li>
+    <li>Game scores and history</li>
+    <li>ELO ratings and attendance statistics</li>
+  </ul>
+
+  <h3>Device Information</h3>
+  <ul>
+    <li><strong>Push notification tokens</strong> — to send game reminders (only if you opt in)</li>
+    <li><strong>Device type</strong> — to optimize the experience for phone, tablet, or watch</li>
+  </ul>
+
+  <h3>Information We Do NOT Collect</h3>
+  <ul>
+    <li>We do not collect precise location data</li>
+    <li>We do not collect contacts or phone numbers</li>
+    <li>We do not track your activity outside the app</li>
+    <li>We do not use advertising SDKs or sell your data</li>
+  </ul>
+
+  <h2>How We Use Your Information</h2>
+  <ul>
+    <li>To provide the core service: creating games, managing players, tracking scores</li>
+    <li>To send notifications about games you've joined (reminders, score updates)</li>
+    <li>To display your name and stats to other players in shared games</li>
+    <li>To improve the app experience and fix bugs</li>
+  </ul>
+
+  <h2>Data Sharing</h2>
+  <p>
+    We do not sell, rent, or share your personal information with third parties for
+    marketing purposes. Your data is only visible to:
+  </p>
+  <ul>
+    <li>Other players in games you've joined (your name and game stats)</li>
+    <li>Event organizers (your attendance and payment status for their events)</li>
+  </ul>
+
+  <h2>Data Storage and Security</h2>
+  <ul>
+    <li>Data is stored on servers hosted by <a href="https://fly.io">Fly.io</a> in the EU (Paris region)</li>
+    <li>All connections use HTTPS encryption</li>
+    <li>Passwords are hashed using industry-standard algorithms</li>
+    <li>OAuth tokens are stored encrypted on your device</li>
+  </ul>
+
+  <h2>Data Retention</h2>
+  <p>
+    Your data is retained as long as your account is active. You can delete your account
+    at any time from the app settings, which will permanently remove all your personal data.
+    Game history in events you participated in will be anonymized.
+  </p>
+
+  <h2>Your Rights</h2>
+  <p>You have the right to:</p>
+  <ul>
+    <li><strong>Access</strong> your data — available in your profile settings</li>
+    <li><strong>Export</strong> your data — use the data export feature in settings</li>
+    <li><strong>Delete</strong> your account and all associated data</li>
+    <li><strong>Opt out</strong> of notifications at any time</li>
+  </ul>
+
+  <h2>Children's Privacy</h2>
+  <p>
+    Convocados is not directed at children under 13. We do not knowingly collect
+    personal information from children under 13. If you believe a child under 13
+    has provided us with personal information, please contact us and we will
+    promptly delete it.
+  </p>
+
+  <h2>Third-Party Services</h2>
+  <ul>
+    <li><strong>Google Sign-In</strong> — for authentication (subject to <a href="https://policies.google.com/privacy">Google's Privacy Policy</a>)</li>
+    <li><strong>Firebase Cloud Messaging</strong> — for push notifications on Android/Wear OS</li>
+    <li><strong>Fly.io</strong> — for hosting (data processed in EU)</li>
+  </ul>
+
+  <h2>Changes to This Policy</h2>
+  <p>
+    We may update this privacy policy from time to time. We will notify users of
+    significant changes via the app. The "last updated" date at the top indicates
+    when the policy was last revised.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    If you have questions about this privacy policy or your data, please open an issue
+    on our <a href="https://github.com/Cabeda/Convocados">GitHub repository</a> or
+    contact the developer at the email associated with the app listing.
+  </p>
+</DocsLayout>
