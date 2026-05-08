@@ -71,3 +71,6 @@ android-app/wear/.idea
 .dolt/
 .beads-credential-key
 .env.wear.local
+android-app/keystore.properties
+android-app/app/release-keystore.jks
+*.jks
