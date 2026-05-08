@@ -1,0 +1,54 @@
+---
+export const prerender = true;
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Delete Your Account" description="How to delete your Convocados account and all associated data.">
+  <h1>Delete Your Account</h1>
+  <p class="subtitle">How to permanently delete your account and all associated data.</p>
+
+  <h2>What gets deleted</h2>
+  <p>When you delete your account, the following data is <strong>permanently removed</strong>:</p>
+  <ul>
+    <li>Your profile (name, email, profile picture)</li>
+    <li>Your login credentials and sessions</li>
+    <li>Your notification preferences and push tokens</li>
+    <li>Your API keys</li>
+    <li>Your calendar tokens</li>
+    <li>Your player claims (linked players become anonymous)</li>
+    <li>Your event ownership (events become unowned)</li>
+  </ul>
+
+  <h2>How to delete your account</h2>
+
+  <h3>From the mobile app</h3>
+  <ol>
+    <li>Open the Convocados app</li>
+    <li>Go to your <strong>Profile</strong> (tap your avatar or the profile icon)</li>
+    <li>Scroll down and tap <strong>"Delete Account"</strong></li>
+    <li>Confirm the deletion when prompted</li>
+  </ol>
+
+  <h3>From the web app</h3>
+  <ol>
+    <li>Sign in at <a href="https://convocados.fly.dev">convocados.fly.dev</a></li>
+    <li>Click your name in the top-right corner to open your profile</li>
+    <li>Scroll down and click <strong>"Delete Account"</strong></li>
+    <li>Confirm the deletion when prompted</li>
+  </ol>
+
+  <h2>Important notes</h2>
+  <ul>
+    <li>Account deletion is <strong>immediate and irreversible</strong></li>
+    <li>Game history you participated in will be anonymized (your name removed from records)</li>
+    <li>Events you created will remain but will no longer have an owner</li>
+    <li>Other players will no longer see your name in past games</li>
+  </ul>
+
+  <h2>Need help?</h2>
+  <p>
+    If you cannot access your account to delete it, or need assistance,
+    please open an issue on our <a href="https://github.com/Cabeda/Convocados/issues">GitHub repository</a>
+    with your account email and we will process the deletion manually.
+  </p>
+</DocsLayout>
