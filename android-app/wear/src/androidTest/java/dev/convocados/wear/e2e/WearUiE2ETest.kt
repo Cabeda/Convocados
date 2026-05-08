@@ -22,7 +22,7 @@ import org.junit.runner.RunWith
 class WearUiE2ETest {
 
     private val TAG = "WearUiE2E"
-    private val PACKAGE = "com.cabeda.Convocados"
+    private val PACKAGE = "com.cabeda.convocados"
     private val ACTIVITY = "dev.convocados.wear.ui.WearActivity"
     private val TIMEOUT = 15_000L
     private val SHORT = 5_000L
