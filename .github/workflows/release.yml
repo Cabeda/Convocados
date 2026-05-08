@@ -167,12 +167,13 @@ jobs:
         run: echo "No conventional commits found since last release. Skipping."
 
   build-android:
-    name: Build Android APK
+    name: Build & Deploy Android
     needs: release
     if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
     env:
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE != '' }}
+      HAS_PLAY_KEY: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON != '' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -198,13 +199,41 @@ jobs:
           }
           EOF
 
+      - name: Create keystore
+        if: ${{ env.HAS_KEYSTORE == 'true' }}
+        working-directory: android-app
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > /tmp/release.keystore
+          cat > keystore.properties << EOF
+          storeFile=/tmp/release.keystore
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+
       - name: Update app version
         working-directory: android-app
         run: |
           VERSION="${{ needs.release.outputs.version }}"
+          VERSION_CODE=$(echo "$VERSION" | awk -F. '{printf "%d%02d%02d", $1, $2, $3}')
           sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" app/build.gradle.kts
+          sed -i "s/versionCode = [0-9]*/versionCode = $VERSION_CODE/" app/build.gradle.kts
 
-      - name: Build phone release APK
+      - name: Build release AAB
+        working-directory: android-app
+        run: ./gradlew :app:bundleRelease --no-daemon
+
+      - name: Upload to Play Store (internal testing)
+        if: ${{ env.HAS_PLAY_KEY == 'true' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: com.cabeda.convocados
+          releaseFiles: android-app/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+
+      - name: Build release APK (for GitHub Release)
         working-directory: android-app
         run: ./gradlew :app:assembleRelease --no-daemon
 
@@ -212,25 +241,15 @@ jobs:
         if: ${{ env.HAS_KEYSTORE == 'true' }}
         working-directory: android-app
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > /tmp/release.keystore
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
           if [ -z "$APK" ]; then echo "No APK found"; exit 1; fi
           APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner -type f 2>/dev/null | sort -V | tail -1)
-          if [ -n "$APKSIGNER" ]; then
-            $APKSIGNER sign \
-              --ks /tmp/release.keystore \
-              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
-              --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
-              --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
-              "$APK"
-          else
-            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-              -keystore /tmp/release.keystore \
-              -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
-              -keypass "${{ secrets.KEY_PASSWORD }}" \
-              "$APK" "${{ secrets.KEY_ALIAS }}"
-          fi
-          rm -f /tmp/release.keystore
+          $APKSIGNER sign \
+            --ks /tmp/release.keystore \
+            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
+            --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+            "$APK"
 
       - name: Upload phone APK to GitHub Release
         uses: actions/github-script@v8
@@ -267,12 +286,13 @@ jobs:
             console.log(`Uploaded ${apkName} to release ${tag}`);
 
   build-wear:
-    name: Build Wear OS APK
+    name: Build & Deploy Wear OS
     needs: release
     if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
     env:
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE != '' }}
+      HAS_PLAY_KEY: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON != '' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -287,13 +307,41 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Create keystore
+        if: ${{ env.HAS_KEYSTORE == 'true' }}
+        working-directory: android-app
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > /tmp/release.keystore
+          cat > keystore.properties << EOF
+          storeFile=/tmp/release.keystore
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+
       - name: Update wear version
         working-directory: android-app
         run: |
           VERSION="${{ needs.release.outputs.version }}"
+          VERSION_CODE=$(echo "$VERSION" | awk -F. '{printf "%d%02d%02d", $1, $2, $3}')
           sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" wear/build.gradle.kts
+          sed -i "s/versionCode = [0-9]*/versionCode = $VERSION_CODE/" wear/build.gradle.kts
 
-      - name: Build Wear OS release APK
+      - name: Build Wear OS release AAB
+        working-directory: android-app
+        run: ./gradlew :wear:bundleRelease --no-daemon
+
+      - name: Upload to Play Store (internal testing)
+        if: ${{ env.HAS_PLAY_KEY == 'true' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: com.cabeda.convocados.wear
+          releaseFiles: android-app/wear/build/outputs/bundle/release/wear-release.aab
+          track: internal
+          status: completed
+
+      - name: Build Wear OS APK (for GitHub Release)
         working-directory: android-app
         run: ./gradlew :wear:assembleRelease --no-daemon
 
@@ -301,25 +349,15 @@ jobs:
         if: ${{ env.HAS_KEYSTORE == 'true' }}
         working-directory: android-app
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > /tmp/release.keystore
           APK=$(find wear/build/outputs/apk/release -name "*.apk" | head -1)
           if [ -z "$APK" ]; then echo "No Wear APK found"; exit 1; fi
           APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner -type f 2>/dev/null | sort -V | tail -1)
-          if [ -n "$APKSIGNER" ]; then
-            $APKSIGNER sign \
-              --ks /tmp/release.keystore \
-              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
-              --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
-              --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
-              "$APK"
-          else
-            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-              -keystore /tmp/release.keystore \
-              -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
-              -keypass "${{ secrets.KEY_PASSWORD }}" \
-              "$APK" "${{ secrets.KEY_ALIAS }}"
-          fi
-          rm -f /tmp/release.keystore
+          $APKSIGNER sign \
+            --ks /tmp/release.keystore \
+            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
+            --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+            "$APK"
 
       - name: Upload Wear OS APK to GitHub Release
         uses: actions/github-script@v8
