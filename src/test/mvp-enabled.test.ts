@@ -100,4 +100,20 @@ describe("PUT /api/events/[id]/mvp-enabled", () => {
     const res = await PUT(ctx(event.id, { mvpEnabled: false }));
     expect(res.status).toBe(200);
   });
+
+  it("disables mvpEloEnabled when mvpEnabled is turned off", async () => {
+    const user = await seedUser();
+    const event = await prisma.event.create({
+      data: { id: "evt-mvp-both", title: "MVP Both", location: "Pitch", dateTime: new Date(), maxPlayers: 10, ownerId: user.id, mvpEnabled: true, mvpEloEnabled: true },
+    });
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+
+    const res = await PUT(ctx(event.id, { mvpEnabled: false }));
+    expect(res.status).toBe(200);
+
+    const updated = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(updated!.mvpEnabled).toBe(false);
+    expect(updated!.mvpEloEnabled).toBe(false);
+  });
 });

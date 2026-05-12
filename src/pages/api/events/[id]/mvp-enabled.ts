@@ -20,7 +20,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
   await prisma.event.update({
     where: { id: params.id },
-    data: { mvpEnabled },
+    data: { mvpEnabled, ...(mvpEnabled ? {} : { mvpEloEnabled: false }) },
   });
 
   return Response.json({ mvpEnabled });

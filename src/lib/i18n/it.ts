@@ -835,6 +835,7 @@ const it: TranslationKeys = {
   mvpEnabledTooltip: "Permettere ai giocatori di votare il miglior giocatore dopo ogni partita",
   mvpEloEnabled: "Bonus ELO MVP",
   mvpEloEnabledTooltip: "Assegna +10 punti ELO all'MVP di ogni partita",
+  mvpEloDisabledBecauseMvpOff: "Attiva prima la votazione MVP per usare il bonus ELO",
 };
 
 export default it;

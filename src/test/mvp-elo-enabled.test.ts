@@ -108,4 +108,33 @@ describe("PUT /api/events/[id]/mvp-elo-enabled", () => {
     const fetched = await prisma.event.findUnique({ where: { id: event.id } });
     expect(fetched!.mvpEloEnabled).toBe(false);
   });
+
+  it("returns 400 when trying to enable MVP ELO while MVP voting is disabled", async () => {
+    const user = await seedUser();
+    const event = await prisma.event.create({
+      data: { id: "evt-mvp-off", title: "MVP Off", location: "Pitch", dateTime: new Date(), maxPlayers: 10, ownerId: user.id, mvpEnabled: false },
+    });
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+
+    const res = await PUT(ctx(event.id, { mvpEloEnabled: true }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/MVP voting must be enabled/i);
+
+    const updated = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(updated!.mvpEloEnabled).toBe(false);
+  });
+
+  it("allows disabling MVP ELO even when MVP voting is disabled", async () => {
+    const user = await seedUser();
+    const event = await prisma.event.create({
+      data: { id: "evt-mvp-off2", title: "MVP Off", location: "Pitch", dateTime: new Date(), maxPlayers: 10, ownerId: user.id, mvpEnabled: false, mvpEloEnabled: true },
+    });
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+
+    const res = await PUT(ctx(event.id, { mvpEloEnabled: false }));
+    expect(res.status).toBe(200);
+  });
 });

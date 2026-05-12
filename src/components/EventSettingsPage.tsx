@@ -658,10 +658,21 @@ export default function EventSettingsPage({ eventId }: Props) {
               label={<Typography variant="body2">{t("mvpEnabled")}</Typography>}
             />
           </Tooltip>
-          <Tooltip title={t("mvpEloEnabledTooltip")}>
+          <Tooltip title={!(event.mvpEnabled ?? true) ? t("mvpEloDisabledBecauseMvpOff") : t("mvpEloEnabledTooltip")}>
             <FormControlLabel
-              control={<Switch size="small" checked={event.mvpEloEnabled ?? false} onChange={(e) => handleToggleMvpEloEnabled(e.target.checked)} disabled={!canEdit} />}
-              label={<Typography variant="body2">{t("mvpEloEnabled")}</Typography>}
+              control={
+                <Switch
+                  size="small"
+                  checked={event.mvpEloEnabled ?? false}
+                  onChange={(e) => handleToggleMvpEloEnabled(e.target.checked)}
+                  disabled={!canEdit || !(event.mvpEnabled ?? true)}
+                />
+              }
+              label={
+                <Typography variant="body2" color={!(event.mvpEnabled ?? true) ? "text.disabled" : undefined}>
+                  {t("mvpEloEnabled")}
+                </Typography>
+              }
             />
           </Tooltip>
         </Stack>

@@ -18,6 +18,13 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const body = await request.json();
   const mvpEloEnabled = Boolean(body.mvpEloEnabled);
 
+  if (mvpEloEnabled && !event.mvpEnabled) {
+    return Response.json(
+      { error: "MVP voting must be enabled before enabling the MVP ELO bonus." },
+      { status: 400 },
+    );
+  }
+
   await prisma.event.update({
     where: { id: params.id },
     data: { mvpEloEnabled },
