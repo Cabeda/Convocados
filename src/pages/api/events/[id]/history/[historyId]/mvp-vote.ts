@@ -57,30 +57,21 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Voting is closed — the 7-day window has expired." }, { status: 400 });
   }
 
-  // Find the voter's player record in this event
-  const voterPlayer = await prisma.player.findFirst({
-    where: { eventId: params.id, userId },
-  });
+  // Only players who actually played in this game (appear in teamsSnapshot) can vote.
+  let voterName: string | undefined;
+  let voterPlayerId: string | undefined;
 
-  // Also check teamsSnapshot for name-based participation
-  let voterName = voterPlayer?.name;
-  let voterPlayerId = voterPlayer?.id;
-
-  if (!voterPlayer) {
-    // Check if user's name appears in the teamsSnapshot (Player records may be gone after reset)
-    const userName = session.user?.name;
-    if (userName && history.teamsSnapshot) {
-      const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
-      const allPlayers = teams.flatMap((t) => t.players);
-      const match = allPlayers.find((p) => p.name.toLowerCase() === userName.toLowerCase());
-      if (match) {
-        const playerByName = await prisma.player.findFirst({
-          where: { eventId: params.id, name: match.name },
-        });
-        // Use Player record if it exists, otherwise fall back to name-based ID
-        voterName = match.name;
-        voterPlayerId = playerByName?.id ?? `name:${match.name}`;
-      }
+  if (history.teamsSnapshot && session.user?.name) {
+    const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
+    const allPlayers = teams.flatMap((t) => t.players);
+    const match = allPlayers.find((p) => p.name.toLowerCase() === session.user!.name!.toLowerCase());
+    if (match) {
+      voterName = match.name;
+      // Try to find the Player record for this user (may exist if they signed up)
+      const voterPlayer = await prisma.player.findFirst({
+        where: { eventId: params.id, userId },
+      });
+      voterPlayerId = voterPlayer?.id ?? `name:${match.name}`;
     }
   }
 
