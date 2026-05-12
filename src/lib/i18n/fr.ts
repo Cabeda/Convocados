@@ -833,6 +833,8 @@ const fr: TranslationKeys = {
   mvpSelfVoteError: "Tu ne peux pas voter pour toi-même",
   mvpEnabled: "Vote MVP",
   mvpEnabledTooltip: "Permettre aux joueurs de voter pour le meilleur joueur après chaque match",
+  mvpEloEnabled: "Bonus ELO MVP",
+  mvpEloEnabledTooltip: "Attribuer +10 points ELO au MVP de chaque match",
 };
 
 export default fr;
