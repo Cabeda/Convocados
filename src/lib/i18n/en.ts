@@ -880,6 +880,9 @@ const en = {
   mvpSelfVoteError: "You cannot vote for yourself",
   mvpEnabled: "MVP voting",
   mvpEnabledTooltip: "Allow players to vote for the most valuable player after each game",
+  mvpEloEnabled: "MVP ELO bonus",
+  mvpEloEnabledTooltip: "Award +10 ELO points to the MVP of each game",
+  mvpEloDisabledBecauseMvpOff: "Enable MVP voting first to use the ELO bonus",
 } as const;
 
 export default en;

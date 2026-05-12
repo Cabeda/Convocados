@@ -134,6 +134,7 @@ model Event {
 
   // MVP voting
   mvpEnabled Boolean @default(true)
+  mvpEloEnabled Boolean @default(false)
 
   // Archive
   archivedAt     DateTime?
