@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { processGame, recalculateAllRatings } from "../../../../../lib/elo.server";
 import { computeGameUpdates } from "../../../../../lib/elo";
+import { MVP_ELO_BONUS } from "../../../../../lib/mvp.constants";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
@@ -242,6 +243,31 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       const playerInfos = ratings.map((r) => ({ name: r.name, rating: r.rating, gamesPlayed: r.gamesPlayed }));
       eloUpdates = computeGameUpdates(playerInfos, snapshot, finalScoreOne, finalScoreTwo)
         .map((u) => ({ name: u.name, delta: u.delta }));
+
+      // Add MVP ELO bonus to displayed deltas
+      if (event.mvpEloEnabled) {
+        const votes = await prisma.mvpVote.findMany({
+          where: { gameHistoryId: params.historyId },
+          select: { votedForName: true },
+        });
+        if (votes.length > 0) {
+          const tally = new Map<string, number>();
+          for (const v of votes) {
+            tally.set(v.votedForName, (tally.get(v.votedForName) ?? 0) + 1);
+          }
+          const maxVotes = Math.max(...tally.values());
+          const mvpNames = new Set(
+            Array.from(tally.entries())
+              .filter(([, count]) => count === maxVotes)
+              .map(([name]) => name),
+          );
+          for (const u of eloUpdates) {
+            if (mvpNames.has(u.name)) {
+              u.delta += MVP_ELO_BONUS;
+            }
+          }
+        }
+      }
     } catch { /* best-effort */ }
   }
 

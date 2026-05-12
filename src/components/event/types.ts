@@ -32,6 +32,7 @@ export interface EventData {
   hideEloInTeams: boolean;
   splitCostsEnabled: boolean;
   mvpEnabled: boolean;
+  mvpEloEnabled: boolean;
   sport: string;
   recurrenceRule: string | null;
   ownerId: string | null;

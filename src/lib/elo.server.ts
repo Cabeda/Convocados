@@ -1,5 +1,6 @@
 import { prisma } from "./db.server";
 import { expectedScore, kFactor, type EloUpdate } from "./elo";
+import { MVP_ELO_BONUS } from "./mvp.constants";
 
 const DEFAULT_RATING = 1000;
 
@@ -75,6 +76,41 @@ export async function processGame(
     });
 
     updates.push({ name, oldRating: r.rating, newRating, delta });
+  }
+
+  // Apply MVP ELO bonus if enabled
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { mvpEloEnabled: true },
+  });
+  if (event?.mvpEloEnabled) {
+    const votes = await prisma.mvpVote.findMany({
+      where: { gameHistoryId: historyId },
+      select: { votedForName: true },
+    });
+    if (votes.length > 0) {
+      const tally = new Map<string, number>();
+      for (const v of votes) {
+        tally.set(v.votedForName, (tally.get(v.votedForName) ?? 0) + 1);
+      }
+      const maxVotes = Math.max(...tally.values());
+      const mvpNames = Array.from(tally.entries())
+        .filter(([, count]) => count === maxVotes)
+        .map(([name]) => name);
+
+      for (const mvpName of mvpNames) {
+        const existingUpdate = updates.find((u) => u.name === mvpName);
+        if (existingUpdate) {
+          const newRatingWithBonus = existingUpdate.newRating + MVP_ELO_BONUS;
+          await prisma.playerRating.update({
+            where: { eventId_name: { eventId, name: mvpName } },
+            data: { rating: newRatingWithBonus },
+          });
+          existingUpdate.newRating = newRatingWithBonus;
+          existingUpdate.delta += MVP_ELO_BONUS;
+        }
+      }
+    }
   }
 
   // Mark history entry as processed
