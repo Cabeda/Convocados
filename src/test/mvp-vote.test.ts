@@ -218,6 +218,24 @@ describe("POST mvp-vote", () => {
     expect(res.status).toBe(403);
   });
 
+  it("rejects admin who did not play in the game", async () => {
+    const admin = await seedUser("Admin");
+    mockAuth(admin.id, "Admin");
+    const event = await seedEvent();
+    // Admin has a Player record for the event but is NOT in the teamsSnapshot
+    await seedPlayer(event.id, "Admin", admin.id);
+    const bob = await seedPlayer(event.id, "Bob");
+    const history = await seedHistory(event.id);
+
+    const res = await castMvpVote(postCtx(
+      { id: event.id, historyId: history.id },
+      { votedForPlayerId: bob.id },
+    ));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toMatch(/participant/i);
+  });
+
   it("rejects vote after newer game exists", async () => {
     const user = await seedUser("Alice");
     mockAuth(user.id, "Alice");
@@ -533,14 +551,26 @@ describe("GET mvp", () => {
     expect(body.hasVoted).toBeNull();
   });
 
-  it("returns hasVoted=false when no player match", async () => {
+  it("returns hasVoted=null when user did not play in the game", async () => {
     const user = await seedUser("Unknown");
     mockAuth(user.id, "Unknown");
     const event = await seedEvent();
     const history = await seedHistory(event.id);
     const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
     const body = await res.json();
-    expect(body.hasVoted).toBe(false);
+    expect(body.hasVoted).toBeNull();
+  });
+
+  it("returns hasVoted=null for admin who did not play", async () => {
+    const admin = await seedUser("Admin");
+    mockAuth(admin.id, "Admin");
+    const event = await seedEvent();
+    // Admin has a Player record for the event but is NOT in the teamsSnapshot
+    await seedPlayer(event.id, "Admin", admin.id);
+    const history = await seedHistory(event.id);
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    const body = await res.json();
+    expect(body.hasVoted).toBeNull();
   });
 
   it("returns empty participants when teamsSnapshot is missing", async () => {
