@@ -59,6 +59,13 @@ data class EventScreenState(
     val error: String? = null,
     val locked: Boolean = false,
     val undoData: UndoData? = null,
+    val teamMoveUndo: TeamMoveUndo? = null,
+)
+
+data class TeamMoveUndo(
+    val playerName: String,
+    val previousTeamOneIds: List<String>,
+    val previousTeamTwoIds: List<String>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -151,6 +158,39 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
+    fun movePlayerToTeam(eventId: String, playerId: String, playerName: String, toTeamOne: Boolean) {
+        val event = event.value ?: return
+        val teams = event.teamResults ?: return
+        if (teams.size != 2) return
+
+        val oldTeamOneIds = teams[0].members.map { m -> event.players.find { it.name == m.name }?.id }.filterNotNull()
+        val oldTeamTwoIds = teams[1].members.map { m -> event.players.find { it.name == m.name }?.id }.filterNotNull()
+
+        val newTeamOneIds = if (toTeamOne) (oldTeamOneIds + playerId).distinct() else oldTeamOneIds.filter { it != playerId }
+        val newTeamTwoIds = if (toTeamOne) oldTeamTwoIds.filter { it != playerId } else (oldTeamTwoIds + playerId).distinct()
+
+        viewModelScope.launch {
+            runCatching { api.updateTeams(eventId, newTeamOneIds, newTeamTwoIds) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        teamMoveUndo = TeamMoveUndo(playerName, oldTeamOneIds, oldTeamTwoIds)
+                    )
+                    repository.refreshEventDetail(eventId)
+                    delay(3000)
+                    _state.value = _state.value.copy(teamMoveUndo = null)
+                }
+        }
+    }
+
+    fun undoTeamMove(eventId: String) {
+        val undo = _state.value.teamMoveUndo ?: return
+        _state.value = _state.value.copy(teamMoveUndo = null)
+        viewModelScope.launch {
+            runCatching { api.updateTeams(eventId, undo.previousTeamOneIds, undo.previousTeamTwoIds) }
+                .onSuccess { repository.refreshEventDetail(eventId) }
+        }
+    }
+
     fun claimPlayer(eventId: String, playerId: String) {
         viewModelScope.launch {
             runCatching { api.claimPlayer(eventId, playerId) }
@@ -203,6 +243,19 @@ fun EventDetailScreen(
     var scoreOne by remember { mutableStateOf("") }
     var scoreTwo by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(state.teamMoveUndo) {
+        val undo = state.teamMoveUndo ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = "${undo.playerName} moved",
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Short,
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            viewModel.undoTeamMove(eventId)
+        }
+    }
 
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
@@ -214,6 +267,7 @@ fun EventDetailScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg),
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Bg,
         modifier = with(sharedTransitionScope) {
             Modifier.sharedElement(
@@ -377,12 +431,20 @@ fun EventDetailScreen(
                                 Row(Modifier.padding(14.dp)) {
                                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(teams[0].name, color = Primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        teams[0].members.forEach { Text(it.name, color = TextSecondary, fontSize = 13.sp) }
+                                        teams[0].members.forEach { m ->
+                                            val pid = event.players.find { it.name == m.name }?.id
+                                            Text(m.name, color = TextSecondary, fontSize = 13.sp,
+                                                modifier = if (pid != null) Modifier.clickable { viewModel.movePlayerToTeam(eventId, pid, m.name, false) } else Modifier)
+                                        }
                                     }
                                     Text("VS", color = TextMuted, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp))
                                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(teams[1].name, color = Primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        teams[1].members.forEach { Text(it.name, color = TextSecondary, fontSize = 13.sp) }
+                                        teams[1].members.forEach { m ->
+                                            val pid = event.players.find { it.name == m.name }?.id
+                                            Text(m.name, color = TextSecondary, fontSize = 13.sp,
+                                                modifier = if (pid != null) Modifier.clickable { viewModel.movePlayerToTeam(eventId, pid, m.name, true) } else Modifier)
+                                        }
                                     }
                                 }
                             }

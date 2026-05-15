@@ -51,6 +51,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
         return client.post("/api/events/$eventId/randomize$qs")
     }
 
+    suspend fun updateTeams(eventId: String, teamOnePlayerIds: List<String>, teamTwoPlayerIds: List<String>): OkResponse =
+        client.patch("/api/events/$eventId/teams", UpdateTeamsRequest(teamOnePlayerIds, teamTwoPlayerIds))
+
     // ── Event editing ─────────────────────────────────────────────────────
     suspend fun updateTitle(eventId: String, title: String): OkResponse =
         client.put("/api/events/$eventId/title", TitleRequest(title))
@@ -183,3 +186,4 @@ data class CreateEventRequest(
 @Serializable data class PasswordVerifyRequest(val password: String)
 @Serializable data class ScoreRequest(val scoreOne: Int, val scoreTwo: Int)
 @Serializable data class PaymentUpdateRequest(val playerName: String, val status: String)
+@Serializable data class UpdateTeamsRequest(val teamOnePlayerIds: List<String>, val teamTwoPlayerIds: List<String>)
