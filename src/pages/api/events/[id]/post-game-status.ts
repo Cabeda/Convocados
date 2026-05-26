@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { isGameEnded } from "../../../../lib/gameStatus";
 import { getSession } from "../../../../lib/auth.helpers.server";
+import { MVP_VOTING_WINDOW_DAYS } from "../../../../lib/mvp.constants";
 
 /**
  * GET /api/events/:id/post-game-status
@@ -28,7 +29,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const latestHistory = await prisma.gameHistory.findFirst({
     where: { eventId: event.id },
     orderBy: { dateTime: "desc" },
-    select: { id: true, scoreOne: true, scoreTwo: true, teamsSnapshot: true, paymentsSnapshot: true },
+    select: { id: true, scoreOne: true, scoreTwo: true, teamsSnapshot: true, paymentsSnapshot: true, status: true, dateTime: true, createdAt: true },
   });
   const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
 
@@ -70,7 +71,52 @@ export const GET: APIRoute = async ({ params, request }) => {
     );
   }
 
-  const allComplete = hasScore && allPaid;
+  // ─── MVP voting completion ──────────────────────────────────────────
+  let mvpComplete = true;
+  if (event.mvpEnabled && latestHistory && latestHistory.status === "played") {
+    // Determine if voting window is still open
+    const gameEndTime = new Date(latestHistory.dateTime.getTime() + (event.durationMinutes ?? 60) * 60_000);
+    const gameHasEnded = gameEndTime <= new Date();
+    const daysSinceCreation = (Date.now() - latestHistory.createdAt.getTime()) / 86400_000;
+    const withinWindow = daysSinceCreation <= MVP_VOTING_WINDOW_DAYS;
+
+    // Check if a newer game exists (closes voting for this one)
+    const newerGame = await prisma.gameHistory.findFirst({
+      where: { eventId: event.id, dateTime: { gt: latestHistory.dateTime }, status: "played" },
+      select: { id: true },
+    });
+
+    const isVotingOpen = gameHasEnded && !newerGame && withinWindow;
+
+    if (isVotingOpen) {
+      // Count eligible voters: participants in teamsSnapshot that have user accounts
+      let eligibleCount = 0;
+      if (latestHistory.teamsSnapshot) {
+        try {
+          const teams = JSON.parse(latestHistory.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
+          const allNames = teams.flatMap((t) => t.players.map((p) => p.name));
+          // Find users whose names match participants (case-insensitive)
+          const matchingUsers = await prisma.user.findMany({
+            where: { name: { in: allNames } },
+            select: { name: true },
+          });
+          eligibleCount = matchingUsers.length;
+        } catch { /* ignore */ }
+      }
+
+      if (eligibleCount > 0) {
+        // Count votes already cast for this game
+        const voteCount = await prisma.mvpVote.count({
+          where: { gameHistoryId: latestHistory.id },
+        });
+        mvpComplete = voteCount >= eligibleCount;
+      }
+      // If no eligible voters (no users matched), consider MVP complete
+    }
+    // If voting is not open (window expired or newer game), mvpComplete stays true
+  }
+
+  const allComplete = hasScore && allPaid && (!event.mvpEnabled || mvpComplete);
 
   // Check if there are unsettled payments from a past game in history,
   // even when the current event hasn't ended yet (post-reset scenario).
@@ -147,6 +193,6 @@ export const GET: APIRoute = async ({ params, request }) => {
   return Response.json({
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
-    hasPendingPastPayments, mvpEnabled: event.mvpEnabled,
+    hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete,
   });
 };

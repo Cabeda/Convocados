@@ -125,22 +125,11 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
   }
 
-  // Create vote (unique constraint prevents duplicates)
-  try {
-    const vote = await prisma.mvpVote.create({
-      data: {
-        gameHistoryId: history.id,
-        voterPlayerId,
-        voterName: voterName as string,
-        votedForPlayerId: targetPlayerId,
-        votedForName: targetPlayerName,
-      },
-    });
-    return Response.json({ ok: true, vote: { id: vote.id, votedForName: vote.votedForName } });
-  } catch (err) {
-    if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002") {
-      return Response.json({ error: "You have already voted for this game." }, { status: 409 });
-    }
-    throw err;
-  }
+  // Upsert vote (swap if already voted)
+  const vote = await prisma.mvpVote.upsert({
+    where: { gameHistoryId_voterPlayerId: { gameHistoryId: history.id, voterPlayerId } },
+    create: { gameHistoryId: history.id, voterPlayerId, voterName: voterName as string, votedForPlayerId: targetPlayerId, votedForName: targetPlayerName },
+    update: { votedForPlayerId: targetPlayerId, votedForName: targetPlayerName },
+  });
+  return Response.json({ ok: true, vote: { id: vote.id, votedForName: vote.votedForName } });
 };

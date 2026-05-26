@@ -831,6 +831,7 @@ const es: TranslationKeys = {
   mvpNoVotesYet: "Sin votos aún",
   mvpVoteSuccess: "¡Voto registrado!",
   mvpSelfVoteError: "No puedes votar por ti mismo",
+  mvpLoginRequired: "Inicia sesión para votar por el MVP",
   mvpEnabled: "Votación MVP",
   mvpEnabledTooltip: "Permitir a los jugadores votar al jugador más valioso después de cada partido",
   mvpEloEnabled: "Bonificación ELO MVP",

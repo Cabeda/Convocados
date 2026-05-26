@@ -36,7 +36,7 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
   const [data, setData] = useState<MvpData | null>(null);
   const [loading, setLoading] = useState(true);
   const [voting, setVoting] = useState(false);
-  const [snack, setSnack] = useState<{ msg: string; severity: "success" | "error" } | null>(null);
+  const [snack, setSnack] = useState<{ msg: string; severity: "success" | "error" | "info" } | null>(null);
 
   const fetchMvp = useCallback(async () => {
     try {
@@ -49,6 +49,10 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
   useEffect(() => { fetchMvp(); }, [fetchMvp]);
 
   const handleVote = async (playerId: string) => {
+    if (!isAuthenticated) {
+      setSnack({ msg: t("mvpLoginRequired"), severity: "info" });
+      return;
+    }
     setVoting(true);
     try {
       const res = await fetch(`/api/events/${eventId}/history/${historyId}/mvp-vote`, {
@@ -78,8 +82,9 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
   if (!data) return null;
 
   const { mvp, isVotingOpen, hasVoted } = data;
-  const canVote = isVotingOpen && isAuthenticated && hasVoted === false;
+  const canVote = isVotingOpen && hasVoted === false;
   const voteCandidates = data.participants ?? [];
+  const filteredCandidates = voteCandidates.filter(p => p.name.toLowerCase() !== session?.user?.name?.toLowerCase());
 
   // Show MVP result badge (voting closed with votes, or already voted and results available)
   if (mvp && mvp.length > 0 && (!canVote || !isVotingOpen)) {
@@ -122,7 +127,7 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
             </Typography>
           </Box>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-            {voteCandidates.map((p) => (
+            {filteredCandidates.map((p) => (
               <Chip
                 key={p.id}
                 data-testid={`mvp-vote-chip-${p.name}`}

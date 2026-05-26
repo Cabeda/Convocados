@@ -151,7 +151,36 @@ describe("POST mvp-vote", () => {
     expect(body.error).toMatch(/yourself/i);
   });
 
-  it("rejects duplicate vote", async () => {
+  it("swaps vote when voting for a different player", async () => {
+    const user = await seedUser("Alice");
+    mockAuth(user.id, "Alice");
+    const event = await seedEvent();
+    await seedPlayer(event.id, "Alice", user.id);
+    const bob = await seedPlayer(event.id, "Bob");
+    const charlie = await seedPlayer(event.id, "Charlie");
+    const history = await seedHistory(event.id);
+
+    const res1 = await castMvpVote(postCtx(
+      { id: event.id, historyId: history.id },
+      { votedForPlayerId: bob.id },
+    ));
+    expect(res1.status).toBe(200);
+
+    const res2 = await castMvpVote(postCtx(
+      { id: event.id, historyId: history.id },
+      { votedForPlayerId: charlie.id },
+    ));
+    expect(res2.status).toBe(200);
+    const body = await res2.json();
+    expect(body.vote.votedForName).toBe("Charlie");
+
+    // Only 1 vote should exist for this voter
+    const votes = await prisma.mvpVote.findMany({ where: { gameHistoryId: history.id } });
+    expect(votes).toHaveLength(1);
+    expect(votes[0].votedForName).toBe("Charlie");
+  });
+
+  it("is idempotent when voting for same player again", async () => {
     const user = await seedUser("Alice");
     mockAuth(user.id, "Alice");
     const event = await seedEvent();
@@ -167,7 +196,10 @@ describe("POST mvp-vote", () => {
       { id: event.id, historyId: history.id },
       { votedForPlayerId: bob.id },
     ));
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
+
+    const votes = await prisma.mvpVote.findMany({ where: { gameHistoryId: history.id } });
+    expect(votes).toHaveLength(1);
   });
 
   it("sets hasVoted=true after voting via GET mvp endpoint", async () => {
