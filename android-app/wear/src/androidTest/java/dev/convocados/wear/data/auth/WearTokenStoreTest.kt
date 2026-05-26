@@ -76,7 +76,7 @@ class WearTokenStoreTest {
 
     @Test
     fun getServerUrl_returns_default_when_not_set() {
-        assertEquals("https://convocados.fly.dev", store.getServerUrl())
+        assertEquals("https://convocados.cabeda.dev", store.getServerUrl())
     }
 
     @Test
@@ -90,8 +90,8 @@ class WearTokenStoreTest {
         store.setServerUrl("http://10.0.2.2:4321")
         assertEquals("http://10.0.2.2:4321", store.getServerUrl())
 
-        store.setServerUrl("https://convocados.fly.dev")
-        assertEquals("https://convocados.fly.dev", store.getServerUrl())
+        store.setServerUrl("https://convocados.cabeda.dev")
+        assertEquals("https://convocados.cabeda.dev", store.getServerUrl())
     }
 
     @Test

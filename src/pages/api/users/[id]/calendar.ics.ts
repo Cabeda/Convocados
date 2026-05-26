@@ -49,7 +49,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   // Sort by date
   allEvents.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.fly.dev";
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
 
   const calendarEvents = allEvents.map((e) => ({

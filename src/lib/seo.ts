@@ -33,7 +33,7 @@ export function generateEventJsonLd(event: EventJsonLdInput): string {
     organizer: {
       "@type": "Organization",
       name: "Convocados",
-      url: "https://convocados.fly.dev",
+      url: "https://convocados.cabeda.dev",
     },
   });
 }
