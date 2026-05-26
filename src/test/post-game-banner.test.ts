@@ -838,7 +838,7 @@ describe("GET /api/events/:id/post-game-status", () => {
         mvpEnabled: true,
       },
     });
-    const oldHistory = await prisma.gameHistory.create({
+    await prisma.gameHistory.create({
       data: {
         eventId: event.id,
         dateTime: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
@@ -934,8 +934,8 @@ describe("GET /api/events/:id/post-game-status", () => {
         mvpEnabled: true,
       },
     });
-    const alice = await prisma.user.create({ data: { id: "u-alice3", name: "Alice", email: "alice3@test.com", emailVerified: false } });
-    const bob = await prisma.user.create({ data: { id: "u-bob3", name: "Bob", email: "bob3@test.com", emailVerified: false } });
+    await prisma.user.create({ data: { id: "u-alice3", name: "Alice", email: "alice3@test.com", emailVerified: false } });
+    await prisma.user.create({ data: { id: "u-bob3", name: "Bob", email: "bob3@test.com", emailVerified: false } });
 
     const history = await prisma.gameHistory.create({
       data: {

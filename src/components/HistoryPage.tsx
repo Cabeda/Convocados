@@ -385,7 +385,7 @@ function HistoryCardFull({
   isOwner,
   userName,
   timezone,
-  eventPlayers,
+  eventPlayers: _eventPlayers,
 }: {
   entry: HistoryEntry;
   eventId: string;
