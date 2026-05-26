@@ -156,11 +156,11 @@ test.describe("MVP Voting — e2e", () => {
     expect(mvpData2.mvp[0].playerName).toBe(voteTarget!.name);
     expect(mvpData2.mvp[0].voteCount).toBe(1);
 
-    // ── Step 11: Verify duplicate vote is rejected ──
+    // ── Step 11: Verify duplicate vote is idempotent (upsert) ──
     const dupeRes = await api.post(`/api/events/${eventId}/history/${historyId}/mvp-vote`, {
       data: { votedForPlayerId: voteTarget!.id },
     });
-    expect(dupeRes.status()).toBe(409);
+    expect(dupeRes.status()).toBe(200);
 
     // ── Step 12: Navigate to history page — MVP result should be visible ──
     await page.goto(`/events/${eventId}/history`);
