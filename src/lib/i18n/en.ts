@@ -878,6 +878,7 @@ const en = {
   mvpNoVotesYet: "No votes yet",
   mvpVoteSuccess: "Vote cast!",
   mvpSelfVoteError: "You cannot vote for yourself",
+  mvpLoginRequired: "Log in to vote for MVP",
   mvpEnabled: "MVP voting",
   mvpEnabledTooltip: "Allow players to vote for the most valuable player after each game",
   mvpEloEnabled: "MVP ELO bonus",
