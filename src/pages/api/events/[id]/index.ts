@@ -5,6 +5,7 @@ import { fireWebhooks } from "../../../../lib/webhook.server";
 import { autoPriorityEnroll } from "../../../../lib/priority.server";
 import { getSession, checkEventAdmin } from "../../../../lib/auth.helpers.server";
 import { checkAccess } from "../../../../lib/eventAccess";
+import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/scheduler.server";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
@@ -123,6 +124,11 @@ export const GET: APIRoute = async ({ params, request }) => {
 
         // Auto-enroll priority players for the new occurrence (non-blocking)
         autoPriorityEnroll(event.id).catch(() => {});
+
+        // Schedule reminder jobs for the new occurrence (non-blocking)
+        cancelEventJobs(event.id)
+          .then(() => scheduleEventReminders(event.id, newDateTime, event.durationMinutes))
+          .catch(() => {});
       }
 
       const fresh = await prisma.event.findUnique({
