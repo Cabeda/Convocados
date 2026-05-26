@@ -127,6 +127,8 @@ export const auth = betterAuth({
   },
   trustedOrigins: [
     baseUrl,
+    // Keep old fly.dev domain as trusted for backwards compatibility
+    "https://convocados.fly.dev",
     // Allow local network access for mobile app development
     ...(process.env.TRUSTED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
   ],

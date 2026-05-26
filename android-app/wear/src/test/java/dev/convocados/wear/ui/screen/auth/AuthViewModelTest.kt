@@ -31,7 +31,7 @@ class AuthViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         every { tokenStore.isAuthenticated } returns isAuthenticatedFlow
-        every { tokenStore.getServerUrl() } returns "https://convocados.fly.dev"
+        every { tokenStore.getServerUrl() } returns "https://convocados.cabeda.dev"
         viewModel = AuthViewModel(tokenStore, googleSignIn, apiClient)
     }
 
