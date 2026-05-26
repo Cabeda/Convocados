@@ -6,7 +6,7 @@ primary_region = "cdg"
 
 [env]
   APP_URL = "https://convocados.fly.dev"
-  POLL_INTERVAL_MS = "10000"
+  CONCURRENCY = "3"
 
 [[vm]]
   memory = "256mb"
