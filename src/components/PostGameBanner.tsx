@@ -52,17 +52,13 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   const [paymentsDirty, setPaymentsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [eventPlayers, setEventPlayers] = useState<{ id: string; name: string }[]>([]);
 
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
 
   const fetchStatus = useCallback(async () => {
     try {
-      const [statusRes, eventRes] = await Promise.all([
-        fetch(`/api/events/${eventId}/post-game-status`),
-        eventPlayers.length === 0 ? fetch(`/api/events/${eventId}`) : null,
-      ]);
+      const statusRes = await fetch(`/api/events/${eventId}/post-game-status`);
       if (statusRes.ok) {
         const data = await statusRes.json();
         setStatus(data);
@@ -71,12 +67,8 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
           setEditablePayments(data.paymentsSnapshot);
         }
       }
-      if (eventRes?.ok) {
-        const ev = await eventRes.json();
-        setEventPlayers((ev.players ?? []).map((p: any) => ({ id: p.id, name: p.name })));
-      }
     } catch { /* ignore */ }
-  }, [eventId, paymentsDirty, eventPlayers.length]);
+  }, [eventId, paymentsDirty]);
 
   useEffect(() => {
     fetchStatus();
@@ -330,7 +322,6 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
                 <MvpVotingCard
                   eventId={eventId}
                   historyId={status.latestHistoryId}
-                  participants={eventPlayers}
                   compact
                 />
               </Box>

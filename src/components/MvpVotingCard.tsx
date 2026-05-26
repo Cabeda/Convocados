@@ -25,12 +25,10 @@ interface MvpData {
 interface Props {
   eventId: string;
   historyId: string;
-  /** All player names from the teamsSnapshot — used as vote candidates */
-  participants: { id: string; name: string }[];
   compact?: boolean;
 }
 
-export function MvpVotingCard({ eventId, historyId, participants, compact }: Props) {
+export function MvpVotingCard({ eventId, historyId, compact }: Props) {
   const t = useT();
   const theme = useTheme();
   const { data: session } = useSession();
@@ -81,7 +79,7 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
 
   const { mvp, isVotingOpen, hasVoted } = data;
   const canVote = isVotingOpen && isAuthenticated && hasVoted === false;
-  const voteCandidates = participants.length > 0 ? participants : (data.participants ?? []);
+  const voteCandidates = data.participants ?? [];
 
   // Show MVP result badge (voting closed with votes, or already voted and results available)
   if (mvp && mvp.length > 0 && (!canVote || !isVotingOpen)) {
