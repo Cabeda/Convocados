@@ -23,7 +23,7 @@ export function _resetResendClient() {
 const EMAIL_FROM = import.meta.env.EMAIL_FROM ?? process.env.EMAIL_FROM ?? "Convocados <noreply@cabeda.dev>";
 
 function getAppUrl(): string {
-  return import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.fly.dev";
+  return import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev";
 }
 
 function emailTemplate({ heading, body, buttonText, buttonUrl, footnote }: {
@@ -80,7 +80,7 @@ function emailTemplate({ heading, body, buttonText, buttonUrl, footnote }: {
           <!-- Footer -->
           <tr>
             <td style="padding: 20px 32px; border-top: 1px solid #e8ece9; text-align: center;">
-              <a href="${getAppUrl()}" style="font-size: 12px; color: #8a9b92; text-decoration: none;">convocados.fly.dev</a>
+              <a href="${getAppUrl()}" style="font-size: 12px; color: #8a9b92; text-decoration: none;">convocados.cabeda.dev</a>
             </td>
           </tr>
         </table>

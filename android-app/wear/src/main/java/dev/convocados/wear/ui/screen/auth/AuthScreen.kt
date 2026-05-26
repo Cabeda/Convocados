@@ -306,7 +306,7 @@ private fun BackendSelector(viewModel: AuthViewModel) {
             Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = {
-                    val newUrl = if (isLocal) "https://convocados.fly.dev" else "http://10.0.2.2:4321"
+                    val newUrl = if (isLocal) "https://convocados.cabeda.dev" else "http://10.0.2.2:4321"
                     serverUrl = newUrl
                     viewModel.setServerUrl(newUrl)
                 },

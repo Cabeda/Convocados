@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../lib/db.server";
 
 export const GET: APIRoute = async ({ request }) => {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.fly.dev";
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const base = `${proto}://${host}`;
 

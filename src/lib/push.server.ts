@@ -31,7 +31,7 @@ async function init() {
   const webpush = await getWebPush();
   const publicKey = import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY ?? "";
   const privateKey = import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY ?? "";
-  webpush.setVapidDetails("mailto:admin@convocados.fly.dev", publicKey, privateKey);
+  webpush.setVapidDetails("mailto:admin@cabeda.dev", publicKey, privateKey);
 }
 
 // ── FCM (Firebase Cloud Messaging) ────────────────────────────────────────────

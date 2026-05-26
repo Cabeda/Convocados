@@ -10,7 +10,7 @@ import { createLogger } from "../../../../lib/logger.server";
 const log = createLogger("event-admins");
 
 function getAppUrl(): string {
-  return import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.fly.dev";
+  return import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev";
 }
 
 /** GET — List admins for an event (owner only). */

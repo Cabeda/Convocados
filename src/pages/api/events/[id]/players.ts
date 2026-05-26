@@ -195,7 +195,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (limited) return limited;
 
   const eventId = params.id ?? "";
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.fly.dev";
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const origin = `${proto}://${host}`;
   const session = await getSession(request);
@@ -332,7 +332,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   if (limited) return limited;
 
   const eventId = params.id ?? "";
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.fly.dev";
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const origin = `${proto}://${host}`;
   const { playerId } = await request.json();
