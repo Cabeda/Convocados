@@ -83,8 +83,8 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
   const voteCandidates = data.participants ?? [];
   const filteredCandidates = voteCandidates.filter(p => p.name.toLowerCase() !== session?.user?.name?.toLowerCase());
 
-  // Show MVP result badge (voting closed with votes, or already voted and results available)
-  if (mvp && mvp.length > 0 && (!canVote || !isVotingOpen)) {
+  // Show MVP result badge (voting closed, or user already voted)
+  if (mvp && mvp.length > 0 && (hasVoted === true || !isVotingOpen)) {
     return (
       <Box data-testid="mvp-result" sx={{
         display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap",
