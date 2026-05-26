@@ -66,9 +66,6 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
         fetchMvp();
       } else if (res.status === 400 && body.error?.includes("yourself")) {
         setSnack({ msg: t("mvpSelfVoteError"), severity: "error" });
-      } else if (res.status === 409) {
-        setSnack({ msg: t("mvpAlreadyVoted"), severity: "error" });
-        fetchMvp();
       } else {
         setSnack({ msg: body.error || "Error", severity: "error" });
       }
@@ -82,7 +79,7 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
   if (!data) return null;
 
   const { mvp, isVotingOpen, hasVoted } = data;
-  const canVote = isVotingOpen && hasVoted === false;
+  const canVote = isVotingOpen && hasVoted !== true;
   const voteCandidates = data.participants ?? [];
   const filteredCandidates = voteCandidates.filter(p => p.name.toLowerCase() !== session?.user?.name?.toLowerCase());
 
