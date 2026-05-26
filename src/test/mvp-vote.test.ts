@@ -665,3 +665,75 @@ describe("POST mvp-vote (name-based)", () => {
     expect(body.error).toMatch(/not found/i);
   });
 });
+
+// ─── GET /api/events/[id]/history/[historyId]/mvp — candidates source ────────
+
+describe("GET mvp — candidates from teamsSnapshot", () => {
+  it("returns all players from teamsSnapshot including anonymous (no Player record)", async () => {
+    const user = await seedUser("Alice");
+    mockAuth(user.id, "Alice");
+    const event = await seedEvent();
+    await seedPlayer(event.id, "Alice", user.id);
+    // "AnonPlayer" has no Player record — only exists in teamsSnapshot
+    const history = await seedHistory(event.id, {
+      teamsSnapshot: JSON.stringify([
+        { team: "Ninjas", players: [{ name: "Alice", order: 0 }, { name: "AnonPlayer", order: 1 }] },
+        { team: "Gunas", players: [{ name: "Bob", order: 0 }] },
+      ]),
+    });
+
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const names = body.participants.map((p: { name: string }) => p.name);
+    expect(names).toContain("AnonPlayer");
+    expect(names).toContain("Alice");
+    expect(names).toContain("Bob");
+    // AnonPlayer should have a name-based ID
+    const anon = body.participants.find((p: { name: string }) => p.name === "AnonPlayer");
+    expect(anon.id).toBe("name:AnonPlayer");
+  });
+
+  it("returns players who left the event after the game", async () => {
+    const user = await seedUser("Alice");
+    mockAuth(user.id, "Alice");
+    const event = await seedEvent();
+    await seedPlayer(event.id, "Alice", user.id);
+    // "LeftPlayer" was in the game but has since been removed from event
+    const history = await seedHistory(event.id, {
+      teamsSnapshot: JSON.stringify([
+        { team: "Ninjas", players: [{ name: "Alice", order: 0 }, { name: "LeftPlayer", order: 1 }] },
+        { team: "Gunas", players: [{ name: "Bob", order: 0 }] },
+      ]),
+    });
+    // LeftPlayer has no Player record (removed from event)
+
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const names = body.participants.map((p: { name: string }) => p.name);
+    expect(names).toContain("LeftPlayer");
+  });
+
+  it("allows voting for anonymous players by name-based ID", async () => {
+    const user = await seedUser("Alice");
+    mockAuth(user.id, "Alice");
+    const event = await seedEvent();
+    await seedPlayer(event.id, "Alice", user.id);
+    const history = await seedHistory(event.id, {
+      teamsSnapshot: JSON.stringify([
+        { team: "Ninjas", players: [{ name: "Alice", order: 0 }] },
+        { team: "Gunas", players: [{ name: "AnonPlayer", order: 0 }] },
+      ]),
+    });
+
+    const res = await castMvpVote(postCtx(
+      { id: event.id, historyId: history.id },
+      { votedForPlayerId: "name:AnonPlayer" },
+    ));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.vote.votedForName).toBe("AnonPlayer");
+  });
+});
