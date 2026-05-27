@@ -168,7 +168,7 @@ test.describe("MVP Voting — e2e", () => {
       timeout: 15_000,
     });
 
-    // Verify the MVP name is shown
-    await expect(page.locator('[data-testid="mvp-result"]')).toContainText(voteTarget!.name);
+    // Verify vote candidates are shown (anonymous sees voting UI)
+    await expect(page.locator('[data-testid="mvp-voting"]')).toContainText(voteTarget!.name);
   });
 });
