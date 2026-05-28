@@ -1,29 +1,23 @@
 package dev.convocados.wear.ui.screen.auth
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.app.RemoteInput
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.credentials.CredentialManager
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.wear.compose.material3.*
+import androidx.wear.input.RemoteInputIntentHelper
 import com.google.android.horologist.annotations.ExperimentalHorologistApi
 import com.google.android.horologist.compose.layout.ScalingLazyColumn
 import com.google.android.horologist.compose.layout.ScreenScaffold
@@ -44,16 +38,9 @@ fun AuthScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val columnState = rememberColumnState()
-    val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated) onAuthenticated()
-    }
-
-    LaunchedEffect(uiState.error) {
-        if (uiState.error != null) {
-            keyboardController?.hide()
-        }
     }
 
     // Dev-only: prefill credentials from .env.wear
@@ -76,101 +63,74 @@ fun AuthScreen(
             }
 
             if (uiState.showEmailLogin) {
-                // --- Email Login Form ---
+                // --- Email Login Form (using Wear OS RemoteInput) ---
                 item {
-                    val emailFocusRequester = remember { FocusRequester() }
-                    val passwordFocusRequester = remember { FocusRequester() }
+                    val emailLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.StartActivityForResult()
+                    ) { result ->
+                        result.data?.let { data ->
+                            val results = RemoteInput.getResultsFromIntent(data)
+                            results?.getCharSequence("email")?.toString()?.let {
+                                viewModel.onEmailChanged(it)
+                            }
+                        }
+                    }
 
-                    LaunchedEffect(Unit) {
-                        emailFocusRequester.requestFocus()
+                    val passwordLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.StartActivityForResult()
+                    ) { result ->
+                        result.data?.let { data ->
+                            val results = RemoteInput.getResultsFromIntent(data)
+                            results?.getCharSequence("password")?.toString()?.let {
+                                viewModel.onPasswordChanged(it)
+                            }
+                        }
                     }
 
                     Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
-                        Text(
-                            text = "Email Sign In",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(4.dp))
+                        // Email input button
+                        Button(
+                            onClick = {
+                                val remoteInput = RemoteInput.Builder("email")
+                                    .setLabel("Email")
+                                    .build()
+                                val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
+                                RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(remoteInput))
+                                intent.putExtra("android.text.InputType", android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
+                                emailLauncher.launch(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.filledTonalButtonColors(),
+                        ) {
+                            Text(
+                                text = uiState.email.ifBlank { "Email" },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
 
-                        BasicTextField(
-                            value = uiState.email,
-                            onValueChange = { viewModel.onEmailChanged(it) },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(emailFocusRequester)
-                                .background(
-                                    color = MaterialTheme.colorScheme.surfaceContainer,
-                                    shape = RoundedCornerShape(20.dp)
-                                )
-                                .padding(vertical = 10.dp, horizontal = 12.dp),
-                            textStyle = MaterialTheme.typography.labelMedium.copy(
-                                color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = TextAlign.Start
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Email,
-                                capitalization = KeyboardCapitalization.None,
-                                autoCorrectEnabled = false,
-                                imeAction = ImeAction.Next,
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onNext = { passwordFocusRequester.requestFocus() }
-                            ),
-                            decorationBox = { innerTextField ->
-                                if (uiState.email.isEmpty()) {
-                                    Text(
-                                        text = "Email",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        )
+                        Spacer(Modifier.height(6.dp))
 
-                        Spacer(Modifier.height(8.dp))
-
-                        BasicTextField(
-                            value = uiState.password,
-                            onValueChange = { viewModel.onPasswordChanged(it) },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(passwordFocusRequester)
-                                .background(
-                                    color = MaterialTheme.colorScheme.surfaceContainer,
-                                    shape = RoundedCornerShape(20.dp)
-                                )
-                                .padding(vertical = 10.dp, horizontal = 12.dp),
-                            textStyle = MaterialTheme.typography.labelMedium.copy(
-                                color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = TextAlign.Start
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Password,
-                                imeAction = ImeAction.Go,
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onGo = { viewModel.loginWithEmail() },
-                                onDone = { viewModel.loginWithEmail() },
-                                onSend = { viewModel.loginWithEmail() },
-                            ),
-                            decorationBox = { innerTextField ->
-                                if (uiState.password.isEmpty()) {
-                                    Text(
-                                        text = "Password",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        )
+                        // Password input button
+                        Button(
+                            onClick = {
+                                val remoteInput = RemoteInput.Builder("password")
+                                    .setLabel("Password")
+                                    .build()
+                                val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
+                                RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(remoteInput))
+                                intent.putExtra("android.text.InputType", android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD)
+                                passwordLauncher.launch(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.filledTonalButtonColors(),
+                        ) {
+                            Text(
+                                text = if (uiState.password.isBlank()) "Password" else "••••••••",
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
                     }
                 }
 
@@ -262,16 +222,6 @@ fun AuthScreen(
             // Dev-only: backend selector
             if (BuildConfig.DEBUG) {
                 item { BackendSelector(viewModel) }
-            }
-
-            item {
-                Text(
-                    text = "or sign in on phone",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextMuted,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 20.dp)
-                )
             }
         }
     }

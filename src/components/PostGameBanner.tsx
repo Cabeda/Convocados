@@ -87,8 +87,8 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
     }
   }, [status?.paymentsSnapshot]);
 
-  // Don't show if game hasn't ended (unless there are unsettled past payments) or everything is complete
-  if (!status || (!status.gameEnded && !status.hasPendingPastPayments) || status.allComplete) return null;
+  // Don't show if game hasn't ended (unless there are unsettled past payments or pending MVP votes) or everything is complete
+  if (!status || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || status.allComplete) return null;
 
   const completedCount = (status.hasScore ? 1 : 0) + (status.allPaid ? 1 : 0);
   const progressPct = (completedCount / 2) * 100;

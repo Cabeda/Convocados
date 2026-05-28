@@ -14,6 +14,11 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 val wearEnv = Properties().apply {
     // Read from .env.wear.local (gitignored, personal creds) or .env.wear (template)
     val localEnv = rootProject.file(".env.wear.local")
@@ -26,12 +31,24 @@ android {
     namespace = "dev.convocados.wear"
     compileSdk = 35
 
+    signingConfigs {
+        create("release") {
+            val ksFile = rootProject.file(keystoreProperties.getProperty("storeFile", ""))
+            if (ksFile.exists()) {
+                storeFile = ksFile
+                storePassword = keystoreProperties.getProperty("storePassword", "")
+                keyAlias = keystoreProperties.getProperty("keyAlias", "")
+                keyPassword = keystoreProperties.getProperty("keyPassword", "")
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "com.cabeda.convocados.wear"
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = (System.currentTimeMillis() / 1000 / 60).toInt()
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -61,7 +78,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -77,6 +94,22 @@ android {
         buildConfig = true
     }
 }
+
+tasks.register("validateGoogleClientId") {
+    doLast {
+        val clientId = localProperties.getProperty("GOOGLE_SERVER_CLIENT_ID", "")
+        if (clientId.isBlank()) {
+            throw GradleException(
+                "GOOGLE_SERVER_CLIENT_ID is not set in local.properties. " +
+                "Google Sign-In will fail at runtime. Add:\n" +
+                "GOOGLE_SERVER_CLIENT_ID=<your-web-client-id>.apps.googleusercontent.com"
+            )
+        }
+    }
+}
+
+tasks.matching { it.name.contains("Release") && it.name.startsWith("assemble") || it.name.startsWith("bundle") }
+    .configureEach { dependsOn("validateGoogleClientId") }
 
 dependencies {
     // Wear Compose
@@ -97,6 +130,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.wear)
+    implementation("androidx.wear:wear-input:1.2.0-alpha02")
 
     // Hilt DI
     implementation(libs.hilt.android)

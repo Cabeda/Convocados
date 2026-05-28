@@ -54,3 +54,26 @@ fun formatRelativeTime(dateTime: String): String {
         }
     }
 }
+
+/** Default game duration in minutes by sport ID. */
+fun sportDurationMinutes(sport: String): Int = when (sport) {
+    "football-5v5" -> 60
+    "football-7v7" -> 70
+    "football-11v11" -> 90
+    "futsal" -> 60
+    "basketball" -> 48
+    "volleyball" -> 60
+    "tennis-singles", "tennis-doubles" -> 90
+    "padel" -> 90
+    else -> 60
+}
+
+/** Returns elapsed fraction (0f..1f) of a game given its start time and sport. */
+fun gameProgressFraction(dateTime: String, sport: String): Float {
+    val start = parseInstant(dateTime) ?: return 0f
+    val now = Instant.now()
+    val elapsed = ChronoUnit.SECONDS.between(start, now)
+    if (elapsed <= 0) return 0f
+    val total = sportDurationMinutes(sport) * 60L
+    return (elapsed.toFloat() / total).coerceIn(0f, 1f)
+}
