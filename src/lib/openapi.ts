@@ -27,7 +27,7 @@ export const openApiSpec = {
     license: { name: "MIT" },
   },
   servers: [
-    { url: "https://convocados.fly.dev", description: "Production" },
+    { url: "https://convocados.cabeda.dev", description: "Production" },
     { url: "http://localhost:4321", description: "Local development" },
   ],
   paths: {

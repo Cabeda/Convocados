@@ -385,7 +385,7 @@ function HistoryCardFull({
   isOwner,
   userName,
   timezone,
-  eventPlayers,
+  eventPlayers: _eventPlayers,
 }: {
   entry: HistoryEntry;
   eventId: string;
@@ -1055,11 +1055,6 @@ function HistoryCardFull({
             <MvpVotingCard
               eventId={eventId}
               historyId={entry.id}
-              participants={(() => {
-                // Only show players who participated in this specific game
-                const gamePlayerNames = new Set(teams.flatMap((t) => t.players.map((p) => p.name.toLowerCase())));
-                return eventPlayers.filter((p) => gamePlayerNames.has(p.name.toLowerCase()));
-              })()}
             />
           </Box>
         )}

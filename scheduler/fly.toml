@@ -5,8 +5,9 @@ primary_region = "cdg"
   dockerfile = "Dockerfile"
 
 [env]
-  APP_URL = "https://convocados.fly.dev"
+  APP_URL = "https://convocados.cabeda.dev"
   CONCURRENCY = "3"
+  POLL_INTERVAL_MS = "10000"
 
 [[vm]]
   memory = "256mb"

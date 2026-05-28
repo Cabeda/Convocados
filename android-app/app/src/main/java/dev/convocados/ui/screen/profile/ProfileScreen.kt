@@ -120,7 +120,7 @@ fun ProfileScreen(
                 Column(Modifier.padding(12.dp)) {
                     OutlinedTextField(
                         value = serverUrl, onValueChange = { serverUrl = it },
-                        placeholder = { Text("https://convocados.fly.dev") },
+                        placeholder = { Text("https://convocados.cabeda.dev") },
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
                     )
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {

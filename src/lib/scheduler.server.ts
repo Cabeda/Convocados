@@ -6,7 +6,7 @@ import { getNotificationPrefs, wantsEmailReminder } from "./notificationPrefs.se
 
 const log = createLogger("scheduler");
 
-const APP_URL = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.fly.dev";
+const APP_URL = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev";
 
 /** Reminder offsets in milliseconds */
 const REMINDER_OFFSETS = {

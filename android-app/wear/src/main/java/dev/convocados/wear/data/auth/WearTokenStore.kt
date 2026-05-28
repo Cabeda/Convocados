@@ -76,6 +76,6 @@ class WearTokenStore @Inject constructor(@ApplicationContext context: Context) {
     }
 
     companion object {
-        const val DEFAULT_SERVER_URL = "https://convocados.fly.dev"
+        const val DEFAULT_SERVER_URL = "https://convocados.cabeda.dev"
     }
 }

@@ -19,18 +19,18 @@ interface MvpData {
   isVotingOpen: boolean;
   hasVoted: boolean | null;
   totalVotes: number;
+  eligibleVoters: number;
   participants?: { id: string; name: string }[];
+  votes?: { voterName: string; votedForName: string }[];
 }
 
 interface Props {
   eventId: string;
   historyId: string;
-  /** All player names from the teamsSnapshot — used as vote candidates */
-  participants: { id: string; name: string }[];
   compact?: boolean;
 }
 
-export function MvpVotingCard({ eventId, historyId, participants, compact }: Props) {
+export function MvpVotingCard({ eventId, historyId, compact }: Props) {
   const t = useT();
   const theme = useTheme();
   const { data: session } = useSession();
@@ -38,7 +38,7 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
   const [data, setData] = useState<MvpData | null>(null);
   const [loading, setLoading] = useState(true);
   const [voting, setVoting] = useState(false);
-  const [snack, setSnack] = useState<{ msg: string; severity: "success" | "error" } | null>(null);
+  const [snack, setSnack] = useState<{ msg: string; severity: "success" | "error" | "info" } | null>(null);
 
   const fetchMvp = useCallback(async () => {
     try {
@@ -51,6 +51,10 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
   useEffect(() => { fetchMvp(); }, [fetchMvp]);
 
   const handleVote = async (playerId: string) => {
+    if (!isAuthenticated) {
+      setSnack({ msg: t("mvpLoginRequired"), severity: "info" });
+      return;
+    }
     setVoting(true);
     try {
       const res = await fetch(`/api/events/${eventId}/history/${historyId}/mvp-vote`, {
@@ -64,9 +68,6 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
         fetchMvp();
       } else if (res.status === 400 && body.error?.includes("yourself")) {
         setSnack({ msg: t("mvpSelfVoteError"), severity: "error" });
-      } else if (res.status === 409) {
-        setSnack({ msg: t("mvpAlreadyVoted"), severity: "error" });
-        fetchMvp();
       } else {
         setSnack({ msg: body.error || "Error", severity: "error" });
       }
@@ -80,11 +81,13 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
   if (!data) return null;
 
   const { mvp, isVotingOpen, hasVoted } = data;
-  const canVote = isVotingOpen && isAuthenticated && hasVoted === false;
-  const voteCandidates = participants.length > 0 ? participants : (data.participants ?? []);
+  const voteCandidates = data.participants ?? [];
+  const filteredCandidates = voteCandidates.filter(p => p.name.toLowerCase() !== session?.user?.name?.toLowerCase());
+  const myVote = data.votes?.find(v => v.voterName.toLowerCase() === session?.user?.name?.toLowerCase());
+  const progressText = data.eligibleVoters > 0 ? `${data.totalVotes}/${data.eligibleVoters}` : null;
 
-  // Show MVP result badge (voting closed with votes, or already voted and results available)
-  if (mvp && mvp.length > 0 && (!canVote || !isVotingOpen)) {
+  // Show MVP result badge (voting closed and has votes)
+  if (mvp && mvp.length > 0 && !isVotingOpen) {
     return (
       <Box data-testid="mvp-result" sx={{
         display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap",
@@ -108,8 +111,8 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
     );
   }
 
-  // Show voting UI
-  if (canVote) {
+  // Show voting UI (voting open — whether user voted or not, allow change)
+  if (isVotingOpen && hasVoted !== null) {
     return (
       <Box data-testid="mvp-voting" sx={{
         p: 1.5, borderRadius: 2,
@@ -117,20 +120,32 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
         border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
       }}>
         <Stack spacing={1}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <HowToRegIcon sx={{ color: theme.palette.primary.main, fontSize: 20 }} />
-            <Typography variant="body2" fontWeight={600}>
-              {t("voteMvp")}
-            </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, justifyContent: "space-between" }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <HowToRegIcon sx={{ color: theme.palette.primary.main, fontSize: 20 }} />
+              <Typography variant="body2" fontWeight={600}>
+                {hasVoted ? t("mvpChangeVote") : t("voteMvp")}
+              </Typography>
+            </Box>
+            {progressText && (
+              <Typography variant="caption" color="text.secondary">
+                {progressText} {t("mvpVoted")}
+              </Typography>
+            )}
           </Box>
+          {myVote && (
+            <Typography variant="caption" color="success.main" fontWeight={600}>
+              ✓ {t("mvpYourVote")}: {myVote.votedForName}
+            </Typography>
+          )}
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-            {voteCandidates.map((p) => (
+            {filteredCandidates.map((p) => (
               <Chip
                 key={p.id}
                 data-testid={`mvp-vote-chip-${p.name}`}
                 label={p.name}
                 size="small"
-                variant="outlined"
+                variant={myVote?.votedForName.toLowerCase() === p.name.toLowerCase() ? "filled" : "outlined"}
                 color="primary"
                 onClick={() => !voting && handleVote(p.id)}
                 disabled={voting}
@@ -144,21 +159,6 @@ export function MvpVotingCard({ eventId, historyId, participants, compact }: Pro
             {snack?.msg}
           </Alert>
         </Snackbar>
-      </Box>
-    );
-  }
-
-  // Already voted — show who they voted for
-  if (hasVoted && data.totalVotes > 0) {
-    return (
-      <Box data-testid="mvp-voted" sx={{
-        display: "flex", alignItems: "center", gap: 1,
-        ...(compact ? {} : { p: 1.5, borderRadius: 2, bgcolor: alpha(theme.palette.success.main, 0.06), border: `1px solid ${alpha(theme.palette.success.main, 0.2)}` }),
-      }}>
-        <EmojiEventsIcon sx={{ color: theme.palette.success.main, fontSize: compact ? 18 : 20 }} />
-        <Typography variant={compact ? "caption" : "body2"} color="success.main" fontWeight={600}>
-          {t("mvpAlreadyVoted")} ({data.totalVotes} {data.totalVotes === 1 ? "vote" : "votes"})
-        </Typography>
       </Box>
     );
   }

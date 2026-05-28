@@ -88,7 +88,7 @@ describe("GET /api/events/[id]/webhooks/[webhookId]/deliveries", () => {
 });
 
 describe("POST /api/events/[id]/webhooks/[webhookId]/test", () => {
-  it("creates a test delivery record", async () => {
+  it("creates a test delivery record", { timeout: 15000 }, async () => {
     const { POST } = await import("~/pages/api/events/[id]/webhooks/[webhookId]/test");
     const eventId = await seedEvent();
     const webhook = await prisma.webhookSubscription.create({

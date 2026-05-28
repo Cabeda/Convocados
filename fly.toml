@@ -7,7 +7,7 @@ primary_region = "cdg"
   HOST = "0.0.0.0"
   PORT = "3000"
   NODE_ENV = "production"
-  BETTER_AUTH_URL = "https://convocados.fly.dev"
+  BETTER_AUTH_URL = "https://convocados.cabeda.dev"
   EMAIL_FROM = "Convocados <noreply@cabeda.dev>"
 
 [http_service]

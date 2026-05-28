@@ -304,6 +304,11 @@ jobs:
           VERSION="${{ needs.release.outputs.version }}"
           sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" wear/build.gradle.kts
 
+      - name: Configure local.properties
+        working-directory: android-app
+        run: |
+          echo "GOOGLE_SERVER_CLIENT_ID=${{ secrets.GOOGLE_SERVER_CLIENT_ID }}" >> local.properties
+
       - name: Build Wear OS release APK
         working-directory: android-app
         run: ./gradlew :wear:assembleRelease --no-daemon

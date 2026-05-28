@@ -14,7 +14,7 @@ import pLimit from "p-limit";
 const log = createLogger("cron");
 
 const CRON_SECRET = import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET;
-const APP_URL = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.fly.dev";
+const APP_URL = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev";
 
 /** Max concurrent outbound email sends to avoid overwhelming the SMTP provider */
 const EMAIL_CONCURRENCY = 10;

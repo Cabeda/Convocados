@@ -33,6 +33,7 @@ export interface PostGameStatus {
   costAmount: number | null;
   hasPendingPastPayments: boolean;
   mvpEnabled: boolean;
+  mvpComplete: boolean;
 }
 
 interface Props {
@@ -52,17 +53,13 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   const [paymentsDirty, setPaymentsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [eventPlayers, setEventPlayers] = useState<{ id: string; name: string }[]>([]);
 
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
 
   const fetchStatus = useCallback(async () => {
     try {
-      const [statusRes, eventRes] = await Promise.all([
-        fetch(`/api/events/${eventId}/post-game-status`),
-        eventPlayers.length === 0 ? fetch(`/api/events/${eventId}`) : null,
-      ]);
+      const statusRes = await fetch(`/api/events/${eventId}/post-game-status`);
       if (statusRes.ok) {
         const data = await statusRes.json();
         setStatus(data);
@@ -71,12 +68,8 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
           setEditablePayments(data.paymentsSnapshot);
         }
       }
-      if (eventRes?.ok) {
-        const ev = await eventRes.json();
-        setEventPlayers((ev.players ?? []).map((p: any) => ({ id: p.id, name: p.name })));
-      }
     } catch { /* ignore */ }
-  }, [eventId, paymentsDirty, eventPlayers.length]);
+  }, [eventId, paymentsDirty]);
 
   useEffect(() => {
     fetchStatus();
@@ -95,8 +88,8 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
     }
   }, [status?.paymentsSnapshot]);
 
-  // Don't show if game hasn't ended (unless there are unsettled past payments) or everything is complete
-  if (!status || (!status.gameEnded && !status.hasPendingPastPayments) || status.allComplete) return null;
+  // Don't show if game hasn't ended (unless there are unsettled past payments or pending MVP votes) or everything is complete
+  if (!status || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || status.allComplete) return null;
 
   const completedCount = (status.hasScore ? 1 : 0) + (status.allPaid ? 1 : 0);
   const progressPct = (completedCount / 2) * 100;
@@ -330,7 +323,6 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
                 <MvpVotingCard
                   eventId={eventId}
                   historyId={status.latestHistoryId}
-                  participants={eventPlayers}
                   compact
                 />
               </Box>

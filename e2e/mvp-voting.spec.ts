@@ -156,19 +156,19 @@ test.describe("MVP Voting — e2e", () => {
     expect(mvpData2.mvp[0].playerName).toBe(voteTarget!.name);
     expect(mvpData2.mvp[0].voteCount).toBe(1);
 
-    // ── Step 11: Verify duplicate vote is rejected ──
+    // ── Step 11: Verify duplicate vote is idempotent (upsert) ──
     const dupeRes = await api.post(`/api/events/${eventId}/history/${historyId}/mvp-vote`, {
       data: { votedForPlayerId: voteTarget!.id },
     });
-    expect(dupeRes.status()).toBe(409);
+    expect(dupeRes.status()).toBe(200);
 
-    // ── Step 12: Navigate to history page — MVP result should be visible ──
+    // ── Step 12: Navigate to history page — MVP voting UI should be visible for anonymous ──
     await page.goto(`/events/${eventId}/history`);
-    await expect(page.locator('[data-testid="mvp-result"]')).toBeVisible({
+    await expect(page.locator('[data-testid="mvp-voting"]')).toBeVisible({
       timeout: 15_000,
     });
 
-    // Verify the MVP name is shown
-    await expect(page.locator('[data-testid="mvp-result"]')).toContainText(voteTarget!.name);
+    // Verify vote candidates are shown (anonymous sees voting UI)
+    await expect(page.locator('[data-testid="mvp-voting"]')).toContainText(voteTarget!.name);
   });
 });
