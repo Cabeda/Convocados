@@ -19,7 +19,9 @@ interface MvpData {
   isVotingOpen: boolean;
   hasVoted: boolean | null;
   totalVotes: number;
+  eligibleVoters: number;
   participants?: { id: string; name: string }[];
+  votes?: { voterName: string; votedForName: string }[];
 }
 
 interface Props {
@@ -82,9 +84,11 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
   const canVote = isVotingOpen && hasVoted !== true;
   const voteCandidates = data.participants ?? [];
   const filteredCandidates = voteCandidates.filter(p => p.name.toLowerCase() !== session?.user?.name?.toLowerCase());
+  const myVote = data.votes?.find(v => v.voterName.toLowerCase() === session?.user?.name?.toLowerCase());
+  const progressText = data.eligibleVoters > 0 ? `${data.totalVotes}/${data.eligibleVoters}` : null;
 
-  // Show MVP result badge (voting closed, or user already voted)
-  if (mvp && mvp.length > 0 && (hasVoted === true || !isVotingOpen)) {
+  // Show MVP result badge (voting closed and has votes)
+  if (mvp && mvp.length > 0 && !isVotingOpen) {
     return (
       <Box data-testid="mvp-result" sx={{
         display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap",
@@ -108,8 +112,8 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
     );
   }
 
-  // Show voting UI
-  if (canVote) {
+  // Show voting UI (voting open — whether user voted or not, allow change)
+  if (isVotingOpen && hasVoted !== null) {
     return (
       <Box data-testid="mvp-voting" sx={{
         p: 1.5, borderRadius: 2,
@@ -117,12 +121,24 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
         border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
       }}>
         <Stack spacing={1}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <HowToRegIcon sx={{ color: theme.palette.primary.main, fontSize: 20 }} />
-            <Typography variant="body2" fontWeight={600}>
-              {t("voteMvp")}
-            </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, justifyContent: "space-between" }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <HowToRegIcon sx={{ color: theme.palette.primary.main, fontSize: 20 }} />
+              <Typography variant="body2" fontWeight={600}>
+                {hasVoted ? t("mvpChangeVote") : t("voteMvp")}
+              </Typography>
+            </Box>
+            {progressText && (
+              <Typography variant="caption" color="text.secondary">
+                {progressText} {t("mvpVoted")}
+              </Typography>
+            )}
           </Box>
+          {myVote && (
+            <Typography variant="caption" color="success.main" fontWeight={600}>
+              ✓ {t("mvpYourVote")}: {myVote.votedForName}
+            </Typography>
+          )}
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
             {filteredCandidates.map((p) => (
               <Chip
@@ -130,7 +146,7 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
                 data-testid={`mvp-vote-chip-${p.name}`}
                 label={p.name}
                 size="small"
-                variant="outlined"
+                variant={myVote?.votedForName.toLowerCase() === p.name.toLowerCase() ? "filled" : "outlined"}
                 color="primary"
                 onClick={() => !voting && handleVote(p.id)}
                 disabled={voting}
@@ -144,21 +160,6 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
             {snack?.msg}
           </Alert>
         </Snackbar>
-      </Box>
-    );
-  }
-
-  // Already voted — show who they voted for
-  if (hasVoted && data.totalVotes > 0) {
-    return (
-      <Box data-testid="mvp-voted" sx={{
-        display: "flex", alignItems: "center", gap: 1,
-        ...(compact ? {} : { p: 1.5, borderRadius: 2, bgcolor: alpha(theme.palette.success.main, 0.06), border: `1px solid ${alpha(theme.palette.success.main, 0.2)}` }),
-      }}>
-        <EmojiEventsIcon sx={{ color: theme.palette.success.main, fontSize: compact ? 18 : 20 }} />
-        <Typography variant={compact ? "caption" : "body2"} color="success.main" fontWeight={600}>
-          {t("mvpAlreadyVoted")} ({data.totalVotes} {data.totalVotes === 1 ? "vote" : "votes"})
-        </Typography>
       </Box>
     );
   }
