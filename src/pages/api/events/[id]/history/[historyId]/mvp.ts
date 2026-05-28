@@ -114,6 +114,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   // Extract participants from teamsSnapshot for the voting UI
   let participants: Array<{ id: string; name: string }> = [];
+  let eligibleVoters = 0;
   if (history.teamsSnapshot) {
     try {
       const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
@@ -133,6 +134,13 @@ export const GET: APIRoute = async ({ params, request }) => {
         acc.push(match ? { id: match.id, name: match.name } : { id: `name:${n}`, name: n });
         return acc;
       }, []);
+
+      // Count eligible voters: participants with user accounts
+      const matchingUsers = await prisma.user.findMany({
+        where: { name: { in: names } },
+        select: { name: true },
+      });
+      eligibleVoters = matchingUsers.length;
     } catch { /* ignore */ }
   }
 
@@ -145,6 +153,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     isVotingOpen,
     hasVoted,
     totalVotes: votes.length,
+    eligibleVoters,
     participants,
   });
 };
