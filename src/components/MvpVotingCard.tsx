@@ -81,7 +81,6 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
   if (!data) return null;
 
   const { mvp, isVotingOpen, hasVoted } = data;
-  const canVote = isVotingOpen && hasVoted !== true;
   const voteCandidates = data.participants ?? [];
   const filteredCandidates = voteCandidates.filter(p => p.name.toLowerCase() !== session?.user?.name?.toLowerCase());
   const myVote = data.votes?.find(v => v.voterName.toLowerCase() === session?.user?.name?.toLowerCase());
