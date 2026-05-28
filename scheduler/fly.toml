@@ -6,6 +6,7 @@ primary_region = "cdg"
 
 [env]
   APP_URL = "https://convocados.cabeda.dev"
+  CONCURRENCY = "3"
   POLL_INTERVAL_MS = "10000"
 
 [[vm]]
