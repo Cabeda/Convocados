@@ -40,9 +40,14 @@ class WearGoogleSignIn @Inject constructor(
      * Uses the server (web) client ID so the backend can verify the ID token.
      */
     fun buildCredentialRequest(): GetCredentialRequest {
+        val clientId = BuildConfig.GOOGLE_SERVER_CLIENT_ID
+        require(clientId.isNotBlank()) {
+            "GOOGLE_SERVER_CLIENT_ID is empty. Add it to android-app/local.properties"
+        }
+
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(BuildConfig.GOOGLE_SERVER_CLIENT_ID)
+            .setServerClientId(clientId)
             .setAutoSelectEnabled(true)
             .build()
 

@@ -2,10 +2,15 @@ package dev.convocados.wear.ui.screen.score
 
 import android.view.HapticFeedbackConstants
 import android.view.View
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -21,6 +26,12 @@ import dev.convocados.wear.R
 import dev.convocados.wear.ui.theme.Success
 import dev.convocados.wear.ui.theme.TextMuted
 import dev.convocados.wear.ui.theme.Warning
+import dev.convocados.wear.util.gameProgressFraction
+import dev.convocados.wear.util.parseInstant
+import dev.convocados.wear.util.sportDurationMinutes
+import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 @OptIn(ExperimentalHorologistApi::class)
 @Composable
@@ -37,6 +48,11 @@ fun ScoreScreen(
 
     ScreenScaffold(scrollState = columnState) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // Game timer arc around the bezel
+            state.game?.let { game ->
+                GameTimerArc(dateTime = game.dateTime, sport = game.sport)
+            }
+
             when {
                 state.isLoading -> {
                     CircularProgressIndicator()
@@ -295,6 +311,76 @@ private fun ScoreColumn(
         ) {
             Text("-", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+/**
+ * Draws a progress arc around the screen edge showing elapsed game time.
+ * Fills clockwise from 12 o'clock. Shows elapsed time text at the top.
+ */
+@Composable
+private fun GameTimerArc(dateTime: String, sport: String) {
+    var progress by remember { mutableFloatStateOf(gameProgressFraction(dateTime, sport)) }
+    var elapsedText by remember { mutableStateOf("") }
+
+    LaunchedEffect(dateTime, sport) {
+        while (true) {
+            progress = gameProgressFraction(dateTime, sport)
+            val start = parseInstant(dateTime)
+            if (start != null) {
+                val elapsed = ChronoUnit.SECONDS.between(start, Instant.now()).coerceAtLeast(0)
+                val min = elapsed / 60
+                val sec = elapsed % 60
+                elapsedText = "%d:%02d".format(min, sec)
+            }
+            delay(1000)
+        }
+    }
+
+    if (progress <= 0f) return
+
+    val arcColor = MaterialTheme.colorScheme.primary
+    val trackColor = MaterialTheme.colorScheme.surfaceContainer
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val strokeWidth = 6.dp.toPx()
+        val padding = 4.dp.toPx()
+        val arcSize = Size(size.width - padding * 2, size.height - padding * 2)
+        val topLeft = Offset(padding, padding)
+
+        // Background track
+        drawArc(
+            color = trackColor,
+            startAngle = -90f,
+            sweepAngle = 360f,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+        )
+
+        // Progress arc
+        drawArc(
+            color = arcColor,
+            startAngle = -90f,
+            sweepAngle = 360f * progress,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+        )
+    }
+
+    // Elapsed time at top
+    Box(
+        modifier = Modifier.fillMaxSize().padding(top = 14.dp),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Text(
+            text = elapsedText,
+            style = MaterialTheme.typography.labelSmall,
+            color = arcColor,
+        )
     }
 }
 
