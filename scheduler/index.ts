@@ -3,19 +3,24 @@
  *
  * A lightweight polling worker that runs as a separate Fly machine.
  * It polls the web app's internal API for due scheduled jobs and
- * processes them one at a time.
+ * processes them in parallel batches.
  *
  * Environment variables:
  *   APP_URL          - Web app base URL (e.g. https://convocados.fly.dev)
  *   SCHEDULER_SECRET - Shared secret for internal API auth
- *   POLL_INTERVAL_MS - Polling interval in ms (default: 10000)
+ *   CONCURRENCY      - Max parallel job processing (default: 3)
  */
 
 import { setTimeout } from "node:timers/promises";
 
 const APP_URL = process.env.APP_URL ?? "https://convocados.fly.dev";
 const SCHEDULER_SECRET = process.env.SCHEDULER_SECRET;
-const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS ?? "10000", 10);
+const CONCURRENCY = parseInt(process.env.CONCURRENCY ?? "3", 10);
+const FETCH_TIMEOUT_MS = 30_000;
+
+/** Adaptive polling: 5s when active, 30s when idle */
+const POLL_ACTIVE_MS = 5_000;
+const POLL_IDLE_MS = 30_000;
 
 interface Job {
   id: string;
@@ -26,9 +31,8 @@ interface Job {
 
 async function fetchDueJobs(): Promise<Job[]> {
   const res = await fetch(`${APP_URL}/api/internal/jobs/due`, {
-    headers: {
-      authorization: `Bearer ${SCHEDULER_SECRET}`,
-    },
+    headers: { authorization: `Bearer ${SCHEDULER_SECRET}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -42,9 +46,8 @@ async function fetchDueJobs(): Promise<Job[]> {
 async function processJob(jobId: string): Promise<void> {
   const res = await fetch(`${APP_URL}/api/internal/jobs/${jobId}/process`, {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${SCHEDULER_SECRET}`,
-    },
+    headers: { authorization: `Bearer ${SCHEDULER_SECRET}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -53,29 +56,43 @@ async function processJob(jobId: string): Promise<void> {
 }
 
 async function runLoop() {
+  let pollInterval = POLL_IDLE_MS;
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const start = Date.now();
     try {
       const jobs = await fetchDueJobs();
+
       if (jobs.length > 0) {
         console.log(`[scheduler] Found ${jobs.length} due job(s)`);
-      }
+        pollInterval = POLL_ACTIVE_MS;
 
-      for (const job of jobs) {
-        try {
-          await processJob(job.id);
-          console.log(`[scheduler] Processed job ${job.id} (${job.type})`);
-        } catch (err) {
-          console.error(`[scheduler] Failed to process job ${job.id}:`, err);
+        // Process in parallel batches of CONCURRENCY
+        for (let i = 0; i < jobs.length; i += CONCURRENCY) {
+          const batch = jobs.slice(i, i + CONCURRENCY);
+          const results = await Promise.allSettled(
+            batch.map(async (job) => {
+              await processJob(job.id);
+              console.log(`[scheduler] Processed job ${job.id} (${job.type})`);
+            }),
+          );
+          for (const r of results) {
+            if (r.status === "rejected") {
+              console.error("[scheduler] Job failed:", r.reason);
+            }
+          }
         }
+      } else {
+        pollInterval = POLL_IDLE_MS;
       }
     } catch (err) {
       console.error("[scheduler] Polling error:", err);
+      pollInterval = POLL_IDLE_MS;
     }
 
     const elapsed = Date.now() - start;
-    const sleep = Math.max(0, POLL_INTERVAL_MS - elapsed);
+    const sleep = Math.max(0, pollInterval - elapsed);
     await setTimeout(sleep);
   }
 }
@@ -86,7 +103,7 @@ if (!SCHEDULER_SECRET) {
   process.exit(1);
 }
 
-console.log(`[scheduler] Starting — polling ${APP_URL}/api/internal/jobs/due every ${POLL_INTERVAL_MS}ms`);
+console.log(`[scheduler] Starting — concurrency=${CONCURRENCY}, active=${POLL_ACTIVE_MS}ms, idle=${POLL_IDLE_MS}ms`);
 runLoop().catch((err) => {
   console.error("[scheduler] Fatal error:", err);
   process.exit(1);

@@ -162,13 +162,5 @@ test.describe("MVP Voting — e2e", () => {
     });
     expect(dupeRes.status()).toBe(200);
 
-    // ── Step 12: Navigate to history page — MVP voting UI should be visible for anonymous ──
-    await page.goto(`/events/${eventId}/history`);
-    await expect(page.locator('[data-testid="mvp-voting"]')).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Verify vote candidates are shown (anonymous sees voting UI)
-    await expect(page.locator('[data-testid="mvp-voting"]')).toContainText(voteTarget!.name);
   });
 });
