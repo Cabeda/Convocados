@@ -16,7 +16,6 @@ import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.auth.AuthManager
 import dev.convocados.data.auth.TokenStore
-import dev.convocados.ui.theme.*
 import javax.inject.Inject
 
 @HiltViewModel
@@ -38,17 +37,17 @@ fun LoginScreen(
     var serverUrl by remember { mutableStateOf("") }
 
     Box(
-        modifier = Modifier.fillMaxSize().background(Bg),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-            Text("Convocados", color = Primary, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Convocados", color = MaterialTheme.colorScheme.primary, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
             Spacer(Modifier.height(8.dp))
-            Text("Manage your games on the go", color = TextMuted, fontSize = 14.sp)
+            Text("Manage your games on the go", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
             Spacer(Modifier.height(48.dp))
             Button(
                 onClick = { viewModel.authManager.startLogin(context as Activity) },
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = MaterialTheme.shapes.medium,
             ) {
@@ -62,7 +61,7 @@ fun LoginScreen(
                 serverUrl = viewModel.getServerUrl()
                 showServerSettings = !showServerSettings
             }) {
-                Text("Server URL", color = TextMuted, fontSize = 13.sp)
+                Text("Server URL", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
             }
 
             if (showServerSettings) {
@@ -74,17 +73,17 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary,
-                        focusedBorderColor = Primary, unfocusedBorderColor = Border,
-                        cursorColor = Primary,
-                        focusedContainerColor = SurfaceHover, unfocusedContainerColor = SurfaceHover,
-                        focusedPlaceholderColor = TextMuted, unfocusedPlaceholderColor = TextMuted,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        focusedPlaceholderColor = MaterialTheme.colorScheme.outline, unfocusedPlaceholderColor = MaterialTheme.colorScheme.outline,
                     ),
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                     TextButton(onClick = { showServerSettings = false }) {
-                        Text("Cancel", color = TextMuted)
+                        Text("Cancel", color = MaterialTheme.colorScheme.outline)
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(
@@ -92,9 +91,9 @@ fun LoginScreen(
                             viewModel.setServerUrl(serverUrl.trim().trimEnd('/'))
                             showServerSettings = false
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                     ) {
-                        Text("Save", color = PrimaryContainer, fontWeight = FontWeight.SemiBold)
+                        Text("Save", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,14 +19,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import dev.convocados.ui.theme.Border
-import dev.convocados.ui.theme.Surface
 
 @Composable
 fun ShimmerItem(
     modifier: Modifier = Modifier,
-    shimmerColor: Color = Border.copy(alpha = 0.5f),
-    baseColor: Color = Border.copy(alpha = 0.2f)
+    shimmerColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+    baseColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
 ) {
     val transition = rememberInfiniteTransition(label = "shimmer")
     val translateAnim = transition.animateFloat(
@@ -46,7 +45,7 @@ fun ShimmerItem(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

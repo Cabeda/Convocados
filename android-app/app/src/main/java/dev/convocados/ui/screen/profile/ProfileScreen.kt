@@ -21,7 +21,6 @@ import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.push.PushTokenManager
 import dev.convocados.data.repository.UserRepository
-import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -78,10 +77,10 @@ fun ProfileScreen(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         // Profile card
         user?.let { u ->
-            Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(u.name, color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    Text(u.email, color = TextMuted, fontSize = 14.sp)
+                    Text(u.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(u.email, color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -93,7 +92,7 @@ fun ProfileScreen(
         // Language
         MenuItem(title = "Language", subtitle = LOCALE_OPTIONS.find { it.code == locale }?.label ?: "English", onClick = { showLanguages = !showLanguages })
         if (showLanguages) {
-            Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Column {
                     LOCALE_OPTIONS.forEach { opt ->
                         Row(
@@ -101,10 +100,10 @@ fun ProfileScreen(
                                 .let { if (locale == opt.code) it else it },
                             horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(opt.label, color = if (locale == opt.code) PrimaryContainer else TextPrimary)
-                            if (locale == opt.code) Text("✓", color = Primary, fontWeight = FontWeight.Bold)
+                            Text(opt.label, color = if (locale == opt.code) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
+                            if (locale == opt.code) Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
-                        if (opt != LOCALE_OPTIONS.last()) HorizontalDivider(color = Border)
+                        if (opt != LOCALE_OPTIONS.last()) HorizontalDivider(color = MaterialTheme.colorScheme.outline)
                     }
                 }
             }
@@ -116,7 +115,7 @@ fun ProfileScreen(
             editingServer = true
         })
         if (editingServer) {
-            Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Column(Modifier.padding(12.dp)) {
                     OutlinedTextField(
                         value = serverUrl, onValueChange = { serverUrl = it },
@@ -124,13 +123,13 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
                     )
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { editingServer = false }) { Text("Cancel", color = TextMuted) }
+                        TextButton(onClick = { editingServer = false }) { Text("Cancel", color = MaterialTheme.colorScheme.outline) }
                         Spacer(Modifier.width(8.dp))
                         Button(onClick = {
                             viewModel.setServerUrl(serverUrl.trim().trimEnd('/'))
                             editingServer = false
-                        }, colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)) {
-                            Text("Save", color = PrimaryContainer)
+                        }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                            Text("Save", color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                     }
                 }
@@ -141,21 +140,21 @@ fun ProfileScreen(
         Button(
             onClick = { viewModel.logout(); onLogout() },
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = ErrorBg),
-        ) { Text("Sign out", color = ErrorText, fontWeight = FontWeight.Bold) }
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+        ) { Text("Sign out", color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold) }
     }
 }
 
 @Composable
 fun MenuItem(title: String, subtitle: String, onClick: () -> Unit) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         onClick = onClick,
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            Text(subtitle, color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+            Text(title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(subtitle, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }

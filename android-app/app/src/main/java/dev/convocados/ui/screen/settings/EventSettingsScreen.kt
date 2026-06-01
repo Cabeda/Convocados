@@ -21,7 +21,6 @@ import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventDetail
 import dev.convocados.ui.screen.create.SPORT_PRESETS
 import dev.convocados.ui.screen.event.SectionTitle
-import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -82,11 +81,11 @@ fun EventSettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Event Settings") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg))
+            TopAppBar(title = { Text("Event Settings") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background))
         },
-        containerColor = Bg,
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = Primary) }; return@Scaffold }
+        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
         val ev = event ?: return@Scaffold
 
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -116,7 +115,7 @@ fun EventSettingsScreen(
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SPORT_PRESETS.forEach { s ->
                     FilterChip(selected = sport == s.id, onClick = { sport = s.id; viewModel.saveSport(eventId, s.id) }, label = { Text(s.label) },
-                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryDark, selectedLabelColor = PrimaryContainer))
+                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primaryContainer, selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer))
                 }
             }
 
@@ -135,8 +134,8 @@ fun EventSettingsScreen(
 
             // Password
             SectionTitle("Access")
-            Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = { showPassword = !showPassword }) {
-                Text(if (ev.hasPassword) "\uD83D\uDD12 Password set — tap to change/remove" else "\uD83D\uDD13 Set password", color = TextPrimary, fontSize = 14.sp, modifier = Modifier.padding(14.dp))
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = { showPassword = !showPassword }) {
+                Text(if (ev.hasPassword) "\uD83D\uDD12 Password set — tap to change/remove" else "\uD83D\uDD13 Set password", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(14.dp))
             }
             if (showPassword) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -149,8 +148,8 @@ fun EventSettingsScreen(
             SectionTitle("Danger zone")
             Button(
                 onClick = { if (ev.archivedAt != null) viewModel.unarchive(eventId) else { viewModel.archive(eventId); onBack() } },
-                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = ErrorBg),
-            ) { Text(if (ev.archivedAt != null) "Unarchive game" else "Archive game", color = ErrorText, fontWeight = FontWeight.Bold) }
+                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+            ) { Text(if (ev.archivedAt != null) "Unarchive game" else "Archive game", color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold) }
 
             // Navigation
             Spacer(Modifier.height(16.dp))
@@ -163,16 +162,16 @@ fun EventSettingsScreen(
     }
 }
 
-@Composable private fun SettingsLabel(text: String) = Text(text, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
-@Composable private fun SaveButton(onClick: () -> Unit) = Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)) { Text("Save", color = PrimaryContainer, fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
-@Composable private fun NavButton(text: String, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = onClick) { Text(text, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(14.dp)) }
+@Composable private fun SettingsLabel(text: String) = Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+@Composable private fun SaveButton(onClick: () -> Unit) = Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) { Text("Save", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
+@Composable private fun NavButton(text: String, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = onClick) { Text(text, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(14.dp)) }
 
 @Composable
 private fun ToggleRow(label: String, checked: Boolean, enabled: Boolean = true, onCheckedChange: (Boolean) -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, color = if (enabled) TextPrimary else TextSecondary, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled, colors = SwitchDefaults.colors(checkedThumbColor = Primary, checkedTrackColor = PrimaryDark))
+            Text(label, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled, colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary, checkedTrackColor = MaterialTheme.colorScheme.primaryContainer))
         }
     }
 }

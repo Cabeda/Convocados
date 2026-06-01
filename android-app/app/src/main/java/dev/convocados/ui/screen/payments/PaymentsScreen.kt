@@ -18,7 +18,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.PaymentsResponse
-import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -55,34 +54,34 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("\uD83D\uDCB0 Payments") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg)) },
-        containerColor = Bg,
+        topBar = { TopAppBar(title = { Text("\uD83D\uDCB0 Payments") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = Primary) }; return@Scaffold }
+        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
         val d = data ?: return@Scaffold
 
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(padding)) {
             // Summary
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryCard("Paid", "${d.summary.paidCount}", TextPrimary, Modifier.weight(1f))
-                    SummaryCard("Pending", "${d.summary.pendingCount}", Warning, Modifier.weight(1f))
-                    d.totalAmount?.let { SummaryCard("Total", "${d.currency ?: "€"}$it", TextPrimary, Modifier.weight(1f)) }
+                    SummaryCard("Paid", "${d.summary.paidCount}", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
+                    SummaryCard("Pending", "${d.summary.pendingCount}", MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
+                    d.totalAmount?.let { SummaryCard("Total", "${d.currency ?: "€"}$it", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f)) }
                 }
             }
             if (d.payments.isEmpty()) {
-                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text("No payments set up", color = TextMuted) } }
+                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text("No payments set up", color = MaterialTheme.colorScheme.outline) } }
             }
             items(d.payments, key = { it.id }) { p ->
-                Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth(), onClick = { viewModel.toggle(eventId, p.playerName, p.status) }) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth(), onClick = { viewModel.toggle(eventId, p.playerName, p.status) }) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(p.playerName, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                            p.method?.let { Text(it, color = TextMuted, fontSize = 12.sp) }
+                            Text(p.playerName, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                            p.method?.let { Text(it, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp) }
                         }
-                        d.totalAmount?.let { Text("${d.currency ?: "€"}${p.amount}", color = TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(end = 10.dp)) }
-                        Card(colors = CardDefaults.cardColors(containerColor = if (p.status == "paid") PrimaryDark else SurfaceHover)) {
-                            Text(if (p.status == "paid") "✓ Paid" else "Pending", color = if (p.status == "paid") PrimaryContainer else TextMuted, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                        d.totalAmount?.let { Text("${d.currency ?: "€"}${p.amount}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(end = 10.dp)) }
+                        Card(colors = CardDefaults.cardColors(containerColor = if (p.status == "paid") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
+                            Text(if (p.status == "paid") "✓ Paid" else "Pending", color = if (p.status == "paid") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.outline, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                         }
                     }
                 }
@@ -93,10 +92,10 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
 
 @Composable
 private fun SummaryCard(label: String, value: String, valueColor: androidx.compose.ui.graphics.Color, modifier: Modifier) {
-    Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = modifier) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = modifier) {
         Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(value, color = valueColor, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-            Text(label, color = TextMuted, fontSize = 11.sp)
+            Text(label, color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
         }
     }
 }

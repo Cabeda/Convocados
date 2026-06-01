@@ -22,7 +22,6 @@ import com.google.accompanist.permissions.rememberPermissionState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.NotificationPrefs
-import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -127,26 +126,26 @@ fun NotificationPrefsScreen(onBack: () -> Unit, viewModel: NotificationPrefsView
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("\uD83D\uDD14 Notifications") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg)) },
-        containerColor = Bg,
+        topBar = { TopAppBar(title = { Text("\uD83D\uDD14 Notifications") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = Primary) }; return@Scaffold }
+        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
         val p = prefs ?: return@Scaffold
 
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
             SECTIONS.forEach { section ->
-                Text(section.title.uppercase(), color = Primary, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
+                Text(section.title.uppercase(), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
                 section.items.forEach { item ->
-                    Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(item.label, color = TextPrimary, fontSize = 15.sp)
-                                item.desc?.let { Text(it, color = TextMuted, fontSize = 12.sp) }
+                                Text(item.label, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
+                                item.desc?.let { Text(it, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp) }
                             }
                             Switch(
                                 checked = viewModel.getPrefValue(p, item.key),
                                 onCheckedChange = { viewModel.toggle(item.key, it) },
-                                colors = SwitchDefaults.colors(checkedThumbColor = Primary, checkedTrackColor = PrimaryDark),
+                                colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary, checkedTrackColor = MaterialTheme.colorScheme.primaryContainer),
                             )
                         }
                     }

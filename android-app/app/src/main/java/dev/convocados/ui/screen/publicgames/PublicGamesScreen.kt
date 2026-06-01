@@ -23,7 +23,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.PublicEvent
 import dev.convocados.ui.screen.games.formatRelativeDate
-import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -75,23 +74,23 @@ fun PublicGamesScreen(
     val hasMore by viewModel.hasMore.collectAsState()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("\uD83C\uDF0D Public Games") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg)) },
-        containerColor = Bg,
+        topBar = { TopAppBar(title = { Text("\uD83C\uDF0D Public Games") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = Primary) }; return@Scaffold }
+        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
 
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(padding)) {
             if (events.isEmpty()) {
                 item {
                     Column(Modifier.fillMaxWidth().padding(48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("No public games right now", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text("Create a game and make it public so others can find it.", color = TextMuted, fontSize = 14.sp)
+                        Text("No public games right now", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("Create a game and make it public so others can find it.", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
                     }
                 }
             }
             items(events, key = { it.id }) { event ->
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Surface),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onEventClick(event.id) }
@@ -106,18 +105,18 @@ fun PublicGamesScreen(
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text(event.title, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                            Card(colors = CardDefaults.cardColors(containerColor = if (event.spotsLeft == 0) ErrorBg else PrimaryDark)) {
-                                Text(if (event.spotsLeft == 0) "Full" else "${event.spotsLeft} spots", color = if (event.spotsLeft == 0) ErrorText else PrimaryContainer, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                            Text(event.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                            Card(colors = CardDefaults.cardColors(containerColor = if (event.spotsLeft == 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer)) {
+                                Text(if (event.spotsLeft == 0) "Full" else "${event.spotsLeft} spots", color = if (event.spotsLeft == 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                             }
                         }
-                        Text("${formatRelativeDate(event.dateTime)} · ${event.playerCount}/${event.maxPlayers} players", color = TextSecondary, fontSize = 13.sp)
-                        if (event.location.isNotBlank()) Text("\uD83D\uDCCD ${event.location}", color = TextMuted, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+                        Text("${formatRelativeDate(event.dateTime)} · ${event.playerCount}/${event.maxPlayers} players", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                        if (event.location.isNotBlank()) Text("\uD83D\uDCCD ${event.location}", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             }
             if (hasMore) {
-                item { TextButton(onClick = { viewModel.loadMore() }, modifier = Modifier.fillMaxWidth()) { Text("Load more", color = Primary) } }
+                item { TextButton(onClick = { viewModel.loadMore() }, modifier = Modifier.fillMaxWidth()) { Text("Load more", color = MaterialTheme.colorScheme.primary) } }
             }
         }
     }

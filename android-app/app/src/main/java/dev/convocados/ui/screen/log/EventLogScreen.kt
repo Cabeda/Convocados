@@ -19,7 +19,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventLogEntry
 import dev.convocados.ui.screen.games.formatRelativeDate
-import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -64,31 +63,31 @@ fun EventLogScreen(eventId: String, onBack: () -> Unit, viewModel: EventLogViewM
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("\uD83D\uDCCB Event Log") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg)) },
-        containerColor = Bg,
+        topBar = { TopAppBar(title = { Text("\uD83D\uDCCB Event Log") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = Primary) }; return@Scaffold }
+        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
 
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(padding)) {
             if (entries.isEmpty()) {
-                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text("No log entries yet", color = TextMuted) } }
+                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text("No log entries yet", color = MaterialTheme.colorScheme.outline) } }
             }
             items(entries, key = { it.id }) { entry ->
-                Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text(entry.action, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                            Text(formatRelativeDate(entry.createdAt), color = TextMuted, fontSize = 11.sp)
+                            Text(entry.action, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                            Text(formatRelativeDate(entry.createdAt), color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
                         }
-                        entry.actorName?.let { Text("by $it", color = TextSecondary, fontSize = 12.sp) }
-                        entry.details?.let { Text(it, color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+                        entry.actorName?.let { Text("by $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
+                        entry.details?.let { Text(it, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
                     }
                 }
             }
             if (hasMore) {
                 item {
                     TextButton(onClick = { viewModel.loadMore(eventId) }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Load more", color = Primary)
+                        Text("Load more", color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }

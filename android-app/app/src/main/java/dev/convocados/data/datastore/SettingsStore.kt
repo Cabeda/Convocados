@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.convocados.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -16,10 +17,29 @@ private val Context.dataStore by preferencesDataStore("settings")
 class SettingsStore @Inject constructor(@ApplicationContext private val context: Context) {
 
     private val LOCALE_KEY = stringPreferencesKey("locale")
+    private val THEME_KEY = stringPreferencesKey("theme_mode")
 
     val locale: Flow<String> = context.dataStore.data.map { it[LOCALE_KEY] ?: "en" }
 
     suspend fun setLocale(locale: String) {
         context.dataStore.edit { it[LOCALE_KEY] = locale }
+    }
+
+    val themeMode: Flow<ThemeMode> = context.dataStore.data.map { prefs ->
+        when (prefs[THEME_KEY]) {
+            "light" -> ThemeMode.Light
+            "dark" -> ThemeMode.Dark
+            else -> ThemeMode.System
+        }
+    }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { prefs ->
+            prefs[THEME_KEY] = when (mode) {
+                ThemeMode.Light -> "light"
+                ThemeMode.Dark -> "dark"
+                ThemeMode.System -> "system"
+            }
+        }
     }
 }
