@@ -15,6 +15,7 @@ import { setTimeout } from "node:timers/promises";
 
 const APP_URL = process.env.APP_URL ?? "https://convocados.fly.dev";
 const SCHEDULER_SECRET = process.env.SCHEDULER_SECRET;
+const CRON_SECRET = process.env.CRON_SECRET ?? SCHEDULER_SECRET;
 const CONCURRENCY = parseInt(process.env.CONCURRENCY ?? "3", 10);
 const FETCH_TIMEOUT_MS = 30_000;
 
@@ -55,12 +56,42 @@ async function processJob(jobId: string): Promise<void> {
   }
 }
 
+/** Interval for periodic maintenance (rate limit cleanup, stale tokens, etc.) */
+const MAINTENANCE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function triggerMaintenance(): Promise<void> {
+  const res = await fetch(`${APP_URL}/api/cron/reminders`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${CRON_SECRET}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Maintenance cron failed: ${res.status} ${res.statusText}`);
+  }
+
+  const body = await res.json() as Record<string, unknown>;
+  console.log("[scheduler] Maintenance completed:", JSON.stringify(body));
+}
+
 async function runLoop() {
   let pollInterval = POLL_IDLE_MS;
+  let lastMaintenance = 0;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const start = Date.now();
+
+    // Periodic maintenance: cleanup + fallback reminder delivery
+    if (start - lastMaintenance >= MAINTENANCE_INTERVAL_MS) {
+      try {
+        await triggerMaintenance();
+        lastMaintenance = start;
+      } catch (err) {
+        console.error("[scheduler] Maintenance error:", err);
+      }
+    }
+
     try {
       const jobs = await fetchDueJobs();
 
