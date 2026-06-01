@@ -5,6 +5,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import dagger.hilt.android.AndroidEntryPoint
 import dev.convocados.data.auth.OAuthTokens
@@ -17,6 +20,8 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var tokenStore: TokenStore
 
+    private var deepLink by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge()
@@ -27,12 +32,14 @@ class MainActivity : ComponentActivity() {
             tokenStore.setTokens(OAuthTokens(accessToken = token, refreshToken = "", expiresAt = System.currentTimeMillis() + 3600_000))
         }
 
-        setContent { ConvocadosRoot(deepLink = extractDeepLink(intent)) }
+        deepLink = extractDeepLink(intent)
+        setContent { ConvocadosRoot(deepLink = deepLink) }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        deepLink = extractDeepLink(intent)
     }
 
     private fun extractDeepLink(intent: Intent): String? {
