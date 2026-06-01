@@ -289,7 +289,7 @@ export function MyComponent() {
 ## Reviewing Checklist
 
 Before submitting a PR:
-- [ ] Lint passes (`npm run lint -- --max-warnings 521`)
+- [ ] Lint passes (`npm run lint -- --max-warnings 259`)
 - [ ] All tests pass (`npm run test`)
 - [ ] Type checking passes (`npm run typecheck`)
 - [ ] i18n strings added to all 6 locales

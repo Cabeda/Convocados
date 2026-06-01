@@ -35,11 +35,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
+      - name: Security audit
+        run: pnpm audit --audit-level=high
         run: pnpm prisma generate
       - name: Type check
         run: pnpm typecheck
       - name: Lint
-        run: pnpm lint --max-warnings 521
+        run: pnpm lint --max-warnings 259
       - name: Run tests with coverage
         run: pnpm vitest run --coverage
       - name: Build
