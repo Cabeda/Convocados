@@ -203,6 +203,9 @@ const en = {
   notifyPlayerJoinedBench: "{name} joined the bench",
   notifyPlayerPromoted: "{name} was promoted from the bench",
   notifyGameReminder: "Reminder: {title}",
+  notifyGameReminder24h: "⏰ {title} is in 24 hours",
+  notifyGameReminder2h: "⏰ {title} starts in 2 hours",
+  notifyGameReminder1h: "⏰ {title} starts in 1 hour!",
   notifyGameFull: "Game is full",
   notifySpotsLeft: "{n} spot(s) left",
 

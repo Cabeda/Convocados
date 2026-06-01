@@ -204,6 +204,9 @@ const pt: TranslationKeys = {
   notifyPlayerJoinedBench: "{name} entrou para o banco",
   notifyPlayerPromoted: "{name} saiu do banco",
   notifyGameReminder: "Lembrete: {title}",
+  notifyGameReminder24h: "⏰ {title} é em 24 horas",
+  notifyGameReminder2h: "⏰ {title} começa em 2 horas",
+  notifyGameReminder1h: "⏰ {title} começa em 1 hora!",
   notifyGameFull: "Jogo completo",
   notifySpotsLeft: "Faltam {n} jogador(es)",
 
