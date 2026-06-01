@@ -1,31 +1,34 @@
 package dev.convocados.wear.data.auth
 
 import android.content.Context
+import android.content.Intent
 import android.util.Log
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.GetCredentialResponse
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.tasks.Task
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.convocados.wear.BuildConfig
 import dev.convocados.wear.data.api.WearApiClient
+import kotlinx.coroutines.suspendCancellableCoroutine
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
- * Handles Google Sign-In directly on the Wear OS device.
- * Uses Credential Manager + Google Identity Services to get an ID token,
- * then exchanges it with the Convocados backend via better-auth's
- * existing social sign-in endpoint.
+ * Standalone Google Sign-In on Wear OS using the legacy Google Sign-In API
+ * (GoogleSignInClient).
  *
- * The SERVER_CLIENT_ID must match the GOOGLE_CLIENT_ID env var configured
- * on the backend (see .env.example). This is the *web* client ID from
- * Google Cloud Console, NOT the Android client ID.
+ * Credential Manager's Google provider is NOT supported on Wear OS
+ * ("Google Identity Services do not support this Android Credential Manager
+ * API on Wear OS"), so we use this GMS API instead. It reads the Google
+ * account already configured on the device, so it works on standalone / LTE
+ * watches with no paired phone.
  *
- * This is the primary login method — prominent and seamless on the watch.
- * The Data Layer sync from the phone app is a secondary/fallback path.
+ * requestIdToken uses the server (web) client ID — which must match the
+ * GOOGLE_CLIENT_ID env var on the backend — so better-auth can verify the
+ * ID token via /api/auth/sign-in/social.
  */
 @Singleton
 class WearGoogleSignIn @Inject constructor(
@@ -33,65 +36,68 @@ class WearGoogleSignIn @Inject constructor(
     private val apiClient: WearApiClient,
     private val tokenStore: WearTokenStore,
 ) {
-    private val credentialManager = CredentialManager.create(context)
-
-    /**
-     * Build the credential request for Google Sign-In.
-     * Uses the server (web) client ID so the backend can verify the ID token.
-     */
-    fun buildCredentialRequest(): GetCredentialRequest {
+    fun getClient(): GoogleSignInClient {
         val clientId = BuildConfig.GOOGLE_SERVER_CLIENT_ID
         require(clientId.isNotBlank()) {
             "GOOGLE_SERVER_CLIENT_ID is empty. Add it to android-app/local.properties"
         }
-
-        val googleIdOption = GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(clientId)
-            .setAutoSelectEnabled(true)
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(clientId)
+            .requestEmail()
             .build()
-
-        return GetCredentialRequest.Builder()
-            .addCredentialOption(googleIdOption)
-            .build()
+        return GoogleSignIn.getClient(context, gso)
     }
 
-    /**
-     * Process the credential response from Google Sign-In.
-     * Extracts the ID token and exchanges it with the backend using
-     * better-auth's social sign-in callback endpoint.
-     */
-    suspend fun handleSignInResult(result: GetCredentialResponse): Boolean {
-        val credential = result.credential
+    /** Intent that launches the on-device account picker (interactive). */
+    fun getSignInIntent(): Intent = getClient().signInIntent
 
-        if (credential is CustomCredential &&
-            credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-        ) {
-            val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data)
-            val idToken = googleIdToken.idToken
+    /** Silently sign in using the existing on-device Google account (no UI). */
+    suspend fun trySilentSignIn(): Boolean = try {
+        val account = getClient().silentSignIn().await()
+        exchange(account.idToken)
+    } catch (e: Exception) {
+        Log.d("WearGoogleSignIn", "Silent sign-in unavailable: ${e.message}")
+        false
+    }
 
-            return try {
-                val tokenResponse = apiClient.exchangeGoogleToken(idToken)
-                tokenStore.setTokens(
-                    OAuthTokens(
-                        accessToken = tokenResponse.accessToken,
-                        refreshToken = tokenResponse.refreshToken ?: "",
-                        expiresAt = System.currentTimeMillis() + tokenResponse.expiresIn * 1000,
-                    )
-                )
-                Log.d("WearGoogleSignIn", "Google Sign-In successful")
-                true
-            } catch (e: Exception) {
-                Log.e("WearGoogleSignIn", "Token exchange failed", e)
-                false
-            }
+    /** Handle the result Intent returned from the interactive sign-in flow. */
+    suspend fun handleSignInResult(data: Intent?): Boolean = try {
+        val account = GoogleSignIn.getSignedInAccountFromIntent(data).await()
+        exchange(account.idToken)
+    } catch (e: Exception) {
+        Log.e("WearGoogleSignIn", "Sign-in failed", e)
+        false
+    }
+
+    private suspend fun exchange(idToken: String?): Boolean {
+        if (idToken.isNullOrBlank()) {
+            Log.e("WearGoogleSignIn", "No ID token returned from Google")
+            return false
         }
-
-        Log.w("WearGoogleSignIn", "Unexpected credential type: ${credential.javaClass.name}")
-        return false
+        return try {
+            val tokenResponse = apiClient.exchangeGoogleToken(idToken)
+            tokenStore.setTokens(
+                OAuthTokens(
+                    accessToken = tokenResponse.accessToken,
+                    refreshToken = tokenResponse.refreshToken ?: "",
+                    expiresAt = System.currentTimeMillis() + tokenResponse.expiresIn * 1000,
+                )
+            )
+            Log.d("WearGoogleSignIn", "Google Sign-In successful")
+            true
+        } catch (e: Exception) {
+            Log.e("WearGoogleSignIn", "Token exchange failed", e)
+            false
+        }
     }
 
     suspend fun loginWithEmail(email: String, password: String): dev.convocados.wear.data.api.OAuthTokenResponse {
         return apiClient.loginWithEmail(email, password)
     }
+}
+
+private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { cont ->
+    addOnSuccessListener { cont.resume(it) }
+    addOnFailureListener { cont.resumeWithException(it) }
+    addOnCanceledListener { cont.cancel() }
 }

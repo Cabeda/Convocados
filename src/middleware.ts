@@ -41,12 +41,28 @@ const SECURITY_HEADERS: Record<string, string> = {
 };
 
 function addSecurityHeaders(response: Response): Response {
-  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
-    if (!response.headers.has(key)) {
-      response.headers.set(key, value);
+  try {
+    for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+      if (!response.headers.has(key)) {
+        response.headers.set(key, value);
+      }
     }
+    return response;
+  } catch {
+    // Responses created via Response.redirect() have immutable headers,
+    // so set() throws. Rebuild with a mutable copy (preserves status + Location).
+    const headers = new Headers(response.headers);
+    for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+      if (!headers.has(key)) {
+        headers.set(key, value);
+      }
+    }
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   }
-  return response;
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
