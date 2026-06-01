@@ -380,7 +380,7 @@ export async function sendPushToEvent(
               { endpoint: sub.endpoint.slice(0, 60), statusCode: pushErr?.statusCode, err: pushErr?.message },
               "Push notification failed",
             );
-            if (pushErr?.statusCode === 410 || pushErr?.statusCode === 404) {
+            if (pushErr?.statusCode === 410 || pushErr?.statusCode === 404 || pushErr?.statusCode === 401 || pushErr?.statusCode === 403) {
               await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
             }
           }
@@ -448,7 +448,7 @@ export async function sendPushToUser(
                 { endpoint: sub.endpoint.slice(0, 60), statusCode: pushErr?.statusCode, err: pushErr?.message, userId },
                 "User push failed",
               );
-              if (pushErr?.statusCode === 410 || pushErr?.statusCode === 404) {
+              if (pushErr?.statusCode === 410 || pushErr?.statusCode === 404 || pushErr?.statusCode === 401 || pushErr?.statusCode === 403) {
                 await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
               }
             }
