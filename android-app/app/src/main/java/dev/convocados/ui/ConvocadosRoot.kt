@@ -79,7 +79,7 @@ class RootViewModel @Inject constructor(
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun ConvocadosRoot(deepLink: String? = null, viewModel: RootViewModel = hiltViewModel()) {
+fun ConvocadosRoot(deepLink: String? = null, intentVersion: Int = 0, viewModel: RootViewModel = hiltViewModel()) {
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
 
     // Request notification permission on Android 13+
@@ -92,9 +92,9 @@ fun ConvocadosRoot(deepLink: String? = null, viewModel: RootViewModel = hiltView
         }
     }
 
-    // Handle deep link intent
+    // Handle OAuth callback and deep link intents (re-runs when intentVersion changes)
     val context = LocalContext.current
-    LaunchedEffect(Unit) {
+    LaunchedEffect(intentVersion) {
         val activity = context as? android.app.Activity
         activity?.intent?.let { viewModel.handleIntent(it) }
     }
