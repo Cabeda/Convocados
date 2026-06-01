@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -15,6 +16,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.UserProfile
 import dev.convocados.data.auth.AuthManager
+import dev.convocados.data.auth.TokenRefreshWorker
 import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.push.PushTokenManager
 import dev.convocados.ui.navigation.AppNavigation
@@ -29,6 +31,7 @@ class RootViewModel @Inject constructor(
     private val api: ConvocadosApi,
     val authManager: AuthManager,
     private val pushTokenManager: PushTokenManager,
+    private val workManager: WorkManager,
 ) : ViewModel() {
 
     val isAuthenticated = tokenStore.isAuthenticated
@@ -42,8 +45,10 @@ class RootViewModel @Inject constructor(
                 if (authed) {
                     runCatching { _user.value = api.fetchUserInfo() }
                     pushTokenManager.registerCurrentToken()
+                    TokenRefreshWorker.schedule(workManager)
                 } else {
                     _user.value = null
+                    TokenRefreshWorker.cancel(workManager)
                 }
             }
         }
@@ -62,6 +67,7 @@ class RootViewModel @Inject constructor(
 
     fun logout() {
         pushTokenManager.unregisterCurrentToken()
+        TokenRefreshWorker.cancel(workManager)
         authManager.logout()
         _user.value = null
     }
@@ -69,7 +75,7 @@ class RootViewModel @Inject constructor(
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun ConvocadosRoot(viewModel: RootViewModel = hiltViewModel()) {
+fun ConvocadosRoot(deepLink: String? = null, viewModel: RootViewModel = hiltViewModel()) {
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
 
     // Request notification permission on Android 13+
@@ -90,6 +96,6 @@ fun ConvocadosRoot(viewModel: RootViewModel = hiltViewModel()) {
     }
 
     ConvocadosTheme {
-        AppNavigation(isAuthenticated = isAuthenticated)
+        AppNavigation(isAuthenticated = isAuthenticated, deepLink = deepLink)
     }
 }
