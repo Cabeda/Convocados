@@ -18,7 +18,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.AttendanceRecord
 import dev.convocados.data.api.ConvocadosApi
-import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -51,32 +50,32 @@ fun AttendanceScreen(eventId: String, onBack: () -> Unit, viewModel: AttendanceV
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("\uD83D\uDCC5 Attendance") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg)) },
-        containerColor = Bg,
+        topBar = { TopAppBar(title = { Text("\uD83D\uDCC5 Attendance") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = Primary) }; return@Scaffold }
+        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
 
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(padding)) {
-            item { Text("$totalGames games played", color = TextMuted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp)) }
+            item { Text("$totalGames games played", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp)) }
             if (players.isEmpty()) {
-                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text("No attendance data yet", color = TextMuted) } }
+                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text("No attendance data yet", color = MaterialTheme.colorScheme.outline) } }
             }
             itemsIndexed(players, key = { _, p -> p.name }) { index, p ->
                 val pct = (p.attendanceRate * 100).toInt()
-                Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("#${index + 1}", color = TextMuted, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
+                        Text("#${index + 1}", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(p.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(p.name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                             LinearProgressIndicator(
                                 progress = { p.attendanceRate.toFloat() },
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(4.dp),
-                                color = PrimaryDark, trackColor = SurfaceHover,
+                                color = MaterialTheme.colorScheme.primaryContainer, trackColor = MaterialTheme.colorScheme.surfaceVariant,
                             )
-                            Text("${p.gamesPlayed}/${p.totalGames} games · streak: ${p.currentStreak}", color = TextMuted, fontSize = 11.sp)
+                            Text("${p.gamesPlayed}/${p.totalGames} games · streak: ${p.currentStreak}", color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text("$pct%", color = when { pct >= 80 -> Success; pct >= 50 -> Primary; else -> Warning }, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("$pct%", color = when { pct >= 80 -> MaterialTheme.colorScheme.primary; pct >= 50 -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.tertiary }, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }

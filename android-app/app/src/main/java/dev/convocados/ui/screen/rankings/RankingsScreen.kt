@@ -24,7 +24,6 @@ import dev.convocados.data.api.EventDetail
 import dev.convocados.data.api.Player
 import dev.convocados.data.api.PlayerRating
 import dev.convocados.data.api.UserProfile
-import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -152,21 +151,21 @@ fun RankingsScreen(
             TopAppBar(
                 title = { Text("\uD83C\uDFC6 Rankings") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
-        containerColor = Bg,
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (loading) {
             Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                CircularProgressIndicator(color = Primary)
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
             return@Scaffold
         }
 
         if (rows.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                Text("No ratings yet", color = TextMuted)
+                Text("No ratings yet", color = MaterialTheme.colorScheme.outline)
             }
             return@Scaffold
         }
@@ -180,30 +179,30 @@ fun RankingsScreen(
                 itemsIndexed(rows, key = { _, r -> r.name }) { index, r ->
                     val canClaim = user != null && !userHasLinkedPlayer && r.userId == null && r.playerId != null
 
-                    Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("#${index + 1}", color = TextMuted, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
+                            Text("#${index + 1}", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(r.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(r.name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                 if (r.rating != null) {
-                                    Text("${r.gamesPlayed}g \u00B7 W${r.wins}/D${r.draws}/L${r.losses}", color = TextSecondary, fontSize = 12.sp)
+                                    Text("${r.gamesPlayed}g \u00B7 W${r.wins}/D${r.draws}/L${r.losses}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                                 } else {
-                                    Text("New player", color = TextSecondary, fontSize = 12.sp)
+                                    Text("New player", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                                 }
                             }
                             if (r.rating != null) {
                                 Text(
                                     "${r.rating}",
                                     color = when {
-                                        r.rating >= 1200 -> Success
-                                        r.rating >= 1000 -> Primary
-                                        else -> Warning
+                                        r.rating >= 1200 -> MaterialTheme.colorScheme.primary
+                                        r.rating >= 1000 -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.tertiary
                                     },
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                 )
                             } else {
-                                Text("\u2014", color = TextMuted, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                                Text("\u2014", color = MaterialTheme.colorScheme.outline, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
                             }
                             if (canClaim) {
                                 Spacer(Modifier.width(8.dp))
@@ -211,7 +210,7 @@ fun RankingsScreen(
                                     onClick = { claimTarget = r },
                                     modifier = Modifier.size(48.dp),
                                 ) {
-                                    Icon(Icons.Default.HowToReg, "Claim as me", tint = Primary, modifier = Modifier.size(24.dp))
+                                    Icon(Icons.Default.HowToReg, "Claim as me", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                                 }
                             }
                         }
@@ -225,23 +224,23 @@ fun RankingsScreen(
     claimTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { claimTarget = null },
-            title = { Text("Claim player", color = TextPrimary) },
+            title = { Text("Claim player", color = MaterialTheme.colorScheme.onSurface) },
             text = {
                 Text(
                     "Are you sure you want to claim \"${target.name}\"? This player will be linked to your account.",
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     target.playerId?.let { viewModel.claimPlayer(eventId, it) }
                     claimTarget = null
-                }) { Text("Claim", color = Primary, fontWeight = FontWeight.Bold) }
+                }) { Text("Claim", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { claimTarget = null }) { Text("Cancel", color = TextMuted) }
+                TextButton(onClick = { claimTarget = null }) { Text("Cancel", color = MaterialTheme.colorScheme.outline) }
             },
-            containerColor = Surface,
+            containerColor = MaterialTheme.colorScheme.surface,
         )
     }
 }

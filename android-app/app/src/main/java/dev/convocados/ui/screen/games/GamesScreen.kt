@@ -3,7 +3,6 @@ package dev.convocados.ui.screen.games
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,7 +26,6 @@ import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventSummary
 import dev.convocados.data.api.MyGamesResponse
 import dev.convocados.data.repository.EventRepository
-import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -89,11 +87,11 @@ fun GamesScreen(
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = onCreateClick, containerColor = Primary, contentColor = OnPrimary) {
+            FloatingActionButton(onClick = onCreateClick, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
                 Icon(Icons.Default.Add, "Create game")
             }
         },
-        containerColor = Bg,
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         val active = owned + joined
         val archived = archivedOwned + archivedJoined
@@ -116,8 +114,8 @@ fun GamesScreen(
                             onClick = { showArchived = false },
                             label = { Text("My Games (${active.size})") },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = PrimaryDark,
-                                selectedLabelColor = PrimaryContainer,
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             ),
                         )
                         if (archived.isNotEmpty()) {
@@ -126,8 +124,8 @@ fun GamesScreen(
                                 onClick = { showArchived = true },
                                 label = { Text("Archived (${archived.size})") },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = PrimaryDark,
-                                    selectedLabelColor = PrimaryContainer,
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                 ),
                             )
                         }
@@ -145,15 +143,15 @@ fun GamesScreen(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text("No games yet", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text("No games yet", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             Spacer(Modifier.height(8.dp))
-                            Text("Create a game or join one to get started.", color = TextMuted, fontSize = 14.sp)
+                            Text("Create a game or join one to get started.", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
                             Spacer(Modifier.height(20.dp))
                             Button(
                                 onClick = onCreateClick,
-                                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             ) {
-                                Text("+ Create a Game", color = OnPrimary, fontWeight = FontWeight.Bold)
+                                Text("+ Create a Game", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -192,27 +190,27 @@ fun GameCard(
                     )
                 }
             ),
-        colors = CardDefaults.cardColors(containerColor = Surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(game.title, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(game.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(Modifier.height(4.dp))
             Text(
                 "${formatRelativeDate(game.dateTime)} · ${game.playerCount}/${game.maxPlayers} players${if (game.isRecurring) " · \uD83D\uDD01" else ""}",
-                color = TextSecondary, fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp,
             )
             if (game.lastScoreOne != null && game.lastScoreTwo != null) {
                 Text(
                     "\u26BD ${game.lastScoreOne}:${game.lastScoreTwo}",
-                    color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
             if (game.location.isNotBlank()) {
-                Text(game.location, color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
+                Text(game.location, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
             }
             if (game.archivedAt != null) {
-                Text("ARCHIVED", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+                Text("ARCHIVED", color = MaterialTheme.colorScheme.outline, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }

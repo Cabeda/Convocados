@@ -23,7 +23,6 @@ import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.PlayerStats
 import dev.convocados.data.api.UserPublicProfile
 import dev.convocados.ui.screen.stats.StatBox
-import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -60,29 +59,29 @@ fun UserProfileScreen(userId: String, onBack: () -> Unit, onEventClick: (String)
     LaunchedEffect(userId) { viewModel.load(userId) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(profile?.name ?: "Profile") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg)) },
-        containerColor = Bg,
+        topBar = { TopAppBar(title = { Text(profile?.name ?: "Profile") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = Primary) }; return@Scaffold }
-        val p = profile ?: run { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { Text("User not found", color = Error) }; return@Scaffold }
+        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
+        val p = profile ?: run { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { Text("User not found", color = MaterialTheme.colorScheme.error) }; return@Scaffold }
 
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
             // Avatar + name
-            Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Surface(color = PrimaryDark, shape = CircleShape, modifier = Modifier.size(72.dp)) {
+                    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = CircleShape, modifier = Modifier.size(72.dp)) {
                         Box(Modifier.fillMaxSize(), Alignment.Center) {
-                            Text(p.name.first().uppercase(), color = Primary, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(p.name.first().uppercase(), color = MaterialTheme.colorScheme.primary, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text(p.name, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(p.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
                 }
             }
 
             stats?.let { s ->
                 Spacer(Modifier.height(16.dp))
-                Text("OVERVIEW", color = Primary, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp)
+                Text("OVERVIEW", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp)
                 Spacer(Modifier.height(12.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StatBox("Games", "${s.summary.totalGames}", Modifier.weight(1f))
@@ -98,13 +97,13 @@ fun UserProfileScreen(userId: String, onBack: () -> Unit, onEventClick: (String)
 
                 if (s.events.isNotEmpty()) {
                     Spacer(Modifier.height(20.dp))
-                    Text("PER EVENT", color = Primary, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp)
+                    Text("PER EVENT", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp)
                     Spacer(Modifier.height(12.dp))
                     s.events.forEach { ev ->
-                        Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clickable { onEventClick(ev.eventId) }) {
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clickable { onEventClick(ev.eventId) }) {
                             Column(Modifier.padding(14.dp)) {
-                                Text(ev.eventTitle, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Text("${ev.gamesPlayed}g · Rating: ${ev.rating} · W${ev.wins}/D${ev.draws}/L${ev.losses}", color = TextSecondary, fontSize = 12.sp)
+                                Text(ev.eventTitle, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text("${ev.gamesPlayed}g · Rating: ${ev.rating} · W${ev.wins}/D${ev.draws}/L${ev.losses}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                             }
                         }
                     }
