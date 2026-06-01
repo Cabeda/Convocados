@@ -1,11 +1,16 @@
 package dev.convocados.ui
 
+import android.Manifest
 import android.content.Intent
+import android.os.Build
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.UserProfile
@@ -62,9 +67,20 @@ class RootViewModel @Inject constructor(
     }
 }
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun ConvocadosRoot(viewModel: RootViewModel = hiltViewModel()) {
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
+
+    // Request notification permission on Android 13+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val permissionState = rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
+        LaunchedEffect(Unit) {
+            if (!permissionState.status.isGranted) {
+                permissionState.launchPermissionRequest()
+            }
+        }
+    }
 
     // Handle deep link intent
     val context = LocalContext.current

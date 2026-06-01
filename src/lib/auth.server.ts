@@ -102,7 +102,7 @@ export const auth = betterAuth({
       allowPlainCodeChallengeMethod: false,
       allowDynamicClientRegistration: true,
       accessTokenExpiresIn: 3600, // 1 hour
-      refreshTokenExpiresIn: 604800, // 7 days
+      refreshTokenExpiresIn: 15552000, // 180 days
       codeExpiresIn: 600, // 10 minutes
       scopes: OAUTH_SCOPES,
       defaultScope: "openid",
