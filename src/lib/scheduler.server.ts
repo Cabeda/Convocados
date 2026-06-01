@@ -61,7 +61,7 @@ export async function scheduleEventReminders(
  */
 export async function cancelEventJobs(eventId: string) {
   await prisma.scheduledJob.deleteMany({
-    where: { eventId, processedAt: null },
+    where: { eventId, processedAt: null, runAt: { gt: new Date() } },
   });
 }
 
