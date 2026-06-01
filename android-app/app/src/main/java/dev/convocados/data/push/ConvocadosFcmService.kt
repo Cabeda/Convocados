@@ -37,7 +37,7 @@ class ConvocadosFcmService : FirebaseMessagingService() {
             url?.let { putExtra("deep_link", it) }
         }
         val pendingIntent = PendingIntent.getActivity(
-            this, url?.hashCode() ?: System.currentTimeMillis().toInt(), intent,
+            this, url.hashCode(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
