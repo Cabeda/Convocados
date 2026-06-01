@@ -1,9 +1,9 @@
 import { defineMiddleware } from "astro:middleware";
 
 /**
- * CSRF protection middleware.
+ * Security middleware: CSRF protection + security headers (CSP, etc.)
  *
- * Validates the Origin header on state-changing requests (POST, PUT, PATCH, DELETE)
+ * CSRF: Validates the Origin header on state-changing requests (POST, PUT, PATCH, DELETE)
  * to prevent cross-site request forgery attacks on session-authenticated endpoints.
  *
  * Bypasses:
@@ -21,30 +21,62 @@ const BYPASS_PREFIXES = [
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-export const onRequest = defineMiddleware((context, next) => {
+/** Security headers applied to all responses */
+const SECURITY_HEADERS: Record<string, string> = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(self)",
+  "Content-Security-Policy": [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://maps.googleapis.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https://*.tile.openstreetmap.org https://maps.googleapis.com https://maps.gstatic.com",
+    "connect-src 'self' https://maps.googleapis.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join("; "),
+};
+
+function addSecurityHeaders(response: Response): Response {
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    if (!response.headers.has(key)) {
+      response.headers.set(key, value);
+    }
+  }
+  return response;
+}
+
+export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
 
   // Safe methods don't need CSRF protection
   if (SAFE_METHODS.has(request.method)) {
-    return next();
+    const response = await next();
+    return addSecurityHeaders(response);
   }
 
   // Bypass for auth routes (better-auth handles its own CSRF via trustedOrigins)
   const pathname = url.pathname;
   if (BYPASS_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-    return next();
+    const response = await next();
+    return addSecurityHeaders(response);
   }
 
   // Bypass for Bearer-authenticated requests (API keys / OAuth tokens)
   // These are not vulnerable to CSRF since the attacker can't inject the header
   const authHeader = request.headers.get("authorization");
   if (authHeader?.startsWith("Bearer ")) {
-    return next();
+    const response = await next();
+    return addSecurityHeaders(response);
   }
 
   // Bypass if no cookies present (no session to exploit)
   if (!request.headers.get("cookie")) {
-    return next();
+    const response = await next();
+    return addSecurityHeaders(response);
   }
 
   // Validate Origin header for session-authenticated mutations
@@ -55,7 +87,8 @@ export const onRequest = defineMiddleware((context, next) => {
     // Browsers always send Origin on cross-origin POST requests.
     const secFetchSite = request.headers.get("sec-fetch-site");
     if (!secFetchSite || secFetchSite === "same-origin" || secFetchSite === "none") {
-      return next();
+      const response = await next();
+      return addSecurityHeaders(response);
     }
     // Browser cross-origin request without Origin — block it
     return new Response("Forbidden: missing Origin header", { status: 403 });
@@ -77,7 +110,8 @@ export const onRequest = defineMiddleware((context, next) => {
   ]);
 
   if (allowedOrigins.has(origin)) {
-    return next();
+    const response = await next();
+    return addSecurityHeaders(response);
   }
 
   // Origin mismatch — block the request
