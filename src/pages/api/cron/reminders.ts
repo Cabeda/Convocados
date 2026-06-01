@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request }) => {
         // Enqueue push notification — drained at end of cron after emails are sent
         enqueueNotification(r.eventId, "reminder", {
           title: r.eventTitle,
-          key: "notifyGameReminder",
+          key: type === "24h" ? "notifyGameReminder24h" : type === "2h" ? "notifyGameReminder2h" : "notifyGameReminder1h",
           params: { title: r.eventTitle },
           url: `/events/${r.eventId}`,
           spotsLeft: 0,
