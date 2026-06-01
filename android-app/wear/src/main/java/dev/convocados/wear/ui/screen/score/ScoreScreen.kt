@@ -88,12 +88,6 @@ fun ScoreScreen(
                         onDone = onDone,
                     )
                 }
-                !state.canScore -> {
-                    NotYetScoreScreen(
-                        state = state,
-                        onTeams = onTeams,
-                    )
-                }
                 state.history?.editable == false -> {
                     ScoreEditor(
                         state = state,
@@ -107,6 +101,8 @@ fun ScoreScreen(
                     )
                 }
                 else -> {
+                    // Teams exist and are editable — go straight to score tracking,
+                    // regardless of the game's time window.
                     ScoreEditor(
                         state = state,
                         onIncrementOne = viewModel::incrementScoreOne,
@@ -118,43 +114,6 @@ fun ScoreScreen(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun NotYetScoreScreen(
-    state: ScoreUiState,
-    onTeams: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = state.game?.title ?: stringResource(R.string.score_title),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = stringResource(R.string.score_not_yet),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        CompactButton(onClick = onTeams) {
-            Text(stringResource(R.string.manage_teams))
         }
     }
 }
