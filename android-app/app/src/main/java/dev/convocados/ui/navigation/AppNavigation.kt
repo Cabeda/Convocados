@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.SportsScore
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -40,9 +41,18 @@ data class BottomNavItem(val route: String, val label: String, val icon: @Compos
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun AppNavigation(isAuthenticated: Boolean) {
+fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
     val navController = rememberNavController()
     val startDestination = if (isAuthenticated) Route.Games.route else Route.Login.route
+
+    // Handle deep link navigation
+    LaunchedEffect(deepLink, isAuthenticated) {
+        if (!isAuthenticated || deepLink == null) return@LaunchedEffect
+        val route = deepLinkToRoute(deepLink)
+        if (route != null) {
+            navController.navigate(route) { launchSingleTop = true }
+        }
+    }
 
     val bottomItems = listOf(
         BottomNavItem(Route.Games.route, "Games") { Icon(Icons.Default.SportsScore, "Games") },
@@ -210,4 +220,15 @@ fun AppNavigation(isAuthenticated: Boolean) {
             }
         }
     }
+}
+
+private fun deepLinkToRoute(url: String): String? {
+    // Handle paths like /events/{id} or full URLs
+    val path = url.removePrefix("https://convocados.cabeda.dev")
+        .removePrefix("http://localhost:4321")
+    val eventMatch = Regex("/events?/([^/]+)").find(path)
+    if (eventMatch != null) return Route.EventDetail.create(eventMatch.groupValues[1])
+    if (path == "/games" || url == "games") return Route.Games.route
+    if (path == "/create" || url == "create") return Route.CreateEvent.route
+    return null
 }

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="my_games"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_my_games"
+        android:shortcutLongLabel="@string/shortcut_my_games">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="com.cabeda.convocados"
+            android:targetClass="dev.convocados.MainActivity">
+            <extra android:name="navigate_to" android:value="games" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="create_game"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_create_game"
+        android:shortcutLongLabel="@string/shortcut_create_game">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="com.cabeda.convocados"
+            android:targetClass="dev.convocados.MainActivity">
+            <extra android:name="navigate_to" android:value="create" />
+        </intent>
+    </shortcut>
+</shortcuts>

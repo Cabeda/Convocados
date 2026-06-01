@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Convocados</string>
+    <string name="shortcut_my_games">My Games</string>
+    <string name="shortcut_create_game">Create Game</string>
 </resources>
