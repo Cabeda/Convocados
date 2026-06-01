@@ -143,7 +143,7 @@ async function _processReminderJob(job: { id: string; eventId: string | null; ty
   // Enqueue push notification
   await enqueueNotification(event.id, "reminder", {
     title: event.title,
-    key: "notifyGameReminder",
+    key: reminderType === "24h" ? "notifyGameReminder24h" : reminderType === "2h" ? "notifyGameReminder2h" : "notifyGameReminder1h",
     params: { title: event.title },
     url: `/events/${event.id}`,
     spotsLeft,
