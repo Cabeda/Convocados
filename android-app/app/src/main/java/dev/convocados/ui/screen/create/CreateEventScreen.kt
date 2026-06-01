@@ -1,6 +1,5 @@
 package dev.convocados.ui.screen.create
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -19,7 +18,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.CreateEventRequest
-import dev.convocados.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -107,15 +105,15 @@ fun CreateEventScreen(
             TopAppBar(
                 title = { Text("Create a Game") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
-        containerColor = Bg,
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Column(
             modifier = Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
         ) {
-            error?.let { Text(it, color = Error, fontSize = 14.sp, modifier = Modifier.padding(bottom = 12.dp)) }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 14.sp, modifier = Modifier.padding(bottom = 12.dp)) }
 
             Label("Game title")
             OutlinedTextField(
@@ -133,7 +131,7 @@ fun CreateEventScreen(
                         onClick = { sport = s.id; maxPlayers = s.defaultMax.toString() },
                         label = { Text(s.label) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PrimaryDark, selectedLabelColor = PrimaryContainer,
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer, selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         ),
                     )
                 }
@@ -148,10 +146,10 @@ fun CreateEventScreen(
             )
 
             Label("Date & time")
-            Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(14.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                     val fmt = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault())
-                    Text(fmt.format(dateTime), color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text(fmt.format(dateTime), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(-86400L to "-1d", -3600L to "-1h", 3600L to "+1h", 86400L to "+1d").forEach { (secs, label) ->
@@ -167,10 +165,10 @@ fun CreateEventScreen(
                 modifier = Modifier.width(100.dp), singleLine = true,
                 colors = textFieldColors(),
             )
-            Text("Players beyond this limit go to the bench", color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            Text("Players beyond this limit go to the bench", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
 
             TextButton(onClick = { showAdvanced = !showAdvanced }, modifier = Modifier.padding(top = 16.dp)) {
-                Text("${if (showAdvanced) "▼" else "▶"} Advanced options", color = TextMuted)
+                Text("${if (showAdvanced) "▼" else "▶"} Advanced options", color = MaterialTheme.colorScheme.outline)
             }
 
             if (showAdvanced) {
@@ -180,8 +178,8 @@ fun CreateEventScreen(
                 OutlinedTextField(value = teamTwoName, onValueChange = { teamTwoName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, colors = textFieldColors())
 
                 Row(modifier = Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    Text("Recurring game", color = TextSecondary, modifier = Modifier.weight(1f))
-                    Switch(checked = isRecurring, onCheckedChange = { isRecurring = it }, colors = SwitchDefaults.colors(checkedThumbColor = Primary, checkedTrackColor = PrimaryDark))
+                    Text("Recurring game", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    Switch(checked = isRecurring, onCheckedChange = { isRecurring = it }, colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary, checkedTrackColor = MaterialTheme.colorScheme.primaryContainer))
                 }
                 if (isRecurring) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
@@ -189,7 +187,7 @@ fun CreateEventScreen(
                             FilterChip(
                                 selected = recurrenceFreq == f, onClick = { recurrenceFreq = f },
                                 label = { Text(f.replaceFirstChar { it.uppercase() }) },
-                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = PrimaryDark, selectedLabelColor = PrimaryContainer),
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primaryContainer, selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer),
                             )
                         }
                     }
@@ -204,11 +202,11 @@ fun CreateEventScreen(
                 },
                 enabled = title.isNotBlank() && !creating,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = MaterialTheme.shapes.medium,
             ) {
-                if (creating) CircularProgressIndicator(color = OnPrimary, modifier = Modifier.size(20.dp))
-                else Text("Create game", color = OnPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                if (creating) CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
+                else Text("Create game", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
             Spacer(Modifier.height(40.dp))
         }
@@ -217,14 +215,14 @@ fun CreateEventScreen(
 
 @Composable
 private fun Label(text: String) {
-    Text(text, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
 }
 
 @Composable
 private fun textFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary,
-    focusedBorderColor = Primary, unfocusedBorderColor = Border,
-    cursorColor = Primary,
-    focusedPlaceholderColor = TextMuted, unfocusedPlaceholderColor = TextMuted,
-    focusedContainerColor = SurfaceHover, unfocusedContainerColor = SurfaceHover,
+    focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+    focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+    cursorColor = MaterialTheme.colorScheme.primary,
+    focusedPlaceholderColor = MaterialTheme.colorScheme.outline, unfocusedPlaceholderColor = MaterialTheme.colorScheme.outline,
+    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
 )

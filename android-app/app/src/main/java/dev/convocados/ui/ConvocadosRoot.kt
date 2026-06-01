@@ -18,9 +18,11 @@ import dev.convocados.data.api.UserProfile
 import dev.convocados.data.auth.AuthManager
 import dev.convocados.data.auth.TokenRefreshWorker
 import dev.convocados.data.auth.TokenStore
+import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.push.PushTokenManager
 import dev.convocados.ui.navigation.AppNavigation
 import dev.convocados.ui.theme.ConvocadosTheme
+import dev.convocados.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -32,9 +34,11 @@ class RootViewModel @Inject constructor(
     val authManager: AuthManager,
     private val pushTokenManager: PushTokenManager,
     private val workManager: WorkManager,
+    private val settingsStore: SettingsStore,
 ) : ViewModel() {
 
     val isAuthenticated = tokenStore.isAuthenticated
+    val themeMode = settingsStore.themeMode
 
     private val _user = MutableStateFlow<UserProfile?>(null)
     val user: StateFlow<UserProfile?> = _user
@@ -95,7 +99,7 @@ fun ConvocadosRoot(deepLink: String? = null, viewModel: RootViewModel = hiltView
         activity?.intent?.let { viewModel.handleIntent(it) }
     }
 
-    ConvocadosTheme {
+    ConvocadosTheme(themeMode = viewModel.themeMode.collectAsState(initial = ThemeMode.System).value) {
         AppNavigation(isAuthenticated = isAuthenticated, deepLink = deepLink)
     }
 }
