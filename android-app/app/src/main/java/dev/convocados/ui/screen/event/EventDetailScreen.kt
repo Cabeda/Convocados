@@ -541,7 +541,7 @@ fun PlayerRow(
                 modifier = Modifier.weight(1f),
             )
             if (canRemove) {
-                IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onRemove) {
                     Icon(Icons.Default.Close, "Remove", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
                 }
             }
