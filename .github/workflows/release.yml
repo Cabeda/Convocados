@@ -20,6 +20,7 @@ jobs:
     outputs:
       released: ${{ steps.bump_version.outputs.new_version != '' }}
       version: ${{ steps.bump_version.outputs.new_version }}
+      android_changed: ${{ steps.changes.outputs.android }}
 
     steps:
       - name: Setup SSH for deploy key
@@ -166,10 +167,26 @@ jobs:
         if: steps.version_bump.outputs.bump_type == 'none'
         run: echo "No conventional commits found since last release. Skipping."
 
+      - name: Check changed paths since last tag
+        id: changes
+        if: steps.version_bump.outputs.bump_type != 'none'
+        run: |
+          LATEST_TAG="${{ steps.get_tag.outputs.latest_tag }}"
+          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+            echo "android=true" >> $GITHUB_OUTPUT
+          else
+            CHANGED=$(git diff --name-only "$LATEST_TAG"..HEAD)
+            if echo "$CHANGED" | grep -q "^android-app/"; then
+              echo "android=true" >> $GITHUB_OUTPUT
+            else
+              echo "android=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
   build-android:
     name: Build Android APK
     needs: release
-    if: needs.release.outputs.released == 'true'
+    if: needs.release.outputs.released == 'true' && needs.release.outputs.android_changed == 'true'
     runs-on: ubuntu-latest
     env:
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE != '' }}
@@ -269,7 +286,7 @@ jobs:
   build-wear:
     name: Build Wear OS APK
     needs: release
-    if: needs.release.outputs.released == 'true'
+    if: needs.release.outputs.released == 'true' && needs.release.outputs.android_changed == 'true'
     runs-on: ubuntu-latest
     env:
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE != '' }}
