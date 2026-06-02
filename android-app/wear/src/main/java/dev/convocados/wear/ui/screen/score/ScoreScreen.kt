@@ -1,17 +1,21 @@
 package dev.convocados.wear.ui.screen.score
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
@@ -256,12 +260,18 @@ private fun TeamScoreButton(
     modifier: Modifier = Modifier,
 ) {
     val view = LocalView.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed && enabled) 0.97f else 1f, label = "press")
     Column(
         modifier = modifier
+            .scale(scale)
             .fillMaxHeight()
             .clip(RoundedCornerShape(28.dp))
             .background(container)
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
                 enabled = enabled,
                 onClickLabel = "Add a point to $teamName",
                 onLongClickLabel = "Remove a point from $teamName",
@@ -308,6 +318,7 @@ private fun GameEdgeProgress(progress: Float, modifier: Modifier = Modifier) {
     val isRound = LocalConfiguration.current.isScreenRound
     val fillColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.surfaceContainer
+    val tickColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
 
     Canvas(modifier = modifier.fillMaxSize()) {
         val stroke = 5.dp.toPx()
@@ -337,6 +348,12 @@ private fun GameEdgeProgress(progress: Float, modifier: Modifier = Modifier) {
         drawPath(path, trackColor, style = Stroke(width = stroke))
 
         val measure = PathMeasure().apply { setPath(path, false) }
+        // Chronograph bezel: faint tick marks evenly around the perimeter.
+        val ticks = 12
+        for (i in 0 until ticks) {
+            drawCircle(tickColor, radius = 1.5.dp.toPx(), center = measure.getPosition(measure.length * i / ticks))
+        }
+
         val segment = Path()
         measure.getSegment(0f, measure.length * progress.coerceIn(0f, 1f), segment, true)
         drawPath(segment, fillColor, style = Stroke(width = stroke, cap = StrokeCap.Round))
