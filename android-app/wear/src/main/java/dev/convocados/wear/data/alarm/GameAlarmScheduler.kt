@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -55,6 +56,7 @@ class GameAlarmScheduler @Inject constructor(
     private fun pendingIntent(eventId: String, code: Int, pulses: Int, create: Boolean): PendingIntent? {
         val intent = Intent(context, GameAlarmReceiver::class.java).apply {
             action = GameAlarmReceiver.ACTION
+            data = Uri.parse("alarm://$eventId/$code")
             putExtra(GameAlarmReceiver.EXTRA_PULSES, pulses)
         }
         val flags = (if (create) PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_NO_CREATE) or

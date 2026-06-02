@@ -15,6 +15,7 @@ class AlarmBootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        val pending = goAsync()
 
         val ep = EntryPointAccessors.fromApplication(context, AlarmBootEntryPoint::class.java)
         val store = ep.settingsStore()
@@ -23,11 +24,10 @@ class AlarmBootReceiver : BroadcastReceiver() {
         var count = 0
 
         for ((eventId, settings) in store.allSettings()) {
-            val kickoff = settings.kickoffEpochMs ?: continue
+            val kickoff = settings.effectiveKickoffMs ?: continue
             val enabled = settings.alarms.filter { it.enabled }
             if (enabled.isEmpty()) continue
-            // Use a generous duration (max sport = 90 min) to not miss late alarms.
-            val fires = computeAlarmTimes(kickoff, enabled, MAX_DURATION_MINUTES, now)
+            val fires = computeAlarmTimes(kickoff, enabled, settings.durationMinutes, now)
             if (fires.isNotEmpty()) {
                 scheduler.reschedule(eventId, fires)
                 count += fires.size
@@ -35,9 +35,6 @@ class AlarmBootReceiver : BroadcastReceiver() {
         }
 
         Log.d("AlarmBootReceiver", "Rescheduled $count alarms after reboot")
-    }
-
-    companion object {
-        private const val MAX_DURATION_MINUTES = 120
+        pending.finish()
     }
 }
