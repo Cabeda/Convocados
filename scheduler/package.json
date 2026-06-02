@@ -10,7 +10,7 @@
     "dev": "tsx index.ts"
   },
   "dependencies": {
-    "p-retry": "^6.2.1"
+    "p-retry": "^8.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
