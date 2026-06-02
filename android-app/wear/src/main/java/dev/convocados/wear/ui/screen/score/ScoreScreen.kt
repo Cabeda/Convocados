@@ -5,12 +5,14 @@ import android.view.View
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -23,6 +25,7 @@ import com.google.android.horologist.annotations.ExperimentalHorologistApi
 import com.google.android.horologist.compose.layout.ScreenScaffold
 import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.R
+import dev.convocados.wear.util.gameProgressFraction
 import dev.convocados.wear.util.parseInstant
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -97,6 +100,7 @@ fun ScoreScreen(
                         onDecrementOne = {},
                         onIncrementTwo = {},
                         onDecrementTwo = {},
+                        onTeams = onTeams,
                         readOnly = true,
                     )
                 }
@@ -109,6 +113,7 @@ fun ScoreScreen(
                         onDecrementOne = viewModel::decrementScoreOne,
                         onIncrementTwo = viewModel::incrementScoreTwo,
                         onDecrementTwo = viewModel::decrementScoreTwo,
+                        onTeams = onTeams,
                     )
                 }
             }
@@ -123,9 +128,22 @@ private fun ScoreEditor(
     onDecrementOne: () -> Unit,
     onIncrementTwo: () -> Unit,
     onDecrementTwo: () -> Unit,
+    onTeams: () -> Unit,
     readOnly: Boolean = false,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                // Swipe up (within the content) opens the Teams screen.
+                val threshold = 64.dp.toPx()
+                var dragY = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { dragY = 0f },
+                    onDragEnd = { if (dragY < -threshold) onTeams() },
+                ) { _, dy -> dragY += dy }
+            },
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -155,6 +173,15 @@ private fun ScoreEditor(
         }
 
         state.game?.let { game ->
+            // Non-interactive overlays: no pointerInput, so taps fall through to the tiles.
+            GameProgressBar(
+                dateTime = game.dateTime,
+                sport = game.sport,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 10.dp)
+                    .fillMaxWidth(0.55f),
+            )
             GameClock(
                 dateTime = game.dateTime,
                 modifier = Modifier
@@ -221,10 +248,39 @@ private fun TeamScoreButton(
     }
 }
 
+/** Horizontal game-progress bar (fraction of match elapsed). Non-interactive. */
+@Composable
+private fun GameProgressBar(dateTime: String, sport: String, modifier: Modifier = Modifier) {
+    var progress by remember { mutableFloatStateOf(gameProgressFraction(dateTime, sport)) }
+
+    LaunchedEffect(dateTime, sport) {
+        while (true) {
+            progress = gameProgressFraction(dateTime, sport)
+            delay(1000)
+        }
+    }
+
+    if (progress <= 0f) return
+
+    Box(
+        modifier = modifier
+            .height(6.dp)
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.primary),
+        )
+    }
+}
+
 /** Lightweight elapsed-time label (m:ss) shown once the game has started. */
 @Composable
-private fun GameClock(dateTime: String, modifier: Modifier = Modifier) {
-    var elapsedText by remember { mutableStateOf("") }
+private fun GameClock(dateTime: String, modifier: Modifier = Modifier) {    var elapsedText by remember { mutableStateOf("") }
 
     LaunchedEffect(dateTime) {
         while (true) {
