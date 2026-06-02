@@ -49,6 +49,10 @@ class GameSettingsViewModel @Inject constructor(
             scheduledKickoffMs = game?.dateTime?.let { parseInstant(it)?.toEpochMilli() }
                 ?: System.currentTimeMillis()
             durationMinutes = game?.let { sportDurationMinutes(it.sport) } ?: 60
+
+            // Persist game context so the boot receiver has it without a network call.
+            store.update(eventId) { it.copy(scheduledKickoffMs = scheduledKickoffMs, durationMinutes = durationMinutes) }
+
             store.settings(eventId).collect { s ->
                 _uiState.value = GameSettingsUiState(
                     isLoading = false,
