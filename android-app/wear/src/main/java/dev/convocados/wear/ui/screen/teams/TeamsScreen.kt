@@ -4,6 +4,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,6 +37,26 @@ fun TeamsScreen(
         ScalingLazyColumnDefaults.responsive()
     )
 
+    // Pull down while already at the top to go back to the score.
+    val pullThreshold = with(LocalDensity.current) { 72.dp.toPx() }
+    var pulled by remember { mutableFloatStateOf(0f) }
+    val pullToBack = remember(onDone) {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y > 0f && !columnState.state.canScrollBackward) {
+                    pulled += available.y
+                    if (pulled >= pullThreshold) {
+                        pulled = 0f
+                        onDone()
+                    }
+                } else if (available.y < 0f) {
+                    pulled = 0f
+                }
+                return Offset.Zero
+            }
+        }
+    }
+
     ScreenScaffold(scrollState = columnState) {
         when {
             state.isLoading -> {
@@ -42,7 +67,7 @@ fun TeamsScreen(
             else -> {
                 ScalingLazyColumn(
                     columnState = columnState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().nestedScroll(pullToBack),
                 ) {
                     // Header
                     item {
