@@ -34,9 +34,9 @@ jobs:
           restore-keys: pnpm-store-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Generate Prisma client
       - name: Security audit
         run: pnpm audit --audit-level=high
+      - name: Generate Prisma client
         run: pnpm prisma generate
       - name: Type check
         run: pnpm typecheck
