@@ -25,8 +25,13 @@ data class GameAlarm(
 @Serializable
 data class GameSettings(
     val kickoffEpochMs: Long? = null,
+    val scheduledKickoffMs: Long? = null,
+    val durationMinutes: Int = 60,
     val alarms: List<GameAlarm> = emptyList(),
-)
+) {
+    /** Effective kickoff: user override ?: scheduled game time. */
+    val effectiveKickoffMs: Long? get() = kickoffEpochMs ?: scheduledKickoffMs
+}
 
 /** A single scheduled vibration. */
 data class AlarmFire(val triggerAtMs: Long, val pulses: Int)

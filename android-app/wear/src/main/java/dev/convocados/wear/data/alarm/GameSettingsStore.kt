@@ -45,10 +45,21 @@ class GameSettingsStore @Inject constructor(
             ?.let { runCatching { json.decodeFromString<GameSettings>(it) }.getOrNull() }
             ?: GameSettings()
 
-    /** All persisted event settings (for boot-time rescheduling). */
-    fun allSettings(): Map<String, GameSettings> = prefs.all.mapNotNull { (key, value) ->
-        (value as? String)?.let { raw ->
-            runCatching { json.decodeFromString<GameSettings>(raw) }.getOrNull()?.let { key to it }
+    /** All persisted event settings (for boot-time rescheduling).
+     *  Prunes entries whose game ended more than 24h ago. */
+    fun allSettings(): Map<String, GameSettings> {
+        val now = System.currentTimeMillis()
+        val cutoff = now - 24 * 60 * 60_000L
+        val result = mutableMapOf<String, GameSettings>()
+        val staleKeys = mutableListOf<String>()
+        for ((key, value) in prefs.all) {
+            val raw = value as? String ?: continue
+            val s = runCatching { json.decodeFromString<GameSettings>(raw) }.getOrNull() ?: continue
+            val gameEnd = (s.effectiveKickoffMs ?: 0) + s.durationMinutes * 60_000L
+            if (gameEnd < cutoff) { staleKeys += key; continue }
+            result[key] = s
         }
-    }.toMap()
+        if (staleKeys.isNotEmpty()) prefs.edit().apply { staleKeys.forEach { remove(it) } }.apply()
+        return result
+    }
 }
