@@ -44,4 +44,11 @@ class GameSettingsStore @Inject constructor(
         prefs.getString(eventId, null)
             ?.let { runCatching { json.decodeFromString<GameSettings>(it) }.getOrNull() }
             ?: GameSettings()
+
+    /** All persisted event settings (for boot-time rescheduling). */
+    fun allSettings(): Map<String, GameSettings> = prefs.all.mapNotNull { (key, value) ->
+        (value as? String)?.let { raw ->
+            runCatching { json.decodeFromString<GameSettings>(raw) }.getOrNull()?.let { key to it }
+        }
+    }.toMap()
 }
