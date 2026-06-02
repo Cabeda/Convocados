@@ -2,6 +2,7 @@ package dev.convocados.wear.ui.screen.score
 
 import android.view.HapticFeedbackConstants
 import android.view.View
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -12,7 +13,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -177,10 +184,7 @@ private fun ScoreEditor(
             GameProgressBar(
                 dateTime = game.dateTime,
                 sport = game.sport,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 10.dp)
-                    .fillMaxWidth(0.55f),
+                modifier = Modifier.fillMaxSize(),
             )
             GameClock(
                 dateTime = game.dateTime,
@@ -248,7 +252,9 @@ private fun TeamScoreButton(
     }
 }
 
-/** Horizontal game-progress bar (fraction of match elapsed). Non-interactive. */
+/** Game-progress indicator that hugs the screen edge (circle on round watches,
+ *  rounded-rectangle perimeter on rectangular ones), starting at 12 o'clock.
+ *  Non-interactive: draws only, so taps fall through to the tiles. */
 @Composable
 private fun GameProgressBar(dateTime: String, sport: String, modifier: Modifier = Modifier) {
     var progress by remember { mutableFloatStateOf(gameProgressFraction(dateTime, sport)) }
@@ -262,19 +268,41 @@ private fun GameProgressBar(dateTime: String, sport: String, modifier: Modifier 
 
     if (progress <= 0f) return
 
-    Box(
-        modifier = modifier
-            .height(6.dp)
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceContainer),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(progress.coerceIn(0f, 1f))
-                .clip(RoundedCornerShape(50))
-                .background(MaterialTheme.colorScheme.primary),
-        )
+    val isRound = LocalConfiguration.current.isScreenRound
+    val fillColor = MaterialTheme.colorScheme.primary
+    val trackColor = MaterialTheme.colorScheme.surfaceContainer
+
+    Canvas(modifier = modifier.fillMaxSize()) {
+        val stroke = 5.dp.toPx()
+        val left = stroke / 2f + 1.dp.toPx()
+        val top = left
+        val right = size.width - left
+        val bottom = size.height - top
+        val w = right - left
+        val h = bottom - top
+        val r = if (isRound) minOf(w, h) / 2f else 28.dp.toPx()
+        val cx = left + w / 2f
+
+        // Perimeter path, clockwise from top-center.
+        val path = Path().apply {
+            moveTo(cx, top)
+            lineTo(right - r, top)
+            arcTo(Rect(right - 2 * r, top, right, top + 2 * r), -90f, 90f, false)
+            lineTo(right, bottom - r)
+            arcTo(Rect(right - 2 * r, bottom - 2 * r, right, bottom), 0f, 90f, false)
+            lineTo(left + r, bottom)
+            arcTo(Rect(left, bottom - 2 * r, left + 2 * r, bottom), 90f, 90f, false)
+            lineTo(left, top + r)
+            arcTo(Rect(left, top, left + 2 * r, top + 2 * r), 180f, 90f, false)
+            close()
+        }
+
+        drawPath(path, trackColor, style = Stroke(width = stroke))
+
+        val measure = PathMeasure().apply { setPath(path, false) }
+        val segment = Path()
+        measure.getSegment(0f, measure.length * progress.coerceIn(0f, 1f), segment, true)
+        drawPath(segment, fillColor, style = Stroke(width = stroke, cap = StrokeCap.Round))
     }
 }
 
