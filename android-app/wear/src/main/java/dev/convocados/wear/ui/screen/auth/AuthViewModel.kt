@@ -1,8 +1,6 @@
 package dev.convocados.wear.ui.screen.auth
 
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.NoCredentialException
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,6 +34,11 @@ class AuthViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
+
+    init {
+        // Zero-tap login on watches that already have a Google account.
+        trySilentSignIn()
+    }
 
     fun onEmailChanged(email: String) {
         _uiState.update { it.copy(email = email) }
@@ -76,14 +79,24 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    /** Returns the credential request to launch from the Activity. */
-    fun getGoogleSignInRequest(): GetCredentialRequest = googleSignIn.buildCredentialRequest()
+    /** Returns the intent that launches the on-device Google account picker. */
+    fun getSignInIntent(): Intent = googleSignIn.getSignInIntent()
 
-    /** Called after the Activity receives the credential response. */
-    fun handleGoogleSignInResult(result: androidx.credentials.GetCredentialResponse) {
+    /** Try a zero-tap silent sign-in using the existing on-device Google account. */
+    fun trySilentSignIn() {
+        if (isAuthenticated.value) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSigningIn = true) }
+            val success = googleSignIn.trySilentSignIn()
+            _uiState.update { it.copy(isSigningIn = false) }
+        }
+    }
+
+    /** Called with the result Intent from the interactive sign-in flow. */
+    fun handleGoogleSignInResult(data: Intent?) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSigningIn = true, error = null) }
-            val success = googleSignIn.handleSignInResult(result)
+            val success = googleSignIn.handleSignInResult(data)
             _uiState.update {
                 it.copy(
                     isSigningIn = false,
@@ -91,15 +104,6 @@ class AuthViewModel @Inject constructor(
                 )
             }
         }
-    }
-
-    fun handleGoogleSignInError(e: Exception) {
-        val message = when (e) {
-            is GetCredentialCancellationException -> null // User cancelled, no error
-            is NoCredentialException -> "No Google account found"
-            else -> "Sign-in failed: ${e.message}"
-        }
-        _uiState.update { it.copy(isSigningIn = false, error = message) }
     }
 
     fun signOut() {

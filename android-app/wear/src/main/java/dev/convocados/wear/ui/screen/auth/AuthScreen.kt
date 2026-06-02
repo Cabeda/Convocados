@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -14,7 +13,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.credentials.CredentialManager
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.wear.compose.material3.*
 import androidx.wear.input.RemoteInputIntentHelper
@@ -25,7 +23,6 @@ import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.BuildConfig
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.theme.TextMuted
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalHorologistApi::class)
 @Composable
@@ -35,8 +32,6 @@ fun AuthScreen(
 ) {
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val columnState = rememberColumnState()
 
     LaunchedEffect(isAuthenticated) {
@@ -175,22 +170,16 @@ fun AuthScreen(
                 item { Spacer(modifier = Modifier.height(8.dp)) }
 
                 item {
+                    val googleLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.StartActivityForResult()
+                    ) { result ->
+                        viewModel.handleGoogleSignInResult(result.data)
+                    }
                     if (uiState.isSigningIn) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                     } else {
                         Button(
-                            onClick = {
-                                scope.launch {
-                                    try {
-                                        val credentialManager = CredentialManager.create(context)
-                                        val request = viewModel.getGoogleSignInRequest()
-                                        val result = credentialManager.getCredential(context, request)
-                                        viewModel.handleGoogleSignInResult(result)
-                                    } catch (e: Exception) {
-                                        viewModel.handleGoogleSignInError(e)
-                                    }
-                                }
-                            },
+                            onClick = { googleLauncher.launch(viewModel.getSignInIntent()) },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text(stringResource(R.string.sign_in_google)) }
                         )

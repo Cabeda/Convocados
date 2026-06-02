@@ -12,6 +12,9 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import javax.inject.Inject
@@ -135,20 +138,60 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
     }
 
     /**
-     * Exchange a Google ID token for Convocados OAuth tokens (unauthenticated).
-     * Uses better-auth's built-in social sign-in callback endpoint, which is
-     * already configured with GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET on the backend.
+     * Exchange a Google ID token for Convocados OAuth tokens (standalone, no phone).
+     *
+     * 1. Signs in to better-auth using the Google ID token (built-in social
+     *    sign-in with ID token) to obtain a session cookie.
+     * 2. Exchanges that session for OAuth access/refresh tokens via the
+     *    mobile-callback flow (same as the email path).
      */
     suspend fun exchangeGoogleToken(idToken: String): OAuthTokenResponse {
-        val response = client.post("$baseUrl/api/auth/callback/google") {
+        val signInResponse = client.post("$baseUrl/api/auth/sign-in/social") {
             contentType(ContentType.Application.Json)
-            setBody(mapOf("idToken" to idToken, "callbackURL" to "/"))
+            setBody(buildJsonObject {
+                put("provider", "google")
+                putJsonObject("idToken") { put("token", idToken) }
+            })
         }
-        if (!response.status.isSuccess()) {
-            val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
-            throw ApiException(response.status.value, "Google token exchange failed: $errorBody")
+        if (!signInResponse.status.isSuccess()) {
+            val errorBody = runCatching { signInResponse.bodyAsText() }.getOrDefault("")
+            throw ApiException(signInResponse.status.value, "Google sign-in failed: $errorBody")
         }
-        return response.body()
+
+        val cookies = signInResponse.headers.getAll("Set-Cookie")
+            ?.joinToString("; ") { it.substringBefore(";") }
+            ?: throw ApiException(401, "No session cookie returned")
+
+        return exchangeSessionForTokens(cookies)
+    }
+
+    /**
+     * Given a better-auth session cookie, run the mobile-callback flow to get
+     * OAuth access/refresh tokens for the mobile-app client.
+     */
+    private suspend fun exchangeSessionForTokens(cookies: String): OAuthTokenResponse {
+        // GET mobile-callback to get a one-time code (redirect carries it)
+        val callbackResponse = client.get("$baseUrl/api/auth/mobile-callback") {
+            header("Cookie", cookies)
+            parameter("redirect_uri", "convocados://auth")
+        }
+
+        val redirectLocation = callbackResponse.headers["Location"]
+            ?: throw ApiException(400, "No redirect from mobile-callback")
+
+        val code = redirectLocation.substringAfter("code=").substringBefore("&")
+        if (code.isBlank()) throw ApiException(400, "No code in redirect: $redirectLocation")
+
+        // Exchange the one-time code for OAuth tokens
+        val tokenResponse = client.post("$baseUrl/api/auth/mobile-callback") {
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("code" to code))
+        }
+        if (!tokenResponse.status.isSuccess()) {
+            val errorBody = runCatching { tokenResponse.bodyAsText() }.getOrDefault("")
+            throw ApiException(tokenResponse.status.value, "Token exchange failed: $errorBody")
+        }
+        return tokenResponse.body()
     }
 
     /**
@@ -171,28 +214,7 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
             ?.joinToString("; ") { it.substringBefore(";") }
             ?: throw ApiException(401, "No session cookie returned")
 
-        // Step 2: GET mobile-callback to get a one-time code
-        val callbackResponse = client.get("$baseUrl/api/auth/mobile-callback") {
-            header("Cookie", cookies)
-            parameter("redirect_uri", "convocados://auth")
-        }
-
-        val redirectLocation = callbackResponse.headers["Location"]
-            ?: throw ApiException(400, "No redirect from mobile-callback")
-
-        val code = redirectLocation.substringAfter("code=").substringBefore("&")
-        if (code.isBlank()) throw ApiException(400, "No code in redirect: $redirectLocation")
-
-        // Step 3: Exchange code for OAuth tokens
-        val tokenResponse = client.post("$baseUrl/api/auth/mobile-callback") {
-            contentType(ContentType.Application.Json)
-            setBody(mapOf("code" to code))
-        }
-        if (!tokenResponse.status.isSuccess()) {
-            val errorBody = runCatching { tokenResponse.bodyAsText() }.getOrDefault("")
-            throw ApiException(tokenResponse.status.value, "Token exchange failed: $errorBody")
-        }
-        return tokenResponse.body()
+        return exchangeSessionForTokens(cookies)
     }
 }
 
