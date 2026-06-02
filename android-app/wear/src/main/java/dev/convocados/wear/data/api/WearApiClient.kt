@@ -123,6 +123,15 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
         patch("/api/events/$eventId/teams", request)
 
     /**
+     * Start score tracking for an event: auto-creates today's game-history
+     * record (requires teams to be assigned). Idempotent — returns the
+     * existing record if one already exists for today.
+     */
+    suspend fun startWatchGame(eventId: String) {
+        authenticatedRequest(HttpMethod.Post, "/api/watch/events", mapOf("eventId" to eventId))
+    }
+
+    /**
      * Exchange email/password for Convocados OAuth tokens.
      */
     suspend fun loginWithEmail(email: String, password: String): OAuthTokenResponse {

@@ -67,7 +67,6 @@ fun WearNavigation(tokenStore: WearTokenStore) {
                     onTeams = {
                         navController.navigate(WearRoutes.teams(eventId))
                     },
-                    onDone = { navController.popBackStack() },
                 )
             }
 
@@ -78,6 +77,17 @@ fun WearNavigation(tokenStore: WearTokenStore) {
                     eventId = eventId,
                     viewModel = viewModel,
                     onDone = { navController.popBackStack() },
+                    onSettings = { navController.navigate(WearRoutes.settings(eventId)) },
+                )
+            }
+
+            composable(WearRoutes.SETTINGS) { backStackEntry ->
+                val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
+                val viewModel: dev.convocados.wear.ui.screen.settings.GameSettingsViewModel = hiltViewModel()
+                dev.convocados.wear.ui.screen.settings.GameSettingsScreen(
+                    eventId = eventId,
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
                 )
             }
         }
