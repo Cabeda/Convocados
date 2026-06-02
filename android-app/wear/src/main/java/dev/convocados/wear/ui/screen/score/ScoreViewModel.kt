@@ -4,16 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.repository.WearScoreRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
-import dev.convocados.wear.util.canScoreGame
 import dev.convocados.wear.util.tickFlow
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -27,10 +25,8 @@ data class ScoreUiState(
     val teamOneName: String = "Team 1",
     val teamTwoName: String = "Team 2",
     val isLoading: Boolean = true,
-    val isSaving: Boolean = false,
     val isStarting: Boolean = false,
     val isOfflineQueued: Boolean = false,
-    val canScore: Boolean = false,
     val error: String? = null,
 )
 
@@ -73,7 +69,6 @@ class ScoreViewModel @Inject constructor(
                         scoreTwo = history?.scoreTwo ?: state.scoreTwo,
                         teamOneName = history?.teamOneName ?: game?.teamOneName ?: "Team 1",
                         teamTwoName = history?.teamTwoName ?: game?.teamTwoName ?: "Team 2",
-                        canScore = game?.let { canScoreGame(it.dateTime) } ?: false,
                         isLoading = false,
                     )
                 }
@@ -87,54 +82,71 @@ class ScoreViewModel @Inject constructor(
             _uiState.update { it.copy(isStarting = true, error = null) }
             val result = repository.startGame(eventId)
             _uiState.update {
-                it.copy(
-                    isStarting = false,
-                    error = if (result.isSuccess) null else "Assign teams first, then try again",
-                )
+                it.copy(isStarting = false, error = startErrorMessage(result.exceptionOrNull()))
             }
         }
     }
 
     fun incrementScoreOne() {
         _uiState.update { it.copy(scoreOne = it.scoreOne + 1) }
-        scheduleSave()
+        persist()
     }
 
     fun decrementScoreOne() {
         _uiState.update { it.copy(scoreOne = maxOf(0, it.scoreOne - 1)) }
-        scheduleSave()
+        persist()
     }
 
     fun incrementScoreTwo() {
         _uiState.update { it.copy(scoreTwo = it.scoreTwo + 1) }
-        scheduleSave()
+        persist()
     }
 
     fun decrementScoreTwo() {
         _uiState.update { it.copy(scoreTwo = maxOf(0, it.scoreTwo - 1)) }
-        scheduleSave()
+        persist()
     }
 
-    private var saveJob: Job? = null
+    private var saving = false
+    private var pendingSave = false
 
-    /** Debounce rapid taps into one save; persists locally + remotely (queues if offline). */
-    private fun scheduleSave() {
-        saveJob?.cancel()
-        saveJob = viewModelScope.launch {
-            delay(500)
-            val state = _uiState.value
-            val historyId = state.history?.id ?: return@launch
-            _uiState.update { it.copy(isSaving = true) }
-            val result = scoreRepository.submitScore(
-                eventId = eventId,
-                historyId = historyId,
-                scoreOne = state.scoreOne,
-                scoreTwo = state.scoreTwo,
-                teamOneName = state.teamOneName,
-                teamTwoName = state.teamTwoName,
-            )
+    /**
+     * Persist the score on every change. submitScore writes the local DB first
+     * (instant, survives going offline) then pushes to the server, queuing for
+     * sync on failure. Calls are coalesced + serialized so rapid taps always
+     * end on the latest value without overlapping requests.
+     */
+    private fun persist() {
+        if (_uiState.value.history?.id == null) return
+        pendingSave = true
+        if (saving) return
+        saving = true
+        viewModelScope.launch {
+            while (pendingSave) {
+                pendingSave = false
+                val s = _uiState.value
+                val historyId = s.history?.id ?: break
+                val result = scoreRepository.submitScore(
+                    eventId = eventId,
+                    historyId = historyId,
+                    scoreOne = s.scoreOne,
+                    scoreTwo = s.scoreTwo,
+                    teamOneName = s.teamOneName,
+                    teamTwoName = s.teamTwoName,
+                )
+                _uiState.update { it.copy(isOfflineQueued = result.isFailure) }
+            }
             ScoreSyncWorker.enqueueOneTime(workManager)
-            _uiState.update { it.copy(isSaving = false, isOfflineQueued = result.isFailure) }
+            saving = false
         }
     }
+}
+
+/** Maps a startGame failure to a short, user-facing reason. */
+internal fun startErrorMessage(e: Throwable?): String? = when {
+    e == null -> null
+    e is ApiException && e.code == 400 -> "Assign teams first"
+    e is ApiException && e.code == 401 -> "Session expired — sign in again"
+    e is ApiException -> "Couldn't start (${e.code})"
+    else -> "Couldn't start — check connection"
 }

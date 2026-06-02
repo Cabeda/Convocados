@@ -67,7 +67,6 @@ fun WearNavigation(tokenStore: WearTokenStore) {
                     onTeams = {
                         navController.navigate(WearRoutes.teams(eventId))
                     },
-                    onDone = { navController.popBackStack() },
                 )
             }
 

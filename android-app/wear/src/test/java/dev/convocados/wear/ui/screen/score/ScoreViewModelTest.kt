@@ -1,11 +1,11 @@
 package dev.convocados.wear.ui.screen.score
 
 import app.cash.turbine.test
+import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.repository.WearScoreRepository
-import dev.convocados.wear.util.canScoreGame
 import androidx.work.WorkManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -155,39 +155,69 @@ class ScoreViewModelTest {
     }
 
     @Test
-    fun `canScore is true for game within 1 hour`() = runTest {
-        val game = makeGame("e1", time = Instant.now().plus(30, ChronoUnit.MINUTES))
-        coEvery { repository.getGame("e1") } returns game
+    fun `incrementing persists the latest score`() = runTest {
+        coEvery { repository.getGame("e1") } returns makeGame("e1")
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
         coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
+        coEvery { scoreRepository.submitScore(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
 
         val viewModel = makeViewModel()
         viewModel.load("e1")
         advanceUntilIdle()
 
-        assertTrue(canScoreGame(game.dateTime))
+        viewModel.incrementScoreOne()
+        advanceUntilIdle()
+
+        coVerify { scoreRepository.submitScore("e1", "h1", 1, 0, any(), any()) }
+    }
+
+    @Test
+    fun `rapid taps coalesce into one save with the final score`() = runTest {
+        coEvery { repository.getGame("e1") } returns makeGame("e1")
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
+        coEvery { scoreRepository.submitScore(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+
+        viewModel.incrementScoreOne()
+        viewModel.incrementScoreOne()
+        viewModel.incrementScoreOne()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { scoreRepository.submitScore("e1", "h1", 3, 0, any(), any()) }
+        coVerify(exactly = 0) { scoreRepository.submitScore("e1", "h1", 1, 0, any(), any()) }
+    }
+
+    @Test
+    fun `startGame success leaves no error`() = runTest {
+        coEvery { repository.startGame(any()) } returns Result.success(Unit)
+
+        val viewModel = makeViewModel()
+        viewModel.startGame()
+        advanceUntilIdle()
+
         viewModel.uiState.test {
-            assertTrue(awaitItem().canScore)
+            val state = awaitItem()
+            assertFalse(state.isStarting)
+            assertNull(state.error)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `canScore is false for game more than 1 hour away`() = runTest {
-        val game = makeGame("e1", time = Instant.now().plus(180, ChronoUnit.MINUTES))
-        coEvery { repository.getGame("e1") } returns game
-        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
-        coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
+    fun `startGame failure with 400 asks to assign teams`() {
+        assertEquals("Assign teams first", startErrorMessage(ApiException(400, "Teams must be assigned first.")))
+    }
 
-        val viewModel = makeViewModel()
-        viewModel.load("e1")
-        advanceUntilIdle()
-
-        assertFalse(canScoreGame(game.dateTime))
-        viewModel.uiState.test {
-            assertFalse(awaitItem().canScore)
-            cancelAndIgnoreRemainingEvents()
-        }
+    @Test
+    fun `startErrorMessage maps auth, other api and network errors`() {
+        assertNull(startErrorMessage(null))
+        assertEquals("Session expired — sign in again", startErrorMessage(ApiException(401, "x")))
+        assertEquals("Couldn't start (500)", startErrorMessage(ApiException(500, "x")))
+        assertEquals("Couldn't start — check connection", startErrorMessage(java.io.IOException("offline")))
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
