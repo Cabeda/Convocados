@@ -9,6 +9,7 @@ import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { syncPaymentsForEvent } from "../../../../lib/payments.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
+import { normalizeForMatch } from "../../../../lib/stringMatch";
 
 const log = createLogger("players-api");
 
@@ -219,8 +220,32 @@ export const POST: APIRoute = async ({ params, request }) => {
     );
   }
 
-  // Only link userId when the client explicitly requests it and user is authenticated
-  const shouldLink = linkToAccount === true && !!session?.user;
+  // Resolve the userId to link, in priority order:
+  //   1. Explicit linkToAccount: true from an authenticated client (QuickJoin flow)
+  //   2. Auto-link: name matches exactly one registered user account
+  //      (accent + case insensitive), and that user has no player in this event yet
+  // The auto-link prevents anonymous duplicate records (e.g. an owner adding a
+  // player by typing a known user's name) and is a no-op when the name is unique
+  // to the event's anonymous players.
+  let linkedUserId: string | null = null;
+  if (linkToAccount === true && session?.user) {
+    linkedUserId = session.user.id;
+  } else {
+    const target = normalizeForMatch(trimmed);
+    const allUsers = await prisma.user.findMany({
+      select: { id: true, name: true },
+    });
+    const matches = allUsers.filter((u) => normalizeForMatch(u.name) === target);
+    if (matches.length === 1 && target.length > 0) {
+      const candidateId = matches[0].id;
+      const alreadyInEvent = await prisma.player.count({
+        where: { eventId, userId: candidateId },
+      });
+      if (alreadyInEvent === 0) {
+        linkedUserId = candidateId;
+      }
+    }
+  }
 
   try {
     const nextOrder = event.players.length;
@@ -229,7 +254,7 @@ export const POST: APIRoute = async ({ params, request }) => {
         name: trimmed,
         eventId,
         order: nextOrder,
-        userId: shouldLink ? session.user.id : null,
+        userId: linkedUserId,
       },
     });
   } catch (e: any) {
@@ -275,19 +300,25 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   // Send game invite email to the joining player if they have a linked account
-  if (shouldLink && session?.user?.email) {
-    try {
-      const prefs = await getNotificationPrefs(session.user.id);
-      if (wantsGameInviteEmail(prefs)) {
-        await sendGameInvite(session.user.email, {
-          eventTitle: event.title,
-          dateTime: event.dateTime.toISOString(),
-          location: event.location,
-          eventUrl: url,
-        });
+  if (linkedUserId) {
+    const linkedUser = await prisma.user.findUnique({
+      where: { id: linkedUserId },
+      select: { email: true, id: true },
+    });
+    if (linkedUser?.email) {
+      try {
+        const prefs = await getNotificationPrefs(linkedUser.id);
+        if (wantsGameInviteEmail(prefs)) {
+          await sendGameInvite(linkedUser.email, {
+            eventTitle: event.title,
+            dateTime: event.dateTime.toISOString(),
+            location: event.location,
+            eventUrl: url,
+          });
+        }
+      } catch (_err) {
+        // Non-blocking — don't fail the join if email fails
       }
-    } catch (_err) {
-      // Non-blocking — don't fail the join if email fails
     }
   }
 

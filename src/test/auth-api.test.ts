@@ -248,14 +248,24 @@ describe("POST /api/events/[id]/players (linkToAccount)", () => {
     expect(player?.userId).toBe(user.id);
   });
 
-  it("does not link userId when linkToAccount is false", async () => {
+  it("does not link userId when linkToAccount is false and no user matches the name", async () => {
+    const user = await seedUser();
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    const res = await addPlayer(ctx({ id }, { name: "Stranger", linkToAccount: false }));
+    expect(res.status).toBe(200);
+    const player = await testPrisma.player.findFirst({ where: { eventId: id, name: "Stranger" } });
+    expect(player?.userId).toBeNull();
+  });
+
+  it("auto-links to the matching user even when linkToAccount is false", async () => {
     const user = await seedUser();
     mockAuth(user.id, user.name);
     const id = await seedEvent();
     const res = await addPlayer(ctx({ id }, { name: user.name, linkToAccount: false }));
     expect(res.status).toBe(200);
     const player = await testPrisma.player.findFirst({ where: { eventId: id, name: user.name } });
-    expect(player?.userId).toBeNull();
+    expect(player?.userId).toBe(user.id);
   });
 
   it("does not link userId for anonymous users even with linkToAccount", async () => {

@@ -1,6 +1,7 @@
 import React from "react";
-import { TextField, Autocomplete, InputAdornment, IconButton } from "@mui/material";
+import { TextField, Autocomplete, InputAdornment, IconButton, Tooltip, Box } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import ShieldIcon from "@mui/icons-material/Shield";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import type { PlayerOption } from "./types";
@@ -9,7 +10,7 @@ interface Props {
   value: string;
   onChange: (value: string) => void;
   onAdd: (name: string) => void;
-  suggestions: { name: string; gamesPlayed: number }[];
+  suggestions: { name: string; gamesPlayed: number; userId?: string | null }[];
   disabled?: boolean;
   label?: string;
 }
@@ -25,7 +26,12 @@ export function PlayerAutocomplete({ value, onChange, onAdd, suggestions, disabl
         const trimmed = value.trim();
         const filtered: PlayerOption[] = suggestions
           .filter((s) => matchesWithName(s.name, trimmed))
-          .map((s) => ({ type: "existing" as const, name: s.name, gamesPlayed: s.gamesPlayed }));
+          .map((s) => ({
+            type: "existing" as const,
+            name: s.name,
+            gamesPlayed: s.gamesPlayed,
+            userId: s.userId ?? null,
+          }));
         if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
           filtered.push({ type: "create" as const, name: trimmed });
         }
@@ -90,10 +96,17 @@ export function PlayerAutocomplete({ value, onChange, onAdd, suggestions, disabl
           );
         }
         return (
-          <li key={key} {...otherProps} style={{ minHeight: 40, display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-            <span>{option.name}</span>
+          <li key={key} {...otherProps} style={{ minHeight: 40, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, width: "100%" }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, overflow: "hidden" }}>
+              {option.userId ? (
+                <Tooltip title={t("protectedPlayer")}>
+                  <ShieldIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
+                </Tooltip>
+              ) : null}
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{option.name}</span>
+            </Box>
             {option.gamesPlayed > 0 && (
-              <span style={{ color: "text.secondary", fontSize: "0.75rem", marginLeft: 8 }}>
+              <span style={{ color: "text.secondary", fontSize: "0.75rem", marginLeft: 8, flexShrink: 0 }}>
                 {t("nGamesPlayed", { n: option.gamesPlayed })}
               </span>
             )}

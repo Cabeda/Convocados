@@ -58,6 +58,7 @@ beforeEach(async () => {
   await prisma.teamResult.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
+  await prisma.user.deleteMany();
 });
 
 // ─── POST /api/events ────────────────────────────────────────────────────────
@@ -653,6 +654,55 @@ describe("GET /api/events/[id]/known-players", () => {
     const body = await res.json();
     expect(body.players).toHaveLength(1);
     expect(body.players[0].name).toBe("Bob");
+  });
+
+  it("annotates suggestions with userId when name matches a registered user", async () => {
+    const id = await seedEvent();
+    await prisma.user.create({
+      data: { id: "u-goncalo", name: "Gonçalo", email: "g-base@t.com", emailVerified: true },
+    });
+    const snapshot = JSON.stringify([
+      { team: "A", players: [{ name: "Gonçalo", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ]);
+    await seedHistory(id, snapshot);
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    const byName = Object.fromEntries(body.players.map((p: any) => [p.name, p]));
+    expect(byName["Gonçalo"].userId).toBe("u-goncalo");
+    expect(byName["Bob"].userId).toBeNull();
+  });
+
+  it("matches user accounts accent- and case-insensitively for userId annotation", async () => {
+    const id = await seedEvent();
+    await prisma.user.create({
+      data: { id: "u-g", name: "Gonçalo", email: "g-acc@t.com", emailVerified: true },
+    });
+    const snapshot = JSON.stringify([
+      { team: "A", players: [{ name: "GONCALO", order: 0 }] },
+    ]);
+    await seedHistory(id, snapshot);
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    expect(body.players).toHaveLength(1);
+    expect(body.players[0].userId).toBe("u-g");
+  });
+
+  it("leaves userId null when multiple users share the name", async () => {
+    const id = await seedEvent();
+    await prisma.user.create({
+      data: { id: "u-1", name: "Gonçalo", email: "g-dup1@t.com", emailVerified: true },
+    });
+    await prisma.user.create({
+      data: { id: "u-2", name: "Gonçalo", email: "g-dup2@t.com", emailVerified: true },
+    });
+    const snapshot = JSON.stringify([
+      { team: "A", players: [{ name: "Gonçalo", order: 0 }] },
+    ]);
+    await seedHistory(id, snapshot);
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    expect(body.players[0].userId).toBeNull();
   });
 });
 
