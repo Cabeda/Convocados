@@ -35,7 +35,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Security audit
-        run: pnpm audit --audit-level=high
+        # CVE-2025-48065: Vitest UI server file read — dev-only tool, not exposed in CI/prod.
+        # Blocked by vitest 4.x migration (breaking config changes). Track in a follow-up.
+        run: pnpm audit --audit-level=high --ignore CVE-2025-48065
       - name: Generate Prisma client
         run: pnpm prisma generate
       - name: Type check
