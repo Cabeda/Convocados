@@ -30,6 +30,7 @@
     <!-- Score screen -->
     <string name="score_title">Score</string>
     <string name="no_game_history">No game history</string>
+    <string name="start_scoring">Start scoring</string>
     <string name="start_from_phone">Start the game from\nthe phone app first</string>
     <string name="syncing">syncing…</string>
     <string name="score_hint">tap +1 · hold −1</string>

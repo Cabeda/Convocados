@@ -44,8 +44,7 @@ class WearGameRepository @Inject constructor(
     }
 
     /** Refresh history for a specific event. */
-    suspend fun refreshHistory(eventId: String): Result<Unit> = try {
-        val history = client.get<dev.convocados.wear.data.api.PaginatedHistory>("/api/events/$eventId/history")
+    suspend fun refreshHistory(eventId: String): Result<Unit> = try {        val history = client.get<dev.convocados.wear.data.api.PaginatedHistory>("/api/events/$eventId/history")
         historyDao.refreshHistory(
             eventId,
             history.data.map { it.toHistoryEntity(eventId) }
@@ -59,6 +58,19 @@ class WearGameRepository @Inject constructor(
     /** Get the latest history entry for a game (from cache). */
     suspend fun getLatestHistory(eventId: String): WearHistoryEntity? =
         historyDao.getLatestHistory(eventId)
+
+    /**
+     * Start score tracking for an event (creates today's history record if
+     * teams are assigned), then refresh the local history cache.
+     */
+    suspend fun startGame(eventId: String): Result<Unit> = try {
+        client.startWatchGame(eventId)
+        refreshHistory(eventId)
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Log.w("WearGameRepo", "Failed to start game $eventId", e)
+        Result.failure(e)
+    }
 
     /** Get a cached game by ID. */
     suspend fun getGame(eventId: String): WearGameEntity? = gameDao.getGame(eventId)

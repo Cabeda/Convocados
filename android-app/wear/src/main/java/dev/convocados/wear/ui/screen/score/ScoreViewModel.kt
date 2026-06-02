@@ -12,6 +12,8 @@ import dev.convocados.wear.data.sync.ScoreSyncWorker
 import dev.convocados.wear.util.canScoreGame
 import dev.convocados.wear.util.tickFlow
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -26,7 +28,7 @@ data class ScoreUiState(
     val teamTwoName: String = "Team 2",
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
-    val saved: Boolean = false,
+    val isStarting: Boolean = false,
     val isOfflineQueued: Boolean = false,
     val canScore: Boolean = false,
     val error: String? = null,
@@ -79,29 +81,50 @@ class ScoreViewModel @Inject constructor(
         }
     }
 
+    /** Start tracking the score for this game (creates today's history record). */
+    fun startGame() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isStarting = true, error = null) }
+            val result = repository.startGame(eventId)
+            _uiState.update {
+                it.copy(
+                    isStarting = false,
+                    error = if (result.isSuccess) null else "Assign teams first, then try again",
+                )
+            }
+        }
+    }
+
     fun incrementScoreOne() {
         _uiState.update { it.copy(scoreOne = it.scoreOne + 1) }
+        scheduleSave()
     }
 
     fun decrementScoreOne() {
         _uiState.update { it.copy(scoreOne = maxOf(0, it.scoreOne - 1)) }
+        scheduleSave()
     }
 
     fun incrementScoreTwo() {
         _uiState.update { it.copy(scoreTwo = it.scoreTwo + 1) }
+        scheduleSave()
     }
 
     fun decrementScoreTwo() {
         _uiState.update { it.copy(scoreTwo = maxOf(0, it.scoreTwo - 1)) }
+        scheduleSave()
     }
 
-    fun saveScore() {
-        val state = _uiState.value
-        val historyId = state.history?.id ?: return
+    private var saveJob: Job? = null
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true, error = null) }
-
+    /** Debounce rapid taps into one save; persists locally + remotely (queues if offline). */
+    private fun scheduleSave() {
+        saveJob?.cancel()
+        saveJob = viewModelScope.launch {
+            delay(500)
+            val state = _uiState.value
+            val historyId = state.history?.id ?: return@launch
+            _uiState.update { it.copy(isSaving = true) }
             val result = scoreRepository.submitScore(
                 eventId = eventId,
                 historyId = historyId,
@@ -110,16 +133,8 @@ class ScoreViewModel @Inject constructor(
                 teamOneName = state.teamOneName,
                 teamTwoName = state.teamTwoName,
             )
-
             ScoreSyncWorker.enqueueOneTime(workManager)
-
-            _uiState.update {
-                it.copy(
-                    isSaving = false,
-                    saved = true,
-                    isOfflineQueued = result.isFailure,
-                )
-            }
+            _uiState.update { it.copy(isSaving = false, isOfflineQueued = result.isFailure) }
         }
     }
 }
