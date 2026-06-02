@@ -2,7 +2,6 @@ package dev.convocados.wear.ui.screen.score
 
 import android.view.HapticFeedbackConstants
 import android.view.View
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -12,10 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -28,9 +23,7 @@ import com.google.android.horologist.annotations.ExperimentalHorologistApi
 import com.google.android.horologist.compose.layout.ScreenScaffold
 import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.R
-import dev.convocados.wear.util.gameProgressFraction
 import dev.convocados.wear.util.parseInstant
-import dev.convocados.wear.util.sportDurationMinutes
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -50,11 +43,6 @@ fun ScoreScreen(
 
     ScreenScaffold(scrollState = columnState) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            // Game timer arc around the bezel
-            state.game?.let { game ->
-                GameTimerArc(dateTime = game.dateTime, sport = game.sport)
-            }
-
             when {
                 state.isLoading -> {
                     CircularProgressIndicator()
@@ -137,32 +125,43 @@ private fun ScoreEditor(
     onDecrementTwo: () -> Unit,
     readOnly: Boolean = false,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 8.dp, vertical = 22.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        TeamScoreButton(
-            teamName = state.teamOneName,
-            score = state.scoreOne,
-            container = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            onIncrement = onIncrementOne,
-            onDecrement = onDecrementOne,
-            enabled = !readOnly,
-            modifier = Modifier.weight(1f),
-        )
-        TeamScoreButton(
-            teamName = state.teamTwoName,
-            score = state.scoreTwo,
-            container = MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-            onIncrement = onIncrementTwo,
-            onDecrement = onDecrementTwo,
-            enabled = !readOnly,
-            modifier = Modifier.weight(1f),
-        )
+    Box(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            TeamScoreButton(
+                teamName = state.teamOneName,
+                score = state.scoreOne,
+                container = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                onIncrement = onIncrementOne,
+                onDecrement = onDecrementOne,
+                enabled = !readOnly,
+                modifier = Modifier.weight(1f),
+            )
+            TeamScoreButton(
+                teamName = state.teamTwoName,
+                score = state.scoreTwo,
+                container = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                onIncrement = onIncrementTwo,
+                onDecrement = onDecrementTwo,
+                enabled = !readOnly,
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        state.game?.let { game ->
+            GameClock(
+                dateTime = game.dateTime,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 4.dp),
+            )
+        }
     }
 }
 
@@ -222,72 +221,31 @@ private fun TeamScoreButton(
     }
 }
 
-/**
- * Draws a progress arc around the screen edge showing elapsed game time.
- * Fills clockwise from 12 o'clock. Shows elapsed time text at the top.
- */
+/** Lightweight elapsed-time label (m:ss) shown once the game has started. */
 @Composable
-private fun GameTimerArc(dateTime: String, sport: String) {
-    var progress by remember { mutableFloatStateOf(gameProgressFraction(dateTime, sport)) }
+private fun GameClock(dateTime: String, modifier: Modifier = Modifier) {
     var elapsedText by remember { mutableStateOf("") }
 
-    LaunchedEffect(dateTime, sport) {
+    LaunchedEffect(dateTime) {
         while (true) {
-            progress = gameProgressFraction(dateTime, sport)
             val start = parseInstant(dateTime)
-            if (start != null) {
-                val elapsed = ChronoUnit.SECONDS.between(start, Instant.now()).coerceAtLeast(0)
-                val min = elapsed / 60
-                val sec = elapsed % 60
-                elapsedText = "%d:%02d".format(min, sec)
-            }
+            elapsedText = if (start != null && !Instant.now().isBefore(start)) {
+                val s = ChronoUnit.SECONDS.between(start, Instant.now()).coerceAtLeast(0)
+                "%d:%02d".format(s / 60, s % 60)
+            } else ""
             delay(1000)
         }
     }
 
-    if (progress <= 0f) return
+    if (elapsedText.isEmpty()) return
 
-    val arcColor = MaterialTheme.colorScheme.primary
-    val trackColor = MaterialTheme.colorScheme.surfaceContainer
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val strokeWidth = 6.dp.toPx()
-        val padding = 4.dp.toPx()
-        val arcSize = Size(size.width - padding * 2, size.height - padding * 2)
-        val topLeft = Offset(padding, padding)
-
-        // Background track
-        drawArc(
-            color = trackColor,
-            startAngle = -90f,
-            sweepAngle = 360f,
-            useCenter = false,
-            topLeft = topLeft,
-            size = arcSize,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-        )
-
-        // Progress arc
-        drawArc(
-            color = arcColor,
-            startAngle = -90f,
-            sweepAngle = 360f * progress,
-            useCenter = false,
-            topLeft = topLeft,
-            size = arcSize,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-        )
-    }
-
-    // Elapsed time at top
-    Box(
-        modifier = Modifier.fillMaxSize().padding(top = 14.dp),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Text(
-            text = elapsedText,
-            style = MaterialTheme.typography.labelSmall,
-            color = arcColor,
-        )
-    }
+    Text(
+        text = elapsedText,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(horizontal = 10.dp, vertical = 2.dp),
+    )
 }
