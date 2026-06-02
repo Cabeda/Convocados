@@ -1,7 +1,6 @@
 package dev.convocados.wear.ui.screen.score
 
 import android.view.HapticFeedbackConstants
-import android.view.View
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -22,6 +21,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,6 +33,7 @@ import com.google.android.horologist.annotations.ExperimentalHorologistApi
 import com.google.android.horologist.compose.layout.ScreenScaffold
 import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.R
+import dev.convocados.wear.ui.theme.Warning
 import dev.convocados.wear.util.gameProgressFraction
 import dev.convocados.wear.util.parseInstant
 import kotlinx.coroutines.delay
@@ -44,7 +46,6 @@ fun ScoreScreen(
     eventId: String,
     viewModel: ScoreViewModel,
     onTeams: () -> Unit = {},
-    onDone: () -> Unit = {},
 ) {
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
@@ -138,6 +139,15 @@ private fun ScoreEditor(
     onTeams: () -> Unit,
     readOnly: Boolean = false,
 ) {
+    // Single 1s ticker drives both the edge progress and the clock.
+    var now by remember { mutableStateOf(Instant.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Instant.now()
+            delay(1000)
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -179,18 +189,44 @@ private fun ScoreEditor(
             )
         }
 
+        // Non-interactive overlays (no pointerInput, so taps fall through to the tiles).
         state.game?.let { game ->
-            // Non-interactive overlays: no pointerInput, so taps fall through to the tiles.
-            GameProgressBar(
-                dateTime = game.dateTime,
-                sport = game.sport,
+            GameEdgeProgress(
+                progress = gameProgressFraction(game.dateTime, game.sport),
                 modifier = Modifier.fillMaxSize(),
             )
-            GameClock(
-                dateTime = game.dateTime,
+            val start = parseInstant(game.dateTime)
+            if (start != null && !now.isBefore(start)) {
+                val s = ChronoUnit.SECONDS.between(start, now).coerceAtLeast(0)
+                GameClock(
+                    text = "%d:%02d".format(s / 60, s % 60),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 4.dp),
+                )
+            }
+        }
+
+        if (!readOnly) {
+            Text(
+                text = stringResource(R.string.teams_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 14.dp),
+            )
+        }
+
+        if (state.isOfflineQueued) {
+            Text(
+                text = stringResource(R.string.will_sync_online),
+                style = MaterialTheme.typography.labelSmall,
+                color = Warning,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 4.dp),
+                    .padding(bottom = 26.dp),
             )
         }
     }
@@ -220,6 +256,8 @@ private fun TeamScoreButton(
             .background(container)
             .combinedClickable(
                 enabled = enabled,
+                onClickLabel = "Add a point to $teamName",
+                onLongClickLabel = "Remove a point from $teamName",
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     onIncrement()
@@ -229,6 +267,7 @@ private fun TeamScoreButton(
                     onDecrement()
                 },
             )
+            .semantics { contentDescription = "$teamName, $score points" }
             .padding(horizontal = 6.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -256,16 +295,7 @@ private fun TeamScoreButton(
  *  rounded-rectangle perimeter on rectangular ones), starting at 12 o'clock.
  *  Non-interactive: draws only, so taps fall through to the tiles. */
 @Composable
-private fun GameProgressBar(dateTime: String, sport: String, modifier: Modifier = Modifier) {
-    var progress by remember { mutableFloatStateOf(gameProgressFraction(dateTime, sport)) }
-
-    LaunchedEffect(dateTime, sport) {
-        while (true) {
-            progress = gameProgressFraction(dateTime, sport)
-            delay(1000)
-        }
-    }
-
+private fun GameEdgeProgress(progress: Float, modifier: Modifier = Modifier) {
     if (progress <= 0f) return
 
     val isRound = LocalConfiguration.current.isScreenRound
@@ -306,25 +336,11 @@ private fun GameProgressBar(dateTime: String, sport: String, modifier: Modifier 
     }
 }
 
-/** Lightweight elapsed-time label (m:ss) shown once the game has started. */
+/** Lightweight elapsed-time pill (m:ss). */
 @Composable
-private fun GameClock(dateTime: String, modifier: Modifier = Modifier) {    var elapsedText by remember { mutableStateOf("") }
-
-    LaunchedEffect(dateTime) {
-        while (true) {
-            val start = parseInstant(dateTime)
-            elapsedText = if (start != null && !Instant.now().isBefore(start)) {
-                val s = ChronoUnit.SECONDS.between(start, Instant.now()).coerceAtLeast(0)
-                "%d:%02d".format(s / 60, s % 60)
-            } else ""
-            delay(1000)
-        }
-    }
-
-    if (elapsedText.isEmpty()) return
-
+private fun GameClock(text: String, modifier: Modifier = Modifier) {
     Text(
-        text = elapsedText,
+        text = text,
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurface,
         modifier = modifier
