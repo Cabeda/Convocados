@@ -2,6 +2,9 @@ package dev.convocados.wear.ui.screen.score
 
 import app.cash.turbine.test
 import dev.convocados.wear.data.api.ApiException
+import dev.convocados.wear.data.alarm.GameAlarmScheduler
+import dev.convocados.wear.data.alarm.GameSettings
+import dev.convocados.wear.data.alarm.GameSettingsStore
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
@@ -10,6 +13,7 @@ import androidx.work.WorkManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.test.*
@@ -27,12 +31,15 @@ class ScoreViewModelTest {
 
     private val repository = mockk<WearGameRepository>(relaxed = true)
     private val scoreRepository = mockk<WearScoreRepository>(relaxed = true)
+    private val settingsStore = mockk<GameSettingsStore>(relaxed = true)
+    private val scheduler = mockk<GameAlarmScheduler>(relaxed = true)
     private val workManager = mockk<WorkManager>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        every { settingsStore.settings(any()) } returns MutableStateFlow(GameSettings())
     }
 
     @After
@@ -41,14 +48,14 @@ class ScoreViewModelTest {
     }
 
     private fun makeViewModel(): ScoreViewModel {
-        val vm = ScoreViewModel(repository, scoreRepository, workManager)
+        val vm = ScoreViewModel(repository, scoreRepository, settingsStore, scheduler, workManager)
         vm.tickProvider = { flowOf(Instant.now()) }
         return vm
     }
 
     @Test
     fun `initial state is loading`() = runTest {
-        val viewModel = ScoreViewModel(repository, scoreRepository, workManager)
+        val viewModel = ScoreViewModel(repository, scoreRepository, settingsStore, scheduler, workManager)
 
         viewModel.uiState.test {
             val state = awaitItem()

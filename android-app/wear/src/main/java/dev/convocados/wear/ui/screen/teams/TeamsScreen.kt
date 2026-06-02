@@ -29,6 +29,7 @@ fun TeamsScreen(
     eventId: String,
     viewModel: TeamsViewModel,
     onDone: () -> Unit = {},
+    onSettings: () -> Unit = {},
 ) {
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
@@ -37,20 +38,22 @@ fun TeamsScreen(
         ScalingLazyColumnDefaults.responsive()
     )
 
-    // Pull down while already at the top to go back to the score.
+    // Edge over-scroll gestures: pull down at the top -> score; pull up at the bottom -> settings.
     val pullThreshold = with(LocalDensity.current) { 72.dp.toPx() }
     var pulled by remember { mutableFloatStateOf(0f) }
-    val pullToBack = remember(onDone) {
+    val edgeNav = remember(onDone, onSettings) {
         object : NestedScrollConnection {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0f && !columnState.state.canScrollBackward) {
-                    pulled += available.y
-                    if (pulled >= pullThreshold) {
-                        pulled = 0f
-                        onDone()
+                when {
+                    available.y > 0f && !columnState.state.canScrollBackward -> {
+                        pulled += available.y
+                        if (pulled >= pullThreshold) { pulled = 0f; onDone() }
                     }
-                } else if (available.y < 0f) {
-                    pulled = 0f
+                    available.y < 0f && !columnState.state.canScrollForward -> {
+                        pulled += available.y
+                        if (pulled <= -pullThreshold) { pulled = 0f; onSettings() }
+                    }
+                    else -> pulled = 0f
                 }
                 return Offset.Zero
             }
@@ -67,7 +70,7 @@ fun TeamsScreen(
             else -> {
                 ScalingLazyColumn(
                     columnState = columnState,
-                    modifier = Modifier.fillMaxSize().nestedScroll(pullToBack),
+                    modifier = Modifier.fillMaxSize().nestedScroll(edgeNav),
                 ) {
                     // Header
                     item {

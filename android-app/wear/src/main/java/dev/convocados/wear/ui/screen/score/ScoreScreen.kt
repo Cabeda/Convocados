@@ -34,11 +34,10 @@ import com.google.android.horologist.compose.layout.ScreenScaffold
 import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.theme.Warning
-import dev.convocados.wear.util.gameProgressFraction
 import dev.convocados.wear.util.parseInstant
+import dev.convocados.wear.util.sportDurationMinutes
 import kotlinx.coroutines.delay
 import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 @OptIn(ExperimentalHorologistApi::class)
 @Composable
@@ -190,28 +189,36 @@ private fun ScoreEditor(
         }
 
         // Non-interactive overlays (no pointerInput, so taps fall through to the tiles).
+        // Non-interactive overlays (no pointerInput, so taps fall through to the tiles).
         state.game?.let { game ->
-            GameEdgeProgress(
-                progress = gameProgressFraction(game.dateTime, game.sport),
-                modifier = Modifier.fillMaxSize(),
-            )
-            val start = parseInstant(game.dateTime)
-            if (start != null && !now.isBefore(start)) {
-                val s = ChronoUnit.SECONDS.between(start, now).coerceAtLeast(0)
-                GameClock(
-                    text = "%d:%02d".format(s / 60, s % 60),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 4.dp),
+            val kickoffMs = state.kickoffEpochMs ?: parseInstant(game.dateTime)?.toEpochMilli()
+            if (kickoffMs != null) {
+                val durationMs = sportDurationMinutes(game.sport) * 60_000L
+                val elapsedMs = now.toEpochMilli() - kickoffMs
+                GameEdgeProgress(
+                    progress = (elapsedMs.toFloat() / durationMs).coerceIn(0f, 1f),
+                    modifier = Modifier.fillMaxSize(),
                 )
+                if (elapsedMs >= 0) {
+                    val s = elapsedMs / 1000
+                    GameClock(
+                        text = "%d:%02d".format(s / 60, s % 60),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 4.dp),
+                    )
+                }
             }
         }
 
         if (!readOnly) {
+            // Show the next-alarm countdown when armed, otherwise the Teams hint.
+            val nextSec = state.nextAlarmAtMs?.let { (it - now.toEpochMilli()) / 1000 }?.takeIf { it > 0 }
             Text(
-                text = stringResource(R.string.teams_hint),
+                text = if (nextSec != null) "⏰ %d:%02d".format(nextSec / 60, nextSec % 60)
+                else stringResource(R.string.teams_hint),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = 14.dp),

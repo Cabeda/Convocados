@@ -5,11 +5,16 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.api.ApiException
+import dev.convocados.wear.data.alarm.GameAlarmScheduler
+import dev.convocados.wear.data.alarm.GameSettingsStore
+import dev.convocados.wear.data.alarm.computeAlarmTimes
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.repository.WearScoreRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
+import dev.convocados.wear.util.parseInstant
+import dev.convocados.wear.util.sportDurationMinutes
 import dev.convocados.wear.util.tickFlow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -27,6 +32,8 @@ data class ScoreUiState(
     val isLoading: Boolean = true,
     val isStarting: Boolean = false,
     val isOfflineQueued: Boolean = false,
+    val kickoffEpochMs: Long? = null,
+    val nextAlarmAtMs: Long? = null,
     val error: String? = null,
 )
 
@@ -34,6 +41,8 @@ data class ScoreUiState(
 class ScoreViewModel @Inject constructor(
     private val repository: WearGameRepository,
     private val scoreRepository: WearScoreRepository,
+    private val settingsStore: GameSettingsStore,
+    private val alarmScheduler: GameAlarmScheduler,
     private val workManager: WorkManager,
 ) : ViewModel() {
 
@@ -53,14 +62,21 @@ class ScoreViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
 
             val game = repository.getGame(eventId)
+            val scheduledKickoffMs = game?.dateTime?.let { parseInstant(it)?.toEpochMilli() }
+            val durationMinutes = game?.let { sportDurationMinutes(it.sport) } ?: 60
             repository.refreshHistory(eventId)
 
             combine(
                 repository.observeLatestHistory(eventId),
+                settingsStore.settings(eventId),
                 tickProvider(),
-            ) { history, _ ->
-                history
-            }.collect { history ->
+            ) { history, settings, _ ->
+                Triple(history, settings, System.currentTimeMillis())
+            }.collect { (history, settings, now) ->
+                val kickoffMs = settings.kickoffEpochMs ?: scheduledKickoffMs
+                val nextAlarm = kickoffMs?.let {
+                    computeAlarmTimes(it, settings.alarms, durationMinutes, now).firstOrNull()?.triggerAtMs
+                }
                 _uiState.update { state ->
                     state.copy(
                         game = game,
@@ -69,11 +85,18 @@ class ScoreViewModel @Inject constructor(
                         scoreTwo = history?.scoreTwo ?: state.scoreTwo,
                         teamOneName = history?.teamOneName ?: game?.teamOneName ?: "Team 1",
                         teamTwoName = history?.teamTwoName ?: game?.teamTwoName ?: "Team 2",
+                        kickoffEpochMs = kickoffMs,
+                        nextAlarmAtMs = nextAlarm,
                         isLoading = false,
                     )
                 }
             }
         }
+    }
+
+    /** Leaving the game cancels all of its pending alarms. */
+    override fun onCleared() {
+        if (eventId.isNotEmpty()) alarmScheduler.cancelAll(eventId)
     }
 
     /** Start tracking the score for this game (creates today's history record). */
