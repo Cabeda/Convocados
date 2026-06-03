@@ -5,7 +5,6 @@ import { authenticateRequest } from "../../../lib/authenticate.server";
 import { parsePaginationParams } from "../../../lib/pagination";
 
 export const GET: APIRoute = async ({ request }) => {
-  // Support both OAuth bearer tokens and session cookies
   const authCtx = await authenticateRequest(request);
   const userId = authCtx?.userId ?? (await getSession(request))?.user?.id;
   if (!userId) {
@@ -14,7 +13,7 @@ export const GET: APIRoute = async ({ request }) => {
   const url = new URL(request.url);
   const { limit } = parsePaginationParams(url);
   const ownedCursor = url.searchParams.get("ownedCursor") || null;
-  const joinedCursor = url.searchParams.get("joinedCursor") || null;
+  const followedCursor = url.searchParams.get("followedCursor") || null;
 
   const gameSelect = {
     id: true,
@@ -34,44 +33,7 @@ export const GET: APIRoute = async ({ request }) => {
     },
   } as const;
 
-  const [ownedEvents, joinedPlayers] = await Promise.all([
-    prisma.event.findMany({
-      where: { ownerId: userId },
-      select: gameSelect,
-      orderBy: { dateTime: "desc" },
-      take: limit + 1,
-      ...(ownedCursor ? { cursor: { id: ownedCursor }, skip: 1 } : {}),
-    }),
-    prisma.player.findMany({
-      where: { userId },
-      select: {
-        id: true,
-        event: {
-          select: { ...gameSelect, ownerId: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit + 1,
-      ...(joinedCursor ? { cursor: { id: joinedCursor }, skip: 1 } : {}),
-    }),
-  ]);
-
-  // Owned pagination
-  const ownedHasMore = ownedEvents.length > limit;
-  const ownedSlice = ownedHasMore ? ownedEvents.slice(0, limit) : ownedEvents;
-  const ownedIds = new Set(ownedSlice.map((e) => e.id));
-
-  // Joined: deduplicate and exclude owned
-  const seen = new Set<string>();
-  const joinedDeduped = joinedPlayers.filter((p) => {
-    if (ownedIds.has(p.event.id) || seen.has(p.event.id)) return false;
-    seen.add(p.event.id);
-    return true;
-  });
-  const joinedHasMore = joinedPlayers.length > limit;
-  const joinedSlice = joinedDeduped.slice(0, limit);
-
-  const mapGame = (e: typeof ownedSlice[number]) => ({
+  const mapGame = (e: any) => ({
     ...e,
     dateTime: e.dateTime.toISOString(),
     archivedAt: e.archivedAt?.toISOString() ?? null,
@@ -80,26 +42,73 @@ export const GET: APIRoute = async ({ request }) => {
     lastScoreTwo: e.history[0]?.scoreTwo ?? null,
   });
 
+  const [ownedEvents, adminEvents, followedRecords] = await Promise.all([
+    prisma.event.findMany({
+      where: { ownerId: userId },
+      select: gameSelect,
+      orderBy: { dateTime: "desc" },
+      take: limit + 1,
+      ...(ownedCursor ? { cursor: { id: ownedCursor }, skip: 1 } : {}),
+    }),
+    prisma.event.findMany({
+      where: { admins: { some: { userId } } },
+      select: gameSelect,
+      orderBy: { dateTime: "desc" },
+      take: limit,
+    }),
+    prisma.eventFollow.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        event: { select: { ...gameSelect, ownerId: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit + 1,
+      ...(followedCursor ? { cursor: { id: followedCursor }, skip: 1 } : {}),
+    }),
+  ]);
+
+  const ownedHasMore = ownedEvents.length > limit;
+  const ownedSlice = ownedHasMore ? ownedEvents.slice(0, limit) : ownedEvents;
+  const ownedIds = new Set(ownedSlice.map((e) => e.id));
+
+  const adminSlice = adminEvents
+    .filter((e) => !ownedIds.has(e.id))
+    .slice(0, limit);
+
+  const adminIds = new Set(adminSlice.map((e) => e.id));
+  const reservedIds = new Set([...ownedIds, ...adminIds]);
+
+  const followedDeduped = followedRecords.filter((r) => {
+    if (reservedIds.has(r.event.id)) return false;
+    reservedIds.add(r.event.id);
+    return true;
+  });
+  const followedHasMore = followedRecords.length > limit;
+  const followedSlice = followedDeduped.slice(0, limit);
+
   const allOwned = ownedSlice.map(mapGame);
-  const allJoined = joinedSlice.map((p) => ({
-    ...p.event,
-    dateTime: p.event.dateTime.toISOString(),
-    archivedAt: p.event.archivedAt?.toISOString() ?? null,
-    playerCount: p.event._count.players,
-    lastScoreOne: p.event.history[0]?.scoreOne ?? null,
-    lastScoreTwo: p.event.history[0]?.scoreTwo ?? null,
+  const allAdmin = adminSlice.map(mapGame);
+  const allFollowed = followedSlice.map((r) => ({
+    ...r.event,
+    dateTime: r.event.dateTime.toISOString(),
+    archivedAt: r.event.archivedAt?.toISOString() ?? null,
+    playerCount: r.event._count.players,
+    lastScoreOne: r.event.history[0]?.scoreOne ?? null,
+    lastScoreTwo: r.event.history[0]?.scoreTwo ?? null,
   }));
 
   return Response.json({
     owned: allOwned.filter((g) => !g.archivedAt),
-    joined: allJoined.filter((g) => !g.archivedAt),
+    admin: allAdmin.filter((g) => !g.archivedAt),
+    followed: allFollowed.filter((g) => !g.archivedAt),
     archivedOwned: allOwned.filter((g) => !!g.archivedAt),
-    archivedJoined: allJoined.filter((g) => !!g.archivedAt),
+    archivedAdmin: allAdmin.filter((g) => !!g.archivedAt),
     ownedNextCursor: ownedHasMore ? ownedSlice[ownedSlice.length - 1].id : null,
     ownedHasMore,
-    joinedNextCursor: joinedHasMore && joinedSlice.length > 0
-      ? joinedPlayers[Math.min(joinedPlayers.length, limit) - 1].id
+    followedNextCursor: followedHasMore && followedSlice.length > 0
+      ? followedRecords[Math.min(followedRecords.length, limit) - 1].id
       : null,
-    joinedHasMore,
+    followedHasMore,
   });
 };

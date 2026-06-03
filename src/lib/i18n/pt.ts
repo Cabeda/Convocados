@@ -333,6 +333,10 @@ const pt: TranslationKeys = {
   relinquishOwnershipDesc: "O evento ficará sem dono e qualquer pessoa pode reclamá-lo.",
   noOwnedGames: "Ainda não tens jogos teus.",
   noJoinedGames: "Ainda não entraste em nenhum jogo.",
+  noFollowedGames: "Ainda não segues nenhum jogo.",
+  adminGames: "Jogos que Administro",
+  followedGames: "Jogos que Sigo",
+  unfollow: "Deixar de seguir",
   ownedGames: "Os Meus Jogos",
   joinedGames: "Jogos em que Participei",
 

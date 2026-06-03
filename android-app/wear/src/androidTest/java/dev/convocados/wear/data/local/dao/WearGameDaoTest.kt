@@ -59,7 +59,7 @@ class WearGameDaoTest {
 
         // Also insert a joined game that should NOT be deleted
         dao.insertAll(listOf(
-            makeGame("j1", "Joined Game", "2025-01-01T10:00:00Z", "joined"),
+            makeGame("j1", "Followed Game", "2025-01-01T10:00:00Z", "followed"),
         ))
 
         // Refresh owned games with new data
@@ -70,9 +70,9 @@ class WearGameDaoTest {
 
         dao.getAllGames().test {
             val result = awaitItem()
-            assertEquals(2, result.size) // 1 new owned + 1 joined
+            assertEquals(2, result.size) // 1 new owned + 1 followed
             val ids = result.map { it.id }.toSet()
-            assertTrue("j1" in ids) // joined preserved
+            assertTrue("j1" in ids) // followed preserved
             assertTrue("2" in ids)  // new owned present
             assertFalse("1" in ids) // old owned deleted
             cancelAndIgnoreRemainingEvents()
@@ -84,22 +84,22 @@ class WearGameDaoTest {
         dao.insertAll(listOf(
             makeGame("o1", "Owned 1", "2025-01-01T10:00:00Z", "owned"),
             makeGame("o2", "Owned 2", "2025-01-02T10:00:00Z", "owned"),
-            makeGame("j1", "Joined 1", "2025-01-03T10:00:00Z", "joined"),
+            makeGame("j1", "Followed 1", "2025-01-03T10:00:00Z", "followed"),
         ))
 
-        // Refresh only "joined" type
-        dao.refreshGames("joined", listOf(
-            makeGame("j2", "Joined 2", "2025-01-04T10:00:00Z", "joined"),
+        // Refresh only "followed" type
+        dao.refreshGames("followed", listOf(
+            makeGame("j2", "Followed 2", "2025-01-04T10:00:00Z", "followed"),
         ))
 
         dao.getAllGames().test {
             val result = awaitItem()
-            assertEquals(3, result.size) // 2 owned + 1 new joined
+            assertEquals(3, result.size) // 2 owned + 1 new followed
             val ids = result.map { it.id }.toSet()
             assertTrue("o1" in ids)
             assertTrue("o2" in ids)
             assertTrue("j2" in ids)
-            assertFalse("j1" in ids) // old joined deleted
+            assertFalse("j1" in ids) // old followed deleted
             cancelAndIgnoreRemainingEvents()
         }
     }

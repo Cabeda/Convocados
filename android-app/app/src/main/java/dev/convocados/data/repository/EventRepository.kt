@@ -70,7 +70,8 @@ class EventRepository @Inject constructor(
         try {
             val response = api.fetchMyGames()
             eventDao.refreshEvents("owned", response.owned.map { it.toEntity("owned") })
-            eventDao.refreshEvents("joined", response.joined.map { it.toEntity("joined") })
+            eventDao.refreshEvents("admin", response.admin.map { it.toEntity("admin") })
+            eventDao.refreshEvents("followed", response.followed.map { it.toEntity("followed") })
         } catch (e: Exception) {
             uiEventManager.showSnackbar("Failed to refresh games: ${e.message}")
         }

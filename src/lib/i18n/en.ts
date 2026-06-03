@@ -332,8 +332,12 @@ const en = {
   relinquishOwnershipDesc: "The event will become ownerless and anyone can claim it.",
   noOwnedGames: "You don't own any games yet.",
   noJoinedGames: "You haven't joined any games yet.",
+  noFollowedGames: "You don't have any followed games yet.",
   ownedGames: "My Games",
+  adminGames: "Games I Admin",
   joinedGames: "Joined Games",
+  followedGames: "Followed Games",
+  unfollow: "Unfollow",
 
   // Calendar
   addToCalendar: "Add to calendar",

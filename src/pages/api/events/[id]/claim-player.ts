@@ -108,6 +108,13 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
 
+  // Auto-follow on claim
+  await prisma.eventFollow.upsert({
+    where: { eventId_userId: { eventId, userId: session.user.id } },
+    create: { eventId, userId: session.user.id },
+    update: {},
+  });
+
   return Response.json({
     ok: true,
     claimedPlayerId: playerId,

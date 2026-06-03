@@ -27,6 +27,10 @@ export const PUT: APIRoute = async ({ params, request }) => {
     data: { archivedAt },
   });
 
+  if (archive) {
+    await prisma.eventFollow.deleteMany({ where: { eventId: params.id } });
+  }
+
   const action = archive ? "event_archived" : "event_unarchived";
   await logEvent(
     event.id,

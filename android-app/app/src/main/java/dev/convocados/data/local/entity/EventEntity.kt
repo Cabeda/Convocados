@@ -17,7 +17,7 @@ data class EventEntity(
     val isRecurring: Boolean,
     val lastScoreOne: Int?,
     val lastScoreTwo: Int?,
-    val type: String // "owned", "joined", "archivedOwned", "archivedJoined"
+    val type: String // "owned", "admin", "followed", "archivedOwned"
 )
 
 fun EventEntity.toSummary() = EventSummary(

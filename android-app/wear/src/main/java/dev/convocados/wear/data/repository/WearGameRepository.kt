@@ -30,13 +30,13 @@ class WearGameRepository @Inject constructor(
     suspend fun refreshGames(): Result<Unit> = try {
         val response = client.get<dev.convocados.wear.data.api.MyGamesResponse>("/api/me/games")
         val owned = response.owned.map { it.toEntity("owned") }
-        val joined = response.joined.map { it.toEntity("joined") }
+        val admin = response.admin.map { it.toEntity("admin") }
+        val followed = response.followed.map { it.toEntity("followed") }
         val archivedOwned = response.archivedOwned.map { it.toEntity("archived_owned") }
-        val archivedJoined = response.archivedJoined.map { it.toEntity("archived_joined") }
         gameDao.refreshGames("owned", owned)
-        gameDao.refreshGames("joined", joined)
+        gameDao.refreshGames("admin", admin)
+        gameDao.refreshGames("followed", followed)
         gameDao.refreshGames("archived_owned", archivedOwned)
-        gameDao.refreshGames("archived_joined", archivedJoined)
         Result.success(Unit)
     } catch (e: Exception) {
         Log.w("WearGameRepo", "Failed to refresh games", e)

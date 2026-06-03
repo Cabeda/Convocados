@@ -52,7 +52,7 @@ class WearGameRepositoryTest {
 
         assertTrue(result.isSuccess)
         coVerify { gameDao.refreshGames("owned", any()) }
-        coVerify { gameDao.refreshGames("joined", any()) }
+        coVerify { gameDao.refreshGames("followed", any()) }
     }
 
     @Test

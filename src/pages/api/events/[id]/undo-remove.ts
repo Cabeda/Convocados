@@ -50,6 +50,15 @@ export const POST: APIRoute = async ({ params, request }) => {
     }),
   ]);
 
+  // Restore follow if the player had a linked account
+  if (userId) {
+    await prisma.eventFollow.upsert({
+      where: { eventId_userId: { eventId, userId } },
+      create: { eventId, userId },
+      update: {},
+    });
+  }
+
   // Re-sync teams if the restored player is in the active range
   if (order < event.maxPlayers) {
     await addPlayerToTeams(eventId, name);

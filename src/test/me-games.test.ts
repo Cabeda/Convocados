@@ -18,7 +18,9 @@ const mockGetSession = vi.mocked(getSession);
 const mockAuthenticateRequest = vi.mocked(authenticateRequest);
 
 beforeEach(async () => {
+  await prisma.eventFollow.deleteMany();
   await prisma.player.deleteMany();
+  await prisma.eventAdmin.deleteMany();
   await prisma.event.deleteMany();
   await prisma.session.deleteMany();
   await prisma.account.deleteMany();
@@ -89,17 +91,14 @@ describe("GET /api/me/games", () => {
     const user = await seedUser();
     mockAuthenticateRequest.mockResolvedValue(null);
     mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
-    // Use distinct dateTimes so cursor ordering is deterministic
     const _event1 = await seedEvent(user.id, { title: "Game 1" });
     const event2 = await seedEvent(user.id, { title: "Game 2" });
     const _event3 = await seedEvent(user.id, { title: "Game 3" });
 
-    // First page without cursor returns all 3
     const resAll = await GET(ctx(`?limit=10`));
     const bodyAll = await resAll.json();
     expect(bodyAll.owned).toHaveLength(3);
 
-    // With a cursor, we get fewer results
     const res = await GET(ctx(`?limit=10&ownedCursor=${event2.id}`));
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -107,29 +106,26 @@ describe("GET /api/me/games", () => {
     expect(body.ownedHasMore).toBe(false);
   });
 
-  it("paginates joined games with cursor", async () => {
+  it("paginates followed games with cursor", async () => {
     const user = await seedUser();
     mockAuthenticateRequest.mockResolvedValue(null);
     mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
     const event1 = await seedEvent(undefined, { title: "Game 1" });
     const event2 = await seedEvent(undefined, { title: "Game 2" });
     const event3 = await seedEvent(undefined, { title: "Game 3" });
-    await prisma.player.create({ data: { name: user.name, eventId: event1.id, userId: user.id } });
-    const player2 = await prisma.player.create({ data: { name: user.name, eventId: event2.id, userId: user.id } });
-    await prisma.player.create({ data: { name: user.name, eventId: event3.id, userId: user.id } });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: event1.id } });
+    const follow2 = await prisma.eventFollow.create({ data: { userId: user.id, eventId: event2.id } });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: event3.id } });
 
-    // First page without cursor returns all 3
     const resAll = await GET(ctx(`?limit=10`));
     const bodyAll = await resAll.json();
-    expect(bodyAll.joined).toHaveLength(3);
+    expect(bodyAll.followed).toHaveLength(3);
 
-    // With a cursor, we get fewer results (cursor skips the cursor record)
-    const res = await GET(ctx(`?limit=10&joinedCursor=${player2.id}`));
+    const res = await GET(ctx(`?limit=10&followedCursor=${follow2.id}`));
     expect(res.status).toBe(200);
     const body = await res.json();
-    // After cursor, we get fewer than the full 3
-    expect(body.joined.length).toBeLessThan(3);
-    expect(body.joinedHasMore).toBe(false);
+    expect(body.followed.length).toBeLessThan(3);
+    expect(body.followedHasMore).toBe(false);
   });
 
   it("returns hasMore=true when more owned games exist", async () => {
@@ -148,22 +144,128 @@ describe("GET /api/me/games", () => {
     expect(body.ownedNextCursor).toBeTruthy();
   });
 
-  it("returns hasMore=true when more joined games exist", async () => {
+  it("returns hasMore=true when more followed games exist", async () => {
     const user = await seedUser();
     mockAuthenticateRequest.mockResolvedValue(null);
     mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
     const event1 = await seedEvent(undefined, { title: "Game 1" });
     const event2 = await seedEvent(undefined, { title: "Game 2" });
     const event3 = await seedEvent(undefined, { title: "Game 3" });
-    await prisma.player.create({ data: { name: user.name, eventId: event1.id, userId: user.id } });
-    await prisma.player.create({ data: { name: user.name, eventId: event2.id, userId: user.id } });
-    await prisma.player.create({ data: { name: user.name, eventId: event3.id, userId: user.id } });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: event1.id } });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: event2.id } });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: event3.id } });
 
     const res = await GET(ctx("?limit=2"));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.joined).toHaveLength(2);
-    expect(body.joinedHasMore).toBe(true);
-    expect(body.joinedNextCursor).toBeTruthy();
+    expect(body.followed).toHaveLength(2);
+    expect(body.followedHasMore).toBe(true);
+    expect(body.followedNextCursor).toBeTruthy();
+  });
+
+  it("includes admin events in admin section", async () => {
+    const user = await seedUser();
+    mockAuthenticateRequest.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const event = await seedEvent(undefined, { title: "Admin Game" });
+    await prisma.eventAdmin.create({ data: { eventId: event.id, userId: user.id } });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.admin).toHaveLength(1);
+    expect(body.admin[0].title).toBe("Admin Game");
+  });
+
+  it("deduplicates admin events that are also owned", async () => {
+    const user = await seedUser();
+    mockAuthenticateRequest.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const event = await seedEvent(user.id, { title: "Owned + Admin" });
+    await prisma.eventAdmin.create({ data: { eventId: event.id, userId: user.id } });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.owned).toHaveLength(1);
+    expect(body.admin).toHaveLength(0);
+    expect(body.followed).toHaveLength(0);
+  });
+
+  it("deduplicates followed events that are also owned or admin", async () => {
+    const user = await seedUser();
+    mockAuthenticateRequest.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const ownedEvent = await seedEvent(user.id, { title: "Owned" });
+    const adminEvent = await seedEvent(undefined, { title: "Admin" });
+    const followEvent = await seedEvent(undefined, { title: "Followed" });
+    await prisma.eventAdmin.create({ data: { eventId: adminEvent.id, userId: user.id } });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: ownedEvent.id } });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: adminEvent.id } });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: followEvent.id } });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.owned).toHaveLength(1);
+    expect(body.admin).toHaveLength(1);
+    expect(body.admin[0].title).toBe("Admin");
+    expect(body.followed).toHaveLength(1);
+    expect(body.followed[0].title).toBe("Followed");
+  });
+
+  it("does not include archived events in admin section", async () => {
+    const user = await seedUser();
+    mockAuthenticateRequest.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const event = await seedEvent(undefined, { title: "Archived Admin", archivedAt: new Date() });
+    await prisma.eventAdmin.create({ data: { eventId: event.id, userId: user.id } });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.admin).toHaveLength(0);
+  });
+
+  it("does not include archived events in followed section", async () => {
+    const user = await seedUser();
+    mockAuthenticateRequest.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const event = await seedEvent(undefined, { title: "Archived Followed", archivedAt: new Date() });
+    await prisma.eventFollow.create({ data: { userId: user.id, eventId: event.id } });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.followed).toHaveLength(0);
+  });
+
+  it("does not return archivedJoined or archivedFollowed", async () => {
+    const user = await seedUser();
+    mockAuthenticateRequest.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body).not.toHaveProperty("archivedJoined");
+    expect(body).not.toHaveProperty("archivedFollowed");
+  });
+
+  it("returns archived admin events", async () => {
+    const user = await seedUser();
+    mockAuthenticateRequest.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const event = await seedEvent(undefined, { title: "Archived Admin", archivedAt: new Date() });
+    await prisma.eventAdmin.create({ data: { eventId: event.id, userId: user.id } });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.archivedAdmin).toHaveLength(1);
+    expect(body.archivedAdmin[0].title).toBe("Archived Admin");
+    expect(body.admin).toHaveLength(0);
+  });
+
+  it("includes non-archived admin in admin, archived in archivedAdmin", async () => {
+    const user = await seedUser();
+    mockAuthenticateRequest.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const active = await seedEvent(undefined, { title: "Active Admin" });
+    const archived = await seedEvent(undefined, { title: "Archived Admin", archivedAt: new Date() });
+    await prisma.eventAdmin.create({ data: { eventId: active.id, userId: user.id } });
+    await prisma.eventAdmin.create({ data: { eventId: archived.id, userId: user.id } });
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(body.admin).toHaveLength(1);
+    expect(body.admin[0].title).toBe("Active Admin");
+    expect(body.archivedAdmin).toHaveLength(1);
+    expect(body.archivedAdmin[0].title).toBe("Archived Admin");
   });
 });
