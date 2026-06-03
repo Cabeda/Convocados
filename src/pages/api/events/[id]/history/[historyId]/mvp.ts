@@ -113,12 +113,17 @@ export const GET: APIRoute = async ({ params, request }) => {
   }
 
   // Extract participants from teamsSnapshot for the voting UI
-  let participants: Array<{ id: string; name: string }> = [];
+  let participants: Array<{ id: string; name: string; voteCount: number }> = [];
   let eligibleVoters = 0;
   if (history.teamsSnapshot) {
     try {
       const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
       const names = teams.flatMap((t) => t.players.map((p) => p.name));
+      // Build tally map from votes
+      const tally = new Map<string, number>();
+      for (const v of votes) {
+        tally.set(v.votedForPlayerId, (tally.get(v.votedForPlayerId) ?? 0) + 1);
+      }
       // Try to resolve Player IDs; fall back to name-based IDs
       const players = await prisma.player.findMany({
         where: { eventId: params.id, name: { in: names } },
@@ -126,12 +131,13 @@ export const GET: APIRoute = async ({ params, request }) => {
       });
       const byName = new Map(players.map((p) => [p.name.toLowerCase(), p]));
       const seen = new Set<string>();
-      participants = names.reduce<Array<{ id: string; name: string }>>((acc, n) => {
+      participants = names.reduce<Array<{ id: string; name: string; voteCount: number }>>((acc, n) => {
         const key = n.toLowerCase();
         if (seen.has(key)) return acc;
         seen.add(key);
         const match = byName.get(key);
-        acc.push(match ? { id: match.id, name: match.name } : { id: `name:${n}`, name: n });
+        const id = match ? match.id : `name:${n}`;
+        acc.push({ id, name: match?.name ?? n, voteCount: tally.get(id) ?? 0 });
         return acc;
       }, []);
 

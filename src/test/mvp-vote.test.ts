@@ -520,6 +520,51 @@ describe("GET mvp", () => {
     const body = await res.json();
     expect(body.participants).toBeDefined();
     expect(body.participants.map((p: any) => p.name).sort()).toEqual(["Alice", "Bob", "Charlie", "Dave"]);
+    // All participants have voteCount=0 when no votes
+    body.participants.forEach((p: any) => {
+      expect(p).toHaveProperty("voteCount");
+      expect(p.voteCount).toBe(0);
+    });
+  });
+
+  it("includes voteCount for each participant when votes exist", async () => {
+    const event = await seedEvent();
+    const alice = await seedPlayer(event.id, "Alice");
+    const bob = await seedPlayer(event.id, "Bob");
+    const charlie = await seedPlayer(event.id, "Charlie");
+    await seedPlayer(event.id, "Dave");
+    const history = await seedHistory(event.id);
+
+    await prisma.mvpVote.create({
+      data: {
+        gameHistoryId: history.id,
+        voterPlayerId: alice.id, voterName: "Alice",
+        votedForPlayerId: bob.id, votedForName: "Bob",
+      },
+    });
+    await prisma.mvpVote.create({
+      data: {
+        gameHistoryId: history.id,
+        voterPlayerId: charlie.id, voterName: "Charlie",
+        votedForPlayerId: bob.id, votedForName: "Bob",
+      },
+    });
+    await prisma.mvpVote.create({
+      data: {
+        gameHistoryId: history.id,
+        voterPlayerId: bob.id, voterName: "Bob",
+        votedForPlayerId: charlie.id, votedForName: "Charlie",
+      },
+    });
+
+    const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
+    const body = await res.json();
+
+    const getByName = (name: string) => body.participants.find((p: any) => p.name === name);
+    expect(getByName("Bob")!.voteCount).toBe(2);
+    expect(getByName("Charlie")!.voteCount).toBe(1);
+    expect(getByName("Alice")!.voteCount).toBe(0);
+    expect(getByName("Dave")!.voteCount).toBe(0);
   });
 
   it("returns 404 for non-existent event", async () => {
