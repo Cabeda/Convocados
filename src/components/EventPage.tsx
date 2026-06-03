@@ -124,7 +124,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const mergedSuggestions = useMemo(() => {
     const qjName = getQjName().trim();
     return (knownPlayersData?.players ?? [])
-      .map((p) => ({ name: p.name, gamesPlayed: p.gamesPlayed ?? 1 }))
+      .map((p) => ({
+        name: p.name,
+        gamesPlayed: p.gamesPlayed ?? 1,
+        userId: p.userId ?? null,
+      }))
       .sort((a, b) => {
         if (qjName && a.name.toLowerCase() === qjName.toLowerCase()) return -1;
         if (qjName && b.name.toLowerCase() === qjName.toLowerCase()) return 1;

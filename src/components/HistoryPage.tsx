@@ -10,6 +10,7 @@ import HistoryIcon from "@mui/icons-material/History";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import LockIcon from "@mui/icons-material/Lock";
+import ShieldIcon from "@mui/icons-material/Shield";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import SaveIcon from "@mui/icons-material/Save";
 import SportsIcon from "@mui/icons-material/Sports";
@@ -32,7 +33,7 @@ import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
 import { MvpVotingCard } from "./MvpVotingCard";
 
 type PlayerOption =
-  | { type: "existing"; name: string; gamesPlayed: number }
+  | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
   | { type: "create"; name: string };
 
 interface TeamSnapshot {
@@ -95,7 +96,7 @@ interface AddHistoricalGameDialogProps {
   eventId: string;
   defaultTeamOneName: string;
   defaultTeamTwoName: string;
-  knownPlayers: { name: string; gamesPlayed: number }[];
+  knownPlayers: { name: string; gamesPlayed: number; userId?: string | null }[];
   playerRatings: { name: string; rating: number; gamesPlayed: number }[];
   onSuccess: (entry: HistoryEntry) => void;
 }
@@ -393,7 +394,7 @@ function HistoryCardFull({
   onUpdate: (updated: HistoryEntry) => void;
   onDelete: (id: string) => void;
   isAuthenticated: boolean;
-  knownPlayers: { name: string; gamesPlayed: number }[];
+  knownPlayers: { name: string; gamesPlayed: number; userId?: string | null }[];
   playerRatings: { name: string; rating: number; gamesPlayed: number }[];
   isOwner: boolean;
   userName: string | null;
@@ -890,7 +891,12 @@ function HistoryCardFull({
                               const trimmed = inputValue.trim();
                               const filtered: PlayerOption[] = availableSuggestions
                                 .filter((s) => matchesWithName(s.name, trimmed))
-                                .map((s) => ({ type: "existing" as const, name: s.name, gamesPlayed: s.gamesPlayed }));
+                                .map((s) => ({
+                                  type: "existing" as const,
+                                  name: s.name,
+                                  gamesPlayed: s.gamesPlayed,
+                                  userId: s.userId ?? null,
+                                }));
                               if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
                                 filtered.push({ type: "create" as const, name: trimmed });
                               }
@@ -965,8 +971,15 @@ function HistoryCardFull({
                                 );
                               }
                               return (
-                                <li key={key} {...otherProps} style={{ minHeight: 40, display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-                                  <span>{option.name}</span>
+                                <li key={key} {...otherProps} style={{ minHeight: 40, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, width: "100%" }}>
+                                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, overflow: "hidden" }}>
+                                    {option.userId ? (
+                                      <Tooltip title={t("protectedPlayer")}>
+                                        <ShieldIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
+                                      </Tooltip>
+                                    ) : null}
+                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{option.name}</span>
+                                  </Box>
                                   {option.gamesPlayed > 0 && (
                                     <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
                                       {t("nGamesPlayed", { n: option.gamesPlayed })}
@@ -1125,7 +1138,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [knownPlayers, setKnownPlayers] = useState<{ name: string; gamesPlayed: number }[]>([]);
+  const [knownPlayers, setKnownPlayers] = useState<{ name: string; gamesPlayed: number; userId?: string | null }[]>([]);
   const [playerRatings, setPlayerRatings] = useState<{ name: string; rating: number; gamesPlayed: number }[]>([]);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -1156,19 +1169,19 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
 
     // Fetch known players (historical) and ratings in parallel (non-blocking)
     // Combine current event players with historical players for suggestions
-    const currentPlayers = (ev.players ?? []).map((p: { name: string }) => ({ name: p.name, gamesPlayed: -1 })); // -1 indicates current player
+    const currentPlayers = (ev.players ?? []).map((p: { name: string }) => ({ name: p.name, gamesPlayed: -1, userId: null })); // -1 indicates current player
     Promise.all([
       fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).catch(() => ({ players: [] })),
       fetch(`/api/events/${eventId}/ratings`).then((r) => r.json()).catch(() => ({ data: [] })),
     ]).then(([kp, ratings]) => {
       // Combine current players with historical players, deduping by name
-      const allPlayersMap = new Map<string, { name: string; gamesPlayed: number }>();
+      const allPlayersMap = new Map<string, { name: string; gamesPlayed: number; userId: string | null }>();
       // Current players first (they get priority)
-      currentPlayers.forEach((p: { name: string; gamesPlayed: number }) => allPlayersMap.set(p.name.toLowerCase(), p));
+      currentPlayers.forEach((p: { name: string; gamesPlayed: number; userId: string | null }) => allPlayersMap.set(p.name.toLowerCase(), p));
       // Historical players (only if not already in current)
-      (kp.players ?? []).forEach((p: { name: string; gamesPlayed: number }) => {
+      (kp.players ?? []).forEach((p: { name: string; gamesPlayed: number; userId?: string | null }) => {
         if (!allPlayersMap.has(p.name.toLowerCase())) {
-          allPlayersMap.set(p.name.toLowerCase(), p);
+          allPlayersMap.set(p.name.toLowerCase(), { name: p.name, gamesPlayed: p.gamesPlayed, userId: p.userId ?? null });
         }
       });
       setKnownPlayers(Array.from(allPlayersMap.values()));

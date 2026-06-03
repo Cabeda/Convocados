@@ -19,6 +19,7 @@ import type { Player, PlayerOption } from "./types";
 interface PlayerSuggestion {
   name: string;
   gamesPlayed: number;
+  userId?: string | null;
 }
 
 interface Props {
@@ -107,7 +108,12 @@ export function PlayerList({
             const trimmed = playerInput.trim();
             const filtered: PlayerOption[] = availableSuggestions
               .filter((s) => matchesWithName(s.name, trimmed))
-              .map((s) => ({ type: "existing" as const, name: s.name, gamesPlayed: s.gamesPlayed }));
+              .map((s) => ({
+                type: "existing" as const,
+                name: s.name,
+                gamesPlayed: s.gamesPlayed,
+                userId: s.userId ?? null,
+              }));
             // Add "Create new player" option when input doesn't exactly match an existing suggestion
             if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
               filtered.push({ type: "create" as const, name: trimmed });
@@ -195,8 +201,15 @@ export function PlayerList({
               );
             }
             return (
-              <li key={key} {...otherProps} style={{ minHeight: 44, display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-                <span>{option.name}</span>
+              <li key={key} {...otherProps} style={{ minHeight: 44, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, width: "100%" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, overflow: "hidden" }}>
+                  {option.userId ? (
+                    <Tooltip title={t("protectedPlayer")}>
+                      <ShieldIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
+                    </Tooltip>
+                  ) : null}
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{option.name}</span>
+                </Box>
                 {option.gamesPlayed > 0 && (
                   <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
                     {t("nGamesPlayed", { n: option.gamesPlayed })}
@@ -218,10 +231,12 @@ export function PlayerList({
               {availableSuggestions.slice(0, 12).map((s) => (
                 <Chip
                   key={s.name}
+                  icon={s.userId ? <ShieldIcon sx={{ color: "primary.main !important" }} /> : undefined}
                   label={s.name}
                   variant="outlined"
                   size="small"
                   onClick={() => { onAddPlayer(s.name); }}
+                  title={s.userId ? t("protectedPlayer") : undefined}
                   sx={{
                     cursor: "pointer",
                     "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
