@@ -49,9 +49,11 @@ export interface EventData {
 export interface KnownPlayer {
   name: string;
   gamesPlayed?: number;
+  /** When non-null, the suggestion matches a registered user account by name. */
+  userId?: string | null;
 }
 
 /** Option type for the player Autocomplete: either an existing player or a "create new" action. */
 export type PlayerOption =
-  | { type: "existing"; name: string; gamesPlayed: number }
+  | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
   | { type: "create"; name: string };

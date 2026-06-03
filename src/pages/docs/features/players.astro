@@ -46,4 +46,34 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
     Click the <strong>X</strong> on any player chip to remove them. If you joined via Quick Join,
     you'll see a "Leave" button instead.
   </p>
+
+  <h2>Shield icon &mdash; linked accounts</h2>
+  <p>
+    When the event owner (or anyone with player-management permission) adds a player by name, Convocados
+    checks if the name matches a registered user account. When it does, the new player is automatically
+    linked to that account, so the player can see the event on their <strong>My Games</strong> page
+    without any extra step.
+  </p>
+  <p>
+    In the quick-add chips and the autocomplete, a small <strong>shield icon</strong> appears next to
+    any name that would auto-link. A name without a shield is still a valid add &mdash; it just stays
+    anonymous, which is the right call when you're not sure who'll actually show up.
+  </p>
+  <h3>What matches</h3>
+  <ul>
+    <li>Accents are ignored: <code>Gonçalo</code>, <code>Goncalo</code>, and <code>gonçalo</code> all match the same user.</li>
+    <li>Letter case is ignored: <code>joão</code> and <code>João</code> match.</li>
+  </ul>
+  <h3>What does <em>not</em> match</h3>
+  <ul>
+    <li>Typos or partial names (<code>Gonça1o</code>, <code>Gonçalo Silva</code> when the user is registered as <code>Gonçalo</code>).</li>
+    <li>Two different users with the same name &mdash; the link is skipped to avoid guessing wrong.</li>
+    <li>A user who is already in the event &mdash; the link is skipped to avoid creating a duplicate.</li>
+  </ul>
+  <h3>Recovering an unlinked player</h3>
+  <p>
+    If you added yourself by name before the auto-link kicked in, you'll see a "Claim" button on the
+    <strong>Rankings</strong> page. Tap it to link the record to your account. The owner can also remove
+    the unlinked player and re-add them; the next add will auto-link.
+  </p>
 </DocsLayout>
