@@ -20,7 +20,7 @@ interface MvpData {
   hasVoted: boolean | null;
   totalVotes: number;
   eligibleVoters: number;
-  participants?: { id: string; name: string }[];
+  participants?: { id: string; name: string; voteCount: number }[];
   votes?: { voterName: string; votedForName: string }[];
 }
 
@@ -143,7 +143,7 @@ export function MvpVotingCard({ eventId, historyId, compact }: Props) {
               <Chip
                 key={p.id}
                 data-testid={`mvp-vote-chip-${p.name}`}
-                label={p.name}
+                label={`${p.name} (${p.voteCount})`}
                 size="small"
                 variant={myVote?.votedForName.toLowerCase() === p.name.toLowerCase() ? "filled" : "outlined"}
                 color="primary"
