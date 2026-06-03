@@ -1,24 +1,29 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   Container, Typography, Stack, Box, Button,
   CircularProgress, Alert, Divider, Accordion, AccordionSummary, AccordionDetails,
+  IconButton, Tooltip,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import UnfollowIcon from "@mui/icons-material/VisibilityOff";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 import { GameCard, type GameSummary } from "./GameCard";
 
+const POLL_INTERVAL = 30_000;
+
 interface DashboardData {
   owned: GameSummary[];
-  joined: GameSummary[];
+  admin: GameSummary[];
+  followed: GameSummary[];
   archivedOwned: GameSummary[];
-  archivedJoined: GameSummary[];
+  archivedAdmin: GameSummary[];
   ownedNextCursor: string | null;
   ownedHasMore: boolean;
-  joinedNextCursor: string | null;
-  joinedHasMore: boolean;
+  followedNextCursor: string | null;
+  followedHasMore: boolean;
 }
 
 export default function DashboardPage() {
@@ -26,39 +31,86 @@ export default function DashboardPage() {
   const { data: session, isPending: sessionLoading } = useSession();
 
   const [owned, setOwned] = useState<GameSummary[]>([]);
-  const [joined, setJoined] = useState<GameSummary[]>([]);
+  const [admin, setAdmin] = useState<GameSummary[]>([]);
+  const [followed, setFollowed] = useState<GameSummary[]>([]);
   const [archivedOwned, setArchivedOwned] = useState<GameSummary[]>([]);
-  const [archivedJoined, setArchivedJoined] = useState<GameSummary[]>([]);
+  const [archivedAdmin, setArchivedAdmin] = useState<GameSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [ownedCursor, setOwnedCursor] = useState<string | null>(null);
   const [ownedHasMore, setOwnedHasMore] = useState(false);
-  const [joinedCursor, setJoinedCursor] = useState<string | null>(null);
-  const [joinedHasMore, setJoinedHasMore] = useState(false);
+  const [followedCursor, setFollowedCursor] = useState<string | null>(null);
+  const [followedHasMore, setFollowedHasMore] = useState(false);
   const [loadingOwned, setLoadingOwned] = useState(false);
-  const [loadingJoined, setLoadingJoined] = useState(false);
+  const [loadingFollowed, setLoadingFollowed] = useState(false);
 
-  const fetchGames = useCallback(async (oc?: string | null, jc?: string | null) => {
+  const fetchGames = useCallback(async (oc?: string | null, fc?: string | null) => {
     const params = new URLSearchParams();
     if (oc) params.set("ownedCursor", oc);
-    if (jc) params.set("joinedCursor", jc);
+    if (fc) params.set("followedCursor", fc);
     const res = await fetch(`/api/me/games?${params.toString()}`);
     return (await res.json()) as DashboardData;
   }, []);
 
+  const loadData = useCallback(async () => {
+    const data = await fetchGames();
+    setOwned(data.owned);
+    setAdmin(data.admin ?? []);
+    setFollowed(data.followed);
+    setArchivedOwned(data.archivedOwned ?? []);
+    setArchivedAdmin(data.archivedAdmin ?? []);
+    setOwnedCursor(data.ownedNextCursor);
+    setOwnedHasMore(data.ownedHasMore);
+    setFollowedCursor(data.followedNextCursor);
+    setFollowedHasMore(data.followedHasMore);
+  }, [fetchGames]);
+
   useEffect(() => {
     if (!session?.user) return;
-    fetchGames().then((data) => {
-      setOwned(data.owned);
-      setJoined(data.joined);
-      setArchivedOwned(data.archivedOwned ?? []);
-      setArchivedJoined(data.archivedJoined ?? []);
-      setOwnedCursor(data.ownedNextCursor);
-      setOwnedHasMore(data.ownedHasMore);
-      setJoinedCursor(data.joinedNextCursor);
-      setJoinedHasMore(data.joinedHasMore);
-      setIsLoading(false);
-    });
+    loadData().then(() => setIsLoading(false));
+  }, [session?.user, loadData]);
+
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const poll = () => {
+      if (document.visibilityState === "hidden") return;
+      fetchGames().then((data) => {
+        setOwned(data.owned);
+        setAdmin(data.admin ?? []);
+        setFollowed(data.followed);
+        setArchivedOwned(data.archivedOwned ?? []);
+        setArchivedAdmin(data.archivedAdmin ?? []);
+        setOwnedCursor(data.ownedNextCursor);
+        setOwnedHasMore(data.ownedHasMore);
+        setFollowedCursor(data.followedNextCursor);
+        setFollowedHasMore(data.followedHasMore);
+      }).catch(() => {});
+    };
+
+    pollRef.current = setInterval(poll, POLL_INTERVAL);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        poll();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [session?.user, fetchGames]);
+
+  const handleUnfollow = async (eventId: string) => {
+    await fetch("/api/me/follows", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ eventId }),
+    });
+    setFollowed((prev) => prev.filter((g) => g.id !== eventId));
+  };
 
   const loadMoreOwned = async () => {
     if (!ownedCursor || loadingOwned) return;
@@ -71,15 +123,14 @@ export default function DashboardPage() {
     setLoadingOwned(false);
   };
 
-  const loadMoreJoined = async () => {
-    if (!joinedCursor || loadingJoined) return;
-    setLoadingJoined(true);
-    const data = await fetchGames(null, joinedCursor);
-    setJoined((prev) => [...prev, ...data.joined]);
-    setArchivedJoined((prev) => [...prev, ...(data.archivedJoined ?? [])]);
-    setJoinedCursor(data.joinedNextCursor);
-    setJoinedHasMore(data.joinedHasMore);
-    setLoadingJoined(false);
+  const loadMoreFollowed = async () => {
+    if (!followedCursor || loadingFollowed) return;
+    setLoadingFollowed(true);
+    const data = await fetchGames(null, followedCursor);
+    setFollowed((prev) => [...prev, ...data.followed]);
+    setFollowedCursor(data.followedNextCursor);
+    setFollowedHasMore(data.followedHasMore);
+    setLoadingFollowed(false);
   };
 
   if (sessionLoading) {
@@ -114,7 +165,8 @@ export default function DashboardPage() {
     );
   }
 
-  const allArchived = [...archivedOwned, ...archivedJoined];
+  const allArchived = [...archivedOwned, ...archivedAdmin];
+  const hasActive = owned.length > 0 || admin.length > 0 || followed.length > 0;
 
   return (
     <ThemeModeProvider>
@@ -129,51 +181,78 @@ export default function DashboardPage() {
               </Box>
             ) : (
               <>
-                {/* Active: Owned games */}
-                <Box>
-                  <Typography variant="h6" fontWeight={600} gutterBottom>
-                    {t("ownedGames")}
-                  </Typography>
-                  {owned.length > 0 ? (
+                {owned.length > 0 && (
+                  <>
+                    <Box>
+                      <Typography variant="h6" fontWeight={600} gutterBottom>
+                        {t("ownedGames")}
+                      </Typography>
+                      <Stack spacing={1.5}>
+                        {owned.map((g) => <GameCard key={g.id} game={g} />)}
+                        {ownedHasMore && (
+                          <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
+                            <Button variant="outlined" size="small" onClick={loadMoreOwned} disabled={loadingOwned}>
+                              {loadingOwned ? t("loading") : t("loadMore")}
+                            </Button>
+                          </Box>
+                        )}
+                      </Stack>
+                    </Box>
+                    <Divider />
+                  </>
+                )}
+
+                {admin.length > 0 && (
+                  <>
+                    <Box>
+                      <Typography variant="h6" fontWeight={600} gutterBottom>
+                        {t("adminGames")}
+                      </Typography>
+                      <Stack spacing={1.5}>
+                        {admin.map((g) => <GameCard key={g.id} game={g} />)}
+                      </Stack>
+                    </Box>
+                    <Divider />
+                  </>
+                )}
+
+                {followed.length > 0 && (
+                  <Box>
+                    <Typography variant="h6" fontWeight={600} gutterBottom>
+                      {t("followedGames")}
+                    </Typography>
                     <Stack spacing={1.5}>
-                      {owned.map((g) => <GameCard key={g.id} game={g} />)}
-                      {ownedHasMore && (
+                      {followed.map((g) => (
+                        <Box key={g.id} sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                          <Box sx={{ flex: 1 }}>
+                            <GameCard game={g} />
+                          </Box>
+                          <Tooltip title={t("unfollow")}>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleUnfollow(g.id)}
+                              sx={{ mt: 1 }}
+                            >
+                              <UnfollowIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      ))}
+                      {followedHasMore && (
                         <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
-                          <Button variant="outlined" size="small" onClick={loadMoreOwned} disabled={loadingOwned}>
-                            {loadingOwned ? t("loading") : t("loadMore")}
+                          <Button variant="outlined" size="small" onClick={loadMoreFollowed} disabled={loadingFollowed}>
+                            {loadingFollowed ? t("loading") : t("loadMore")}
                           </Button>
                         </Box>
                       )}
                     </Stack>
-                  ) : (
-                    <Alert severity="info">{t("noOwnedGames")}</Alert>
-                  )}
-                </Box>
+                  </Box>
+                )}
 
-                <Divider />
+                {!hasActive && (
+                  <Alert severity="info">{t("noFollowedGames")}</Alert>
+                )}
 
-                {/* Active: Joined games */}
-                <Box>
-                  <Typography variant="h6" fontWeight={600} gutterBottom>
-                    {t("joinedGames")}
-                  </Typography>
-                  {joined.length > 0 ? (
-                    <Stack spacing={1.5}>
-                      {joined.map((g) => <GameCard key={g.id} game={g} />)}
-                      {joinedHasMore && (
-                        <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
-                          <Button variant="outlined" size="small" onClick={loadMoreJoined} disabled={loadingJoined}>
-                            {loadingJoined ? t("loading") : t("loadMore")}
-                          </Button>
-                        </Box>
-                      )}
-                    </Stack>
-                  ) : (
-                    <Alert severity="info">{t("noJoinedGames")}</Alert>
-                  )}
-                </Box>
-
-                {/* Archived games (collapsible) */}
                 {allArchived.length > 0 && (
                   <>
                     <Divider />

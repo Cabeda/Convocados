@@ -48,13 +48,13 @@ class GamesViewModel @Inject constructor(
     val ownedGames = repository.getEventsByType("owned")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val joinedGames = repository.getEventsByType("joined")
+    val adminGames = repository.getEventsByType("admin")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val followedGames = repository.getEventsByType("followed")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val archivedOwned = repository.getEventsByType("archivedOwned")
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val archivedJoined = repository.getEventsByType("archivedJoined")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init { refresh() }
@@ -79,9 +79,9 @@ fun GamesScreen(
     animatedVisibilityScope: AnimatedVisibilityScope,
 ) {
     val owned by viewModel.ownedGames.collectAsState()
-    val joined by viewModel.joinedGames.collectAsState()
+    val admin by viewModel.adminGames.collectAsState()
+    val followed by viewModel.followedGames.collectAsState()
     val archivedOwned by viewModel.archivedOwned.collectAsState()
-    val archivedJoined by viewModel.archivedJoined.collectAsState()
     val isRefreshing by viewModel.refreshing.collectAsState()
     var showArchived by remember { mutableStateOf(false) }
 
@@ -93,8 +93,8 @@ fun GamesScreen(
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        val active = owned + joined
-        val archived = archivedOwned + archivedJoined
+        val active = owned + admin + followed
+        val archived = archivedOwned
         val games = if (showArchived) archived else active
 
         PullToRefreshBox(

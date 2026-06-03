@@ -21,13 +21,13 @@ data class EventSummary(
 @Serializable
 data class MyGamesResponse(
     val owned: List<EventSummary> = emptyList(),
-    val joined: List<EventSummary> = emptyList(),
+    val admin: List<EventSummary> = emptyList(),
+    val followed: List<EventSummary> = emptyList(),
     val archivedOwned: List<EventSummary> = emptyList(),
-    val archivedJoined: List<EventSummary> = emptyList(),
     val ownedNextCursor: String? = null,
     val ownedHasMore: Boolean = false,
-    val joinedNextCursor: String? = null,
-    val joinedHasMore: Boolean = false,
+    val followedNextCursor: String? = null,
+    val followedHasMore: Boolean = false,
 )
 
 @Serializable

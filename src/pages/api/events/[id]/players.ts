@@ -264,6 +264,15 @@ export const POST: APIRoute = async ({ params, request }) => {
     throw e;
   }
 
+  // Auto-follow: only for user-initiated actions (Quick Join)
+  if (linkToAccount === true && linkedUserId) {
+    await prisma.eventFollow.upsert({
+      where: { eventId_userId: { eventId, userId: linkedUserId } },
+      create: { eventId, userId: linkedUserId },
+      update: {},
+    });
+  }
+
   // Auto-add player to ranking system with default ELO (upsert to avoid overwriting existing ratings)
   await prisma.playerRating.upsert({
     where: { eventId_name: { eventId, name: trimmed } },
@@ -393,6 +402,14 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const firstBench = event.players[event.maxPlayers];
 
   await prisma.player.delete({ where: { id: playerId, eventId } });
+
+  // Auto-unfollow on self-removal
+  const isSelfRemoval = session?.user?.id && session.user.id === player.userId;
+  if (isSelfRemoval) {
+    await prisma.eventFollow.deleteMany({
+      where: { eventId, userId: session.user.id },
+    });
+  }
 
   // Re-index remaining player orders
   const remaining = event.players.filter((p) => p.id !== playerId);

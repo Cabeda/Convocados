@@ -43,9 +43,9 @@ class EventRepositoryTest {
     fun `refreshMyGames fetches from api and updates dao`() = runTest {
         val response = MyGamesResponse(
             owned = listOf(EventSummary("1", "T1", "L1", "D1", "S1", 10, 5, null, false)),
-            joined = emptyList(),
+            admin = emptyList(),
+            followed = emptyList(),
             archivedOwned = emptyList(),
-            archivedJoined = emptyList()
         )
         coEvery { api.fetchMyGames() } returns response
         coEvery { dao.refreshEvents(any(), any()) } returns Unit
@@ -54,7 +54,8 @@ class EventRepositoryTest {
 
         coVerify { api.fetchMyGames() }
         coVerify { dao.refreshEvents("owned", any()) }
-        coVerify { dao.refreshEvents("joined", any()) }
+        coVerify { dao.refreshEvents("admin", any()) }
+        coVerify { dao.refreshEvents("followed", any()) }
     }
 
     @Test

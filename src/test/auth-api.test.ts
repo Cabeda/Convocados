@@ -122,6 +122,8 @@ beforeEach(async () => {
   vi.clearAllMocks();
   mockAnonymous();
   await resetApiRateLimitStore();
+  await testPrisma.eventFollow.deleteMany();
+  await testPrisma.eventAdmin.deleteMany();
   await testPrisma.appPushToken.deleteMany();
   await testPrisma.pushSubscription.deleteMany();
   await testPrisma.notificationJob.deleteMany();
@@ -276,6 +278,43 @@ describe("POST /api/events/[id]/players (linkToAccount)", () => {
     const player = await testPrisma.player.findFirst({ where: { eventId: id, name: "Anon" } });
     expect(player?.userId).toBeNull();
   });
+
+  it("creates EventFollow on Quick Join (linkToAccount=true)", async () => {
+    const user = await seedUser();
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    const res = await addPlayer(ctx({ id }, { name: user.name, linkToAccount: true }));
+    expect(res.status).toBe(200);
+    const follow = await testPrisma.eventFollow.findUnique({
+      where: { eventId_userId: { eventId: id, userId: user.id } },
+    });
+    expect(follow).not.toBeNull();
+  });
+
+  it("does not create EventFollow on auto-link (linkToAccount=false)", async () => {
+    const user = await seedUser();
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    const res = await addPlayer(ctx({ id }, { name: user.name, linkToAccount: false }));
+    expect(res.status).toBe(200);
+    const follow = await testPrisma.eventFollow.findUnique({
+      where: { eventId_userId: { eventId: id, userId: user.id } },
+    });
+    expect(follow).toBeNull();
+  });
+
+  it("does not create EventFollow when owner adds a different user", async () => {
+    const owner = await seedUser();
+    const playerUser = await seedUser({ name: "Player", email: "player@test.com" });
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    const res = await addPlayer(ctx({ id }, { name: playerUser.name, linkToAccount: false }));
+    expect(res.status).toBe(200);
+    const follow = await testPrisma.eventFollow.findUnique({
+      where: { eventId_userId: { eventId: id, userId: playerUser.id } },
+    });
+    expect(follow).toBeNull();
+  });
 });
 
 // ─── DELETE /api/events/[id]/players (protected players) ─────────────────────
@@ -317,33 +356,76 @@ describe("DELETE /api/events/[id]/players (protected)", () => {
     const res = await deletePlayer(deleteCtx({ id }, { playerId: p.id }));
     expect(res.status).toBe(200);
   });
+
+  it("deletes EventFollow on self-removal", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent();
+    const p = await testPrisma.player.create({ data: { name: user.name, eventId: id, userId: user.id } });
+    await testPrisma.eventFollow.create({ data: { userId: user.id, eventId: id } });
+    const res = await deletePlayer(deleteCtx({ id }, { playerId: p.id }));
+    expect(res.status).toBe(200);
+    const follow = await testPrisma.eventFollow.findUnique({
+      where: { eventId_userId: { eventId: id, userId: user.id } },
+    });
+    expect(follow).toBeNull();
+  });
+
+  it("does not delete EventFollow when owner removes a player", async () => {
+    const owner = await seedUser();
+    const player = await seedUser({ name: "Player", email: "player@test.com" });
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
+    const p = await testPrisma.player.create({ data: { name: player.name, eventId: id, userId: player.id } });
+    await testPrisma.eventFollow.create({ data: { userId: player.id, eventId: id } });
+    const res = await deletePlayer(deleteCtx({ id }, { playerId: p.id }));
+    expect(res.status).toBe(200);
+    const follow = await testPrisma.eventFollow.findUnique({
+      where: { eventId_userId: { eventId: id, userId: player.id } },
+    });
+    expect(follow).not.toBeNull();
+  });
 });
 
 // ─── GET /api/me/games (authenticated) ──────────────────────────────────────
 
 describe("GET /api/me/games (authenticated)", () => {
-  it("returns owned and joined games", async () => {
+  it("returns owned, admin, and followed games", async () => {
     const user = await seedUser();
     mockAuth(user.id);
     const _ownedId = await seedEvent({ ownerId: user.id });
-    const joinedId = await seedEvent({ title: "Joined Game" });
-    await testPrisma.player.create({ data: { name: user.name, eventId: joinedId, userId: user.id } });
+    const adminId = await seedEvent({ title: "Admin Game" });
+    const followId = await seedEvent({ title: "Followed Game" });
+    await testPrisma.eventAdmin.create({ data: { eventId: adminId, userId: user.id } });
+    await testPrisma.eventFollow.create({ data: { userId: user.id, eventId: followId } });
     const res = await getMyGames(ctx({}));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.owned).toHaveLength(1);
-    expect(body.joined).toHaveLength(1);
+    expect(body.admin).toHaveLength(1);
+    expect(body.followed).toHaveLength(1);
   });
 
-  it("deduplicates joined events that are also owned", async () => {
+  it("deduplicates admin events that are also owned", async () => {
     const user = await seedUser();
     mockAuth(user.id);
     const id = await seedEvent({ ownerId: user.id });
-    await testPrisma.player.create({ data: { name: user.name, eventId: id, userId: user.id } });
+    await testPrisma.eventAdmin.create({ data: { eventId: id, userId: user.id } });
     const res = await getMyGames(ctx({}));
     const body = await res.json();
     expect(body.owned).toHaveLength(1);
-    expect(body.joined).toHaveLength(0);
+    expect(body.admin).toHaveLength(0);
+  });
+
+  it("deduplicates followed events that are also owned", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent({ ownerId: user.id });
+    await testPrisma.eventFollow.create({ data: { userId: user.id, eventId: id } });
+    const res = await getMyGames(ctx({}));
+    const body = await res.json();
+    expect(body.owned).toHaveLength(1);
+    expect(body.followed).toHaveLength(0);
   });
 });
 
@@ -590,6 +672,19 @@ describe("POST /api/events/[id]/claim-player", () => {
       where: { eventId_name: { eventId: id, name: "Anon" } },
     });
     expect(anonRating).toBeNull();
+  });
+
+  it("creates EventFollow when claiming a player", async () => {
+    const user = await seedUser({ name: "Claimer" });
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
+    const res = await claimPlayerEndpoint(ctx({ id }, { playerId: p.id }));
+    expect(res.status).toBe(200);
+    const follow = await testPrisma.eventFollow.findUnique({
+      where: { eventId_userId: { eventId: id, userId: user.id } },
+    });
+    expect(follow).not.toBeNull();
   });
 });
 
@@ -1229,19 +1324,19 @@ describe("GET /api/me/games — archived games", () => {
     expect(body.archivedOwned[0].archivedAt).toBeTruthy();
   });
 
-  it("separates active and archived joined games", async () => {
+  it("separates active and archived followed games", async () => {
     const user = await seedUser();
     mockAuth(user.id);
-    const activeId = await seedEvent({ title: "Active Joined" });
-    const archivedId = await seedEvent({ title: "Archived Joined", archivedAt: new Date() });
-    await testPrisma.player.create({ data: { name: user.name, eventId: activeId, userId: user.id } });
-    await testPrisma.player.create({ data: { name: user.name, eventId: archivedId, userId: user.id } });
+    const activeId = await seedEvent({ title: "Active Followed" });
+    const archivedId = await seedEvent({ title: "Archived Followed", archivedAt: new Date() });
+    await testPrisma.eventFollow.create({ data: { userId: user.id, eventId: activeId } });
+    await testPrisma.eventFollow.create({ data: { userId: user.id, eventId: archivedId } });
     const res = await getMyGames(ctx({}));
     const body = await res.json();
-    expect(body.joined).toHaveLength(1);
-    expect(body.joined[0].title).toBe("Active Joined");
-    expect(body.archivedJoined).toHaveLength(1);
-    expect(body.archivedJoined[0].title).toBe("Archived Joined");
+    expect(body.followed).toHaveLength(1);
+    expect(body.followed[0].title).toBe("Active Followed");
+    expect(body).not.toHaveProperty("archivedJoined");
+    expect(body).not.toHaveProperty("archivedFollowed");
   });
 
   it("returns empty archived arrays when no archived games exist", async () => {
@@ -1251,6 +1346,5 @@ describe("GET /api/me/games — archived games", () => {
     const res = await getMyGames(ctx({}));
     const body = await res.json();
     expect(body.archivedOwned).toHaveLength(0);
-    expect(body.archivedJoined).toHaveLength(0);
   });
 });

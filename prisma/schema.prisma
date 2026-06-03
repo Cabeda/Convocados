@@ -31,6 +31,7 @@ model User {
   priorityConfirmations   PriorityConfirmation[]
   eventInvites            EventInvite[]
   adminEvents             EventAdmin[]  @relation("EventAdmins")
+  followedEvents          EventFollow[] @relation("EventFollows")
   pushSubscriptions       PushSubscription[]
   appPushTokens           AppPushToken[]
   oauthApps               OauthApplication[] @relation("OAuthApps")
@@ -111,6 +112,7 @@ model Event {
   priorityConfirmations PriorityConfirmation[]
   invites         EventInvite[]
   admins          EventAdmin[]
+  followers        EventFollow[]
   notificationJobs NotificationJob[]
 
   // Priority enrollment settings
@@ -483,6 +485,21 @@ model EventAdmin {
 
   @@unique([eventId, userId])
   @@index([userId])
+}
+
+// ── Event follows (dashboard visibility) ─────────────────────────────────
+
+model EventFollow {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("EventFollows", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@index([eventId])
 }
 
 // ── Payment reminder log ──────────────────────────────────────────────────────

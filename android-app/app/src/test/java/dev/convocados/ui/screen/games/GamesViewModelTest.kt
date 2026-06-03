@@ -35,20 +35,20 @@ class GamesViewModelTest {
     @Test
     fun `viewModel observes repository flows`() = runTest {
         val owned = listOf(EventSummary("1", "T1", "L1", "D1", "S1", 10, 5, null, false))
-        val joined = listOf(EventSummary("2", "T2", "L2", "D2", "S2", 12, 6, null, false))
+        val followed = listOf(EventSummary("2", "T2", "L2", "D2", "S2", 12, 6, null, false))
         
         coEvery { repository.getEventsByType("owned") } returns flowOf(owned)
-        coEvery { repository.getEventsByType("joined") } returns flowOf(joined)
+        coEvery { repository.getEventsByType("admin") } returns flowOf(emptyList())
+        coEvery { repository.getEventsByType("followed") } returns flowOf(followed)
         coEvery { repository.getEventsByType("archivedOwned") } returns flowOf(emptyList())
-        coEvery { repository.getEventsByType("archivedJoined") } returns flowOf(emptyList())
 
         val viewModel = GamesViewModel(repository, api)
         
         viewModel.ownedGames.test {
             assertEquals(owned, awaitItem())
         }
-        viewModel.joinedGames.test {
-            assertEquals(joined, awaitItem())
+        viewModel.followedGames.test {
+            assertEquals(followed, awaitItem())
         }
     }
 
