@@ -41,6 +41,7 @@ COPY prisma ./prisma
 COPY public ./public
 COPY litestream.yml ./litestream.yml
 COPY scripts/start.sh ./scripts/start.sh
+COPY scripts/release-migrate.sh ./scripts/release-migrate.sh
 
 EXPOSE 3000
 CMD ["sh", "./scripts/start.sh"]
