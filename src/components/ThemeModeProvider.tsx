@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
+import React, { createContext, use, useMemo, useState, useEffect } from "react";
 import { ThemeProvider, createTheme, type PaletteMode } from "@mui/material/styles";
 import { CssBaseline } from "@mui/material";
 
@@ -12,7 +12,7 @@ const ThemeModeContext = createContext<ThemeModeContextType>({
   toggleMode: () => {},
 });
 
-export const useThemeMode = () => useContext(ThemeModeContext);
+export const useThemeMode = () => use(ThemeModeContext);
 
 function getInitialMode(): PaletteMode {
   if (typeof window === "undefined") return "light";
@@ -146,11 +146,11 @@ export const ThemeModeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   );
 
   return (
-    <ThemeModeContext.Provider value={{ mode, toggleMode }}>
+    <ThemeModeContext value={{ mode, toggleMode }}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
         {children}
       </ThemeProvider>
-    </ThemeModeContext.Provider>
+    </ThemeModeContext>
   );
 };

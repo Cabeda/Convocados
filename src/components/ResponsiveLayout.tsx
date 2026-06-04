@@ -73,6 +73,7 @@ interface BeforeInstallPromptEvent extends Event {
 
 function ElevationScroll({ children }: { children: React.ReactElement<{ elevation?: number }> }) {
   const trigger = useScrollTrigger({ disableHysteresis: true, threshold: 0 });
+  // eslint-disable-next-line @eslint-react/no-clone-element -- MUI idiom for forwarding elevation prop
   return React.cloneElement(children, { elevation: trigger ? 4 : 0 });
 }
 

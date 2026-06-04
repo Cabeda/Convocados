@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/db.server";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../lib/authenticate.server";
