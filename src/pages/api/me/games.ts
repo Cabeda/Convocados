@@ -1,8 +1,12 @@
 import type { APIRoute } from "astro";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/db.server";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../lib/authenticate.server";
 import { parsePaginationParams } from "../../../lib/pagination";
+import { createLogger } from "../../../lib/logger.server";
+
+const log = createLogger("me-games");
 
 export const GET: APIRoute = async ({ request }) => {
   const authCtx = await authenticateRequest(request);
@@ -42,6 +46,11 @@ export const GET: APIRoute = async ({ request }) => {
     lastScoreTwo: e.history[0]?.scoreTwo ?? null,
   });
 
+  const followedSelect = {
+    id: true,
+    event: { select: { ...gameSelect, ownerId: true } },
+  } as const;
+
   const [ownedEvents, adminEvents, followedRecords] = await Promise.all([
     prisma.event.findMany({
       where: { ownerId: userId },
@@ -58,13 +67,15 @@ export const GET: APIRoute = async ({ request }) => {
     }),
     prisma.eventFollow.findMany({
       where: { userId },
-      select: {
-        id: true,
-        event: { select: { ...gameSelect, ownerId: true } },
-      },
+      select: followedSelect,
       orderBy: { createdAt: "desc" },
       take: limit + 1,
       ...(followedCursor ? { cursor: { id: followedCursor }, skip: 1 } : {}),
+    }).catch((err) => {
+      // Schema drift: the EventFollow table may be missing if migrations
+      // haven't been applied yet. Don't let it take down owned/admin data.
+      log.warn({ err }, "eventFollow.findMany failed; returning empty list");
+      return [] as Prisma.EventFollowGetPayload<{ select: typeof followedSelect }>[];
     }),
   ]);
 

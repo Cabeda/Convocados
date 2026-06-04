@@ -268,4 +268,24 @@ describe("GET /api/me/games", () => {
     expect(body.archivedAdmin).toHaveLength(1);
     expect(body.archivedAdmin[0].title).toBe("Archived Admin");
   });
+
+  it("still returns admin events when the EventFollow query fails", async () => {
+    const user = await seedUser();
+    mockAuthenticateRequest.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const event = await seedEvent(undefined, { title: "Admin During Drift" });
+    await prisma.eventAdmin.create({ data: { eventId: event.id, userId: user.id } });
+
+    const spy = vi.spyOn(prisma.eventFollow, "findMany").mockRejectedValue(
+      new Error("The table `main.EventFollow` does not exist in the current database."),
+    );
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.admin).toHaveLength(1);
+    expect(body.admin[0].title).toBe("Admin During Drift");
+    expect(body.followed).toEqual([]);
+    spy.mockRestore();
+  });
 });

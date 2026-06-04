@@ -30,6 +30,19 @@ echo "[startup] Running database migrations..."
 # unexecuted migrations as "applied".
 ./node_modules/.bin/prisma migrate deploy
 
+# ── Post-migration verification ──────────────────────────────────────────────
+# Defense-in-depth check: confirm the DB schema matches the migration files
+# in the image. Catches cases where the image is stale or release_command was
+# skipped. Non-fatal: we want the app to still serve, but log loudly so the
+# operator notices. See src/lib/schemaCheck.server.ts for the library version
+# exposed at GET /api/health/migration.
+echo "[startup] Verifying schema is in sync with migrations directory..."
+if ! ./node_modules/.bin/prisma migrate status >/tmp/migrate-status.log 2>&1; then
+  echo "[startup] WARNING: schema drift detected after migrate deploy:"
+  cat /tmp/migrate-status.log
+  echo "[startup] App will start, but endpoints touching missing tables will fail."
+fi
+
 # ── Start app ─────────────────────────────────────────────────────────────────
 if [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
   echo "[startup] Starting app with Litestream replication..."
