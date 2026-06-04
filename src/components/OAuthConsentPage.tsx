@@ -85,6 +85,7 @@ export default function OAuthConsentPage() {
       }
       const data = await res.json();
       if (data.redirectURI) {
+        // eslint-disable-next-line react-hooks/immutability -- intentional redirect after consent
         window.location.href = data.redirectURI;
       }
     } catch {

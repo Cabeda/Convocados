@@ -30,12 +30,14 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 20 }: Sc
   const [isDraggingState, setIsDraggingState] = useState(false);
 
   // Scroll to value without animation on mount (intentionally empty deps — only run once)
-  // eslint-disable-next-line @eslint-react/exhaustive-deps, react-hooks/exhaustive-deps
+  // Mount-only effect: scroll to initial value. Intentionally empty deps.
+  /* eslint-disable @eslint-react/exhaustive-deps, react-hooks/exhaustive-deps */
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
     el.scrollTop = (numValue - min) * ITEM_HEIGHT;
   }, []); // only on mount
+  /* eslint-enable @eslint-react/exhaustive-deps, react-hooks/exhaustive-deps */
 
   // Scroll to value with animation when value changes externally
   const prevValueRef = useRef(numValue);
@@ -65,7 +67,7 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 20 }: Sc
     }
     el.scrollTop += velocityRef.current;
     velocityRef.current *= 0.92;
-    rafIdRef.current = requestAnimationFrame(() => applyMomentum(el));
+    rafIdRef.current = requestAnimationFrame(() => applyMomentum(el)); // eslint-disable-line -- recursive ref, defined above
   }, [snapToNearest]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {

@@ -56,7 +56,9 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const onStatusChangeRef = useRef(onStatusChange);
-  onStatusChangeRef.current = onStatusChange;
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
 
   const fetchStatus = useCallback(async () => {
     try {
