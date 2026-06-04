@@ -1,3 +1,4 @@
+/* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, user interactions mutate it, server data resyncs on refetch. Setting from async fetch callbacks is also fine. */
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button,
