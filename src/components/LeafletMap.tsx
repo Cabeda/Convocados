@@ -107,7 +107,7 @@ export default function LeafletMap({ initialAddress, initialCoordinate, onPinDro
         }
       })
       .catch(() => {});
-  }, [initialAddress]);
+  }, [initialAddress, initialCoordinate]);
 
   const handleMove = (lat: number, lon: number) => {
     setPosition([lat, lon]);

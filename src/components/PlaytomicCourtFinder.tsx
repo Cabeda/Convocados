@@ -240,9 +240,9 @@ export default function PlaytomicCourtFinder({ open, onClose, sport, date, onSel
                                           {t("playtomicNoSlots")}
                                         </Typography>
                                       ) : (
-                                        court.slots.map((slot, i) => (
+                                        court.slots.map((slot) => (
                                           <Chip
-                                            key={i}
+                                            key={slot.start_time}
                                             label={`${formatTime(slot.start_time)} - ${formatPrice(slot.price, slot.currency)}`}
                                             size="small"
                                             variant="outlined"

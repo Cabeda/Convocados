@@ -1,3 +1,4 @@
+/* eslint-disable @eslint-react/purity -- React Compiler hint, not a bug. Date objects during render are common and necessary for time-based UI (countdown, past detection, etc.) */
 import React, { useState } from "react";
 import {
   Container, Paper, Typography, TextField, Button, Box, Stack, Select, MenuItem, FormControl, InputLabel,

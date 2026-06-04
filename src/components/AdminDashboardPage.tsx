@@ -62,8 +62,8 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
       color: isDark ? "#fff" : "rgba(0,0,0,0.87)",
     }}>
       <p style={{ margin: 0, marginBottom: 4 }}>{label}</p>
-      {payload.map((entry, i) => (
-        <p key={i} style={{ margin: 0, color: entry.color }}>
+      {payload.map((entry) => (
+        <p key={entry.name ?? entry.value} style={{ margin: 0, color: entry.color }}>
           {entry.name} : {entry.value}
         </p>
       ))}

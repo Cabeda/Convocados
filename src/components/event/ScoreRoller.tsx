@@ -29,7 +29,8 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 20 }: Sc
   const rafIdRef = useRef<number | null>(null);
   const [isDraggingState, setIsDraggingState] = useState(false);
 
-  // Scroll to value without animation on mount
+  // Scroll to value without animation on mount (intentionally empty deps — only run once)
+  // eslint-disable-next-line @eslint-react/exhaustive-deps, react-hooks/exhaustive-deps
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
