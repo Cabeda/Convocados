@@ -31,10 +31,10 @@ interface Props {
 }
 
 const PHOTON_URL =
-  (import.meta as any).env?.PUBLIC_PHOTON_URL ?? "https://photon.komoot.io";
+  import.meta.env.PUBLIC_PHOTON_URL ?? "https://photon.komoot.io";
 
 const NOMINATIM_URL =
-  (import.meta as any).env?.PUBLIC_NOMINATIM_URL ?? "https://nominatim.openstreetmap.org";
+  import.meta.env.PUBLIC_NOMINATIM_URL ?? "https://nominatim.openstreetmap.org";
 
 async function fetchSuggestionsFromPhoton(query: string): Promise<Suggestion[]> {
   if (query.length < 2) return [];
@@ -44,7 +44,7 @@ async function fetchSuggestionsFromPhoton(query: string): Promise<Suggestion[]> 
     );
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.features ?? []).map((f: any) => {
+    return (data.features ?? []).map((f: { properties: { name?: string; street?: string; city?: string; country?: string }; geometry: { coordinates: [number, number] } }) => {
       const p = f.properties;
       const parts = [p.name, p.street, p.city, p.country].filter(Boolean);
       return {

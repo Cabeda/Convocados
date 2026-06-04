@@ -199,7 +199,7 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
                       onChange={(e) => handleSportChange(e.target.value)}>
                       {SPORT_PRESETS.map((s) => (
                         <MenuItem key={s.id} value={s.id}>
-                          {t(s.labelKey as any)} ({s.defaultMaxPlayers})
+                          {t(s.labelKey)} ({s.defaultMaxPlayers})
                         </MenuItem>
                       ))}
                     </Select>

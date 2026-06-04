@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import type { Player } from "@prisma/client";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
@@ -25,15 +26,15 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const target = event.players.find((p: any) => p.id === playerId);
+  const target = event.players.find((p: Player) => p.id === playerId);
   if (!target) return Response.json({ error: "Player not found." }, { status: 404 });
 
-  if ((target as any).userId) {
+  if (target.userId) {
     return Response.json({ error: "This player is already linked to an account." }, { status: 409 });
   }
 
   // Block claim if the user already has a linked player in this event
-  const existing = event.players.find((p: any) => (p as any).userId === session.user.id);
+  const existing = event.players.find((p: Player) => p.userId === session.user.id);
   if (existing) {
     return Response.json({ error: "You already have a linked player in this event." }, { status: 409 });
   }
@@ -46,8 +47,8 @@ export const POST: APIRoute = async ({ params, request }) => {
       // Replace the anonymous player: set name to user's name and link userId
       // Use updateMany with userId: null guard for atomicity (race protection)
       const claimed = await tx.player.updateMany({
-        where: { id: playerId, eventId, userId: null } as any,
-        data: { userId: session.user.id, name: userName } as any,
+        where: { id: playerId, eventId, userId: null },
+        data: { userId: session.user.id, name: userName },
       });
       if (claimed.count === 0) {
         throw new Error("CLAIM_RACE");

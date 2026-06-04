@@ -111,8 +111,8 @@ async function deliverWebhook(
         data: { error: errText },
       });
       log.warn({ url: url.slice(0, 60), status: res.status, attempt }, "Webhook delivery failed with HTTP error");
-    } catch (err: any) {
-      const errMsg = err?.name === "AbortError" ? "Timeout" : (err?.message ?? "Unknown error");
+    } catch (err) {
+      const errMsg = err instanceof Error && err.name === "AbortError" ? "Timeout" : (err instanceof Error ? err.message : "Unknown error");
       await prisma.webhookDelivery.update({
         where: { id: delivery.id },
         data: {

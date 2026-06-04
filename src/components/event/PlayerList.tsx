@@ -191,7 +191,7 @@ export function PlayerList({
             />
           )}
           renderOption={(props, option) => {
-            const { key, ...otherProps } = props as any;
+            const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
             if (option.type === "create") {
               return (
                 <li key={key} {...otherProps} style={{ minHeight: 44, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>

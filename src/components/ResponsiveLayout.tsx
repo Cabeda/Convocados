@@ -40,13 +40,13 @@ const INSTALL_DISMISS_DAYS = 7;
 function isStandalone(): boolean {
   return typeof window !== "undefined" && (
     window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as any).standalone === true
+    ('standalone' in navigator && (navigator as Navigator & { standalone?: boolean }).standalone === true)
   );
 }
 
 function isIos(): boolean {
   if (typeof navigator === "undefined") return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window);
 }
 
 function isDismissed(): boolean {
