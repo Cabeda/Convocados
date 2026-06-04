@@ -64,7 +64,7 @@ function HeroContent() {
             <Chip
               key={key}
               icon={<Icon sx={{ fontSize: 14 }} />}
-              label={t(key as any)}
+              label={t(key)}
               size="small"
               variant="outlined"
               sx={{ borderColor: theme.palette.primary.main, color: theme.palette.text.secondary, fontSize: "0.7rem", height: 26 }}
@@ -77,7 +77,7 @@ function HeroContent() {
             <Stack key={key} direction="row" spacing={1.5} alignItems="center">
               <Icon sx={{ color: theme.palette.primary.main, fontSize: 22 }} />
               <Typography variant="body1" color="text.secondary">
-                {t(key as any)}
+                {t(key)}
               </Typography>
             </Stack>
           ))}

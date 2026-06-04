@@ -1,10 +1,12 @@
+import type { Resend as ResendClass } from "resend";
 import { createLogger } from "./logger.server";
 
 const log = createLogger("email");
 
 // Lazy-load Resend to avoid pulling it into memory at startup
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _resend: any = null;
+let _resend: ResendClient | null = null;
+
+type ResendClient = ResendClass;
 
 async function getResend() {
   if (!_resend) {
@@ -12,7 +14,7 @@ async function getResend() {
     const key = import.meta.env.RESEND_API_KEY ?? process.env.RESEND_API_KEY;
     _resend = new Resend(key);
   }
-  return _resend as { emails: { send: (opts: any) => Promise<{ data?: { id?: string }; error?: { message: string } | null }> } };
+  return _resend;
 }
 
 /** Visible for testing — resets the cached Resend client */

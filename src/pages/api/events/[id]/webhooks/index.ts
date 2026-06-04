@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../../../../lib/db.server";
 import { checkOwnership } from "../../../../../lib/auth.helpers.server";
 
@@ -53,8 +54,8 @@ export const POST: APIRoute = async ({ params, request }) => {
       events: JSON.parse(webhook.events),
       createdAt: webhook.createdAt.toISOString(),
     });
-  } catch (e: any) {
-    if (e?.code === "P2002") {
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return Response.json({ error: "Webhook already registered for this URL." }, { status: 409 });
     }
     throw e;

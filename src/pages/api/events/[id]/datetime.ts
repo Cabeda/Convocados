@@ -74,7 +74,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
       actorId,
       details: JSON.stringify({
         fields: Object.keys(updates),
-        timezone: updates.timezone ?? (event as any).timezone ?? "UTC",
+        timezone: updates.timezone ?? event.timezone ?? "UTC",
       }),
     },
   });

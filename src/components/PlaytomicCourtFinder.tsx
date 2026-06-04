@@ -81,8 +81,8 @@ export default function PlaytomicCourtFinder({ open, onClose, sport, date, onSel
       } else {
         setClubs(data.clubs ?? []);
       }
-    } catch (err: any) {
-      if (err?.code === 1) {
+    } catch (err) {
+      if (err instanceof Error && 'code' in err && (err as { code: unknown }).code === 1) {
         setSearchError(t("playtomicLocationDenied"));
       } else {
         setSearchError(t("playtomicSearchError"));
@@ -240,9 +240,9 @@ export default function PlaytomicCourtFinder({ open, onClose, sport, date, onSel
                                           {t("playtomicNoSlots")}
                                         </Typography>
                                       ) : (
-                                        court.slots.map((slot, i) => (
+                                        court.slots.map((slot) => (
                                           <Chip
-                                            key={i}
+                                            key={slot.start_time}
                                             label={`${formatTime(slot.start_time)} - ${formatPrice(slot.price, slot.currency)}`}
                                             size="small"
                                             variant="outlined"

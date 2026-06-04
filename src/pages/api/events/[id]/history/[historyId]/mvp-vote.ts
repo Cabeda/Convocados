@@ -61,10 +61,11 @@ export const POST: APIRoute = async ({ params, request }) => {
   let voterName: string | undefined;
   let voterPlayerId: string | undefined;
 
-  if (history.teamsSnapshot && session.user?.name) {
+  const voterNameFromSession = session.user?.name;
+  if (history.teamsSnapshot && voterNameFromSession) {
     const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
     const allPlayers = teams.flatMap((t) => t.players);
-    const match = allPlayers.find((p) => p.name.toLowerCase() === session.user!.name!.toLowerCase());
+    const match = allPlayers.find((p) => p.name.toLowerCase() === voterNameFromSession.toLowerCase());
     if (match) {
       voterName = match.name;
       // Try to find the Player record for this user (may exist if they signed up)

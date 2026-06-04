@@ -74,14 +74,15 @@ function computeHistoryDeltas(
       if (!ratings.has(name)) ratings.set(name, 1000);
     }
 
-    const avg = (names: string[]) => names.reduce((s, n) => s + ratings.get(n)!, 0) / names.length;
+    const get = (n: string): number => ratings.get(n) ?? 1000;
+    const avg = (names: string[]) => names.reduce((s, n) => s + get(n), 0) / names.length;
     const teamOneElo = avg(t1);
     const teamTwoElo = avg(t2);
     const outcome = game.scoreOne > game.scoreTwo ? 1 : game.scoreOne < game.scoreTwo ? 0 : 0.5;
 
     const deltas: { name: string; delta: number }[] = [];
     for (const name of all) {
-      const r = ratings.get(name)!;
+      const r = get(name);
       const isT1 = t1.includes(name);
       const pOutcome = isT1 ? outcome : 1 - outcome;
       const oppElo = isT1 ? teamTwoElo : teamOneElo;

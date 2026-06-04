@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button,
   CircularProgress, Alert, Chip, alpha, useTheme,
@@ -50,9 +50,12 @@ function PlayerRow({ player }: { player: AttendanceRecord }) {
   const t = useT();
   const locale = detectLocale();
   const pct = `${Math.round(player.attendanceRate * 100)}%`;
-  const lastDate = player.lastPlayed
-    ? new Date(player.lastPlayed).toLocaleDateString(locale === "pt" ? "pt-PT" : locale === "es" ? "es-ES" : locale === "fr" ? "fr-FR" : locale === "de" ? "de-DE" : locale === "it" ? "it-IT" : "en-GB", { day: "numeric", month: "short" })
-    : "—";
+  const lastDate = useMemo(
+    () => player.lastPlayed
+      ? new Date(player.lastPlayed).toLocaleDateString(locale === "pt" ? "pt-PT" : locale === "es" ? "es-ES" : locale === "fr" ? "fr-FR" : locale === "de" ? "de-DE" : locale === "it" ? "it-IT" : "en-GB", { day: "numeric", month: "short" })
+      : "—",
+    [player.lastPlayed, locale]
+  );
 
   return (
     <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>

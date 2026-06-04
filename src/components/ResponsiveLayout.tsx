@@ -1,3 +1,5 @@
+/* eslint-disable @eslint-react/purity -- React Compiler hint, not a bug. Date objects during render are common and necessary for time-based UI (countdown, past detection, etc.) */
+/* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import React, { useState, useEffect, useRef } from "react";
 import {
   AppBar, Toolbar, IconButton, Typography, Box, useTheme,
@@ -40,13 +42,13 @@ const INSTALL_DISMISS_DAYS = 7;
 function isStandalone(): boolean {
   return typeof window !== "undefined" && (
     window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as any).standalone === true
+    ('standalone' in navigator && (navigator as Navigator & { standalone?: boolean }).standalone === true)
   );
 }
 
 function isIos(): boolean {
   if (typeof navigator === "undefined") return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window);
 }
 
 function isDismissed(): boolean {
@@ -73,6 +75,7 @@ interface BeforeInstallPromptEvent extends Event {
 
 function ElevationScroll({ children }: { children: React.ReactElement<{ elevation?: number }> }) {
   const trigger = useScrollTrigger({ disableHysteresis: true, threshold: 0 });
+  // eslint-disable-next-line @eslint-react/no-clone-element -- MUI idiom for forwarding elevation prop
   return React.cloneElement(children, { elevation: trigger ? 4 : 0 });
 }
 
@@ -83,18 +86,35 @@ function UpdateBanner() {
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
+    let cancelled = false;
+    const registrations: Array<{ target: EventTarget; type: string; listener: EventListener }> = [];
+
+    const add = (target: EventTarget, type: string, listener: EventListener) => {
+      // eslint-disable-next-line @eslint-react/web-api/no-leaked-event-listener -- cleaned up via registrations array in the effect cleanup
+      target.addEventListener(type, listener);
+      registrations.push({ target, type, listener });
+    };
+
     navigator.serviceWorker.register("/sw.js").then((reg) => {
+      if (cancelled) return;
       if (reg.waiting) { setWaiting(reg.waiting); return; }
-      reg.addEventListener("updatefound", () => {
+      const onUpdateFound = () => {
         const newSW = reg.installing;
         if (!newSW) return;
-        newSW.addEventListener("statechange", () => {
+        add(newSW, "statechange", () => {
           if (newSW.state === "installed" && navigator.serviceWorker.controller) {
             setWaiting(newSW);
           }
         });
-      });
+      };
+      add(reg, "updatefound", onUpdateFound);
     });
+    return () => {
+      cancelled = true;
+      for (const { target, type, listener } of registrations) {
+        target.removeEventListener(type, listener);
+      }
+    };
   }, []);
 
   if (!waiting) return null;
@@ -139,7 +159,7 @@ function UpdateBanner() {
 function InstallBanner() {
   const { t } = useLocale();
   const theme = useTheme();
-  const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
+  const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [showIos, setShowIos] = useState(false);
 
@@ -156,7 +176,7 @@ function InstallBanner() {
     // Chrome/Edge/etc: listen for beforeinstallprompt
     const handler = (e: Event) => {
       e.preventDefault();
-      deferredPrompt.current = e as BeforeInstallPromptEvent;
+      deferredPromptRef.current = e as BeforeInstallPromptEvent;
       setShowBanner(true);
     };
 
@@ -165,7 +185,7 @@ function InstallBanner() {
     // Detect successful install
     const installHandler = () => {
       setShowBanner(false);
-      deferredPrompt.current = null;
+      deferredPromptRef.current = null;
     };
     window.addEventListener("appinstalled", installHandler);
 
@@ -176,13 +196,13 @@ function InstallBanner() {
   }, []);
 
   const handleInstall = async () => {
-    if (!deferredPrompt.current) return;
-    await deferredPrompt.current.prompt();
-    const { outcome } = await deferredPrompt.current.userChoice;
+    if (!deferredPromptRef.current) return;
+    await deferredPromptRef.current.prompt();
+    const { outcome } = await deferredPromptRef.current.userChoice;
     if (outcome === "accepted") {
       setShowBanner(false);
     }
-    deferredPrompt.current = null;
+    deferredPromptRef.current = null;
   };
 
   const handleDismiss = () => {

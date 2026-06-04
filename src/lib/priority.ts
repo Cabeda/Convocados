@@ -62,7 +62,8 @@ export function gamesInWindow(
   let count = 0;
   for (const game of windowGames) {
     try {
-      const teams: { team: string; players: { name: string }[] }[] = JSON.parse(game.teamsSnapshot!);
+      if (game.teamsSnapshot === null) continue;
+      const teams: { team: string; players: { name: string }[] }[] = JSON.parse(game.teamsSnapshot);
       for (const team of teams) {
         if (team.players.some((p) => p.name === playerName)) {
           count++;

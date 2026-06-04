@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import type * as AuthHelpersServer from "~/lib/auth.helpers.server";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { DELETE } from "~/pages/api/events/[id]/purge-player";
 
 vi.mock("~/lib/auth.helpers.server", async () => {
-  const actual = await vi.importActual<typeof import("~/lib/auth.helpers.server")>("~/lib/auth.helpers.server");
+  const actual = await vi.importActual<typeof AuthHelpersServer>("~/lib/auth.helpers.server");
   return {
     ...actual,
     getSession: vi.fn().mockResolvedValue(null),

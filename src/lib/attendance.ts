@@ -43,7 +43,8 @@ export function calculateAttendance(history: HistoryEntry[]): AttendanceResult {
   const gameParticipants: { dateTime: string; players: Set<string> }[] = [];
   for (const game of playedGames) {
     try {
-      const teams: TeamSnapshot[] = JSON.parse(game.teamsSnapshot!);
+      if (game.teamsSnapshot === null) continue;
+      const teams: TeamSnapshot[] = JSON.parse(game.teamsSnapshot);
       const players = new Set<string>();
       for (const team of teams) {
         for (const p of team.players) {

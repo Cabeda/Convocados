@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Box, Typography, Stack, Switch, FormControlLabel, Slider, Button, Chip,
@@ -143,7 +144,7 @@ export default function EventSettingsPage({ eventId }: Props) {
   const [adminCandidates, setAdminCandidates] = useState<AdminCandidate[]>([]);
   const [adminSearchInput, setAdminSearchInput] = useState("");
   const [adminError, setAdminError] = useState<string | null>(null);
-  const adminSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const adminSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchEvent = useCallback(async () => {
     try {
@@ -214,19 +215,19 @@ export default function EventSettingsPage({ eventId }: Props) {
   // re-fetch base candidates when "@" is removed from input.
   useEffect(() => {
     if (!isOwner) return;
-    if (adminSearchTimer.current) clearTimeout(adminSearchTimer.current);
+    if (adminSearchTimerRef.current) clearTimeout(adminSearchTimerRef.current);
     if (!adminSearchInput.includes("@")) {
       // Input no longer has "@" — restore base candidate list
       fetchAdminCandidates();
       return;
     }
-    adminSearchTimer.current = setTimeout(async () => {
+    adminSearchTimerRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/events/${eventId}/admins/candidates?q=${encodeURIComponent(adminSearchInput.trim())}`);
         if (res.ok) setAdminCandidates(await res.json());
       } catch { /* ignore */ }
     }, 300);
-    return () => { if (adminSearchTimer.current) clearTimeout(adminSearchTimer.current); };
+    return () => { if (adminSearchTimerRef.current) clearTimeout(adminSearchTimerRef.current); };
   }, [adminSearchInput, eventId, isOwner, fetchAdminCandidates]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────

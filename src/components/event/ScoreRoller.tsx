@@ -20,29 +20,32 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 20 }: Sc
   const items = Array.from({ length: max - min + 1 }, (_, i) => i + min);
 
   const listRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false);
-  const startY = useRef(0);
-  const startScrollTop = useRef(0);
-  const lastY = useRef(0);
-  const lastTime = useRef(0);
-  const velocity = useRef(0);
-  const rafId = useRef<number | null>(null);
+  const isDraggingRef = useRef(false);
+  const startYRef = useRef(0);
+  const startScrollTopRef = useRef(0);
+  const lastYRef = useRef(0);
+  const lastTimeRef = useRef(0);
+  const velocityRef = useRef(0);
+  const rafIdRef = useRef<number | null>(null);
   const [isDraggingState, setIsDraggingState] = useState(false);
 
-  // Scroll to value without animation on mount
+  // Scroll to value without animation on mount (intentionally empty deps — only run once)
+  // Mount-only effect: scroll to initial value. Intentionally empty deps.
+  /* eslint-disable @eslint-react/exhaustive-deps, react-hooks/exhaustive-deps */
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
     el.scrollTop = (numValue - min) * ITEM_HEIGHT;
   }, []); // only on mount
+  /* eslint-enable @eslint-react/exhaustive-deps, react-hooks/exhaustive-deps */
 
   // Scroll to value with animation when value changes externally
-  const prevValue = useRef(numValue);
+  const prevValueRef = useRef(numValue);
   useEffect(() => {
-    if (prevValue.current === numValue) return;
-    prevValue.current = numValue;
+    if (prevValueRef.current === numValue) return;
+    prevValueRef.current = numValue;
     const el = listRef.current;
-    if (!el || isDragging.current) return;
+    if (!el || isDraggingRef.current) return;
     el.scrollTo({ top: (numValue - min) * ITEM_HEIGHT, behavior: "smooth" });
   }, [numValue, min]);
 
@@ -58,63 +61,63 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 20 }: Sc
   }, [items, value, onChange]);
 
   const applyMomentum = useCallback((el: HTMLDivElement) => {
-    if (Math.abs(velocity.current) < 0.5) {
+    if (Math.abs(velocityRef.current) < 0.5) {
       snapToNearest(el);
       return;
     }
-    el.scrollTop += velocity.current;
-    velocity.current *= 0.92;
-    rafId.current = requestAnimationFrame(() => applyMomentum(el));
+    el.scrollTop += velocityRef.current;
+    velocityRef.current *= 0.92;
+    rafIdRef.current = requestAnimationFrame(() => applyMomentum(el)); // eslint-disable-line -- recursive ref, defined above
   }, [snapToNearest]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     const el = listRef.current;
     if (!el) return;
     e.preventDefault();
-    if (rafId.current) cancelAnimationFrame(rafId.current);
-    isDragging.current = true;
+    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+    isDraggingRef.current = true;
     setIsDraggingState(true);
-    startY.current = e.clientY;
-    startScrollTop.current = el.scrollTop;
-    lastY.current = e.clientY;
-    lastTime.current = Date.now();
-    velocity.current = 0;
+    startYRef.current = e.clientY;
+    startScrollTopRef.current = el.scrollTop;
+    lastYRef.current = e.clientY;
+    lastTimeRef.current = Date.now();
+    velocityRef.current = 0;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, []);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDragging.current) return;
+    if (!isDraggingRef.current) return;
     const el = listRef.current;
     if (!el) return;
     const now = Date.now();
-    const dt = now - lastTime.current;
-    const dy = lastY.current - e.clientY;
-    if (dt > 0) velocity.current = dy / dt * 16; // normalize to ~60fps
-    lastY.current = e.clientY;
-    lastTime.current = now;
-    el.scrollTop = startScrollTop.current + (startY.current - e.clientY);
+    const dt = now - lastTimeRef.current;
+    const dy = lastYRef.current - e.clientY;
+    if (dt > 0) velocityRef.current = dy / dt * 16; // normalize to ~60fps
+    lastYRef.current = e.clientY;
+    lastTimeRef.current = now;
+    el.scrollTop = startScrollTopRef.current + (startYRef.current - e.clientY);
   }, []);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    if (!isDragging.current) return;
-    isDragging.current = false;
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
     setIsDraggingState(false);
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     const el = listRef.current;
     if (!el) return;
-    if (Math.abs(velocity.current) > 1) {
-      rafId.current = requestAnimationFrame(() => applyMomentum(el));
+    if (Math.abs(velocityRef.current) > 1) {
+      rafIdRef.current = requestAnimationFrame(() => applyMomentum(el));
     } else {
       snapToNearest(el);
     }
   }, [applyMomentum, snapToNearest]);
 
   // Snap on scroll end (for mouse wheel / keyboard)
-  const scrollTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleScroll = useCallback(() => {
-    if (isDragging.current) return;
-    if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
-    scrollTimeout.current = setTimeout(() => {
+    if (isDraggingRef.current) return;
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
       const el = listRef.current;
       if (el) snapToNearest(el);
     }, 80);
@@ -134,8 +137,8 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 20 }: Sc
 
   useEffect(() => {
     return () => {
-      if (rafId.current) cancelAnimationFrame(rafId.current);
-      if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     };
   }, []);
 

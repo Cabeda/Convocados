@@ -152,13 +152,11 @@ export async function getGrowthTimeline(range: "30d" | "1y" | "all") {
   }
 
   // Build cumulative timeline
-  const sortedDays = [...dayMap.keys()].sort();
   let cumUsers = userOffset;
   let cumEvents = eventOffset;
   const timeline: { date: string; users: number; events: number }[] = [];
 
-  for (const day of sortedDays) {
-    const entry = dayMap.get(day)!;
+  for (const [day, entry] of dayMap) {
     cumUsers += entry.users;
     cumEvents += entry.events;
     timeline.push({ date: day, users: cumUsers, events: cumEvents });
