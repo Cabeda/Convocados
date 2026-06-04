@@ -373,7 +373,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ── Derived state ───────────────────────────────────────────────────────────
 
-  const gameDate = useMemo(() => event ? new Date(event.dateTime) : new Date(), [event?.dateTime]);
+  const gameDate = useMemo(() => event ? new Date(event.dateTime) : new Date(), [event]);
   const countdown = useCountdown(gameDate, t("gameTime"));
 
   const isAuthenticated = !!session?.user;

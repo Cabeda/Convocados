@@ -86,24 +86,34 @@ function UpdateBanner() {
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
-    const cleanups: Array<() => void> = [];
+    let cancelled = false;
+    const registrations: Array<{ target: EventTarget; type: string; listener: EventListener }> = [];
+
+    const add = (target: EventTarget, type: string, listener: EventListener) => {
+      target.addEventListener(type, listener);
+      registrations.push({ target, type, listener });
+    };
+
     navigator.serviceWorker.register("/sw.js").then((reg) => {
+      if (cancelled) return;
       if (reg.waiting) { setWaiting(reg.waiting); return; }
       const onUpdateFound = () => {
         const newSW = reg.installing;
         if (!newSW) return;
-        const onStateChange = () => {
+        add(newSW, "statechange", () => {
           if (newSW.state === "installed" && navigator.serviceWorker.controller) {
             setWaiting(newSW);
           }
-        };
-        newSW.addEventListener("statechange", onStateChange);
-        cleanups.push(() => newSW.removeEventListener("statechange", onStateChange));
+        });
       };
-      reg.addEventListener("updatefound", onUpdateFound);
-      cleanups.push(() => reg.removeEventListener("updatefound", onUpdateFound));
+      add(reg, "updatefound", onUpdateFound);
     });
-    return () => { for (const fn of cleanups) fn(); };
+    return () => {
+      cancelled = true;
+      for (const { target, type, listener } of registrations) {
+        target.removeEventListener(type, listener);
+      }
+    };
   }, []);
 
   if (!waiting) return null;
