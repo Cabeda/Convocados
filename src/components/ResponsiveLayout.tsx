@@ -90,6 +90,7 @@ function UpdateBanner() {
     const registrations: Array<{ target: EventTarget; type: string; listener: EventListener }> = [];
 
     const add = (target: EventTarget, type: string, listener: EventListener) => {
+      // eslint-disable-next-line @eslint-react/web-api/no-leaked-event-listener -- cleaned up via registrations array in the effect cleanup
       target.addEventListener(type, listener);
       registrations.push({ target, type, listener });
     };
