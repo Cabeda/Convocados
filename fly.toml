@@ -7,7 +7,9 @@ primary_region = "cdg"
   # Runs once per deploy, before the new app version takes traffic. If the
   # migration fails, the deploy fails and the previous version keeps serving.
   # This is the canonical place for schema changes — see docs/runbooks/.
-  release_command = "node_modules/.bin/prisma migrate deploy"
+  # The release-migrate.sh wrapper also auto-resolves failed migrations
+  # left from prior deploys so the app isn't stuck crash-looping on P3009.
+  release_command = "sh scripts/release-migrate.sh"
 
 [env]
   HOST = "0.0.0.0"
@@ -36,7 +38,7 @@ primary_region = "cdg"
     timeout = "5s"
 
 [[vm]]
-  memory = "256mb"
+  memory = "512mb"
   cpu_kind = "shared"
   cpus = 1
 

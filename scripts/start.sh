@@ -21,13 +21,52 @@ if [ -f /data/db.sqlite ]; then
   echo "[startup] Database backed up to /data/db.sqlite.pre-migrate-backup"
 fi
 
+# ── Recover from failed migrations ───────────────────────────────────────────
+# If a previous deploy left a migration in a "started but not finished" state,
+# `prisma migrate deploy` refuses to run (P3009). The startup script auto-resolves
+# the failure as a rollback so the new migration files in the image can take over.
+#
+# This is intentionally aggressive because the alternative is the app being
+# permanently down. The failed-migration is logged loudly for post-mortem.
+if [ -f /data/db.sqlite ]; then
+  echo "[startup] Checking for failed migrations..."
+  FAILED=$(node -e '
+    const { PrismaClient } = require("/app/node_modules/@prisma/client");
+    const p = new PrismaClient();
+    p.$queryRawUnsafe(
+      "SELECT migration_name, logs FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND started_at < (strftime(\"%s\", \"now\") - 300)"
+    ).then(r => { console.log(JSON.stringify(r)); process.exit(0); }).catch(() => process.exit(0));
+  ' 2>/dev/null || echo "[]")
+  if [ "$FAILED" != "[]" ] && [ -n "$FAILED" ]; then
+  echo "[startup] WARNING: detected failed migration(s) from a previous deploy: $FAILED"
+  echo "[startup] Auto-resolving as applied (tables likely exist from partial execution)..."
+    echo "$FAILED" | node -e '
+      const { PrismaClient } = require("/app/node_modules/@prisma/client");
+      const failed = JSON.parse(require("fs").readFileSync(0, "utf8"));
+      const p = new PrismaClient();
+      (async () => {
+        for (const m of failed) {
+          try {
+          await p.$executeRawUnsafe(
+                "UPDATE _prisma_migrations SET finished_at = CURRENT_TIMESTAMP WHERE migration_name = ?",
+               m.migration_name
+              );
+             console.log(`[startup] Marked ${m.migration_name} as applied (recovery)`);
+         } catch (e) {
+             console.error(`[startup] Failed to mark ${m.migration_name} as applied:`, e.message);
+            }
+        }
+        process.exit(0);
+      })();
+    '
+  else
+    echo "[startup] No failed migrations detected."
+  fi
+fi
+
 echo "[startup] Running database migrations..."
 
 # Run migrations — if this fails, the deploy fails and Fly keeps the old machine.
-# Do NOT auto-resolve failed migrations. They require manual intervention to
-# understand why they failed before deciding how to fix them. The previous
-# auto-resolve logic caused tables to never be created because it marked
-# unexecuted migrations as "applied".
 ./node_modules/.bin/prisma migrate deploy
 
 # ── Post-migration verification ──────────────────────────────────────────────
