@@ -315,7 +315,7 @@ export function PaymentSection({
                     </Typography>
                     <Stack spacing={1}>
                       {methodsDraft.map((m, idx) => (
-                        <Box key={`${m.type}-${m.label}-${idx}`} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
+                        <Box key={`${m.type}-${m.label}`} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                           <FormControl size="small" sx={{ minWidth: 130 }}>
                             <Select
                               value={m.type}
@@ -414,7 +414,7 @@ export function PaymentSection({
                       const label = t(LABEL_KEYS[m.type]);
 
                       return (
-                        <Paper key={`${p.playerName}-${p.status}-${idx}`} variant="outlined" sx={{
+                        <Paper key={`${m.type}-${m.label}-${deepLink}`} variant="outlined" sx={{
                           borderRadius: 2, px: 1.5, py: 0.75,
                           display: "flex", alignItems: "center", gap: 1,
                         }}>
@@ -517,7 +517,7 @@ export function PaymentSection({
                         </Typography>
                         <Stack spacing={1}>
                           {overrideMethodsDraft.map((m, idx) => (
-                            <Box key={`${m.type}-${m.label}-${idx}`} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
+                            <Box key={`${m.type}-${m.label}`} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                               <FormControl size="small" sx={{ minWidth: 130 }}>
                                 <Select
                                   value={m.type}
