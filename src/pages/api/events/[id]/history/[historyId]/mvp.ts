@@ -64,11 +64,12 @@ export const GET: APIRoute = async ({ params, request }) => {
     let isParticipant = false;
     let playerIds: string[] = [];
 
-    if (history.teamsSnapshot && session.user.name) {
+    const participantName = session.user?.name;
+    if (history.teamsSnapshot && participantName) {
       const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
       const allSnapshotPlayers = teams.flatMap((t) => t.players);
       const nameMatch = allSnapshotPlayers.find(
-        (p) => p.name.toLowerCase() === session.user!.name!.toLowerCase(),
+        (p) => p.name.toLowerCase() === participantName.toLowerCase(),
       );
       if (nameMatch) {
         isParticipant = true;

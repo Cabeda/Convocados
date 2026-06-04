@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Paper, Typography, Stack, Box, Chip } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
@@ -21,8 +21,8 @@ export interface GameSummary {
 export function GameCard({ game, dimPast = false }: { game: GameSummary; dimPast?: boolean }) {
   const locale = detectLocale();
   const t = useT();
-  const date = new Date(game.dateTime);
-  const isPast = dimPast && date < new Date();
+  const date = useMemo(() => new Date(game.dateTime), [game.dateTime]);
+  const isPast = useMemo(() => dimPast && date < new Date(), [dimPast, date]);
   const isArchived = !!game.archivedAt;
   return (
     <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, opacity: isPast || isArchived ? 0.7 : 1 }}>

@@ -1,6 +1,7 @@
+import type { TranslationKey } from "./i18n";
 export interface SportPreset {
   id: string;
-  labelKey: string; // i18n key
+  labelKey: TranslationKey; // i18n key
   defaultMaxPlayers: number;
   defaultDurationMinutes: number;
 }

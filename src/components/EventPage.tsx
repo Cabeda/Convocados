@@ -1,3 +1,4 @@
+/* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, user interactions mutate it, server data resyncs on refetch. Setting from async fetch callbacks is also fine. */
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button,
@@ -60,12 +61,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
   }, [ratingsResponse]);
 
   // ── Stable client ID ────────────────────────────────────────────────────────
-  const clientId = useRef<string>("");
+  const clientIdRef = useRef<string>("");
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
     let id = localStorage.getItem("client_id");
     if (!id) { id = crypto.randomUUID(); localStorage.setItem("client_id", id); }
-    clientId.current = id;
+    clientIdRef.current = id;
   }, []);
 
   // ── Team state ──────────────────────────────────────────────────────────────
@@ -75,14 +76,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ── Event data ──────────────────────────────────────────────────────────────
   const [event, setEvent] = useState<EventData | null>(null);
-  const [error, setFetchError] = useState<{ status?: number } | null>(null);
+  const [error, setError] = useState<{ status?: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lockedEvent, setLockedEvent] = useState<{ id: string; title: string } | null>(null);
 
   const fetchEvent = useCallback(async () => {
     try {
       const r = await fetch(`/api/events/${eventId}`);
-      if (r.status === 404) { setFetchError({ status: 404 }); return; }
+      if (r.status === 404) { setError({ status: 404 }); return; }
       const data = await r.json();
       if (data.locked) {
         setLockedEvent({ id: data.id, title: data.title });
@@ -90,10 +91,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
       } else {
         setEvent(data);
         setLockedEvent(null);
-        setFetchError(null);
+        setError(null);
       }
     } catch (_e) {
-      setFetchError({});
+      setError({});
     } finally {
       setIsLoading(false);
     }
@@ -151,12 +152,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
   useEffect(() => {
     if (event) document.title = `${event.title} — Convocados`;
     return () => { document.title = "Convocados"; };
-  }, [event?.title]);
+  }, [event]);
 
   // ── Sync localMatches from server ───────────────────────────────────────────
-  const isDragging = useRef(false);
+  const isDraggingRef = useRef(false);
   useEffect(() => {
-    if (!event || isDragging.current) return;
+    if (!event || isDraggingRef.current) return;
     if (event.teamResults.length > 0) {
       setLocalMatches(event.teamResults.map((tr) => ({
         team: tr.name,
@@ -188,7 +189,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
     const res = await fetch(`/api/events/${eventId}/players`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Client-Id": clientId.current },
+      headers: { "Content-Type": "application/json", "X-Client-Id": clientIdRef.current },
       body: JSON.stringify({ name: trimmed, linkToAccount }),
     });
     const json = await res.json();
@@ -210,7 +211,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
     const res = await fetch(`/api/events/${eventId}/players`, {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", "X-Client-Id": clientId.current },
+      headers: { "Content-Type": "application/json", "X-Client-Id": clientIdRef.current },
       body: JSON.stringify({ playerId }),
     });
     if (res.ok) {
@@ -285,13 +286,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const handleTeamChange = async (matches: Imatch[]) => {
     setLocalMatches(matches);
-    isDragging.current = true;
+    isDraggingRef.current = true;
     await fetch(`/api/events/${eventId}/teams`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ matches }),
     });
-    isDragging.current = false;
+    isDraggingRef.current = false;
     fetchEvent();
   };
 
@@ -372,7 +373,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ── Derived state ───────────────────────────────────────────────────────────
 
-  const gameDate = event ? new Date(event.dateTime) : new Date();
+  const gameDate = useMemo(() => event ? new Date(event.dateTime) : new Date(), [event]);
   const countdown = useCountdown(gameDate, t("gameTime"));
 
   const isAuthenticated = !!session?.user;

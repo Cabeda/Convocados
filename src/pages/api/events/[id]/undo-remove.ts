@@ -46,7 +46,7 @@ export const POST: APIRoute = async ({ params, request }) => {
         eventId,
         order,
         userId: userId ?? null,
-      } as any,
+      },
     }),
   ]);
 

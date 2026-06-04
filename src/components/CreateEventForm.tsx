@@ -1,3 +1,4 @@
+/* eslint-disable @eslint-react/purity -- React Compiler hint, not a bug. Date objects during render are common and necessary for time-based UI (countdown, past detection, etc.) */
 import React, { useState } from "react";
 import {
   Container, Paper, Typography, TextField, Button, Box, Stack, Select, MenuItem, FormControl, InputLabel,
@@ -199,7 +200,7 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
                       onChange={(e) => handleSportChange(e.target.value)}>
                       {SPORT_PRESETS.map((s) => (
                         <MenuItem key={s.id} value={s.id}>
-                          {t(s.labelKey as any)} ({s.defaultMaxPlayers})
+                          {t(s.labelKey)} ({s.defaultMaxPlayers})
                         </MenuItem>
                       ))}
                     </Select>

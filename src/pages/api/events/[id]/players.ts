@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
@@ -142,8 +143,9 @@ async function tryBalancedSwap(eventId: string, promotedName: string, promotedTe
   });
   if (teams.length !== 2) return;
 
-  const promotedTeam = teams.find(t => t.id === promotedTeamId)!;
-  const otherTeam = teams.find(t => t.id !== promotedTeamId)!;
+  const promotedTeam = teams.find(t => t.id === promotedTeamId);
+  const otherTeam = teams.find(t => t.id !== promotedTeamId);
+  if (!promotedTeam || !otherTeam) return;
 
   // Get ELO ratings
   const ratings = await prisma.playerRating.findMany({ where: { eventId } });
@@ -175,7 +177,8 @@ async function tryBalancedSwap(eventId: string, promotedName: string, promotedTe
   if (!bestSwap) return; // No swap improves balance
 
   // Perform the swap
-  const promotedMember = promotedTeam.members.find(m => m.name === promotedName)!;
+  const promotedMember = promotedTeam.members.find(m => m.name === promotedName);
+  if (!promotedMember) return;
   const swapTarget = bestSwap.otherMember;
 
   // Move promoted player to other team
@@ -257,8 +260,8 @@ export const POST: APIRoute = async ({ params, request }) => {
         userId: linkedUserId,
       },
     });
-  } catch (e: any) {
-    if (e?.code === "P2002") {
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return Response.json({ error: `"${trimmed}" is already in the list.` }, { status: 409 });
     }
     throw e;

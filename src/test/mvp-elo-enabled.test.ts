@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import type * as AuthHelpersServer from "~/lib/auth.helpers.server";
 import { prisma } from "~/lib/db.server";
 import { PUT } from "~/pages/api/events/[id]/mvp-elo-enabled";
 import { checkOwnership } from "~/lib/auth.helpers.server";
@@ -6,7 +7,7 @@ import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 vi.mock("~/lib/auth.helpers.server", async () => {
-  const actual = await vi.importActual<typeof import("~/lib/auth.helpers.server")>("~/lib/auth.helpers.server");
+  const actual = await vi.importActual<typeof AuthHelpersServer>("~/lib/auth.helpers.server");
   return {
     ...actual,
     checkOwnership: vi.fn(),

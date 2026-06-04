@@ -1,3 +1,4 @@
+/* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Paper, Typography, Stack, Box, Button, alpha, useTheme,
@@ -55,7 +56,9 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const onStatusChangeRef = useRef(onStatusChange);
-  onStatusChangeRef.current = onStatusChange;
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -86,7 +89,7 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
     if (status?.paymentsSnapshot && editablePayments.length === 0) {
       setEditablePayments(status.paymentsSnapshot);
     }
-  }, [status?.paymentsSnapshot]);
+  }, [status?.paymentsSnapshot, editablePayments.length]);
 
   // Don't show if game hasn't ended (unless there are unsettled past payments or pending MVP votes) or everything is complete
   if (!status || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || status.allComplete) return null;

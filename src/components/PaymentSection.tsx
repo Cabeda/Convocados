@@ -1,3 +1,4 @@
+/* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Accordion, AccordionSummary, AccordionDetails, Box, Typography, TextField,
@@ -235,7 +236,7 @@ export function PaymentSection({
     setOverrideMethodsDraft((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const statusColor = (status: string) => {
+  const statusColor = (status: string): "success" | "default" => {
     if (status === "paid") return "success";
     return "default";
   };
@@ -314,7 +315,7 @@ export function PaymentSection({
                     </Typography>
                     <Stack spacing={1}>
                       {methodsDraft.map((m, idx) => (
-                        <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
+                        <Box key={`${m.type}-${m.label}`} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                           <FormControl size="small" sx={{ minWidth: 130 }}>
                             <Select
                               value={m.type}
@@ -413,7 +414,7 @@ export function PaymentSection({
                       const label = t(LABEL_KEYS[m.type]);
 
                       return (
-                        <Paper key={idx} variant="outlined" sx={{
+                        <Paper key={`${m.type}-${m.label}-${deepLink}`} variant="outlined" sx={{
                           borderRadius: 2, px: 1.5, py: 0.75,
                           display: "flex", alignItems: "center", gap: 1,
                         }}>
@@ -516,7 +517,7 @@ export function PaymentSection({
                         </Typography>
                         <Stack spacing={1}>
                           {overrideMethodsDraft.map((m, idx) => (
-                            <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
+                            <Box key={`${m.type}-${m.label}`} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                               <FormControl size="small" sx={{ minWidth: 130 }}>
                                 <Select
                                   value={m.type}
@@ -579,7 +580,7 @@ export function PaymentSection({
                     <Chip
                       key={p.playerName}
                       label={`${p.playerName} — ${p.amount.toFixed(2)}`}
-                      color={statusColor(p.status) as any}
+                      color={statusColor(p.status)}
                       variant={p.status === "pending" ? "outlined" : "filled"}
                       size="small"
                       onClick={canEdit ? () => handleTogglePayment(p.playerName, p.status) : undefined}

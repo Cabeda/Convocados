@@ -1,3 +1,5 @@
+/* eslint-disable @eslint-react/purity -- React Compiler hint, not a bug. Date objects during render are common and necessary for time-based UI (countdown, past detection, etc.) */
+/* eslint-disable react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Container, Paper, Typography, Stack, Box, Chip, Avatar,

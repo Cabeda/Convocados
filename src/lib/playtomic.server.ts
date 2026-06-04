@@ -12,6 +12,32 @@ const PLAYTOMIC_API = "https://api.playtomic.io/v1";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+
+interface PlaytomicRawClub {
+  tenant_id?: string;
+  tenant_name?: string;
+  address?: {
+    street?: string;
+    city?: string;
+    postal_code?: string;
+    country?: string;
+    coordinate?: { lat: number; lon: number };
+  } | null;
+  images?: Array<{ image_url?: string }>;
+}
+
+interface PlaytomicRawCourt {
+  resource_id?: string;
+  resource_name?: string;
+  name?: string;
+  slots?: Array<{
+    start_time?: string;
+    duration?: number;
+    price?: number;
+    currency?: string;
+  }>;
+}
+
 export interface PlaytomicClub {
   tenant_id: string;
   tenant_name: string;
@@ -80,7 +106,7 @@ export async function searchClubs(params: SearchClubsParams): Promise<SearchClub
       return { clubs: [], error: "Unexpected response format" };
     }
 
-    const clubs: PlaytomicClub[] = data.map((t: any) => ({
+    const clubs: PlaytomicClub[] = data.map((t: PlaytomicRawClub) => ({
       tenant_id: t.tenant_id ?? "",
       tenant_name: t.tenant_name ?? "",
       address: t.address
@@ -94,7 +120,7 @@ export async function searchClubs(params: SearchClubsParams): Promise<SearchClub
       coordinate: t.address?.coordinate
         ? { lat: t.address.coordinate.lat, lon: t.address.coordinate.lon }
         : null,
-      images: Array.isArray(t.images) ? t.images.map((img: any) => img.image_url ?? "") : [],
+      images: Array.isArray(t.images) ? t.images.map((img: { image_url?: string }) => img.image_url ?? "") : [],
     }));
 
     return { clubs };
@@ -141,13 +167,13 @@ export async function getAvailability(params: GetAvailabilityParams): Promise<Ge
       return { courts: [], error: "Unexpected response format" };
     }
 
-    const courts: PlaytomicCourtAvailability[] = data.map((court: any) => ({
+    const courts: PlaytomicCourtAvailability[] = data.map((court: PlaytomicRawCourt) => ({
       resource_id: court.resource_id ?? "",
       resource_name: court.resource_name ?? court.name ?? "",
       slots: Array.isArray(court.slots)
         ? court.slots
-            .filter((s: any) => !duration || s.duration === duration)
-            .map((s: any) => ({
+            .filter((s: { start_time?: string; duration?: number; price?: number; currency?: string }) => !duration || s.duration === duration)
+            .map((s: { start_time?: string; duration?: number; price?: number; currency?: string }) => ({
               start_time: s.start_time ?? "",
               duration: s.duration ?? 0,
               price: s.price ?? 0,

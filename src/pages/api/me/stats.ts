@@ -88,7 +88,8 @@ export const GET: APIRoute = async ({ request }) => {
   for (const v of mvpVotes) {
     const gameId = v.gameHistoryId;
     if (!votesByGame.has(gameId)) votesByGame.set(gameId, new Map());
-    const gameTally = votesByGame.get(gameId)!;
+    const gameTally = votesByGame.get(gameId);
+    if (!gameTally) continue;
     const existing = gameTally.get(v.votedForPlayerId);
     if (existing) {
       existing.count++;
