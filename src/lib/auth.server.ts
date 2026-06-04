@@ -84,12 +84,14 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true,
   },
-  socialProviders: {
-    google: {
-      clientId: requiredEnv("GOOGLE_CLIENT_ID"),
-      clientSecret: requiredEnv("GOOGLE_CLIENT_SECRET"),
-    },
-  },
+  socialProviders: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+    ? {
+        google: {
+          clientId: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        },
+      }
+    : {},
   plugins: [
     magicLink({
       sendMagicLink: async ({ email, url }) => {
@@ -134,9 +136,3 @@ export const auth = betterAuth({
     ...(process.env.TRUSTED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
   ],
 });
-
-function requiredEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required env var: ${name}`);
-  return value;
-}
