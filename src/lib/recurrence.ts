@@ -60,7 +60,7 @@ export function nextOccurrence(base: Date, rule: RecurrenceRule, after: Date): D
       while (candidate <= after) candidate.setDate(candidate.getDate() + 7 * rule.interval);
       if (!best || candidate < best) best = candidate;
     }
-    return best!;
+    return best ?? new Date(base);
   }
 
   if (rule.freq === "yearly") {

@@ -143,8 +143,9 @@ async function tryBalancedSwap(eventId: string, promotedName: string, promotedTe
   });
   if (teams.length !== 2) return;
 
-  const promotedTeam = teams.find(t => t.id === promotedTeamId)!;
-  const otherTeam = teams.find(t => t.id !== promotedTeamId)!;
+  const promotedTeam = teams.find(t => t.id === promotedTeamId);
+  const otherTeam = teams.find(t => t.id !== promotedTeamId);
+  if (!promotedTeam || !otherTeam) return;
 
   // Get ELO ratings
   const ratings = await prisma.playerRating.findMany({ where: { eventId } });
@@ -176,7 +177,8 @@ async function tryBalancedSwap(eventId: string, promotedName: string, promotedTe
   if (!bestSwap) return; // No swap improves balance
 
   // Perform the swap
-  const promotedMember = promotedTeam.members.find(m => m.name === promotedName)!;
+  const promotedMember = promotedTeam.members.find(m => m.name === promotedName);
+  if (!promotedMember) return;
   const swapTarget = bestSwap.otherMember;
 
   // Move promoted player to other team

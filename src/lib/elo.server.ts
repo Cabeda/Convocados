@@ -51,8 +51,7 @@ export async function processGame(
   const updates: EloUpdate[] = [];
 
   // Update each player
-  for (const name of allNames) {
-    const r = ratingMap.get(name)!;
+  for (const [name, r] of ratingMap) {
     const isTeamOne = teamOnePlayers.includes(name);
     const playerOutcome = isTeamOne ? outcome : 1 - outcome;
     const opponentElo = isTeamOne ? teamTwoElo : teamOneElo;
@@ -133,7 +132,11 @@ export async function recalculateAllRatings(eventId: string): Promise<number> {
     where: { eventId, initialRating: { not: null } },
     select: { name: true, initialRating: true },
   });
-  const initialRatings = new Map(existingRatings.map((r) => [r.name, r.initialRating!]));
+  const initialRatings = new Map(
+    existingRatings
+      .filter((r): r is typeof r & { initialRating: number } => r.initialRating !== null)
+      .map((r) => [r.name, r.initialRating])
+  );
 
   // Reset all ratings and processed flags
   await prisma.$transaction([
@@ -165,8 +168,9 @@ export async function recalculateAllRatings(eventId: string): Promise<number> {
 
   let processed = 0;
   for (const game of games) {
-    const snapshot: TeamSnapshot[] = JSON.parse(game.teamsSnapshot!);
-    await processGame(eventId, game.id, snapshot, game.scoreOne!, game.scoreTwo!);
+    if (game.teamsSnapshot === null || game.scoreOne === null || game.scoreTwo === null) continue;
+    const snapshot: TeamSnapshot[] = JSON.parse(game.teamsSnapshot);
+    await processGame(eventId, game.id, snapshot, game.scoreOne, game.scoreTwo);
     processed++;
   }
 
