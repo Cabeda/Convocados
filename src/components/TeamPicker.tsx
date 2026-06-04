@@ -38,10 +38,10 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
   const [activeDropZone, setActiveDropZone] = useState<string | null>(null);
   const [editingTeam, setEditingTeam] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState("");
-  const teamRefs = useRef<Record<string, HTMLElement | null>>({});
+  const teamsRef = useRef<Record<string, HTMLElement | null>>({});
 
   const teamAtPoint = useCallback((x: number, y: number): string | null => {
-    for (const [teamName, el] of Object.entries(teamRefs.current)) {
+    for (const [teamName, el] of Object.entries(teamsRef.current)) {
       if (!el) continue;
       const rect = el.getBoundingClientRect();
       if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
@@ -144,7 +144,7 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
           return (
             <Paper
               key={team.team}
-              ref={(el: HTMLElement | null) => { teamRefs.current[team.team] = el; }}
+              ref={(el: HTMLElement | null) => { teamsRef.current[team.team] = el; }}
               elevation={isActive ? 6 : 1}
               sx={{
                 borderRadius: 3,

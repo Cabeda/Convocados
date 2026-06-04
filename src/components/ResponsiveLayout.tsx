@@ -139,7 +139,7 @@ function UpdateBanner() {
 function InstallBanner() {
   const { t } = useLocale();
   const theme = useTheme();
-  const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
+  const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [showIos, setShowIos] = useState(false);
 
@@ -156,7 +156,7 @@ function InstallBanner() {
     // Chrome/Edge/etc: listen for beforeinstallprompt
     const handler = (e: Event) => {
       e.preventDefault();
-      deferredPrompt.current = e as BeforeInstallPromptEvent;
+      deferredPromptRef.current = e as BeforeInstallPromptEvent;
       setShowBanner(true);
     };
 
@@ -165,7 +165,7 @@ function InstallBanner() {
     // Detect successful install
     const installHandler = () => {
       setShowBanner(false);
-      deferredPrompt.current = null;
+      deferredPromptRef.current = null;
     };
     window.addEventListener("appinstalled", installHandler);
 
@@ -176,13 +176,13 @@ function InstallBanner() {
   }, []);
 
   const handleInstall = async () => {
-    if (!deferredPrompt.current) return;
-    await deferredPrompt.current.prompt();
-    const { outcome } = await deferredPrompt.current.userChoice;
+    if (!deferredPromptRef.current) return;
+    await deferredPromptRef.current.prompt();
+    const { outcome } = await deferredPromptRef.current.userChoice;
     if (outcome === "accepted") {
       setShowBanner(false);
     }
-    deferredPrompt.current = null;
+    deferredPromptRef.current = null;
   };
 
   const handleDismiss = () => {

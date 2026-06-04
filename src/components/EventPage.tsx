@@ -60,12 +60,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
   }, [ratingsResponse]);
 
   // ── Stable client ID ────────────────────────────────────────────────────────
-  const clientId = useRef<string>("");
+  const clientIdRef = useRef<string>("");
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
     let id = localStorage.getItem("client_id");
     if (!id) { id = crypto.randomUUID(); localStorage.setItem("client_id", id); }
-    clientId.current = id;
+    clientIdRef.current = id;
   }, []);
 
   // ── Team state ──────────────────────────────────────────────────────────────
@@ -154,9 +154,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
   }, [event?.title]);
 
   // ── Sync localMatches from server ───────────────────────────────────────────
-  const isDragging = useRef(false);
+  const isDraggingRef = useRef(false);
   useEffect(() => {
-    if (!event || isDragging.current) return;
+    if (!event || isDraggingRef.current) return;
     if (event.teamResults.length > 0) {
       setLocalMatches(event.teamResults.map((tr) => ({
         team: tr.name,
@@ -188,7 +188,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
     const res = await fetch(`/api/events/${eventId}/players`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Client-Id": clientId.current },
+      headers: { "Content-Type": "application/json", "X-Client-Id": clientIdRef.current },
       body: JSON.stringify({ name: trimmed, linkToAccount }),
     });
     const json = await res.json();
@@ -210,7 +210,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
     const res = await fetch(`/api/events/${eventId}/players`, {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", "X-Client-Id": clientId.current },
+      headers: { "Content-Type": "application/json", "X-Client-Id": clientIdRef.current },
       body: JSON.stringify({ playerId }),
     });
     if (res.ok) {
@@ -285,13 +285,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const handleTeamChange = async (matches: Imatch[]) => {
     setLocalMatches(matches);
-    isDragging.current = true;
+    isDraggingRef.current = true;
     await fetch(`/api/events/${eventId}/teams`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ matches }),
     });
-    isDragging.current = false;
+    isDraggingRef.current = false;
     fetchEvent();
   };
 
