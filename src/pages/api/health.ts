@@ -33,9 +33,9 @@ export const GET: APIRoute = async () => {
     }
 
     return Response.json(response);
-  } catch (err: any) {
+  } catch (err) {
     return Response.json(
-      { status: "error", message: err?.message ?? "db unreachable" },
+      { status: "error", message: err instanceof Error ? err.message : "db unreachable" },
       { status: 503 },
     );
   }

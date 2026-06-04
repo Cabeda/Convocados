@@ -5,7 +5,7 @@ import L, { type LeafletMouseEvent } from "leaflet";
 import { Box } from "@mui/material";
 
 // Fix Leaflet's default icon paths broken by bundlers
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+delete (L.Icon.Default.prototype as L.Icon.Default & { _getIconUrl?: unknown })._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -92,7 +92,7 @@ export default function LeafletMap({ initialAddress, initialCoordinate, onPinDro
     }
 
     const nominatimUrl =
-      (import.meta as any).env?.PUBLIC_NOMINATIM_URL ?? "https://nominatim.openstreetmap.org";
+      import.meta.env.PUBLIC_NOMINATIM_URL ?? "https://nominatim.openstreetmap.org";
     fetch(`${nominatimUrl}/search?q=${encodeURIComponent(initialAddress)}&format=json&limit=1`, {
       headers: { "Accept-Language": "en", "User-Agent": "Convocados/1.0" },
     })

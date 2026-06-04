@@ -19,6 +19,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
+import type { TranslationKey } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
 
 interface LogEntry {
@@ -87,7 +88,7 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
   override_cleared: <PaymentIcon fontSize="small" />,
 };
 
-const ACTION_I18N: Record<string, string> = {
+const ACTION_I18N: Record<string, TranslationKey> = {
   player_added: "logPlayerAdded",
   player_removed: "logPlayerRemoved",
   player_claimed: "logPlayerClaimed",
@@ -135,7 +136,7 @@ function LogEntryRow({ entry, currentUserId }: { entry: LogEntry; currentUserId?
   let descriptionNode: React.ReactNode;
   if (i18nKey) {
     const ACTOR_PLACEHOLDER = "\x00ACTOR\x00";
-    const raw = t(i18nKey as any, { actor: ACTOR_PLACEHOLDER, player });
+    const raw = t(i18nKey, { actor: ACTOR_PLACEHOLDER, player });
     const parts = raw.split(ACTOR_PLACEHOLDER);
 
     const actorNode = actorIsCurrentUser ? (

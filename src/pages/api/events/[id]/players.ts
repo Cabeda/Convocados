@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
@@ -257,8 +258,8 @@ export const POST: APIRoute = async ({ params, request }) => {
         userId: linkedUserId,
       },
     });
-  } catch (e: any) {
-    if (e?.code === "P2002") {
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return Response.json({ error: `"${trimmed}" is already in the list.` }, { status: 409 });
     }
     throw e;

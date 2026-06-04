@@ -235,7 +235,7 @@ export function PaymentSection({
     setOverrideMethodsDraft((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const statusColor = (status: string) => {
+  const statusColor = (status: string): "success" | "default" => {
     if (status === "paid") return "success";
     return "default";
   };
@@ -579,7 +579,7 @@ export function PaymentSection({
                     <Chip
                       key={p.playerName}
                       label={`${p.playerName} — ${p.amount.toFixed(2)}`}
-                      color={statusColor(p.status) as any}
+                      color={statusColor(p.status)}
                       variant={p.status === "pending" ? "outlined" : "filled"}
                       size="small"
                       onClick={canEdit ? () => handleTogglePayment(p.playerName, p.status) : undefined}

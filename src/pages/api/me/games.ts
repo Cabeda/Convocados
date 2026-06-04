@@ -37,7 +37,8 @@ export const GET: APIRoute = async ({ request }) => {
     },
   } as const;
 
-  const mapGame = (e: any) => ({
+  type GameRow = Prisma.EventGetPayload<{ select: typeof gameSelect }>;
+  const mapGame = (e: GameRow) => ({
     ...e,
     dateTime: e.dateTime.toISOString(),
     archivedAt: e.archivedAt?.toISOString() ?? null,

@@ -86,7 +86,7 @@ export function PlayerAutocomplete({ value, onChange, onAdd, suggestions, disabl
         />
       )}
       renderOption={(props, option) => {
-        const { key, ...otherProps } = props as any;
+        const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
         if (option.type === "create") {
           return (
             <li key={key} {...otherProps} style={{ minHeight: 40, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>

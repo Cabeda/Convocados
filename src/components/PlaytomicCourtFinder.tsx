@@ -81,8 +81,8 @@ export default function PlaytomicCourtFinder({ open, onClose, sport, date, onSel
       } else {
         setClubs(data.clubs ?? []);
       }
-    } catch (err: any) {
-      if (err?.code === 1) {
+    } catch (err) {
+      if (err instanceof Error && 'code' in err && (err as { code: unknown }).code === 1) {
         setSearchError(t("playtomicLocationDenied"));
       } else {
         setSearchError(t("playtomicSearchError"));
