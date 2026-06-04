@@ -111,7 +111,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "No valid fields to update." }, { status: 400 });
   }
 
-  await updatePrioritySettings(event.id, updates as any);
+  await updatePrioritySettings(event.id, updates);
   const fresh = await getPrioritySettings(event.id);
   return Response.json({ ok: true, settings: fresh });
 };

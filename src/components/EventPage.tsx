@@ -75,14 +75,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ── Event data ──────────────────────────────────────────────────────────────
   const [event, setEvent] = useState<EventData | null>(null);
-  const [error, setFetchError] = useState<{ status?: number } | null>(null);
+  const [error, setError] = useState<{ status?: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lockedEvent, setLockedEvent] = useState<{ id: string; title: string } | null>(null);
 
   const fetchEvent = useCallback(async () => {
     try {
       const r = await fetch(`/api/events/${eventId}`);
-      if (r.status === 404) { setFetchError({ status: 404 }); return; }
+      if (r.status === 404) { setError({ status: 404 }); return; }
       const data = await r.json();
       if (data.locked) {
         setLockedEvent({ id: data.id, title: data.title });
@@ -90,10 +90,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
       } else {
         setEvent(data);
         setLockedEvent(null);
-        setFetchError(null);
+        setError(null);
       }
     } catch (_e) {
-      setFetchError({});
+      setError({});
     } finally {
       setIsLoading(false);
     }
