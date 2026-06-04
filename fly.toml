@@ -3,6 +3,12 @@ primary_region = "cdg"
 
 [build]
 
+[deploy]
+  # Runs once per deploy, before the new app version takes traffic. If the
+  # migration fails, the deploy fails and the previous version keeps serving.
+  # This is the canonical place for schema changes — see docs/runbooks/.
+  release_command = "node_modules/.bin/prisma migrate deploy"
+
 [env]
   HOST = "0.0.0.0"
   PORT = "3000"
