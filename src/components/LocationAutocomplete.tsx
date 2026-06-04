@@ -167,9 +167,9 @@ export default function LocationAutocomplete({
           }}
         >
           <List dense disablePadding>
-            {suggestions.map((s, i) => (
+            {suggestions.map((s) => (
               <ListItemButton
-                key={i}
+                key={s.label}
                 onMouseDown={() => handleSelect(s)}
                 sx={{ py: 1 }}
               >

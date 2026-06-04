@@ -87,7 +87,7 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
     if (status?.paymentsSnapshot && editablePayments.length === 0) {
       setEditablePayments(status.paymentsSnapshot);
     }
-  }, [status?.paymentsSnapshot]);
+  }, [status?.paymentsSnapshot, editablePayments.length]);
 
   // Don't show if game hasn't ended (unless there are unsettled past payments or pending MVP votes) or everything is complete
   if (!status || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || status.allComplete) return null;

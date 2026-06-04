@@ -152,7 +152,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   useEffect(() => {
     if (event) document.title = `${event.title} — Convocados`;
     return () => { document.title = "Convocados"; };
-  }, [event?.title]);
+  }, [event]);
 
   // ── Sync localMatches from server ───────────────────────────────────────────
   const isDraggingRef = useRef(false);
@@ -373,7 +373,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ── Derived state ───────────────────────────────────────────────────────────
 
-  const gameDate = event ? new Date(event.dateTime) : new Date();
+  const gameDate = useMemo(() => event ? new Date(event.dateTime) : new Date(), [event?.dateTime]);
   const countdown = useCountdown(gameDate, t("gameTime"));
 
   const isAuthenticated = !!session?.user;
