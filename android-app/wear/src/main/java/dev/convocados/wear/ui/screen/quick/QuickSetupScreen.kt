@@ -41,42 +41,46 @@ fun QuickSetupScreen(
 
             // Game duration picker
             item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    CompactButton(onClick = { duration = maxOf(10, duration - 10) }) {
-                        Text("−")
-                    }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = stringResource(R.string.duration_minutes, duration),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(horizontal = 8.dp),
+                        text = stringResource(R.string.duration_label),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    CompactButton(onClick = { duration = minOf(120, duration + 10) }) {
-                        Text("+")
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        CompactButton(onClick = { duration = maxOf(10, duration - 10) }) { Text("−") }
+                        Text(
+                            text = stringResource(R.string.minutes_value, duration),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                        CompactButton(onClick = { duration = minOf(120, duration + 10) }) { Text("+") }
                     }
                 }
             }
 
             // Alarm interval picker
             item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    CompactButton(onClick = { alarmInterval = maxOf(5, alarmInterval - 5) }) {
-                        Text("−")
-                    }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = stringResource(R.string.alarm_every_minutes, alarmInterval),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(horizontal = 8.dp),
+                        text = stringResource(R.string.alarm_label),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    CompactButton(onClick = { alarmInterval = minOf(30, alarmInterval + 5) }) {
-                        Text("+")
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        CompactButton(onClick = { alarmInterval = maxOf(5, alarmInterval - 5) }) { Text("−") }
+                        Text(
+                            text = stringResource(R.string.minutes_value, alarmInterval),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                        CompactButton(onClick = { alarmInterval = minOf(30, alarmInterval + 5) }) { Text("+") }
                     }
                 }
             }
