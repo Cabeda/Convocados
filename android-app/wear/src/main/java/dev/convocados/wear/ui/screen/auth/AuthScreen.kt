@@ -211,7 +211,7 @@ fun AuthScreen(
 
             item {
                 Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = onQuickGame) {
+                CompactButton(onClick = onQuickGame) {
                     Text(
                         text = stringResource(R.string.quick_game),
                         style = MaterialTheme.typography.labelSmall,
