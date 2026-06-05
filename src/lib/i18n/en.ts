@@ -663,6 +663,11 @@ const en = {
   purgePlayerConfirm: "Permanently remove \"{name}\" from this event? This will delete their player record, ratings, and remove them from all game history. ELO will be recalculated. This cannot be undone.",
   purgePlayerSuccess: "Player removed.",
   purgePlayerError: "Could not remove player.",
+  mergePlayers: "Merge players",
+  mergePlayerDesc: "Merge two player identities. The source player's game history will be absorbed into the target. Use when the same person played under two different names.",
+  mergeSource: "Source (will be removed)",
+  mergeTarget: "Target (will keep)",
+  mergePlayerSuccess: "Players merged successfully.",
 
   // Event archive (#161)
   archiveEvent: "Archive event",

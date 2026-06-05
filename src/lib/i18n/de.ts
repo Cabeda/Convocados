@@ -799,6 +799,11 @@ const de: TranslationKeys = {
   purgePlayerConfirm: "\"{name}\" dauerhaft aus diesem Ereignis entfernen? Dadurch werden der Spielerdatensatz, die Bewertungen und alle Spielhistorieneinträge gelöscht. ELO wird neu berechnet. Diese Aktion kann nicht rückgängig gemacht werden.",
   purgePlayerSuccess: "Spieler entfernt.",
   purgePlayerError: "Spieler konnte nicht entfernt werden.",
+  mergePlayers: "Spieler zusammenführen",
+  mergePlayerDesc: "Zwei Spieleridentitäten zusammenführen. Die Spielhistorie des Quellspielers wird in den Zielspieler übernommen. Verwende dies, wenn dieselbe Person unter zwei verschiedenen Namen gespielt hat.",
+  mergeSource: "Quelle (wird entfernt)",
+  mergeTarget: "Ziel (wird beibehalten)",
+  mergePlayerSuccess: "Spieler erfolgreich zusammengeführt.",
 
   // Admin role notifications
   adminRoleAddedSubject: "Du bist jetzt Admin von {title}",
