@@ -34,6 +34,7 @@ fun GamesScreen(
     viewModel: GamesViewModel,
     onGameSelected: (String) -> Unit,
     onSignOut: () -> Unit,
+    onQuickGame: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
     val columnState = rememberColumnState(
@@ -84,13 +85,17 @@ fun GamesScreen(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (state.isOffline) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            CompactButton(
-                                onClick = { viewModel.refresh() },
-                            ) {
-                                Text(stringResource(R.string.retry))
-                            }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        CompactButton(onClick = { viewModel.refresh() }) {
+                            Text(stringResource(R.string.refresh))
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        CompactButton(onClick = onQuickGame) {
+                            Text(stringResource(R.string.quick_game))
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        CompactButton(onClick = onSignOut) {
+                            Text(stringResource(R.string.sign_out))
                         }
                     }
                 }
@@ -106,6 +111,15 @@ fun GamesScreen(
                                 text = stringResource(R.string.games_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+
+                    item {
+                        CompactButton(onClick = { viewModel.refresh() }) {
+                            Text(
+                                text = stringResource(R.string.refresh),
+                                style = MaterialTheme.typography.labelSmall,
                             )
                         }
                     }
@@ -188,6 +202,16 @@ fun GamesScreen(
 
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
+                        CompactButton(onClick = onQuickGame) {
+                            Text(
+                                text = stringResource(R.string.quick_game),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(4.dp))
                         CompactButton(
                             onClick = onSignOut,
                         ) {
