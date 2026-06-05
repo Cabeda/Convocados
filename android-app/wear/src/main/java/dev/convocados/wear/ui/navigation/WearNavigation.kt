@@ -8,6 +8,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
+import dev.convocados.wear.data.auth.WearGoogleSignIn
 import dev.convocados.wear.data.auth.WearTokenStore
 import dev.convocados.wear.ui.screen.auth.AuthScreen
 import dev.convocados.wear.ui.screen.games.GamesScreen
@@ -25,7 +26,7 @@ import com.google.android.horologist.compose.layout.ScreenScaffold
 import com.google.android.horologist.compose.layout.rememberColumnState
 
 @Composable
-fun WearNavigation(tokenStore: WearTokenStore) {
+fun WearNavigation(tokenStore: WearTokenStore, googleSignIn: WearGoogleSignIn) {
     val navController = rememberSwipeDismissableNavController()
     val isAuthenticated by tokenStore.isAuthenticated.collectAsState()
 
@@ -57,6 +58,7 @@ fun WearNavigation(tokenStore: WearTokenStore) {
                         navController.navigate(WearRoutes.score(eventId))
                     },
                     onSignOut = {
+                        googleSignIn.signOut()
                         tokenStore.clearTokens()
                         navController.navigate(WearRoutes.AUTH) {
                             popUpTo(WearRoutes.GAMES) { inclusive = true }

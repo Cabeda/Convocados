@@ -51,6 +51,11 @@ class WearGoogleSignIn @Inject constructor(
     /** Intent that launches the on-device account picker (interactive). */
     fun getSignInIntent(): Intent = getClient().signInIntent
 
+    /** Sign out from Google so silent sign-in won't auto-re-authenticate. */
+    fun signOut() {
+        getClient().signOut()
+    }
+
     /** Silently sign in using the existing on-device Google account (no UI). */
     suspend fun trySilentSignIn(): Boolean = try {
         val account = getClient().silentSignIn().await()
