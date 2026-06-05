@@ -1,5 +1,6 @@
 package dev.convocados.wear.ui.screen.quick
 
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
+@Stable
 data class QuickScoreUiState(
     val scoreOne: Int = 0,
     val scoreTwo: Int = 0,

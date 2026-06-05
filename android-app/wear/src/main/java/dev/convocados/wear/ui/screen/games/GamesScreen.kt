@@ -24,9 +24,6 @@ import dev.convocados.wear.ui.theme.Success
 import dev.convocados.wear.ui.theme.TextMuted
 import dev.convocados.wear.ui.theme.Warning
 import dev.convocados.wear.util.formatRelativeTime
-import dev.convocados.wear.util.parseInstant
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 @OptIn(ExperimentalHorologistApi::class)
 @Composable
@@ -40,13 +37,6 @@ fun GamesScreen(
     val columnState = rememberColumnState(
         ScalingLazyColumnDefaults.responsive()
     )
-
-    val sortedGames = remember(state.games, state.suggestedGameId) {
-        state.games.sortedWith(
-            compareBy<WearGameEntity> { it.id != state.suggestedGameId }
-                .thenBy { parseInstant(it.dateTime)?.let { t -> kotlin.math.abs(ChronoUnit.MINUTES.between(Instant.now(), t)) } ?: Long.MAX_VALUE }
-        )
-    }
 
     val visiblePastGames = remember(state.pastGames, state.visiblePastCount) {
         state.pastGames.take(state.visiblePastCount)
@@ -148,7 +138,7 @@ fun GamesScreen(
                         }
                     }
 
-                    items(sortedGames, key = { it.id }) { game ->
+                    items(state.games, key = { it.id }) { game ->
                         val canScore = game.id in state.canScoreGameIds
                         GameChip(
                             game = game,
