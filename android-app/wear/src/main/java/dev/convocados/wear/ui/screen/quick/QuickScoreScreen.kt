@@ -32,8 +32,16 @@ fun QuickScoreScreen(viewModel: QuickScoreViewModel) {
         }
     }
 
-    val totalDurationMs = state.durationMinutes.toLong() * state.periods * 60_000L
+    val totalDurationMs = state.durationMinutes.toLong() * 60_000L
     val elapsedMs = now.toEpochMilli() - state.kickoffEpochMs
+
+    // Compute next alarm time
+    val nextAlarmSec = if (state.alarmIntervalMinutes > 0 && elapsedMs >= 0) {
+        val intervalMs = state.alarmIntervalMinutes * 60_000L
+        val nextAlarmMs = ((elapsedMs / intervalMs) + 1) * intervalMs
+        if (nextAlarmMs <= totalDurationMs) ((nextAlarmMs - elapsedMs) / 1000).takeIf { it > 0 }
+        else null
+    } else null
 
     ScreenScaffold(scrollState = columnState) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -77,13 +85,10 @@ fun QuickScoreScreen(viewModel: QuickScoreViewModel) {
                 )
             }
 
-            // Period indicator at top
-            val currentPeriod = minOf(
-                state.periods,
-                ((elapsedMs.toFloat() / (state.durationMinutes * 60_000L)).toInt()) + 1
-            )
+            // Next alarm countdown at top
             Text(
-                text = "P$currentPeriod/${state.periods}",
+                text = if (nextAlarmSec != null) "⏰ %d:%02d".format(nextAlarmSec / 60, nextAlarmSec % 60)
+                else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier
