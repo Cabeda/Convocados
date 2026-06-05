@@ -33,12 +33,15 @@ android {
 
     signingConfigs {
         create("release") {
-            val ksFile = rootProject.file(keystoreProperties.getProperty("storeFile", ""))
-            if (ksFile.exists()) {
-                storeFile = ksFile
-                storePassword = keystoreProperties.getProperty("storePassword", "")
-                keyAlias = keystoreProperties.getProperty("keyAlias", "")
-                keyPassword = keystoreProperties.getProperty("keyPassword", "")
+            val storePath = keystoreProperties.getProperty("storeFile", "")
+            if (storePath.isNotBlank()) {
+                val ksFile = rootProject.file(storePath)
+                if (ksFile.exists()) {
+                    storeFile = ksFile
+                    storePassword = keystoreProperties.getProperty("storePassword", "")
+                    keyAlias = keystoreProperties.getProperty("keyAlias", "")
+                    keyPassword = keystoreProperties.getProperty("keyPassword", "")
+                }
             }
         }
     }
@@ -92,6 +95,9 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    composeCompiler {
+        stabilityConfigurationFile = rootProject.layout.projectDirectory.file("wear/stability-config.txt")
     }
 }
 

@@ -7,6 +7,8 @@ object WearRoutes {
     const val SCORE = "score/{eventId}"
     const val TEAMS = "teams/{eventId}"
     const val SETTINGS = "settings/{eventId}"
+    const val QUICK_SETUP = "quick_setup"
+    const val QUICK_SCORE = "quick_score"
 
     fun score(eventId: String) = "score/$eventId"
     fun teams(eventId: String) = "teams/$eventId"
