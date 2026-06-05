@@ -151,10 +151,10 @@ The fix is **forward-looking** — it auto-links on the *next* add. Existing orp
 
 To recover an orphan, the affected user has two options:
 
-1. **Claim** from the **Rankings** page. The `POST /api/events/[id]/claim-player` flow renames the anonymous player and links the `userId`. (The full merge-player flow from #297 is available for the more complex case where both anonymous and logged-in records exist.)
+1. **Claim** from the **Rankings** page. The `POST /api/events/[id]/claim-player` flow renames the anonymous player and links the `userId`.
 2. **Owner removes the orphan** and the next re-add auto-links correctly (assuming the owner types the right name).
 
-For the reported case: `Player.id = cmpvp5d9i00g1pijpzqw88emf` on `Ninjas da Areosa` (`Event.id = cmmkfrx8b0000o2ixrix1yp2m`). After the next lazy reset on `2026-06-08T19:00:00Z`, any add of "Gonçalo" by the owner will auto-link to `User.id = bJzXFpoS7oxI3kpkKsgIR6tdvVfs4b2t` automatically.
+For the more complex case where both anonymous and logged-in records exist (same human, two `PlayerRating` entries), use the admin **merge-player** flow (`POST /api/events/[id]/merge-player`) documented in #297.
 
 ## Related
 

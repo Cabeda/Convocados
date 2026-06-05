@@ -799,6 +799,11 @@ const fr: TranslationKeys = {
   purgePlayerConfirm: "Retirer définitivement \"{name}\" de cet événement ? Cela supprimera son dossier de joueur, ses classements et le retirera de tout l'historique des matchs. L'ELO sera recalculé. Cette action est irréversible.",
   purgePlayerSuccess: "Joueur retiré.",
   purgePlayerError: "Impossible de retirer le joueur.",
+  mergePlayers: "Fusionner les joueurs",
+  mergePlayerDesc: "Fusionner deux identités de joueur. L'historique du joueur source sera absorbé par la cible. Utilisez ceci quand la même personne a joué sous deux noms différents.",
+  mergeSource: "Source (sera supprimé)",
+  mergeTarget: "Cible (sera conservé)",
+  mergePlayerSuccess: "Joueurs fusionnés avec succès.",
 
   // Admin role notifications
   adminRoleAddedSubject: "Vous êtes maintenant admin de {title}",
