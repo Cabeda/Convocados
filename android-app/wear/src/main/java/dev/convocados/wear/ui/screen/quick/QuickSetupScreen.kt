@@ -18,10 +18,10 @@ import dev.convocados.wear.R
 @OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun QuickSetupScreen(
-    onStart: (durationMinutes: Int, periods: Int) -> Unit,
+    onStart: (durationMinutes: Int, alarmIntervalMinutes: Int) -> Unit,
 ) {
-    var duration by remember { mutableIntStateOf(10) }
-    var periods by remember { mutableIntStateOf(2) }
+    var duration by remember { mutableIntStateOf(60) }
+    var alarmInterval by remember { mutableIntStateOf(10) }
     val columnState = rememberColumnState(ScalingLazyColumnDefaults.responsive())
 
     ScreenScaffold(scrollState = columnState) {
@@ -39,43 +39,43 @@ fun QuickSetupScreen(
                 }
             }
 
-            // Duration picker
+            // Game duration picker
             item {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    CompactButton(onClick = { duration = maxOf(5, duration - 5) }) {
+                    CompactButton(onClick = { duration = maxOf(10, duration - 10) }) {
                         Text("−")
                     }
                     Text(
-                        text = stringResource(R.string.interval_minutes, duration),
+                        text = stringResource(R.string.duration_minutes, duration),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(horizontal = 8.dp),
                     )
-                    CompactButton(onClick = { duration = minOf(45, duration + 5) }) {
+                    CompactButton(onClick = { duration = minOf(120, duration + 10) }) {
                         Text("+")
                     }
                 }
             }
 
-            // Periods picker
+            // Alarm interval picker
             item {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    CompactButton(onClick = { periods = maxOf(1, periods - 1) }) {
+                    CompactButton(onClick = { alarmInterval = maxOf(5, alarmInterval - 5) }) {
                         Text("−")
                     }
                     Text(
-                        text = stringResource(R.string.periods_count, periods),
+                        text = stringResource(R.string.alarm_every_minutes, alarmInterval),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(horizontal = 8.dp),
                     )
-                    CompactButton(onClick = { periods = minOf(4, periods + 1) }) {
+                    CompactButton(onClick = { alarmInterval = minOf(30, alarmInterval + 5) }) {
                         Text("+")
                     }
                 }
@@ -85,7 +85,7 @@ fun QuickSetupScreen(
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = { onStart(duration, periods) },
+                    onClick = { onStart(duration, alarmInterval) },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(stringResource(R.string.start_quick_game))
