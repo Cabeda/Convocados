@@ -93,6 +93,9 @@ android {
         compose = true
         buildConfig = true
     }
+    composeCompiler {
+        stabilityConfigurationFile = rootProject.layout.projectDirectory.file("wear/stability-config.txt")
+    }
 }
 
 tasks.register("validateGoogleClientId") {

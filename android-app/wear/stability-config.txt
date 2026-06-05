@@ -1,0 +1,5 @@
+// Treat all data classes in our packages as stable
+dev.convocados.wear.ui.screen.games.GamesUiState
+dev.convocados.wear.ui.screen.quick.QuickScoreUiState
+dev.convocados.wear.ui.screen.score.ScoreUiState
+dev.convocados.wear.data.local.entity.*
