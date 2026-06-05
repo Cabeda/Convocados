@@ -5,12 +5,14 @@ import {
   CircularProgress, alpha, useTheme, IconButton, Tooltip, Snackbar, Alert,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField,
+  Autocomplete,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
+import MergeIcon from "@mui/icons-material/MergeType";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -77,6 +79,12 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   // Claim player state
   const [claimTarget, setClaimTarget] = useState<{ id: string; name: string } | null>(null);
   const [claiming, setClaiming] = useState(false);
+
+  // Merge player state
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeSource, setMergeSource] = useState<string | null>(null);
+  const [mergeTarget, setMergeTarget] = useState<string | null>(null);
+  const [merging, setMerging] = useState(false);
 
   const load = useCallback(async () => {
     const [evRes, ratRes] = await Promise.all([
@@ -218,6 +226,31 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const userHasLinkedPlayer = isAuthenticated && players.some((p) => p.userId === session?.user?.id);
   const canClaimPlayer = isAuthenticated && !userHasLinkedPlayer;
 
+  const handleMergePlayer = async () => {
+    if (!mergeSource || !mergeTarget) return;
+    setMerging(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/merge-player`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceName: mergeSource, targetName: mergeTarget }),
+      });
+      if (res.ok) {
+        setSnack({ msg: t("mergePlayerSuccess"), severity: "success" });
+        setMergeOpen(false);
+        setMergeSource(null);
+        setMergeTarget(null);
+        load();
+      } else {
+        const data = await res.json();
+        setSnack({ msg: data.error || "Error", severity: "error" });
+      }
+    } catch {
+      setSnack({ msg: "Error", severity: "error" });
+    }
+    setMerging(false);
+  };
+
   const playerByName = new Map(players.map((p) => [p.name, p]));
 
   const tableRows: TableRowData[] = (() => {
@@ -309,6 +342,16 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                   disabled={recalculating}
                 >
                   {recalculating ? t("recalculating") : t("recalculateRatings")}
+                </Button>
+              )}
+              {canManage && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<MergeIcon />}
+                  onClick={() => setMergeOpen(true)}
+                >
+                  {t("mergePlayers")}
                 </Button>
               )}
             </Box>
@@ -514,6 +557,40 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
               disabled={saving || !!editError || editValue === ""}
             >
               {saving ? t("loading") : t("saveProfile")}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Merge player dialog */}
+        <Dialog open={mergeOpen} onClose={() => !merging && setMergeOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle>{t("mergePlayers")}</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {t("mergePlayerDesc")}
+            </Typography>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Autocomplete
+                options={ratings.map((r) => r.name).filter((n) => n !== mergeTarget)}
+                value={mergeSource}
+                onChange={(_, v) => setMergeSource(v)}
+                renderInput={(params) => <TextField {...params} label={t("mergeSource")} size="small" />}
+              />
+              <Autocomplete
+                options={ratings.map((r) => r.name).filter((n) => n !== mergeSource)}
+                value={mergeTarget}
+                onChange={(_, v) => setMergeTarget(v)}
+                renderInput={(params) => <TextField {...params} label={t("mergeTarget")} size="small" />}
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setMergeOpen(false)} disabled={merging}>{t("cancel")}</Button>
+            <Button
+              variant="contained"
+              onClick={handleMergePlayer}
+              disabled={merging || !mergeSource || !mergeTarget}
+            >
+              {merging ? t("loading") : t("mergePlayers")}
             </Button>
           </DialogActions>
         </Dialog>

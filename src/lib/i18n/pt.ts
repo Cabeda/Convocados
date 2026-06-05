@@ -845,6 +845,11 @@ const pt: TranslationKeys = {
   purgePlayerConfirm: "Remover permanentemente \"{name}\" deste evento? Isto irá eliminar o registo do jogador, as classificações e removê-lo de todo o histórico de jogos. O ELO será recalculado. Esta ação não pode ser desfeita.",
   purgePlayerSuccess: "Jogador removido.",
   purgePlayerError: "Não foi possível remover o jogador.",
+  mergePlayers: "Unir jogadores",
+  mergePlayerDesc: "Unir duas identidades de jogador. O histórico do jogador de origem será absorvido pelo destino. Usa quando a mesma pessoa jogou com dois nomes diferentes.",
+  mergeSource: "Origem (será removido)",
+  mergeTarget: "Destino (será mantido)",
+  mergePlayerSuccess: "Jogadores unidos com sucesso.",
 
   // Admin role notifications
   adminRoleAddedSubject: "És agora admin de {title}",

@@ -34,6 +34,7 @@ export type EventAction =
   | "rating_manual_disabled"
   | "player_archived"
   | "player_unarchived"
+  | "player_merged"
   | "override_set"
   | "override_cleared";
 
