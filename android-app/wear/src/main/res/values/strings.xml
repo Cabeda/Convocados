@@ -40,6 +40,14 @@
     <string name="team_default_1">Team 1</string>
     <string name="team_default_2">Team 2</string>
 
+    <!-- Quick Game -->
+    <string name="quick_game">Quick Game</string>
+    <string name="quick_setup_title">Setup</string>
+    <string name="interval_minutes">Interval: %1$d min</string>
+    <string name="periods_count">Periods: %1$d</string>
+    <string name="start_quick_game">Start</string>
+    <string name="refresh">Refresh</string>
+
     <!-- Teams screen -->
     <string name="teams_title">Teams</string>
     <string name="teams_chip">Teams ↑</string>
