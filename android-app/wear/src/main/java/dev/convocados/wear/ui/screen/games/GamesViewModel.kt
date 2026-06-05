@@ -1,5 +1,6 @@
 package dev.convocados.wear.ui.screen.games
 
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
@@ -20,6 +21,7 @@ import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import kotlin.math.abs
 
+@Stable
 data class GamesUiState(
     val games: List<WearGameEntity> = emptyList(),
     val pastGames: List<WearGameEntity> = emptyList(),
@@ -66,8 +68,13 @@ class GamesViewModel @Inject constructor(
                 val upcoming = games.filter { !isStalePastGame(it.dateTime, it.isRecurring) }
                 val suggested = findBestGame(upcoming)
                 val scorable = upcoming.filter { canScoreGame(it.dateTime) }.map { it.id }.toSet()
+                // Pre-sort: suggested first, then by proximity to now
+                val sorted = upcoming.sortedWith(
+                    compareBy<WearGameEntity> { it.id != suggested?.id }
+                        .thenBy { parseInstant(it.dateTime)?.let { t -> abs(ChronoUnit.MINUTES.between(Instant.now(), t)) } ?: Long.MAX_VALUE }
+                )
                 _uiState.value = _uiState.value.copy(
-                    games = upcoming,
+                    games = sorted,
                     pastGames = archived,
                     suggestedGameId = suggested?.id,
                     isLoading = false,
