@@ -114,13 +114,25 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  check-android:
+    name: Check Android Changes
+    runs-on: ubuntu-latest
+    outputs:
+      android: ${{ steps.filter.outputs.android }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            android:
+              - 'android-app/**'
+
   android:
     name: Android Build
     runs-on: ubuntu-latest
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' &&
-       contains(join(github.event.pull_request.*.filename, ' '), 'android-app/'))
+    needs: check-android
+    if: needs.check-android.outputs.android == 'true' || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v6
@@ -151,10 +163,8 @@ jobs:
   android-wear:
     name: Wear OS Build
     runs-on: ubuntu-latest
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' &&
-       contains(join(github.event.pull_request.*.filename, ' '), 'android-app/'))
+    needs: check-android
+    if: needs.check-android.outputs.android == 'true' || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v6

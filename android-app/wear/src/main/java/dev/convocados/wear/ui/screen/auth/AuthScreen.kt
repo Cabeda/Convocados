@@ -28,6 +28,7 @@ import dev.convocados.wear.ui.theme.TextMuted
 @Composable
 fun AuthScreen(
     onAuthenticated: () -> Unit,
+    onQuickGame: () -> Unit = {},
     viewModel: AuthViewModel = hiltViewModel(),
 ) {
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
@@ -204,6 +205,16 @@ fun AuthScreen(
                         color = MaterialTheme.colorScheme.error,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
+                    )
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                CompactButton(onClick = onQuickGame) {
+                    Text(
+                        text = stringResource(R.string.quick_game),
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
             }

@@ -24,9 +24,6 @@ import dev.convocados.wear.ui.theme.Success
 import dev.convocados.wear.ui.theme.TextMuted
 import dev.convocados.wear.ui.theme.Warning
 import dev.convocados.wear.util.formatRelativeTime
-import dev.convocados.wear.util.parseInstant
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 @OptIn(ExperimentalHorologistApi::class)
 @Composable
@@ -34,18 +31,12 @@ fun GamesScreen(
     viewModel: GamesViewModel,
     onGameSelected: (String) -> Unit,
     onSignOut: () -> Unit,
+    onQuickGame: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
     val columnState = rememberColumnState(
         ScalingLazyColumnDefaults.responsive()
     )
-
-    val sortedGames = remember(state.games, state.suggestedGameId) {
-        state.games.sortedWith(
-            compareBy<WearGameEntity> { it.id != state.suggestedGameId }
-                .thenBy { parseInstant(it.dateTime)?.let { t -> kotlin.math.abs(ChronoUnit.MINUTES.between(Instant.now(), t)) } ?: Long.MAX_VALUE }
-        )
-    }
 
     val visiblePastGames = remember(state.pastGames, state.visiblePastCount) {
         state.pastGames.take(state.visiblePastCount)
@@ -84,13 +75,17 @@ fun GamesScreen(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (state.isOffline) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            CompactButton(
-                                onClick = { viewModel.refresh() },
-                            ) {
-                                Text(stringResource(R.string.retry))
-                            }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        CompactButton(onClick = { viewModel.refresh() }) {
+                            Text(stringResource(R.string.refresh))
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        CompactButton(onClick = onQuickGame) {
+                            Text(stringResource(R.string.quick_game))
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        CompactButton(onClick = onSignOut) {
+                            Text(stringResource(R.string.sign_out))
                         }
                     }
                 }
@@ -106,6 +101,15 @@ fun GamesScreen(
                                 text = stringResource(R.string.games_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+
+                    item {
+                        CompactButton(onClick = { viewModel.refresh() }) {
+                            Text(
+                                text = stringResource(R.string.refresh),
+                                style = MaterialTheme.typography.labelSmall,
                             )
                         }
                     }
@@ -134,7 +138,7 @@ fun GamesScreen(
                         }
                     }
 
-                    items(sortedGames, key = { it.id }) { game ->
+                    items(state.games, key = { it.id }) { game ->
                         val canScore = game.id in state.canScoreGameIds
                         GameChip(
                             game = game,
@@ -188,6 +192,16 @@ fun GamesScreen(
 
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
+                        CompactButton(onClick = onQuickGame) {
+                            Text(
+                                text = stringResource(R.string.quick_game),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(4.dp))
                         CompactButton(
                             onClick = onSignOut,
                         ) {

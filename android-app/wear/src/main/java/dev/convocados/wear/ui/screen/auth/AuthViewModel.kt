@@ -107,6 +107,7 @@ class AuthViewModel @Inject constructor(
     }
 
     fun signOut() {
+        googleSignIn.signOut()
         tokenStore.clearTokens()
     }
 
