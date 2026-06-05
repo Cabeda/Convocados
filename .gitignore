@@ -74,4 +74,6 @@ android-app/wear/.idea
 .env.wear.local
 android-app/keystore.properties
 android-app/app/release-keystore.jks
+android-app/release-output/
 *.jks
+*.aab
