@@ -31,6 +31,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.*
 import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.repository.EventRepository
+import dev.convocados.data.sync.ScoreSyncWorker
 import dev.convocados.ui.screen.games.formatRelativeDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -73,6 +74,7 @@ class EventDetailViewModel @Inject constructor(
     private val repository: EventRepository,
     private val api: ConvocadosApi,
     private val tokenStore: TokenStore,
+    private val workManager: androidx.work.WorkManager,
 ) : ViewModel() {
     private val _eventId = MutableStateFlow<String?>(null)
 
@@ -199,8 +201,11 @@ class EventDetailViewModel @Inject constructor(
 
     fun saveScore(eventId: String, historyId: String, s1: Int, s2: Int) {
         viewModelScope.launch {
-            runCatching { api.updateScore(eventId, historyId, s1, s2) }
-                .onSuccess { repository.refreshEventDetail(eventId) }
+            val result = repository.saveScore(eventId, historyId, s1, s2)
+            if (result.isFailure) {
+                ScoreSyncWorker.enqueueOneTime(workManager)
+                _state.value = _state.value.copy(error = "Score saved offline — will sync when connected")
+            }
         }
     }
 
@@ -254,6 +259,11 @@ fun EventDetailScreen(
         if (result == SnackbarResult.ActionPerformed) {
             viewModel.undoTeamMove(eventId)
         }
+    }
+
+    LaunchedEffect(state.error) {
+        val msg = state.error ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
     }
 
     LaunchedEffect(eventId) { viewModel.load(eventId) }

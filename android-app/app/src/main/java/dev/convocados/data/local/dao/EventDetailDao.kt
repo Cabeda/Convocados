@@ -32,6 +32,9 @@ interface EventDetailDao {
     @Query("DELETE FROM game_history WHERE eventId = :eventId")
     suspend fun deleteHistory(eventId: String)
 
+    @Query("UPDATE game_history SET scoreOne = :scoreOne, scoreTwo = :scoreTwo WHERE id = :historyId")
+    suspend fun updateHistoryScore(historyId: String, scoreOne: Int, scoreTwo: Int)
+
     @Transaction
     suspend fun refreshEvent(
         event: EventDetailEntity,

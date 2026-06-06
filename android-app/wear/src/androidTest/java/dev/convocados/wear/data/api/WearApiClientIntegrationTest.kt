@@ -74,7 +74,7 @@ class WearApiClientIntegrationTest {
 
         // Should deserialize without error; lists may be empty but not null
         assertNotNull(response.owned)
-        assertNotNull(response.joined)
+        assertNotNull(response.followed)
     }
 
     @Test
@@ -97,7 +97,7 @@ class WearApiClientIntegrationTest {
 
         // First get a game to use its ID
         val games: MyGamesResponse = client.get("/api/me/games")
-        val firstGame = (games.owned + games.joined).firstOrNull()
+        val firstGame = (games.owned + games.followed).firstOrNull()
             ?: return@runTest // Skip if no games
 
         val history: PaginatedHistory = client.get("/api/events/${firstGame.id}/history")
@@ -111,7 +111,7 @@ class WearApiClientIntegrationTest {
         skipIfNoToken()
 
         val games: MyGamesResponse = client.get("/api/me/games")
-        val firstGame = (games.owned + games.joined).firstOrNull()
+        val firstGame = (games.owned + games.followed).firstOrNull()
             ?: return@runTest
 
         val history: PaginatedHistory = client.get("/api/events/${firstGame.id}/history")

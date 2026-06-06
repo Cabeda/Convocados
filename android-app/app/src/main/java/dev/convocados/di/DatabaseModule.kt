@@ -11,6 +11,7 @@ import dagger.hilt.components.SingletonComponent
 import dev.convocados.data.local.AppDatabase
 import dev.convocados.data.local.dao.EventDao
 import dev.convocados.data.local.dao.EventDetailDao
+import dev.convocados.data.local.dao.PendingScoreDao
 import dev.convocados.data.local.dao.UserDao
 import javax.inject.Singleton
 
@@ -36,6 +37,9 @@ object DatabaseModule {
 
     @Provides
     fun provideUserDao(db: AppDatabase): UserDao = db.userDao()
+
+    @Provides
+    fun providePendingScoreDao(db: AppDatabase): PendingScoreDao = db.pendingScoreDao()
 
     @Provides
     @Singleton

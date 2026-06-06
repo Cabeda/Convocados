@@ -11,8 +11,10 @@ import dev.convocados.data.api.RemovePlayerResponse
 import dev.convocados.data.api.UndoData
 import dev.convocados.data.local.dao.EventDao
 import dev.convocados.data.local.dao.EventDetailDao
+import dev.convocados.data.local.dao.PendingScoreDao
 import dev.convocados.data.local.entity.EventDetailEntity
 import dev.convocados.data.local.entity.GameHistoryEntity
+import dev.convocados.data.local.entity.PendingScoreEntity
 import dev.convocados.data.local.entity.PlayerEntity
 import dev.convocados.data.local.entity.toEntity
 import dev.convocados.data.local.entity.toSummary
@@ -29,6 +31,7 @@ class EventRepository @Inject constructor(
     private val api: ConvocadosApi,
     private val eventDao: EventDao,
     private val eventDetailDao: EventDetailDao,
+    private val pendingScoreDao: PendingScoreDao,
     private val uiEventManager: UiEventManager
 ) {
     fun getEventsByType(type: String): Flow<List<EventSummary>> =
@@ -99,6 +102,32 @@ class EventRepository @Inject constructor(
         Result.success(Unit)
     } catch (e: Exception) {
         Result.failure(e)
+    }
+
+    fun observePendingScoreCount(): Flow<Int> = pendingScoreDao.observeCount()
+
+    /**
+     * Offline-first score save: updates local DB immediately (optimistic),
+     * then tries API. On failure, queues for sync via WorkManager.
+     * Returns Result.failure if queued offline (score is still saved locally).
+     */
+    suspend fun saveScore(eventId: String, historyId: String, scoreOne: Int, scoreTwo: Int): Result<Unit> {
+        // Optimistic local update
+        eventDetailDao.updateHistoryScore(historyId, scoreOne, scoreTwo)
+        return try {
+            api.updateScore(eventId, historyId, scoreOne, scoreTwo)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            pendingScoreDao.insert(
+                PendingScoreEntity(
+                    eventId = eventId,
+                    historyId = historyId,
+                    scoreOne = scoreOne,
+                    scoreTwo = scoreTwo,
+                )
+            )
+            Result.failure(e)
+        }
     }
 
     // Helper mappers for the Flow

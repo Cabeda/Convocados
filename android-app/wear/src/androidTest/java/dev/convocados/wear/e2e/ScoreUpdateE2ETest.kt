@@ -196,7 +196,7 @@ class ScoreUpdateE2ETest {
 
         // ── Step 3: Fetch games via API ──────────────────────────────────
         val gamesResponse: MyGamesResponse = apiClient.get("/api/me/games")
-        val allGames = gamesResponse.owned + gamesResponse.joined
+        val allGames = gamesResponse.owned + gamesResponse.followed
         assumeTrue(
             "No games found for user $testEmail. Create at least one event with history first.",
             allGames.isNotEmpty(),
