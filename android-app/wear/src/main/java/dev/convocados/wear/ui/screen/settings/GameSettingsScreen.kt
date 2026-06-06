@@ -1,7 +1,6 @@
 package dev.convocados.wear.ui.screen.settings
 
 import android.content.Intent
-import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -107,7 +106,7 @@ fun GameSettingsScreen(
                             textAlign = TextAlign.Center,
                         )
                         CompactButton(onClick = {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                                 runCatching {
                                     context.startActivity(
                                         Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)

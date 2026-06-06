@@ -5,10 +5,11 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
+
+import android.os.Build
 
 /**
  * Schedules per-event game alarms as exact [AlarmManager] alarms that fire even
@@ -23,7 +24,11 @@ class GameAlarmScheduler @Inject constructor(
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
     fun canScheduleExact(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true
+        }
 
     /** Cancel any previously-scheduled alarms for the event and schedule [fires]. */
     fun reschedule(eventId: String, fires: List<AlarmFire>) {

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -8,16 +10,36 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 android {
     namespace = "dev.convocados"
     compileSdk = 35
 
+    signingConfigs {
+        create("release") {
+            val storePath = keystoreProperties.getProperty("storeFile", "")
+            if (storePath.isNotBlank()) {
+                val ksFile = rootProject.file(storePath)
+                if (ksFile.exists()) {
+                    storeFile = ksFile
+                    storePassword = keystoreProperties.getProperty("storePassword", "")
+                    keyAlias = keystoreProperties.getProperty("keyAlias", "")
+                    keyPassword = keystoreProperties.getProperty("keyPassword", "")
+                }
+            }
+        }
+    }
+
     defaultConfig {
-        applicationId = "com.cabeda.convocados"
+        applicationId = "com.cabeda.Convocados"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = (System.currentTimeMillis() / 1000 / 60).toInt()
+        versionName = "1.2.0"
         manifestPlaceholders["appAuthRedirectScheme"] = "convocados"
     }
 
@@ -26,7 +48,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

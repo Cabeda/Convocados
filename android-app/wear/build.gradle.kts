@@ -47,11 +47,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.cabeda.convocados.wear"
+        applicationId = "com.cabeda.Convocados"
         minSdk = 30
         targetSdk = 35
         versionCode = (System.currentTimeMillis() / 1000 / 60).toInt()
-        versionName = "1.0.1"
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
