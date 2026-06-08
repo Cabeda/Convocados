@@ -30,4 +30,7 @@ sealed class Route(val route: String) {
     data class UserProfile(val id: String = "{userId}") : Route("user/{userId}") {
         companion object { fun create(id: String) = "user/$id" }
     }
+    data class HistoryDetail(val eventId: String = "{eventId}", val historyId: String = "{historyId}") : Route("event/{eventId}/history/{historyId}") {
+        companion object { fun create(eventId: String, historyId: String) = "event/$eventId/history/$historyId" }
+    }
 }

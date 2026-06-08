@@ -238,6 +238,7 @@ fun EventDetailScreen(
     onAttendance: () -> Unit,
     onNotificationPrefs: () -> Unit,
     onUserClick: (String) -> Unit,
+    onHistoryClick: (String) -> Unit = {},
     viewModel: EventDetailViewModel = hiltViewModel(),
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -511,6 +512,7 @@ fun EventDetailScreen(
                             }
                             state.history.forEach { h ->
                                 HistoryCard(h, editingScoreId, scoreOne, scoreTwo,
+                                    onClick = { onHistoryClick(h.id) },
                                     onEditScore = { editingScoreId = h.id; scoreOne = (h.scoreOne ?: "").toString(); scoreTwo = (h.scoreTwo ?: "").toString() },
                                     onScoreOneChange = { scoreOne = it }, onScoreTwoChange = { scoreTwo = it },
                                     onSaveScore = {
@@ -575,10 +577,11 @@ fun PlayerRow(
 @Composable
 fun HistoryCard(
     h: GameHistory, editingScoreId: String?, scoreOne: String, scoreTwo: String,
+    onClick: () -> Unit = {},
     onEditScore: () -> Unit, onScoreOneChange: (String) -> Unit, onScoreTwoChange: (String) -> Unit,
     onSaveScore: () -> Unit,
 ) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).clickable(onClick = onClick)) {
         Column(Modifier.padding(12.dp)) {
             Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
             if (h.scoreOne != null && h.scoreTwo != null) {
