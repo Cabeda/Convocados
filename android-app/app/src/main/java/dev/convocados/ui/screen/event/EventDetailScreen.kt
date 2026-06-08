@@ -239,6 +239,7 @@ fun EventDetailScreen(
     onNotificationPrefs: () -> Unit,
     onUserClick: (String) -> Unit,
     onHistoryClick: (String) -> Unit = {},
+    onAllHistory: () -> Unit = {},
     viewModel: EventDetailViewModel = hiltViewModel(),
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -480,7 +481,7 @@ fun EventDetailScreen(
                             }
                         }
 
-                        // Suggestions
+                        // Suggestions (quick-add chips when input is empty)
                         if (suggestions.isNotEmpty() && newPlayer.isBlank()) {
                             Row(modifier = Modifier.padding(top = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 suggestions.forEach { s ->
@@ -489,19 +490,46 @@ fun EventDetailScreen(
                             }
                         }
 
-                        // Add player
-                        Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
-                                value = newPlayer, onValueChange = { newPlayer = it },
-                                placeholder = { Text("Add player name") }, singleLine = true,
-                                modifier = Modifier.weight(1f),
-                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline, cursorColor = MaterialTheme.colorScheme.primary, focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant),
-                            )
-                            Button(
-                                onClick = { viewModel.addPlayer(eventId, newPlayer.trim()); newPlayer = "" },
-                                enabled = newPlayer.isNotBlank(),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                            ) { Text("Add", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold) }
+                        // Add player with autocomplete dropdown
+                        Box(modifier = Modifier.padding(top = 12.dp)) {
+                            val filteredSuggestions = if (newPlayer.length >= 2) {
+                                state.knownPlayers.filter {
+                                    it.name.lowercase().contains(newPlayer.lowercase()) && it.name.lowercase() !in currentNames
+                                }.take(5)
+                            } else emptyList()
+
+                            Column {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    OutlinedTextField(
+                                        value = newPlayer, onValueChange = { newPlayer = it },
+                                        placeholder = { Text("Add player name") }, singleLine = true,
+                                        modifier = Modifier.weight(1f),
+                                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline, cursorColor = MaterialTheme.colorScheme.primary, focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    )
+                                    Button(
+                                        onClick = { viewModel.addPlayer(eventId, newPlayer.trim()); newPlayer = "" },
+                                        enabled = newPlayer.isNotBlank(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                    ) { Text("Add", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold) }
+                                }
+                                // Autocomplete dropdown
+                                if (filteredSuggestions.isNotEmpty()) {
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                    ) {
+                                        Column {
+                                            filteredSuggestions.forEach { s ->
+                                                Text(
+                                                    "${s.name} (${s.gamesPlayed} games)",
+                                                    modifier = Modifier.fillMaxWidth().clickable { viewModel.addPlayer(eventId, s.name); newPlayer = "" }.padding(horizontal = 16.dp, vertical = 10.dp),
+                                                    color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         // History
@@ -510,7 +538,7 @@ fun EventDetailScreen(
                                 SectionTitle("History")
                                 TextButton(onClick = onLog) { Text("View log →", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp) }
                             }
-                            state.history.forEach { h ->
+                            state.history.take(2).forEach { h ->
                                 HistoryCard(h, editingScoreId, scoreOne, scoreTwo,
                                     onClick = { onHistoryClick(h.id) },
                                     onEditScore = { editingScoreId = h.id; scoreOne = (h.scoreOne ?: "").toString(); scoreTwo = (h.scoreTwo ?: "").toString() },
@@ -521,6 +549,11 @@ fun EventDetailScreen(
                                         viewModel.saveScore(eventId, h.id, s1, s2); editingScoreId = null
                                     },
                                 )
+                            }
+                            if (state.history.size > 2) {
+                                TextButton(onClick = onAllHistory, modifier = Modifier.fillMaxWidth()) {
+                                    Text("See all ${state.history.size} games →", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
                         Spacer(Modifier.height(40.dp))

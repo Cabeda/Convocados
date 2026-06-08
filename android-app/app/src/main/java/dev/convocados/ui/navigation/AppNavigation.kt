@@ -37,6 +37,8 @@ import dev.convocados.ui.screen.log.EventLogScreen
 import dev.convocados.ui.screen.notifications.NotificationPrefsScreen
 import dev.convocados.ui.screen.user.UserProfileScreen
 import dev.convocados.ui.screen.history.HistoryDetailScreen
+import dev.convocados.ui.screen.history.EventHistoryScreen
+import dev.convocados.ui.screen.history.EventHistoryScreen
 import dev.convocados.ui.screen.map.MapPickerScreen
 
 data class BottomNavItem(val route: String, val label: String, val icon: @Composable () -> Unit)
@@ -159,6 +161,7 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
                         onNotificationPrefs = { navController.navigate(Route.NotificationPrefs.route) },
                         onUserClick = { navController.navigate(Route.UserProfile.create(it)) },
                         onHistoryClick = { historyId -> navController.navigate(Route.HistoryDetail.create(eventId, historyId)) },
+                        onAllHistory = { navController.navigate(Route.EventHistory.create(eventId)) },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this@composable,
                     )
@@ -240,6 +243,17 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
                         eventId = eventId,
                         historyId = historyId,
                         onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(
+                    Route.EventHistory().route,
+                    arguments = listOf(navArgument("eventId") { type = NavType.StringType }),
+                ) { entry ->
+                    val eventId = entry.arguments?.getString("eventId") ?: return@composable
+                    EventHistoryScreen(
+                        eventId = eventId,
+                        onBack = { navController.popBackStack() },
+                        onHistoryClick = { historyId -> navController.navigate(Route.HistoryDetail.create(eventId, historyId)) },
                     )
                 }
             }
