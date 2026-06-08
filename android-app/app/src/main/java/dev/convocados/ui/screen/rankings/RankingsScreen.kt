@@ -13,10 +13,12 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -162,8 +164,8 @@ fun RankingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("\uD83C\uDFC6 Rankings") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text("\uD83C\uDFC6 ${stringResource(R.string.rankings)}") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
                     if (isOwner) {
                         IconButton(onClick = {
@@ -187,7 +189,7 @@ fun RankingsScreen(
 
         if (rows.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                Text("No ratings yet", color = MaterialTheme.colorScheme.outline)
+                Text(stringResource(R.string.no_ratings), color = MaterialTheme.colorScheme.outline)
             }
             return@Scaffold
         }

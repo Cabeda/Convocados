@@ -19,9 +19,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.convocados.R
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -108,8 +110,8 @@ fun PublicGamesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("\uD83C\uDF0D Public Games") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text("\uD83C\uDF0D ${stringResource(R.string.public_games)}") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
                     IconButton(onClick = { showMap = !showMap }) {
                         Icon(if (showMap) Icons.Default.ViewList else Icons.Default.Map, "Toggle view")
@@ -186,7 +188,7 @@ fun PublicGamesScreen(
                         }
                     }
                     if (hasMore) {
-                        item { TextButton(onClick = { viewModel.loadMore() }, modifier = Modifier.fillMaxWidth()) { Text("Load more", color = MaterialTheme.colorScheme.primary) } }
+                        item { TextButton(onClick = { viewModel.loadMore() }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.load_more), color = MaterialTheme.colorScheme.primary) } }
                     }
                 }
             }

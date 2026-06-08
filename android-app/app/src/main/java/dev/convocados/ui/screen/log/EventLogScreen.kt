@@ -9,10 +9,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -63,14 +65,14 @@ fun EventLogScreen(eventId: String, onBack: () -> Unit, viewModel: EventLogViewM
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("\uD83D\uDCCB Event Log") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        topBar = { TopAppBar(title = { Text("\uD83D\uDCCB ${stringResource(R.string.event_log)}") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
 
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(padding)) {
             if (entries.isEmpty()) {
-                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text("No log entries yet", color = MaterialTheme.colorScheme.outline) } }
+                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text(stringResource(R.string.no_log_entries), color = MaterialTheme.colorScheme.outline) } }
             }
             items(entries, key = { it.id }) { entry ->
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
@@ -86,7 +88,7 @@ fun EventLogScreen(eventId: String, onBack: () -> Unit, viewModel: EventLogViewM
             if (hasMore) {
                 item {
                     TextButton(onClick = { viewModel.loadMore(eventId) }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Load more", color = MaterialTheme.colorScheme.primary)
+                        Text(stringResource(R.string.load_more), color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }

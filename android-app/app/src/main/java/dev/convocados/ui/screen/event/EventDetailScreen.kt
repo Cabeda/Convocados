@@ -22,9 +22,11 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -277,7 +279,7 @@ fun EventDetailScreen(
         topBar = {
             TopAppBar(
                 title = { Text(event?.title ?: "Event", maxLines = 1) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
@@ -465,7 +467,7 @@ fun EventDetailScreen(
                         }
 
                         // Players
-                        SectionTitle("Playing (${activePlayers.size}/${event.maxPlayers})")
+                        SectionTitle(stringResource(R.string.playing_count, activePlayers.size, event.maxPlayers))
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                             Column {
                                 activePlayers.forEachIndexed { i, p ->
@@ -480,7 +482,7 @@ fun EventDetailScreen(
                         }
 
                         if (benchPlayers.isNotEmpty()) {
-                            SectionTitle("Bench (${benchPlayers.size})")
+                            SectionTitle(stringResource(R.string.bench_count, benchPlayers.size))
                             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                                 Column {
                                     benchPlayers.forEachIndexed { i, p ->
@@ -514,7 +516,7 @@ fun EventDetailScreen(
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     OutlinedTextField(
                                         value = newPlayer, onValueChange = { newPlayer = it },
-                                        placeholder = { Text("Add player name") }, singleLine = true,
+                                        placeholder = { Text(stringResource(R.string.add_player_placeholder)) }, singleLine = true,
                                         modifier = Modifier.weight(1f),
                                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline, cursorColor = MaterialTheme.colorScheme.primary, focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant),
                                     )
@@ -522,7 +524,7 @@ fun EventDetailScreen(
                                         onClick = { viewModel.addPlayer(eventId, newPlayer.trim()); newPlayer = "" },
                                         enabled = newPlayer.isNotBlank(),
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                                    ) { Text("Add", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold) }
+                                    ) { Text(stringResource(R.string.add_button), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold) }
                                 }
                                 // Autocomplete dropdown
                                 if (filteredSuggestions.isNotEmpty()) {
@@ -547,8 +549,8 @@ fun EventDetailScreen(
                         // History
                         if (state.history.isNotEmpty()) {
                             Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                SectionTitle("History")
-                                TextButton(onClick = onLog) { Text("View log →", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp) }
+                                SectionTitle(stringResource(R.string.history))
+                                TextButton(onClick = onLog) { Text(stringResource(R.string.view_log), color = MaterialTheme.colorScheme.primary, fontSize = 13.sp) }
                             }
                             state.history.take(2).forEach { h ->
                                 HistoryCard(h, editingScoreId, scoreOne, scoreTwo,
@@ -564,7 +566,7 @@ fun EventDetailScreen(
                             }
                             if (state.history.size > 2) {
                                 TextButton(onClick = onAllHistory, modifier = Modifier.fillMaxWidth()) {
-                                    Text("See all ${state.history.size} games →", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                    Text(stringResource(R.string.see_all_games, state.history.size), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -590,8 +592,9 @@ fun PlayerRow(
 ) {
     ListItem(
         headlineContent = {
+            val youSuffix = stringResource(R.string.you_suffix)
             Text(
-                "${player.name}${if (isMe) " (you)" else ""}",
+                "${player.name}${if (isMe) youSuffix else ""}",
                 color = if (isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (isMe) FontWeight.SemiBold else FontWeight.Normal,
                 fontSize = 14.sp,
@@ -604,7 +607,7 @@ fun PlayerRow(
                 Spacer(Modifier.size(20.dp))
             }
         },
-        trailingContent = if (canRemove) {{ IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, "Remove", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp)) } }} else null,
+        trailingContent = if (canRemove) {{ IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, stringResource(R.string.remove), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp)) } }} else null,
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         modifier = Modifier.height(44.dp),
     )
