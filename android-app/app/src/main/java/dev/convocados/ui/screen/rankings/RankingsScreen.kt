@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.HowToReg
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -206,9 +207,17 @@ fun RankingsScreen(
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("#${index + 1}", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                tint = if (r.userId == user?.id) MaterialTheme.colorScheme.primary
+                                       else if (r.userId != null) MaterialTheme.colorScheme.onSurfaceVariant
+                                       else MaterialTheme.colorScheme.outlineVariant,
+                                modifier = Modifier.size(20.dp).padding(end = 4.dp),
+                            )
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    r.name,
+                                    r.name + if (r.userId == user?.id) " (you)" else "",
                                     color = if (r.userId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                     fontWeight = FontWeight.Bold, fontSize = 15.sp,
                                     modifier = if (r.userId != null) Modifier.clickable { onUserClick(r.userId!!) } else Modifier,
