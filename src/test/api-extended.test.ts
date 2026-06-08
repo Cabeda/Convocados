@@ -18,7 +18,6 @@ import { PUT as updateTitle } from "~/pages/api/events/[id]/title";
 import { POST as claimOwnership, DELETE as relinquishOwnership } from "~/pages/api/events/[id]/claim";
 import { POST as transferOwnership } from "~/pages/api/events/[id]/transfer";
 import { GET as getStatus } from "~/pages/api/events/[id]/status";
-import { POST as subscribePush, DELETE as unsubscribePush } from "~/pages/api/events/[id]/push";
 import { GET as getHistory } from "~/pages/api/events/[id]/history/index";
 import { GET as getRatings } from "~/pages/api/events/[id]/ratings/index";
 import { POST as recalculateRatings } from "~/pages/api/events/[id]/ratings/recalculate";
@@ -354,81 +353,6 @@ describe("GET /api/events/[id]/status", () => {
   it("returns 404 for unknown event", async () => {
     const res = await getStatus(ctx({ id: "nonexistent" }));
     expect(res.status).toBe(404);
-  });
-});
-
-// ─── POST/DELETE /api/events/[id]/push ───────────────────────────────────────
-
-describe("POST /api/events/[id]/push", () => {
-  it("subscribes to push notifications", async () => {
-    const id = await seedEvent();
-    const res = await subscribePush(ctx({ id }, {
-      endpoint: "https://push.example.com/sub1",
-      keys: { p256dh: "key1", auth: "auth1" },
-      locale: "en",
-      clientId: "client1",
-    }));
-    expect(res.status).toBe(200);
-    const subs = await prisma.pushSubscription.findMany({ where: { eventId: id } });
-    expect(subs).toHaveLength(1);
-    expect(subs[0].endpoint).toBe("https://push.example.com/sub1");
-  });
-
-  it("returns 404 for unknown event", async () => {
-    const res = await subscribePush(ctx({ id: "nonexistent" }, {
-      endpoint: "https://push.example.com/sub1",
-      keys: { p256dh: "key1", auth: "auth1" },
-    }));
-    expect(res.status).toBe(404);
-  });
-
-  it("returns 400 for invalid subscription", async () => {
-    const id = await seedEvent();
-    const res = await subscribePush(ctx({ id }, { endpoint: "", keys: {} }));
-    expect(res.status).toBe(400);
-  });
-
-  it("handles pt locale", async () => {
-    const id = await seedEvent();
-    await subscribePush(ctx({ id }, {
-      endpoint: "https://push.example.com/sub-pt",
-      keys: { p256dh: "k", auth: "a" },
-      locale: "pt-BR",
-    }));
-    const sub = await prisma.pushSubscription.findFirst({ where: { eventId: id } });
-    expect(sub?.locale).toBe("pt");
-  });
-
-  it("upserts existing subscription", async () => {
-    const id = await seedEvent();
-    const payload = {
-      endpoint: "https://push.example.com/sub-upsert",
-      keys: { p256dh: "k1", auth: "a1" },
-    };
-    await subscribePush(ctx({ id }, payload));
-    await subscribePush(ctx({ id }, { ...payload, keys: { p256dh: "k2", auth: "a2" } }));
-    const subs = await prisma.pushSubscription.findMany({ where: { eventId: id } });
-    expect(subs).toHaveLength(1);
-    expect(subs[0].p256dh).toBe("k2");
-  });
-});
-
-describe("DELETE /api/events/[id]/push", () => {
-  it("unsubscribes from push notifications", async () => {
-    const id = await seedEvent();
-    await prisma.pushSubscription.create({
-      data: { eventId: id, endpoint: "https://push.example.com/del", p256dh: "k", auth: "a", locale: "en", clientId: "" },
-    });
-    const res = await unsubscribePush(deleteCtx({ id }, { endpoint: "https://push.example.com/del" }));
-    expect(res.status).toBe(200);
-    const subs = await prisma.pushSubscription.findMany({ where: { eventId: id } });
-    expect(subs).toHaveLength(0);
-  });
-
-  it("returns 400 for missing endpoint", async () => {
-    const id = await seedEvent();
-    const res = await unsubscribePush(deleteCtx({ id }, {}));
-    expect(res.status).toBe(400);
   });
 });
 

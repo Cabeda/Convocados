@@ -62,6 +62,7 @@ data class EventScreenState(
     val locked: Boolean = false,
     val undoData: UndoData? = null,
     val teamMoveUndo: TeamMoveUndo? = null,
+    val isFollowing: Boolean = false,
 )
 
 data class TeamMoveUndo(
@@ -116,7 +117,20 @@ class EventDetailViewModel @Inject constructor(
             repository.refreshEventDetail(eventId)
             val postGame = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
             val known = runCatching { api.fetchKnownPlayers(eventId) }.getOrNull()?.players ?: emptyList()
-            _state.value = _state.value.copy(loading = false, refreshing = false, postGame = postGame, knownPlayers = known)
+            val following = runCatching { api.getFollowState(eventId) }.getOrNull()?.following ?: false
+            _state.value = _state.value.copy(loading = false, refreshing = false, postGame = postGame, knownPlayers = known, isFollowing = following)
+        }
+    }
+
+    fun toggleFollow(eventId: String) {
+        viewModelScope.launch {
+            val current = _state.value.isFollowing
+            _state.value = _state.value.copy(isFollowing = !current)
+            runCatching {
+                if (current) api.unfollowEvent(eventId) else api.followEvent(eventId)
+            }.onFailure {
+                _state.value = _state.value.copy(isFollowing = current)
+            }
         }
     }
 
@@ -280,6 +294,15 @@ fun EventDetailScreen(
             TopAppBar(
                 title = { Text(event?.title ?: "Event", maxLines = 1) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+                actions = {
+                    IconButton(onClick = { viewModel.toggleFollow(eventId) }) {
+                        Icon(
+                            if (state.isFollowing) Icons.Default.Notifications else Icons.Default.NotificationsNone,
+                            contentDescription = if (state.isFollowing) "Unfollow" else "Follow",
+                            tint = if (state.isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
