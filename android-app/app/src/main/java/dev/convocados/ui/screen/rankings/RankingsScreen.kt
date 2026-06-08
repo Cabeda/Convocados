@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.HowToReg
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -76,6 +77,13 @@ class RankingsViewModel @Inject constructor(
         load(id)
     }
 
+    fun recalculate(id: String) {
+        viewModelScope.launch {
+            runCatching { api.recalculateRatings(id) }
+                .onSuccess { load(id) }
+        }
+    }
+
     fun claimPlayer(eventId: String, playerId: String) {
         viewModelScope.launch {
             runCatching { api.claimPlayer(eventId, playerId) }
@@ -142,18 +150,30 @@ fun RankingsScreen(
     val players = event?.players ?: emptyList()
     val rows = mergeRows(ratings, players)
     val userHasLinkedPlayer = user != null && players.any { it.userId == user?.id }
+    val isOwner = user != null && event?.ownerId == user?.id
 
     // Claim confirmation dialog state
     var claimTarget by remember { mutableStateOf<RankingRow?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("\uD83C\uDFC6 Rankings") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                actions = {
+                    if (isOwner) {
+                        IconButton(onClick = {
+                            viewModel.recalculate(eventId)
+                            scope.launch { snackbarHostState.showSnackbar("Recalculating ratings...") }
+                        }) { Icon(Icons.Default.Refresh, "Recalculate", tint = MaterialTheme.colorScheme.primary) }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (loading) {

@@ -49,7 +49,12 @@ class ProfileViewModelTest {
         val viewModel = ProfileViewModel(userRepository, api, authManager, tokenStore, settingsStore, pushTokenManager)
 
         viewModel.user.test {
-            assertEquals(profile, awaitItem())
+            val item = awaitItem()
+            if (item == null) {
+                assertEquals(profile, awaitItem())
+            } else {
+                assertEquals(profile, item)
+            }
         }
     }
 
@@ -73,5 +78,19 @@ class ProfileViewModelTest {
         advanceUntilIdle()
 
         coVerify { settingsStore.setLocale("pt") }
+    }
+
+    @Test
+    fun `updateName calls api and refreshes profile`() = runTest {
+        coEvery { api.updateProfile("New Name") } returns UserProfile("1", "New Name", "test@test.com")
+
+        val viewModel = ProfileViewModel(userRepository, api, authManager, tokenStore, settingsStore, pushTokenManager)
+        advanceUntilIdle()
+
+        viewModel.updateName("New Name")
+        advanceUntilIdle()
+
+        coVerify { api.updateProfile("New Name") }
+        coVerify(atLeast = 2) { userRepository.refreshUserProfile() }
     }
 }

@@ -36,6 +36,7 @@ import dev.convocados.ui.screen.attendance.AttendanceScreen
 import dev.convocados.ui.screen.log.EventLogScreen
 import dev.convocados.ui.screen.notifications.NotificationPrefsScreen
 import dev.convocados.ui.screen.user.UserProfileScreen
+import dev.convocados.ui.screen.map.MapPickerScreen
 
 data class BottomNavItem(val route: String, val label: String, val icon: @Composable () -> Unit)
 
@@ -131,6 +132,13 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
                                 popUpTo(Route.CreateEvent.route) { inclusive = true }
                             }
                         },
+                        onBack = { navController.popBackStack() },
+                        onPickMap = { navController.navigate(Route.MapPicker.route) },
+                    )
+                }
+                composable(Route.MapPicker.route) {
+                    MapPickerScreen(
+                        onLocationPicked = { _, _ -> navController.popBackStack() },
                         onBack = { navController.popBackStack() },
                     )
                 }

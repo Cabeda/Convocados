@@ -52,6 +52,7 @@ class EventSettingsViewModel @Inject constructor(private val api: ConvocadosApi)
     fun savePassword(id: String, pw: String?) = exec { api.updatePassword(id, pw); load(id) }
     fun archive(id: String) = exec { api.archiveEvent(id) }
     fun unarchive(id: String) = exec { api.unarchiveEvent(id); load(id) }
+    fun transferOwnership(id: String, targetUserId: String) = exec { api.transferOwnership(id, targetUserId); load(id) }
 
     private fun exec(block: suspend () -> Unit) { viewModelScope.launch { runCatching { block() } } }
 }
@@ -146,6 +147,43 @@ fun EventSettingsScreen(
 
             // Danger zone
             SectionTitle("Danger zone")
+
+            // Transfer Ownership (owner only)
+            if (ev.ownerId != null) {
+                var showTransfer by remember { mutableStateOf(false) }
+                val candidates = ev.players.filter { it.userId != null && it.userId != ev.ownerId }
+
+                Button(
+                    onClick = { showTransfer = true },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                    enabled = candidates.isNotEmpty(),
+                ) { Text("Transfer Ownership", color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold) }
+
+                if (showTransfer) {
+                    AlertDialog(
+                        onDismissRequest = { showTransfer = false },
+                        title = { Text("Transfer Ownership") },
+                        text = {
+                            Column {
+                                Text("Select a player to transfer ownership to:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                                Spacer(Modifier.height(8.dp))
+                                candidates.forEach { player ->
+                                    TextButton(onClick = {
+                                        player.userId?.let { viewModel.transferOwnership(eventId, it) }
+                                        showTransfer = false
+                                    }, modifier = Modifier.fillMaxWidth()) {
+                                        Text(player.name, color = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = { TextButton(onClick = { showTransfer = false }) { Text("Cancel") } },
+                    )
+                }
+            }
+
             Button(
                 onClick = { if (ev.archivedAt != null) viewModel.unarchive(eventId) else { viewModel.archive(eventId); onBack() } },
                 modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),

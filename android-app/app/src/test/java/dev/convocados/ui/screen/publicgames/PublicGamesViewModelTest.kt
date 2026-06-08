@@ -77,10 +77,28 @@ class PublicGamesViewModelTest {
         val viewModel = PublicGamesViewModel(api)
 
         viewModel.loading.test {
-            // Initial state from init load() might be true or false depending on how fast it runs
-            // But with StandardTestDispatcher it should be predictable
             assertEquals(true, awaitItem())
             assertEquals(false, awaitItem())
         }
+    }
+
+    @Test
+    fun `setSportFilter filters events by sport`() = runTest {
+        val events = listOf(
+            PublicEvent("1", "Football Game", "Loc", null, null, "football-5v5", "2024-01-01T10:00:00Z", 10, 5, 5),
+            PublicEvent("2", "Basketball Game", "Loc", null, null, "basketball", "2024-01-01T10:00:00Z", 10, 5, 5),
+        )
+        val response = PaginatedPublicEvents(data = events, nextCursor = null, hasMore = false)
+        coEvery { api.fetchPublicEvents(null) } returns response
+
+        val viewModel = PublicGamesViewModel(api)
+        advanceUntilIdle()
+
+        viewModel.setSportFilter("football")
+        assertEquals(1, viewModel.events.value.size)
+        assertEquals("Football Game", viewModel.events.value[0].title)
+
+        viewModel.setSportFilter("all")
+        assertEquals(2, viewModel.events.value.size)
     }
 }
