@@ -26,6 +26,7 @@ import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.push.PushTokenManager
 import dev.convocados.data.repository.UserRepository
+import dev.convocados.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -52,6 +53,7 @@ class ProfileViewModel @Inject constructor(
     val user: StateFlow<UserProfile?> = repository.userProfile
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val locale = settingsStore.locale
+    val themeMode = settingsStore.themeMode
 
     init { viewModelScope.launch { repository.refreshUserProfile() } }
 
@@ -72,6 +74,7 @@ class ProfileViewModel @Inject constructor(
     fun getServerUrl() = tokenStore.getServerUrl()
     fun setServerUrl(url: String) = tokenStore.setServerUrl(url)
     fun setLocale(code: String) { viewModelScope.launch { settingsStore.setLocale(code) } }
+    fun setThemeMode(mode: ThemeMode) { viewModelScope.launch { settingsStore.setThemeMode(mode) } }
 }
 
 @Composable
@@ -123,6 +126,28 @@ fun ProfileScreen(
                             if (locale == opt.code) Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
                         if (opt != LOCALE_OPTIONS.last()) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+        }
+
+        // Theme
+        val themeMode by viewModel.themeMode.collectAsState(initial = ThemeMode.System)
+        val themeLabel = when (themeMode) { ThemeMode.System -> "System"; ThemeMode.Light -> "Light"; ThemeMode.Dark -> "Dark" }
+        var showTheme by remember { mutableStateOf(false) }
+        MenuItem(title = "Theme", subtitle = themeLabel, onClick = { showTheme = !showTheme })
+        if (showTheme) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Column {
+                    listOf(ThemeMode.System to "System", ThemeMode.Light to "Light", ThemeMode.Dark to "Dark").forEach { (mode, label) ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { viewModel.setThemeMode(mode); showTheme = false }.padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(label, color = if (themeMode == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontWeight = if (themeMode == mode) FontWeight.Bold else FontWeight.Normal)
+                            if (themeMode == mode) Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        }
+                        if (mode != ThemeMode.Dark) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
             }
