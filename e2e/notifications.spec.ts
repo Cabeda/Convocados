@@ -585,7 +585,7 @@ test.describe("Web push notification delivery", () => {
       // subscription is only deleted on 410/404 status codes. A connection
       // error or other failure keeps the subscription intact.
       const subCountAfter = sqlQuery(
-        `SELECT COUNT(*) FROM PushSubscription WHERE eventId = '${eventId}' AND endpoint = '${fakeEndpoint}'`,
+        `SELECT COUNT(*) FROM PushSubscription WHERE userId = '${subUserId}' AND endpoint = '${fakeEndpoint}'`,
       );
       // Subscription may or may not survive depending on the push service response
       // The important thing is the job was processed
@@ -607,7 +607,7 @@ test.describe("Web push notification delivery", () => {
 
     // Verify subscription was stored in DB
     const subCount = sqlQuery(
-      `SELECT COUNT(*) FROM PushSubscription WHERE eventId = '${eventId}'`,
+      `SELECT COUNT(*) FROM PushSubscription WHERE userId = '${subUserId}'`,
     );
     expect(parseInt(subCount)).toBeGreaterThanOrEqual(1);
 
