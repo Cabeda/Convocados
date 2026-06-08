@@ -15,10 +15,12 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -112,7 +114,7 @@ fun GamesScreen(
                         FilterChip(
                             selected = !showArchived,
                             onClick = { showArchived = false },
-                            label = { Text("My Games (${active.size})") },
+                            label = { Text("${stringResource(R.string.my_games)} (${active.size})") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -122,7 +124,7 @@ fun GamesScreen(
                             FilterChip(
                                 selected = showArchived,
                                 onClick = { showArchived = true },
-                                label = { Text("Archived (${archived.size})") },
+                                label = { Text("${stringResource(R.string.archived)} (${archived.size})") },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -145,15 +147,15 @@ fun GamesScreen(
                         ) {
                             Text("🏟️", fontSize = 48.sp)
                             Spacer(Modifier.height(12.dp))
-                            Text("No games yet", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+                            Text(stringResource(R.string.no_games_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
                             Spacer(Modifier.height(8.dp))
-                            Text("Create a game or join one to get started.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                            Text(stringResource(R.string.no_games_desc), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
                             Spacer(Modifier.height(20.dp))
                             Button(
                                 onClick = onCreateClick,
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             ) {
-                                Text("+ Create a Game", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.create_a_game), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

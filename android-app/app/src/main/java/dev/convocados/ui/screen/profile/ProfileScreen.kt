@@ -10,10 +10,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -94,7 +96,7 @@ fun ProfileScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(u.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                         IconButton(onClick = { editName = u.name; showEditName = true }) {
-                            Icon(Icons.Default.Edit, "Edit name", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Edit, stringResource(R.string.edit_name), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         }
                     }
                     Text(u.email, color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
@@ -104,10 +106,10 @@ fun ProfileScreen(
         }
 
         // Notifications
-        MenuItem(title = "\uD83D\uDD14 Notifications", subtitle = "Manage push & email preferences", onClick = onNotificationPrefs)
+        MenuItem(title = "\uD83D\uDD14 ${stringResource(R.string.notifications_title)}", subtitle = stringResource(R.string.notifications_subtitle), onClick = onNotificationPrefs)
 
         // Language
-        MenuItem(title = "Language", subtitle = LOCALE_OPTIONS.find { it.code == locale }?.label ?: "English", onClick = { showLanguages = !showLanguages })
+        MenuItem(title = stringResource(R.string.language), subtitle = LOCALE_OPTIONS.find { it.code == locale }?.label ?: "English", onClick = { showLanguages = !showLanguages })
         if (showLanguages) {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Column {
@@ -127,7 +129,7 @@ fun ProfileScreen(
         }
 
         // Server URL
-        MenuItem(title = "Server URL", subtitle = "Configure instance", onClick = {
+        MenuItem(title = stringResource(R.string.server_url), subtitle = stringResource(R.string.configure_instance), onClick = {
             serverUrl = viewModel.getServerUrl()
             editingServer = true
         })
@@ -158,14 +160,14 @@ fun ProfileScreen(
             onClick = { viewModel.logout(); onLogout() },
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-        ) { Text("Sign out", color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold) }
+        ) { Text(stringResource(R.string.sign_out), color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold) }
     }
 
     // Edit name dialog
     if (showEditName) {
         AlertDialog(
             onDismissRequest = { showEditName = false },
-            title = { Text("Edit name") },
+            title = { Text(stringResource(R.string.edit_name)) },
             text = {
                 OutlinedTextField(value = editName, onValueChange = { editName = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
             },

@@ -8,10 +8,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.auth.AuthManager
@@ -43,7 +45,7 @@ fun LoginScreen(
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
             Text("Convocados", color = MaterialTheme.colorScheme.primary, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
             Spacer(Modifier.height(8.dp))
-            Text("Manage your games on the go", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+            Text(stringResource(R.string.manage_games), color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
             Spacer(Modifier.height(48.dp))
             Button(
                 onClick = { viewModel.authManager.startLogin(context as Activity) },
@@ -51,7 +53,7 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = MaterialTheme.shapes.medium,
             ) {
-                Text("Sign in", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(stringResource(R.string.sign_in), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
 
             Spacer(Modifier.height(24.dp))
@@ -61,7 +63,7 @@ fun LoginScreen(
                 serverUrl = viewModel.getServerUrl()
                 showServerSettings = !showServerSettings
             }) {
-                Text("Server URL", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+                Text(stringResource(R.string.server_url), color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
             }
 
             if (showServerSettings) {
