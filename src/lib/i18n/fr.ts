@@ -171,7 +171,7 @@ const fr: TranslationKeys = {
   errorNeedMorePlayers: "Il faut au moins 2 joueurs.",
   notifySubscribe: "Recevoir les notifications",
   notifyUnsubscribe: "Désactiver les notifications",
-  notifyEnabled: "Notifications activées",
+  notifyEnabled: "Suivi",
   notifyDenied: "Notifications bloquées — vérifie les paramètres du navigateur",
   notifyUnsupported: "Notifications non supportées dans ce navigateur",
   pushPromptBanner: "Activez les notifications pour recevoir des rappels et des mises à jour sur cet appareil.",

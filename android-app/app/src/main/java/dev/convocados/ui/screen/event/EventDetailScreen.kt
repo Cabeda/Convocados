@@ -298,7 +298,7 @@ fun EventDetailScreen(
                     IconButton(onClick = { viewModel.toggleFollow(eventId) }) {
                         Icon(
                             if (state.isFollowing) Icons.Default.Notifications else Icons.Default.NotificationsNone,
-                            contentDescription = if (state.isFollowing) "Unfollow" else "Follow",
+                            contentDescription = if (state.isFollowing) "Following" else "Follow",
                             tint = if (state.isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }

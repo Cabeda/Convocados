@@ -169,7 +169,7 @@ const es: TranslationKeys = {
   errorPlayerNameRequired: "El nombre del jugador es obligatorio.",
   errorPlayerDuplicate: '"{name}" ya está en la lista.',
   errorNeedMorePlayers: "Se necesitan al menos 2 jugadores.",
-  notifySubscribe: "Recibir notificaciones",
+  notifySubscribe: "Seguir",
   notifyUnsubscribe: "Desactivar notificaciones",
   notifyEnabled: "Notificaciones activadas",
   notifyDenied: "Notificaciones bloqueadas — revisa la configuración del navegador",
