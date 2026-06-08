@@ -17,6 +17,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -465,20 +466,30 @@ fun EventDetailScreen(
 
                         // Players
                         SectionTitle("Playing (${activePlayers.size}/${event.maxPlayers})")
-                        activePlayers.forEach { p ->
-                            PlayerRow(
-                                player = p, isMe = p.userId == user?.id,
-                                onRemove = { viewModel.removePlayer(eventId, p.id) },
-                                canRemove = isOwner || p.userId == user?.id || p.userId == null,
-                            )
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                            Column {
+                                activePlayers.forEachIndexed { i, p ->
+                                    PlayerRow(
+                                        player = p, isMe = p.userId == user?.id,
+                                        onRemove = { viewModel.removePlayer(eventId, p.id) },
+                                        canRemove = isOwner || p.userId == user?.id || p.userId == null,
+                                    )
+                                    if (i < activePlayers.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                }
+                            }
                         }
 
                         if (benchPlayers.isNotEmpty()) {
                             SectionTitle("Bench (${benchPlayers.size})")
-                            benchPlayers.forEach { p ->
-                                PlayerRow(player = p, isMe = p.userId == user?.id, isBench = true,
-                                    onRemove = { viewModel.removePlayer(eventId, p.id) },
-                                    canRemove = isOwner || p.userId == user?.id || p.userId == null)
+                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                                Column {
+                                    benchPlayers.forEachIndexed { i, p ->
+                                        PlayerRow(player = p, isMe = p.userId == user?.id, isBench = true,
+                                            onRemove = { viewModel.removePlayer(eventId, p.id) },
+                                            canRemove = isOwner || p.userId == user?.id || p.userId == null)
+                                        if (i < benchPlayers.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    }
+                                }
                             }
                         }
 
@@ -577,35 +588,26 @@ fun PlayerRow(
     canRemove: Boolean = false,
     onRemove: () -> Unit = {},
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-    ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (player.userId != null) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = "Linked account",
-                    tint = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp).padding(end = 4.dp),
-                )
-            } else {
-                Spacer(Modifier.size(16.dp).padding(end = 4.dp))
-            }
+    ListItem(
+        headlineContent = {
             Text(
                 "${player.name}${if (isMe) " (you)" else ""}",
                 color = if (isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (isMe) FontWeight.SemiBold else FontWeight.Normal,
                 fontSize = 14.sp,
-                modifier = Modifier.weight(1f),
             )
-            if (canRemove) {
-                IconButton(onClick = onRemove) {
-                    Icon(Icons.Default.Close, "Remove", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
-                }
+        },
+        leadingContent = {
+            if (player.userId != null) {
+                Icon(Icons.Default.Person, "Linked", tint = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            } else {
+                Spacer(Modifier.size(20.dp))
             }
-        }
-    }
+        },
+        trailingContent = if (canRemove) {{ IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, "Remove", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp)) } }} else null,
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.height(44.dp),
+    )
 }
 
 @Composable
