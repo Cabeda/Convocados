@@ -185,7 +185,7 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
                     arguments = listOf(navArgument("eventId") { type = NavType.StringType }),
                 ) { entry ->
                     val eventId = entry.arguments?.getString("eventId") ?: return@composable
-                    RankingsScreen(eventId = eventId, onBack = { navController.popBackStack() })
+                    RankingsScreen(eventId = eventId, onBack = { navController.popBackStack() }, onUserClick = { navController.navigate(Route.UserProfile.create(it)) })
                 }
                 composable(
                     Route.EventPayments().route,

@@ -1,5 +1,6 @@
 package dev.convocados.ui.screen.rankings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -137,6 +138,7 @@ private fun mergeRows(
 fun RankingsScreen(
     eventId: String,
     onBack: () -> Unit,
+    onUserClick: (String) -> Unit = {},
     viewModel: RankingsViewModel = hiltViewModel(),
 ) {
     val ratings by viewModel.ratings.collectAsStateWithLifecycle()
@@ -203,7 +205,12 @@ fun RankingsScreen(
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("#${index + 1}", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(r.name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(
+                                    r.name,
+                                    color = if (r.userId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                                    modifier = if (r.userId != null) Modifier.clickable { onUserClick(r.userId!!) } else Modifier,
+                                )
                                 if (r.rating != null) {
                                     Text("${r.gamesPlayed}g \u00B7 W${r.wins}/D${r.draws}/L${r.losses}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                                 } else {
