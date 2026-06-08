@@ -546,9 +546,21 @@ fun PlayerRow(
         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
     ) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (player.userId != null) {
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = "Linked account",
+                    tint = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp).padding(end = 4.dp),
+                )
+            } else {
+                Spacer(Modifier.size(16.dp).padding(end = 4.dp))
+            }
             Text(
-                "${player.name}${if (isMe) " ✓" else ""}",
-                color = if (isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface, fontSize = 14.sp,
+                "${player.name}${if (isMe) " (you)" else ""}",
+                color = if (isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (isMe) FontWeight.SemiBold else FontWeight.Normal,
+                fontSize = 14.sp,
                 modifier = Modifier.weight(1f),
             )
             if (canRemove) {
