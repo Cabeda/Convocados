@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,6 +45,12 @@ class PaymentsViewModel @Inject constructor(private val api: ConvocadosApi) : Vi
             runCatching { api.updatePaymentStatus(eventId, playerName, newStatus) }.onSuccess { load(eventId) }
         }
     }
+
+    fun setCostOverride(eventId: String, playerName: String, amount: Double) {
+        viewModelScope.launch {
+            runCatching { api.setCostOverride(eventId, playerName, amount) }.onSuccess { load(eventId) }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +58,8 @@ class PaymentsViewModel @Inject constructor(private val api: ConvocadosApi) : Vi
 fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewModel = hiltViewModel()) {
     val data by viewModel.data.collectAsState()
     val loading by viewModel.loading.collectAsState()
+    var overrideTarget by remember { mutableStateOf<String?>(null) }
+    var overrideAmount by remember { mutableStateOf("") }
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
     Scaffold(
@@ -83,9 +92,33 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
                         Card(colors = CardDefaults.cardColors(containerColor = if (p.status == "paid") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
                             Text(if (p.status == "paid") "✓ Paid" else "Pending", color = if (p.status == "paid") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.outline, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                         }
+                        Spacer(Modifier.width(4.dp))
+                        IconButton(onClick = { overrideTarget = p.playerName; overrideAmount = p.amount.toString() }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Edit, "Set custom cost", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
+                        }
                     }
                 }
             }
+        }
+
+        // Cost override dialog
+        overrideTarget?.let { name ->
+            AlertDialog(
+                onDismissRequest = { overrideTarget = null },
+                title = { Text("Custom cost for $name") },
+                text = {
+                    OutlinedTextField(value = overrideAmount, onValueChange = { overrideAmount = it }, label = { Text("Amount") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        overrideAmount.toDoubleOrNull()?.let { viewModel.setCostOverride(eventId, name, it) }
+                        overrideTarget = null
+                    }) { Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { overrideTarget = null }) { Text("Cancel") }
+                },
+            )
         }
     }
 }

@@ -1,6 +1,8 @@
 package dev.convocados.data.datastore
 
 import android.content.Context
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -23,6 +25,8 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
 
     suspend fun setLocale(locale: String) {
         context.dataStore.edit { it[LOCALE_KEY] = locale }
+        val localeList = LocaleListCompat.forLanguageTags(locale)
+        AppCompatDelegate.setApplicationLocales(localeList)
     }
 
     val themeMode: Flow<ThemeMode> = context.dataStore.data.map { prefs ->

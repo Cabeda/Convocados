@@ -276,14 +276,15 @@ data class NotificationPrefs(
 data class EventLogEntry(
     val id: String,
     val action: String,
-    val actorName: String? = null,
-    val details: String? = null,
+    val actor: String? = null,
+    val actorId: String? = null,
+    val details: kotlinx.serialization.json.JsonElement? = null,
     val createdAt: String,
 )
 
 @Serializable
 data class PaginatedLog(
-    val data: List<EventLogEntry> = emptyList(),
+    val entries: List<EventLogEntry> = emptyList(),
     val nextCursor: String? = null,
     val hasMore: Boolean = false,
 )
@@ -321,6 +322,31 @@ data class UserPublicProfile(
     val name: String,
     val image: String? = null,
     val stats: PublicStats? = null,
+)
+
+@Serializable
+data class UserProfileResponse(
+    val user: UserPublicProfile,
+    val stats: ProfileStats? = null,
+    val owned: List<ProfileEvent> = emptyList(),
+    val joined: List<ProfileEvent> = emptyList(),
+)
+
+@Serializable
+data class ProfileStats(
+    val totalGames: Int = 0,
+    val ownedGames: Int = 0,
+    val joinedGames: Int = 0,
+)
+
+@Serializable
+data class ProfileEvent(
+    val id: String,
+    val title: String,
+    val dateTime: String = "",
+    val sport: String = "",
+    val playerCount: Int = 0,
+    val maxPlayers: Int = 10,
 )
 
 @Serializable

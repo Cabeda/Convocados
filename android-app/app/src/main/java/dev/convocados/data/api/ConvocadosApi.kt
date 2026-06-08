@@ -128,7 +128,7 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     }
 
     // ── User profiles ─────────────────────────────────────────────────────
-    suspend fun fetchUserProfile(userId: String): UserPublicProfile =
+    suspend fun fetchUserProfile(userId: String): UserProfileResponse =
         client.get("/api/users/$userId")
 
     suspend fun fetchUserStats(userId: String): PlayerStats =
@@ -140,6 +140,29 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun relinquishOwnership(eventId: String): OkResponse =
         client.delete("/api/events/$eventId/claim")
+
+    suspend fun transferOwnership(eventId: String, targetUserId: String): OkResponse =
+        client.post("/api/events/$eventId/transfer", TransferRequest(targetUserId))
+
+    // ── Profile ───────────────────────────────────────────────────────────
+    suspend fun updateProfile(name: String): UserProfile =
+        client.put("/api/me/profile", UpdateProfileRequest(name))
+
+    // ── Reorder players ───────────────────────────────────────────────────
+    suspend fun reorderPlayers(eventId: String, playerIds: List<String>): OkResponse =
+        client.put("/api/events/$eventId/reorder-players", ReorderPlayersRequest(playerIds))
+
+    // ── Ratings recalculate ───────────────────────────────────────────────
+    suspend fun recalculateRatings(eventId: String): OkResponse =
+        client.post("/api/events/$eventId/ratings/recalculate")
+
+    // ── Cost override ─────────────────────────────────────────────────────
+    suspend fun setCostOverride(eventId: String, playerName: String, amount: Double): OkResponse =
+        client.put("/api/events/$eventId/cost/override", CostOverrideRequest(playerName, amount))
+
+    // ── Location with coords ──────────────────────────────────────────────
+    suspend fun updateLocationWithCoords(eventId: String, location: String, latitude: Double, longitude: Double): OkResponse =
+        client.put("/api/events/$eventId/location", LocationWithCoordsRequest(location, latitude, longitude))
 
     // ── Share URL ─────────────────────────────────────────────────────────
     fun getShareUrl(eventId: String): String =
@@ -187,3 +210,8 @@ data class CreateEventRequest(
 @Serializable data class ScoreRequest(val scoreOne: Int, val scoreTwo: Int)
 @Serializable data class PaymentUpdateRequest(val playerName: String, val status: String)
 @Serializable data class UpdateTeamsRequest(val teamOnePlayerIds: List<String>, val teamTwoPlayerIds: List<String>)
+@Serializable data class TransferRequest(val targetUserId: String)
+@Serializable data class UpdateProfileRequest(val name: String)
+@Serializable data class ReorderPlayersRequest(val playerIds: List<String>)
+@Serializable data class CostOverrideRequest(val playerName: String, val amount: Double)
+@Serializable data class LocationWithCoordsRequest(val location: String, val latitude: Double, val longitude: Double)

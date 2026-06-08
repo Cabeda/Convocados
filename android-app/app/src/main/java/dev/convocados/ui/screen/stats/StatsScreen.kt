@@ -9,10 +9,12 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -65,7 +67,7 @@ fun StatsScreen(onEventClick: (String) -> Unit, viewModel: StatsViewModel = hilt
     val s = stats!!.summary
     PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = { isRefreshing = true; viewModel.load(); isRefreshing = false }, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Text("OVERVIEW", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 1.sp)
+            Text(stringResource(R.string.overview), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 1.sp)
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatBox("Games", "${s.totalGames}", Modifier.weight(1f))
@@ -81,7 +83,7 @@ fun StatsScreen(onEventClick: (String) -> Unit, viewModel: StatsViewModel = hilt
 
             if (stats!!.events.isNotEmpty()) {
                 Spacer(Modifier.height(20.dp))
-                Text("PER EVENT", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 1.sp)
+                Text(stringResource(R.string.per_event), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 1.sp)
                 Spacer(Modifier.height(12.dp))
                 stats!!.events.forEach { ev ->
                     Card(
