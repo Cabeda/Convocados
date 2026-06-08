@@ -191,11 +191,14 @@ const en = {
   errorNeedMorePlayers: "Need at least 2 players.",
 
   // Notifications
-  notifySubscribe: "Get notified",
+  notifySubscribe: "Follow",
   notifyUnsubscribe: "Turn off notifications",
-  notifyEnabled: "Notifications on",
+  notifyEnabled: "Following",
   notifyDenied: "Notifications blocked — check browser settings",
   notifyUnsupported: "Notifications not supported in this browser",
+  pushPromptBanner: "Enable notifications to get game reminders and player updates on this device.",
+  enable: "Enable",
+  dismiss: "Dismiss",
   notifyPlayerJoined: "{name} joined the game",
   notifyPlayerLeft: "{name} left the game",
   notifyPlayerLeftBench: "{name} left the bench",

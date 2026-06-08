@@ -192,11 +192,14 @@ const pt: TranslationKeys = {
   errorNeedMorePlayers: "São necessários pelo menos 2 jogadores.",
 
   // Notifications
-  notifySubscribe: "Receber notificações",
+  notifySubscribe: "Seguir",
   notifyUnsubscribe: "Desativar notificações",
-  notifyEnabled: "Notificações ativas",
+  notifyEnabled: "A seguir",
   notifyDenied: "Notificações bloqueadas — verifica as definições do browser",
   notifyUnsupported: "Notificações não suportadas neste browser",
+  pushPromptBanner: "Ativa as notificações para receber lembretes e atualizações neste dispositivo.",
+  enable: "Ativar",
+  dismiss: "Dispensar",
   notifyPlayerJoined: "{name} entrou no jogo",
   notifyPlayerLeft: "{name} saiu do jogo",
   notifyPlayerLeftBench: "{name} saiu do banco",

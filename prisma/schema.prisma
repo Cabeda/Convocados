@@ -103,7 +103,6 @@ model Event {
   teamResults    TeamResult[]
   history        GameHistory[]
   playerRatings  PlayerRating[]
-  pushSubs       PushSubscription[]
   webhookSubs    WebhookSubscription[]
   reminderLogs   ReminderLog[]
   eventCost      EventCost?
@@ -233,19 +232,15 @@ model TeamMember {
 
 model PushSubscription {
   id        String   @id @default(cuid())
-  eventId   String
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   endpoint  String
   p256dh    String
   auth      String
   locale    String   @default("en")
-  clientId  String   @default("")
-  userId    String?  // linked when user is authenticated at subscribe time
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
 
-  @@unique([eventId, endpoint])
-  @@index([userId])
+  @@unique([userId, endpoint])
 }
 
 model WebhookSubscription {

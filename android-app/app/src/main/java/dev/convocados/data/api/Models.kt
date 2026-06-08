@@ -404,3 +404,6 @@ data class UndoData(
     val userId: String? = null,
     val removedAt: Long,
 )
+
+@Serializable
+data class FollowStateResponse(val following: Boolean = false)

@@ -1,17 +1,12 @@
 import type { APIRoute } from "astro";
-import { prisma } from "../../../../lib/db.server";
-import { getSession } from "../../../../lib/auth.helpers.server";
+import { prisma } from "~/lib/db.server";
+import { getSession } from "~/lib/auth.helpers.server";
 
 /**
- * POST /api/events/[id]/push — legacy endpoint.
- * Now registers a per-user PushSubscription (not per-event) and auto-follows the event.
- * Requires authentication since PushSubscription is per-user.
+ * POST /api/push/subscribe — register a web push endpoint for the authenticated user.
+ * This is per-user (not per-event). Which events notify this user is determined by EventFollow.
  */
-export const POST: APIRoute = async ({ params, request }) => {
-  const eventId = params.id ?? "";
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
-  if (!event) return Response.json({ error: "Not found." }, { status: 404 });
-
+export const POST: APIRoute = async ({ request }) => {
   const session = await getSession(request);
   if (!session?.user?.id) return Response.json({ error: "Unauthorized." }, { status: 401 });
 
@@ -21,23 +16,19 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   const lang = typeof locale === "string" && locale.toLowerCase().startsWith("pt") ? "pt" : "en";
-  const userId = session.user.id;
 
   await prisma.pushSubscription.upsert({
-    where: { userId_endpoint: { userId, endpoint } },
-    create: { userId, endpoint, p256dh: keys.p256dh, auth: keys.auth, locale: lang },
+    where: { userId_endpoint: { userId: session.user.id, endpoint } },
+    create: { userId: session.user.id, endpoint, p256dh: keys.p256dh, auth: keys.auth, locale: lang },
     update: { p256dh: keys.p256dh, auth: keys.auth, locale: lang },
-  });
-
-  await prisma.eventFollow.upsert({
-    where: { eventId_userId: { eventId, userId } },
-    create: { eventId, userId },
-    update: {},
   });
 
   return Response.json({ ok: true });
 };
 
+/**
+ * DELETE /api/push/subscribe — unregister a web push endpoint for the authenticated user.
+ */
 export const DELETE: APIRoute = async ({ request }) => {
   const session = await getSession(request);
   if (!session?.user?.id) return Response.json({ error: "Unauthorized." }, { status: 401 });

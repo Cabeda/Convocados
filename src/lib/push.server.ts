@@ -203,13 +203,8 @@ async function sendAppPushToUser(
 }
 
 /**
- * Send app push notifications to all users associated with an event.
- *
- * Finds users via three sources (deduplicated):
- * 1. PushSubscription records linked to the event (web push subscribers)
- * 2. Player records linked to the event (players with userId)
- * 3. Event owner (ownerId)
- *
+ * Send FCM push to all mobile devices of users who FOLLOW this event.
+ * Owner is always included (implicit permanent follow).
  * Messages are localized per-token using the locale stored on AppPushToken.
  */
 async function sendAppPushToEventUsers(
@@ -224,43 +219,27 @@ async function sendAppPushToEventUsers(
   reminderType?: "24h" | "2h" | "1h",
   prefsMap?: Map<string, typeof DEFAULTS>,
 ): Promise<void> {
-  // Source 1: users with web push subscriptions linked to this event
-  const subs = await prisma.pushSubscription.findMany({
-    where: { eventId, userId: { not: null } },
+  const follows = await prisma.eventFollow.findMany({
+    where: { eventId },
     select: { userId: true },
   });
-
-  // Source 2: players in the event with linked accounts
-  const players = await prisma.player.findMany({
-    where: { eventId, userId: { not: null } },
-    select: { userId: true },
-  });
-
-  // Source 3: event owner
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { ownerId: true },
   });
 
-  // Merge and deduplicate all user IDs, excluding the sender
-  const allUserIds = new Set<string>();
-  for (const s of subs) if (s.userId) allUserIds.add(s.userId);
-  for (const p of players) if (p.userId) allUserIds.add(p.userId);
+  const allUserIds = new Set(follows.map((f) => f.userId));
   if (event?.ownerId) allUserIds.add(event.ownerId);
-
-  // Remove excluded users (sender)
   for (const id of excludeUserIds) allUserIds.delete(id);
 
   const userIds = [...allUserIds];
   if (userIds.length === 0) return;
 
-  // Find app push tokens for these users
   const tokens = await prisma.appPushToken.findMany({
     where: { userId: { in: userIds } },
   });
   if (tokens.length === 0) return;
 
-  // Filter by notification preferences and build localized messages
   const fcmMessages: { token: string; title: string; body: string; data?: Record<string, string> }[] = [];
 
   for (const token of tokens) {
@@ -269,13 +248,10 @@ async function sendAppPushToEventUsers(
       if (!wantsPushForJobType(prefs, jobType)) continue;
       if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) continue;
     }
-    // Build localized body using the token's stored locale
     const t = createT((token.locale as Locale) ?? "en");
     const body = t(key, params);
     const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
-    const fullBody = `${body} · ${suffix}`;
-
-    fcmMessages.push({ token: token.token, title, body: fullBody, data: { url } });
+    fcmMessages.push({ token: token.token, title, body: `${body} · ${suffix}`, data: { url } });
   }
 
   await sendFcmBatch(fcmMessages);
@@ -297,96 +273,87 @@ export async function sendPushToEvent(
     (import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY)
   );
 
-  const subs = await prisma.pushSubscription.findMany({ where: { eventId } });
-
-  const filtered = subs.filter(
-    (sub) => !senderClientId || !sub.clientId || sub.clientId !== senderClientId,
-  );
-
-  // Collect ALL user IDs that will receive notifications (web + mobile + owner)
-  // so we can batch-load prefs for everyone in one query.
-  const webUserIds = new Set(
-    subs.map((s) => s.userId).filter(Boolean) as string[],
-  );
-  const players = await prisma.player.findMany({
-    where: { eventId, userId: { not: null } },
+  // Recipients = followers + owner
+  const follows = await prisma.eventFollow.findMany({
+    where: { eventId },
     select: { userId: true },
   });
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { ownerId: true },
   });
-  const allUserIds = new Set(webUserIds);
-  for (const p of players) if (p.userId) allUserIds.add(p.userId);
-  if (event?.ownerId) allUserIds.add(event.ownerId);
 
-  const allUserIdList = [...allUserIds];
-  const prefsRows = allUserIdList.length > 0
-    ? await prisma.notificationPreferences.findMany({ where: { userId: { in: allUserIdList } } })
-    : [];
-  const prefsMap = new Map(prefsRows.map((p) => [p.userId, { ...DEFAULTS, ...p }]));
+  const recipientUserIds = new Set(follows.map((f) => f.userId));
+  if (event?.ownerId) recipientUserIds.add(event.ownerId);
 
-  // Collect sender userIds so we can exclude them from app push too.
-  // Sender is identified by senderClientId (web) or by userId from the
-  // request header x-sender-user-id (mobile).
+  // Exclude sender
   const senderUserIds = new Set<string>();
-  if (senderClientId) {
-    // If senderClientId looks like a userId (not a web push clientId), add directly
-    if (allUserIds.has(senderClientId)) {
-      senderUserIds.add(senderClientId);
-    }
-    // Also check web push subscriptions for matching clientId
-    for (const sub of subs) {
-      if (sub.clientId === senderClientId && sub.userId) senderUserIds.add(sub.userId);
-    }
+  if (senderClientId && recipientUserIds.has(senderClientId)) {
+    senderUserIds.add(senderClientId);
   }
+  for (const id of senderUserIds) recipientUserIds.delete(id);
+
+  const recipientList = [...recipientUserIds];
+  if (recipientList.length === 0) return;
+
+  // Batch-load prefs
+  const prefsRows = await prisma.notificationPreferences.findMany({
+    where: { userId: { in: recipientList } },
+  });
+  const prefsMap = new Map(prefsRows.map((p) => [p.userId, { ...DEFAULTS, ...p }]));
 
   const promises: Promise<unknown>[] = [];
 
-  // App push fan-out (mobile devices via FCM)
+  // App push (FCM)
   promises.push(
     sendAppPushToEventUsers(eventId, title, key, params, url, spotsLeft, senderUserIds, jobType, reminderType, prefsMap),
   );
 
-  // Web push fan-out — requires VAPID keys
-  if (hasVapid && filtered.length > 0) {
-    await init();
-    const webpush = await getWebPush();
-    const limit = pLimit(PUSH_CONCURRENCY);
+  // Web push
+  if (hasVapid) {
+    const subs = await prisma.pushSubscription.findMany({
+      where: { userId: { in: recipientList } },
+    });
 
-    promises.push(
-      ...filtered.map((sub) =>
-        limit(async () => {
-          if (jobType && sub.userId) {
-            const prefs = prefsMap.get(sub.userId) ?? DEFAULTS;
-            if (!wantsPushForJobType(prefs, jobType)) return;
-            if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) return;
-          }
+    if (subs.length > 0) {
+      await init();
+      const webpush = await getWebPush();
+      const limit = pLimit(PUSH_CONCURRENCY);
 
-          const t = createT((sub.locale as Locale) ?? "en");
-          const body = t(key, params);
-          const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
-          const pushPayload = JSON.stringify({ title, body: `${body} · ${suffix}`, url });
-
-          try {
-            await webpush.sendNotification(
-              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-              pushPayload,
-            );
-            log.info({ endpoint: sub.endpoint.slice(0, 50) }, "Push notification sent");
-          } catch (err: unknown) {
-            const pushErr = err as { statusCode?: number; message?: string };
-            log.error(
-              { endpoint: sub.endpoint.slice(0, 60), statusCode: pushErr?.statusCode, err: pushErr?.message },
-              "Push notification failed",
-            );
-            if (pushErr?.statusCode === 410 || pushErr?.statusCode === 404 || pushErr?.statusCode === 401 || pushErr?.statusCode === 403) {
-              await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+      promises.push(
+        ...subs.map((sub) =>
+          limit(async () => {
+            if (jobType) {
+              const prefs = prefsMap.get(sub.userId) ?? DEFAULTS;
+              if (!wantsPushForJobType(prefs, jobType)) return;
+              if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) return;
             }
-          }
-        }),
-      ),
-    );
+
+            const t = createT((sub.locale as Locale) ?? "en");
+            const body = t(key, params);
+            const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
+            const pushPayload = JSON.stringify({ title, body: `${body} · ${suffix}`, url });
+
+            try {
+              await webpush.sendNotification(
+                { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+                pushPayload,
+              );
+              log.info({ endpoint: sub.endpoint.slice(0, 50) }, "Push notification sent");
+            } catch (err: unknown) {
+              const pushErr = err as { statusCode?: number; message?: string };
+              log.error(
+                { endpoint: sub.endpoint.slice(0, 60), statusCode: pushErr?.statusCode, err: pushErr?.message },
+                "Push notification failed",
+              );
+              if (pushErr?.statusCode === 410 || pushErr?.statusCode === 404 || pushErr?.statusCode === 401 || pushErr?.statusCode === 403) {
+                await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+              }
+            }
+          }),
+        ),
+      );
+    }
   }
 
   await Promise.allSettled(promises);
