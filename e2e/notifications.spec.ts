@@ -189,6 +189,11 @@ test.describe("Push subscription API", () => {
   test("POST and DELETE push subscription", async ({ request }) => {
     const ip = uniqueIp();
     const api = withIp(request, ip);
+
+    // Authenticate first — push endpoint now requires session
+    const email = `push-api-${Date.now()}@test.local`;
+    const userId = await createVerifiedUser(request, email, "TestPassword123!", "PushApiUser");
+
     const eventId = await createEvent(api, "E2E Push API Test");
 
     // Subscribe — POST a fake push subscription
@@ -201,7 +206,6 @@ test.describe("Push subscription API", () => {
           auth: "tBHItJI5svbpC7sc9axQiA",
         },
         locale: "en",
-        clientId: "e2e-test-client",
       },
     });
     expect(postRes.status()).toBe(200);
@@ -210,7 +214,7 @@ test.describe("Push subscription API", () => {
 
     // Verify subscription exists in DB
     const count = execSync(
-      `sqlite3 "${DB_PATH}" "SELECT COUNT(*) FROM PushSubscription WHERE eventId = '${eventId}' AND endpoint = '${fakeEndpoint}'"`,
+      `sqlite3 "${DB_PATH}" "SELECT COUNT(*) FROM PushSubscription WHERE userId = '${userId}' AND endpoint = '${fakeEndpoint}'"`,
       { encoding: "utf-8" },
     ).trim();
     expect(parseInt(count)).toBe(1);
@@ -226,7 +230,7 @@ test.describe("Push subscription API", () => {
 
     // Verify subscription is gone
     const countAfter = execSync(
-      `sqlite3 "${DB_PATH}" "SELECT COUNT(*) FROM PushSubscription WHERE eventId = '${eventId}' AND endpoint = '${fakeEndpoint}'"`,
+      `sqlite3 "${DB_PATH}" "SELECT COUNT(*) FROM PushSubscription WHERE userId = '${userId}' AND endpoint = '${fakeEndpoint}'"`,
       { encoding: "utf-8" },
     ).trim();
     expect(parseInt(countAfter)).toBe(0);
@@ -235,6 +239,11 @@ test.describe("Push subscription API", () => {
   test("POST push subscription returns 400 for invalid data", async ({ request }) => {
     const ip = uniqueIp();
     const api = withIp(request, ip);
+
+    // Authenticate first
+    const email = `push-invalid-${Date.now()}@test.local`;
+    await createVerifiedUser(request, email, "TestPassword123!", "PushInvalidUser");
+
     const eventId = await createEvent(api, "E2E Push Validation Test");
 
     const res = await api.post(`/api/events/${eventId}/push`, {
@@ -245,12 +254,16 @@ test.describe("Push subscription API", () => {
 
   test("POST push subscription returns 404 for non-existent event", async ({ request }) => {
     const ip = uniqueIp();
+
+    // Authenticate first
+    const email = `push-404-${Date.now()}@test.local`;
+    await createVerifiedUser(request, email, "TestPassword123!", "Push404User");
+
     const res = await request.post("/api/events/non-existent-id/push", {
       data: {
         endpoint: "https://example.com/fake",
         keys: { p256dh: "abc", auth: "def" },
         locale: "en",
-        clientId: "test",
       },
       headers: { "X-Forwarded-For": ip },
     });
@@ -486,6 +499,11 @@ test.describe("Web push notification delivery", () => {
   test("subscriber receives push when another user adds a player", async ({ browser, request }) => {
     const ip = uniqueIp();
     const api = withIp(request, ip);
+
+    // Authenticate the subscriber for push subscription
+    const subEmail = `push-delivery-${Date.now()}@test.local`;
+    const subUserId = await createVerifiedUser(request, subEmail, "TestPassword123!", "PushSubscriber");
+
     const eventId = await createEvent(api, "E2E Push Delivery Test", 10);
 
     // ── Browser A: subscriber ──
@@ -520,14 +538,13 @@ test.describe("Web push notification delivery", () => {
             auth: "tBHItJI5svbpC7sc9axQiA",
           },
           locale: "en",
-          clientId: "subscriber-client",
         },
       });
       expect(subRes.status()).toBe(200);
 
       // Verify subscription exists
       const subCount = sqlQuery(
-        `SELECT COUNT(*) FROM PushSubscription WHERE eventId = '${eventId}'`,
+        `SELECT COUNT(*) FROM PushSubscription WHERE userId = '${subUserId}' AND endpoint = '${fakeEndpoint}'`,
       );
       expect(parseInt(subCount)).toBeGreaterThanOrEqual(1);
 
@@ -568,7 +585,7 @@ test.describe("Web push notification delivery", () => {
       // subscription is only deleted on 410/404 status codes. A connection
       // error or other failure keeps the subscription intact.
       const subCountAfter = sqlQuery(
-        `SELECT COUNT(*) FROM PushSubscription WHERE eventId = '${eventId}' AND endpoint = '${fakeEndpoint}'`,
+        `SELECT COUNT(*) FROM PushSubscription WHERE userId = '${subUserId}' AND endpoint = '${fakeEndpoint}'`,
       );
       // Subscription may or may not survive depending on the push service response
       // The important thing is the job was processed
@@ -590,7 +607,7 @@ test.describe("Web push notification delivery", () => {
 
     // Verify subscription was stored in DB
     const subCount = sqlQuery(
-      `SELECT COUNT(*) FROM PushSubscription WHERE eventId = '${eventId}'`,
+      `SELECT COUNT(*) FROM PushSubscription WHERE userId = '${subUserId}'`,
     );
     expect(parseInt(subCount)).toBeGreaterThanOrEqual(1);
 

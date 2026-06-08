@@ -174,6 +174,16 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun fetchMvp(eventId: String, historyId: String): MvpResponse =
         client.get("/api/events/$eventId/history/$historyId/mvp")
+
+    // ── Follow ────────────────────────────────────────────────────────────
+    suspend fun getFollowState(eventId: String): FollowStateResponse =
+        client.get("/api/events/$eventId/follow")
+
+    suspend fun followEvent(eventId: String): FollowStateResponse =
+        client.post("/api/events/$eventId/follow")
+
+    suspend fun unfollowEvent(eventId: String): FollowStateResponse =
+        client.delete("/api/events/$eventId/follow")
 }
 
 // ── Request bodies ────────────────────────────────────────────────────────────

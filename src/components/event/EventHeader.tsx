@@ -445,7 +445,7 @@ export function EventHeader({
 
               {isMobile ? (
                 <>
-                  <NotifyButton eventId={eventId} />
+                  <NotifyButton eventId={eventId} isAuthenticated={isAuthenticated} />
                   <IconButton
                     onClick={(e) => setAnchorEl(e.currentTarget)}
                     aria-label={t("moreActions")}
@@ -457,7 +457,7 @@ export function EventHeader({
                 </>
               ) : (
                 <>
-                  <NotifyButton eventId={eventId} />
+                  <NotifyButton eventId={eventId} isAuthenticated={isAuthenticated} />
                   <Button variant="outlined" size="small" startIcon={<MoreVertIcon />}
                     onClick={(e) => setAnchorEl(e.currentTarget)}
                     sx={{ ml: "auto", flexShrink: 0 }}>

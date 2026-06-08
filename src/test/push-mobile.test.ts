@@ -77,6 +77,14 @@ async function seedEvent(ownerId: string, id = "evt-push-1") {
   return id;
 }
 
+async function followEvent(userId: string, eventId: string) {
+  await prisma.eventFollow.upsert({
+    where: { eventId_userId: { eventId, userId } },
+    create: { eventId, userId },
+    update: {},
+  });
+}
+
 /** Get all FCM fetch calls (calls to fcm.googleapis.com) */
 function getFcmCalls() {
   return mockFetch.mock.calls.filter(
@@ -101,6 +109,7 @@ beforeEach(async () => {
   await prisma.notificationJob.deleteMany();
   await prisma.appPushToken.deleteMany();
   await prisma.pushSubscription.deleteMany();
+  await prisma.eventFollow.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
   await prisma.session.deleteMany();
@@ -117,10 +126,12 @@ describe("sendPushToEvent — mobile app push delivery", () => {
     const ownerId = await seedUser("owner-1", "Owner");
     const playerId = await seedUser("player-1", "Mobile Player");
     const eventId = await seedEvent(ownerId);
+    await followEvent(ownerId, eventId);
 
     await prisma.player.create({
       data: { name: "Mobile Player", eventId, userId: playerId, order: 0 },
     });
+    await followEvent(playerId, eventId);
 
     await prisma.appPushToken.create({
       data: { userId: playerId, token: "fcm-token-mobile-1", platform: "android" },
@@ -144,6 +155,7 @@ describe("sendPushToEvent — mobile app push delivery", () => {
   it("sends FCM push to event owner even without web subscription", async () => {
     const ownerId = await seedUser("owner-2", "Owner");
     const eventId = await seedEvent(ownerId);
+    await followEvent(ownerId, eventId);
 
     await prisma.appPushToken.create({
       data: { userId: ownerId, token: "fcm-token-owner-1", platform: "android" },
@@ -168,13 +180,16 @@ describe("sendPushToEvent — mobile app push delivery", () => {
     const ownerId = await seedUser("owner-3", "Owner");
     const senderId = await seedUser("sender-1", "Sender");
     const eventId = await seedEvent(ownerId, "evt-push-exclude");
+    await followEvent(ownerId, eventId);
 
     await prisma.player.create({
       data: { name: "Owner", eventId, userId: ownerId, order: 0 },
     });
+    await followEvent(ownerId, eventId);
     await prisma.player.create({
       data: { name: "Sender", eventId, userId: senderId, order: 1 },
     });
+    await followEvent(senderId, eventId);
 
     await prisma.appPushToken.create({
       data: { userId: ownerId, token: "fcm-token-owner-excl", platform: "android" },
@@ -186,12 +201,10 @@ describe("sendPushToEvent — mobile app push delivery", () => {
     // Sender has a web push subscription with a clientId
     await prisma.pushSubscription.create({
       data: {
-        eventId,
         endpoint: "https://push.example.com/sender",
         p256dh: "key1",
         auth: "auth1",
         locale: "en",
-        clientId: "sender-client-123",
         userId: senderId,
       },
     });
@@ -204,7 +217,7 @@ describe("sendPushToEvent — mobile app push delivery", () => {
       { name: "Someone" },
       `/events/${eventId}`,
       5,
-      "sender-client-123",
+      senderId,
     );
 
     const tokens = getAllFcmTokens();
@@ -216,6 +229,8 @@ describe("sendPushToEvent — mobile app push delivery", () => {
     const ownerId = await seedUser("owner-4", "Owner");
     const userId = await seedUser("dual-user", "Dual User");
     const eventId = await seedEvent(ownerId, "evt-push-dedup");
+    await followEvent(ownerId, eventId);
+    await followEvent(userId, eventId);
 
     await prisma.player.create({
       data: { name: "Dual User", eventId, userId, order: 0 },
@@ -223,12 +238,10 @@ describe("sendPushToEvent — mobile app push delivery", () => {
 
     await prisma.pushSubscription.create({
       data: {
-        eventId,
         endpoint: "https://push.example.com/dual",
         p256dh: "key2",
         auth: "auth2",
         locale: "en",
-        clientId: "",
         userId,
       },
     });
@@ -260,9 +273,11 @@ describe("sendPushToEvent — mobile app push delivery", () => {
     await prisma.player.create({
       data: { name: "Owner", eventId, userId: ownerId, order: 0 },
     });
+    await followEvent(ownerId, eventId);
     await prisma.player.create({
       data: { name: "Mobile Sender", eventId, userId: senderId, order: 1 },
     });
+    await followEvent(senderId, eventId);
 
     await prisma.appPushToken.create({
       data: { userId: ownerId, token: "fcm-token-owner-uid", platform: "android" },
@@ -295,6 +310,7 @@ describe("sendPushToEvent — mobile app push delivery", () => {
     await prisma.player.create({
       data: { name: "Portuguese User", eventId, userId: ptUserId, order: 0 },
     });
+    await followEvent(ptUserId, eventId);
 
     await prisma.appPushToken.create({
       data: { userId: ptUserId, token: "fcm-token-pt-1", platform: "android", locale: "pt" },
@@ -333,6 +349,7 @@ describe("sendPushToEvent — mobile app push delivery", () => {
     await prisma.player.create({
       data: { name: "Player", eventId, userId: playerId, order: 0 },
     });
+    await followEvent(playerId, eventId);
     await prisma.appPushToken.create({
       data: { userId: playerId, token: "fcm-token-full-1", platform: "android" },
     });
@@ -422,6 +439,7 @@ describe("sendPushToEvent — notification preferences", () => {
     await prisma.player.create({
       data: { name: "Opt Out User", eventId, userId: optOutId, order: 0 },
     });
+    await followEvent(optOutId, eventId);
     await prisma.appPushToken.create({
       data: { userId: optOutId, token: "fcm-token-optout-1", platform: "android" },
     });
