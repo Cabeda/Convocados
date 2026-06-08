@@ -1,20 +1,25 @@
 package dev.convocados.ui.screen.rankings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.HowToReg
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -76,6 +81,13 @@ class RankingsViewModel @Inject constructor(
         load(id)
     }
 
+    fun recalculate(id: String) {
+        viewModelScope.launch {
+            runCatching { api.recalculateRatings(id) }
+                .onSuccess { load(id) }
+        }
+    }
+
     fun claimPlayer(eventId: String, playerId: String) {
         viewModelScope.launch {
             runCatching { api.claimPlayer(eventId, playerId) }
@@ -129,6 +141,7 @@ private fun mergeRows(
 fun RankingsScreen(
     eventId: String,
     onBack: () -> Unit,
+    onUserClick: (String) -> Unit = {},
     viewModel: RankingsViewModel = hiltViewModel(),
 ) {
     val ratings by viewModel.ratings.collectAsStateWithLifecycle()
@@ -142,18 +155,30 @@ fun RankingsScreen(
     val players = event?.players ?: emptyList()
     val rows = mergeRows(ratings, players)
     val userHasLinkedPlayer = user != null && players.any { it.userId == user?.id }
+    val isOwner = user != null && event?.ownerId == user?.id
 
     // Claim confirmation dialog state
     var claimTarget by remember { mutableStateOf<RankingRow?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("\uD83C\uDFC6 Rankings") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text("\uD83C\uDFC6 ${stringResource(R.string.rankings)}") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+                actions = {
+                    if (isOwner) {
+                        IconButton(onClick = {
+                            viewModel.recalculate(eventId)
+                            scope.launch { snackbarHostState.showSnackbar("Recalculating ratings...") }
+                        }) { Icon(Icons.Default.Refresh, "Recalculate", tint = MaterialTheme.colorScheme.primary) }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (loading) {
@@ -165,7 +190,7 @@ fun RankingsScreen(
 
         if (rows.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                Text("No ratings yet", color = MaterialTheme.colorScheme.outline)
+                Text(stringResource(R.string.no_ratings), color = MaterialTheme.colorScheme.outline)
             }
             return@Scaffold
         }
@@ -182,8 +207,21 @@ fun RankingsScreen(
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("#${index + 1}", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                tint = if (r.userId == user?.id) MaterialTheme.colorScheme.primary
+                                       else if (r.userId != null) MaterialTheme.colorScheme.onSurfaceVariant
+                                       else MaterialTheme.colorScheme.outlineVariant,
+                                modifier = Modifier.size(20.dp).padding(end = 4.dp),
+                            )
                             Column(Modifier.weight(1f)) {
-                                Text(r.name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(
+                                    r.name + if (r.userId == user?.id) " (you)" else "",
+                                    color = if (r.userId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                                    modifier = if (r.userId != null) Modifier.clickable { onUserClick(r.userId!!) } else Modifier,
+                                )
                                 if (r.rating != null) {
                                     Text("${r.gamesPlayed}g \u00B7 W${r.wins}/D${r.draws}/L${r.losses}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                                 } else {

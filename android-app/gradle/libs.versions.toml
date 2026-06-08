@@ -28,6 +28,7 @@ workRuntime = "2.10.0"
 hiltWork = "1.2.0"
 turbine = "1.2.0"
 mockk = "1.13.16"
+osmdroid = "6.1.18"
 kotlinxCoroutinesTest = "1.11.0"
 
 [libraries]
@@ -48,6 +49,7 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "androidxDataStore" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "androidxSecurity" }
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "androidxBrowser" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version = "1.7.0" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "androidxSplashscreen" }
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
@@ -84,6 +86,7 @@ androidx-wear = { group = "androidx.wear", name = "wear", version = "1.3.0" }
 # Testing
 junit = { group = "junit", name = "junit", version = "4.13.2" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+osmdroid = { group = "org.osmdroid", name = "osmdroid-android", version.ref = "osmdroid" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
 

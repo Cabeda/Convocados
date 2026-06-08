@@ -3,4 +3,60 @@
     <string name="app_name">Convocados</string>
     <string name="shortcut_my_games">My Games</string>
     <string name="shortcut_create_game">Create Game</string>
+
+    <!-- Shared keys from web i18n -->
+    <string name="create_game">Create a Game</string>
+    <string name="my_games">My Games</string>
+    <string name="players">Players</string>
+    <string name="teams">Teams</string>
+    <string name="randomize_teams">Randomize teams</string>
+    <string name="cancel">Cancel</string>
+    <string name="score">Score</string>
+    <string name="ratings">Ratings</string>
+    <string name="no_ratings">No ratings yet</string>
+    <string name="rankings">Rankings</string>
+    <string name="loading">Loading…</string>
+    <string name="save">Save</string>
+    <string name="archived">Archived</string>
+
+    <!-- Event detail -->
+    <string name="playing">Playing</string>
+    <string name="playing_count">Playing (%1$d/%2$d)</string>
+    <string name="bench">Bench</string>
+    <string name="bench_count">Bench (%1$d)</string>
+    <string name="add_player_placeholder">Add player name</string>
+    <string name="add_button">Add</string>
+    <string name="see_all_games">See all %1$d games →</string>
+    <string name="history">History</string>
+    <string name="view_log">View log →</string>
+    <string name="no_games_yet">No games yet</string>
+    <string name="no_games_desc">Create a game or join one to get started.</string>
+    <string name="create_a_game">+ Create a Game</string>
+    <string name="sign_in">Sign in</string>
+    <string name="manage_games">Manage your games on the go</string>
+    <string name="server_url">Server URL</string>
+    <string name="language">Language</string>
+    <string name="notifications_title">Notifications</string>
+    <string name="notifications_subtitle">Manage push &amp; email preferences</string>
+    <string name="sign_out">Sign out</string>
+    <string name="edit_name">Edit name</string>
+    <string name="configure_instance">Configure instance</string>
+    <string name="game_details">Game Details</string>
+    <string name="game_history">Game History</string>
+    <string name="event_log">Event Log</string>
+    <string name="no_log_entries">No log entries yet</string>
+    <string name="load_more">Load more</string>
+    <string name="back">Back</string>
+    <string name="remove">Remove</string>
+    <string name="linked_account">Linked account</string>
+    <string name="you_suffix"> (you)</string>
+    <string name="games_played_suffix">%1$d games</string>
+    <string name="public_games">Public Games</string>
+    <string name="profile">Profile</string>
+    <string name="stats">Stats</string>
+    <string name="games_tab">Games</string>
+    <string name="elo_changes">ELO Changes</string>
+    <string name="payments">Payments</string>
+    <string name="overview">OVERVIEW</string>
+    <string name="per_event">PER EVENT</string>
 </resources>

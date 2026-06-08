@@ -1,16 +1,21 @@
 package dev.convocados.ui.screen.profile
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,6 +26,7 @@ import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.push.PushTokenManager
 import dev.convocados.data.repository.UserRepository
+import dev.convocados.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,8 +53,16 @@ class ProfileViewModel @Inject constructor(
     val user: StateFlow<UserProfile?> = repository.userProfile
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val locale = settingsStore.locale
+    val themeMode = settingsStore.themeMode
 
     init { viewModelScope.launch { repository.refreshUserProfile() } }
+
+    fun updateName(name: String) {
+        viewModelScope.launch {
+            runCatching { api.updateProfile(name) }
+                .onSuccess { repository.refreshUserProfile() }
+        }
+    }
 
     fun logout() { 
         viewModelScope.launch {
@@ -60,6 +74,7 @@ class ProfileViewModel @Inject constructor(
     fun getServerUrl() = tokenStore.getServerUrl()
     fun setServerUrl(url: String) = tokenStore.setServerUrl(url)
     fun setLocale(code: String) { viewModelScope.launch { settingsStore.setLocale(code) } }
+    fun setThemeMode(mode: ThemeMode) { viewModelScope.launch { settingsStore.setThemeMode(mode) } }
 }
 
 @Composable
@@ -73,13 +88,20 @@ fun ProfileScreen(
     var editingServer by remember { mutableStateOf(false) }
     var serverUrl by remember { mutableStateOf("") }
     var showLanguages by remember { mutableStateOf(false) }
+    var showEditName by remember { mutableStateOf(false) }
+    var editName by remember { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         // Profile card
         user?.let { u ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(u.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(u.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                        IconButton(onClick = { editName = u.name; showEditName = true }) {
+                            Icon(Icons.Default.Edit, stringResource(R.string.edit_name), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        }
+                    }
                     Text(u.email, color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
                 }
             }
@@ -87,30 +109,52 @@ fun ProfileScreen(
         }
 
         // Notifications
-        MenuItem(title = "\uD83D\uDD14 Notifications", subtitle = "Manage push & email preferences", onClick = onNotificationPrefs)
+        MenuItem(title = "\uD83D\uDD14 ${stringResource(R.string.notifications_title)}", subtitle = stringResource(R.string.notifications_subtitle), onClick = onNotificationPrefs)
 
         // Language
-        MenuItem(title = "Language", subtitle = LOCALE_OPTIONS.find { it.code == locale }?.label ?: "English", onClick = { showLanguages = !showLanguages })
+        MenuItem(title = stringResource(R.string.language), subtitle = LOCALE_OPTIONS.find { it.code == locale }?.label ?: "English", onClick = { showLanguages = !showLanguages })
         if (showLanguages) {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Column {
                     LOCALE_OPTIONS.forEach { opt ->
                         Row(
                             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
-                                .let { if (locale == opt.code) it else it },
+                                .clickable { viewModel.setLocale(opt.code); showLanguages = false },
                             horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(opt.label, color = if (locale == opt.code) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
+                            Text(opt.label, color = if (locale == opt.code) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontWeight = if (locale == opt.code) FontWeight.Bold else FontWeight.Normal)
                             if (locale == opt.code) Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
-                        if (opt != LOCALE_OPTIONS.last()) HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                        if (opt != LOCALE_OPTIONS.last()) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+        }
+
+        // Theme
+        val themeMode by viewModel.themeMode.collectAsState(initial = ThemeMode.System)
+        val themeLabel = when (themeMode) { ThemeMode.System -> "System"; ThemeMode.Light -> "Light"; ThemeMode.Dark -> "Dark" }
+        var showTheme by remember { mutableStateOf(false) }
+        MenuItem(title = "Theme", subtitle = themeLabel, onClick = { showTheme = !showTheme })
+        if (showTheme) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Column {
+                    listOf(ThemeMode.System to "System", ThemeMode.Light to "Light", ThemeMode.Dark to "Dark").forEach { (mode, label) ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { viewModel.setThemeMode(mode); showTheme = false }.padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(label, color = if (themeMode == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontWeight = if (themeMode == mode) FontWeight.Bold else FontWeight.Normal)
+                            if (themeMode == mode) Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        }
+                        if (mode != ThemeMode.Dark) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
             }
         }
 
         // Server URL
-        MenuItem(title = "Server URL", subtitle = "Configure instance", onClick = {
+        MenuItem(title = stringResource(R.string.server_url), subtitle = stringResource(R.string.configure_instance), onClick = {
             serverUrl = viewModel.getServerUrl()
             editingServer = true
         })
@@ -141,7 +185,26 @@ fun ProfileScreen(
             onClick = { viewModel.logout(); onLogout() },
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-        ) { Text("Sign out", color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold) }
+        ) { Text(stringResource(R.string.sign_out), color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold) }
+    }
+
+    // Edit name dialog
+    if (showEditName) {
+        AlertDialog(
+            onDismissRequest = { showEditName = false },
+            title = { Text(stringResource(R.string.edit_name)) },
+            text = {
+                OutlinedTextField(value = editName, onValueChange = { editName = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (editName.isNotBlank()) { viewModel.updateName(editName.trim()); showEditName = false }
+                }) { Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditName = false }) { Text("Cancel", color = MaterialTheme.colorScheme.outline) }
+            },
+        )
     }
 }
 

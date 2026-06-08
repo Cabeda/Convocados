@@ -17,13 +17,16 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -73,6 +76,7 @@ class EventDetailViewModel @Inject constructor(
     private val repository: EventRepository,
     private val api: ConvocadosApi,
     private val tokenStore: TokenStore,
+    private val client: ApiClient,
 ) : ViewModel() {
     private val _eventId = MutableStateFlow<String?>(null)
 
@@ -111,7 +115,8 @@ class EventDetailViewModel @Inject constructor(
             _state.value = _state.value.copy(loading = event.value == null)
             repository.refreshEventDetail(eventId)
             val postGame = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
-            _state.value = _state.value.copy(loading = false, refreshing = false, postGame = postGame)
+            val known = runCatching { api.fetchKnownPlayers(eventId) }.getOrNull()?.players ?: emptyList()
+            _state.value = _state.value.copy(loading = false, refreshing = false, postGame = postGame, knownPlayers = known)
         }
     }
 
@@ -197,6 +202,13 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
+    fun reorderPlayers(eventId: String, playerIds: List<String>) {
+        viewModelScope.launch {
+            runCatching { api.reorderPlayers(eventId, playerIds) }
+                .onSuccess { repository.refreshEventDetail(eventId) }
+        }
+    }
+
     fun saveScore(eventId: String, historyId: String, s1: Int, s2: Int) {
         viewModelScope.launch {
             runCatching { api.updateScore(eventId, historyId, s1, s2) }
@@ -213,6 +225,9 @@ class EventDetailViewModel @Inject constructor(
     }
 
     fun getShareUrl(eventId: String): String = "${tokenStore.getServerUrl()}/events/$eventId"
+
+    suspend fun fetchCalendarIcs(eventId: String): String? =
+        runCatching { client.fetchCalendarIcs(eventId) }.getOrNull()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
@@ -227,6 +242,8 @@ fun EventDetailScreen(
     onAttendance: () -> Unit,
     onNotificationPrefs: () -> Unit,
     onUserClick: (String) -> Unit,
+    onHistoryClick: (String) -> Unit = {},
+    onAllHistory: () -> Unit = {},
     viewModel: EventDetailViewModel = hiltViewModel(),
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -262,7 +279,7 @@ fun EventDetailScreen(
         topBar = {
             TopAppBar(
                 title = { Text(event?.title ?: "Event", maxLines = 1) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
@@ -329,7 +346,7 @@ fun EventDetailScreen(
                             }, label = { Text("\uD83D\uDCE4 Share") })
                             if (activePlayers.size >= 2) AssistChip(onClick = { viewModel.randomize(eventId, event.balanced) }, label = { Text("\uD83C\uDFB2 Randomize") })
                             if (isOwner || event.isAdmin) AssistChip(onClick = onSettings, label = { Text("\u2699\uFE0F") })
-                            if (event.eloEnabled) AssistChip(onClick = onRankings, label = { Text("\uD83C\uDFC6 Rankings") })
+                            AssistChip(onClick = onRankings, label = { Text("\uD83C\uDFC6 Rankings") })
                             AssistChip(onClick = onNotificationPrefs, label = { Text("\uD83D\uDD14") })
                         }
 
@@ -450,25 +467,35 @@ fun EventDetailScreen(
                         }
 
                         // Players
-                        SectionTitle("Playing (${activePlayers.size}/${event.maxPlayers})")
-                        activePlayers.forEach { p ->
-                            PlayerRow(
-                                player = p, isMe = p.userId == user?.id,
-                                onRemove = { viewModel.removePlayer(eventId, p.id) },
-                                canRemove = isOwner || p.userId == user?.id || p.userId == null,
-                            )
-                        }
-
-                        if (benchPlayers.isNotEmpty()) {
-                            SectionTitle("Bench (${benchPlayers.size})")
-                            benchPlayers.forEach { p ->
-                                PlayerRow(player = p, isMe = p.userId == user?.id, isBench = true,
-                                    onRemove = { viewModel.removePlayer(eventId, p.id) },
-                                    canRemove = isOwner || p.userId == user?.id || p.userId == null)
+                        SectionTitle(stringResource(R.string.playing_count, activePlayers.size, event.maxPlayers))
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                            Column {
+                                activePlayers.forEachIndexed { i, p ->
+                                    PlayerRow(
+                                        player = p, isMe = p.userId == user?.id,
+                                        onRemove = { viewModel.removePlayer(eventId, p.id) },
+                                        canRemove = isOwner || p.userId == user?.id || p.userId == null,
+                                    )
+                                    if (i < activePlayers.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                }
                             }
                         }
 
-                        // Suggestions
+                        if (benchPlayers.isNotEmpty()) {
+                            SectionTitle(stringResource(R.string.bench_count, benchPlayers.size))
+                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                                Column {
+                                    benchPlayers.forEachIndexed { i, p ->
+                                        PlayerRow(player = p, isMe = p.userId == user?.id, isBench = true,
+                                            onRemove = { viewModel.removePlayer(eventId, p.id) },
+                                            canRemove = isOwner || p.userId == user?.id || p.userId == null)
+                                        if (i < benchPlayers.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Suggestions (quick-add chips when input is empty)
                         if (suggestions.isNotEmpty() && newPlayer.isBlank()) {
                             Row(modifier = Modifier.padding(top = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 suggestions.forEach { s ->
@@ -477,29 +504,57 @@ fun EventDetailScreen(
                             }
                         }
 
-                        // Add player
-                        Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
-                                value = newPlayer, onValueChange = { newPlayer = it },
-                                placeholder = { Text("Add player name") }, singleLine = true,
-                                modifier = Modifier.weight(1f),
-                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline, cursorColor = MaterialTheme.colorScheme.primary, focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant),
-                            )
-                            Button(
-                                onClick = { viewModel.addPlayer(eventId, newPlayer.trim()); newPlayer = "" },
-                                enabled = newPlayer.isNotBlank(),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                            ) { Text("Add", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold) }
+                        // Add player with autocomplete dropdown
+                        Box(modifier = Modifier.padding(top = 12.dp)) {
+                            val filteredSuggestions = if (newPlayer.length >= 2) {
+                                state.knownPlayers.filter {
+                                    it.name.lowercase().contains(newPlayer.lowercase()) && it.name.lowercase() !in currentNames
+                                }.take(5)
+                            } else emptyList()
+
+                            Column {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    OutlinedTextField(
+                                        value = newPlayer, onValueChange = { newPlayer = it },
+                                        placeholder = { Text(stringResource(R.string.add_player_placeholder)) }, singleLine = true,
+                                        modifier = Modifier.weight(1f),
+                                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline, cursorColor = MaterialTheme.colorScheme.primary, focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    )
+                                    Button(
+                                        onClick = { viewModel.addPlayer(eventId, newPlayer.trim()); newPlayer = "" },
+                                        enabled = newPlayer.isNotBlank(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                    ) { Text(stringResource(R.string.add_button), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold) }
+                                }
+                                // Autocomplete dropdown
+                                if (filteredSuggestions.isNotEmpty()) {
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                    ) {
+                                        Column {
+                                            filteredSuggestions.forEach { s ->
+                                                Text(
+                                                    "${s.name} (${s.gamesPlayed} games)",
+                                                    modifier = Modifier.fillMaxWidth().clickable { viewModel.addPlayer(eventId, s.name); newPlayer = "" }.padding(horizontal = 16.dp, vertical = 10.dp),
+                                                    color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         // History
                         if (state.history.isNotEmpty()) {
                             Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                SectionTitle("History")
-                                TextButton(onClick = onLog) { Text("View log →", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp) }
+                                SectionTitle(stringResource(R.string.history))
+                                TextButton(onClick = onLog) { Text(stringResource(R.string.view_log), color = MaterialTheme.colorScheme.primary, fontSize = 13.sp) }
                             }
-                            state.history.forEach { h ->
+                            state.history.take(2).forEach { h ->
                                 HistoryCard(h, editingScoreId, scoreOne, scoreTwo,
+                                    onClick = { onHistoryClick(h.id) },
                                     onEditScore = { editingScoreId = h.id; scoreOne = (h.scoreOne ?: "").toString(); scoreTwo = (h.scoreTwo ?: "").toString() },
                                     onScoreOneChange = { scoreOne = it }, onScoreTwoChange = { scoreTwo = it },
                                     onSaveScore = {
@@ -508,6 +563,11 @@ fun EventDetailScreen(
                                         viewModel.saveScore(eventId, h.id, s1, s2); editingScoreId = null
                                     },
                                 )
+                            }
+                            if (state.history.size > 2) {
+                                TextButton(onClick = onAllHistory, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.see_all_games, state.history.size), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
                         Spacer(Modifier.height(40.dp))
@@ -530,32 +590,37 @@ fun PlayerRow(
     canRemove: Boolean = false,
     onRemove: () -> Unit = {},
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-    ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    ListItem(
+        headlineContent = {
+            val youSuffix = stringResource(R.string.you_suffix)
             Text(
-                "${player.name}${if (isMe) " ✓" else ""}",
-                color = if (isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface, fontSize = 14.sp,
-                modifier = Modifier.weight(1f),
+                "${player.name}${if (isMe) youSuffix else ""}",
+                color = if (isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (isMe) FontWeight.SemiBold else FontWeight.Normal,
+                fontSize = 14.sp,
             )
-            if (canRemove) {
-                IconButton(onClick = onRemove) {
-                    Icon(Icons.Default.Close, "Remove", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
-                }
+        },
+        leadingContent = {
+            if (player.userId != null) {
+                Icon(Icons.Default.Person, "Linked", tint = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            } else {
+                Spacer(Modifier.size(20.dp))
             }
-        }
-    }
+        },
+        trailingContent = if (canRemove) {{ IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, stringResource(R.string.remove), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp)) } }} else null,
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.height(44.dp),
+    )
 }
 
 @Composable
 fun HistoryCard(
     h: GameHistory, editingScoreId: String?, scoreOne: String, scoreTwo: String,
+    onClick: () -> Unit = {},
     onEditScore: () -> Unit, onScoreOneChange: (String) -> Unit, onScoreTwoChange: (String) -> Unit,
     onSaveScore: () -> Unit,
 ) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).clickable(onClick = onClick)) {
         Column(Modifier.padding(12.dp)) {
             Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
             if (h.scoreOne != null && h.scoreTwo != null) {

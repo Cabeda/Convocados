@@ -107,6 +107,7 @@ dependencies {
 
     // Browser (Custom Tabs for OAuth)
     implementation(libs.androidx.browser)
+    implementation(libs.androidx.appcompat)
 
     // Splash screen
     implementation(libs.androidx.core.splashscreen)
@@ -122,6 +123,9 @@ dependencies {
 
     // Accompanist (Permissions)
     implementation(libs.accompanist.permissions)
+
+    // OSM Maps
+    implementation(libs.osmdroid)
 
     // Wearable Data Layer (sync auth tokens to watch)
     implementation(libs.play.services.wearable)

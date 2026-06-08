@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Convocados</string>
+    <string name="shortcut_my_games">Meine Spiele</string>
+    <string name="shortcut_create_game">Spiel erstellen</string>
+
+    <!-- Shared keys from web i18n -->
+    <string name="create_game">Spiel erstellen</string>
+    <string name="my_games">Meine Spiele</string>
+    <string name="players">Spieler</string>
+    <string name="teams">Teams</string>
+    <string name="randomize_teams">Teams auslosen</string>
+    <string name="cancel">Abbrechen</string>
+    <string name="score">Ergebnis</string>
+    <string name="ratings">Bewertungen</string>
+    <string name="no_ratings">Noch keine Bewertungen</string>
+    <string name="rankings">Rangliste</string>
+    <string name="loading">Lädt…</string>
+    <string name="save">Speichern</string>
+    <string name="archived">Archiviert</string>
+
+    <!-- Event detail -->
+    <string name="playing">Spielen</string>
+    <string name="playing_count">Spielen (%1$d/%2$d)</string>
+    <string name="bench">Ersatzbank</string>
+    <string name="bench_count">Ersatzbank (%1$d)</string>
+    <string name="add_player_placeholder">Spieler hinzufügen</string>
+    <string name="add_button">Hinzufügen</string>
+    <string name="see_all_games">Alle %1$d Spiele anzeigen →</string>
+    <string name="history">Verlauf</string>
+    <string name="view_log">Protokoll anzeigen →</string>
+    <string name="no_games_yet">Noch keine Spiele</string>
+    <string name="no_games_desc">Erstelle ein Spiel oder tritt einem bei.</string>
+    <string name="create_a_game">+ Spiel erstellen</string>
+    <string name="sign_in">Anmelden</string>
+    <string name="manage_games">Verwalte deine Spiele unterwegs</string>
+    <string name="server_url">Server-URL</string>
+    <string name="language">Sprache</string>
+    <string name="notifications_title">Benachrichtigungen</string>
+    <string name="notifications_subtitle">Push- und E-Mail-Einstellungen verwalten</string>
+    <string name="sign_out">Abmelden</string>
+    <string name="edit_name">Name bearbeiten</string>
+    <string name="configure_instance">Instanz konfigurieren</string>
+    <string name="game_details">Spieldetails</string>
+    <string name="game_history">Spielverlauf</string>
+    <string name="event_log">Aktivitätsprotokoll</string>
+    <string name="no_log_entries">Noch keine Einträge</string>
+    <string name="load_more">Mehr laden</string>
+    <string name="back">Zurück</string>
+    <string name="remove">Entfernen</string>
+    <string name="linked_account">Verknüpftes Konto</string>
+    <string name="you_suffix"> (du)</string>
+    <string name="games_played_suffix">%1$d Spiele</string>
+    <string name="public_games">Öffentliche Spiele</string>
+    <string name="profile">Profil</string>
+    <string name="stats">Statistiken</string>
+    <string name="games_tab">Spiele</string>
+    <string name="elo_changes">ELO-Änderungen</string>
+    <string name="payments">Zahlungen</string>
+    <string name="overview">ÜBERSICHT</string>
+    <string name="per_event">PRO EVENT</string>
+</resources>
