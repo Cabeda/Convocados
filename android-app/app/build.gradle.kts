@@ -107,6 +107,7 @@ dependencies {
 
     // Browser (Custom Tabs for OAuth)
     implementation(libs.androidx.browser)
+    implementation(libs.androidx.appcompat)
 
     // Splash screen
     implementation(libs.androidx.core.splashscreen)
