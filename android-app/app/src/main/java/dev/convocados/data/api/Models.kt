@@ -276,14 +276,15 @@ data class NotificationPrefs(
 data class EventLogEntry(
     val id: String,
     val action: String,
-    val actorName: String? = null,
-    val details: String? = null,
+    val actor: String? = null,
+    val actorId: String? = null,
+    val details: kotlinx.serialization.json.JsonElement? = null,
     val createdAt: String,
 )
 
 @Serializable
 data class PaginatedLog(
-    val data: List<EventLogEntry> = emptyList(),
+    val entries: List<EventLogEntry> = emptyList(),
     val nextCursor: String? = null,
     val hasMore: Boolean = false,
 )

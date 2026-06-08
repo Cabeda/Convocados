@@ -38,7 +38,7 @@ class EventLogViewModel @Inject constructor(private val api: ConvocadosApi) : Vi
         viewModelScope.launch {
             _loading.value = true
             runCatching { api.fetchEventLog(id) }.onSuccess {
-                _entries.value = it.data; _hasMore.value = it.hasMore; cursor = it.nextCursor
+                _entries.value = it.entries; _hasMore.value = it.hasMore; cursor = it.nextCursor
             }
             _loading.value = false
         }
@@ -48,7 +48,7 @@ class EventLogViewModel @Inject constructor(private val api: ConvocadosApi) : Vi
         val c = cursor ?: return
         viewModelScope.launch {
             runCatching { api.fetchEventLog(id, c) }.onSuccess {
-                _entries.value = _entries.value + it.data; _hasMore.value = it.hasMore; cursor = it.nextCursor
+                _entries.value = _entries.value + it.entries; _hasMore.value = it.hasMore; cursor = it.nextCursor
             }
         }
     }
@@ -76,11 +76,10 @@ fun EventLogScreen(eventId: String, onBack: () -> Unit, viewModel: EventLogViewM
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text(entry.action, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                            Text(entry.action.replace("_", " "), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
                             Text(formatRelativeDate(entry.createdAt), color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
                         }
-                        entry.actorName?.let { Text("by $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
-                        entry.details?.let { Text(it, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+                        entry.actor?.let { Text("by $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
                     }
                 }
             }
