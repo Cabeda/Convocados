@@ -143,9 +143,11 @@ fun GamesScreen(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text("No games yet", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text("🏟️", fontSize = 48.sp)
+                            Spacer(Modifier.height(12.dp))
+                            Text("No games yet", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
                             Spacer(Modifier.height(8.dp))
-                            Text("Create a game or join one to get started.", color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+                            Text("Create a game or join one to get started.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
                             Spacer(Modifier.height(20.dp))
                             Button(
                                 onClick = onCreateClick,
@@ -178,7 +180,7 @@ fun GameCard(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
 ) {
-    Card(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -190,30 +192,50 @@ fun GameCard(
                     )
                 }
             ),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(game.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Spacer(Modifier.height(4.dp))
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(sportEmoji(game.sport), fontSize = 22.sp, modifier = Modifier.padding(end = 10.dp))
+                Text(game.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            }
+            Spacer(Modifier.height(6.dp))
             Text(
                 "${formatRelativeDate(game.dateTime)} · ${game.playerCount}/${game.maxPlayers} players${if (game.isRecurring) " · \uD83D\uDD01" else ""}",
-                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp,
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (game.lastScoreOne != null && game.lastScoreTwo != null) {
                 Text(
-                    "\u26BD ${game.lastScoreOne}:${game.lastScoreTwo}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    "${sportEmoji(game.sport)} ${game.lastScoreOne}:${game.lastScoreTwo}",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
             if (game.location.isNotBlank()) {
-                Text(game.location, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
+                Text("\uD83D\uDCCD ${game.location}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
             }
             if (game.archivedAt != null) {
-                Text("ARCHIVED", color = MaterialTheme.colorScheme.outline, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+                Text("ARCHIVED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
+}
+
+fun sportEmoji(sport: String): String = when {
+    sport.contains("football") || sport.contains("soccer") -> "⚽"
+    sport.contains("futsal") -> "⚽"
+    sport.contains("basketball") -> "🏀"
+    sport.contains("volleyball") -> "🏐"
+    sport.contains("tennis") -> "🎾"
+    sport.contains("padel") -> "🏓"
+    sport.contains("rugby") -> "🏉"
+    sport.contains("handball") -> "🤾"
+    sport.contains("hockey") -> "🏑"
+    sport.contains("baseball") -> "⚾"
+    sport.contains("cricket") -> "🏏"
+    sport.isNotBlank() -> "🏅"
+    else -> "🎯"
 }
 
 fun formatRelativeDate(iso: String): String = runCatching {

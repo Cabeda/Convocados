@@ -123,6 +123,9 @@ dependencies {
     // Accompanist (Permissions)
     implementation(libs.accompanist.permissions)
 
+    // OSM Maps
+    implementation(libs.osmdroid)
+
     // Wearable Data Layer (sync auth tokens to watch)
     implementation(libs.play.services.wearable)
 

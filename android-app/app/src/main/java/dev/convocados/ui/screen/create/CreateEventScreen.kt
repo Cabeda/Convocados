@@ -82,6 +82,7 @@ class CreateEventViewModel @Inject constructor(private val api: ConvocadosApi) :
 fun CreateEventScreen(
     onCreated: (String) -> Unit,
     onBack: () -> Unit,
+    onPickMap: () -> Unit = {},
     viewModel: CreateEventViewModel = hiltViewModel(),
 ) {
     val creating by viewModel.creating.collectAsState()
@@ -144,6 +145,7 @@ fun CreateEventScreen(
                 modifier = Modifier.fillMaxWidth(), singleLine = true,
                 colors = textFieldColors(),
             )
+            TextButton(onClick = onPickMap) { Text("\uD83D\uDDFA\uFE0F Pick on map", color = MaterialTheme.colorScheme.primary) }
 
             Label("Date & time")
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {

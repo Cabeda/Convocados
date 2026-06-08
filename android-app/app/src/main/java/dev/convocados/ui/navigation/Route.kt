@@ -8,6 +8,7 @@ sealed class Route(val route: String) {
     data object CreateEvent : Route("create")
     data object PublicGames : Route("public-games")
     data object NotificationPrefs : Route("notification-prefs")
+    data object MapPicker : Route("map-picker")
     data class EventDetail(val id: String = "{eventId}") : Route("event/{eventId}") {
         companion object { fun create(id: String) = "event/$id" }
     }

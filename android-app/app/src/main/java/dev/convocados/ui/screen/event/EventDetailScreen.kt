@@ -73,6 +73,7 @@ class EventDetailViewModel @Inject constructor(
     private val repository: EventRepository,
     private val api: ConvocadosApi,
     private val tokenStore: TokenStore,
+    private val client: ApiClient,
 ) : ViewModel() {
     private val _eventId = MutableStateFlow<String?>(null)
 
@@ -197,6 +198,13 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
+    fun reorderPlayers(eventId: String, playerIds: List<String>) {
+        viewModelScope.launch {
+            runCatching { api.reorderPlayers(eventId, playerIds) }
+                .onSuccess { repository.refreshEventDetail(eventId) }
+        }
+    }
+
     fun saveScore(eventId: String, historyId: String, s1: Int, s2: Int) {
         viewModelScope.launch {
             runCatching { api.updateScore(eventId, historyId, s1, s2) }
@@ -213,6 +221,9 @@ class EventDetailViewModel @Inject constructor(
     }
 
     fun getShareUrl(eventId: String): String = "${tokenStore.getServerUrl()}/events/$eventId"
+
+    suspend fun fetchCalendarIcs(eventId: String): String? =
+        runCatching { client.fetchCalendarIcs(eventId) }.getOrNull()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)

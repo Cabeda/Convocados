@@ -3,6 +3,8 @@ package dev.convocados.ui.screen.profile
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,6 +52,13 @@ class ProfileViewModel @Inject constructor(
 
     init { viewModelScope.launch { repository.refreshUserProfile() } }
 
+    fun updateName(name: String) {
+        viewModelScope.launch {
+            runCatching { api.updateProfile(name) }
+                .onSuccess { repository.refreshUserProfile() }
+        }
+    }
+
     fun logout() { 
         viewModelScope.launch {
             pushTokenManager.unregisterCurrentToken()
@@ -73,13 +82,20 @@ fun ProfileScreen(
     var editingServer by remember { mutableStateOf(false) }
     var serverUrl by remember { mutableStateOf("") }
     var showLanguages by remember { mutableStateOf(false) }
+    var showEditName by remember { mutableStateOf(false) }
+    var editName by remember { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         // Profile card
         user?.let { u ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(u.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(u.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                        IconButton(onClick = { editName = u.name; showEditName = true }) {
+                            Icon(Icons.Default.Edit, "Edit name", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        }
+                    }
                     Text(u.email, color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
                 }
             }
@@ -142,6 +158,25 @@ fun ProfileScreen(
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
         ) { Text("Sign out", color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold) }
+    }
+
+    // Edit name dialog
+    if (showEditName) {
+        AlertDialog(
+            onDismissRequest = { showEditName = false },
+            title = { Text("Edit name") },
+            text = {
+                OutlinedTextField(value = editName, onValueChange = { editName = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (editName.isNotBlank()) { viewModel.updateName(editName.trim()); showEditName = false }
+                }) { Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditName = false }) { Text("Cancel", color = MaterialTheme.colorScheme.outline) }
+            },
+        )
     }
 }
 

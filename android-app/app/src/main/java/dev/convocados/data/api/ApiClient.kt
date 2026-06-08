@@ -118,6 +118,11 @@ class ApiClient @Inject constructor(private val tokenStore: TokenStore) {
 
     fun getLoginUrl(redirectUri: String): String =
         "$baseUrl/api/auth/mobile-callback?redirect_uri=${redirectUri.encodeURLParameter()}"
+
+    suspend fun fetchCalendarIcs(eventId: String): String {
+        val response = authenticatedRequest(HttpMethod.Get, "/api/events/$eventId/calendar")
+        return response.bodyAsText()
+    }
 }
 
 class ApiException(val code: Int, message: String) : Exception(message)
