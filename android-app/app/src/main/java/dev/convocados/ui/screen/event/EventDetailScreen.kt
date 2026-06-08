@@ -343,7 +343,7 @@ fun EventDetailScreen(
                             }, label = { Text("\uD83D\uDCE4 Share") })
                             if (activePlayers.size >= 2) AssistChip(onClick = { viewModel.randomize(eventId, event.balanced) }, label = { Text("\uD83C\uDFB2 Randomize") })
                             if (isOwner || event.isAdmin) AssistChip(onClick = onSettings, label = { Text("\u2699\uFE0F") })
-                            if (event.eloEnabled) AssistChip(onClick = onRankings, label = { Text("\uD83C\uDFC6 Rankings") })
+                            AssistChip(onClick = onRankings, label = { Text("\uD83C\uDFC6 Rankings") })
                             AssistChip(onClick = onNotificationPrefs, label = { Text("\uD83D\uDD14") })
                         }
 
