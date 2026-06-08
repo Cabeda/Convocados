@@ -325,6 +325,31 @@ data class UserPublicProfile(
 )
 
 @Serializable
+data class UserProfileResponse(
+    val user: UserPublicProfile,
+    val stats: ProfileStats? = null,
+    val owned: List<ProfileEvent> = emptyList(),
+    val joined: List<ProfileEvent> = emptyList(),
+)
+
+@Serializable
+data class ProfileStats(
+    val totalGames: Int = 0,
+    val ownedGames: Int = 0,
+    val joinedGames: Int = 0,
+)
+
+@Serializable
+data class ProfileEvent(
+    val id: String,
+    val title: String,
+    val dateTime: String = "",
+    val sport: String = "",
+    val playerCount: Int = 0,
+    val maxPlayers: Int = 10,
+)
+
+@Serializable
 data class PublicStats(
     val totalGames: Int = 0,
     val totalWins: Int = 0,

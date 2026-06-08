@@ -128,7 +128,7 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     }
 
     // ── User profiles ─────────────────────────────────────────────────────
-    suspend fun fetchUserProfile(userId: String): UserPublicProfile =
+    suspend fun fetchUserProfile(userId: String): UserProfileResponse =
         client.get("/api/users/$userId")
 
     suspend fun fetchUserStats(userId: String): PlayerStats =

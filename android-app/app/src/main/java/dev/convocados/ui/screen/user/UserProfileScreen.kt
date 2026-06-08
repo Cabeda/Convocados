@@ -41,9 +41,9 @@ class UserProfileViewModel @Inject constructor(private val api: ConvocadosApi) :
         viewModelScope.launch {
             _loading.value = true
             runCatching {
-                val p = api.fetchUserProfile(userId)
-                val s = runCatching { api.fetchUserStats(userId) }.getOrNull()
-                _profile.value = p; _stats.value = s
+                val resp = api.fetchUserProfile(userId)
+                _profile.value = resp.user
+                _stats.value = runCatching { api.fetchUserStats(userId) }.getOrNull()
             }
             _loading.value = false
         }
