@@ -41,19 +41,28 @@ export const GET: APIRoute = async ({ params, request }) => {
     include: { payments: { select: { status: true, playerName: true, amount: true, method: true } } },
   });
 
-  const hasCost = !!(eventCost && eventCost.totalAmount > 0) || !!(latestHistory?.paymentsSnapshot);
-
-  // Determine allPaid for the PAST game.
-  // The banner is about settling the past game, so we must check the history
-  // snapshot first (it represents the past game's payments after recurrence
-  // reset). Only fall back to live payments when no snapshot exists yet
-  // (game ended but hasn't reset — live payments ARE the past game).
+  // Determine hasCost and allPaid for the PAST game.
+  // The banner is about settling the past game. When a history entry exists,
+  // its paymentsSnapshot is the authoritative source. Live payments may belong
+  // to the NEXT game (after recurrence reset re-created costs for new players),
+  // so we only fall back to live payments when either:
+  //  a) No history entry exists yet (game ended but hasn't reset)
+  //  b) History exists without snapshot BUT the game hasn't reset yet
+  //     (history.dateTime matches event.dateTime — same game)
+  let hasCost: boolean;
   let allPaid = true;
   let pastGameSource: "snapshot" | "live" | "none" = "none";
+
+  // Detect whether a recurrence reset has moved the event forward.
+  // If latestHistory.dateTime < event.dateTime, the event moved to a new occurrence
+  // and live payments belong to the new game, not the past one.
+  const hasResetOccurred = latestHistory
+    && event.dateTime.getTime() > latestHistory.dateTime.getTime();
 
   if (latestHistory?.paymentsSnapshot) {
     // History snapshot exists — this is the authoritative source for the past game
     pastGameSource = "snapshot";
+    hasCost = true;
     try {
       const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
       if (snapshot.length > 0) {
@@ -62,13 +71,19 @@ export const GET: APIRoute = async ({ params, request }) => {
         );
       }
     } catch { /* ignore parse errors */ }
-  } else if (eventCost && eventCost.payments.length > 0) {
-    // No snapshot yet — live payments are still the past game's payments
-    // (game ended but recurrence hasn't reset yet)
+  } else if (eventCost && eventCost.totalAmount > 0 && !hasResetOccurred) {
+    // No snapshot AND game hasn't reset yet — live payments are the past game's
     pastGameSource = "live";
-    allPaid = eventCost.payments.every(
-      (p) => p.status === "paid",
-    );
+    hasCost = true;
+    if (eventCost.payments.length > 0) {
+      allPaid = eventCost.payments.every(
+        (p) => p.status === "paid",
+      );
+    }
+  } else {
+    // Either: no cost at all, OR history exists post-reset with no snapshot
+    // (past game had no cost). Live payments belong to the NEW game — don't use.
+    hasCost = false;
   }
 
   // ─── MVP voting completion ──────────────────────────────────────────
