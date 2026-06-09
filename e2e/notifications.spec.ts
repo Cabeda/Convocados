@@ -271,6 +271,76 @@ test.describe("Push subscription API", () => {
   });
 });
 
+// ─── Per-event notification overrides ────────────────────────────────────────
+
+test.describe("Per-event notification overrides", () => {
+  test("PUT /api/events/[id]/follow updates notification overrides", async ({ request }) => {
+    const ip = uniqueIp();
+    const api = withIp(request, ip);
+
+    const email = `notif-override-${Date.now()}@test.local`;
+    await createVerifiedUser(request, email, "TestPassword123!", "OverrideUser");
+
+    const eventId = await createEvent(api, "E2E Override Test");
+
+    // Follow the event first
+    const followRes = await api.post(`/api/events/${eventId}/follow`);
+    expect(followRes.status()).toBe(200);
+
+    // Update overrides
+    const putRes = await request.put(`/api/events/${eventId}/follow`, {
+      data: { mutePlayerActivity: true, mutePostGame: null },
+      headers: { "X-Forwarded-For": ip, "Content-Type": "application/json" },
+    });
+    expect(putRes.status()).toBe(200);
+    const putBody = await putRes.json();
+    expect(putBody.mutePlayerActivity).toBe(true);
+    expect(putBody.mutePostGame).toBe(null);
+    expect(putBody.muteReminders).toBe(null);
+
+    // GET returns the overrides
+    const getRes = await api.get(`/api/events/${eventId}/follow`);
+    expect(getRes.status()).toBe(200);
+    const getBody = await getRes.json();
+    expect(getBody.following).toBe(true);
+    expect(getBody.mutePlayerActivity).toBe(true);
+    expect(getBody.muteReminders).toBe(null);
+  });
+
+  test("PUT returns 404 when not following", async ({ request }) => {
+    const ip = uniqueIp();
+    const api = withIp(request, ip);
+
+    const email = `notif-nf-${Date.now()}@test.local`;
+    await createVerifiedUser(request, email, "TestPassword123!", "NotFollowing");
+
+    const eventId = await createEvent(api, "E2E Not Following Test");
+
+    const res = await request.put(`/api/events/${eventId}/follow`, {
+      data: { mutePlayerActivity: true },
+      headers: { "X-Forwarded-For": ip, "Content-Type": "application/json" },
+    });
+    expect(res.status()).toBe(404);
+  });
+
+  test("PUT returns 400 for invalid field type", async ({ request }) => {
+    const ip = uniqueIp();
+    const api = withIp(request, ip);
+
+    const email = `notif-bad-${Date.now()}@test.local`;
+    await createVerifiedUser(request, email, "TestPassword123!", "BadField");
+
+    const eventId = await createEvent(api, "E2E Bad Field Test");
+    await api.post(`/api/events/${eventId}/follow`);
+
+    const res = await request.put(`/api/events/${eventId}/follow`, {
+      data: { mutePlayerActivity: "yes" },
+      headers: { "X-Forwarded-For": ip, "Content-Type": "application/json" },
+    });
+    expect(res.status()).toBe(400);
+  });
+});
+
 // ─── NotifyButton UI states ──────────────────────────────────────────────────
 
 test.describe("NotifyButton UI", () => {
