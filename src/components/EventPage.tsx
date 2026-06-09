@@ -27,6 +27,8 @@ import {
 import type { EventData, Player, KnownPlayer } from "./event";
 import { PostGameBanner } from "./PostGameBanner";
 import type { PostGameStatus } from "./PostGameBanner";
+import CourtAlternatives from "./CourtAlternatives";
+import { isPlaytomicSport } from "~/lib/playtomic";
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -497,6 +499,16 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onClaimOwnership={handleClaimOwnership}
               onSnackbar={setSnackbar}
             />
+
+            {/* Court alternatives — admin-only, Playtomic sports only */}
+            {canEditSettings && event && isPlaytomicSport(event.sport) && (
+              <CourtAlternatives
+                eventId={eventId}
+                hasCoordinates={!!(event.latitude && event.longitude)}
+                courtWatchConfig={event.courtWatchConfig ? JSON.parse(event.courtWatchConfig) : null}
+                gameTime={gameDate ? `${String(gameDate.getUTCHours()).padStart(2, "0")}:${String(gameDate.getUTCMinutes()).padStart(2, "0")}` : "00:00"}
+              />
+            )}
 
             {/* Post-game banner — shown after game ends until tasks are complete */}
             <PostGameBanner

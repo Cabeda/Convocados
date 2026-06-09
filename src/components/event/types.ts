@@ -45,6 +45,9 @@ export interface EventData {
   locked?: boolean;
   archivedAt?: string | null;
   isAdmin?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  courtWatchConfig?: string | null;
 }
 
 export interface KnownPlayer {
