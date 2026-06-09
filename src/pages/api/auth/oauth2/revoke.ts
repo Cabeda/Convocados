@@ -31,15 +31,23 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.json({ ok: true }, { status: 200 });
   }
 
-  // Find and delete the token record (revokes both access + refresh)
-  const oauthToken = await prisma.oauthAccessToken.findFirst({
-    where: {
-      OR: [{ accessToken: token }, { refreshToken: token }],
-    },
+  // Find and delete the token record
+  const accessToken = await prisma.oauthAccessToken.findFirst({
+    where: { token },
   });
 
-  if (oauthToken) {
-    await prisma.oauthAccessToken.delete({ where: { id: oauthToken.id } });
+  if (accessToken) {
+    await prisma.oauthAccessToken.delete({ where: { id: accessToken.id } });
+    return Response.json({ ok: true }, { status: 200 });
+  }
+
+  // Check refresh tokens — deleting a refresh token cascades to its access tokens
+  const refreshToken = await prisma.oauthRefreshToken.findFirst({
+    where: { token },
+  });
+
+  if (refreshToken) {
+    await prisma.oauthRefreshToken.delete({ where: { id: refreshToken.id } });
   }
 
   // Per RFC 7009: always return 200, even if token was not found
