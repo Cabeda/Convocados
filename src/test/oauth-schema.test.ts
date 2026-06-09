@@ -4,6 +4,7 @@ import { prisma } from "~/lib/db.server";
 beforeEach(async () => {
   await prisma.$executeRawUnsafe("DELETE FROM oauthConsent");
   await prisma.$executeRawUnsafe("DELETE FROM oauthAccessToken");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthRefreshToken");
   await prisma.$executeRawUnsafe("DELETE FROM oauthClient");
   await prisma.$executeRawUnsafe("DELETE FROM User WHERE id LIKE 'oauth-test-%'");
   await prisma.user.create({
@@ -22,6 +23,7 @@ describe("OAuth 2.1 schema — OauthApplication", () => {
   it("creates a web client with all fields", async () => {
     const app = await prisma.oauthClient.create({
       data: {
+        id: crypto.randomUUID(),
         name: "Test App",
         clientId: "test-client-id",
         clientSecret: "hashed-secret",
@@ -40,6 +42,7 @@ describe("OAuth 2.1 schema — OauthApplication", () => {
   it("creates a public (native) client without a secret", async () => {
     const app = await prisma.oauthClient.create({
       data: {
+        id: crypto.randomUUID(),
         name: "Mobile App",
         clientId: "mobile-client-id",
         redirectUris: JSON.stringify(["com.convocados.app://callback"]),
@@ -55,6 +58,7 @@ describe("OAuth 2.1 schema — OauthApplication", () => {
   it("enforces unique clientId", async () => {
     await prisma.oauthClient.create({
       data: {
+        id: crypto.randomUUID(),
         name: "App 1",
         clientId: "dup-client-id",
         redirectUris: "",
@@ -65,6 +69,7 @@ describe("OAuth 2.1 schema — OauthApplication", () => {
     await expect(
       prisma.oauthClient.create({
         data: {
+          id: crypto.randomUUID(),
           name: "App 2",
           clientId: "dup-client-id",
           redirectUris: "",
@@ -78,6 +83,7 @@ describe("OAuth 2.1 schema — OauthApplication", () => {
   it("cascades delete when user is deleted", async () => {
     await prisma.oauthClient.create({
       data: {
+        id: crypto.randomUUID(),
         name: "User App",
         clientId: "user-app-id",
         redirectUris: "",
@@ -98,6 +104,7 @@ describe("OAuth 2.1 schema — OauthAccessToken", () => {
   beforeEach(async () => {
     await prisma.oauthClient.create({
       data: {
+        id: crypto.randomUUID(),
         name: "Token Test App",
         clientId: "token-test-client",
         redirectUris: "",
@@ -111,53 +118,48 @@ describe("OAuth 2.1 schema — OauthAccessToken", () => {
     const now = new Date();
     const token = await prisma.oauthAccessToken.create({
       data: {
-        accessToken: "at_test_123",
-        refreshToken: "rt_test_123",
-        accessTokenExpiresAt: new Date(now.getTime() + 3600_000),
-        refreshTokenExpiresAt: new Date(now.getTime() + 604800_000),
+        id: crypto.randomUUID(),
+        token: "at_test_123",
+        expiresAt: new Date(now.getTime() + 3600_000),
         clientId: "token-test-client",
         userId: "oauth-test-user-1",
         scopes: "openid read:events",
-        updatedAt: now,
       },
     });
-    expect(token.accessToken).toBe("at_test_123");
+    expect(token.token).toBe("at_test_123");
     expect(token.scopes).toBe("openid read:events");
-    expect(token.accessTokenExpiresAt.getTime()).toBeGreaterThan(now.getTime());
+    expect(token.expiresAt!.getTime()).toBeGreaterThan(now.getTime());
   });
 
-  it("enforces unique accessToken", async () => {
+  it("enforces unique token", async () => {
     const data = {
-      accessToken: "at_dup",
-      refreshToken: "rt_unique_1",
-      accessTokenExpiresAt: new Date(),
-      refreshTokenExpiresAt: new Date(),
+      id: crypto.randomUUID(),
+      token: "at_dup",
+      expiresAt: new Date(),
       clientId: "token-test-client",
       scopes: "openid",
-      updatedAt: new Date(),
     };
     await prisma.oauthAccessToken.create({ data });
     await expect(
       prisma.oauthAccessToken.create({
-        data: { ...data, refreshToken: "rt_unique_2" },
+        data: { ...data, id: crypto.randomUUID() },
       }),
     ).rejects.toThrow();
   });
 
-  it("enforces unique refreshToken", async () => {
+  it("enforces unique refresh token", async () => {
     const data = {
-      accessToken: "at_unique_1",
-      refreshToken: "rt_dup",
-      accessTokenExpiresAt: new Date(),
-      refreshTokenExpiresAt: new Date(),
+      id: crypto.randomUUID(),
+      token: "rt_dup",
+      expiresAt: new Date(),
       clientId: "token-test-client",
+      userId: "oauth-test-user-1",
       scopes: "openid",
-      updatedAt: new Date(),
     };
-    await prisma.oauthAccessToken.create({ data });
+    await prisma.oauthRefreshToken.create({ data });
     await expect(
-      prisma.oauthAccessToken.create({
-        data: { ...data, accessToken: "at_unique_2" },
+      prisma.oauthRefreshToken.create({
+        data: { ...data, id: crypto.randomUUID() },
       }),
     ).rejects.toThrow();
   });
@@ -165,20 +167,18 @@ describe("OAuth 2.1 schema — OauthAccessToken", () => {
   it("cascades delete when client is deleted", async () => {
     await prisma.oauthAccessToken.create({
       data: {
-        accessToken: "at_cascade",
-        refreshToken: "rt_cascade",
-        accessTokenExpiresAt: new Date(),
-        refreshTokenExpiresAt: new Date(),
+        id: crypto.randomUUID(),
+        token: "at_cascade",
+        expiresAt: new Date(),
         clientId: "token-test-client",
         scopes: "openid",
-        updatedAt: new Date(),
       },
     });
     await prisma.oauthClient.delete({
       where: { clientId: "token-test-client" },
     });
     const token = await prisma.oauthAccessToken.findUnique({
-      where: { accessToken: "at_cascade" },
+      where: { token: "at_cascade" },
     });
     expect(token).toBeNull();
   });
@@ -188,6 +188,7 @@ describe("OAuth 2.1 schema — OauthConsent", () => {
   beforeEach(async () => {
     await prisma.oauthClient.create({
       data: {
+        id: crypto.randomUUID(),
         name: "Consent Test App",
         clientId: "consent-test-client",
         redirectUris: "",

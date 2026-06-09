@@ -12,6 +12,7 @@ beforeEach(async () => {
   await prisma.account.deleteMany();
   await prisma.user.deleteMany();
   await prisma.oauthAccessToken.deleteMany();
+  await prisma.oauthRefreshToken.deleteMany();
   await prisma.oauthClient.deleteMany();
   resetRateLimitStore();
   resetApiRateLimitStore();
@@ -22,6 +23,7 @@ beforeEach(async () => {
 async function seedOAuthApp(clientId = "client1") {
   return prisma.oauthClient.create({
     data: {
+      id: crypto.randomUUID(),
       name: "Test App",
       clientId,
       redirectUris: "",
@@ -58,10 +60,9 @@ describe("getSession", () => {
     await seedOAuthApp();
     await prisma.oauthAccessToken.create({
       data: {
-        accessToken: "expired_token",
-        accessTokenExpiresAt: new Date(Date.now() - 1000),
-        refreshToken: "refresh",
-        refreshTokenExpiresAt: new Date(Date.now() + 3600000),
+        id: crypto.randomUUID(),
+        token: "expired_token",
+        expiresAt: new Date(Date.now() - 1000),
         userId: user.id,
         clientId: "client1",
         scopes: "read",
@@ -79,10 +80,9 @@ describe("getSession", () => {
     await seedOAuthApp();
     await prisma.oauthAccessToken.create({
       data: {
-        accessToken: "valid_token",
-        accessTokenExpiresAt: new Date(Date.now() + 3600000),
-        refreshToken: "refresh",
-        refreshTokenExpiresAt: new Date(Date.now() + 3600000),
+        id: crypto.randomUUID(),
+        token: "valid_token",
+        expiresAt: new Date(Date.now() + 3600000),
         userId: user.id,
         clientId: "client1",
         scopes: "read",
@@ -135,10 +135,9 @@ describe("checkOwnership", () => {
     await seedOAuthApp();
     await prisma.oauthAccessToken.create({
       data: {
-        accessToken: "valid_token",
-        accessTokenExpiresAt: new Date(Date.now() + 3600000),
-        refreshToken: "refresh",
-        refreshTokenExpiresAt: new Date(Date.now() + 3600000),
+        id: crypto.randomUUID(),
+        token: "valid_token",
+        expiresAt: new Date(Date.now() + 3600000),
         userId: user.id,
         clientId: "client1",
         scopes: "read",
@@ -166,10 +165,9 @@ describe("checkOwnership", () => {
     await seedOAuthApp();
     await prisma.oauthAccessToken.create({
       data: {
-        accessToken: "admin_token",
-        accessTokenExpiresAt: new Date(Date.now() + 3600000),
-        refreshToken: "refresh",
-        refreshTokenExpiresAt: new Date(Date.now() + 3600000),
+        id: crypto.randomUUID(),
+        token: "admin_token",
+        expiresAt: new Date(Date.now() + 3600000),
         userId: admin.id,
         clientId: "client1",
         scopes: "read",
