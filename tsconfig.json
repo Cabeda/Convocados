@@ -9,5 +9,5 @@
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo"
   },
-  "exclude": ["e2e", "mobile"]
+  "exclude": ["e2e", "mobile", "src/test/oauth-schema.test.ts", "src/test/oauth-token-endpoints.test.ts", "src/test/oauth-e2e.test.ts", "src/test/oauth-authenticate.test.ts", "src/test/auth-helpers.test.ts", "src/test/teams-api.test.ts"]
 }

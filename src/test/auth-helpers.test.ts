@@ -12,7 +12,7 @@ beforeEach(async () => {
   await prisma.account.deleteMany();
   await prisma.user.deleteMany();
   await prisma.oauthAccessToken.deleteMany();
-  await prisma.oauthApplication.deleteMany();
+  await prisma.oauthClient.deleteMany();
   resetRateLimitStore();
   resetApiRateLimitStore();
   vi.restoreAllMocks();
@@ -20,11 +20,11 @@ beforeEach(async () => {
 });
 
 async function seedOAuthApp(clientId = "client1") {
-  return prisma.oauthApplication.create({
+  return prisma.oauthClient.create({
     data: {
       name: "Test App",
       clientId,
-      redirectUrls: "[]",
+      redirectUris: "",
       type: "web",
     },
   });

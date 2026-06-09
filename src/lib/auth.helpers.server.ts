@@ -12,9 +12,9 @@ export async function getSession(request: Request) {
   if (authHeader?.startsWith("Bearer ") && !authHeader.startsWith("Bearer cvk_")) {
     const token = authHeader.slice(7);
     const oauthToken = await prisma.oauthAccessToken.findUnique({
-      where: { accessToken: token },
+      where: { token },
     });
-    if (oauthToken && oauthToken.userId && oauthToken.accessTokenExpiresAt > new Date()) {
+    if (oauthToken && oauthToken.userId && (!oauthToken.expiresAt || oauthToken.expiresAt > new Date())) {
       const user = await prisma.user.findUnique({ where: { id: oauthToken.userId } });
       if (user) {
         return {
@@ -28,12 +28,12 @@ export async function getSession(request: Request) {
             updatedAt: user.updatedAt,
           },
           session: {
-            id: `oauth-${oauthToken.accessToken.slice(0, 8)}`,
+            id: `oauth-${oauthToken.token.slice(0, 8)}`,
             userId: user.id,
-            expiresAt: oauthToken.accessTokenExpiresAt,
-            token: oauthToken.accessToken,
-            createdAt: oauthToken.createdAt,
-            updatedAt: oauthToken.createdAt,
+            expiresAt: oauthToken.expiresAt ?? new Date(Date.now() + 3600_000),
+            token: oauthToken.token,
+            createdAt: oauthToken.createdAt ?? new Date(),
+            updatedAt: oauthToken.createdAt ?? new Date(),
           },
         };
       }

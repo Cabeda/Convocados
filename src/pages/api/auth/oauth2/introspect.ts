@@ -30,30 +30,40 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.json({ active: false }, { status: 200 });
   }
 
-  // Look up the token
-  const oauthToken = await prisma.oauthAccessToken.findFirst({
-    where: {
-      OR: [{ accessToken: token }, { refreshToken: token }],
-    },
+  // Look up the token in access tokens first, then refresh tokens
+  const accessToken = await prisma.oauthAccessToken.findFirst({
+    where: { token },
   });
 
-  if (!oauthToken) {
-    return Response.json({ active: false }, { status: 200 });
+  if (accessToken) {
+    const active = accessToken.expiresAt ? accessToken.expiresAt > new Date() : true;
+    return Response.json({
+      active,
+      scope: accessToken.scopes,
+      client_id: accessToken.clientId,
+      sub: accessToken.userId ?? undefined,
+      token_type: "access_token",
+      exp: accessToken.expiresAt ? Math.floor(accessToken.expiresAt.getTime() / 1000) : undefined,
+      iat: accessToken.createdAt ? Math.floor(accessToken.createdAt.getTime() / 1000) : undefined,
+    });
   }
 
-  const isAccessToken = oauthToken.accessToken === token;
-  const expiresAt = isAccessToken
-    ? oauthToken.accessTokenExpiresAt
-    : oauthToken.refreshTokenExpiresAt;
-  const active = expiresAt > new Date();
-
-  return Response.json({
-    active,
-    scope: oauthToken.scopes,
-    client_id: oauthToken.clientId,
-    sub: oauthToken.userId ?? undefined,
-    token_type: isAccessToken ? "access_token" : "refresh_token",
-    exp: Math.floor(expiresAt.getTime() / 1000),
-    iat: Math.floor(oauthToken.createdAt.getTime() / 1000),
+  const refreshToken = await prisma.oauthRefreshToken.findFirst({
+    where: { token },
   });
+
+  if (refreshToken) {
+    const active = refreshToken.expiresAt ? refreshToken.expiresAt > new Date() : true;
+    return Response.json({
+      active: active && !refreshToken.revoked,
+      scope: refreshToken.scopes,
+      client_id: refreshToken.clientId,
+      sub: refreshToken.userId,
+      token_type: "refresh_token",
+      exp: refreshToken.expiresAt ? Math.floor(refreshToken.expiresAt.getTime() / 1000) : undefined,
+      iat: refreshToken.createdAt ? Math.floor(refreshToken.createdAt.getTime() / 1000) : undefined,
+    });
+  }
+
+  return Response.json({ active: false }, { status: 200 });
 };
