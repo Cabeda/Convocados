@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO: update test for new oauthClient schema
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { generateApiKey } from "~/lib/apiKey.server";
