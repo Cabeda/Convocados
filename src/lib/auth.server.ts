@@ -2,7 +2,8 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { magicLink } from "better-auth/plugins/magic-link";
-import { oidcProvider } from "better-auth/plugins/oidc-provider";
+import { jwt } from "better-auth/plugins";
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { prisma } from "./db.server";
 import { sendVerificationEmail, sendChangeEmailVerification, sendMagicLinkEmail } from "./email.server";
 import { OAUTH_SCOPES } from "./scopes";
@@ -98,19 +99,20 @@ export const auth = betterAuth({
         await sendMagicLinkEmail(email, url);
       },
     }),
-    oidcProvider({
+    jwt(),
+    oauthProvider({
       loginPage: "/auth/signin",
       consentPage: "/oauth/consent",
-      requirePKCE: true,
-      allowPlainCodeChallengeMethod: false,
       allowDynamicClientRegistration: true,
       accessTokenExpiresIn: 3600, // 1 hour
       refreshTokenExpiresIn: 15552000, // 180 days
       codeExpiresIn: 600, // 10 minutes
       scopes: OAUTH_SCOPES,
-      defaultScope: "openid",
+      clientRegistrationDefaultScopes: ["openid"],
       storeClientSecret: "hashed",
-      trustedClients: buildTrustedClients(),
+      cachedTrustedClients: new Set(
+        process.env.TRUSTED_OAUTH_CLIENT_ID ? [process.env.TRUSTED_OAUTH_CLIENT_ID] : [],
+      ),
     }),
   ],
   emailVerification: {

@@ -1,7 +1,7 @@
 /**
  * OAuth 2.1 rate limiting middleware.
  *
- * Applies rate limits to OAuth endpoints handled by better-auth's oidcProvider.
+ * Applies rate limits to OAuth endpoints handled by better-auth's oauthProvider.
  * This is called before the auth handler to reject abusive requests early.
  */
 import { rateLimitResponse } from "./apiRateLimit.server";
