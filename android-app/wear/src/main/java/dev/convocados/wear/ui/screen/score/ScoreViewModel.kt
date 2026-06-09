@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.api.ApiException
-import dev.convocados.wear.data.alarm.GameAlarmScheduler
 import dev.convocados.wear.data.alarm.GameSettingsStore
 import dev.convocados.wear.data.alarm.computeAlarmTimes
 import dev.convocados.wear.data.local.entity.WearGameEntity
@@ -42,7 +41,6 @@ class ScoreViewModel @Inject constructor(
     private val repository: WearGameRepository,
     private val scoreRepository: WearScoreRepository,
     private val settingsStore: GameSettingsStore,
-    private val alarmScheduler: GameAlarmScheduler,
     private val workManager: WorkManager,
 ) : ViewModel() {
 
@@ -92,11 +90,6 @@ class ScoreViewModel @Inject constructor(
                 }
             }
         }
-    }
-
-    /** Leaving the game cancels all of its pending alarms. */
-    override fun onCleared() {
-        if (eventId.isNotEmpty()) alarmScheduler.cancelAll(eventId)
     }
 
     /** Start tracking the score for this game (creates today's history record). */

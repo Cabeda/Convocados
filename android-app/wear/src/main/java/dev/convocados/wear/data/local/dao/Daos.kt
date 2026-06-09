@@ -37,7 +37,10 @@ interface WearHistoryDao {
     @Query("SELECT * FROM wear_history WHERE eventId = :eventId ORDER BY dateTime DESC LIMIT 1")
     suspend fun getLatestHistory(eventId: String): WearHistoryEntity?
 
-    @Query("SELECT * FROM wear_history WHERE eventId = :eventId ORDER BY dateTime DESC LIMIT 1")
+    @Query("SELECT * FROM wear_history WHERE eventId = :eventId AND editable = 1 ORDER BY dateTime DESC LIMIT 1")
+    suspend fun getLatestEditableHistory(eventId: String): WearHistoryEntity?
+
+    @Query("SELECT * FROM wear_history WHERE eventId = :eventId AND editable = 1 ORDER BY dateTime DESC LIMIT 1")
     fun observeLatestHistory(eventId: String): Flow<WearHistoryEntity?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
