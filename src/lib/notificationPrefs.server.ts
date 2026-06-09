@@ -50,11 +50,12 @@ export function wantsPushWithOverrides(
   prefs: NotificationPrefs,
   type: NotificationJobType,
   overrides: EventFollowOverrides | null,
+  eventDefaults?: EventFollowOverrides | null,
 ): boolean {
   if (!prefs.pushEnabled) return false;
 
-  // Determine which override field applies
-  let override: boolean | null = null;
+  // Determine which override/default field applies
+  let fieldName: keyof EventFollowOverrides | null = null;
   switch (type) {
     case "player_joined":
     case "player_left":
@@ -63,22 +64,27 @@ export function wantsPushWithOverrides(
     case "player_left_promoted":
     case "game_full":
     case "spot_available":
-      override = overrides?.mutePlayerActivity ?? null;
+      fieldName = "mutePlayerActivity";
       break;
     case "event_details":
-      override = overrides?.muteEventDetails ?? null;
+      fieldName = "muteEventDetails";
       break;
     case "reminder":
-      override = overrides?.muteReminders ?? null;
+      fieldName = "muteReminders";
       break;
     case "post_game":
-      override = overrides?.mutePostGame ?? null;
+      fieldName = "mutePostGame";
       break;
   }
 
-  // Per-event override wins if set (true = muted/suppress, false = force-enable)
-  if (override === true) return false;
-  if (override === false) return true;
+  // Resolution order: per-user override → event defaults (admin) → global preference
+  const userOverride = fieldName ? (overrides?.[fieldName] ?? null) : null;
+  if (userOverride === true) return false;
+  if (userOverride === false) return true;
+
+  const eventDefault = fieldName ? (eventDefaults?.[fieldName] ?? null) : null;
+  if (eventDefault === true) return false;
+  if (eventDefault === false) return true;
 
   // Fall back to global preference
   return wantsPushForJobType(prefs, type);
