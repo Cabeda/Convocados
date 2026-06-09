@@ -202,7 +202,7 @@ jobs:
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Create placeholder google-services.json
         working-directory: android-app
@@ -302,7 +302,7 @@ jobs:
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Create placeholder google-services.json
         working-directory: android-app
