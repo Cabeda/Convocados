@@ -61,7 +61,6 @@ export default defineConfig({
         "src/pages/api/me/api-keys.ts",
         "src/pages/api/me/calendar-token.ts",
         "src/pages/api/events/[id]/calendar.ics.ts",
-        "src/pages/api/events/[id]/stream.ts",
         "src/pages/api/watch/**",
         "src/pages/api/users/[id]/calendar.ics.ts",
         "src/test/**",
