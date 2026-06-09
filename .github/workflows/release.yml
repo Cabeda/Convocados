@@ -422,6 +422,69 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
 
+  publish-play-store:
+    name: Publish to Play Store (Internal)
+    needs: release
+    if: needs.release.outputs.released == 'true' && needs.release.outputs.android_changed == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Create google-services.json
+        working-directory: android-app
+        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+
+      - name: Create Play service account credentials
+        working-directory: android-app
+        run: echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > play-service-account.json
+
+      - name: Configure keystore
+        working-directory: android-app
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > release-keystore.jks
+          cat > keystore.properties << EOF
+          storeFile=release-keystore.jks
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+
+      - name: Configure local.properties
+        working-directory: android-app
+        run: |
+          echo "GOOGLE_SERVER_CLIENT_ID=${{ secrets.GOOGLE_SERVER_CLIENT_ID }}" > local.properties
+
+      - name: Update version names
+        working-directory: android-app
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" app/build.gradle.kts
+          sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" wear/build.gradle.kts
+
+      - name: Publish phone app to internal track
+        working-directory: android-app
+        run: ./gradlew :app:publishReleaseBundle --no-daemon
+
+      - name: Publish wear app to internal track
+        working-directory: android-app
+        run: ./gradlew :wear:publishReleaseBundle --no-daemon
+
+      - name: Cleanup credentials
+        if: always()
+        working-directory: android-app
+        run: rm -f play-service-account.json release-keystore.jks keystore.properties
+
   deploy-scheduler:
     name: Deploy Scheduler Worker
     needs: release
