@@ -147,6 +147,10 @@ model Event {
   // Notification defaults (admin-set, JSON: {mutePlayerActivity?, muteReminders?, mutePostGame?, muteEventDetails?})
   notificationDefaults String? // null = all enabled
 
+  // Court Watch (JSON: {radius: number, indoor: boolean|null, surface: string|null}; null = disabled)
+  courtWatchConfig String?
+  courtWatchAlerts CourtWatchAlert[]
+
   // Archive
   archivedAt     DateTime?
 
@@ -688,4 +692,27 @@ model OauthConsent {
   @@index([clientId])
   @@index([userId])
   @@map("oauthConsent")
+}
+
+// ── Court Watch alerts (deduplication) ────────────────────────────────────────
+
+model CourtWatchAlert {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tenantId    String   // Playtomic club ID
+  tenantName  String
+  resourceId  String   // Playtomic court ID
+  resourceName String
+  slotTime    String   // "HH:mm" of the available slot
+  slotDate    String   // "YYYY-MM-DD"
+  duration    Int      // minutes
+  price       Float
+  currency    String   @default("EUR")
+  coordinate  String?  // JSON: {lat, lon}
+  address     String?  // club address string
+  notifiedAt  DateTime @default(now())
+
+  @@unique([eventId, tenantId, resourceId, slotDate, slotTime])
+  @@index([eventId])
 }

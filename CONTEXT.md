@@ -91,3 +91,9 @@ Tapping the bell when not following → follows the event. Tapping when already 
 - Event changes (date/location/title)
 
 Each toggle shows the effective state (resolved from per-event override or global default). Changing a toggle writes the per-event override. An "Unfollow" action at the bottom of the sheet removes the follow entirely.
+
+## Court Alternative
+A Playtomic court slot that matches an existing Game's dateTime (±30 min), sport, and minimum duration, offered as a replacement option. Surfaced to Owner/Admins only — either via manual search or an automated hourly background sweep ("Court Watch"). Filtered by distance from the Game's coordinates, and optionally by indoor/outdoor and surface type (best-effort, dependent on Playtomic data availability). When accepted ("Switch"), the Game's location and coordinates are updated and all Followers are notified via the standard event-details-changed flow.
+
+## Court Watch
+An opt-in background process that checks Playtomic hourly for Court Alternatives matching a Game's criteria. Enabled per-game by an Admin via a JSON config (`courtWatchConfig`) on the Event. Requires the Event to have latitude/longitude. Alerts are deduplicated — the same slot is never re-notified. Watching stops only when the Admin disables it.
