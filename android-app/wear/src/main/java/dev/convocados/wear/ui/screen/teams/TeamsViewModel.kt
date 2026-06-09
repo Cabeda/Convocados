@@ -172,9 +172,19 @@ class TeamsViewModel @Inject constructor(
                 it.copy(
                     isSaving = false,
                     saved = result.isSuccess,
-                    error = result.exceptionOrNull()?.message,
+                    error = result.exceptionOrNull()?.let { e -> parseTeamError(e) },
                 )
             }
         }
+    }
+
+    private fun parseTeamError(e: Throwable): String {
+        if (e is dev.convocados.wear.data.api.ApiException) {
+            val match = Regex(""""error"\s*:\s*"([^"]+)"""").find(e.message ?: "")
+            if (match != null) return match.groupValues[1]
+            if (e.code == 401) return "Session expired — sign in again"
+            if (e.code == 403) return "Not authorized to update teams"
+        }
+        return e.message ?: "Failed to update teams"
     }
 }

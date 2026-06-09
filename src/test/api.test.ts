@@ -3,6 +3,14 @@ import { prisma } from "~/lib/db.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
+// Mock auth helpers — default to unauthenticated, tests override as needed
+const mockGetSession = vi.fn().mockResolvedValue(null);
+vi.mock("~/lib/auth.helpers.server", () => ({
+  getSession: (...args: any[]) => mockGetSession(...args),
+  checkOwnership: vi.fn().mockResolvedValue({ isOwner: true, isAdmin: false, session: null }),
+  checkEventAdmin: vi.fn().mockResolvedValue(false),
+}));
+
 // Import route handlers directly — they're plain async functions
 import { POST as createEvent } from "~/pages/api/events/index";
 import { GET as getEvent } from "~/pages/api/events/[id]/index";
@@ -374,6 +382,10 @@ describe("POST /api/events/[id]/randomize", () => {
 // ─── PUT /api/events/[id]/teams ──────────────────────────────────────────────
 
 describe("PUT /api/events/[id]/teams", () => {
+  beforeEach(() => {
+    mockGetSession.mockResolvedValue({ user: { id: "test-user-1", name: "Test User" } });
+  });
+
   it("saves team assignments", async () => {
     const id = await seedEvent();
     await prisma.player.createMany({
