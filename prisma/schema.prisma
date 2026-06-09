@@ -32,6 +32,7 @@ model User {
   eventInvites            EventInvite[]
   adminEvents             EventAdmin[]  @relation("EventAdmins")
   followedEvents          EventFollow[] @relation("EventFollows")
+  notifications           InAppNotification[] @relation("UserNotifications")
   pushSubscriptions       PushSubscription[]
   appPushTokens           AppPushToken[]
   oauthApps               OauthApplication[] @relation("OAuthApps")
@@ -113,6 +114,7 @@ model Event {
   admins          EventAdmin[]
   followers        EventFollow[]
   notificationJobs NotificationJob[]
+  inAppNotifications InAppNotification[] @relation("EventNotifications")
 
   // Priority enrollment settings
   priorityEnabled       Boolean @default(false)
@@ -374,6 +376,7 @@ model NotificationPreferences {
   gameReminderPush     Boolean  @default(true)
   playerActivityPush   Boolean  @default(true)   // player joined/left
   eventDetailsPush     Boolean  @default(true)   // date/location/title changes
+  postGamePush         Boolean  @default(true)   // post-game results
   weeklySummaryEmail   Boolean  @default(false)
   paymentReminderEmail Boolean  @default(false)
   paymentReminderPush  Boolean  @default(true)
@@ -493,6 +496,12 @@ model EventFollow {
   user      User     @relation("EventFollows", fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
+  // Per-event notification overrides (null = use global default)
+  mutePlayerActivity Boolean?
+  muteReminders      Boolean?
+  mutePostGame       Boolean?
+  muteEventDetails   Boolean?
+
   @@unique([eventId, userId])
   @@index([userId])
   @@index([eventId])
@@ -532,6 +541,23 @@ model NotificationJob {
   // true atomic claiming under READ COMMITTED isolation.
   @@index([processedAt, createdAt])
   @@index([failedAt])
+  @@index([eventId])
+}
+
+model InAppNotification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  eventId   String?
+  event     Event?    @relation("EventNotifications", fields: [eventId], references: [id], onDelete: Cascade)
+  type      String    // matches NotificationJobType
+  title     String
+  body      String
+  url       String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
   @@index([eventId])
 }
 

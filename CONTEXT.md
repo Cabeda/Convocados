@@ -15,7 +15,12 @@ A User granted management privileges for a Game by the Owner (via `EventAdmin`).
 ## Follow
 An explicit relationship between a User and a Game (stored in `EventFollow`). Following a Game means:
 1. It appears on the User's "My games" dashboard.
-2. It is the **gating condition** for receiving notifications from that Game — only followers receive push notifications (web + mobile), regardless of which devices are registered.
+2. It is the **gating condition** for receiving notifications from that Game — only followers receive push notifications (web + mobile), subject to per-event overrides.
+
+Each `EventFollow` carries nullable per-type override columns (`mutePlayerActivity`, `muteReminders`, `mutePostGame`, `muteEventDetails`). Tri-state semantics:
+- `null` — use the user's global preference from `NotificationPreferences`
+- `true` — suppress this notification type for this game regardless of global setting
+- `false` — force-enable this type for this game regardless of global setting
 
 Distinct from "joined" (participation via Player record). A user can follow without playing, and play without following (though joining prompts a follow).
 
@@ -56,6 +61,11 @@ Push notification delivery channels are registered **per user**, not per event:
 ### Notification dispatch gating
 Recipients for event notifications = users who follow the event (`EventFollow`) + the Owner (always, implicit permanent follow). Admins must explicitly follow to receive notifications.
 
+Resolution order for each notification type:
+1. Per-event override on `EventFollow` (if not null, wins)
+2. Global user preference from `NotificationPreferences`
+3. System default (all push enabled)
+
 A player who joined but explicitly unfollowed will NOT receive notifications (they opted out of updates while retaining their spot).
 
 ## Quick Game
@@ -70,4 +80,14 @@ Shows games grouped by relationship:
 Profile pages (`/api/users/[id]`) continue to show **joined** (participation via Player records), not followed.
 
 ## Follow toggle (event detail page)
-Authenticated users see a "Following" toggle (bell icon) on the event detail page. Tapping unfollow removes the game from the dashboard and stops notifications. No per-game notification granularity in the dashboard — the push permission banner handles device-level enablement globally.
+Authenticated users see a bell icon on the event detail page:
+- **Bell filled** — following with notifications on (per global defaults)
+- **Bell outline** — not following
+
+Tapping the bell when not following → follows the event. Tapping when already following opens a **bottom sheet** with per-type toggles:
+- Player activity (joins/leaves)
+- Game reminders
+- Post-game results
+- Event changes (date/location/title)
+
+Each toggle shows the effective state (resolved from per-event override or global default). Changing a toggle writes the per-event override. An "Unfollow" action at the bottom of the sheet removes the follow entirely.

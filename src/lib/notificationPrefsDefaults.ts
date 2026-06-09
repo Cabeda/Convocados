@@ -9,6 +9,7 @@ export interface NotificationPrefs {
   gameReminderPush: boolean;
   playerActivityPush: boolean;
   eventDetailsPush: boolean;
+  postGamePush: boolean;
   weeklySummaryEmail: boolean;
   paymentReminderEmail: boolean;
   paymentReminderPush: boolean;
@@ -31,6 +32,7 @@ export const DEFAULTS: NotificationPrefs = {
   gameReminderPush: true,
   playerActivityPush: true,
   eventDetailsPush: true,
+  postGamePush: true,
   weeklySummaryEmail: false,
   paymentReminderEmail: false,
   paymentReminderPush: true,

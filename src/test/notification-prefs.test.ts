@@ -28,7 +28,7 @@ vi.mock("~/lib/db.server", () => {
 import { GET, PUT } from "~/pages/api/me/notification-preferences";
 
 // Import helper functions (these don't need DB mocking — they use the mocked prisma)
-import { wantsEmailReminder, wantsPushReminder, wantsGameInviteEmail, wantsWeeklySummary, type NotificationPrefs } from "~/lib/notificationPrefs.server";
+import { wantsEmailReminder, wantsPushReminder, wantsGameInviteEmail, wantsWeeklySummary, wantsPushWithOverrides, type NotificationPrefs } from "~/lib/notificationPrefs.server";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -245,6 +245,7 @@ describe("notificationPrefs helpers", () => {
     gameReminderPush: true,
     playerActivityPush: true,
     eventDetailsPush: true,
+    postGamePush: true,
     weeklySummaryEmail: true,
     paymentReminderEmail: true,
     paymentReminderPush: true,
@@ -262,6 +263,7 @@ describe("notificationPrefs helpers", () => {
     gameReminderPush: false,
     playerActivityPush: false,
     eventDetailsPush: false,
+    postGamePush: false,
     weeklySummaryEmail: false,
     paymentReminderEmail: false,
     paymentReminderPush: false,
@@ -336,5 +338,47 @@ describe("notificationPrefs helpers", () => {
     it("returns false when weeklySummaryEmail is off (default)", () => {
       expect(wantsWeeklySummary(allDisabled)).toBe(false);
     });
+  });
+});
+
+describe("wantsPushWithOverrides", () => {
+  const prefs: NotificationPrefs = {
+    emailEnabled: true, pushEnabled: true, gameInviteEmail: true, gameInvitePush: true,
+    gameReminderEmail: true, gameReminderPush: true, playerActivityPush: true,
+    eventDetailsPush: true, postGamePush: true, weeklySummaryEmail: true,
+    paymentReminderEmail: true, paymentReminderPush: true,
+    reminder24h: true, reminder2h: true, reminder1h: true,
+  };
+
+  it("returns global preference when override is null", () => {
+    const overrides = { mutePlayerActivity: null, muteReminders: null, mutePostGame: null, muteEventDetails: null };
+    expect(wantsPushWithOverrides(prefs, "player_joined", overrides)).toBe(true);
+  });
+
+  it("mutes when per-event override is true", () => {
+    const overrides = { mutePlayerActivity: true, muteReminders: null, mutePostGame: null, muteEventDetails: null };
+    expect(wantsPushWithOverrides(prefs, "player_joined", overrides)).toBe(false);
+  });
+
+  it("force-enables when per-event override is false even if global is off", () => {
+    const disabledPrefs = { ...prefs, playerActivityPush: false };
+    const overrides = { mutePlayerActivity: false, muteReminders: null, mutePostGame: null, muteEventDetails: null };
+    expect(wantsPushWithOverrides(disabledPrefs, "player_joined", overrides)).toBe(true);
+  });
+
+  it("respects pushEnabled=false regardless of overrides", () => {
+    const noPush = { ...prefs, pushEnabled: false };
+    const overrides = { mutePlayerActivity: false, muteReminders: null, mutePostGame: null, muteEventDetails: null };
+    expect(wantsPushWithOverrides(noPush, "player_joined", overrides)).toBe(false);
+  });
+
+  it("handles null overrides (no follow record)", () => {
+    expect(wantsPushWithOverrides(prefs, "post_game", null)).toBe(true);
+  });
+
+  it("mutes post_game independently from reminders", () => {
+    const overrides = { mutePlayerActivity: null, muteReminders: null, mutePostGame: true, muteEventDetails: null };
+    expect(wantsPushWithOverrides(prefs, "post_game", overrides)).toBe(false);
+    expect(wantsPushWithOverrides(prefs, "reminder", overrides)).toBe(true);
   });
 });
