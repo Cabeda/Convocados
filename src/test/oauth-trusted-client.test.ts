@@ -17,7 +17,7 @@ import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
-import { authenticateRequest, requireScope } from "~/lib/authenticate.server";
+import { authenticateRequest } from "~/lib/authenticate.server";
 import { auth, ensureTrustedClientInDB } from "~/lib/auth.server";
 
 // ── Trusted client credentials (must match env / auth.server config) ────
