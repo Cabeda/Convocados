@@ -29,10 +29,55 @@ export function wantsPushForJobType(prefs: NotificationPrefs, type: Notification
     case "reminder":
       return prefs.gameReminderPush;
     case "post_game":
-      return prefs.gameReminderPush;
+      return prefs.postGamePush;
     default:
       return true;
   }
+}
+
+/** Per-event notification override fields from EventFollow */
+export interface EventFollowOverrides {
+  mutePlayerActivity: boolean | null;
+  muteReminders: boolean | null;
+  mutePostGame: boolean | null;
+  muteEventDetails: boolean | null;
+}
+
+/** Resolve whether a notification should be sent, considering per-event overrides */
+export function wantsPushWithOverrides(
+  prefs: NotificationPrefs,
+  type: NotificationJobType,
+  overrides: EventFollowOverrides | null,
+): boolean {
+  if (!prefs.pushEnabled) return false;
+
+  // Determine which override field applies
+  let override: boolean | null = null;
+  switch (type) {
+    case "player_joined":
+    case "player_left":
+    case "player_joined_bench":
+    case "player_left_bench":
+    case "player_left_promoted":
+      override = overrides?.mutePlayerActivity ?? null;
+      break;
+    case "event_details":
+      override = overrides?.muteEventDetails ?? null;
+      break;
+    case "reminder":
+      override = overrides?.muteReminders ?? null;
+      break;
+    case "post_game":
+      override = overrides?.mutePostGame ?? null;
+      break;
+  }
+
+  // Per-event override wins if set (true = muted/suppress, false = force-enable)
+  if (override === true) return false;
+  if (override === false) return true;
+
+  // Fall back to global preference
+  return wantsPushForJobType(prefs, type);
 }
 
 /** Check if a user wants email reminders for a given reminder type */

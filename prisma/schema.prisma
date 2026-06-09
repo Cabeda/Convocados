@@ -374,6 +374,7 @@ model NotificationPreferences {
   gameReminderPush     Boolean  @default(true)
   playerActivityPush   Boolean  @default(true)   // player joined/left
   eventDetailsPush     Boolean  @default(true)   // date/location/title changes
+  postGamePush         Boolean  @default(true)   // post-game results
   weeklySummaryEmail   Boolean  @default(false)
   paymentReminderEmail Boolean  @default(false)
   paymentReminderPush  Boolean  @default(true)
@@ -492,6 +493,12 @@ model EventFollow {
   userId    String
   user      User     @relation("EventFollows", fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  // Per-event notification overrides (null = use global default)
+  mutePlayerActivity Boolean?
+  muteReminders      Boolean?
+  mutePostGame       Boolean?
+  muteEventDetails   Boolean?
 
   @@unique([eventId, userId])
   @@index([userId])

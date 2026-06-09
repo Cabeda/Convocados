@@ -25,7 +25,7 @@ vi.mock("~/lib/db.server", () => {
 
 import { POST as subscribePush, DELETE as unsubscribePush } from "~/pages/api/push/subscribe";
 import { POST as legacySubscribe, DELETE as legacyUnsubscribe } from "~/pages/api/events/[id]/push";
-import { GET as getFollow, POST as followEvent, DELETE as unfollowEvent } from "~/pages/api/events/[id]/follow";
+import { GET as getFollow, POST as followEvent, PUT as putFollow, DELETE as unfollowEvent } from "~/pages/api/events/[id]/follow";
 
 function ctx(params: Record<string, string>, body?: unknown, method = "POST") {
   const request = new Request("http://localhost/api/test", {
@@ -38,6 +38,10 @@ function ctx(params: Record<string, string>, body?: unknown, method = "POST") {
 
 function deleteCtx(params: Record<string, string>, body?: unknown) {
   return ctx(params, body, "DELETE");
+}
+
+function putCtx(params: Record<string, string>, body: unknown) {
+  return ctx(params, body, "PUT");
 }
 
 async function seedEvent(id = "evt-sub-1") {
@@ -248,5 +252,60 @@ describe("DELETE /api/events/[id]/follow", () => {
     mockGetSession.mockResolvedValue(null);
     const res = await unfollowEvent(deleteCtx({ id: "x" }));
     expect(res.status).toBe(401);
+  });
+});
+
+// ─── PUT /api/events/[id]/follow (per-event notification overrides) ──────────
+
+describe("PUT /api/events/[id]/follow", () => {
+  it("updates notification overrides", async () => {
+    const id = await seedEvent();
+    await testPrisma.eventFollow.create({ data: { eventId: id, userId } });
+    const res = await putFollow(putCtx({ id }, { mutePlayerActivity: true, muteReminders: null }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.mutePlayerActivity).toBe(true);
+    expect(body.muteReminders).toBe(null);
+    expect(body.mutePostGame).toBe(null);
+  });
+
+  it("returns 404 when not following", async () => {
+    const id = await seedEvent();
+    const res = await putFollow(putCtx({ id }, { mutePlayerActivity: true }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 401 when unauthenticated", async () => {
+    mockGetSession.mockResolvedValue(null);
+    const res = await putFollow(putCtx({ id: "x" }, { mutePlayerActivity: true }));
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 for invalid field type", async () => {
+    const id = await seedEvent();
+    await testPrisma.eventFollow.create({ data: { eventId: id, userId } });
+    const res = await putFollow(putCtx({ id }, { mutePlayerActivity: "yes" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when no valid fields provided", async () => {
+    const id = await seedEvent();
+    await testPrisma.eventFollow.create({ data: { eventId: id, userId } });
+    const res = await putFollow(putCtx({ id }, { invalid: true }));
+    expect(res.status).toBe(400);
+  });
+});
+
+// ─── GET /api/events/[id]/follow returns overrides ───────────────────────────
+
+describe("GET /api/events/[id]/follow with overrides", () => {
+  it("returns override values when set", async () => {
+    const id = await seedEvent();
+    await testPrisma.eventFollow.create({ data: { eventId: id, userId, mutePostGame: true } });
+    const res = await getFollow(ctx({ id }, undefined, "GET"));
+    const body = await res.json();
+    expect(body.following).toBe(true);
+    expect(body.mutePostGame).toBe(true);
+    expect(body.mutePlayerActivity).toBe(null);
   });
 });
