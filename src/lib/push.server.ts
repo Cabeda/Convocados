@@ -1,7 +1,7 @@
 import { prisma } from "./db.server";
 import { createT, type Locale, type TranslationKey } from "./i18n";
 import { createLogger } from "./logger.server";
-import { DEFAULTS, wantsPushForJobType, wantsPushReminder, wantsPushWithOverrides } from "./notificationPrefs.server";
+import { DEFAULTS, wantsPushReminder, wantsPushWithOverrides } from "./notificationPrefs.server";
 import type { NotificationJobType } from "./notificationQueue.server";
 import type webpush from "web-push";
 import pLimit from "p-limit";
@@ -217,8 +217,7 @@ async function sendAppPushToEventUsers(
   excludeUserIds: Set<string>,
   jobType?: NotificationJobType,
   reminderType?: "24h" | "2h" | "1h",
-  prefsMap?: Map<string, typeof DEFAULTS>,
-  overridesMap?: Map<string, { mutePlayerActivity: boolean | null; muteReminders: boolean | null; mutePostGame: boolean | null; muteEventDetails: boolean | null }>,
+  opts?: { prefsMap?: Map<string, typeof DEFAULTS>; overridesMap?: Map<string, { mutePlayerActivity: boolean | null; muteReminders: boolean | null; mutePostGame: boolean | null; muteEventDetails: boolean | null }> },
 ): Promise<void> {
   const follows = await prisma.eventFollow.findMany({
     where: { eventId },
@@ -244,9 +243,9 @@ async function sendAppPushToEventUsers(
   const fcmMessages: { token: string; title: string; body: string; data?: Record<string, string> }[] = [];
 
   for (const token of tokens) {
-    if (prefsMap && jobType) {
-      const prefs = prefsMap.get(token.userId) ?? DEFAULTS;
-      const overrides = overridesMap?.get(token.userId) ?? null;
+    if (opts?.prefsMap && jobType) {
+      const prefs = opts.prefsMap.get(token.userId) ?? DEFAULTS;
+      const overrides = opts.overridesMap?.get(token.userId) ?? null;
       if (!wantsPushWithOverrides(prefs, jobType, overrides)) continue;
       if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) continue;
     }
@@ -315,7 +314,7 @@ export async function sendPushToEvent(
 
   // App push (FCM)
   promises.push(
-    sendAppPushToEventUsers(eventId, title, key, params, url, spotsLeft, senderUserIds, jobType, reminderType, prefsMap, overridesMap),
+    sendAppPushToEventUsers(eventId, title, key, params, url, spotsLeft, senderUserIds, jobType, reminderType, { prefsMap, overridesMap }),
   );
 
   // Web push
