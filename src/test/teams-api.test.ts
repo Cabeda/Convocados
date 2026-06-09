@@ -47,12 +47,12 @@ async function seedUser(overrides: Record<string, unknown> = {}) {
 const OAUTH_CLIENT_ID = "teams-test-client";
 
 async function seedOAuthApp() {
-	await prisma.oauthApplication.upsert({
+	await prisma.oauthClient.upsert({
 		where: { clientId: OAUTH_CLIENT_ID },
 		create: {
 			name: "Teams Test Client",
 			clientId: OAUTH_CLIENT_ID,
-			redirectUrls: "[]",
+			redirectUris: "",
 			type: "web",
 		},
 		update: {},
@@ -256,7 +256,7 @@ describe("PATCH /api/events/[id]/teams", () => {
 		await prisma.oauthAccessToken.deleteMany();
 		await prisma.event.deleteMany();
 		await prisma.user.deleteMany();
-		await prisma.oauthApplication.deleteMany();
+		await prisma.oauthClient.deleteMany();
 
 		await seedOAuthApp();
 		owner = await seedUser();
@@ -523,7 +523,7 @@ describe("PUT /api/events/[id]/teams (legacy matches format)", () => {
 		await prisma.oauthAccessToken.deleteMany();
 		await prisma.event.deleteMany();
 		await prisma.user.deleteMany();
-		await prisma.oauthApplication.deleteMany();
+		await prisma.oauthClient.deleteMany();
 
 		await seedOAuthApp();
 	});

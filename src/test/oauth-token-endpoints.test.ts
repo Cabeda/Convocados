@@ -6,8 +6,8 @@ const BASE = "http://localhost:4321";
 
 beforeEach(async () => {
   await resetApiRateLimitStore();
-  await prisma.$executeRawUnsafe("DELETE FROM OauthAccessToken");
-  await prisma.$executeRawUnsafe("DELETE FROM OauthApplication");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthAccessToken");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthClient");
   await prisma.$executeRawUnsafe("DELETE FROM User WHERE id LIKE 'token-ep-test-%'");
   await prisma.user.create({
     data: {
@@ -19,11 +19,11 @@ beforeEach(async () => {
       updatedAt: new Date(),
     },
   });
-  await prisma.oauthApplication.create({
+  await prisma.oauthClient.create({
     data: {
       name: "Token EP Test App",
       clientId: "token-ep-client",
-      redirectUrls: "[]",
+      redirectUris: "",
       type: "web",
       updatedAt: new Date(),
     },

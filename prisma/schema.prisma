@@ -35,8 +35,9 @@ model User {
   notifications           InAppNotification[] @relation("UserNotifications")
   pushSubscriptions       PushSubscription[]
   appPushTokens           AppPushToken[]
-  oauthApps               OauthApplication[] @relation("OAuthApps")
+  oauthClients            OauthClient[]      @relation("OAuthClients")
   oauthTokens             OauthAccessToken[] @relation("OAuthTokens")
+  oauthRefreshTokens      OauthRefreshToken[] @relation("OAuthRefreshTokens")
   oauthConsents           OauthConsent[]     @relation("OAuthConsents")
 }
 
@@ -50,6 +51,9 @@ model Session {
   userAgent String?
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  oauthAccessTokens  OauthAccessToken[]
+  oauthRefreshTokens OauthRefreshToken[]
 }
 
 model Account {
@@ -564,59 +568,124 @@ model InAppNotification {
   @@index([eventId])
 }
 
-// ── OAuth 2.1 (better-auth oidcProvider plugin) ───────────────────────────────
+// ── OAuth 2.1 (@better-auth/oauth-provider) ──────────────────────────────────
 
-model OauthApplication {
-  id                   String   @id @default(cuid())
-  name                 String
-  icon                 String?
-  metadata             String?  // JSON
-  clientId             String   @unique
-  clientSecret         String?
-  redirectUrls         String   // JSON array of redirect URIs
-  type                 String   @default("web") // "web" | "native" | "public" | "user-agent-based"
-  disabled             Boolean  @default(false)
-  userId               String?
-  user                 User?    @relation("OAuthApps", fields: [userId], references: [id], onDelete: Cascade)
-  authenticationScheme String   @default("client_secret_basic") // token_endpoint_auth_method
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+/// JWT signing keys for the OAuth provider
+model Jwks {
+  id         String    @id
+  publicKey  String
+  privateKey String
+  createdAt  DateTime
+  expiresAt  DateTime?
+
+  @@map("jwks")
+}
+
+/// New OAuth client table used by @better-auth/oauth-provider
+model OauthClient {
+  id                      String   @id
+  clientId                String   @unique
+  clientSecret            String?
+  disabled                Boolean? @default(false)
+  skipConsent             Boolean?
+  enableEndSession        Boolean?
+  subjectType             String?
+  scopes                  String?
+  userId                  String?
+  user                    User?    @relation("OAuthClients", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt               DateTime?
+  updatedAt               DateTime?
+  name                    String?
+  uri                     String?
+  icon                    String?
+  contacts                String?
+  tos                     String?
+  policy                  String?
+  softwareId              String?
+  softwareVersion         String?
+  softwareStatement       String?
+  redirectUris            String
+  postLogoutRedirectUris  String?
+  tokenEndpointAuthMethod String?
+  grantTypes              String?
+  responseTypes           String?
+  public                  Boolean?
+  type                    String?
+  requirePKCE             Boolean?
+  referenceId             String?
+  metadata                String?
+
+  refreshTokens OauthRefreshToken[]
+  accessTokens  OauthAccessToken[]
+  consents      OauthConsent[]
+
+  @@index([userId])
+  @@map("oauthClient")
+}
+
+/// Refresh tokens (split from old OauthAccessToken)
+model OauthRefreshToken {
+  id          String    @id
+  token       String    @unique
+  clientId    String
+  client      OauthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  sessionId   String?
+  session     Session?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  userId      String
+  user        User      @relation("OAuthRefreshTokens", fields: [userId], references: [id], onDelete: Cascade)
+  referenceId String?
+  expiresAt   DateTime?
+  createdAt   DateTime?
+  revoked     DateTime?
+  authTime    DateTime?
+  scopes      String
 
   accessTokens OauthAccessToken[]
-  consents     OauthConsent[]
 
+  @@index([clientId])
+  @@index([sessionId])
   @@index([userId])
+  @@map("oauthRefreshToken")
 }
 
+/// Access tokens for the new oauth-provider plugin
 model OauthAccessToken {
-  id                    String   @id @default(cuid())
-  accessToken           String   @unique
-  refreshToken          String   @unique
-  accessTokenExpiresAt  DateTime
-  refreshTokenExpiresAt DateTime
-  clientId              String
-  client                OauthApplication @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
-  userId                String?
-  user                  User?    @relation("OAuthTokens", fields: [userId], references: [id], onDelete: Cascade)
-  scopes                String   // space-separated scopes
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id          String    @id
+  token       String    @unique
+  clientId    String
+  client      OauthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  sessionId   String?
+  session     Session?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  userId      String?
+  user        User?     @relation("OAuthTokens", fields: [userId], references: [id], onDelete: Cascade)
+  referenceId String?
+  refreshId   String?
+  refresh     OauthRefreshToken? @relation(fields: [refreshId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime?
+  createdAt   DateTime?
+  scopes      String?
 
   @@index([clientId])
   @@index([userId])
+  @@index([sessionId])
+  @@index([refreshId])
+  @@map("oauthAccessToken")
 }
 
+/// OAuth consent records
 model OauthConsent {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   clientId     String
-  client       OauthApplication @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  client       OauthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
   userId       String
-  user         User     @relation("OAuthConsents", fields: [userId], references: [id], onDelete: Cascade)
-  scopes       String   // space-separated scopes
+  user         User      @relation("OAuthConsents", fields: [userId], references: [id], onDelete: Cascade)
+  scopes       String
   consentGiven Boolean
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  referenceId  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([clientId])
   @@index([userId])
+  @@map("oauthConsent")
 }

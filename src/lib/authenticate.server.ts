@@ -56,12 +56,12 @@ export async function authenticateRequest(
     }
 
     const oauthToken = await prisma.oauthAccessToken.findUnique({
-      where: { accessToken: token },
+      where: { token },
     });
-    if (oauthToken && oauthToken.userId && oauthToken.accessTokenExpiresAt > new Date()) {
+    if (oauthToken && oauthToken.userId && (!oauthToken.expiresAt || oauthToken.expiresAt > new Date())) {
       return {
         userId: oauthToken.userId,
-        scopes: oauthToken.scopes.split(" ").filter(Boolean),
+        scopes: (oauthToken.scopes ?? "").split(" ").filter(Boolean),
         authMethod: "oauth",
         clientId: oauthToken.clientId,
       };

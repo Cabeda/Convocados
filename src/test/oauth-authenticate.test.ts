@@ -5,8 +5,8 @@ import { authenticateRequest, requireScope } from "~/lib/authenticate.server";
 import type { AuthContext } from "~/lib/authenticate.server";
 
 beforeEach(async () => {
-  await prisma.$executeRawUnsafe("DELETE FROM OauthAccessToken");
-  await prisma.$executeRawUnsafe("DELETE FROM OauthApplication");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthAccessToken");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthClient");
   await prisma.$executeRawUnsafe("DELETE FROM ApiKey");
   await prisma.$executeRawUnsafe("DELETE FROM User WHERE id LIKE 'auth-mw-test-%'");
   await prisma.user.create({
@@ -59,11 +59,11 @@ describe("authenticateRequest", () => {
 
   describe("OAuth bearer token auth", () => {
     beforeEach(async () => {
-      await prisma.oauthApplication.create({
+      await prisma.oauthClient.create({
         data: {
           name: "Test OAuth App",
           clientId: "auth-mw-oauth-client",
-          redirectUrls: "[]",
+          redirectUris: "",
           type: "web",
           updatedAt: new Date(),
         },

@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "~/lib/db.server";
 
 beforeEach(async () => {
-  await prisma.$executeRawUnsafe("DELETE FROM OauthConsent");
-  await prisma.$executeRawUnsafe("DELETE FROM OauthAccessToken");
-  await prisma.$executeRawUnsafe("DELETE FROM OauthApplication");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthConsent");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthAccessToken");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthClient");
   await prisma.$executeRawUnsafe("DELETE FROM User WHERE id LIKE 'oauth-test-%'");
   await prisma.user.create({
     data: {
@@ -20,12 +20,12 @@ beforeEach(async () => {
 
 describe("OAuth 2.1 schema — OauthApplication", () => {
   it("creates a web client with all fields", async () => {
-    const app = await prisma.oauthApplication.create({
+    const app = await prisma.oauthClient.create({
       data: {
         name: "Test App",
         clientId: "test-client-id",
         clientSecret: "hashed-secret",
-        redirectUrls: JSON.stringify(["https://example.com/callback"]),
+        redirectUris: JSON.stringify(["https://example.com/callback"]),
         type: "web",
         userId: "oauth-test-user-1",
         updatedAt: new Date(),
@@ -34,15 +34,15 @@ describe("OAuth 2.1 schema — OauthApplication", () => {
     expect(app.clientId).toBe("test-client-id");
     expect(app.type).toBe("web");
     expect(app.disabled).toBe(false);
-    expect(JSON.parse(app.redirectUrls)).toEqual(["https://example.com/callback"]);
+    expect(JSON.parse(app.redirectUris)).toEqual(["https://example.com/callback"]);
   });
 
   it("creates a public (native) client without a secret", async () => {
-    const app = await prisma.oauthApplication.create({
+    const app = await prisma.oauthClient.create({
       data: {
         name: "Mobile App",
         clientId: "mobile-client-id",
-        redirectUrls: JSON.stringify(["com.convocados.app://callback"]),
+        redirectUris: JSON.stringify(["com.convocados.app://callback"]),
         type: "native",
         updatedAt: new Date(),
       },
@@ -53,21 +53,21 @@ describe("OAuth 2.1 schema — OauthApplication", () => {
   });
 
   it("enforces unique clientId", async () => {
-    await prisma.oauthApplication.create({
+    await prisma.oauthClient.create({
       data: {
         name: "App 1",
         clientId: "dup-client-id",
-        redirectUrls: "[]",
+        redirectUris: "",
         type: "web",
         updatedAt: new Date(),
       },
     });
     await expect(
-      prisma.oauthApplication.create({
+      prisma.oauthClient.create({
         data: {
           name: "App 2",
           clientId: "dup-client-id",
-          redirectUrls: "[]",
+          redirectUris: "",
           type: "web",
           updatedAt: new Date(),
         },
@@ -76,18 +76,18 @@ describe("OAuth 2.1 schema — OauthApplication", () => {
   });
 
   it("cascades delete when user is deleted", async () => {
-    await prisma.oauthApplication.create({
+    await prisma.oauthClient.create({
       data: {
         name: "User App",
         clientId: "user-app-id",
-        redirectUrls: "[]",
+        redirectUris: "",
         type: "web",
         userId: "oauth-test-user-1",
         updatedAt: new Date(),
       },
     });
     await prisma.user.delete({ where: { id: "oauth-test-user-1" } });
-    const app = await prisma.oauthApplication.findUnique({
+    const app = await prisma.oauthClient.findUnique({
       where: { clientId: "user-app-id" },
     });
     expect(app).toBeNull();
@@ -96,11 +96,11 @@ describe("OAuth 2.1 schema — OauthApplication", () => {
 
 describe("OAuth 2.1 schema — OauthAccessToken", () => {
   beforeEach(async () => {
-    await prisma.oauthApplication.create({
+    await prisma.oauthClient.create({
       data: {
         name: "Token Test App",
         clientId: "token-test-client",
-        redirectUrls: "[]",
+        redirectUris: "",
         type: "web",
         updatedAt: new Date(),
       },
@@ -174,7 +174,7 @@ describe("OAuth 2.1 schema — OauthAccessToken", () => {
         updatedAt: new Date(),
       },
     });
-    await prisma.oauthApplication.delete({
+    await prisma.oauthClient.delete({
       where: { clientId: "token-test-client" },
     });
     const token = await prisma.oauthAccessToken.findUnique({
@@ -186,11 +186,11 @@ describe("OAuth 2.1 schema — OauthAccessToken", () => {
 
 describe("OAuth 2.1 schema — OauthConsent", () => {
   beforeEach(async () => {
-    await prisma.oauthApplication.create({
+    await prisma.oauthClient.create({
       data: {
         name: "Consent Test App",
         clientId: "consent-test-client",
-        redirectUrls: "[]",
+        redirectUris: "",
         type: "web",
         updatedAt: new Date(),
       },
@@ -221,7 +221,7 @@ describe("OAuth 2.1 schema — OauthConsent", () => {
         updatedAt: new Date(),
       },
     });
-    await prisma.oauthApplication.delete({
+    await prisma.oauthClient.delete({
       where: { clientId: "consent-test-client" },
     });
     const found = await prisma.oauthConsent.findUnique({

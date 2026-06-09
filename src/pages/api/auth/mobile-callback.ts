@@ -12,15 +12,16 @@ async function ensureMobileClient() {
   if (_mobileClientInitialized) return;
   _mobileClientInitialized = true;
 
-  await prisma.oauthApplication.upsert({
+  await prisma.oauthClient.upsert({
     where: { clientId: MOBILE_CLIENT_ID },
     create: {
+      id: MOBILE_CLIENT_ID,
       clientId: MOBILE_CLIENT_ID,
       clientSecret: "",
       name: "Convocados Mobile App",
       type: "native",
-      redirectUrls: "convocados://auth",
-      updatedAt: new Date(),
+      redirectUris: "convocados://auth",
+      public: true,
     },
     update: {},
   });
@@ -60,10 +61,9 @@ export const GET: APIRoute = async ({ request }) => {
     // Store as a temporary token entry
     await prisma.oauthAccessToken.create({
       data: {
-        accessToken: `mcode_${code}`,
-        refreshToken: `mcode_ref_${code}`,
-        accessTokenExpiresAt: expiresAt,
-        refreshTokenExpiresAt: expiresAt,
+        id: `mcode_${code}`,
+        token: `mcode_${code}`,
+        expiresAt,
         userId: session.user.id,
         clientId: MOBILE_CLIENT_ID,
         scopes: "_onetime_code",
@@ -103,13 +103,13 @@ export const POST: APIRoute = async ({ request }) => {
   // Find and validate the one-time code
   const record = await prisma.oauthAccessToken.findFirst({
     where: {
-      accessToken: `mcode_${code}`,
+      token: `mcode_${code}`,
       clientId: MOBILE_CLIENT_ID,
       scopes: "_onetime_code",
     },
   });
 
-  if (!record || record.accessTokenExpiresAt < new Date()) {
+  if (!record || (record.expiresAt && record.expiresAt < new Date())) {
     if (record) {
       await prisma.oauthAccessToken.delete({ where: { id: record.id } }).catch(() => {});
     }
@@ -124,14 +124,25 @@ export const POST: APIRoute = async ({ request }) => {
   const refreshToken = crypto.randomBytes(32).toString("hex");
   const expiresIn = 3600; // 1 hour
 
+  const refreshRecord = await prisma.oauthRefreshToken.create({
+    data: {
+      id: crypto.randomUUID(),
+      token: refreshToken,
+      userId: record.userId!,
+      clientId: MOBILE_CLIENT_ID,
+      scopes: "openid profile email offline_access read:events write:events manage:players read:ratings read:history manage:teams manage:push",
+      expiresAt: new Date(Date.now() + 30 * 86400_000), // 30 days
+    },
+  });
+
   await prisma.oauthAccessToken.create({
     data: {
-      accessToken,
-      refreshToken,
-      accessTokenExpiresAt: new Date(Date.now() + expiresIn * 1000),
-      refreshTokenExpiresAt: new Date(Date.now() + 30 * 86400_000), // 30 days
+      id: crypto.randomUUID(),
+      token: accessToken,
+      expiresAt: new Date(Date.now() + expiresIn * 1000),
       userId: record.userId,
       clientId: MOBILE_CLIENT_ID,
+      refreshId: refreshRecord.id,
       scopes: "openid profile email offline_access read:events write:events manage:players read:ratings read:history manage:teams manage:push",
     },
   });
