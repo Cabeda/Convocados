@@ -63,6 +63,11 @@ data class EventScreenState(
     val undoData: UndoData? = null,
     val teamMoveUndo: TeamMoveUndo? = null,
     val isFollowing: Boolean = false,
+    val mutePlayerActivity: Boolean? = null,
+    val muteReminders: Boolean? = null,
+    val mutePostGame: Boolean? = null,
+    val muteEventDetails: Boolean? = null,
+    val showNotificationSheet: Boolean = false,
 )
 
 data class TeamMoveUndo(
@@ -117,20 +122,61 @@ class EventDetailViewModel @Inject constructor(
             repository.refreshEventDetail(eventId)
             val postGame = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
             val known = runCatching { api.fetchKnownPlayers(eventId) }.getOrNull()?.players ?: emptyList()
-            val following = runCatching { api.getFollowState(eventId) }.getOrNull()?.following ?: false
-            _state.value = _state.value.copy(loading = false, refreshing = false, postGame = postGame, knownPlayers = known, isFollowing = following)
+            val following = runCatching { api.getFollowState(eventId) }.getOrNull()
+            _state.value = _state.value.copy(
+                loading = false, refreshing = false, postGame = postGame, knownPlayers = known,
+                isFollowing = following?.following ?: false,
+                mutePlayerActivity = following?.mutePlayerActivity,
+                muteReminders = following?.muteReminders,
+                mutePostGame = following?.mutePostGame,
+                muteEventDetails = following?.muteEventDetails,
+            )
         }
     }
 
     fun toggleFollow(eventId: String) {
+        if (_state.value.isFollowing) {
+            // Already following — show notification preferences sheet
+            _state.value = _state.value.copy(showNotificationSheet = true)
+            return
+        }
         viewModelScope.launch {
-            val current = _state.value.isFollowing
-            _state.value = _state.value.copy(isFollowing = !current)
-            runCatching {
-                if (current) api.unfollowEvent(eventId) else api.followEvent(eventId)
-            }.onFailure {
-                _state.value = _state.value.copy(isFollowing = current)
+            _state.value = _state.value.copy(isFollowing = true)
+            runCatching { api.followEvent(eventId) }
+                .onFailure { _state.value = _state.value.copy(isFollowing = false) }
+        }
+    }
+
+    fun dismissNotificationSheet() {
+        _state.value = _state.value.copy(showNotificationSheet = false)
+    }
+
+    fun updateNotificationOverride(eventId: String, field: String, value: Boolean?) {
+        viewModelScope.launch {
+            val req = when (field) {
+                "mutePlayerActivity" -> FollowOverridesRequest(mutePlayerActivity = value)
+                "muteReminders" -> FollowOverridesRequest(muteReminders = value)
+                "mutePostGame" -> FollowOverridesRequest(mutePostGame = value)
+                "muteEventDetails" -> FollowOverridesRequest(muteEventDetails = value)
+                else -> return@launch
             }
+            runCatching { api.updateFollowPreferences(eventId, req) }
+                .onSuccess { res ->
+                    _state.value = _state.value.copy(
+                        mutePlayerActivity = res.mutePlayerActivity,
+                        muteReminders = res.muteReminders,
+                        mutePostGame = res.mutePostGame,
+                        muteEventDetails = res.muteEventDetails,
+                    )
+                }
+        }
+    }
+
+    fun unfollow(eventId: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isFollowing = false, showNotificationSheet = false)
+            runCatching { api.unfollowEvent(eventId) }
+                .onFailure { _state.value = _state.value.copy(isFollowing = true) }
         }
     }
 
@@ -288,6 +334,35 @@ fun EventDetailScreen(
     }
 
     LaunchedEffect(eventId) { viewModel.load(eventId) }
+
+    // Notification preferences bottom sheet
+    if (state.showNotificationSheet) {
+        ModalBottomSheet(onDismissRequest = { viewModel.dismissNotificationSheet() }) {
+            Column(Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
+                Text("Notification Settings", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(16.dp))
+                NotificationToggleRow("Player activity", state.mutePlayerActivity) { value ->
+                    viewModel.updateNotificationOverride(eventId, "mutePlayerActivity", value)
+                }
+                NotificationToggleRow("Game reminders", state.muteReminders) { value ->
+                    viewModel.updateNotificationOverride(eventId, "muteReminders", value)
+                }
+                NotificationToggleRow("Post-game results", state.mutePostGame) { value ->
+                    viewModel.updateNotificationOverride(eventId, "mutePostGame", value)
+                }
+                NotificationToggleRow("Event changes", state.muteEventDetails) { value ->
+                    viewModel.updateNotificationOverride(eventId, "muteEventDetails", value)
+                }
+                Spacer(Modifier.height(24.dp))
+                TextButton(
+                    onClick = { viewModel.unfollow(eventId) },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Unfollow") }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -673,5 +748,19 @@ fun HistoryCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NotificationToggleRow(label: String, muted: Boolean?, onToggle: (Boolean?) -> Unit) {
+    // muted=null means "use global default" (enabled), muted=true means suppressed
+    val enabled = muted != true
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = enabled, onCheckedChange = { checked -> onToggle(if (checked) null else true) })
     }
 }
