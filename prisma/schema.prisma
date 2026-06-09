@@ -140,6 +140,9 @@ model Event {
   mvpEnabled Boolean @default(true)
   mvpEloEnabled Boolean @default(false)
 
+  // Notification defaults (admin-set, JSON: {mutePlayerActivity?, muteReminders?, mutePostGame?, muteEventDetails?})
+  notificationDefaults String? // null = all enabled
+
   // Archive
   archivedAt     DateTime?
 

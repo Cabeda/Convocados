@@ -25,11 +25,13 @@ import GroupIcon from "@mui/icons-material/Group";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import UnarchiveIcon from "@mui/icons-material/Unarchive";
 import EmailIcon from "@mui/icons-material/Email";
+import NotificationsIcon from "@mui/icons-material/Notifications";
 import { useT } from "~/lib/useT";
 import { SPORT_PRESETS } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
+import { NotificationDefaultsEditor } from "./event/NotificationDefaultsEditor";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -690,6 +692,14 @@ export default function EventSettingsPage({ eventId }: Props) {
             />
           </Tooltip>
         </Stack>
+      </SectionCard>
+
+      {/* ── Notification Defaults ── */}
+      <SectionCard title={t("notificationDefaults")} icon={<NotificationsIcon color="action" />}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          {t("notificationDefaultsDesc")}
+        </Typography>
+        <NotificationDefaultsEditor eventId={eventId} canEdit={canEdit} />
       </SectionCard>
 
       {/* ── Priority Enrollment ── */}
