@@ -221,11 +221,7 @@ jobs:
           VERSION="${{ needs.release.outputs.version }}"
           sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" app/build.gradle.kts
 
-      - name: Build phone release APK
-        working-directory: android-app
-        run: ./gradlew :app:assembleRelease --no-daemon
-
-      - name: Sign phone APK
+      - name: Configure keystore
         if: ${{ env.HAS_KEYSTORE == 'true' }}
         working-directory: android-app
         env:
@@ -234,25 +230,17 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          printenv ANDROID_KEYSTORE | base64 -d > /tmp/release.keystore
-          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
-          if [ -z "$APK" ]; then echo "No APK found"; exit 1; fi
-          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner -type f 2>/dev/null | sort -V | tail -1)
-          if [ -n "$APKSIGNER" ]; then
-            $APKSIGNER sign \
-              --ks /tmp/release.keystore \
-              --ks-key-alias "$KEY_ALIAS" \
-              --ks-pass "pass:$KEYSTORE_PASSWORD" \
-              --key-pass "pass:$KEY_PASSWORD" \
-              "$APK"
-          else
-            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-              -keystore /tmp/release.keystore \
-              -storepass "$KEYSTORE_PASSWORD" \
-              -keypass "$KEY_PASSWORD" \
-              "$APK" "$KEY_ALIAS"
-          fi
-          rm -f /tmp/release.keystore
+          printenv ANDROID_KEYSTORE | base64 -d > app/release-keystore.jks
+          {
+            echo "storeFile=release-keystore.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > keystore.properties
+
+      - name: Build phone release APK
+        working-directory: android-app
+        run: ./gradlew :app:assembleRelease --no-daemon
 
       - name: Upload phone APK to GitHub Release
         uses: actions/github-script@v9
@@ -333,11 +321,7 @@ jobs:
         run: |
           echo "GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID" >> local.properties
 
-      - name: Build Wear OS release APK
-        working-directory: android-app
-        run: ./gradlew :wear:assembleRelease --no-daemon
-
-      - name: Sign Wear OS APK
+      - name: Configure keystore
         if: ${{ env.HAS_KEYSTORE == 'true' }}
         working-directory: android-app
         env:
@@ -346,25 +330,17 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          printenv ANDROID_KEYSTORE | base64 -d > /tmp/release.keystore
-          APK=$(find wear/build/outputs/apk/release -name "*.apk" | head -1)
-          if [ -z "$APK" ]; then echo "No Wear APK found"; exit 1; fi
-          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner -type f 2>/dev/null | sort -V | tail -1)
-          if [ -n "$APKSIGNER" ]; then
-            $APKSIGNER sign \
-              --ks /tmp/release.keystore \
-              --ks-key-alias "$KEY_ALIAS" \
-              --ks-pass "pass:$KEYSTORE_PASSWORD" \
-              --key-pass "pass:$KEY_PASSWORD" \
-              "$APK"
-          else
-            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-              -keystore /tmp/release.keystore \
-              -storepass "$KEYSTORE_PASSWORD" \
-              -keypass "$KEY_PASSWORD" \
-              "$APK" "$KEY_ALIAS"
-          fi
-          rm -f /tmp/release.keystore
+          printenv ANDROID_KEYSTORE | base64 -d > app/release-keystore.jks
+          {
+            echo "storeFile=release-keystore.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > keystore.properties
+
+      - name: Build Wear OS release APK
+        working-directory: android-app
+        run: ./gradlew :wear:assembleRelease --no-daemon
 
       - name: Upload Wear OS APK to GitHub Release
         uses: actions/github-script@v9
