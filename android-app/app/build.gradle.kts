@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.play.publisher)
 }
 
 val keystoreProperties = Properties().apply {
@@ -61,6 +62,15 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+}
+
+play {
+    track.set("internal")
+    defaultToAppBundles.set(true)
+    val credFile = rootProject.file("play-service-account.json")
+    if (credFile.exists()) {
+        serviceAccountCredentials.set(credFile)
     }
 }
 

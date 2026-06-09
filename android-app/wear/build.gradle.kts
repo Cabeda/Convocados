@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.play.publisher)
 }
 
 val localProperties = Properties().apply {
@@ -98,6 +99,15 @@ android {
     }
     composeCompiler {
         stabilityConfigurationFile = rootProject.layout.projectDirectory.file("wear/stability-config.txt")
+    }
+}
+
+play {
+    track.set("wear:internal")
+    defaultToAppBundles.set(true)
+    val credFile = rootProject.file("play-service-account.json")
+    if (credFile.exists()) {
+        serviceAccountCredentials.set(credFile)
     }
 }
 
