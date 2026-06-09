@@ -359,6 +359,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   fireWebhooks(eventId, "player_joined", webhookData).catch(() => {});
   if (spotsLeft === 0) {
     fireWebhooks(eventId, "game_full", webhookData).catch(() => {});
+    await enqueueNotification(eventId, "game_full", { title: event.title, key: "notifyGameFullAlert", params: { name: trimmed }, url, spotsLeft: 0 }, senderClientId);
   }
 
   // Recalculate payment shares if a cost is set
@@ -443,6 +444,12 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     await enqueueNotification(eventId, "player_left_promoted", { title: event.title, key: "notifyPlayerLeftPromoted", params: { left: player.name, promoted: firstBench.name }, url, spotsLeft }, senderClientId);
   } else {
     await enqueueNotification(eventId, "player_left", { title: event.title, key: "notifyPlayerLeft", params: { name: player.name }, url, spotsLeft }, senderClientId);
+  }
+
+  // Spot available: game was full before removal and now has an opening (no bench to auto-promote)
+  const wasFull = event.players.length >= event.maxPlayers;
+  if (wasActive && wasFull && !firstBench && spotsLeft > 0) {
+    await enqueueNotification(eventId, "spot_available", { title: event.title, key: "notifySpotAvailable", params: { name: player.name }, url, spotsLeft }, senderClientId);
   }
 
   // Drain notification queue before responding so push is sent immediately.

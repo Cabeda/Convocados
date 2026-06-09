@@ -211,6 +211,11 @@ const en = {
   notifyGameReminder1h: "⏰ {title} starts in 1 hour!",
   notifyGameFull: "Game is full",
   notifySpotsLeft: "{n} spot(s) left",
+  notifyPlayersJoined: "{count} players joined",
+  notifyPlayersLeft: "{count} players left",
+  notifyPlayerActivityGrouped: "{count} player updates",
+  notifyGameFullAlert: "🎉 Game is full! All spots taken",
+  notifySpotAvailable: "📢 A spot opened up!",
 
   // Update banner
   updateAvailable: "A new version is available",

@@ -184,6 +184,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun unfollowEvent(eventId: String): FollowStateResponse =
         client.delete("/api/events/$eventId/follow")
+
+    suspend fun updateFollowPreferences(eventId: String, overrides: FollowOverridesRequest): FollowStateResponse =
+        client.put("/api/events/$eventId/follow", overrides)
 }
 
 // ── Request bodies ────────────────────────────────────────────────────────────
@@ -225,3 +228,11 @@ data class CreateEventRequest(
 @Serializable data class ReorderPlayersRequest(val playerIds: List<String>)
 @Serializable data class CostOverrideRequest(val playerName: String, val amount: Double)
 @Serializable data class LocationWithCoordsRequest(val location: String, val latitude: Double, val longitude: Double)
+
+@Serializable
+data class FollowOverridesRequest(
+    val mutePlayerActivity: Boolean? = null,
+    val muteReminders: Boolean? = null,
+    val mutePostGame: Boolean? = null,
+    val muteEventDetails: Boolean? = null,
+)

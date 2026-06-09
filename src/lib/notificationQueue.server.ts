@@ -20,7 +20,9 @@ export type NotificationJobType =
   | "player_left_promoted"
   | "event_details"
   | "reminder"
-  | "post_game";
+  | "post_game"
+  | "game_full"
+  | "spot_available";
 
 export interface NotificationJobPayload {
   title: string;
@@ -58,6 +60,72 @@ export function enqueueNotification(
     .catch((err: unknown) => {
       log.error({ eventId, type, err }, "Failed to enqueue notification job");
     });
+}
+
+const PLAYER_ACTIVITY_TYPES = new Set<string>([
+  "player_joined", "player_left", "player_joined_bench", "player_left_bench", "player_left_promoted",
+]);
+
+/**
+ * Group player-activity jobs for the same event within the grouping window.
+ * Returns grouped jobs (collapsed) + non-activity jobs (passthrough).
+ */
+function groupPlayerActivityJobs(jobs: Array<{ id: string; eventId: string; type: string; payload: string; senderClientId: string | null; createdAt: Date; retryCount: number }>) {
+  const activityByEvent = new Map<string, typeof jobs>();
+  const other: typeof jobs = [];
+
+  for (const job of jobs) {
+    if (PLAYER_ACTIVITY_TYPES.has(job.type)) {
+      const group = activityByEvent.get(job.eventId) ?? [];
+      group.push(job);
+      activityByEvent.set(job.eventId, group);
+    } else {
+      other.push(job);
+    }
+  }
+
+  const grouped: Array<{ jobs: typeof jobs; eventId: string; payload: NotificationJobPayload; senderClientId: string | null; type: NotificationJobType }> = [];
+
+  for (const [eventId, eventJobs] of activityByEvent) {
+    if (eventJobs.length === 1) {
+      // Single job — process normally
+      other.push(eventJobs[0]);
+      continue;
+    }
+
+    // Multiple player activity for same event — collapse
+    const names: string[] = [];
+    let latestPayload: NotificationJobPayload | null = null;
+    for (const j of eventJobs) {
+      const p = JSON.parse(j.payload) as NotificationJobPayload;
+      latestPayload = p;
+      if (p.params.name) names.push(p.params.name);
+      else if (p.params.left) names.push(p.params.left);
+    }
+
+    const joinedCount = eventJobs.filter((j) => j.type.includes("joined")).length;
+    const leftCount = eventJobs.filter((j) => j.type.includes("left")).length;
+
+    let key: TranslationKey = "notifyPlayerActivityGrouped";
+    const params: Record<string, string> = { count: String(names.length), names: names.slice(0, 3).join(", ") };
+    if (joinedCount > 0 && leftCount === 0) {
+      key = "notifyPlayersJoined";
+      params.count = String(joinedCount);
+    } else if (leftCount > 0 && joinedCount === 0) {
+      key = "notifyPlayersLeft";
+      params.count = String(leftCount);
+    }
+
+    grouped.push({
+      jobs: eventJobs,
+      eventId,
+      payload: { ...(latestPayload as NotificationJobPayload), key, params },
+      senderClientId: eventJobs[0].senderClientId,
+      type: "player_joined" as NotificationJobType, // uses playerActivity prefs
+    });
+  }
+
+  return { grouped, individual: other };
 }
 
 /**
@@ -143,8 +211,34 @@ async function _doDrain(): Promise<number> {
 
     if (jobs.length === 0) break;
 
+    const { grouped, individual } = groupPlayerActivityJobs(jobs);
+
+    // Process grouped notifications (collapsed player activity)
     await Promise.allSettled(
-      jobs.map((job) =>
+      grouped.map((group) =>
+        limit(async () => {
+          try {
+            await sendPushToEvent(
+              group.eventId,
+              group.payload.title,
+              group.payload.key,
+              group.payload.params,
+              group.payload.url,
+              group.payload.spotsLeft,
+              group.senderClientId ?? undefined,
+              group.type,
+            );
+            await createInAppNotifications(group.eventId, group.type, group.payload, group.senderClientId);
+          } catch (err: unknown) {
+            log.error({ eventId: group.eventId, err }, "Failed to process grouped notification");
+          }
+        }),
+      ),
+    );
+
+    // Process individual (non-grouped) notifications
+    await Promise.allSettled(
+      individual.map((job) =>
         limit(async () => {
           try {
             const payload = JSON.parse(job.payload) as NotificationJobPayload;
@@ -159,6 +253,7 @@ async function _doDrain(): Promise<number> {
               job.type as NotificationJobType,
               payload.reminderType,
             );
+            await createInAppNotifications(job.eventId, job.type as NotificationJobType, payload, job.senderClientId);
           } catch (err: unknown) {
             log.error({ jobId: job.id, eventId: job.eventId, type: job.type, err }, "Failed to process notification job");
             const nextRetry = job.retryCount + 1;
@@ -182,4 +277,45 @@ async function _doDrain(): Promise<number> {
   }
 
   return totalProcessed;
+}
+
+/**
+ * Create in-app notification records for all followers of an event.
+ * These persist so users can see missed notifications in their feed.
+ */
+async function createInAppNotifications(
+  eventId: string,
+  type: NotificationJobType,
+  payload: NotificationJobPayload,
+  senderClientId: string | null,
+) {
+  try {
+    const follows = await prisma.eventFollow.findMany({
+      where: { eventId },
+      select: { userId: true },
+    });
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { ownerId: true },
+    });
+
+    const recipientIds = new Set(follows.map((f) => f.userId));
+    if (event?.ownerId) recipientIds.add(event.ownerId);
+    if (senderClientId) recipientIds.delete(senderClientId);
+
+    if (recipientIds.size === 0) return;
+
+    await prisma.inAppNotification.createMany({
+      data: [...recipientIds].map((userId) => ({
+        userId,
+        eventId,
+        type,
+        title: payload.title,
+        body: `${payload.key}:${JSON.stringify(payload.params)}`,
+        url: payload.url,
+      })),
+    });
+  } catch (err) {
+    log.error({ eventId, type, err }, "Failed to create in-app notifications");
+  }
 }
