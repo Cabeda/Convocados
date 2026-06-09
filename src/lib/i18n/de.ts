@@ -468,6 +468,8 @@ const de: TranslationKeys = {
 
   // Notification settings (#112)
   notificationSettings: "Benachrichtigungseinstellungen",
+  notificationSettingsForGame: "Notifications for this game",
+  postGameResults: "Post-game results",
   notificationSettingsDesc: "Wähle, wie und wann du benachrichtigt werden möchtest.",
   emailNotifications: "E-Mail-Benachrichtigungen",
   pushNotifications: "Push-Benachrichtigungen",

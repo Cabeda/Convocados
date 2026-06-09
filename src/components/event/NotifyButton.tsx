@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { Button, Tooltip } from "@mui/material";
+import {
+  Button, Tooltip, Popover, Stack, Typography, Switch,
+  FormControlLabel, Divider,
+} from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import { useT } from "~/lib/useT";
+
+interface FollowState {
+  following: boolean;
+  mutePlayerActivity: boolean | null;
+  muteReminders: boolean | null;
+  mutePostGame: boolean | null;
+  muteEventDetails: boolean | null;
+}
 
 interface Props {
   eventId: string;
@@ -12,23 +23,24 @@ interface Props {
 
 export function NotifyButton({ eventId, isAuthenticated }: Props) {
   const t = useT();
-  const [following, setFollowing] = useState(false);
+  const [state, setState] = useState<FollowState>({ following: false, mutePlayerActivity: null, muteReminders: null, mutePostGame: null, muteEventDetails: null });
   const [pushDenied, setPushDenied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetch(`/api/events/${eventId}/follow`).then(r => r.json()).then(d => setFollowing(d.following)).catch(() => {});
+    fetch(`/api/events/${eventId}/follow`).then(r => r.json()).then(d => setState(d)).catch(() => {});
     if ("Notification" in window && Notification.permission === "denied") setPushDenied(true);
   }, [eventId, isAuthenticated]);
 
   const handleFollow = async () => {
     setLoading(true);
     try {
-      await fetch(`/api/events/${eventId}/follow`, { method: "POST" });
-      setFollowing(true);
+      const res = await fetch(`/api/events/${eventId}/follow`, { method: "POST" });
+      const data = await res.json();
+      setState(data);
 
-      // Also subscribe this device to push if possible
       if ("serviceWorker" in navigator && "PushManager" in window && Notification.permission !== "denied") {
         try {
           const reg = await navigator.serviceWorker.register("/sw.js");
@@ -46,7 +58,7 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ...sub.toJSON(), locale: navigator.language }),
           });
-        } catch { /* push permission denied or unavailable — follow still worked */ }
+        } catch { /* push permission denied or unavailable */ }
       }
     } finally {
       setLoading(false);
@@ -57,15 +69,41 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
     setLoading(true);
     try {
       await fetch(`/api/events/${eventId}/follow`, { method: "DELETE" });
-      setFollowing(false);
+      setState({ following: false, mutePlayerActivity: null, muteReminders: null, mutePostGame: null, muteEventDetails: null });
+      setAnchorEl(null);
     } finally {
       setLoading(false);
     }
   };
 
+  const toggleOverride = async (field: keyof FollowState) => {
+    const current = state[field] as boolean | null;
+    const newValue = current === true ? null : true; // toggle: muted → enabled (null), enabled → muted (true)
+    setState(prev => ({ ...prev, [field]: newValue }));
+    try {
+      const res = await fetch(`/api/events/${eventId}/follow`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: newValue }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setState(prev => ({ ...prev, ...data }));
+      }
+    } catch { /* revert on error handled by next fetch */ }
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLElement>) => {
+    if (state.following) {
+      setAnchorEl(e.currentTarget);
+    } else {
+      handleFollow();
+    }
+  };
+
   if (!isAuthenticated) return null;
 
-  if (pushDenied && !following) return (
+  if (pushDenied && !state.following) return (
     <Tooltip title={t("notifyDenied")}>
       <span>
         <Button variant="outlined" size="small" disabled startIcon={<NotificationsOffIcon />} sx={{ flexShrink: 0 }}>
@@ -75,17 +113,54 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
     </Tooltip>
   );
 
-  if (following) return (
-    <Button variant="outlined" size="small" color="success" startIcon={<NotificationsIcon />}
-      onClick={handleUnfollow} disabled={loading} sx={{ flexShrink: 0 }}>
-      {t("notifyEnabled")}
-    </Button>
-  );
-
   return (
-    <Button variant="outlined" size="small" startIcon={<NotificationsNoneIcon />}
-      onClick={handleFollow} disabled={loading} sx={{ flexShrink: 0 }}>
-      {t("notifySubscribe")}
-    </Button>
+    <>
+      <Button
+        variant="outlined"
+        size="small"
+        color={state.following ? "success" : "inherit"}
+        startIcon={state.following ? <NotificationsIcon /> : <NotificationsNoneIcon />}
+        onClick={handleClick}
+        disabled={loading}
+        sx={{ flexShrink: 0 }}
+      >
+        {state.following ? t("notifyEnabled") : t("notifySubscribe")}
+      </Button>
+
+      <Popover
+        open={!!anchorEl}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        slotProps={{ paper: { sx: { p: 2, minWidth: 260 } } }}
+      >
+        <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+          {t("notificationSettingsForGame")}
+        </Typography>
+        <Stack spacing={0.5}>
+          <FormControlLabel
+            control={<Switch size="small" checked={state.mutePlayerActivity !== true} onChange={() => toggleOverride("mutePlayerActivity")} />}
+            label={<Typography variant="body2">{t("playerActivity")}</Typography>}
+          />
+          <FormControlLabel
+            control={<Switch size="small" checked={state.muteReminders !== true} onChange={() => toggleOverride("muteReminders")} />}
+            label={<Typography variant="body2">{t("gameReminders")}</Typography>}
+          />
+          <FormControlLabel
+            control={<Switch size="small" checked={state.mutePostGame !== true} onChange={() => toggleOverride("mutePostGame")} />}
+            label={<Typography variant="body2">{t("postGameResults")}</Typography>}
+          />
+          <FormControlLabel
+            control={<Switch size="small" checked={state.muteEventDetails !== true} onChange={() => toggleOverride("muteEventDetails")} />}
+            label={<Typography variant="body2">{t("eventDetails")}</Typography>}
+          />
+        </Stack>
+        <Divider sx={{ my: 1.5 }} />
+        <Button size="small" color="error" onClick={handleUnfollow} disabled={loading} fullWidth>
+          {t("notifyUnsubscribe")}
+        </Button>
+      </Popover>
+    </>
   );
 }

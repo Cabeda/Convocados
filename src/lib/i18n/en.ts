@@ -515,6 +515,8 @@ const en = {
   // Notification settings (#112)
   notificationSettings: "Notification settings",
   notificationSettingsDesc: "Choose how and when you want to be notified.",
+  notificationSettingsForGame: "Notifications for this game",
+  postGameResults: "Post-game results",
   emailNotifications: "Email notifications",
   pushNotifications: "Push notifications",
   gameInvites: "Game invites",
