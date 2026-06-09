@@ -10,6 +10,14 @@ export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
+  // Block non-admins when competitive data is hidden
+  if (!event.showCompetitiveData) {
+    const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, params.id);
+    if (event.ownerId && !isOwner && !isAdmin) {
+      return Response.json({ error: "Ratings are hidden for this event." }, { status: 403 });
+    }
+  }
+
   const url = new URL(request.url);
   const { limit, cursor } = parsePaginationParams(url);
 

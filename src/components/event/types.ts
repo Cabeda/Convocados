@@ -30,6 +30,7 @@ export interface EventData {
   balanced: boolean;
   eloEnabled: boolean;
   hideEloInTeams: boolean;
+  showCompetitiveData: boolean;
   splitCostsEnabled: boolean;
   mvpEnabled: boolean;
   mvpEloEnabled: boolean;
