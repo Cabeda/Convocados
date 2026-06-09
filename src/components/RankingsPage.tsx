@@ -59,6 +59,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const [players, setPlayers] = useState<EventPlayer[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -93,6 +94,7 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
     ]);
     if (evRes.status === 404) { setNotFound(true); setLoading(false); return; }
     const ev = await evRes.json();
+    if (ratRes.status === 403) { setTitle(ev.title); setHidden(true); setLoading(false); return; }
     const rat = ratRes.ok ? await ratRes.json() : { data: [], nextCursor: null, hasMore: false };
     setTitle(ev.title);
     setRatings(rat.data);
@@ -311,6 +313,18 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
         <Container maxWidth="sm" sx={{ py: 8, textAlign: "center" }}>
           <Typography variant="h4" fontWeight={700} gutterBottom>{t("gameNotFound")}</Typography>
           <Button variant="contained" href="/">{t("createNewGame")}</Button>
+        </Container>
+      </ResponsiveLayout>
+    </ThemeModeProvider>
+  );
+
+  if (hidden) return (
+    <ThemeModeProvider>
+      <ResponsiveLayout>
+        <Container maxWidth="sm" sx={{ py: 8, textAlign: "center" }}>
+          <EmojiEventsIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom>{t("ratingsHidden")}</Typography>
+          <Button variant="outlined" href={`/events/${eventId}`} startIcon={<ArrowBackIcon />}>{t("backToGame")}</Button>
         </Container>
       </ResponsiveLayout>
     </ThemeModeProvider>

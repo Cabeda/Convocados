@@ -223,6 +223,9 @@ const en = {
   webhookHelp: "POST to this URL to register a webhook. See docs for payload format.",
 
   // ELO / Ratings
+  showCompetitiveData: "Show competitive data",
+  showCompetitiveDataTooltip: "Show rankings, scores, and stats to players. When off, data is still tracked for team balancing but hidden from players.",
+  ratingsHidden: "Ratings are hidden for this event.",
   eloEnabled: "ELO ratings",
   eloEnabledTooltip: "Track player skill ratings using the ELO system",
   balancedTeams: "ELO-balanced teams",

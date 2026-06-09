@@ -224,6 +224,9 @@ const pt: TranslationKeys = {
   webhookHelp: "Faz POST para este URL para registar um webhook. Consulta a documentação para o formato do payload.",
 
   // ELO / Ratings
+  showCompetitiveData: "Mostrar dados competitivos",
+  showCompetitiveDataTooltip: "Mostrar classificações, resultados e estatísticas aos jogadores. Quando desligado, os dados continuam a ser registados para equilibrar equipas mas ficam escondidos dos jogadores.",
+  ratingsHidden: "As classificações estão escondidas para este evento.",
   eloEnabled: "Classificações ELO",
   eloEnabledTooltip: "Acompanhar classificações de habilidade dos jogadores usando o sistema ELO",
   balancedTeams: "Equipas equilibradas por ELO",

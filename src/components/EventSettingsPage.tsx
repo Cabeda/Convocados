@@ -78,6 +78,7 @@ interface EventSettings {
   balanced: boolean;
   eloEnabled: boolean;
   hideEloInTeams: boolean;
+  showCompetitiveData: boolean;
   allowManualRating: boolean;
   splitCostsEnabled: boolean;
   mvpEnabled: boolean;
@@ -260,6 +261,11 @@ export default function EventSettingsPage({ eventId }: Props) {
   const handleToggleElo = (v: boolean) => {
     setEvent((e) => e ? { ...e, eloEnabled: v, ...(v ? {} : { balanced: false, hideEloInTeams: false }) } : e);
     updateSetting("elo", { eloEnabled: v });
+  };
+
+  const handleToggleShowCompetitiveData = (v: boolean) => {
+    setEvent((e) => e ? { ...e, showCompetitiveData: v } : e);
+    updateSetting("show-competitive-data", { showCompetitiveData: v });
   };
 
   const handleToggleManualRating = (v: boolean) => {
@@ -617,6 +623,13 @@ export default function EventSettingsPage({ eventId }: Props) {
       {/* ── Teams & Ratings ── */}
       <SectionCard title={t("eventSettingsTeams")} icon={<StarIcon color="action" />}>
         <Stack spacing={1}>
+          <Tooltip title={t("showCompetitiveDataTooltip")}>
+            <FormControlLabel
+              control={<Switch size="small" checked={event.showCompetitiveData ?? true} onChange={(e) => handleToggleShowCompetitiveData(e.target.checked)} disabled={!canEdit} />}
+              label={<Typography variant="body2">{t("showCompetitiveData")}</Typography>}
+            />
+          </Tooltip>
+          <Divider sx={{ my: 0.5 }} />
           <Tooltip title={t("eloEnabledTooltip")}>
             <FormControlLabel
               control={<Switch size="small" checked={event.eloEnabled ?? true} onChange={(e) => handleToggleElo(e.target.checked)} disabled={!canEdit} />}
