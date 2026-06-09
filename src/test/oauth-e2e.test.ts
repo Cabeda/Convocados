@@ -26,6 +26,7 @@ beforeEach(async () => {
   await resetApiRateLimitStore();
   await prisma.$executeRawUnsafe("DELETE FROM oauthConsent");
   await prisma.$executeRawUnsafe("DELETE FROM oauthAccessToken");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthRefreshToken");
   await prisma.$executeRawUnsafe("DELETE FROM oauthClient");
   await prisma.$executeRawUnsafe("DELETE FROM ApiKey");
   await prisma.$executeRawUnsafe("DELETE FROM User WHERE id LIKE 'e2e-oauth-%'");
@@ -46,6 +47,7 @@ describe("OAuth 2.1 E2E — Full lifecycle", () => {
     // Step 1: Register a client (simulating dynamic registration)
     const client = await prisma.oauthClient.create({
       data: {
+        id: crypto.randomUUID(),
         name: "E2E Test App",
         clientId: "e2e-test-client",
         clientSecret: "e2e-test-secret",
@@ -60,17 +62,15 @@ describe("OAuth 2.1 E2E — Full lifecycle", () => {
     const now = new Date();
     const token = await prisma.oauthAccessToken.create({
       data: {
-        accessToken: "e2e_access_token",
-        refreshToken: "e2e_refresh_token",
-        accessTokenExpiresAt: new Date(now.getTime() + 3600_000),
-        refreshTokenExpiresAt: new Date(now.getTime() + 604800_000),
+        id: crypto.randomUUID(),
+        token: "e2e_access_token",
+        expiresAt: new Date(now.getTime() + 3600_000),
         clientId: "e2e-test-client",
         userId: "e2e-oauth-user-1",
         scopes: "openid read:events",
-        updatedAt: now,
       },
     });
-    expect(token.accessToken).toBe("e2e_access_token");
+    expect(token.token).toBe("e2e_access_token");
 
     // Step 3: Authenticate with the token via unified middleware
     const authCtx = await authenticateRequest(
@@ -140,6 +140,7 @@ describe("OAuth 2.1 E2E — Full lifecycle", () => {
   it("consent persistence: consent is remembered per user+client", async () => {
     await prisma.oauthClient.create({
       data: {
+        id: crypto.randomUUID(),
         name: "Consent Test App",
         clientId: "e2e-consent-client",
         redirectUris: "",
@@ -173,6 +174,7 @@ describe("OAuth 2.1 E2E — Error cases", () => {
   beforeEach(async () => {
     await prisma.oauthClient.create({
       data: {
+        id: crypto.randomUUID(),
         name: "Error Test App",
         clientId: "e2e-error-client",
         redirectUris: "",
@@ -185,14 +187,12 @@ describe("OAuth 2.1 E2E — Error cases", () => {
   it("expired access token is rejected by authenticateRequest", async () => {
     await prisma.oauthAccessToken.create({
       data: {
-        accessToken: "e2e_expired_at",
-        refreshToken: "e2e_expired_rt",
-        accessTokenExpiresAt: new Date(Date.now() - 1000),
-        refreshTokenExpiresAt: new Date(Date.now() + 604800_000),
+        id: crypto.randomUUID(),
+        token: "e2e_expired_at",
+        expiresAt: new Date(Date.now() - 1000),
         clientId: "e2e-error-client",
         userId: "e2e-oauth-user-1",
         scopes: "openid",
-        updatedAt: new Date(),
       },
     });
 
@@ -207,14 +207,12 @@ describe("OAuth 2.1 E2E — Error cases", () => {
   it("token without required scope fails requireScope check", async () => {
     await prisma.oauthAccessToken.create({
       data: {
-        accessToken: "e2e_limited_at",
-        refreshToken: "e2e_limited_rt",
-        accessTokenExpiresAt: new Date(Date.now() + 3600_000),
-        refreshTokenExpiresAt: new Date(Date.now() + 604800_000),
+        id: crypto.randomUUID(),
+        token: "e2e_limited_at",
+        expiresAt: new Date(Date.now() + 3600_000),
         clientId: "e2e-error-client",
         userId: "e2e-oauth-user-1",
         scopes: "openid read:events",
-        updatedAt: new Date(),
       },
     });
 
@@ -239,17 +237,29 @@ describe("OAuth 2.1 E2E — Error cases", () => {
     expect(ctx).toBeNull();
   });
 
-  it("revoking a refresh token invalidates the entire token pair", async () => {
-    await prisma.oauthAccessToken.create({
+  it("revoking a refresh token invalidates associated access tokens", async () => {
+    // Create a refresh token
+    const refreshToken = await prisma.oauthRefreshToken.create({
       data: {
-        accessToken: "e2e_pair_at",
-        refreshToken: "e2e_pair_rt",
-        accessTokenExpiresAt: new Date(Date.now() + 3600_000),
-        refreshTokenExpiresAt: new Date(Date.now() + 604800_000),
+        id: crypto.randomUUID(),
+        token: "e2e_pair_rt",
+        expiresAt: new Date(Date.now() + 604800_000),
         clientId: "e2e-error-client",
         userId: "e2e-oauth-user-1",
         scopes: "openid",
-        updatedAt: new Date(),
+      },
+    });
+
+    // Create an access token linked to the refresh token
+    await prisma.oauthAccessToken.create({
+      data: {
+        id: crypto.randomUUID(),
+        token: "e2e_pair_at",
+        expiresAt: new Date(Date.now() + 3600_000),
+        clientId: "e2e-error-client",
+        userId: "e2e-oauth-user-1",
+        scopes: "openid",
+        refreshId: refreshToken.id,
       },
     });
 
@@ -264,7 +274,7 @@ describe("OAuth 2.1 E2E — Error cases", () => {
       ),
     );
 
-    // Access token should also be gone
+    // Access token should also be gone (cascade delete from refresh token)
     const ctx = await authenticateRequest(
       new Request("http://localhost:4321/api/test", {
         headers: { authorization: "Bearer e2e_pair_at" },
@@ -276,14 +286,12 @@ describe("OAuth 2.1 E2E — Error cases", () => {
   it("client deletion cascades to tokens and consents", async () => {
     await prisma.oauthAccessToken.create({
       data: {
-        accessToken: "e2e_cascade_at",
-        refreshToken: "e2e_cascade_rt",
-        accessTokenExpiresAt: new Date(Date.now() + 3600_000),
-        refreshTokenExpiresAt: new Date(Date.now() + 604800_000),
+        id: crypto.randomUUID(),
+        token: "e2e_cascade_at",
+        expiresAt: new Date(Date.now() + 3600_000),
         clientId: "e2e-error-client",
         userId: "e2e-oauth-user-1",
         scopes: "openid",
-        updatedAt: new Date(),
       },
     });
     await prisma.oauthConsent.create({
@@ -300,7 +308,7 @@ describe("OAuth 2.1 E2E — Error cases", () => {
     await prisma.oauthClient.delete({ where: { clientId: "e2e-error-client" } });
 
     // Tokens and consents should be gone
-    const token = await prisma.oauthAccessToken.findFirst({ where: { accessToken: "e2e_cascade_at" } });
+    const token = await prisma.oauthAccessToken.findFirst({ where: { token: "e2e_cascade_at" } });
     expect(token).toBeNull();
     const consent = await prisma.oauthConsent.findFirst({ where: { clientId: "e2e-error-client" } });
     expect(consent).toBeNull();

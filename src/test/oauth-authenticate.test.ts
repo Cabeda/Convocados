@@ -6,6 +6,7 @@ import type { AuthContext } from "~/lib/authenticate.server";
 
 beforeEach(async () => {
   await prisma.$executeRawUnsafe("DELETE FROM oauthAccessToken");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthRefreshToken");
   await prisma.$executeRawUnsafe("DELETE FROM oauthClient");
   await prisma.$executeRawUnsafe("DELETE FROM ApiKey");
   await prisma.$executeRawUnsafe("DELETE FROM User WHERE id LIKE 'auth-mw-test-%'");
@@ -61,6 +62,7 @@ describe("authenticateRequest", () => {
     beforeEach(async () => {
       await prisma.oauthClient.create({
         data: {
+          id: crypto.randomUUID(),
           name: "Test OAuth App",
           clientId: "auth-mw-oauth-client",
           redirectUris: "",
@@ -74,14 +76,12 @@ describe("authenticateRequest", () => {
       const now = new Date();
       await prisma.oauthAccessToken.create({
         data: {
-          accessToken: "valid_oauth_token",
-          refreshToken: "valid_refresh_token",
-          accessTokenExpiresAt: new Date(now.getTime() + 3600_000),
-          refreshTokenExpiresAt: new Date(now.getTime() + 604800_000),
+          id: crypto.randomUUID(),
+          token: "valid_oauth_token",
+          expiresAt: new Date(now.getTime() + 3600_000),
           clientId: "auth-mw-oauth-client",
           userId: "auth-mw-test-user-1",
           scopes: "openid read:events",
-          updatedAt: now,
         },
       });
 
@@ -100,14 +100,12 @@ describe("authenticateRequest", () => {
       const past = new Date(Date.now() - 3600_000);
       await prisma.oauthAccessToken.create({
         data: {
-          accessToken: "expired_oauth_token",
-          refreshToken: "expired_refresh_token",
-          accessTokenExpiresAt: past,
-          refreshTokenExpiresAt: past,
+          id: crypto.randomUUID(),
+          token: "expired_oauth_token",
+          expiresAt: past,
           clientId: "auth-mw-oauth-client",
           userId: "auth-mw-test-user-1",
           scopes: "openid",
-          updatedAt: past,
         },
       });
 

@@ -50,6 +50,7 @@ async function seedOAuthApp() {
 	await prisma.oauthClient.upsert({
 		where: { clientId: OAUTH_CLIENT_ID },
 		create: {
+			id: crypto.randomUUID(),
 			name: "Teams Test Client",
 			clientId: OAUTH_CLIENT_ID,
 			redirectUris: "",
@@ -63,10 +64,9 @@ async function seedOAuthToken(userId: string, scopes = "write:events manage:play
 	const accessToken = "test-team-token-" + Math.random().toString(36).slice(2);
 	await prisma.oauthAccessToken.create({
 		data: {
-			accessToken,
-			refreshToken: "test-team-refresh-" + Math.random().toString(36).slice(2),
-			accessTokenExpiresAt: new Date(Date.now() + 3600_000),
-			refreshTokenExpiresAt: new Date(Date.now() + 86400_000),
+			id: crypto.randomUUID(),
+			token: accessToken,
+			expiresAt: new Date(Date.now() + 3600_000),
 			userId,
 			clientId: OAUTH_CLIENT_ID,
 			scopes,
@@ -589,6 +589,7 @@ describe("PUT /api/events/[id]/teams (legacy matches format)", () => {
 			something: "else",
 		}));
 
-		expect(res.status).toBe(400);
+		// Auth is enforced before body validation — unauthenticated gets 401
+		expect(res.status).toBe(401);
 	});
 });

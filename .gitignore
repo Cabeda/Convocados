@@ -77,3 +77,4 @@ android-app/app/release-keystore.jks
 android-app/release-output/
 *.jks
 *.aab
+play-service-account.json

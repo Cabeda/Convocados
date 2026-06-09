@@ -7,6 +7,7 @@ const BASE = "http://localhost:4321";
 beforeEach(async () => {
   await resetApiRateLimitStore();
   await prisma.$executeRawUnsafe("DELETE FROM oauthAccessToken");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthRefreshToken");
   await prisma.$executeRawUnsafe("DELETE FROM oauthClient");
   await prisma.$executeRawUnsafe("DELETE FROM User WHERE id LIKE 'token-ep-test-%'");
   await prisma.user.create({
@@ -21,6 +22,7 @@ beforeEach(async () => {
   });
   await prisma.oauthClient.create({
     data: {
+      id: crypto.randomUUID(),
       name: "Token EP Test App",
       clientId: "token-ep-client",
       redirectUris: "",
@@ -33,20 +35,30 @@ beforeEach(async () => {
 async function createToken(overrides: Partial<{
   accessToken: string;
   refreshToken: string;
-  accessTokenExpiresAt: Date;
-  refreshTokenExpiresAt: Date;
+  expiresAt: Date;
+  refreshExpiresAt: Date;
 }> = {}) {
   const now = new Date();
-  return prisma.oauthAccessToken.create({
+  const refreshId = crypto.randomUUID();
+  await prisma.oauthRefreshToken.create({
     data: {
-      accessToken: overrides.accessToken ?? "at_introspect_test",
-      refreshToken: overrides.refreshToken ?? "rt_introspect_test",
-      accessTokenExpiresAt: overrides.accessTokenExpiresAt ?? new Date(now.getTime() + 3600_000),
-      refreshTokenExpiresAt: overrides.refreshTokenExpiresAt ?? new Date(now.getTime() + 604800_000),
+      id: refreshId,
+      token: overrides.refreshToken ?? "rt_introspect_test",
+      expiresAt: overrides.refreshExpiresAt ?? new Date(now.getTime() + 604800_000),
       clientId: "token-ep-client",
       userId: "token-ep-test-user-1",
       scopes: "openid read:events",
-      updatedAt: now,
+    },
+  });
+  return prisma.oauthAccessToken.create({
+    data: {
+      id: crypto.randomUUID(),
+      token: overrides.accessToken ?? "at_introspect_test",
+      expiresAt: overrides.expiresAt ?? new Date(now.getTime() + 3600_000),
+      clientId: "token-ep-client",
+      userId: "token-ep-test-user-1",
+      scopes: "openid read:events",
+      refreshId,
     },
   });
 }
@@ -103,7 +115,7 @@ describe("Token Introspection (RFC 7662)", () => {
     await createToken({
       accessToken: "at_expired",
       refreshToken: "rt_expired",
-      accessTokenExpiresAt: new Date(Date.now() - 1000),
+      expiresAt: new Date(Date.now() - 1000),
     });
     const req = makeRequest("/api/auth/oauth2/introspect", { token: "at_expired" });
     const res = await introspectHandler(stubContext(req));
@@ -144,12 +156,12 @@ describe("Token Revocation (RFC 7009)", () => {
 
     // Verify token is gone
     const found = await prisma.oauthAccessToken.findFirst({
-      where: { accessToken: "at_revoke_test" },
+      where: { token: "at_revoke_test" },
     });
     expect(found).toBeNull();
   });
 
-  it("revokes by refresh token (deletes the whole token record)", async () => {
+  it("revokes by refresh token (deletes the refresh token and cascades to access tokens)", async () => {
     await createToken({ accessToken: "at_revoke2", refreshToken: "rt_revoke2" });
 
     const req = makeRequest("/api/auth/oauth2/revoke", { token: "rt_revoke2" });
@@ -157,10 +169,14 @@ describe("Token Revocation (RFC 7009)", () => {
     expect(res.status).toBe(200);
 
     // Both access and refresh should be gone
-    const found = await prisma.oauthAccessToken.findFirst({
-      where: { accessToken: "at_revoke2" },
+    const foundAccess = await prisma.oauthAccessToken.findFirst({
+      where: { token: "at_revoke2" },
     });
-    expect(found).toBeNull();
+    expect(foundAccess).toBeNull();
+    const foundRefresh = await prisma.oauthRefreshToken.findFirst({
+      where: { token: "rt_revoke2" },
+    });
+    expect(foundRefresh).toBeNull();
   });
 
   it("returns 200 for an unknown token (per RFC 7009)", async () => {
