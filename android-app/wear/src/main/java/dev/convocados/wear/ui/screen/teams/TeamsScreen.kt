@@ -1,5 +1,7 @@
 package dev.convocados.wear.ui.screen.teams
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -8,6 +10,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -21,40 +24,45 @@ import com.google.android.horologist.compose.layout.ScalingLazyColumnDefaults
 import com.google.android.horologist.compose.layout.ScreenScaffold
 import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.R
+import dev.convocados.wear.data.alarm.AlarmType
+import dev.convocados.wear.data.alarm.GameAlarm
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
+import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
 
 @OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun TeamsScreen(
     eventId: String,
     viewModel: TeamsViewModel,
+    settingsViewModel: GameSettingsViewModel,
     onDone: () -> Unit = {},
-    onSettings: () -> Unit = {},
+    onKickoff: () -> Unit = {},
 ) {
-    LaunchedEffect(eventId) { viewModel.load(eventId) }
+    LaunchedEffect(eventId) {
+        viewModel.load(eventId)
+        settingsViewModel.load(eventId)
+    }
 
     val state by viewModel.uiState.collectAsState()
-    val columnState = rememberColumnState(
-        ScalingLazyColumnDefaults.responsive()
-    )
+    val settingsState by settingsViewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val columnState = rememberColumnState(ScalingLazyColumnDefaults.responsive())
 
-    // Edge over-scroll gestures: pull down at the top -> score; pull up at the bottom -> settings.
+    // Pull down at top -> back to score
     val pullThreshold = with(LocalDensity.current) { 72.dp.toPx() }
     var pulled by remember { mutableFloatStateOf(0f) }
-    val edgeNav = remember(onDone, onSettings) {
+    val edgeNav = remember(onDone) {
         object : NestedScrollConnection {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                when {
-                    available.y > 0f && !columnState.state.canScrollBackward -> {
-                        pulled += available.y
-                        if (pulled >= pullThreshold) { pulled = 0f; onDone() }
-                    }
-                    available.y < 0f && !columnState.state.canScrollForward -> {
-                        pulled += available.y
-                        if (pulled <= -pullThreshold) { pulled = 0f; onSettings() }
-                    }
-                    else -> pulled = 0f
-                }
+                if (available.y > 0f && !columnState.state.canScrollBackward) {
+                    pulled += available.y
+                    if (pulled >= pullThreshold) { pulled = 0f; onDone() }
+                } else if (available.y < 0f) pulled = 0f
                 return Offset.Zero
             }
         }
@@ -72,7 +80,7 @@ fun TeamsScreen(
                     columnState = columnState,
                     modifier = Modifier.fillMaxSize().nestedScroll(edgeNav),
                 ) {
-                    // Header
+                    // ── Teams section ──────────────────────────────────
                     item {
                         ListHeader {
                             Text(
@@ -83,7 +91,6 @@ fun TeamsScreen(
                         }
                     }
 
-                    // Team 1 header and players
                     item {
                         Text(
                             text = state.teamOneName,
@@ -104,17 +111,15 @@ fun TeamsScreen(
                     }
 
                     items(state.teamOnePlayers, key = { "t1-${it.id}" }) { player ->
-                        PlayerChip(
-                            player = player,
-                            targetTeam = "2",
-                            onMove = { viewModel.movePlayerToTeamTwo(player) },
-                        )
+                        if (state.isReadOnly) {
+                            ReadOnlyPlayerChip(player)
+                        } else {
+                            PlayerChip(player = player, targetTeam = "2", onMove = { viewModel.movePlayerToTeamTwo(player) })
+                        }
                     }
 
-                    // Spacer
                     item { Spacer(modifier = Modifier.height(6.dp)) }
 
-                    // Team 2 header and players
                     item {
                         Text(
                             text = state.teamTwoName,
@@ -135,14 +140,13 @@ fun TeamsScreen(
                     }
 
                     items(state.teamTwoPlayers, key = { "t2-${it.id}" }) { player ->
-                        PlayerChip(
-                            player = player,
-                            targetTeam = "1",
-                            onMove = { viewModel.movePlayerToTeamOne(player) },
-                        )
+                        if (state.isReadOnly) {
+                            ReadOnlyPlayerChip(player)
+                        } else {
+                            PlayerChip(player = player, targetTeam = "1", onMove = { viewModel.movePlayerToTeamOne(player) })
+                        }
                     }
 
-                    // Unassigned players
                     if (state.unassigned.isNotEmpty()) {
                         item { Spacer(modifier = Modifier.height(6.dp)) }
                         item {
@@ -162,7 +166,6 @@ fun TeamsScreen(
                         }
                     }
 
-                    // Bench players (read-only)
                     if (state.bench.isNotEmpty()) {
                         item { Spacer(modifier = Modifier.height(6.dp)) }
                         item {
@@ -184,7 +187,6 @@ fun TeamsScreen(
                         }
                     }
 
-                    // Saving indicator
                     if (state.isSaving) {
                         item {
                             Text(
@@ -195,7 +197,6 @@ fun TeamsScreen(
                         }
                     }
 
-                    // Error message
                     state.error?.let { error ->
                         item {
                             Text(
@@ -210,9 +211,97 @@ fun TeamsScreen(
                         }
                     }
 
+                    // ── Game Settings section ─────────────────────────
+                    item { Spacer(modifier = Modifier.height(12.dp)) }
+                    item {
+                        ListHeader { Text("Game settings", color = MaterialTheme.colorScheme.primary) }
+                    }
+
+                    // Kickoff
+                    item {
+                        val time = Instant.ofEpochMilli(settingsState.kickoffEpochMs)
+                            .atZone(ZoneId.systemDefault()).format(timeFormat)
+                        Text(
+                            text = "Kickoff $time" + if (settingsState.isKickoffOverridden) " (set)" else "",
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    item {
+                        Button(
+                            onClick = {
+                                settingsViewModel.kickoffNow()
+                                onKickoff()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Kick off now") }
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            CompactButton(onClick = { settingsViewModel.nudgeKickoff(-1) }) { Text("−1m") }
+                            CompactButton(onClick = { settingsViewModel.nudgeKickoff(1) }) { Text("+1m") }
+                            if (settingsState.isKickoffOverridden) {
+                                CompactButton(onClick = { settingsViewModel.resetKickoff() }) { Text("Reset") }
+                            }
+                        }
+                    }
+
+                    // Exact-alarm permission
+                    if (!settingsState.canScheduleExact) {
+                        item {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "Alarms may be delayed. Allow exact alarms for on-time buzzes.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center,
+                                )
+                                CompactButton(onClick = {
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                        runCatching {
+                                            context.startActivity(
+                                                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                                                    .setData(android.net.Uri.parse("package:${context.packageName}"))
+                                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                            )
+                                        }
+                                    }
+                                }) { Text("Allow") }
+                            }
+                        }
+                    }
+
+                    // Alarms
+                    item {
+                        Text(
+                            text = "Vibration alarms",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    items(settingsState.alarms, key = { it.id }) { alarm ->
+                        AlarmRow(
+                            alarm = alarm,
+                            onToggle = { settingsViewModel.toggleAlarm(alarm.id) },
+                            onMinus = { settingsViewModel.changeMinute(alarm.id, -1) },
+                            onPlus = { settingsViewModel.changeMinute(alarm.id, 1) },
+                            onRemove = { settingsViewModel.removeAlarm(alarm.id) },
+                        )
+                    }
+
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            CompactButton(onClick = { settingsViewModel.addRecurring() }) { Text("+ Every") }
+                            CompactButton(onClick = { settingsViewModel.addSingle() }) { Text("+ Once") }
+                        }
+                    }
+
                     // Done button
                     item {
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         CompactButton(onClick = onDone) {
                             Text(stringResource(R.string.done))
                         }
@@ -224,63 +313,54 @@ fun TeamsScreen(
 }
 
 @Composable
-private fun PlayerChip(
-    player: WearPlayerEntity,
-    targetTeam: String,
-    onMove: () -> Unit,
-) {
-    Button(
-        onClick = onMove,
-        modifier = Modifier.fillMaxWidth(),
-        label = {
-            Text(
-                text = player.name,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        secondaryLabel = {
-            Text(
-                text = stringResource(R.string.move_to_team, targetTeam),
-                style = MaterialTheme.typography.labelSmall,
-            )
-        },
+private fun ReadOnlyPlayerChip(player: WearPlayerEntity) {
+    Text(
+        text = player.name,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 
 @Composable
-private fun UnassignedPlayerChip(
-    player: WearPlayerEntity,
-    onMoveToOne: () -> Unit,
-    onMoveToTwo: () -> Unit,
-) {
-    Column(
+private fun PlayerChip(player: WearPlayerEntity, targetTeam: String, onMove: () -> Unit) {
+    Button(
+        onClick = onMove,
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+        label = { Text(text = player.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        secondaryLabel = { Text(text = stringResource(R.string.move_to_team, targetTeam), style = MaterialTheme.typography.labelSmall) },
+    )
+}
+
+@Composable
+private fun UnassignedPlayerChip(player: WearPlayerEntity, onMoveToOne: () -> Unit, onMoveToTwo: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = player.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
+            CompactButton(onClick = onMoveToOne) { Text(text = stringResource(R.string.move_to_team, "1"), style = MaterialTheme.typography.labelSmall) }
+            CompactButton(onClick = onMoveToTwo) { Text(text = stringResource(R.string.move_to_team, "2"), style = MaterialTheme.typography.labelSmall) }
+        }
+    }
+}
+
+@Composable
+private fun AlarmRow(alarm: GameAlarm, onToggle: () -> Unit, onMinus: () -> Unit, onPlus: () -> Unit, onRemove: () -> Unit) {
+    val label = if (alarm.type == AlarmType.RECURRING) "Every ${alarm.minute}m" else "At ${alarm.minute}m"
+    val dots = "•".repeat(alarm.pulses)
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = player.name,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            text = "$label  $dots",
+            style = MaterialTheme.typography.labelMedium,
+            color = if (alarm.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(top = 2.dp),
-        ) {
-            CompactButton(onClick = onMoveToOne) {
-                Text(
-                    text = stringResource(R.string.move_to_team, "1"),
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
-            CompactButton(onClick = onMoveToTwo) {
-                Text(
-                    text = stringResource(R.string.move_to_team, "2"),
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
+            CompactButton(onClick = onMinus) { Text("−") }
+            CompactButton(onClick = onPlus) { Text("+") }
+            CompactButton(onClick = onToggle) { Text(if (alarm.enabled) "On" else "Off") }
+            CompactButton(onClick = onRemove) { Text("✕") }
         }
     }
 }

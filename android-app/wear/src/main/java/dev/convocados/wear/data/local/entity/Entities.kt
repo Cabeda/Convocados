@@ -45,6 +45,7 @@ data class WearHistoryEntity(
     val scoreTwo: Int?,
     val teamOneName: String,
     val teamTwoName: String,
+    val teamsSnapshot: String? = null,
     val editable: Boolean,
 )
 

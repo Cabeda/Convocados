@@ -21,7 +21,7 @@ import dev.convocados.wear.data.local.entity.WearPlayerEntity
         WearPlayerEntity::class,
         PendingRosterChangeEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class WearDatabase : RoomDatabase() {

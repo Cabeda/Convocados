@@ -65,7 +65,11 @@ class GameSettingsViewModel @Inject constructor(
         }
     }
 
-    fun kickoffNow() = apply { it.copy(kickoffEpochMs = System.currentTimeMillis()) }
+    fun kickoffNow() {
+        apply { it.copy(kickoffEpochMs = System.currentTimeMillis()) }
+        // Also start the game (idempotent — reuses existing history record)
+        viewModelScope.launch { gameRepository.startGame(eventId) }
+    }
 
     fun nudgeKickoff(deltaMinutes: Int) = apply {
         it.copy(kickoffEpochMs = (it.kickoffEpochMs ?: scheduledKickoffMs) + deltaMinutes * 60_000L)

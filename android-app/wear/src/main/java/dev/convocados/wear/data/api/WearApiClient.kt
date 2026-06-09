@@ -92,13 +92,19 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
     @PublishedApi
     internal suspend fun refreshToken() {
         val tokens = tokenStore.getTokens() ?: throw ApiException(401, "No refresh token")
-        val response = client.post("$baseUrl/api/auth/oauth2/token") {
-            contentType(ContentType.Application.FormUrlEncoded)
-            setBody("grant_type=refresh_token&refresh_token=${tokens.refreshToken}&client_id=mobile-app")
+        val response = try {
+            client.post("$baseUrl/api/auth/oauth2/token") {
+                contentType(ContentType.Application.FormUrlEncoded)
+                setBody("grant_type=refresh_token&refresh_token=${tokens.refreshToken}&client_id=mobile-app")
+            }
+        } catch (e: Exception) {
+            throw ApiException(0, "Network error during refresh: ${e.message}")
         }
         if (!response.status.isSuccess()) {
-            tokenStore.clearTokens()
-            throw ApiException(401, "Session expired")
+            if (response.status.value == 401 || response.status.value == 403) {
+                tokenStore.clearTokens()
+            }
+            throw ApiException(response.status.value, "Refresh failed (${response.status.value})")
         }
         val data: OAuthTokenResponse = response.body()
         tokenStore.setTokens(

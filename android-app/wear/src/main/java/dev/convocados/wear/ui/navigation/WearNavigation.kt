@@ -18,12 +18,11 @@ import dev.convocados.wear.ui.screen.quick.QuickScoreViewModel
 import dev.convocados.wear.ui.screen.quick.QuickSetupScreen
 import dev.convocados.wear.ui.screen.score.ScoreScreen
 import dev.convocados.wear.ui.screen.score.ScoreViewModel
+import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
 import dev.convocados.wear.ui.screen.teams.TeamsScreen
 import dev.convocados.wear.ui.screen.teams.TeamsViewModel
 
 import com.google.android.horologist.compose.layout.AppScaffold
-import com.google.android.horologist.compose.layout.ScreenScaffold
-import com.google.android.horologist.compose.layout.rememberColumnState
 
 @Composable
 fun WearNavigation(tokenStore: WearTokenStore, googleSignIn: WearGoogleSignIn) {
@@ -85,21 +84,13 @@ fun WearNavigation(tokenStore: WearTokenStore, googleSignIn: WearGoogleSignIn) {
             composable(WearRoutes.TEAMS) { backStackEntry ->
                 val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
                 val viewModel: TeamsViewModel = hiltViewModel()
+                val settingsViewModel: GameSettingsViewModel = hiltViewModel()
                 TeamsScreen(
                     eventId = eventId,
                     viewModel = viewModel,
+                    settingsViewModel = settingsViewModel,
                     onDone = { navController.popBackStack() },
-                    onSettings = { navController.navigate(WearRoutes.settings(eventId)) },
-                )
-            }
-
-            composable(WearRoutes.SETTINGS) { backStackEntry ->
-                val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
-                val viewModel: dev.convocados.wear.ui.screen.settings.GameSettingsViewModel = hiltViewModel()
-                dev.convocados.wear.ui.screen.settings.GameSettingsScreen(
-                    eventId = eventId,
-                    viewModel = viewModel,
-                    onBack = { navController.popBackStack() },
+                    onKickoff = { navController.popBackStack() },
                 )
             }
 
