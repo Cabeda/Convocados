@@ -6,6 +6,7 @@ import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
+import dev.convocados.wear.data.repository.WearTeamRepository
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -15,6 +16,7 @@ class WearGameRepository @Inject constructor(
     private val client: WearApiClient,
     private val gameDao: WearGameDao,
     private val historyDao: WearHistoryDao,
+    private val teamRepository: WearTeamRepository,
 ) {
     /** Observable list of all cached games, sorted by dateTime. */
     fun observeGames(): Flow<List<WearGameEntity>> = gameDao.getAllGames()
@@ -26,7 +28,7 @@ class WearGameRepository @Inject constructor(
     fun observeLatestHistory(eventId: String): Flow<WearHistoryEntity?> =
         historyDao.observeLatestHistory(eventId)
 
-    /** Refresh games from the API, falling back to cache on failure. */
+    /** Refresh games from the API, falling back to cache on failure. Also pre-fetches teams for active games. */
     suspend fun refreshGames(): Result<Unit> = try {
         val response = client.get<dev.convocados.wear.data.api.MyGamesResponse>("/api/me/games")
         val owned = response.owned.map { it.toEntity("owned") }
@@ -37,6 +39,11 @@ class WearGameRepository @Inject constructor(
         gameDao.refreshGames("admin", admin)
         gameDao.refreshGames("followed", followed)
         gameDao.refreshGames("archived_owned", archivedOwned)
+        // Pre-fetch teams for all active (non-archived) games
+        val activeIds = (owned + admin + followed).map { it.id }
+        for (id in activeIds) {
+            try { teamRepository.refreshTeams(id) } catch (_: Exception) {}
+        }
         Result.success(Unit)
     } catch (e: Exception) {
         Log.w("WearGameRepo", "Failed to refresh games", e)
@@ -58,6 +65,10 @@ class WearGameRepository @Inject constructor(
     /** Get the latest history entry for a game (from cache). */
     suspend fun getLatestHistory(eventId: String): WearHistoryEntity? =
         historyDao.getLatestHistory(eventId)
+
+    /** Get the latest editable history entry (active game session). */
+    suspend fun getLatestEditableHistory(eventId: String): WearHistoryEntity? =
+        historyDao.getLatestEditableHistory(eventId)
 
     /**
      * Start score tracking for an event (creates today's history record if
@@ -99,6 +110,7 @@ class WearGameRepository @Inject constructor(
             scoreTwo = scoreTwo,
             teamOneName = teamOneName,
             teamTwoName = teamTwoName,
+            teamsSnapshot = teamsSnapshot,
             editable = editable,
         )
 }

@@ -29,6 +29,8 @@ import dev.convocados.wear.util.sportDurationMinutes
 import kotlinx.coroutines.delay
 import java.time.Instant
 
+import dev.convocados.wear.ui.LocalAmbientMode
+
 @OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun ScoreScreen(
@@ -40,6 +42,7 @@ fun ScoreScreen(
 
     val state by viewModel.uiState.collectAsState()
     val columnState = rememberColumnState()
+    val isAmbient = LocalAmbientMode.current
 
     ScreenScaffold(scrollState = columnState) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -102,16 +105,18 @@ fun ScoreScreen(
                     )
                 }
                 else -> {
-                    // Teams exist and are editable — go straight to score tracking,
-                    // regardless of the game's time window.
-                    ScoreEditor(
-                        state = state,
-                        onIncrementOne = viewModel::incrementScoreOne,
-                        onDecrementOne = viewModel::decrementScoreOne,
-                        onIncrementTwo = viewModel::incrementScoreTwo,
-                        onDecrementTwo = viewModel::decrementScoreTwo,
-                        onTeams = onTeams,
-                    )
+                    if (isAmbient) {
+                        AmbientScoreDisplay(state = state)
+                    } else {
+                        ScoreEditor(
+                            state = state,
+                            onIncrementOne = viewModel::incrementScoreOne,
+                            onDecrementOne = viewModel::decrementScoreOne,
+                            onIncrementTwo = viewModel::incrementScoreTwo,
+                            onDecrementTwo = viewModel::decrementScoreTwo,
+                            onTeams = onTeams,
+                        )
+                    }
                 }
             }
         }
@@ -236,3 +241,52 @@ private fun ScoreEditor(
  */
 
 /** Game-progress indicator — see ScoreComponents.kt */
+
+/** Simplified white-on-black score display for ambient (always-on) mode. */
+@Composable
+private fun AmbientScoreDisplay(state: ScoreUiState) {
+    var now by remember { mutableStateOf(Instant.now()) }
+    // Update once per minute in ambient to save power
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Instant.now()
+            delay(60_000)
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(androidx.compose.ui.graphics.Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Score
+            Text(
+                text = "${state.scoreOne} - ${state.scoreTwo}",
+                style = MaterialTheme.typography.displayMedium,
+                color = androidx.compose.ui.graphics.Color.White,
+            )
+            // Team names
+            Text(
+                text = "${state.teamOneName} vs ${state.teamTwoName}",
+                style = MaterialTheme.typography.labelSmall,
+                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+            )
+            // Game clock
+            val kickoffMs = state.kickoffEpochMs
+            if (kickoffMs != null) {
+                val elapsedMs = now.toEpochMilli() - kickoffMs
+                if (elapsedMs >= 0) {
+                    val s = elapsedMs / 1000
+                    Text(
+                        text = "%d:%02d".format(s / 60, s % 60),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        }
+    }
+}
