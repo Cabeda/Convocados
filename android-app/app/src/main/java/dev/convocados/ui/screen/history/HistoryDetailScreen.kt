@@ -46,6 +46,8 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
     val payments: StateFlow<List<PaymentEntry>> = _payments
     private val _saving = MutableStateFlow(false)
     val saving: StateFlow<Boolean> = _saving
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error
 
     fun load(eventId: String, historyId: String) {
         viewModelScope.launch {
@@ -93,9 +95,13 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
     fun updateScore(eventId: String, historyId: String, scoreOne: Int, scoreTwo: Int) {
         viewModelScope.launch {
             _saving.value = true
-            runCatching { api.updateScore(eventId, historyId, scoreOne, scoreTwo) }.onSuccess {
-                _history.value = it
-            }
+            runCatching { api.updateScore(eventId, historyId, scoreOne, scoreTwo) }
+                .onSuccess { _history.value = it }
+                .onFailure { e ->
+                    val body = e.message ?: ""
+                    val match = Regex(""""error"\s*:\s*"([^"]+)"""").find(body)
+                    _error.value = match?.groupValues?.get(1) ?: "Failed to update score"
+                }
             _saving.value = false
         }
     }

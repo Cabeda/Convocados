@@ -163,6 +163,13 @@ internal fun startErrorMessage(e: Throwable?): String? = when {
     e == null -> null
     e is ApiException && e.code == 400 -> "Assign teams first"
     e is ApiException && e.code == 401 -> "Session expired — sign in again"
+    e is ApiException && e.code == 403 -> parseApiError(e.message) ?: "Not authorized"
     e is ApiException -> "Couldn't start (${e.code})"
     else -> "Couldn't start — check connection"
+}
+
+private fun parseApiError(body: String?): String? {
+    if (body == null) return null
+    val match = Regex(""""error"\s*:\s*"([^"]+)"""").find(body)
+    return match?.groupValues?.get(1)
 }
