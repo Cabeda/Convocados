@@ -287,12 +287,16 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const handleTeamChange = async (matches: Imatch[]) => {
     setLocalMatches(matches);
     isDraggingRef.current = true;
-    await fetch(`/api/events/${eventId}/teams`, {
+    const res = await fetch(`/api/events/${eventId}/teams`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ matches }),
     });
     isDraggingRef.current = false;
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setSnackbar(json.error || "Failed to update teams");
+    }
     fetchEvent();
   };
 

@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { authenticateRequest } from "../../../../lib/authenticate.server";
+import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
 
@@ -100,6 +101,11 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
 	if (!params.id) return Response.json({ error: "Missing event id" }, { status: 400 });
 
+	const session = await getSession(request);
+	if (!session?.user) {
+		return Response.json({ error: "You must be logged in to update teams." }, { status: 401 });
+	}
+
 	const eventId = params.id;
 
 	const event = await prisma.event.findUnique({
@@ -110,6 +116,13 @@ export const PUT: APIRoute = async ({ params, request }) => {
 	});
 
 	if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+	const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
+	const isPlayer = event.players.some((p) => p.userId === session.user.id);
+
+	if (!isOwner && !isAdmin && !isPlayer) {
+		return Response.json({ error: "You must be the event owner, an admin, or a player in this game to update teams." }, { status: 403 });
+	}
 
 	interface MatchInput { team: string; players: { name: string; order: number }[] }
 	let body: { matches: MatchInput[] };

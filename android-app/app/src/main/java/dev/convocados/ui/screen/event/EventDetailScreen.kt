@@ -243,6 +243,10 @@ class EventDetailViewModel @Inject constructor(
                     delay(3000)
                     _state.value = _state.value.copy(teamMoveUndo = null)
                 }
+                .onFailure { e ->
+                    val msg = parseApiErrorMessage(e) ?: "Failed to update teams"
+                    _state.value = _state.value.copy(error = msg)
+                }
         }
     }
 
@@ -273,6 +277,10 @@ class EventDetailViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { api.updateScore(eventId, historyId, s1, s2) }
                 .onSuccess { repository.refreshEventDetail(eventId) }
+                .onFailure { e ->
+                    val msg = parseApiErrorMessage(e) ?: "Failed to update score"
+                    _state.value = _state.value.copy(error = msg)
+                }
         }
     }
 
@@ -288,6 +296,12 @@ class EventDetailViewModel @Inject constructor(
 
     suspend fun fetchCalendarIcs(eventId: String): String? =
         runCatching { client.fetchCalendarIcs(eventId) }.getOrNull()
+}
+
+private fun parseApiErrorMessage(e: Throwable): String? {
+    val body = e.message ?: return null
+    val match = Regex(""""error"\s*:\s*"([^"]+)"""").find(body)
+    return match?.groupValues?.get(1)
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
