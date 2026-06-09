@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
-import { getSession } from "../../../lib/auth.helpers.server";
+import { getSession, checkOwnership } from "../../../lib/auth.helpers.server";
 
 /** How many minutes before/after the event dateTime we consider it "happening now" */
 const HAPPENING_WINDOW_MS = 90 * 60 * 1000; // 90 minutes
@@ -38,6 +38,16 @@ export const POST: APIRoute = async ({ request }) => {
 
   if (!event) {
     return Response.json({ error: "Event not found." }, { status: 404 });
+  }
+
+  // Check that the user is the owner, admin, or a player in this event
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
+  const isPlayer = await prisma.player.findFirst({
+    where: { eventId, userId: session.user.id, archivedAt: null },
+  });
+
+  if (!isOwner && !isAdmin && !isPlayer) {
+    return Response.json({ error: "You must be the event owner, an admin, or a player in this game to start scoring." }, { status: 403 });
   }
 
   if (event.teamResults.length < 2) {
