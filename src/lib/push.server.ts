@@ -217,7 +217,7 @@ async function sendAppPushToEventUsers(
   excludeUserIds: Set<string>,
   jobType?: NotificationJobType,
   reminderType?: "24h" | "2h" | "1h",
-  opts?: { prefsMap?: Map<string, typeof DEFAULTS>; overridesMap?: Map<string, { mutePlayerActivity: boolean | null; muteReminders: boolean | null; mutePostGame: boolean | null; muteEventDetails: boolean | null }> },
+  opts?: { prefsMap?: Map<string, typeof DEFAULTS>; overridesMap?: Map<string, { mutePlayerActivity: boolean | null; muteReminders: boolean | null; mutePostGame: boolean | null; muteEventDetails: boolean | null }>; eventDefaults?: { mutePlayerActivity?: boolean; muteReminders?: boolean; mutePostGame?: boolean; muteEventDetails?: boolean } | null },
 ): Promise<void> {
   const follows = await prisma.eventFollow.findMany({
     where: { eventId },
@@ -246,7 +246,7 @@ async function sendAppPushToEventUsers(
     if (opts?.prefsMap && jobType) {
       const prefs = opts.prefsMap.get(token.userId) ?? DEFAULTS;
       const overrides = opts.overridesMap?.get(token.userId) ?? null;
-      if (!wantsPushWithOverrides(prefs, jobType, overrides)) continue;
+      if (!wantsPushWithOverrides(prefs, jobType, overrides, opts.eventDefaults ?? null)) continue;
       if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) continue;
     }
     const t = createT((token.locale as Locale) ?? "en");
@@ -281,8 +281,12 @@ export async function sendPushToEvent(
   });
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { ownerId: true },
+    select: { ownerId: true, notificationDefaults: true },
   });
+
+  const eventDefaults = event?.notificationDefaults
+    ? JSON.parse(event.notificationDefaults) as { mutePlayerActivity?: boolean; muteReminders?: boolean; mutePostGame?: boolean; muteEventDetails?: boolean }
+    : null;
 
   const overridesMap = new Map(follows.map((f) => [f.userId, {
     mutePlayerActivity: f.mutePlayerActivity,
@@ -314,7 +318,7 @@ export async function sendPushToEvent(
 
   // App push (FCM)
   promises.push(
-    sendAppPushToEventUsers(eventId, title, key, params, url, spotsLeft, senderUserIds, jobType, reminderType, { prefsMap, overridesMap }),
+    sendAppPushToEventUsers(eventId, title, key, params, url, spotsLeft, senderUserIds, jobType, reminderType, { prefsMap, overridesMap, eventDefaults }),
   );
 
   // Web push
@@ -334,7 +338,7 @@ export async function sendPushToEvent(
             if (jobType) {
               const prefs = prefsMap.get(sub.userId) ?? DEFAULTS;
               const overrides = overridesMap.get(sub.userId) ?? null;
-              if (!wantsPushWithOverrides(prefs, jobType, overrides)) return;
+              if (!wantsPushWithOverrides(prefs, jobType, overrides, eventDefaults)) return;
               if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) return;
             }
 

@@ -515,6 +515,10 @@ const pt: TranslationKeys = {
 
   // Notification settings (#112)
   notificationSettings: "Definições de notificações",
+  notificationSettingsForGame: "Notificações para este jogo",
+  notificationDefaults: "Predefinições de notificações",
+  notificationDefaultsDesc: "Controla que notificações são enviadas a todos os seguidores deste jogo. Utilizadores individuais podem alterar nas suas definições.",
+  postGameResults: "Resultados pós-jogo",
   notificationSettingsDesc: "Escolhe como e quando queres ser notificado.",
   emailNotifications: "Notificações por email",
   pushNotifications: "Notificações push",
