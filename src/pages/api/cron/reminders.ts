@@ -1,9 +1,9 @@
 import type { APIRoute } from "astro";
 import { getUpcomingReminders, getPostGameReminders, markReminderSent } from "~/lib/reminders.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
-import { cleanupStalePushTokens } from "~/lib/push.server";
+import { cleanupStalePushTokens, sendPushToUser } from "~/lib/push.server";
 import { sendReminder, sendPaymentReminder } from "~/lib/email.server";
-import { getNotificationPrefs, wantsEmailReminder, wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
+import { getNotificationPrefs, wantsEmailReminder, wantsPaymentReminderEmail, wantsPaymentReminderPush } from "~/lib/notificationPrefs.server";
 import { getPlayersWithPendingPayments, shouldSendPaymentReminder, markPaymentReminderSent } from "~/lib/paymentReminders.server";
 import { cleanupExpiredRateLimits } from "~/lib/apiRateLimit.server";
 import { expireUnconfirmed } from "~/lib/priority.server";
@@ -111,14 +111,26 @@ export const POST: APIRoute = async ({ request }) => {
             const prefs = await getNotificationPrefs(pp.userId);
             const raw = ppPrefsMap.get(pp.userId);
             const effective = raw ? { ...prefs, ...raw } : prefs;
-            if (!wantsPaymentReminderEmail(effective)) return;
 
-            await sendPaymentReminder(pp.email, {
-              eventTitle: pp.eventTitle,
-              amount: pp.amount.toFixed(2),
-              currency: pp.currency,
-              eventUrl: `${APP_URL}/events/${pp.eventId}`,
-            });
+            const wantsEmail = wantsPaymentReminderEmail(effective);
+            const wantsPush = wantsPaymentReminderPush(effective);
+            if (!wantsEmail && !wantsPush) return;
+
+            const eventUrl = `${APP_URL}/events/${pp.eventId}`;
+            const pushBody = `💸 You owe ${pp.amount.toFixed(2)} ${pp.currency} for ${pp.eventTitle}`;
+
+            if (wantsEmail) {
+              await sendPaymentReminder(pp.email, {
+                eventTitle: pp.eventTitle,
+                amount: pp.amount.toFixed(2),
+                currency: pp.currency,
+                eventUrl,
+              });
+            }
+
+            if (wantsPush) {
+              await sendPushToUser(pp.userId, pp.eventTitle, pushBody, eventUrl);
+            }
 
             await markPaymentReminderSent(pp.eventId, pp.userId);
             paymentRemindersSent.push(`${pp.email}:${pp.eventId}`);
