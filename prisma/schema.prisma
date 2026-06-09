@@ -126,6 +126,7 @@ model Event {
   accessPassword        String?               // bcrypt-hashed password (null = no password)
 
   // Rating settings
+  showCompetitiveData Boolean @default(true)  // top-level gate: hide rankings/scores/stats from players
   eloEnabled        Boolean @default(true)
   hideEloInTeams    Boolean @default(false)
   allowManualRating Boolean @default(false)

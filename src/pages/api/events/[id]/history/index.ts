@@ -10,6 +10,13 @@ export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
+  // Determine if caller can see competitive data
+  let hideCompetitive = false;
+  if (!event.showCompetitiveData && event.ownerId) {
+    const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, params.id);
+    hideCompetitive = !isOwner && !isAdmin;
+  }
+
   const url = new URL(request.url);
   const { limit, cursor } = parsePaginationParams(url);
 
@@ -31,8 +38,8 @@ export const GET: APIRoute = async ({ params, request }) => {
     id: h.id,
     dateTime: h.dateTime.toISOString(),
     status: h.status,
-    scoreOne: h.scoreOne,
-    scoreTwo: h.scoreTwo,
+    scoreOne: hideCompetitive ? null : h.scoreOne,
+    scoreTwo: hideCompetitive ? null : h.scoreTwo,
     teamOneName: h.teamOneName,
     teamTwoName: h.teamTwoName,
     teamsSnapshot: h.teamsSnapshot,
@@ -41,7 +48,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     createdAt: h.createdAt.toISOString(),
     editable: h.editableUntil > new Date(),
     source: h.source,
-    eloUpdates: eloMap.get(h.id) ?? null,
+    eloUpdates: hideCompetitive ? null : (eloMap.get(h.id) ?? null),
   }));
 
   return Response.json(buildPaginatedResponse(mapped, limit));

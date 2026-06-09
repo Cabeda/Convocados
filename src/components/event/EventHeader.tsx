@@ -483,7 +483,7 @@ export function EventHeader({
                     <ListItemText>{t("attendance")}</ListItemText>
                   </MenuItem>
                 )}
-                {(event.eloEnabled ?? true) && (
+                {(event.eloEnabled ?? true) && (event.showCompetitiveData ?? true) && (
                   <MenuItem component="a" href={`/events/${eventId}/rankings`} onClick={() => setAnchorEl(null)}>
                     <ListItemIcon><EmojiEventsIcon fontSize="small" /></ListItemIcon>
                     <ListItemText>{t("ratings")}</ListItemText>
