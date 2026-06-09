@@ -233,6 +233,94 @@ class GamesViewModelTest {
         assertEquals(10, viewModel.uiState.value.visiblePastCount)
     }
 
+    @Test
+    fun `autoNavigateEventId is set when suggested game is scorable`() = runTest {
+        val now = Instant.now()
+        val scorableGame = makeGame("scorable", now.plus(30, ChronoUnit.MINUTES))
+
+        coEvery { repository.observeGames() } returns flowOf(listOf(scorableGame))
+        coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
+        coEvery { repository.refreshGames() } returns Result.success(Unit)
+
+        val viewModel = makeViewModel()
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertEquals("scorable", state.autoNavigateEventId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `autoNavigateEventId is null when suggested game is not scorable`() = runTest {
+        val now = Instant.now()
+        val futureGame = makeGame("future", now.plus(180, ChronoUnit.MINUTES))
+
+        coEvery { repository.observeGames() } returns flowOf(listOf(futureGame))
+        coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
+        coEvery { repository.refreshGames() } returns Result.success(Unit)
+
+        val viewModel = makeViewModel()
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertNull(state.autoNavigateEventId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `consumeAutoNavigate clears autoNavigateEventId`() = runTest {
+        val now = Instant.now()
+        val scorableGame = makeGame("scorable", now.plus(30, ChronoUnit.MINUTES))
+
+        coEvery { repository.observeGames() } returns flowOf(listOf(scorableGame))
+        coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
+        coEvery { repository.refreshGames() } returns Result.success(Unit)
+
+        val viewModel = makeViewModel()
+        advanceUntilIdle()
+
+        viewModel.consumeAutoNavigate()
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertNull(state.autoNavigateEventId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `autoNavigateEventId does not re-fire after consume`() = runTest {
+        val now = Instant.now()
+        val scorableGame = makeGame("scorable", now.plus(30, ChronoUnit.MINUTES))
+
+        coEvery { repository.observeGames() } returns flowOf(listOf(scorableGame))
+        coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
+        coEvery { repository.refreshGames() } returns Result.success(Unit)
+
+        val viewModel = makeViewModel()
+        advanceUntilIdle()
+
+        viewModel.consumeAutoNavigate()
+
+        // Trigger another refresh cycle
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertNull(state.autoNavigateEventId)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private fun makeGame(
         id: String,
         time: Instant = Instant.now(),

@@ -2,6 +2,7 @@ package dev.convocados.wear.ui.screen.games
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -34,6 +35,16 @@ fun GamesScreen(
     onQuickGame: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // Auto-navigate to the scorable suggested game on first load
+    val autoNavId = state.autoNavigateEventId
+    LaunchedEffect(autoNavId) {
+        if (autoNavId != null) {
+            onGameSelected(autoNavId)
+            viewModel.consumeAutoNavigate()
+        }
+    }
+
     val columnState = rememberColumnState(
         ScalingLazyColumnDefaults.responsive()
     )
