@@ -29,6 +29,10 @@ export default tseslint.config(
     ...eslintReact.configs["recommended-typescript"],
     files: ["src/**/*.tsx"],
   },
+  {
+    ...eslintReact.configs["web-api"],
+    files: ["src/**/*.tsx"],
+  },
 
   // ── React Hooks ─────────────────────────────────────────────────────────────
   {
@@ -107,14 +111,13 @@ export default tseslint.config(
       // No duplicate keys in JSX
       "@eslint-react/no-duplicate-key": "error",
       // Detect leaked event listeners, intervals, timeouts
-      "@eslint-react/web-api/no-leaked-event-listener": "warn",
-      "@eslint-react/web-api/no-leaked-interval": "warn",
-      "@eslint-react/web-api/no-leaked-timeout": "warn",
+      "@eslint-react/web-api-no-leaked-event-listener": "warn",
+      "@eslint-react/web-api-no-leaked-interval": "warn",
+      "@eslint-react/web-api-no-leaked-timeout": "warn",
       // React Compiler hints — these trigger only when React Compiler is enabled.
       // The codebase doesn't use the React Compiler yet, and these warnings are
       // noise that block CI. Disabled until the compiler is adopted.
       "@eslint-react/unsupported-syntax": "off",
-      "@eslint-react/component-hook-factories": "off",
     },
   },
 
