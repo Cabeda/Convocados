@@ -60,15 +60,21 @@ function extractCookie(res: Response, name: string): string | null {
 
 /**
  * Get the redirect URL from a response.
- * better-auth returns 302 for non-browser requests, or JSON { redirect, url }
+ * better-auth returns 302 for non-browser requests, or JSON { redirect, url, redirectURI }
  * for browser-like fetch requests (detected via Sec-Fetch-Site header).
  */
 async function getRedirectUrl(res: Response): Promise<string> {
   if (res.status === 302 || res.status === 301) {
     return res.headers.get("location") ?? "";
   }
-  const body = await res.json();
-  return body.url ?? body.redirectURI ?? "";
+  const text = await res.text();
+  if (!text) return "";
+  try {
+    const body = JSON.parse(text);
+    return body.url ?? body.redirectURI ?? body.redirect ?? "";
+  } catch {
+    return "";
+  }
 }
 
 // ── Test setup ──────────────────────────────────────────────────────────
