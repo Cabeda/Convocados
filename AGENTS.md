@@ -12,14 +12,27 @@
 - **Language**: TypeScript
 
 ### Android App (`android-app/`)
+Gradle multi-module project — `:app` (phone/tablet) and `:wear` (Wear OS).
 - **Language**: Kotlin
 - **UI**: Jetpack Compose with Material 3
 - **DI**: Hilt (Dagger)
 - **Networking**: Ktor client
+- **Build**: Gradle with KSP, targetSdk 35
+
+**`:app` (phone)**
 - **Auth**: OAuth 2.1 via Custom Tabs (redirect scheme: `convocados://auth`)
 - **Push**: Firebase Cloud Messaging (FCM) via `firebase-messaging-ktx`
-- **Build**: Gradle with KSP, minSdk 26, targetSdk 35
+- **Build**: minSdk 26
 - **Package**: `com.cabeda.convocados` / namespace `dev.convocados`
+
+**`:wear` (Wear OS)**
+- **UI**: Wear Compose (Material 3) + Horologist
+- **Type**: Standalone app (`android.hardware.type.watch`, `wearable.standalone=true`)
+- **Auth**: Direct Google Sign-In on watch + token sync from phone via Wearable Data Layer
+- **Offline**: Room DB + WorkManager sync queue
+- **Build**: minSdk 30 (Wear OS 3+ → Pixel Watch & Galaxy Watch 4+)
+- **Package**: `com.cabeda.Convocados` / namespace `dev.convocados.wear`
+- **Distribution**: dedicated Wear OS track in Play Console (form-factor opt-in required)
 
 ## Core Principles
 
@@ -156,8 +169,8 @@ src/                        # Web app source
 └── prisma/
     └── schema.prisma
 
-android-app/               # Native Android app
-├── app/src/main/java/dev/convocados/
+android-app/               # Native Android app (Gradle multi-module: :app, :wear)
+├── app/src/main/java/dev/convocados/        # :app — phone/tablet
 │   ├── data/
 │   │   ├── api/           # ApiClient, ConvocadosApi, Models
 │   │   ├── auth/          # AuthManager, TokenStore (OAuth 2.1)
@@ -170,7 +183,21 @@ android-app/               # Native Android app
 │   ├── ConvocadosApp.kt   # Hilt application class
 │   ├── MainActivity.kt    # Single activity entry point
 │   └── ConvocadosRoot.kt  # Root composable + RootViewModel
-├── app/build.gradle.kts   # App-level dependencies
+├── wear/src/main/java/dev/convocados/wear/  # :wear — Wear OS (standalone)
+│   ├── data/
+│   │   ├── api/           # ApiClient + remote models
+│   │   ├── auth/          # Google Sign-In + Data Layer token sync
+│   │   ├── local/         # Room DB (offline cache)
+│   │   ├── repository/    # Repositories
+│   │   ├── alarm/         # Game alarm scheduling + boot receiver
+│   │   └── sync/          # WorkManager sync queue
+│   ├── ui/                # Wear Compose screens, navigation, theme
+│   ├── di/                # Hilt modules
+│   ├── util/              # DateTimeUtil, TickFlow
+│   └── WearApp.kt         # Hilt application class
+├── app/build.gradle.kts   # :app dependencies
+├── wear/build.gradle.kts  # :wear dependencies
+├── settings.gradle.kts    # Module includes (:app, :wear)
 └── build.gradle.kts       # Project-level plugins
 ```
 
