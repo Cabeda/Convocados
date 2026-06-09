@@ -37,6 +37,7 @@ data class GameHistory(
     val scoreTwo: Int? = null,
     val teamOneName: String = "",
     val teamTwoName: String = "",
+    val teamsSnapshot: String? = null,
     val editable: Boolean = false,
 )
 
