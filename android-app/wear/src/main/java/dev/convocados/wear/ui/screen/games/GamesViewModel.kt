@@ -26,6 +26,7 @@ data class GamesUiState(
     val games: List<WearGameEntity> = emptyList(),
     val pastGames: List<WearGameEntity> = emptyList(),
     val suggestedGameId: String? = null,
+    val autoNavigateEventId: String? = null,
     val isLoading: Boolean = true,
     val isOffline: Boolean = false,
     val pendingSyncCount: Int = 0,
@@ -44,6 +45,8 @@ class GamesViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(GamesUiState())
     val uiState: StateFlow<GamesUiState> = _uiState.asStateFlow()
+
+    private var hasAutoNavigated = false
 
     @Volatile
     var tickProvider: () -> Flow<Instant> = { tickFlow() }
@@ -77,6 +80,10 @@ class GamesViewModel @Inject constructor(
                     games = sorted,
                     pastGames = archived,
                     suggestedGameId = suggested?.id,
+                    autoNavigateEventId = if (!hasAutoNavigated && suggested != null && suggested.id in scorable) {
+                        hasAutoNavigated = true
+                        suggested.id
+                    } else _uiState.value.autoNavigateEventId,
                     isLoading = false,
                     pendingSyncCount = pending,
                     canScoreGameIds = scorable,
@@ -103,6 +110,10 @@ class GamesViewModel @Inject constructor(
 
     fun togglePastGames() {
         _uiState.update { it.copy(showPastGames = !it.showPastGames, visiblePastCount = 5) }
+    }
+
+    fun consumeAutoNavigate() {
+        _uiState.update { it.copy(autoNavigateEventId = null) }
     }
 
     fun loadMorePast() {
