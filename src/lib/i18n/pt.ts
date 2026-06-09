@@ -212,6 +212,11 @@ const pt: TranslationKeys = {
   notifyGameReminder1h: "⏰ {title} começa em 1 hora!",
   notifyGameFull: "Jogo completo",
   notifySpotsLeft: "Faltam {n} jogador(es)",
+  notifyPlayersJoined: "{count} jogadores entraram",
+  notifyPlayersLeft: "{count} jogadores saíram",
+  notifyPlayerActivityGrouped: "{count} atualizações de jogadores",
+  notifyGameFullAlert: "🎉 Jogo completo! Todos os lugares preenchidos",
+  notifySpotAvailable: "📢 Abriu uma vaga!",
 
   // Update banner
   updateAvailable: "Nova versão disponível",
