@@ -51,6 +51,7 @@ export default defineConfig({
         "src/lib/auth.client.ts",
         "src/lib/auth.server.ts",
         "src/lib/push.server.ts",
+        "src/lib/notificationQueue.server.ts",
         "src/lib/calendarToken.server.ts",
         "src/pages/api/auth/**",
         "src/pages/api/oauth-callback.ts",

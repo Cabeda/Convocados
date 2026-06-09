@@ -32,6 +32,7 @@ model User {
   eventInvites            EventInvite[]
   adminEvents             EventAdmin[]  @relation("EventAdmins")
   followedEvents          EventFollow[] @relation("EventFollows")
+  notifications           InAppNotification[] @relation("UserNotifications")
   pushSubscriptions       PushSubscription[]
   appPushTokens           AppPushToken[]
   oauthApps               OauthApplication[] @relation("OAuthApps")
@@ -113,6 +114,7 @@ model Event {
   admins          EventAdmin[]
   followers        EventFollow[]
   notificationJobs NotificationJob[]
+  inAppNotifications InAppNotification[] @relation("EventNotifications")
 
   // Priority enrollment settings
   priorityEnabled       Boolean @default(false)
@@ -539,6 +541,23 @@ model NotificationJob {
   // true atomic claiming under READ COMMITTED isolation.
   @@index([processedAt, createdAt])
   @@index([failedAt])
+  @@index([eventId])
+}
+
+model InAppNotification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  eventId   String?
+  event     Event?    @relation("EventNotifications", fields: [eventId], references: [id], onDelete: Cascade)
+  type      String    // matches NotificationJobType
+  title     String
+  body      String
+  url       String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
   @@index([eventId])
 }
 

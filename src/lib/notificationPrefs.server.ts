@@ -23,6 +23,8 @@ export function wantsPushForJobType(prefs: NotificationPrefs, type: Notification
     case "player_joined_bench":
     case "player_left_bench":
     case "player_left_promoted":
+    case "game_full":
+    case "spot_available":
       return prefs.playerActivityPush;
     case "event_details":
       return prefs.eventDetailsPush;
@@ -59,6 +61,8 @@ export function wantsPushWithOverrides(
     case "player_joined_bench":
     case "player_left_bench":
     case "player_left_promoted":
+    case "game_full":
+    case "spot_available":
       override = overrides?.mutePlayerActivity ?? null;
       break;
     case "event_details":
