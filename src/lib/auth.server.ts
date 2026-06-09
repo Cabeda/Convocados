@@ -34,12 +34,12 @@ export async function ensureTrustedClientInDB() {
       clientSecret: hashedSecret,
       name: "Trusted App",
       type: "web",
-      redirectUris: redirectUrls.join(","),
+      redirectUris: JSON.stringify(redirectUrls),
       skipConsent: true,
     },
     update: {
       clientSecret: hashedSecret,
-      redirectUris: redirectUrls.join(","),
+      redirectUris: JSON.stringify(redirectUrls),
       skipConsent: true,
     },
   });

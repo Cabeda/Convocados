@@ -1,6 +1,12 @@
+import { createHash } from "node:crypto";
 import { auth } from "./auth.server";
 import { authenticateApiKey } from "./apiKey.server";
 import { prisma } from "./db.server";
+
+/** Hash a token the same way better-auth stores them (SHA-256 → base64url) */
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("base64url");
+}
 
 export type AuthMethod = "session" | "api_key" | "oauth";
 
@@ -56,6 +62,8 @@ export async function authenticateRequest(
     }
 
     const oauthToken = await prisma.oauthAccessToken.findUnique({
+      where: { token: hashToken(token) },
+    }) ?? await prisma.oauthAccessToken.findUnique({
       where: { token },
     });
     if (oauthToken && oauthToken.userId && (!oauthToken.expiresAt || oauthToken.expiresAt > new Date())) {
