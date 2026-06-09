@@ -143,7 +143,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.version_bump.outputs.bump_type != 'none'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -250,7 +250,7 @@ jobs:
           rm -f /tmp/release.keystore
 
       - name: Upload phone APK to GitHub Release
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -355,7 +355,7 @@ jobs:
           rm -f /tmp/release.keystore
 
       - name: Upload Wear OS APK to GitHub Release
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
