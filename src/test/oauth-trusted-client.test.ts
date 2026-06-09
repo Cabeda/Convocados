@@ -94,9 +94,9 @@ beforeEach(async () => {
 
 beforeAll(async () => {
   // Clean up ALL test data to start fresh
-  await prisma.$executeRawUnsafe("DELETE FROM OauthConsent");
-  await prisma.$executeRawUnsafe("DELETE FROM OauthAccessToken");
-  await prisma.$executeRawUnsafe("DELETE FROM OauthApplication");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthConsent");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthAccessToken");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthClient");
   await prisma.$executeRawUnsafe("DELETE FROM Verification");
   await prisma.$executeRawUnsafe("DELETE FROM Session");
   await prisma.$executeRawUnsafe("DELETE FROM Account");

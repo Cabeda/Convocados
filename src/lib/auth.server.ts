@@ -60,20 +60,21 @@ export async function ensureTrustedClientInDB() {
     .split(",")
     .map((u) => u.trim());
 
-  await prisma.oauthApplication.upsert({
+  await prisma.oauthClient.upsert({
     where: { clientId },
     create: {
+      id: clientId,
       clientId,
       clientSecret: hashedSecret,
       name: "Trusted App",
       type: "web",
-      redirectUrls: redirectUrls.join(","),
-      updatedAt: new Date(),
+      redirectUris: redirectUrls.join(","),
+      skipConsent: true,
     },
     update: {
       clientSecret: hashedSecret,
-      redirectUrls: redirectUrls.join(","),
-      updatedAt: new Date(),
+      redirectUris: redirectUrls.join(","),
+      skipConsent: true,
     },
   });
 }

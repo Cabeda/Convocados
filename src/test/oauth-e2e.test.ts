@@ -24,9 +24,9 @@ function stubContext(request: Request) {
 
 beforeEach(async () => {
   await resetApiRateLimitStore();
-  await prisma.$executeRawUnsafe("DELETE FROM OauthConsent");
-  await prisma.$executeRawUnsafe("DELETE FROM OauthAccessToken");
-  await prisma.$executeRawUnsafe("DELETE FROM OauthApplication");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthConsent");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthAccessToken");
+  await prisma.$executeRawUnsafe("DELETE FROM oauthClient");
   await prisma.$executeRawUnsafe("DELETE FROM ApiKey");
   await prisma.$executeRawUnsafe("DELETE FROM User WHERE id LIKE 'e2e-oauth-%'");
   await prisma.user.create({
@@ -44,12 +44,12 @@ beforeEach(async () => {
 describe("OAuth 2.1 E2E — Full lifecycle", () => {
   it("complete flow: register client → issue token → introspect → revoke → reject", async () => {
     // Step 1: Register a client (simulating dynamic registration)
-    const client = await prisma.oauthApplication.create({
+    const client = await prisma.oauthClient.create({
       data: {
         name: "E2E Test App",
         clientId: "e2e-test-client",
         clientSecret: "e2e-test-secret",
-        redirectUrls: JSON.stringify(["https://example.com/callback"]),
+        redirectUris: JSON.stringify(["https://example.com/callback"]),
         type: "web",
         updatedAt: new Date(),
       },
@@ -138,11 +138,11 @@ describe("OAuth 2.1 E2E — Full lifecycle", () => {
   });
 
   it("consent persistence: consent is remembered per user+client", async () => {
-    await prisma.oauthApplication.create({
+    await prisma.oauthClient.create({
       data: {
         name: "Consent Test App",
         clientId: "e2e-consent-client",
-        redirectUrls: "[]",
+        redirectUris: "",
         type: "web",
         updatedAt: new Date(),
       },
@@ -171,11 +171,11 @@ describe("OAuth 2.1 E2E — Full lifecycle", () => {
 
 describe("OAuth 2.1 E2E — Error cases", () => {
   beforeEach(async () => {
-    await prisma.oauthApplication.create({
+    await prisma.oauthClient.create({
       data: {
         name: "Error Test App",
         clientId: "e2e-error-client",
-        redirectUrls: "[]",
+        redirectUris: "",
         type: "web",
         updatedAt: new Date(),
       },
@@ -297,7 +297,7 @@ describe("OAuth 2.1 E2E — Error cases", () => {
     });
 
     // Delete the client
-    await prisma.oauthApplication.delete({ where: { clientId: "e2e-error-client" } });
+    await prisma.oauthClient.delete({ where: { clientId: "e2e-error-client" } });
 
     // Tokens and consents should be gone
     const token = await prisma.oauthAccessToken.findFirst({ where: { accessToken: "e2e_cascade_at" } });
