@@ -60,6 +60,7 @@ async function seedEvent(overrides: Partial<{
 }
 
 beforeEach(async () => {
+  mockGetSession.mockResolvedValue(null);
   await resetRateLimitStore();
   await resetApiRateLimitStore();
   await prisma.gameHistory.deleteMany();
