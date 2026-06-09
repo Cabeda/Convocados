@@ -174,6 +174,40 @@ export const openApiSpec = {
         responses: { "200": { description: "Split costs setting updated" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/cost/override": {
+      put: {
+        summary: "Override player cost amount",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Cost override saved" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/follow": {
+      get: {
+        summary: "Get follow status for an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Follow status" }, "401": { description: "Unauthorized" } },
+      },
+      post: {
+        summary: "Follow an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Followed" }, ...errorResponses },
+      },
+      put: {
+        summary: "Update follow notification overrides",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Follow updated" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Unfollow an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Unfollowed" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/access": {
       put: {
         summary: "Set or remove event password",
@@ -561,6 +595,11 @@ export const openApiSpec = {
         summary: "Get authenticated user's profile",
         tags: ["Users"],
         responses: { "200": { description: "User profile" }, "401": { description: "Unauthorized" } },
+      },
+      put: {
+        summary: "Update authenticated user's profile",
+        tags: ["Users"],
+        responses: { "200": { description: "Profile updated" }, "401": { description: "Unauthorized" } },
       },
     },
     "/api/me/notification-preferences": {
