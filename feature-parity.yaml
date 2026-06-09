@@ -1,0 +1,174 @@
+# Feature Parity Manifest
+# Tracks which features exist on each platform.
+# CI validates this file's schema. A docs generator renders it as a user-facing table.
+
+auth:
+  web: true
+  android: true
+  wearos: true
+  capabilities:
+    email-magic-link: { web: true, android: false, wearos: false }
+    google-sso: { web: true, android: true, wearos: true }
+    oauth2-pkce: { web: true, android: true, wearos: true }
+
+my-games:
+  web: true
+  android: true
+  wearos: true
+  capabilities:
+    list-owned: { web: true, android: true, wearos: true }
+    list-followed: { web: true, android: true, wearos: false }
+    list-admin: { web: true, android: true, wearos: false }
+    archived-games: { web: true, android: true, wearos: false }
+
+create-event:
+  web: true
+  android: true
+  wearos: false
+  capabilities:
+    recurring-events: { web: true, android: true, wearos: false }
+    sport-presets: { web: true, android: true, wearos: false }
+    custom-team-names: { web: true, android: true, wearos: false }
+    location-map-picker: { web: true, android: false, wearos: false }
+
+event-detail:
+  web: true
+  android: true
+  wearos: false
+  capabilities:
+    view-players: { web: true, android: true, wearos: false }
+    add-player: { web: true, android: true, wearos: false }
+    remove-player: { web: true, android: true, wearos: false }
+    claim-player: { web: true, android: true, wearos: false }
+    undo-remove: { web: true, android: true, wearos: false }
+    reorder-players: { web: true, android: false, wearos: false }
+    known-players-autocomplete: { web: true, android: true, wearos: false }
+
+teams:
+  web: true
+  android: true
+  wearos: true
+  capabilities:
+    randomize: { web: true, android: true, wearos: false }
+    balanced-randomize: { web: true, android: true, wearos: false }
+    manual-drag-assign: { web: true, android: true, wearos: false }
+    view-teams: { web: true, android: true, wearos: true }
+
+score-tracking:
+  web: true
+  android: true
+  wearos: true
+  capabilities:
+    record-score: { web: true, android: true, wearos: true }
+    edit-score: { web: true, android: true, wearos: false }
+    live-score-sync: { web: false, android: false, wearos: true }
+    interval-alarms: { web: false, android: false, wearos: true }
+
+quick-game:
+  web: false
+  android: false
+  wearos: true
+  capabilities:
+    local-score-only: { web: false, android: false, wearos: true }
+    no-auth-required: { web: false, android: false, wearos: true }
+
+game-history:
+  web: true
+  android: true
+  wearos: false
+  capabilities:
+    paginated-history: { web: true, android: true, wearos: false }
+    mvp-voting: { web: true, android: true, wearos: false }
+    mvp-display: { web: true, android: true, wearos: false }
+
+rankings:
+  web: true
+  android: true
+  wearos: false
+  capabilities:
+    elo-ratings: { web: true, android: true, wearos: false }
+    recalculate-elo: { web: true, android: false, wearos: false }
+    manual-rating: { web: true, android: false, wearos: false }
+
+attendance:
+  web: true
+  android: true
+  wearos: false
+
+payments:
+  web: true
+  android: true
+  wearos: false
+  capabilities:
+    split-costs: { web: true, android: true, wearos: false }
+    mark-paid: { web: true, android: true, wearos: false }
+    cost-override: { web: true, android: false, wearos: false }
+
+event-settings:
+  web: true
+  android: true
+  wearos: true
+  capabilities:
+    edit-title: { web: true, android: true, wearos: false }
+    edit-location: { web: true, android: true, wearos: false }
+    edit-datetime: { web: true, android: true, wearos: false }
+    edit-sport: { web: true, android: true, wearos: false }
+    edit-max-players: { web: true, android: true, wearos: false }
+    toggle-visibility: { web: true, android: true, wearos: false }
+    toggle-elo: { web: true, android: true, wearos: false }
+    hide-elo-in-teams: { web: true, android: true, wearos: false }
+    split-costs-toggle: { web: true, android: true, wearos: false }
+    password-protection: { web: true, android: true, wearos: false }
+    archive-event: { web: true, android: true, wearos: false }
+    transfer-ownership: { web: true, android: false, wearos: false }
+    game-settings-wear: { web: false, android: false, wearos: true }
+
+event-log:
+  web: true
+  android: true
+  wearos: false
+
+public-games:
+  web: true
+  android: true
+  wearos: false
+  capabilities:
+    list-view: { web: true, android: true, wearos: false }
+    map-view: { web: true, android: false, wearos: false }
+    sport-filter: { web: true, android: false, wearos: false }
+
+notifications:
+  web: true
+  android: true
+  wearos: false
+  capabilities:
+    web-push: { web: true, android: false, wearos: false }
+    fcm-push: { web: false, android: true, wearos: false }
+    notification-preferences: { web: true, android: true, wearos: false }
+
+sharing:
+  web: true
+  android: true
+  wearos: false
+  capabilities:
+    share-link: { web: true, android: true, wearos: false }
+    calendar-ics: { web: true, android: false, wearos: false }
+
+user-profile:
+  web: true
+  android: true
+  wearos: false
+  capabilities:
+    view-stats: { web: true, android: true, wearos: false }
+    view-other-profiles: { web: true, android: true, wearos: false }
+    edit-name: { web: true, android: false, wearos: false }
+
+webhooks:
+  web: true
+  android: false
+  wearos: false
+
+admin-panel:
+  web: true
+  android: false
+  wearos: false

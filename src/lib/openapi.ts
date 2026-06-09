@@ -141,6 +141,139 @@ export const openApiSpec = {
         responses: { "200": { description: "Balanced mode updated" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/datetime": {
+      put: {
+        summary: "Update event date and time",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { dateTime: { type: "string" }, timezone: { type: "string" } } } } } },
+        responses: { "200": { description: "Date/time updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/elo": {
+      put: {
+        summary: "Toggle ELO ratings for an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "ELO setting updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/hide-elo-in-teams": {
+      put: {
+        summary: "Toggle hiding ELO in team view",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Hide ELO setting updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/split-costs": {
+      put: {
+        summary: "Toggle split costs for an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Split costs setting updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/access": {
+      put: {
+        summary: "Set or remove event password",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Access updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/access/verify": {
+      post: {
+        summary: "Verify event password",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Password verified" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/archive": {
+      post: {
+        summary: "Archive an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Event archived" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Unarchive an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Event unarchived" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/post-game-status": {
+      get: {
+        summary: "Get post-game status (voting, MVP)",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Post-game status" } },
+      },
+    },
+    "/api/events/{id}/max-players": {
+      put: {
+        summary: "Update max players for an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Max players updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/attendance": {
+      get: {
+        summary: "Get attendance stats for an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Attendance data" } },
+      },
+    },
+    "/api/events/{id}/payments": {
+      get: {
+        summary: "Get payment status for event players",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Payment statuses" } },
+      },
+      put: {
+        summary: "Update a player's payment status",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Payment updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/log": {
+      get: {
+        summary: "Get event activity log",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Paginated activity log" } },
+      },
+    },
+    "/api/events/{id}/history/{historyId}/mvp-vote": {
+      post: {
+        summary: "Cast MVP vote for a game",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Vote cast" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/history/{historyId}/mvp": {
+      get: {
+        summary: "Get MVP results for a game",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "MVP results" } },
+      },
+    },
+    "/api/users/{id}/stats": {
+      get: {
+        summary: "Get a user's game statistics",
+        tags: ["Users"],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "User ID" }],
+        responses: { "200": { description: "Player statistics" }, "404": { description: "User not found" } },
+      },
+    },
     "/api/events/{id}/team-names": {
       put: {
         summary: "Update team names",
@@ -155,6 +288,12 @@ export const openApiSpec = {
         tags: ["Events"],
         parameters: [eventIdParam],
         responses: { "200": { description: "Ownership claimed" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Relinquish ownership of an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Ownership relinquished" }, ...errorResponses },
       },
     },
     "/api/events/{id}/transfer": {
@@ -240,6 +379,12 @@ export const openApiSpec = {
         tags: ["Teams"],
         parameters: [eventIdParam],
         responses: { "200": { description: "Team assignments" } },
+      },
+      patch: {
+        summary: "Manually update team assignments",
+        tags: ["Teams"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Teams updated" }, ...errorResponses },
       },
     },
     "/api/events/{id}/randomize": {
@@ -402,6 +547,32 @@ export const openApiSpec = {
         summary: "Get authenticated user's games",
         tags: ["Users"],
         responses: { "200": { description: "Owned and joined games" }, "401": { description: "Unauthorized" } },
+      },
+    },
+    "/api/me/stats": {
+      get: {
+        summary: "Get authenticated user's statistics",
+        tags: ["Users"],
+        responses: { "200": { description: "Player statistics" }, "401": { description: "Unauthorized" } },
+      },
+    },
+    "/api/me/profile": {
+      get: {
+        summary: "Get authenticated user's profile",
+        tags: ["Users"],
+        responses: { "200": { description: "User profile" }, "401": { description: "Unauthorized" } },
+      },
+    },
+    "/api/me/notification-preferences": {
+      get: {
+        summary: "Get notification preferences",
+        tags: ["Users"],
+        responses: { "200": { description: "Notification preferences" }, "401": { description: "Unauthorized" } },
+      },
+      put: {
+        summary: "Update notification preferences",
+        tags: ["Users"],
+        responses: { "200": { description: "Preferences updated" }, ...errorResponses },
       },
     },
     "/api/me/calendar-token": {
@@ -590,6 +761,7 @@ export const openApiSpec = {
     { name: "Ratings", description: "ELO player ratings" },
     { name: "Calendar", description: "iCal feeds and calendar integration" },
     { name: "Push", description: "Push notification subscriptions" },
+    { name: "Payments", description: "Event cost splitting and payment tracking" },
     { name: "Webhooks", description: "Webhook subscriptions and delivery" },
     { name: "Users", description: "User profiles and authentication" },
     { name: "OAuth", description: "OAuth 2.1 authorization server endpoints" },
