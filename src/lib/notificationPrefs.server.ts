@@ -50,7 +50,7 @@ export function wantsPushWithOverrides(
   prefs: NotificationPrefs,
   type: NotificationJobType,
   overrides: EventFollowOverrides | null,
-  eventDefaults?: EventFollowOverrides | null,
+  eventDefaults?: Partial<Record<keyof EventFollowOverrides, boolean | null>> | null,
 ): boolean {
   if (!prefs.pushEnabled) return false;
 

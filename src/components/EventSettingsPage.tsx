@@ -699,7 +699,7 @@ export default function EventSettingsPage({ eventId }: Props) {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
           {t("notificationDefaultsDesc")}
         </Typography>
-        <NotificationDefaultsEditor eventId={event.id} canEdit={canEdit} />
+        <NotificationDefaultsEditor eventId={eventId} canEdit={canEdit} />
       </SectionCard>
 
       {/* ── Priority Enrollment ── */}
