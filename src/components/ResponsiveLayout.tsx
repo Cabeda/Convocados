@@ -26,6 +26,7 @@ import { useThemeMode } from "./ThemeModeProvider";
 import { useLocale } from "~/lib/useT";
 import type { Locale } from "~/lib/i18n";
 import { useSession, signOut } from "~/lib/auth.client";
+import { shareForHomeScreen } from "~/lib/pwaInstall";
 
 const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
   { code: "en", label: "English" },
@@ -205,6 +206,13 @@ function InstallBanner() {
     deferredPromptRef.current = null;
   };
 
+  const handleIosShare = async () => {
+    // iOS has no programmatic A2HS; open the native share sheet, which holds
+    // the "Add to Home Screen" action. Falls back to the on-screen hint when
+    // the Web Share API is unavailable.
+    await shareForHomeScreen(navigator, window.location.href, document.title);
+  };
+
   const handleDismiss = () => {
     setShowBanner(false);
     setShowIos(false);
@@ -231,7 +239,10 @@ function InstallBanner() {
         borderTop: `1px solid ${theme.palette.divider}`,
       }}>
         <GetAppIcon sx={{ color: theme.palette.primary.main, fontSize: 32 }} />
-        <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Box
+          sx={{ flex: 1, minWidth: 0, cursor: showIos ? "pointer" : "default" }}
+          onClick={showIos ? handleIosShare : undefined}
+        >
           <Typography variant="body2" fontWeight={700}>
             {t("installApp")}
           </Typography>
@@ -240,7 +251,14 @@ function InstallBanner() {
           </Typography>
         </Box>
         {showIos ? (
-          <IosShareIcon sx={{ color: theme.palette.text.secondary, fontSize: 20, flexShrink: 0 }} />
+          <IconButton
+            size="small"
+            onClick={handleIosShare}
+            aria-label={t("installApp")}
+            sx={{ color: theme.palette.primary.main, flexShrink: 0 }}
+          >
+            <IosShareIcon fontSize="small" />
+          </IconButton>
         ) : (
           <Button
             size="small"
