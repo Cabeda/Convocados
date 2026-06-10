@@ -1,4 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { shareForHomeScreen } from "~/lib/pwaInstall";
+
+// ── iOS "Add to Home Screen" share trigger ──────────────────────────────────
+
+describe("shareForHomeScreen", () => {
+  it("invokes the Web Share API with the page url and title", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    const outcome = await shareForHomeScreen({ share }, "https://convocados.app/", "Convocados");
+    expect(outcome).toBe("shared");
+    expect(share).toHaveBeenCalledWith({ title: "Convocados", url: "https://convocados.app/" });
+  });
+
+  it("returns 'cancelled' when the user dismisses the share sheet", async () => {
+    const share = vi.fn().mockRejectedValue(new DOMException("Abort", "AbortError"));
+    const outcome = await shareForHomeScreen({ share }, "https://convocados.app/", "Convocados");
+    expect(outcome).toBe("cancelled");
+  });
+
+  it("returns 'unsupported' when the Web Share API is unavailable", async () => {
+    const outcome = await shareForHomeScreen({}, "https://convocados.app/", "Convocados");
+    expect(outcome).toBe("unsupported");
+  });
+});
 
 // ── i18n key tests ──────────────────────────────────────────────────────────
 
