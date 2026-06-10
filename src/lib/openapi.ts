@@ -276,6 +276,14 @@ export const openApiSpec = {
         responses: { "200": { description: "Payment updated" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/balance": {
+      get: {
+        summary: "Get outstanding balance and enforcement info for the caller",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Balance, aggregate, enforcement level" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/log": {
       get: {
         summary: "Get event activity log",
