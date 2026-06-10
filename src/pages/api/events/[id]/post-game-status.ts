@@ -205,9 +205,19 @@ export const GET: APIRoute = async ({ params, request }) => {
     }
   }
 
+  // Compute aggregate payment info for social proof
+  let paidAggregate = { paidCount: 0, totalCount: 0 };
+  if (paymentsSnapshot && paymentsSnapshot.length > 0) {
+    paidAggregate = {
+      paidCount: paymentsSnapshot.filter((p) => p.status === "paid").length,
+      totalCount: paymentsSnapshot.length,
+    };
+  }
+
   return Response.json({
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
     hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete,
+    paidAggregate,
   });
 };

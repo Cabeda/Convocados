@@ -140,6 +140,11 @@ model Event {
   // Cost tracking
   splitCostsEnabled Boolean @default(true)
 
+  // Payment enforcement
+  paymentEnforcementLevel String  @default("nudge") // "off" | "nudge" | "soft_gate" | "hard_gate"
+  paymentGateThreshold    Float   @default(0)       // amount in event currency; 0 = any debt triggers
+  showDebtorNames         Boolean @default(false)   // false = aggregate only; true = names visible to group
+
   // MVP voting
   mvpEnabled Boolean @default(true)
   mvpEloEnabled Boolean @default(false)
