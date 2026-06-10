@@ -117,6 +117,14 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updatePaymentStatus(eventId: String, playerName: String, status: String): OkResponse =
         client.put("/api/events/$eventId/payments", PaymentUpdateRequest(playerName, status))
 
+    /** Self-report: mark own payment as sent (pending → sent). */
+    suspend fun markPaymentSent(eventId: String, playerName: String): OkResponse =
+        client.put("/api/events/$eventId/payments", PaymentUpdateRequest(playerName, "sent"))
+
+    // ── Balance / Payment Nudge ───────────────────────────────────────────
+    suspend fun fetchBalance(eventId: String): BalanceResponse =
+        client.get("/api/events/$eventId/balance")
+
     // ── Attendance ────────────────────────────────────────────────────────
     suspend fun fetchAttendance(eventId: String): AttendanceResult =
         client.get("/api/events/$eventId/attendance")

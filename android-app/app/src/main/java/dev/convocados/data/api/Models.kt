@@ -413,3 +413,38 @@ data class FollowStateResponse(
     val mutePostGame: Boolean? = null,
     val muteEventDetails: Boolean? = null,
 )
+
+// ── Payment Nudge / Balance ─────────────────────────────────────────────────
+
+@Serializable
+data class PlayerBalance(
+    val playerName: String = "",
+    val amount: Double = 0.0,
+    val gamesOwed: Int = 0,
+    val streak: Int = 0,
+)
+
+@Serializable
+data class BalanceAggregate(
+    val paidCount: Int = 0,
+    val totalCount: Int = 0,
+)
+
+@Serializable
+data class BalanceResponse(
+    val enforcement: String = "nudge",
+    val threshold: Double = 0.0,
+    val callerBalance: PlayerBalance? = null,
+    val aggregate: BalanceAggregate = BalanceAggregate(),
+    val balances: List<PlayerBalance> = emptyList(),
+)
+
+@Serializable
+data class PaymentGateError(
+    val error: String = "",
+    val code: String = "",
+    val balance: PlayerBalance? = null,
+    val gateAmount: Double = 0.0,
+    val enforcement: String = "",
+    val threshold: Double = 0.0,
+)

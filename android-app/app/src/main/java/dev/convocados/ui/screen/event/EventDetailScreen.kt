@@ -68,6 +68,10 @@ data class EventScreenState(
     val mutePostGame: Boolean? = null,
     val muteEventDetails: Boolean? = null,
     val showNotificationSheet: Boolean = false,
+    // Payment nudge
+    val balance: BalanceResponse? = null,
+    val paymentGateBlocked: Boolean = false,
+    val showPaymentNudge: Boolean = false,
 )
 
 data class TeamMoveUndo(
@@ -123,6 +127,7 @@ class EventDetailViewModel @Inject constructor(
             val postGame = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
             val known = runCatching { api.fetchKnownPlayers(eventId) }.getOrNull()?.players ?: emptyList()
             val following = runCatching { api.getFollowState(eventId) }.getOrNull()
+            val balance = runCatching { api.fetchBalance(eventId) }.getOrNull()
             _state.value = _state.value.copy(
                 loading = false, refreshing = false, postGame = postGame, knownPlayers = known,
                 isFollowing = following?.following ?: false,
@@ -130,6 +135,7 @@ class EventDetailViewModel @Inject constructor(
                 muteReminders = following?.muteReminders,
                 mutePostGame = following?.mutePostGame,
                 muteEventDetails = following?.muteEventDetails,
+                balance = balance,
             )
         }
     }
@@ -188,8 +194,61 @@ class EventDetailViewModel @Inject constructor(
     fun addPlayer(eventId: String, name: String, link: Boolean = true) {
         viewModelScope.launch {
             repository.addPlayer(eventId, name, link)
+                .onFailure { e ->
+                    if (e is ApiException && e.code == 402) {
+                        // Parse the PAYMENT_GATE response
+                        val gateError = runCatching {
+                            kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                                .decodeFromString<PaymentGateError>(e.message ?: "")
+                        }.getOrNull()
+                        _state.value = _state.value.copy(
+                            paymentGateBlocked = true,
+                            balance = _state.value.balance?.copy(
+                                callerBalance = gateError?.balance
+                            ) ?: BalanceResponse(callerBalance = gateError?.balance),
+                        )
+                    } else {
+                        _state.value = _state.value.copy(error = e.message)
+                    }
+                }
+        }
+    }
+
+    fun fetchBalance(eventId: String) {
+        viewModelScope.launch {
+            runCatching { api.fetchBalance(eventId) }
+                .onSuccess { _state.value = _state.value.copy(balance = it) }
+        }
+    }
+
+    /** Show payment nudge dialog before joining. */
+    fun showPaymentNudge() {
+        _state.value = _state.value.copy(showPaymentNudge = true)
+    }
+
+    fun dismissPaymentNudge() {
+        _state.value = _state.value.copy(showPaymentNudge = false)
+    }
+
+    fun dismissPaymentGate() {
+        _state.value = _state.value.copy(paymentGateBlocked = false)
+    }
+
+    /** Self-report as sent, then attempt to join. */
+    fun markSentAndJoin(eventId: String, playerName: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(showPaymentNudge = false)
+            runCatching { api.markPaymentSent(eventId, playerName) }
+            // Now attempt to join (gate should clear since sent removes pending amount)
+            repository.addPlayer(eventId, playerName, true)
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
         }
+    }
+
+    /** Join without paying (dismiss nudge). */
+    fun joinWithoutPaying(eventId: String, name: String) {
+        _state.value = _state.value.copy(showPaymentNudge = false)
+        addPlayer(eventId, name, true)
     }
 
     fun removePlayer(eventId: String, playerId: String) {
@@ -521,23 +580,89 @@ fun EventDetailScreen(
 
                         // Quick join
                         if (user?.name != null) {
+                            val callerBalance = state.balance?.callerBalance
+                            val hasDebt = callerBalance != null && callerBalance.amount > 0
+                            val enforcement = state.balance?.enforcement ?: "off"
+                            val aggregate = state.balance?.aggregate
+
                             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                                if (myPlayer != null) {
-                                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.padding(14.dp)) {
+                                    // Social proof
+                                    if (aggregate != null && aggregate.totalCount > 0) {
                                         Text(
-                                            if (isOnBench) "You're on the bench" else "You joined as ${myPlayer.name}",
-                                            color = if (isOnBench) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
+                                            "${aggregate.paidCount} of ${aggregate.totalCount} paid for the last game",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(bottom = 8.dp),
                                         )
-                                        OutlinedButton(onClick = { viewModel.removePlayer(eventId, myPlayer.id) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                                            Text("Leave")
+                                    }
+
+                                    // Streak
+                                    if (callerBalance != null && callerBalance.streak > 1) {
+                                        Text(
+                                            "\uD83D\uDD25 ${callerBalance.streak} game paid streak",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(bottom = 8.dp),
+                                        )
+                                    }
+
+                                    if (myPlayer != null) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                if (isOnBench) "You're on the bench" else "You joined as ${myPlayer.name}",
+                                                color = if (isOnBench) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
+                                            )
+                                            OutlinedButton(onClick = { viewModel.removePlayer(eventId, myPlayer.id) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                                                Text("Leave")
+                                            }
+                                        }
+                                    } else {
+                                        // Debt warning
+                                        if (hasDebt && enforcement != "off") {
+                                            Text(
+                                                "You owe €${"%.2f".format(callerBalance!!.amount)} from ${callerBalance.gamesOwed} game(s)",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.padding(bottom = 8.dp),
+                                            )
+                                        }
+
+                                        // Gate blocked alert
+                                        if (state.paymentGateBlocked) {
+                                            Text(
+                                                "Settle your outstanding balance to join.",
+                                                color = MaterialTheme.colorScheme.error,
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier.padding(bottom = 8.dp),
+                                            )
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                if (hasDebt && enforcement != "off") {
+                                                    viewModel.showPaymentNudge()
+                                                } else {
+                                                    viewModel.addPlayer(eventId, user!!.name, true)
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (hasDebt && enforcement != "off")
+                                                    MaterialTheme.colorScheme.tertiary
+                                                else MaterialTheme.colorScheme.primary
+                                            ),
+                                            enabled = !state.paymentGateBlocked,
+                                        ) {
+                                            Text(
+                                                if (hasDebt && enforcement != "off")
+                                                    "Pay €${"%.2f".format(callerBalance!!.amount)} & join"
+                                                else "Join (${user!!.name})",
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                fontWeight = FontWeight.Bold,
+                                            )
                                         }
                                     }
-                                } else {
-                                    Button(
-                                        onClick = { viewModel.addPlayer(eventId, user!!.name, true) },
-                                        modifier = Modifier.fillMaxWidth().padding(14.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                    ) { Text("Join (${user!!.name})", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
                                 }
                             }
                         }
@@ -687,6 +812,48 @@ fun EventDetailScreen(
                 }
             }
         }
+    }
+
+    // ── Payment Nudge Dialog ──────────────────────────────────────────────
+    if (state.showPaymentNudge && user?.name != null) {
+        val callerBalance = state.balance?.callerBalance
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissPaymentNudge() },
+            title = { Text("Settle up before you play") },
+            text = {
+                Column {
+                    if (callerBalance != null) {
+                        Text("You owe €${"%.2f".format(callerBalance.amount)} from ${callerBalance.gamesOwed} game(s)")
+                    }
+                    state.balance?.aggregate?.let { agg ->
+                        if (agg.totalCount > 0) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "${agg.paidCount} of ${agg.totalCount} paid for the last game",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.markSentAndJoin(eventId, user!!.name) },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                ) {
+                    Text(
+                        if (callerBalance != null) "Pay €${"%.2f".format(callerBalance.amount)} & join" else "Pay & join",
+                        color = MaterialTheme.colorScheme.onTertiary,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user!!.name) }) {
+                    Text("Join and pay later", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                }
+            },
+        )
     }
 }
 
