@@ -53,7 +53,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
   useEffect(() => {
     if (!balanced) { setRatingsResponse(null); return; }
-    fetch(`/api/events/${eventId}/ratings?limit=100`).then((r) => r.json()).then(setRatingsResponse);
+    const controller = new AbortController();
+    fetch(`/api/events/${eventId}/ratings?limit=100`, { signal: controller.signal })
+      .then((r) => r.json())
+      .then(setRatingsResponse)
+      .catch(() => {});
+    return () => controller.abort();
   }, [balanced, eventId]);
   const ratingsMap = useMemo(() => {
     if (!ratingsResponse?.data) return undefined;
@@ -121,7 +126,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── Known players for autocomplete ──────────────────────────────────────────
   const [knownPlayersData, setKnownPlayersData] = useState<{ players: KnownPlayer[] } | null>(null);
   useEffect(() => {
-    fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).then(setKnownPlayersData);
+    const controller = new AbortController();
+    fetch(`/api/events/${eventId}/known-players`, { signal: controller.signal })
+      .then((r) => r.json())
+      .then(setKnownPlayersData)
+      .catch(() => {});
+    return () => controller.abort();
   }, [eventId]);
 
   const mergedSuggestions = useMemo(() => {
@@ -554,6 +564,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {/* Quick join — authenticated users only */}
             {isAuthenticated && session?.user?.name && (
               <QuickJoin
+                eventId={event.id}
                 userName={session.user.name}
                 players={event.players}
                 maxPlayers={event.maxPlayers}

@@ -97,3 +97,33 @@ A Playtomic court slot that matches an existing Game's dateTime (±30 min), spor
 
 ## Court Watch
 An opt-in background process that checks Playtomic hourly for Court Alternatives matching a Game's criteria. Enabled per-game by an Admin via a JSON config (`courtWatchConfig`) on the Event. Requires the Event to have latitude/longitude. Alerts are deduplicated — the same slot is never re-notified. Watching stops only when the Admin disables it.
+
+## Outstanding Balance ("tab")
+The total amount a Player still owes within a single Game, computed (not stored) by summing unpaid amounts across that Game's played history (`GameHistory.paymentsSnapshot`) plus the current unpaid `PlayerPayment` rows. Scoped **per-Game, keyed by `playerName`** — it does not span events, and a name in one Game is unrelated to the same name in another. "Tab" is the informal synonym.
+
+A balance is only attributable to a person (and therefore eligible to drive a personal payment nudge) when the Player is linked to a `User` who is acting on their own behalf (Quick Join / Claim). For owner-added guests with no account, the balance is informational only — surfaced to the Owner/Admin, never as a personal nudge.
+
+## Payment status lifecycle
+A `PlayerPayment` (and each entry in a `GameHistory.paymentsSnapshot`) moves through:
+- **pending** — owed, no action taken. Counts toward the Outstanding Balance.
+- **sent** — the Player has self-reported paying (e.g. tapped "Pay & join" and confirmed they sent the transfer). Still counts toward the balance — the debt is not cleared until confirmed. Only the Player acting on their own behalf may move `pending → sent`.
+- **paid** — the Owner/Admin has confirmed receipt. The only status that clears the balance. Only Owner/Admin may set `paid` (and may move `sent → paid` or `pending → paid` directly).
+
+The Owner/Admin remains the single source of truth for money actually received; `sent` is a courtesy signal that gives the payer closure and gives the organizer a "confirm received" worklist. It never auto-promotes to `paid`.
+
+## Payment enforcement level
+A per-Game setting controlling how the Outstanding Balance is surfaced at join time. Stored on `Event`. Levels:
+- **off** — balance not surfaced at join; current behaviour.
+- **nudge** (default) — a dismissible interstitial + debt-aware join button when the joining Player has a balance > 0. Never blocks.
+- **soft_gate** — joining while owing requires explicitly choosing "join and pay later," which notifies the Owner. Does not block.
+- **hard_gate** — a self-service joiner whose **pending** balance exceeds the gate threshold is fully blocked from joining (no bench-waiting, to avoid the auto-promotion leak). Cleared by reaching `paid` **or** `sent` on the outstanding amount (so an offline Owner cannot strand a player).
+
+Enforcement only applies to **attributable self-service joins** (Quick Join / Claim). Owner/Admin adding any Player — including unlinked guests — always bypasses enforcement. The gate threshold is a per-Game amount in the Game's currency (default `0` = any unpaid debt triggers it).
+
+## Debt visibility
+How Outstanding Balances are exposed:
+- The **owing Player** always sees their own balance prominently (drives the nudge).
+- **Other players** see only an aggregate social-proof signal (e.g. "9 of 11 paid for the last game") — never individual names.
+- The **Owner/Admin** always sees the full per-Player breakdown.
+
+A per-Game `showDebtorNames` toggle (default **off**) lets the Owner reveal individual debtor names to the whole group for clubs that want full transparency. Default is privacy-preserving to keep casual groups friendly.
