@@ -554,6 +554,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {/* Quick join — authenticated users only */}
             {isAuthenticated && session?.user?.name && (
               <QuickJoin
+                eventId={event.id}
                 userName={session.user.name}
                 players={event.players}
                 maxPlayers={event.maxPlayers}
