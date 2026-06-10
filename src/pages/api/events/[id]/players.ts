@@ -8,6 +8,7 @@ import { fireWebhooks } from "../../../../lib/webhook.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { syncPaymentsForEvent } from "../../../../lib/payments.server";
+import { getOutstandingBalance, getGateBalance } from "../../../../lib/balance.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
@@ -248,6 +249,31 @@ export const POST: APIRoute = async ({ params, request }) => {
         linkedUserId = candidateId;
       }
     }
+  }
+
+  // ── Payment enforcement (self-service joins only) ──────────────────────────
+  const isSelfServiceJoin = linkToAccount === true && linkedUserId;
+  if (isSelfServiceJoin && event.paymentEnforcementLevel !== "off") {
+    const balance = await getOutstandingBalance(eventId, trimmed);
+    const threshold = event.paymentGateThreshold ?? 0;
+
+    if (event.paymentEnforcementLevel === "hard_gate") {
+      // Gate uses pending-only balance (sent clears the gate per ADR 0006)
+      const gateAmount = await getGateBalance(eventId, trimmed);
+      if (gateAmount > threshold) {
+        return Response.json({
+          error: "You must settle your outstanding balance before joining.",
+          code: "PAYMENT_GATE",
+          balance,
+          gateAmount,
+          enforcement: "hard_gate",
+          threshold,
+        }, { status: 402 });
+      }
+    }
+
+    // soft_gate and nudge: include balance info in the response but don't block
+    // (the client-side interstitial handles them)
   }
 
   try {

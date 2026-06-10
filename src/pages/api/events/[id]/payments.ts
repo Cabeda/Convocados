@@ -1,9 +1,9 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { checkOwnership } from "../../../../lib/auth.helpers.server";
+import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
-const VALID_STATUSES = ["pending", "paid"];
+const VALID_STATUSES = ["pending", "sent", "paid"];
 
 /** GET — list all payments with summary. */
 export const GET: APIRoute = async ({ params }) => {
@@ -56,16 +56,32 @@ export const PUT: APIRoute = async ({ params, request }) => {
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (event.ownerId && !isOwner && !isAdmin) {
+  const session = await getSession(request);
+
+  // Determine if this is a player self-reporting sent
+  let isSelfReport = false;
+  const body = await request.json();
+  const playerName = String(body.playerName ?? "").trim();
+  const status = String(body.status ?? "");
+
+  if (session?.user && !isOwner && !isAdmin) {
+    // Check if the player is linked to this user
+    const linkedPlayer = await prisma.player.findFirst({
+      where: { eventId, userId: session.user.id, name: playerName },
+    });
+    if (linkedPlayer && status === "sent") {
+      // Allowed: player marking their own payment as sent
+      isSelfReport = true;
+    }
+  }
+
+  if (event.ownerId && !isOwner && !isAdmin && !isSelfReport) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 
   const eventCost = await prisma.eventCost.findUnique({ where: { eventId } });
   if (!eventCost) return Response.json({ error: "No cost set for this event." }, { status: 404 });
 
-  const body = await request.json();
-  const playerName = String(body.playerName ?? "").trim();
-  const status = String(body.status ?? "");
   const method = body.method !== null ? String(body.method).trim().slice(0, 50) || null : undefined;
 
   if (!VALID_STATUSES.includes(status)) {
@@ -76,6 +92,11 @@ export const PUT: APIRoute = async ({ params, request }) => {
     where: { eventCostId_playerName: { eventCostId: eventCost.id, playerName } },
   });
   if (!payment) return Response.json({ error: "Player payment not found." }, { status: 404 });
+
+  // Self-report can only move pending → sent
+  if (isSelfReport && payment.status !== "pending") {
+    return Response.json({ error: "Can only mark as sent when status is pending." }, { status: 400 });
+  }
 
   const updated = await prisma.playerPayment.update({
     where: { id: payment.id },
