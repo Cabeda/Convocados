@@ -388,6 +388,7 @@ const fr: TranslationKeys = {
   paymentNudgeSocialProof: "{paid} sur {total} ont payé le dernier match",
   paymentNudgeStreak: "🔥 {count} matchs payés d'affilée",
   paymentNudgeSentConfirmation: "Marqué comme envoyé — l'organisateur confirmera",
+  paymentNudgeMarkSent: "J'ai envoyé ✓",
   paymentNudgeSettleUp: "Régler",
   paymentEnforcementOff: "Désactivé",
   paymentEnforcementNudge: "Rappel",
