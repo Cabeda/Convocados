@@ -91,7 +91,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
       params: { title: event.title },
       url,
       spotsLeft,
-    });
+    }, session?.user?.id);
 
     // Drain notification queue before responding so push is sent immediately.
     if (!process.env.VITEST) {
