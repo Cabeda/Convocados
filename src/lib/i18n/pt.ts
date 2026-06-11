@@ -438,6 +438,8 @@ const pt: TranslationKeys = {
   paymentNudgeStreak: "🔥 {count} jogos pagos seguidos",
   paymentNudgeSentConfirmation: "Marcado como enviado — o organizador vai confirmar",
   paymentNudgeSettleUp: "Acertar",
+  bulkMarkAllPaid: "Marcar todos como pago",
+  autoPayOnJoinLabel: "Mostrar pagamento ao entrar",
   paymentEnforcementOff: "Desligado",
   paymentEnforcementNudge: "Lembrete",
   paymentEnforcementSoftGate: "Exigir confirmação",

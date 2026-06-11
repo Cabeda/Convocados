@@ -389,6 +389,8 @@ const de: TranslationKeys = {
   paymentNudgeStreak: "🔥 {count} Spiele bezahlt in Folge",
   paymentNudgeSentConfirmation: "Als gesendet markiert — der Organisator wird bestätigen",
   paymentNudgeSettleUp: "Ausgleichen",
+  bulkMarkAllPaid: "Alle als bezahlt markieren",
+  autoPayOnJoinLabel: "Zahlung beim Beitritt anzeigen",
   paymentEnforcementOff: "Aus",
   paymentEnforcementNudge: "Erinnerung",
   paymentEnforcementSoftGate: "Bestätigung erforderlich",

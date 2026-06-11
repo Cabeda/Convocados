@@ -116,7 +116,7 @@ export const POST: APIRoute = async ({ request }) => {
             const wantsPush = wantsPaymentReminderPush(effective);
             if (!wantsEmail && !wantsPush) return;
 
-            const eventUrl = `${APP_URL}/events/${pp.eventId}`;
+            const eventUrl = `${APP_URL}/events/${pp.eventId}?action=pay`;
             const pushBody = `💸 You owe ${pp.amount.toFixed(2)} ${pp.currency} for ${pp.eventTitle}`;
 
             if (wantsEmail) {

@@ -389,6 +389,8 @@ const it: TranslationKeys = {
   paymentNudgeStreak: "🔥 {count} partite pagate di fila",
   paymentNudgeSentConfirmation: "Segnato come inviato — l'organizzatore confermerà",
   paymentNudgeSettleUp: "Saldare",
+  bulkMarkAllPaid: "Segna tutti come pagato",
+  autoPayOnJoinLabel: "Mostra pagamento all'iscrizione",
   paymentEnforcementOff: "Disattivato",
   paymentEnforcementNudge: "Promemoria",
   paymentEnforcementSoftGate: "Richiedere conferma",
