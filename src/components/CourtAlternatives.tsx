@@ -138,7 +138,9 @@ export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchC
   });
 
   const formatPrice = (price: number, currency: string) =>
-    new Intl.NumberFormat(undefined, { style: "currency", currency }).format(price);
+    price !== null && price !== undefined && !isNaN(price) && currency
+      ? new Intl.NumberFormat(undefined, { style: "currency", currency }).format(price)
+      : null;
 
   if (!hasCoordinates) {
     return (
@@ -260,7 +262,9 @@ export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchC
                         <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
                           <Chip label={alt.slotTime} size="small" color="primary" variant="outlined" />
                           <Chip label={`${alt.duration}min`} size="small" variant="outlined" />
-                          <Chip label={formatPrice(alt.price, alt.currency)} size="small" color="success" variant="outlined" />
+                          {formatPrice(alt.price, alt.currency) && (
+                            <Chip label={formatPrice(alt.price, alt.currency)} size="small" color="success" variant="outlined" />
+                          )}
                         </Stack>
                       </Box>
                       <Stack direction="row" spacing={0.5} alignItems="center">
