@@ -244,6 +244,30 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
     return 0;
   });
 
+  // Group by club: merge multiple slots/courts into one entry per club
+  interface GroupedClub {
+    primary: CourtAlternative; // first sorted entry (cheapest/earliest/closest)
+    slots: Array<{ resourceName: string; slotTime: string; price: number | null; currency: string | null; resourceId: string }>;
+    hasBooked: boolean;
+  }
+  const groupedAlternatives: GroupedClub[] = [];
+  const clubIndex = new Map<string, number>();
+  for (const alt of sortedAlternatives) {
+    const existing = clubIndex.get(alt.tenantId);
+    if (existing !== undefined) {
+      const group = groupedAlternatives[existing];
+      group.slots.push({ resourceName: alt.resourceName, slotTime: alt.slotTime, price: alt.price, currency: alt.currency, resourceId: alt.resourceId });
+      if (alt.status === "booked") group.hasBooked = true;
+    } else {
+      clubIndex.set(alt.tenantId, groupedAlternatives.length);
+      groupedAlternatives.push({
+        primary: alt,
+        slots: [{ resourceName: alt.resourceName, slotTime: alt.slotTime, price: alt.price, currency: alt.currency, resourceId: alt.resourceId }],
+        hasBooked: alt.status === "booked",
+      });
+    }
+  }
+
   const formatPrice = (price: number | null, currency: string | null) =>
     price !== null && price !== undefined && !isNaN(price) && currency
       ? new Intl.NumberFormat(undefined, { style: "currency", currency }).format(price)
@@ -349,7 +373,7 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
                 <IconButton size="small" onClick={() => setMapView(!mapView)} title={mapView ? "List" : "Map"}>
                   {mapView ? <ListIcon fontSize="small" /> : <MapIcon fontSize="small" />}
                 </IconButton>
-                <Typography variant="caption" color="text.secondary">{sortedAlternatives.length} {t("courtAlternativesSearch").toLowerCase()}</Typography>
+                <Typography variant="caption" color="text.secondary">{groupedAlternatives.length} clubs</Typography>
               </Stack>
 
               {mapView ? (
@@ -358,73 +382,75 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
                 </Box>
               ) : (
                 <>
-                  <Stack spacing={1} divider={<Divider />}>
-                    {sortedAlternatives.slice(0, visibleCount).map((alt) => (
-                  <Box key={`${alt.tenantId}-${alt.resourceId}-${alt.slotTime}`} sx={{ py: 1, opacity: alt.status === "booked" ? 0.7 : 1 }}>
+                  <Stack spacing={1.5} divider={<Divider />}>
+                    {groupedAlternatives.slice(0, visibleCount).map((group) => {
+                  const alt = group.primary;
+                  return (
+                  <Box key={alt.tenantId} sx={{ py: 1 }}>
                     <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                      {/* Court photo */}
                       {alt.imageUrl && (
-                        <Avatar
-                          src={alt.imageUrl}
-                          variant="rounded"
-                          sx={{ width: 48, height: 48 }}
-                        />
+                        <Avatar src={alt.imageUrl} variant="rounded" sx={{ width: 48, height: 48 }} />
                       )}
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="body2" fontWeight={600}>{alt.tenantName}</Typography>
-                        <Typography variant="caption" color="text.secondary">{alt.resourceName}</Typography>
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          <Typography variant="body2" fontWeight={600}>{alt.tenantName}</Typography>
+                          <IconButton size="small" href={alt.playtomicUrl} target="_blank" rel="noopener noreferrer" title={t("playtomicBookOnPlaytomic")}>
+                            <OpenInNewIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </Stack>
                         {alt.address && (
                           <Stack direction="row" spacing={0.5} alignItems="center">
                             <PlaceIcon sx={{ fontSize: 12, color: "text.secondary" }} />
                             <Typography variant="caption" color="text.secondary">
-                              {alt.address}
-                              {alt.distanceKm !== null && ` · ${alt.distanceKm} km`}
+                              {alt.address}{alt.distanceKm !== null && ` · ${alt.distanceKm} km`}
                             </Typography>
                           </Stack>
                         )}
+                        {/* Available slots as chips */}
                         <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
-                          {alt.status === "booked" ? (
+                          {group.slots.filter((s) => sortedAlternatives.find((a) => a.tenantId === alt.tenantId && a.resourceId === s.resourceId && a.slotTime === s.slotTime)?.status === "available").map((s) => (
+                            <Chip
+                              key={`${s.resourceId}-${s.slotTime}`}
+                              label={`${s.slotTime}${s.resourceName !== alt.resourceName ? ` (${s.resourceName})` : ""}${formatPrice(s.price, s.currency) ? ` ${formatPrice(s.price, s.currency)}` : ""}`}
+                              size="small" color="primary" variant="outlined"
+                              onClick={() => setSwitchTarget(sortedAlternatives.find((a) => a.tenantId === alt.tenantId && a.resourceId === s.resourceId && a.slotTime === s.slotTime)!)}
+                            />
+                          ))}
+                          {group.hasBooked && (
                             <Chip label={t("courtStatusBooked")} size="small" color="default" variant="filled" />
-                          ) : (
-                            <Chip label={alt.slotTime} size="small" color="primary" variant="outlined" />
-                          )}
-                          <Chip label={`${alt.duration}min`} size="small" variant="outlined" />
-                          {formatPrice(alt.price, alt.currency) && (
-                            <Chip label={formatPrice(alt.price, alt.currency)} size="small" color="success" variant="outlined" />
                           )}
                         </Stack>
                       </Box>
-                      <Stack direction="row" spacing={0.5} alignItems="center">
-                        <IconButton size="small" href={alt.playtomicUrl} target="_blank" rel="noopener noreferrer" title={t("playtomicBookOnPlaytomic")}>
-                          <OpenInNewIcon fontSize="small" />
-                        </IconButton>
-                        {alt.status === "booked" ? (
-                          watchedResourceIds.has(alt.resourceId) ? (
-                            <Chip label={t("courtWatchCreated")} size="small" color="success" icon={<NotificationsActiveIcon />} />
-                          ) : (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={watchingResourceId === alt.resourceId ? <CircularProgress size={14} /> : <NotificationsActiveIcon />}
-                              onClick={() => createWatch(alt)}
-                              disabled={watchingResourceId === alt.resourceId}
-                            >
-                              {t("courtNotifyWhenFree")}
-                            </Button>
-                          )
-                        ) : (
+                      {/* Actions */}
+                      <Stack spacing={0.5} alignItems="flex-end">
+                        {alt.status === "available" && (
                           <Button size="small" variant="outlined" startIcon={<SwapHorizIcon />} onClick={() => setSwitchTarget(alt)}>
                             {t("courtSwitchButton")}
                           </Button>
                         )}
+                        {group.hasBooked && !watchedResourceIds.has(alt.resourceId) && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={watchingResourceId === alt.resourceId ? <CircularProgress size={14} /> : <NotificationsActiveIcon />}
+                            onClick={() => createWatch(alt)}
+                            disabled={watchingResourceId === alt.resourceId}
+                          >
+                            {t("courtNotifyWhenFree")}
+                          </Button>
+                        )}
+                        {watchedResourceIds.has(alt.resourceId) && (
+                          <Chip label={t("courtWatchCreated")} size="small" color="success" icon={<NotificationsActiveIcon />} />
+                        )}
                       </Stack>
                     </Stack>
                   </Box>
-                ))}
+                  );
+                })}
               </Stack>
-              {visibleCount < sortedAlternatives.length && (
+              {visibleCount < groupedAlternatives.length && (
                 <Button size="small" sx={{ mt: 1 }} onClick={() => setVisibleCount((c) => c + 5)}>
-                  {t("courtShowMore")} ({sortedAlternatives.length - visibleCount} more)
+                  {t("courtShowMore")} ({groupedAlternatives.length - visibleCount} more)
                 </Button>
               )}
                 </>
