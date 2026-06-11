@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.convocados.R
+import dev.convocados.ui.components.SectionCard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -54,6 +55,7 @@ class ProfileViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val locale = settingsStore.locale
     val themeMode = settingsStore.themeMode
+    val dynamicColor = settingsStore.dynamicColor
 
     init { viewModelScope.launch { repository.refreshUserProfile() } }
 
@@ -75,6 +77,7 @@ class ProfileViewModel @Inject constructor(
     fun setServerUrl(url: String) = tokenStore.setServerUrl(url)
     fun setLocale(code: String) { viewModelScope.launch { settingsStore.setLocale(code) } }
     fun setThemeMode(mode: ThemeMode) { viewModelScope.launch { settingsStore.setThemeMode(mode) } }
+    fun setDynamicColor(enabled: Boolean) { viewModelScope.launch { settingsStore.setDynamicColor(enabled) } }
 }
 
 @Composable
@@ -155,6 +158,25 @@ fun ProfileScreen(
                     }
                 }
             }
+        }
+
+        // Material You dynamic color (Android 12+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            val dynamicColor by viewModel.dynamicColor.collectAsState(initial = false)
+            SectionCard {
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Material You", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
+                        Text("Use colors from your wallpaper", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = dynamicColor, onCheckedChange = { viewModel.setDynamicColor(it) })
+                }
+            }
+            Spacer(Modifier.height(8.dp))
         }
 
         // Server URL

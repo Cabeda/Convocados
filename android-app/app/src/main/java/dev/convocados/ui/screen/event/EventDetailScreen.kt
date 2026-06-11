@@ -20,6 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
@@ -533,9 +536,12 @@ fun EventDetailScreen(
                 ) {
                     Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
                         // Header
-                        Text(event.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge)
-                        Text(formatRelativeDate(event.dateTime), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                        if (event.location.isNotBlank()) Text(event.location, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
+                        EventHeader(
+                            title = event.title,
+                            dateLabel = formatRelativeDate(event.dateTime),
+                            location = event.location,
+                            modifier = Modifier.testTag("event_header"),
+                        )
 
                         // Action bar
                         Row(modifier = Modifier.padding(vertical = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -776,11 +782,17 @@ fun EventDetailScreen(
 
                         // Add player with autocomplete dropdown
                         Box(modifier = Modifier.padding(top = 12.dp)) {
-                            val filteredSuggestions = if (newPlayer.length >= 2) {
-                                state.knownPlayers.filter {
-                                    it.name.lowercase().contains(newPlayer.lowercase()) && it.name.lowercase() !in currentNames
-                                }.take(5)
-                            } else emptyList()
+                            // derivedStateOf so the filter only recomputes when the query or the
+                            // known-player set actually changes, not on every recomposition.
+                            val filteredSuggestions by remember(currentNames) {
+                                derivedStateOf {
+                                    if (newPlayer.length >= 2) {
+                                        state.knownPlayers.filter {
+                                            it.name.lowercase().contains(newPlayer.lowercase()) && it.name.lowercase() !in currentNames
+                                        }.take(5)
+                                    } else emptyList()
+                                }
+                            }
 
                             Column {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -906,7 +918,33 @@ fun EventDetailScreen(
 
 @Composable
 fun SectionTitle(text: String) {
-    Text(text, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.sp, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+    Text(text, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.sp, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp).semantics { heading() })
+}
+
+/** Stateless event header (title, date, location) with heading semantics. */
+@Composable
+fun EventHeader(title: String, dateLabel: String, location: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+        Text(dateLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        if (location.isNotBlank()) Text(location, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true)
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun EventHeaderPreview() {
+    dev.convocados.ui.theme.ConvocadosTheme {
+        androidx.compose.material3.Surface {
+            EventHeader(
+                title = "Tuesday 5-a-side",
+                dateLabel = "Tomorrow, 19:00",
+                location = "Riverside Astro, Pitch 2",
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
