@@ -19,8 +19,12 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const body = await request.json();
   const location = String(body.location ?? "").trim().slice(0, 200);
 
-  // Geocode the new location
-  const geo = location ? await resolveLocation(location) : null;
+  // Use explicit coordinates if provided, otherwise geocode the location text
+  const explicitLat = typeof body.latitude === "number" ? body.latitude : null;
+  const explicitLng = typeof body.longitude === "number" ? body.longitude : null;
+  const geo = (explicitLat !== null && explicitLng !== null)
+    ? { latitude: explicitLat, longitude: explicitLng }
+    : location ? await resolveLocation(location) : null;
 
   await prisma.event.update({
     where: { id: params.id },

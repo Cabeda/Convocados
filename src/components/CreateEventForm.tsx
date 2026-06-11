@@ -132,6 +132,7 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
       recurrenceFreq,
       recurrenceInterval: isRecurring ? recurrenceInterval : null,
       recurrenceByDay: isRecurring ? recurrenceByDay : null,
+      ...(locationCoord ? { latitude: locationCoord.lat, longitude: locationCoord.lon } : {}),
     };
 
     const res = await fetch("/api/events", {

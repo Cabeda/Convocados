@@ -83,7 +83,12 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   // Geocode location (non-blocking failure — coordinates are optional)
-  const geo = location ? await resolveLocation(location) : null;
+  // Use explicit coordinates if provided (e.g. from Playtomic court finder), otherwise resolve from location text
+  const explicitLat = typeof body.latitude === "number" ? body.latitude : null;
+  const explicitLng = typeof body.longitude === "number" ? body.longitude : null;
+  const geo = (explicitLat !== null && explicitLng !== null)
+    ? { latitude: explicitLat, longitude: explicitLng }
+    : location ? await resolveLocation(location) : null;
 
   const event = await prisma.event.create({
     data: {
