@@ -1,53 +1,34 @@
 # Baseline Profiles
 
-The app ships a baseline profile at `app/src/main/baseline-prof.txt`. The
-`androidx.profileinstaller` dependency compiles these rules ahead-of-time at
-install, improving cold start and first-scroll jank without waiting for the
-JIT to warm up.
+The app ships a **device-measured** baseline profile at
+`app/src/release/generated/baselineProfiles/baseline-prof.txt` (plus a
+`startup-prof.txt`). The `androidx.profileinstaller` dependency compiles these
+rules ahead-of-time at install, improving cold start and first-scroll jank
+without waiting for the JIT to warm up.
 
-The committed file is a **hand-authored starter** covering the cold-start
-critical path (Application → MainActivity → theme → navigation → first
-screens). For best results, replace it with a **device-measured** profile.
+The profile is produced by the `:baselineprofile` Macrobenchmark module
+(`BaselineProfileGenerator`), which the `androidx.baselineprofile` Gradle
+plugin wires into `:app` via `baselineProfile(project(":baselineprofile"))`.
 
-## Regenerating an optimized profile
+## Regenerating
 
-Generating an optimal profile requires running a Macrobenchmark on a real
-device or emulator, so it is not part of CI.
+Generation runs a Macrobenchmark on a connected device/emulator, so it is not
+part of CI.
 
-1. Add a `:baselineprofile` module (a `com.android.test` module) with the
-   `androidx.baselineprofile` plugin and a `BaselineProfileGenerator` test that
-   exercises the main user journeys (open app → list → event detail → scroll).
+```bash
+# Boot an emulator or attach a device, then:
+./gradlew :app:generateBaselineProfile
+```
 
-   ```kotlin
-   // baselineprofile/build.gradle.kts
-   plugins {
-       id("com.android.test")
-       id("org.jetbrains.kotlin.android")
-       id("androidx.baselineprofile")
-   }
-   ```
+This re-runs the generator journey (cold start → first screen → scroll) and
+overwrites `app/src/release/generated/baselineProfiles/`.
 
-   ```kotlin
-   @get:Rule val rule = BaselineProfileRule()
+## Notes
 
-   @Test fun generate() = rule.collect(packageName = "com.cabeda.Convocados") {
-       startActivityAndWait()
-       // scroll the games list, open an event, etc.
-   }
-   ```
-
-2. Apply the `androidx.baselineprofile` plugin to `:app` and add
-   `baselineProfile(project(":baselineprofile"))`.
-
-3. Run on a connected device/emulator:
-
-   ```bash
-   ./gradlew :app:generateBaselineProfile
-   ```
-
-   This overwrites `app/src/main/baseline-prof.txt` (and produces a startup
-   profile) measured on-device.
-
-4. Verify the improvement with a Macrobenchmark (`StartupTimingMetric`,
-   `FrameTimingMetric`) comparing `CompilationMode.None()` vs
-   `CompilationMode.Partial(baselineProfile)`.
+- Release-type variants fall back to **debug signing** when no production
+  keystore is configured (see `app/build.gradle.kts`), so the
+  `nonMinifiedRelease` / `benchmarkRelease` variants the plugin creates can be
+  built and installed locally for profiling.
+- To measure the improvement, add a Macrobenchmark with `StartupTimingMetric`
+  / `FrameTimingMetric` comparing `CompilationMode.None()` vs
+  `CompilationMode.Partial(baselineProfile)`.

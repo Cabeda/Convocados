@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
     alias(libs.plugins.play.publisher)
+    alias(libs.plugins.baselineprofile)
 }
 
 val keystoreProperties = Properties().apply {
@@ -49,7 +50,16 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            // Use the production keystore when configured (CI/release); otherwise fall
+            // back to debug signing so the baseline-profile variants (nonMinifiedRelease /
+            // benchmarkRelease) can still be built and installed locally.
+            val hasReleaseKeystore = keystoreProperties.getProperty("storeFile", "").isNotBlank() &&
+                rootProject.file(keystoreProperties.getProperty("storeFile", "")).exists()
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -127,6 +137,8 @@ dependencies {
     // Baseline profile installer — compiles the bundled baseline-prof.txt at install
     // time for faster cold start and smoother first scroll.
     implementation(libs.androidx.profileinstaller)
+    // Consumes the generated profile from the :baselineprofile module.
+    baselineProfile(project(":baselineprofile"))
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
