@@ -144,7 +144,9 @@ export default function PlaytomicCourtFinder({ open, onClose, sport, date, onSel
 
   const formatTime = (time: string) => time.slice(0, 5); // "HH:mm:ss" -> "HH:mm"
   const formatPrice = (price: number, currency: string) =>
-    new Intl.NumberFormat(undefined, { style: "currency", currency }).format(price);
+    price !== null && price !== undefined && !isNaN(price) && currency
+      ? new Intl.NumberFormat(undefined, { style: "currency", currency }).format(price)
+      : null;
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
@@ -243,7 +245,7 @@ export default function PlaytomicCourtFinder({ open, onClose, sport, date, onSel
                                         court.slots.map((slot) => (
                                           <Chip
                                             key={slot.start_time}
-                                            label={`${formatTime(slot.start_time)} - ${formatPrice(slot.price, slot.currency)}`}
+                                            label={`${formatTime(slot.start_time)}${formatPrice(slot.price, slot.currency) ? ` - ${formatPrice(slot.price, slot.currency)}` : ""}`}
                                             size="small"
                                             variant="outlined"
                                             color="primary"
