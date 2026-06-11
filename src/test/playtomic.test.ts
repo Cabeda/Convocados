@@ -28,8 +28,8 @@ describe("mapSportToPlaytomic", () => {
     expect(mapSportToPlaytomic("tennis-doubles")).toBe("TENNIS");
   });
 
-  it("maps football-5v5 to FUTSAL", () => {
-    expect(mapSportToPlaytomic("football-5v5")).toBe("FUTSAL");
+  it("maps football-5v5 to FOOTBALL_OTHERS", () => {
+    expect(mapSportToPlaytomic("football-5v5")).toBe("FOOTBALL_OTHERS");
   });
 
   it("maps football-7v7 to FOOTBALL7", () => {
@@ -253,7 +253,7 @@ describe("getAvailability", () => {
 
     const url = fetchSpy.mock.calls[0][0] as string;
     expect(url).toContain("tenant_id=abc123");
-    expect(url).toContain("sport_id=FUTSAL");
+    expect(url).toContain("sport_id=FOOTBALL_OTHERS");
     expect(url).toContain("local_start_min=2026-04-01T00:00:00");
     expect(url).toContain("local_start_max=2026-04-01T23:59:59");
   });

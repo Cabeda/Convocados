@@ -24,7 +24,7 @@ export function playtomicSportIds(sport: string): string[] | null {
     "padel": ["PADEL"],
     "tennis-singles": ["TENNIS"],
     "tennis-doubles": ["TENNIS"],
-    "football-5v5": ["FUTSAL", "FOOTBALL_OTHERS"],
+    "football-5v5": ["FOOTBALL_OTHERS", "FUTSAL"],
     "football-7v7": ["FOOTBALL7"],
     "futsal": ["FUTSAL", "FOOTBALL_OTHERS"],
   };
