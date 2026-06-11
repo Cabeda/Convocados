@@ -903,6 +903,7 @@ const fr: TranslationKeys = {
   landingFeatureRankings: "Suis les classements ELO",
   landingFeatureNotifications: "Reçois des notifications push",
   landingFeatureReminders: "Rappels pour jouer et payer",
+  landingFeatureCourtFinder: "Trouvez et comparez les terrains proches",
   landingOpenSource: "Open source · Gratuit pour toujours",
 
   // MVP voting (#200)
