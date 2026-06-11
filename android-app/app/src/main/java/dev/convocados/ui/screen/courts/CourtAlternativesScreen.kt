@@ -1,6 +1,7 @@
 package dev.convocados.ui.screen.courts
 
 import android.content.Intent
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import android.net.Uri
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -119,9 +120,11 @@ fun CourtAlternativesScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            TopAppBar(scrollBehavior = scrollBehavior, 
                 title = { Text("Court Alternatives") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
             )

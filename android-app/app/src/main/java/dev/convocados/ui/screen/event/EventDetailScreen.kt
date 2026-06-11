@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -472,9 +473,11 @@ fun EventDetailScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
         topBar = {
             TopAppBar(
+                scrollBehavior = scrollBehavior,
                 title = { Text(event?.title ?: "Event", maxLines = 1) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
@@ -496,7 +499,7 @@ fun EventDetailScreen(
                 rememberSharedContentState(key = "item-container-$eventId"),
                 animatedVisibilityScope = animatedVisibilityScope
             )
-        }
+        }.nestedScroll(scrollBehavior.nestedScrollConnection)
     ) { padding ->
         when {
             state.loading && event == null -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
