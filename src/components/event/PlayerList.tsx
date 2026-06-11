@@ -30,7 +30,7 @@ interface Props {
   availableSuggestions: PlayerSuggestion[];
   playerError: string | null;
   onPlayerErrorChange: (error: string | null) => void;
-  onAddPlayer: (name: string) => Promise<void>;
+  onAddPlayer: (name: string, email?: string) => Promise<void>;
   onRemovePlayer: (playerId: string) => Promise<void>;
   onReorderPlayers: (playerIds: string[]) => Promise<void>;
   onResetPlayerOrder: () => Promise<void>;
@@ -48,6 +48,7 @@ export function PlayerList({
   const t = useT();
   const theme = useTheme();
   const [playerInput, setPlayerInput] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
 
   // ── Player reorder drag state ──────────────────────────────────────────────
   const [dragPlayer, setDragPlayer] = useState<{ id: string; index: number } | null>(null);
@@ -164,8 +165,9 @@ export function PlayerList({
                   if (hasPartialMatch) return;
                   e.preventDefault();
                   e.stopPropagation();
-                  onAddPlayer(trimmed);
+                  onAddPlayer(trimmed, inviteEmail.trim() || undefined);
                   setPlayerInput("");
+                  setInviteEmail("");
                 }
               }}
               onPaste={(e) => {
@@ -182,7 +184,7 @@ export function PlayerList({
                   <InputAdornment position="end">
                     <IconButton color="primary" edge="end"
                       disabled={!playerInput.trim()}
-                      onClick={() => { onAddPlayer(playerInput); setPlayerInput(""); }}>
+                      onClick={() => { onAddPlayer(playerInput, inviteEmail.trim() || undefined); setPlayerInput(""); setInviteEmail(""); }}>
                       <PersonAddIcon />
                     </IconButton>
                   </InputAdornment>
@@ -219,6 +221,20 @@ export function PlayerList({
             );
           }}
           noOptionsText={t("noSuggestions")}
+        />
+
+        {/* Optional: notify a registered player or email an invite to register */}
+        <TextField
+          type="email"
+          size="small"
+          variant="outlined"
+          fullWidth
+          value={inviteEmail}
+          onChange={(e) => setInviteEmail(e.target.value)}
+          placeholder={t("inviteByEmailPlaceholder")}
+          helperText={t("inviteByEmailHelper")}
+          inputProps={{ inputMode: "email", maxLength: 120 }}
+          sx={{ mt: 1 }}
         />
 
         {/* Recent players — quick-add chips */}

@@ -64,6 +64,8 @@ const fr: TranslationKeys = {
   copyLink: "Copier le lien",
   players: "Joueurs",
   addPlayerPlaceholder: "Ajouter un joueur",
+  inviteByEmailPlaceholder: "Inviter par e-mail (optionnel)",
+  inviteByEmailHelper: "Les notifie s'ils sont sur Convocados, sinon envoie une invitation par e-mail",
   addPlayerHelper: "Appuie sur Entrée pour ajouter, ou colle une liste séparée par des lignes",
   randomizeTeams: "Tirer les équipes au sort",
   teamsOutOfSync: "Les joueurs ont changé depuis le dernier tirage. Pense à retirer au sort.",

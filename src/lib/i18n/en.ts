@@ -72,6 +72,8 @@ const en = {
   copyLink: "Copy link",
   players: "Players",
   addPlayerPlaceholder: "Add player name",
+  inviteByEmailPlaceholder: "Invite by email (optional)",
+  inviteByEmailHelper: "Notifies them if they're on Convocados, otherwise emails an invite to join",
   addPlayerHelper: "Press Enter to add, or paste a newline-separated list",
   randomizeTeams: "Randomize teams",
   teamsOutOfSync: "Players have changed since teams were last randomized. Consider re-randomizing.",

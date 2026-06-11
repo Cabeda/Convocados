@@ -2,7 +2,8 @@ import { Prisma } from "@prisma/client";
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
-import { sendGameInvite, sendPlayerJoinedOwnerNotification } from "../../../../lib/email.server";
+import { sendGameInvite, sendPlayerJoinedOwnerNotification, sendPlayerInviteToRegister } from "../../../../lib/email.server";
+import { sendPushToUser } from "../../../../lib/push.server";
 import { getNotificationPrefs, wantsGameInviteEmail } from "../../../../lib/notificationPrefs.server";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
@@ -211,9 +212,15 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { name, linkToAccount } = await request.json();
+  const { name, linkToAccount, email } = await request.json();
   const trimmed = String(name ?? "").trim().slice(0, 50);
   if (!trimmed) return Response.json({ error: "Player name is required." }, { status: 400 });
+
+  // Optional email — used to notify a registered user or invite an unregistered
+  // one to join Convocados. Validated loosely; ignored if malformed.
+  const normalizedEmail = typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+    ? email.trim().toLowerCase()
+    : null;
 
   // Bench cap: max bench size equals maxPlayers (total players = 2 * maxPlayers)
   const maxTotal = event.maxPlayers * 2;
@@ -248,6 +255,28 @@ export const POST: APIRoute = async ({ params, request }) => {
       if (alreadyInEvent === 0) {
         linkedUserId = candidateId;
       }
+    }
+  }
+
+  // Email-based invite resolution. If an email was supplied, decide whether the
+  // invitee is already a Convocados user (→ notify) or not (→ email invite).
+  let notifyRegisteredUserId: string | null = null;
+  let inviteUnregisteredEmail: string | null = null;
+  if (normalizedEmail) {
+    const invited = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true },
+    });
+    if (invited) {
+      // Link the new player record to their account (if not already in the event)
+      // so the game shows up for them, and flag them for a push notification.
+      const alreadyInEvent = await prisma.player.count({ where: { eventId, userId: invited.id } });
+      if (alreadyInEvent === 0 && !linkedUserId) {
+        linkedUserId = invited.id;
+      }
+      notifyRegisteredUserId = invited.id;
+    } else {
+      inviteUnregisteredEmail = normalizedEmail;
     }
   }
 
@@ -394,7 +423,37 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   logEvent(eventId, "player_added", session?.user?.name ?? trimmed, session?.user?.id ?? null, { playerName: trimmed }).catch(() => {});
 
-  return Response.json({ ok: true });
+  // ── Invite-by-email: notify a registered user, or email an unregistered one ──
+  let inviteResult: "notified" | "emailed" | null = null;
+  const inviterName = session?.user?.name ?? null;
+  if (notifyRegisteredUserId && notifyRegisteredUserId !== session?.user?.id) {
+    try {
+      await sendPushToUser(
+        notifyRegisteredUserId,
+        event.title,
+        inviterName ? `${inviterName} added you to the game` : "You've been added to the game",
+        url,
+      );
+      inviteResult = "notified";
+    } catch (err) {
+      log.error({ eventId, err }, "Failed to send invite push");
+    }
+  } else if (inviteUnregisteredEmail) {
+    try {
+      await sendPlayerInviteToRegister(inviteUnregisteredEmail, {
+        eventTitle: event.title,
+        dateTime: event.dateTime.toISOString(),
+        location: event.location,
+        eventUrl: url,
+        inviterName,
+      });
+      inviteResult = "emailed";
+    } catch (err) {
+      log.error({ eventId, err }, "Failed to send invite email");
+    }
+  }
+
+  return Response.json({ ok: true, invited: inviteResult });
 };
 
 export const DELETE: APIRoute = async ({ params, request }) => {
