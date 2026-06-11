@@ -436,6 +436,7 @@ const en = {
   paymentNudgeSocialProof: "{paid} of {total} paid for the last game",
   paymentNudgeStreak: "🔥 {count} game paid streak",
   paymentNudgeSentConfirmation: "Marked as sent — the organizer will confirm receipt",
+  paymentNudgeMarkSent: "I've sent it ✓",
   paymentNudgeSettleUp: "Settle up",
   bulkMarkAllPaid: "Mark all as paid",
   autoPayOnJoinLabel: "Always show payment when I join",
