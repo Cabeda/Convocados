@@ -230,7 +230,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          printenv ANDROID_KEYSTORE | base64 -d > app/release-keystore.jks
+          printenv ANDROID_KEYSTORE | base64 -d > release-keystore.jks
           {
             echo "storeFile=release-keystore.jks"
             echo "storePassword=$KEYSTORE_PASSWORD"
@@ -330,7 +330,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          printenv ANDROID_KEYSTORE | base64 -d > app/release-keystore.jks
+          printenv ANDROID_KEYSTORE | base64 -d > release-keystore.jks
           {
             echo "storeFile=release-keystore.jks"
             echo "storePassword=$KEYSTORE_PASSWORD"
