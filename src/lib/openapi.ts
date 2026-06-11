@@ -806,6 +806,34 @@ export const openApiSpec = {
         },
       },
     },
+    "/api/court-watches": {
+      get: {
+        summary: "List court watches",
+        tags: ["Court Finder"],
+        responses: { "200": { description: "User's court watches" }, ...errorResponses },
+      },
+      post: {
+        summary: "Create a court watch",
+        tags: ["Court Finder"],
+        responses: { "201": { description: "Watch created" }, ...errorResponses },
+      },
+    },
+    "/api/court-watches/{id}": {
+      delete: {
+        summary: "Delete a court watch",
+        tags: ["Court Finder"],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Watch deleted" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/court-alternatives": {
+      get: {
+        summary: "Search court alternatives for an event",
+        tags: ["Court Finder"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Court alternatives" }, ...errorResponses },
+      },
+    },
   },
   tags: [
     { name: "System", description: "Health and status" },
