@@ -35,6 +35,7 @@ import dev.convocados.data.api.*
 import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.repository.EventRepository
+import dev.convocados.ui.screen.courts.PLAYTOMIC_SPORTS
 import dev.convocados.ui.screen.games.formatRelativeDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -393,6 +394,7 @@ fun EventDetailScreen(
     onUserClick: (String) -> Unit,
     onHistoryClick: (String) -> Unit = {},
     onAllHistory: () -> Unit = {},
+    onCourtAlternatives: () -> Unit = {},
     viewModel: EventDetailViewModel = hiltViewModel(),
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -541,6 +543,7 @@ fun EventDetailScreen(
                             if (activePlayers.size >= 2) AssistChip(onClick = { viewModel.randomize(eventId, event.balanced) }, label = { Text("\uD83C\uDFB2 Randomize") })
                             if (isOwner || event.isAdmin) AssistChip(onClick = onSettings, label = { Text("\u2699\uFE0F") })
                             AssistChip(onClick = onRankings, label = { Text("\uD83C\uDFC6 Rankings") })
+                            if (event.sport in PLAYTOMIC_SPORTS) AssistChip(onClick = onCourtAlternatives, label = { Text("\uD83C\uDFDF\uFE0F Courts") })
                             AssistChip(onClick = onNotificationPrefs, label = { Text("\uD83D\uDD14") })
                         }
 

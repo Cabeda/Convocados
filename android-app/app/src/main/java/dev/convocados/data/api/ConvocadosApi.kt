@@ -199,6 +199,31 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun updateFollowPreferences(eventId: String, overrides: FollowOverridesRequest): FollowStateResponse =
         client.put("/api/events/$eventId/follow", overrides)
+
+    // ── Court Finder ──────────────────────────────────────────────────────
+    suspend fun fetchCourtAlternatives(
+        eventId: String,
+        radius: Int = 10000,
+        startTime: String? = null,
+        endTime: String? = null,
+        includeBooked: Boolean = true,
+    ): CourtAlternativesResponse {
+        val params = buildString {
+            append("?radius=$radius&includeBooked=$includeBooked")
+            if (startTime != null) append("&startTime=$startTime")
+            if (endTime != null) append("&endTime=$endTime")
+        }
+        return client.get("/api/events/$eventId/court-alternatives$params")
+    }
+
+    suspend fun fetchCourtWatches(): CourtWatchesResponse =
+        client.get("/api/court-watches")
+
+    suspend fun createCourtWatch(request: CreateCourtWatchRequest): OkResponse =
+        client.post("/api/court-watches", request)
+
+    suspend fun deleteCourtWatch(id: String): OkResponse =
+        client.delete("/api/court-watches/$id")
 }
 
 // ── Request bodies ────────────────────────────────────────────────────────────

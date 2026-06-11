@@ -40,6 +40,8 @@ import dev.convocados.ui.screen.history.HistoryDetailScreen
 import dev.convocados.ui.screen.history.EventHistoryScreen
 import dev.convocados.ui.screen.history.EventHistoryScreen
 import dev.convocados.ui.screen.map.MapPickerScreen
+import dev.convocados.ui.screen.courts.CourtAlternativesScreen
+import dev.convocados.ui.screen.courts.CourtWatchesScreen
 
 data class BottomNavItem(val route: String, val label: String, val icon: @Composable () -> Unit)
 
@@ -126,6 +128,7 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
                             }
                         },
                         onNotificationPrefs = { navController.navigate(Route.NotificationPrefs.route) },
+                        onCourtWatches = { navController.navigate(Route.CourtWatches.route) },
                     )
                 }
                 composable(Route.CreateEvent.route) {
@@ -167,6 +170,7 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
                         onUserClick = { navController.navigate(Route.UserProfile.create(it)) },
                         onHistoryClick = { historyId -> navController.navigate(Route.HistoryDetail.create(eventId, historyId)) },
                         onAllHistory = { navController.navigate(Route.EventHistory.create(eventId)) },
+                        onCourtAlternatives = { navController.navigate(Route.CourtAlternatives.create(eventId)) },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this@composable,
                     )
@@ -260,6 +264,19 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
                         onBack = { navController.popBackStack() },
                         onHistoryClick = { historyId -> navController.navigate(Route.HistoryDetail.create(eventId, historyId)) },
                     )
+                }
+                composable(
+                    Route.CourtAlternatives().route,
+                    arguments = listOf(navArgument("eventId") { type = NavType.StringType }),
+                ) { entry ->
+                    val eventId = entry.arguments?.getString("eventId") ?: return@composable
+                    CourtAlternativesScreen(
+                        eventId = eventId,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(Route.CourtWatches.route) {
+                    CourtWatchesScreen(onBack = { navController.popBackStack() })
                 }
             }
         }
