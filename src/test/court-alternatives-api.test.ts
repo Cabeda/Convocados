@@ -19,8 +19,14 @@ const mockGetAvailability = vi.fn();
 vi.mock("~/lib/playtomic.server", () => ({
   searchClubs: (...args: unknown[]) => mockSearchClubs(...args),
   getAvailability: (...args: unknown[]) => mockGetAvailability(...args),
+  getClubResources: vi.fn().mockResolvedValue({ resources: [] }),
   mapSportToPlaytomic: (s: string) => ({ padel: "PADEL", "football-5v5": "FUTSAL" })[s] ?? null,
   isPlaytomicSport: (s: string) => ["padel", "football-5v5"].includes(s),
+}));
+
+// searchCourtAlternatives reads availability through the cache layer
+vi.mock("~/lib/availabilityCache.server", () => ({
+  getCachedAvailability: (...args: unknown[]) => mockGetAvailability(...args),
 }));
 
 vi.mock("~/lib/playtomic", () => ({

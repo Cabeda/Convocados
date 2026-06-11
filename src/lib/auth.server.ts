@@ -77,6 +77,7 @@ export const auth = betterAuth({
       scopes: OAUTH_SCOPES,
       clientRegistrationDefaultScopes: ["openid"],
       storeClientSecret: "hashed",
+      silenceWarnings: { oauthAuthServerConfig: true },
       cachedTrustedClients: new Set(
         process.env.TRUSTED_OAUTH_CLIENT_ID ? [process.env.TRUSTED_OAUTH_CLIENT_ID] : [],
       ),

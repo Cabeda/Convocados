@@ -84,7 +84,8 @@ export const POST: APIRoute = async ({ request }) => {
         const recipientIds = [event.ownerId, ...event.admins.map((a) => a.userId)].filter(Boolean) as string[];
         const uniqueRecipients = [...new Set(recipientIds)];
         const title = event.title;
-        const body = `🎾 ${alt.tenantName} — ${alt.resourceName} at ${alt.slotTime} (${alt.price}${alt.currency})`;
+        const priceLabel = alt.price !== null && alt.currency ? ` (${alt.price}${alt.currency})` : "";
+        const body = `🎾 ${alt.tenantName} — ${alt.resourceName} at ${alt.slotTime}${priceLabel}`;
         const url = `/events/${event.id}`;
 
         for (const userId of uniqueRecipients) {
