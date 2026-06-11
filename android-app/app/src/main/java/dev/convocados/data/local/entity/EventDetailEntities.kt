@@ -7,6 +7,11 @@ import androidx.room.PrimaryKey
 import dev.convocados.data.api.EventDetail
 import dev.convocados.data.api.GameHistory
 import dev.convocados.data.api.Player
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
+/** Shared Json for (de)serializing nested entity payloads like team results. */
+internal val EntityJson = Json { ignoreUnknownKeys = true }
 
 @Entity(tableName = "event_details")
 data class EventDetailEntity(
@@ -21,6 +26,8 @@ data class EventDetailEntity(
     val locked: Boolean,
     val teamOneName: String,
     val teamTwoName: String,
+    /** JSON-encoded List<TeamResult> of the generated teams, or null if none. */
+    val teamResultsJson: String? = null,
 )
 
 @Entity(
@@ -76,7 +83,8 @@ fun EventDetail.toEntity() = EventDetailEntity(
     isAdmin = isAdmin,
     locked = locked,
     teamOneName = teamOneName,
-    teamTwoName = teamTwoName
+    teamTwoName = teamTwoName,
+    teamResultsJson = teamResults?.let { EntityJson.encodeToString(it) },
 )
 
 fun Player.toEntity(eventId: String) = PlayerEntity(

@@ -8,6 +8,7 @@ import dev.convocados.data.api.OkResponse
 import dev.convocados.data.api.PaginatedHistory
 import dev.convocados.data.api.Player
 import dev.convocados.data.api.RemovePlayerResponse
+import dev.convocados.data.api.TeamResult
 import dev.convocados.data.api.UndoData
 import dev.convocados.data.local.dao.EventDao
 import dev.convocados.data.local.dao.EventDetailDao
@@ -16,6 +17,8 @@ import dev.convocados.data.local.entity.GameHistoryEntity
 import dev.convocados.data.local.entity.PlayerEntity
 import dev.convocados.data.local.entity.toEntity
 import dev.convocados.data.local.entity.toSummary
+import dev.convocados.data.local.entity.EntityJson
+import kotlinx.serialization.decodeFromString
 import dev.convocados.data.api.MyGamesResponse
 import dev.convocados.ui.UiEventManager
 import kotlinx.coroutines.flow.Flow
@@ -123,7 +126,10 @@ class EventRepository @Inject constructor(
         id = id, title = title, location = location, dateTime = dateTime,
         maxPlayers = maxPlayers, sport = sport, ownerId = ownerId,
         isAdmin = isAdmin, locked = locked, teamOneName = teamOneName, teamTwoName = teamTwoName,
-        players = players.map { it.toDomain() }
+        players = players.map { it.toDomain() },
+        teamResults = teamResultsJson?.let {
+            runCatching { EntityJson.decodeFromString<List<TeamResult>>(it) }.getOrNull()
+        },
     )
 
     private fun PlayerEntity.toDomain() = Player(
