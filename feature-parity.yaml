@@ -168,6 +168,21 @@ webhooks:
   android: false
   wearos: false
 
+court-finder:
+  web: true
+  android: false
+  wearos: false
+  capabilities:
+    search-nearby-clubs: { web: true, android: false, wearos: false }
+    availability-check: { web: true, android: false, wearos: false }
+    compare-prices: { web: true, android: false, wearos: false }
+    map-view: { web: true, android: false, wearos: false }
+    switch-court: { web: true, android: false, wearos: false }
+    playtomic-deep-links: { web: true, android: false, wearos: false }
+    include-booked-courts: { web: true, android: false, wearos: false }
+    court-watch-alerts: { web: true, android: false, wearos: false }
+    recurring-watches: { web: true, android: false, wearos: false }
+
 admin-panel:
   web: true
   android: false
