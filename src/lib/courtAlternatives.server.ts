@@ -3,7 +3,7 @@
  * Finds Playtomic slots matching an event's time (±30 min) and filters.
  */
 
-import { searchClubs, getAvailability } from "./playtomic.server";
+import { searchClubs, getAvailability, getClubResources } from "./playtomic.server";
 import { isPlaytomicSport } from "./playtomic";
 
 export interface CourtWatchConfig {
@@ -27,6 +27,7 @@ export interface CourtAlternative {
   playtomicUrl: string;
   imageUrl: string | null;
   distanceKm: number | null;
+  status: "available" | "booked";
 }
 
 export interface SearchAlternativesParams {
@@ -39,6 +40,7 @@ export interface SearchAlternativesParams {
   maxClubs?: number; // default 5
   startTime?: string; // "HH:mm" — override time filter start
   endTime?: string;   // "HH:mm" — override time filter end
+  includeBooked?: boolean; // also return courts that are booked (no slot) in the window
 }
 
 const DEFAULT_TIME_TOLERANCE_MINUTES = 30;
@@ -112,16 +114,20 @@ export async function searchCourtAlternatives(params: SearchAlternativesParams):
 
     if (availError) continue; // skip this club, don't fail entire search
 
+    const distanceKm = club.coordinate
+      ? Math.round(haversineKm(params.latitude, params.longitude, club.coordinate.lat, club.coordinate.lon) * 10) / 10
+      : null;
+    const address = club.address ? [club.address.street, club.address.city].filter(Boolean).join(", ") : null;
+    const availableResourceIds = new Set<string>();
+
     for (const court of courts) {
       const matchingSlots = court.slots.filter(
         (s) => isTimeMatch(s.start_time, params.dateTime, params.startTime, params.endTime) && s.duration >= params.durationMinutes,
       );
 
-      for (const slot of matchingSlots) {
-        const distanceKm = club.coordinate
-          ? Math.round(haversineKm(params.latitude, params.longitude, club.coordinate.lat, club.coordinate.lon) * 10) / 10
-          : null;
+      if (matchingSlots.length > 0) availableResourceIds.add(court.resource_id);
 
+      for (const slot of matchingSlots) {
         alternatives.push({
           tenantId: club.tenant_id,
           tenantName: club.tenant_name,
@@ -133,10 +139,37 @@ export async function searchCourtAlternatives(params: SearchAlternativesParams):
           price: slot.price,
           currency: slot.currency,
           coordinate: club.coordinate,
-          address: club.address ? [club.address.street, club.address.city].filter(Boolean).join(", ") : null,
+          address,
           playtomicUrl: `https://playtomic.io/tenant/${club.tenant_id}/booking/${dateStr}?resource_id=${court.resource_id}&start=${slot.start_time}`,
           imageUrl: club.images[0] || null,
           distanceKm,
+          status: "available",
+        });
+      }
+    }
+
+    // Optionally surface courts that exist but are booked (no slot) in the window
+    if (params.includeBooked) {
+      const { resources } = await getClubResources(club.tenant_id, params.sport);
+      const windowStart = params.startTime ?? `${String(params.dateTime.getUTCHours()).padStart(2, "0")}:${String(params.dateTime.getUTCMinutes()).padStart(2, "0")}`;
+      for (const resource of resources) {
+        if (availableResourceIds.has(resource.resource_id)) continue; // available, already listed
+        alternatives.push({
+          tenantId: club.tenant_id,
+          tenantName: club.tenant_name,
+          resourceId: resource.resource_id,
+          resourceName: resource.name,
+          slotTime: windowStart,
+          slotDate: dateStr,
+          duration: params.durationMinutes,
+          price: null,
+          currency: null,
+          coordinate: club.coordinate,
+          address,
+          playtomicUrl: `https://playtomic.io/tenant/${club.tenant_id}`,
+          imageUrl: club.images[0] || null,
+          distanceKm,
+          status: "booked",
         });
       }
     }

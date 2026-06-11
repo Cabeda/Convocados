@@ -223,3 +223,75 @@ export async function getAvailability(params: GetAvailabilityParams): Promise<Ge
 export function buildPlaytomicUrl(tenantId: string): string {
   return `https://playtomic.io/tenant/${tenantId}`;
 }
+
+// ── Resources (full court list) ────────────────────────────────────────────────
+
+export interface PlaytomicResource {
+  resource_id: string;
+  name: string;
+  sport_id: string | null;
+  indoor: boolean | null;
+}
+
+export interface GetClubResourcesResult {
+  resources: PlaytomicResource[];
+  error?: string;
+}
+
+interface PlaytomicRawResource {
+  resource_id?: string;
+  name?: string;
+  sport_id?: string;
+  properties?: { resource_type?: string; resource_feature?: string };
+}
+
+interface PlaytomicRawTenant {
+  resources?: PlaytomicRawResource[];
+}
+
+/**
+ * Fetch the full list of courts (resources) for a club, optionally filtered by sport.
+ * Unlike availability (which only returns free slots), this returns every court,
+ * so callers can determine which courts are booked at a given time.
+ */
+export async function getClubResources(tenantId: string, sport?: string): Promise<GetClubResourcesResult> {
+  const playtomicSport = sport ? mapSportToPlaytomic(sport) : null;
+  if (sport && !playtomicSport) {
+    return { resources: [], error: "Unsupported sport for Playtomic search" };
+  }
+
+  const url = `${PLAYTOMIC_API}/tenants/${encodeURIComponent(tenantId)}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Convocados/1.0", Accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!res.ok) {
+      return { resources: [], error: `Playtomic API returned ${res.status}` };
+    }
+
+    const data: PlaytomicRawTenant = await res.json();
+    if (!data || !Array.isArray(data.resources)) {
+      return { resources: [], error: "Unexpected response format" };
+    }
+
+    const resources: PlaytomicResource[] = data.resources
+      .map((r) => {
+        const feature = r.properties?.resource_feature;
+        return {
+          resource_id: r.resource_id ?? "",
+          name: r.name ?? "",
+          sport_id: r.sport_id ?? null,
+          indoor: feature === "indoor" ? true : feature === "outdoor" ? false : null,
+        };
+      })
+      .filter((r) => r.resource_id && (!playtomicSport || !r.sport_id || r.sport_id === playtomicSport));
+
+    return { resources };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return { resources: [], error: message };
+  }
+}
