@@ -15,6 +15,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -102,7 +103,7 @@ fun GamesScreen(
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = onCreateClick, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
+            FloatingActionButton(onClick = onCreateClick, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.testTag("create_game_fab")) {
                 Icon(Icons.Default.Add, "Create game")
             }
         },
@@ -198,6 +199,7 @@ fun GameCard(
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
+            .testTag("game_card_${game.id}")
             .clickable(onClick = onClick)
             .then(
                 with(sharedTransitionScope) {
