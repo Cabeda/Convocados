@@ -34,6 +34,9 @@ export const GET: APIRoute = async ({ params, request }) => {
   const radius = Number(url.searchParams.get("radius")) || config.radius;
   const indoor = url.searchParams.has("indoor") ? url.searchParams.get("indoor") === "true" : config.indoor;
   const surface = url.searchParams.get("surface") ?? config.surface;
+  const startTime = url.searchParams.get("startTime") ?? undefined; // "HH:mm"
+  const endTime = url.searchParams.get("endTime") ?? undefined;     // "HH:mm"
+  const includeBooked = url.searchParams.get("includeBooked") === "true";
 
   const { alternatives, error } = await searchCourtAlternatives({
     sport: event.sport,
@@ -42,6 +45,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     latitude: event.latitude,
     longitude: event.longitude,
     config: { radius, indoor, surface },
+    includeBooked,
+    startTime,
+    endTime,
   });
 
   if (error) return Response.json({ alternatives: [], error }, { status: 502 });
