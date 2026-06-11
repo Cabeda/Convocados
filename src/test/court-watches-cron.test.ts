@@ -54,6 +54,20 @@ describe("POST /api/cron/court-watches", () => {
     expect(mockSendPush).toHaveBeenCalledTimes(1);
   });
 
+  it("notifies with no price label when price is null", async () => {
+    await prisma.user.create({ data: { id: "u1", name: "U", email: "u1@test.com", emailVerified: true } });
+    await prisma.courtWatch.create({ data: { ...validWatch, userId: "u1", resourceId: null, resourceName: null } });
+    mockFindWatchMatches.mockResolvedValue({
+      matches: [{ resourceId: "courtX", resourceName: "Court X", slotDate: "2026-06-15", slotTime: "19:00", duration: 90, price: null, currency: null }],
+    });
+    const res = await POST(cronReq());
+    const data = await res.json();
+    expect(data.results[0].found).toBe(1);
+    expect(mockSendPush).toHaveBeenCalledTimes(1);
+    const [, , body] = mockSendPush.mock.calls[0];
+    expect(body).not.toContain("null");
+  });
+
   it("skips inactive watches", async () => {
     await prisma.user.create({ data: { id: "u1", name: "U", email: "u1@test.com", emailVerified: true } });
     await prisma.courtWatch.create({ data: { ...validWatch, userId: "u1", active: false } });
