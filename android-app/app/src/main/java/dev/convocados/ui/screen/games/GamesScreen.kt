@@ -133,45 +133,46 @@ fun GamesScreen(
         val archived = archivedOwned
         val games = if (showArchived) archived else active
 
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = { viewModel.refresh() },
-            modifier = Modifier.fillMaxSize().padding(padding),
-        ) {
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            // Fixed tab header — stays visible while content scrolls.
+            // SecondaryScrollableTabRow adapts: scrollable when tabs overflow,
+            // fills width otherwise. Better than chips that clip on small screens.
+            val tabIndex = if (showArchived) 1 else 0
+            SecondaryScrollableTabRow(
+                selectedTabIndex = tabIndex,
+                edgePadding = 16.dp,
+                containerColor = MaterialTheme.colorScheme.background,
+                divider = {},
             ) {
-                // Tab bar
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-                        FilterChip(
-                            selected = !showArchived,
-                            onClick = { showArchived = false },
-                            label = { Text("${stringResource(R.string.my_games)} (${active.size})") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            ),
-                        )
-                        if (archived.isNotEmpty()) {
-                            FilterChip(
-                                selected = showArchived,
-                                onClick = { showArchived = true },
-                                label = { Text("${stringResource(R.string.archived)} (${archived.size})") },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                ),
-                            )
-                        }
-                        FilterChip(
-                            selected = false,
-                            onClick = onPublicClick,
-                            label = { Text(stringResource(R.string.public_label)) }, leadingIcon = { Icon(Icons.Default.Public, stringResource(R.string.public_label), modifier = Modifier.size(18.dp)) },
-                        )
-                    }
+                Tab(
+                    selected = tabIndex == 0,
+                    onClick = { showArchived = false },
+                    text = { Text("${stringResource(R.string.my_games)} (${active.size})") },
+                )
+                if (archived.isNotEmpty()) {
+                    Tab(
+                        selected = tabIndex == 1,
+                        onClick = { showArchived = true },
+                        text = { Text("${stringResource(R.string.archived)} (${archived.size})") },
+                    )
                 }
+                Tab(
+                    selected = false,
+                    onClick = onPublicClick,
+                    text = { Text(stringResource(R.string.public_label)) },
+                    icon = { Icon(Icons.Default.Public, null, modifier = Modifier.size(18.dp)) },
+                )
+            }
+
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
 
                 if (games.isEmpty() && showArchived) {
                     item {
@@ -235,7 +236,8 @@ fun GamesScreen(
                     )
                 }
             }
-        }
+        }  // PullToRefreshBox
+        }  // Column
     }
 }
 
