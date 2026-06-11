@@ -642,6 +642,11 @@ const fr: TranslationKeys = {
   courtFilterIndoor: "Intérieur seulement",
   courtFilterOutdoor: "Extérieur seulement",
   courtFilterSurface: "Type de surface",
+  courtFilterTimeFrom: "De",
+  courtFilterTimeTo: "À",
+  courtSortPrice: "Prix",
+  courtSortTime: "Heure",
+  courtSortDistance: "Distance",
   courtPreviousAlerts: "Trouvés précédemment",
 
   // Admin dashboard (#159)

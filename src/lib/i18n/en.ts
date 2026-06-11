@@ -690,6 +690,11 @@ const en = {
   courtFilterIndoor: "Indoor only",
   courtFilterOutdoor: "Outdoor only",
   courtFilterSurface: "Surface type",
+  courtFilterTimeFrom: "From",
+  courtFilterTimeTo: "To",
+  courtSortPrice: "Price",
+  courtSortTime: "Time",
+  courtSortDistance: "Distance",
   courtPreviousAlerts: "Previously found",
 
   // Admin dashboard (#159)
