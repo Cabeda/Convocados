@@ -17,7 +17,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, params.id);
+  const { isOwner, isAdmin, session } = await checkOwnership(request, event.ownerId, undefined, params.id);
   if (!isOwner && !isAdmin) {
     return Response.json({ error: "Only event owner or admins can switch courts." }, { status: 403 });
   }
@@ -56,7 +56,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     params: { title: event.title },
     url: `/events/${event.id}`,
     spotsLeft,
-  });
+  }, session?.user?.id);
 
   if (!process.env.VITEST) {
     await drainNotificationQueue().catch((err) => {
