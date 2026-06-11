@@ -1,57 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Convocados</string>
-    <string name="shortcut_my_games">Le Mie Partite</string>
-    <string name="shortcut_create_game">Crea Partita</string>
+    <string name="shortcut_my_games">Le mie partite</string>
+    <string name="shortcut_create_game">Crea partita</string>
 
-    <!-- Shared keys from web i18n -->
-    <string name="create_game">Crea una Partita</string>
-    <string name="my_games">Le Mie Partite</string>
+    <string name="create_game">Crea una partita</string>
+    <string name="my_games">Le mie partite</string>
     <string name="players">Giocatori</string>
     <string name="teams">Squadre</string>
-    <string name="randomize_teams">Sorteggia squadre</string>
+    <string name="randomize_teams">Sorteggia le squadre</string>
     <string name="cancel">Annulla</string>
-    <string name="score">Risultato</string>
-    <string name="ratings">Classifiche</string>
-    <string name="no_ratings">Ancora nessuna classifica</string>
-    <string name="rankings">Rankings</string>
+    <string name="score">Punteggio</string>
+    <string name="ratings">Valutazioni</string>
+    <string name="no_ratings">Ancora nessuna valutazione</string>
+    <string name="rankings">Classifica</string>
     <string name="loading">Caricamento…</string>
     <string name="save">Salva</string>
-    <string name="archived">Archiviato</string>
+    <string name="archived">Archiviata</string>
 
-    <!-- Event detail -->
     <string name="playing">In campo</string>
     <string name="playing_count">In campo (%1$d/%2$d)</string>
     <string name="bench">Panchina</string>
     <string name="bench_count">Panchina (%1$d)</string>
-    <string name="add_player_placeholder">Aggiungi giocatore</string>
+    <string name="add_player_placeholder">Aggiungi nome giocatore</string>
     <string name="add_button">Aggiungi</string>
-    <string name="see_all_games">Vedi tutte le %1$d partite →</string>
+    <plurals name="see_all_games">
+        <item quantity="one">Vedi %1$d partita →</item>
+        <item quantity="other">Vedi tutte le %1$d partite →</item>
+    </plurals>
     <string name="history">Cronologia</string>
     <string name="view_log">Vedi registro →</string>
     <string name="no_games_yet">Ancora nessuna partita</string>
-    <string name="no_games_desc">Crea una partita o unisciti a una per iniziare.</string>
-    <string name="create_a_game">+ Crea una Partita</string>
+    <string name="no_games_desc">Crea una partita o uniscitene a una per iniziare.</string>
+    <string name="create_a_game">+ Crea una partita</string>
     <string name="sign_in">Accedi</string>
-    <string name="manage_games">Gestisci le tue partite ovunque</string>
+    <string name="manage_games">Gestisci le tue partite ovunque tu sia</string>
     <string name="server_url">URL del server</string>
     <string name="language">Lingua</string>
     <string name="notifications_title">Notifiche</string>
-    <string name="notifications_subtitle">Gestisci preferenze push ed email</string>
+    <string name="notifications_subtitle">Gestisci le preferenze push ed e-mail</string>
     <string name="sign_out">Esci</string>
     <string name="edit_name">Modifica nome</string>
     <string name="configure_instance">Configura istanza</string>
-    <string name="game_details">Dettagli Partita</string>
-    <string name="game_history">Cronologia Partite</string>
-    <string name="event_log">Registro Attività</string>
-    <string name="no_log_entries">Nessuna voce nel registro</string>
+    <string name="game_details">Dettagli partita</string>
+    <string name="game_history">Cronologia partite</string>
+    <string name="event_log">Registro evento</string>
+    <string name="no_log_entries">Ancora nessuna voce</string>
     <string name="load_more">Carica altro</string>
     <string name="back">Indietro</string>
     <string name="remove">Rimuovi</string>
     <string name="linked_account">Account collegato</string>
     <string name="you_suffix"> (tu)</string>
-    <string name="games_played_suffix">%1$d partite</string>
-    <string name="public_games">Partite Pubbliche</string>
+    <plurals name="games_played_suffix">
+        <item quantity="one">%1$d partita</item>
+        <item quantity="other">%1$d partite</item>
+    </plurals>
+    <string name="public_games">Partite pubbliche</string>
     <string name="profile">Profilo</string>
     <string name="stats">Statistiche</string>
     <string name="games_tab">Partite</string>

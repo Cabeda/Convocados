@@ -1,61 +1,65 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Convocados</string>
-    <string name="shortcut_my_games">Mes Matchs</string>
-    <string name="shortcut_create_game">Créer un Match</string>
+    <string name="shortcut_my_games">Mes matchs</string>
+    <string name="shortcut_create_game">Créer un match</string>
 
-    <!-- Shared keys from web i18n -->
-    <string name="create_game">Créer un Match</string>
-    <string name="my_games">Mes Matchs</string>
+    <string name="create_game">Créer un match</string>
+    <string name="my_games">Mes matchs</string>
     <string name="players">Joueurs</string>
     <string name="teams">Équipes</string>
-    <string name="randomize_teams">Tirer les équipes</string>
+    <string name="randomize_teams">Tirer les équipes au sort</string>
     <string name="cancel">Annuler</string>
     <string name="score">Score</string>
     <string name="ratings">Classements</string>
-    <string name="no_ratings">Pas encore de classements</string>
-    <string name="rankings">Rankings</string>
+    <string name="no_ratings">Pas encore de classement</string>
+    <string name="rankings">Classement</string>
     <string name="loading">Chargement…</string>
     <string name="save">Enregistrer</string>
     <string name="archived">Archivé</string>
 
-    <!-- Event detail -->
-    <string name="playing">En jeu</string>
-    <string name="playing_count">En jeu (%1$d/%2$d)</string>
+    <string name="playing">Sur le terrain</string>
+    <string name="playing_count">Sur le terrain (%1$d/%2$d)</string>
     <string name="bench">Remplaçants</string>
     <string name="bench_count">Remplaçants (%1$d)</string>
-    <string name="add_player_placeholder">Ajouter un joueur</string>
+    <string name="add_player_placeholder">Ajouter le nom du joueur</string>
     <string name="add_button">Ajouter</string>
-    <string name="see_all_games">Voir les %1$d matchs →</string>
+    <plurals name="see_all_games">
+        <item quantity="one">Voir %1$d match →</item>
+        <item quantity="other">Voir les %1$d matchs →</item>
+    </plurals>
     <string name="history">Historique</string>
     <string name="view_log">Voir le journal →</string>
-    <string name="no_games_yet">Pas encore de matchs</string>
-    <string name="no_games_desc">Crée un match ou rejoins-en un pour commencer.</string>
-    <string name="create_a_game">+ Créer un Match</string>
+    <string name="no_games_yet">Aucun match pour l\'instant</string>
+    <string name="no_games_desc">Créez un match ou rejoignez-en un pour commencer.</string>
+    <string name="create_a_game">+ Créer un match</string>
     <string name="sign_in">Se connecter</string>
-    <string name="manage_games">Gère tes matchs en déplacement</string>
+    <string name="manage_games">Gérez vos matchs où que vous soyez</string>
     <string name="server_url">URL du serveur</string>
     <string name="language">Langue</string>
     <string name="notifications_title">Notifications</string>
-    <string name="notifications_subtitle">Gérer les préférences push et email</string>
+    <string name="notifications_subtitle">Gérer les préférences push et e-mail</string>
     <string name="sign_out">Se déconnecter</string>
     <string name="edit_name">Modifier le nom</string>
     <string name="configure_instance">Configurer l\'instance</string>
-    <string name="game_details">Détails du Match</string>
-    <string name="game_history">Historique des Matchs</string>
-    <string name="event_log">Journal d\'Activité</string>
-    <string name="no_log_entries">Aucune entrée dans le journal</string>
+    <string name="game_details">Détails du match</string>
+    <string name="game_history">Historique des matchs</string>
+    <string name="event_log">Journal de l\'événement</string>
+    <string name="no_log_entries">Aucune entrée pour l\'instant</string>
     <string name="load_more">Charger plus</string>
     <string name="back">Retour</string>
-    <string name="remove">Supprimer</string>
-    <string name="linked_account">Compte lié</string>
+    <string name="remove">Retirer</string>
+    <string name="linked_account">Compte associé</string>
     <string name="you_suffix"> (vous)</string>
-    <string name="games_played_suffix">%1$d matchs</string>
-    <string name="public_games">Matchs Publics</string>
+    <plurals name="games_played_suffix">
+        <item quantity="one">%1$d match</item>
+        <item quantity="other">%1$d matchs</item>
+    </plurals>
+    <string name="public_games">Matchs publics</string>
     <string name="profile">Profil</string>
     <string name="stats">Statistiques</string>
     <string name="games_tab">Matchs</string>
-    <string name="elo_changes">Changements ELO</string>
+    <string name="elo_changes">Variations d\'ELO</string>
     <string name="payments">Paiements</string>
     <string name="overview">APERÇU</string>
     <string name="per_event">PAR ÉVÉNEMENT</string>
