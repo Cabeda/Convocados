@@ -647,6 +647,15 @@ const es: TranslationKeys = {
   courtSortPrice: "Precio",
   courtSortTime: "Hora",
   courtSortDistance: "Distancia",
+  courtIncludeBooked: "Incluir pistas reservadas",
+  courtStatusBooked: "Reservada",
+  courtNotifyWhenFree: "Avisar cuando esté libre",
+  courtWatchCreated: "Vigilando",
+  courtWatchesTitle: "Alertas de pista",
+  courtWatchesDesc: "Recibe un aviso cuando una pista concreta queda libre en un día y hora recurrentes.",
+  courtWatchesEmpty: "Aún no tienes alertas de pista. Busca alternativas y pulsa \"Avisar cuando esté libre\" en una pista reservada.",
+  courtWatchDelete: "Eliminar alerta",
+  courtWatchEveryWeekday: "Cada {weekday}",
   courtPreviousAlerts: "Encontrados anteriormente",
 
   // Admin dashboard (#159)

@@ -647,6 +647,15 @@ const de: TranslationKeys = {
   courtSortPrice: "Preis",
   courtSortTime: "Uhrzeit",
   courtSortDistance: "Entfernung",
+  courtIncludeBooked: "Belegte Plätze einschließen",
+  courtStatusBooked: "Belegt",
+  courtNotifyWhenFree: "Benachrichtigen, wenn frei",
+  courtWatchCreated: "Wird beobachtet",
+  courtWatchesTitle: "Platz-Beobachtungen",
+  courtWatchesDesc: "Werde benachrichtigt, wenn ein bestimmter Platz an einem wiederkehrenden Tag und zur Uhrzeit frei wird.",
+  courtWatchesEmpty: "Du hast noch keine Platz-Beobachtungen. Suche Alternativen und tippe bei einem belegten Platz auf „Benachrichtigen, wenn frei“.",
+  courtWatchDelete: "Beobachtung entfernen",
+  courtWatchEveryWeekday: "Jeden {weekday}",
   courtPreviousAlerts: "Zuvor gefunden",
 
   // Admin dashboard (#159)

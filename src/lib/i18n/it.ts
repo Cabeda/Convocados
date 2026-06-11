@@ -647,6 +647,15 @@ const it: TranslationKeys = {
   courtSortPrice: "Prezzo",
   courtSortTime: "Orario",
   courtSortDistance: "Distanza",
+  courtIncludeBooked: "Includi campi prenotati",
+  courtStatusBooked: "Prenotato",
+  courtNotifyWhenFree: "Avvisa quando libero",
+  courtWatchCreated: "In monitoraggio",
+  courtWatchesTitle: "Monitoraggi campo",
+  courtWatchesDesc: "Ricevi un avviso quando un campo specifico si libera in un giorno e orario ricorrenti.",
+  courtWatchesEmpty: "Non hai ancora monitoraggi campo. Cerca alternative e tocca \"Avvisa quando libero\" su un campo prenotato.",
+  courtWatchDelete: "Rimuovi monitoraggio",
+  courtWatchEveryWeekday: "Ogni {weekday}",
   courtPreviousAlerts: "Trovati in precedenza",
 
   // Admin dashboard (#159)

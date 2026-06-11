@@ -12,6 +12,7 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import PlaceIcon from "@mui/icons-material/Place";
 import SortIcon from "@mui/icons-material/Sort";
+import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import { useT } from "~/lib/useT";
 
 interface CourtAlternative {
@@ -28,10 +29,12 @@ interface CourtAlternative {
   playtomicUrl: string;
   imageUrl: string | null;
   distanceKm: number | null;
+  status: "available" | "booked";
 }
 
 interface Props {
   eventId: string;
+  sport: string;
   hasCoordinates: boolean;
   courtWatchConfig: { radius: number; indoor: boolean | null; surface: string | null } | null;
   gameTime: string; // "HH:mm"
@@ -39,7 +42,7 @@ interface Props {
 
 type SortOption = "price" | "time" | "distance";
 
-export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchConfig, gameTime }: Props) {
+export default function CourtAlternatives({ eventId, sport, hasCoordinates, courtWatchConfig, gameTime }: Props) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -63,9 +66,14 @@ export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchC
     return `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
   });
   const [sortBy, setSortBy] = useState<SortOption>("price");
+  const [includeBooked, setIncludeBooked] = useState(false);
 
   // Watch config
   const [watchEnabled, setWatchEnabled] = useState(!!courtWatchConfig);
+
+  // Notify-when-free (standalone court watch) state
+  const [watchingResourceId, setWatchingResourceId] = useState<string | null>(null);
+  const [watchedResourceIds, setWatchedResourceIds] = useState<Set<string>>(new Set());
 
   // Switch dialog
   const [switchTarget, setSwitchTarget] = useState<CourtAlternative | null>(null);
@@ -79,6 +87,7 @@ export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchC
       const params = new URLSearchParams({ radius: String(radius), startTime, endTime });
       if (indoor === "indoor") params.set("indoor", "true");
       else if (indoor === "outdoor") params.set("indoor", "false");
+      if (includeBooked) params.set("includeBooked", "true");
 
       const res = await fetch(`/api/events/${eventId}/court-alternatives?${params}`);
       const data = await res.json();
@@ -89,7 +98,7 @@ export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchC
     } finally {
       setLoading(false);
     }
-  }, [eventId, radius, indoor, startTime, endTime, t]);
+  }, [eventId, radius, indoor, startTime, endTime, includeBooked, t]);
 
   const toggleWatch = useCallback(async (enabled: boolean) => {
     try {
@@ -129,6 +138,40 @@ export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchC
       setSwitching(false);
     }
   }, [eventId, switchTarget]);
+
+  const createWatch = useCallback(async (alt: CourtAlternative) => {
+    setWatchingResourceId(alt.resourceId);
+    try {
+      // dayOfWeek derived from the searched date (event's date)
+      const dayOfWeek = new Date(`${alt.slotDate}T00:00:00Z`).getUTCDay();
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const res = await fetch(`/api/court-watches`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sport,
+          tenantId: alt.tenantId,
+          tenantName: alt.tenantName,
+          resourceId: alt.resourceId,
+          resourceName: alt.resourceName,
+          dayOfWeek,
+          startTime,
+          endTime,
+          timezone,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? t("courtAlternativesError"));
+        return;
+      }
+      setWatchedResourceIds((prev) => new Set(prev).add(alt.resourceId));
+    } catch {
+      setError(t("courtAlternativesError"));
+    } finally {
+      setWatchingResourceId(null);
+    }
+  }, [sport, startTime, endTime, t]);
 
   const sortedAlternatives = [...alternatives].sort((a, b) => {
     if (sortBy === "price") return (a.price ?? Infinity) - (b.price ?? Infinity);
@@ -199,6 +242,11 @@ export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchC
               <ToggleButton value="indoor">{t("courtFilterIndoor")}</ToggleButton>
               <ToggleButton value="outdoor">{t("courtFilterOutdoor")}</ToggleButton>
             </ToggleButtonGroup>
+
+            <FormControlLabel
+              control={<Switch checked={includeBooked} onChange={(_, checked) => setIncludeBooked(checked)} size="small" />}
+              label={<Typography variant="body2">{t("courtIncludeBooked")}</Typography>}
+            />
           </Stack>
 
           {/* Actions */}
@@ -237,7 +285,7 @@ export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchC
 
               <Stack spacing={1} divider={<Divider />}>
                 {sortedAlternatives.map((alt) => (
-                  <Box key={`${alt.tenantId}-${alt.resourceId}-${alt.slotTime}`} sx={{ py: 1 }}>
+                  <Box key={`${alt.tenantId}-${alt.resourceId}-${alt.slotTime}`} sx={{ py: 1, opacity: alt.status === "booked" ? 0.7 : 1 }}>
                     <Stack direction="row" spacing={1.5} alignItems="flex-start">
                       {/* Court photo */}
                       {alt.imageUrl && (
@@ -259,8 +307,12 @@ export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchC
                             </Typography>
                           </Stack>
                         )}
-                        <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
-                          <Chip label={alt.slotTime} size="small" color="primary" variant="outlined" />
+                        <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
+                          {alt.status === "booked" ? (
+                            <Chip label={t("courtStatusBooked")} size="small" color="default" variant="filled" />
+                          ) : (
+                            <Chip label={alt.slotTime} size="small" color="primary" variant="outlined" />
+                          )}
                           <Chip label={`${alt.duration}min`} size="small" variant="outlined" />
                           {formatPrice(alt.price, alt.currency) && (
                             <Chip label={formatPrice(alt.price, alt.currency)} size="small" color="success" variant="outlined" />
@@ -271,9 +323,25 @@ export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchC
                         <IconButton size="small" href={alt.playtomicUrl} target="_blank" rel="noopener noreferrer" title={t("playtomicBookOnPlaytomic")}>
                           <OpenInNewIcon fontSize="small" />
                         </IconButton>
-                        <Button size="small" variant="outlined" startIcon={<SwapHorizIcon />} onClick={() => setSwitchTarget(alt)}>
-                          {t("courtSwitchButton")}
-                        </Button>
+                        {alt.status === "booked" ? (
+                          watchedResourceIds.has(alt.resourceId) ? (
+                            <Chip label={t("courtWatchCreated")} size="small" color="success" icon={<NotificationsActiveIcon />} />
+                          ) : (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={watchingResourceId === alt.resourceId ? <CircularProgress size={14} /> : <NotificationsActiveIcon />}
+                              onClick={() => createWatch(alt)}
+                              disabled={watchingResourceId === alt.resourceId}
+                            >
+                              {t("courtNotifyWhenFree")}
+                            </Button>
+                          )
+                        ) : (
+                          <Button size="small" variant="outlined" startIcon={<SwapHorizIcon />} onClick={() => setSwitchTarget(alt)}>
+                            {t("courtSwitchButton")}
+                          </Button>
+                        )}
                       </Stack>
                     </Stack>
                   </Box>
