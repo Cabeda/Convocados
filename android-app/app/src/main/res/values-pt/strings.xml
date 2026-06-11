@@ -244,4 +244,5 @@
     <string name="create_teams_desc">Divide os jogadores em duas equipas.</string>
     <string name="teams_balanced">Equilibradas</string>
     <string name="teams_random">Aleatórias</string>
+    <string name="add_from_contacts">Adicionar dos contactos</string>
 </resources>

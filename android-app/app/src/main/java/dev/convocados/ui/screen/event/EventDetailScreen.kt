@@ -1,6 +1,8 @@
 package dev.convocados.ui.screen.event
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -779,11 +781,29 @@ fun EventDetailScreen(
                             }
 
                             Column {
+                                val contactPicker = rememberLauncherForActivityResult(
+                                    androidx.activity.result.contract.ActivityResultContracts.PickContact()
+                                ) { uri ->
+                                    uri?.let {
+                                        runCatching {
+                                            context.contentResolver.query(
+                                                it,
+                                                arrayOf(android.provider.ContactsContract.Contacts.DISPLAY_NAME),
+                                                null, null, null,
+                                            )?.use { c -> if (c.moveToFirst()) c.getString(0)?.let { name -> newPlayer = name } }
+                                        }
+                                    }
+                                }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     OutlinedTextField(
                                         value = newPlayer, onValueChange = { newPlayer = it },
                                         placeholder = { Text(stringResource(R.string.add_player_placeholder)) }, singleLine = true,
                                         modifier = Modifier.weight(1f),
+                                        trailingIcon = {
+                                            IconButton(onClick = { contactPicker.launch(null) }) {
+                                                Icon(Icons.Default.Contacts, contentDescription = stringResource(R.string.add_from_contacts), tint = MaterialTheme.colorScheme.primary)
+                                            }
+                                        },
                                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline, cursorColor = MaterialTheme.colorScheme.primary, focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant),
                                     )
                                     Button(
