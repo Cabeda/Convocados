@@ -1,8 +1,38 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { searchClubs, getAvailability } from "~/lib/playtomic.server";
+import { searchClubs, getAvailability, parsePlaytomicPrice } from "~/lib/playtomic.server";
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("parsePlaytomicPrice", () => {
+  it("parses the live combined string format '72 GBP'", () => {
+    expect(parsePlaytomicPrice("72 GBP")).toEqual({ price: 72, currency: "GBP" });
+  });
+
+  it("parses decimals and EUR", () => {
+    expect(parsePlaytomicPrice("24.5 EUR")).toEqual({ price: 24.5, currency: "EUR" });
+  });
+
+  it("parses comma decimals", () => {
+    expect(parsePlaytomicPrice("16,50 EUR")).toEqual({ price: 16.5, currency: "EUR" });
+  });
+
+  it("keeps numeric price with separate currency (legacy format)", () => {
+    expect(parsePlaytomicPrice(20, "EUR")).toEqual({ price: 20, currency: "EUR" });
+  });
+
+  it("defaults currency to EUR when only an amount string is present", () => {
+    expect(parsePlaytomicPrice("30")).toEqual({ price: 30, currency: "EUR" });
+  });
+
+  it("returns null for undefined/null/empty/invalid", () => {
+    expect(parsePlaytomicPrice(undefined)).toEqual({ price: null, currency: null });
+    expect(parsePlaytomicPrice(null)).toEqual({ price: null, currency: null });
+    expect(parsePlaytomicPrice("")).toEqual({ price: null, currency: null });
+    expect(parsePlaytomicPrice("free")).toEqual({ price: null, currency: null });
+    expect(parsePlaytomicPrice(NaN)).toEqual({ price: null, currency: null });
+  });
 });
 
 describe("searchClubs", () => {

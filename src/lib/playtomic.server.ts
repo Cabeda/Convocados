@@ -33,9 +33,36 @@ interface PlaytomicRawCourt {
   slots?: Array<{
     start_time?: string;
     duration?: number;
-    price?: number;
+    price?: number | string; // Real API returns combined string e.g. "72 GBP"; some responses use a number + separate currency
     currency?: string;
   }>;
+}
+
+/**
+ * Parse a Playtomic slot price into a numeric amount + ISO currency code.
+ * The live API returns price as a combined string like "72 GBP" or "24.5 EUR"
+ * (no separate currency field). Older/mocked responses may provide a numeric
+ * price with a separate currency field. Handles both.
+ * Returns { price: null, currency: null } when no valid price is present.
+ */
+export function parsePlaytomicPrice(
+  rawPrice: number | string | undefined | null,
+  rawCurrency?: string,
+): { price: number | null; currency: string | null } {
+  if (typeof rawPrice === "number" && !isNaN(rawPrice)) {
+    return { price: rawPrice, currency: rawCurrency ?? "EUR" };
+  }
+  if (typeof rawPrice === "string") {
+    // Match "<amount> <CURRENCY>" e.g. "72 GBP", "24.5 EUR"
+    const match = rawPrice.trim().match(/^(-?\d+(?:[.,]\d+)?)\s*([A-Za-z]{3})?$/);
+    if (match) {
+      const amount = parseFloat(match[1].replace(",", "."));
+      if (!isNaN(amount)) {
+        return { price: amount, currency: match[2]?.toUpperCase() ?? rawCurrency ?? "EUR" };
+      }
+    }
+  }
+  return { price: null, currency: null };
 }
 
 export interface PlaytomicClub {
@@ -54,8 +81,8 @@ export interface PlaytomicClub {
 export interface PlaytomicSlot {
   start_time: string; // "HH:mm:ss"
   duration: number;   // minutes
-  price: number;
-  currency: string;
+  price: number | null;   // null when Playtomic doesn't expose a price
+  currency: string | null;
 }
 
 export interface PlaytomicCourtAvailability {
@@ -172,13 +199,16 @@ export async function getAvailability(params: GetAvailabilityParams): Promise<Ge
       resource_name: court.resource_name ?? court.name ?? "",
       slots: Array.isArray(court.slots)
         ? court.slots
-            .filter((s: { start_time?: string; duration?: number; price?: number; currency?: string }) => !duration || s.duration === duration)
-            .map((s: { start_time?: string; duration?: number; price?: number; currency?: string }) => ({
-              start_time: s.start_time ?? "",
-              duration: s.duration ?? 0,
-              price: s.price ?? 0,
-              currency: s.currency ?? "EUR",
-            }))
+            .filter((s: { start_time?: string; duration?: number; price?: number | string; currency?: string }) => !duration || s.duration === duration)
+            .map((s: { start_time?: string; duration?: number; price?: number | string; currency?: string }) => {
+              const { price, currency } = parsePlaytomicPrice(s.price, s.currency);
+              return {
+                start_time: s.start_time ?? "",
+                duration: s.duration ?? 0,
+                price,
+                currency,
+              };
+            })
         : [],
     }));
 
