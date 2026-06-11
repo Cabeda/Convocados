@@ -464,10 +464,7 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
             <Button
               variant="contained"
               startIcon={<OpenInNewIcon />}
-              href={switchTarget?.playtomicUrl ?? "#"}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setSwitchTarget(null)}
+              onClick={() => { window.open(switchTarget?.playtomicUrl, "_blank", "noopener,noreferrer"); setSwitchTarget(null); }}
               fullWidth
             >
               {t("playtomicBookOnPlaytomic")}
