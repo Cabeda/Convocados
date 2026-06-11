@@ -126,7 +126,7 @@ fun NotificationPrefsScreen(onBack: () -> Unit, viewModel: NotificationPrefsView
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("\uD83D\uDD14 Notifications") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        topBar = { TopAppBar(title = { Text("Notifications") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }

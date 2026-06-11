@@ -6,6 +6,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -136,7 +140,7 @@ fun EventSettingsScreen(
             // Password
             SectionTitle("Access")
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = { showPassword = !showPassword }) {
-                Text(if (ev.hasPassword) "\uD83D\uDD12 Password set — tap to change/remove" else "\uD83D\uDD13 Set password", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(14.dp))
+                Text(if (ev.hasPassword) "Password set — tap to change/remove" else "Set password", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(14.dp))
             }
             if (showPassword) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -191,10 +195,10 @@ fun EventSettingsScreen(
 
             // Navigation
             Spacer(Modifier.height(16.dp))
-            NavButton("\uD83C\uDFC6 Rankings / ELO", onRankings)
-            NavButton("\uD83D\uDCB0 Payments", onPayments)
-            NavButton("\uD83D\uDCCB Event log", onLog)
-            NavButton("\uD83D\uDCC5 Attendance stats", onAttendance)
+            NavButton("Rankings / ELO", Icons.Default.EmojiEvents, onRankings)
+            NavButton("Payments", Icons.Default.Payments, onPayments)
+            NavButton("Event log", Icons.AutoMirrored.Filled.List, onLog)
+            NavButton("Attendance stats", Icons.Default.CalendarMonth, onAttendance)
             Spacer(Modifier.height(40.dp))
         }
     }
@@ -202,7 +206,7 @@ fun EventSettingsScreen(
 
 @Composable private fun SettingsLabel(text: String) = Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
 @Composable private fun SaveButton(onClick: () -> Unit) = Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) { Text("Save", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium) }
-@Composable private fun NavButton(text: String, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = onClick) { Text(text, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(14.dp)) }
+@Composable private fun NavButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = onClick) { Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) { Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)); Text(text, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge) } }
 
 @Composable
 private fun ToggleRow(label: String, checked: Boolean, enabled: Boolean = true, onCheckedChange: (Boolean) -> Unit) {

@@ -170,7 +170,7 @@ fun CourtAlternativesScreen(
                         )
                         if (slots.firstOrNull()?.distanceKm?.let { it > 0 } == true) {
                             Text(
-                                "📍 ${String.format("%.1f", slots.first().distanceKm)} km",
+                                "${String.format("%.1f", slots.first().distanceKm)} km",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.outline,
                             )

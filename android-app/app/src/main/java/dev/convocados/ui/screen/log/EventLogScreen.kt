@@ -65,7 +65,7 @@ fun EventLogScreen(eventId: String, onBack: () -> Unit, viewModel: EventLogViewM
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("\uD83D\uDCCB ${stringResource(R.string.event_log)}") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.event_log)) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }

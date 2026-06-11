@@ -145,7 +145,7 @@ fun CreateEventScreen(
                 modifier = Modifier.fillMaxWidth(), singleLine = true,
                 colors = textFieldColors(),
             )
-            TextButton(onClick = onPickMap) { Text("\uD83D\uDDFA\uFE0F Pick on map", color = MaterialTheme.colorScheme.primary) }
+            TextButton(onClick = onPickMap) { Text("Pick on map", color = MaterialTheme.colorScheme.primary) }
 
             Label("Date & time")
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {

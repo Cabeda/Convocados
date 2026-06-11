@@ -38,6 +38,19 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import javax.inject.Inject
+import androidx.compose.material.icons.filled.SportsSoccer
+import androidx.compose.material.icons.filled.SportsBasketball
+import androidx.compose.material.icons.filled.SportsVolleyball
+import androidx.compose.material.icons.filled.SportsTennis
+import androidx.compose.material.icons.filled.SportsRugby
+import androidx.compose.material.icons.filled.SportsHandball
+import androidx.compose.material.icons.filled.SportsHockey
+import androidx.compose.material.icons.filled.SportsBaseball
+import androidx.compose.material.icons.filled.SportsCricket
+import androidx.compose.material.icons.filled.SportsMartialArts
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Stadium
+import androidx.compose.material3.Icon
 
 @HiltViewModel
 class GamesViewModel @Inject constructor(
@@ -134,7 +147,7 @@ fun GamesScreen(
                         FilterChip(
                             selected = false,
                             onClick = onPublicClick,
-                            label = { Text("\uD83C\uDF0D") },
+                            label = { Text("Public") }, leadingIcon = { Icon(Icons.Default.Public, "Public", modifier = Modifier.size(18.dp)) },
                         )
                     }
                 }
@@ -145,7 +158,7 @@ fun GamesScreen(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text("🏟️", style = MaterialTheme.typography.displaySmall)
+                            Icon(Icons.Default.Stadium, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(12.dp))
                             Text(stringResource(R.string.no_games_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
                             Spacer(Modifier.height(8.dp))
@@ -199,29 +212,47 @@ fun GameCard(
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(sportEmoji(game.sport), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(end = 10.dp))
+                SportIcon(game.sport, modifier = Modifier.size(24.dp).padding(end = 2.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(game.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "${formatRelativeDate(game.dateTime)} · ${game.playerCount}/${game.maxPlayers} players${if (game.isRecurring) " · \uD83D\uDD01" else ""}",
+                "${formatRelativeDate(game.dateTime)} · ${game.playerCount}/${game.maxPlayers} players${if (game.isRecurring) " · Recurring" else ""}",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (game.lastScoreOne != null && game.lastScoreTwo != null) {
                 Text(
-                    "${sportEmoji(game.sport)} ${game.lastScoreOne}:${game.lastScoreTwo}",
+                    "Last: ${game.lastScoreOne}:${game.lastScoreTwo}",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
             if (game.location.isNotBlank()) {
-                Text("\uD83D\uDCCD ${game.location}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
+                Text(game.location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
             }
             if (game.archivedAt != null) {
                 Text("ARCHIVED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
+}
+
+@Composable
+fun SportIcon(sport: String, modifier: Modifier = Modifier, tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary) {
+    val icon = when {
+        sport.contains("football") || sport.contains("soccer") || sport.contains("futsal") -> Icons.Default.SportsSoccer
+        sport.contains("basketball") -> Icons.Default.SportsBasketball
+        sport.contains("volleyball") -> Icons.Default.SportsVolleyball
+        sport.contains("tennis") || sport.contains("padel") -> Icons.Default.SportsTennis
+        sport.contains("rugby") -> Icons.Default.SportsRugby
+        sport.contains("handball") -> Icons.Default.SportsHandball
+        sport.contains("hockey") -> Icons.Default.SportsHockey
+        sport.contains("baseball") -> Icons.Default.SportsBaseball
+        sport.contains("cricket") -> Icons.Default.SportsCricket
+        else -> Icons.Default.SportsMartialArts
+    }
+    Icon(icon, contentDescription = sport, modifier = modifier, tint = tint)
 }
 
 fun sportEmoji(sport: String): String = when {

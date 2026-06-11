@@ -32,7 +32,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.PublicEvent
 import dev.convocados.ui.screen.games.formatRelativeDate
-import dev.convocados.ui.screen.games.sportEmoji
+import dev.convocados.ui.screen.games.SportIcon
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -42,6 +42,7 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import javax.inject.Inject
+import androidx.compose.material.icons.filled.Public
 
 val SPORT_FILTERS = listOf("all", "football", "futsal", "basketball", "volleyball", "tennis", "padel")
 
@@ -110,7 +111,7 @@ fun PublicGamesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("\uD83C\uDF0D ${stringResource(R.string.public_games)}") },
+                title = { Text(stringResource(R.string.public_games)) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
                     IconButton(onClick = { showMap = !showMap }) {
@@ -150,7 +151,7 @@ fun PublicGamesScreen(
                     if (events.isEmpty()) {
                         item {
                             Column(Modifier.fillMaxWidth().padding(48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("🌍", style = MaterialTheme.typography.displaySmall)
+                                Icon(Icons.Default.Public, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(Modifier.height(8.dp))
                                 Text("No public games right now", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                                 Text("Create a game and make it public so others can find it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
@@ -175,7 +176,7 @@ fun PublicGamesScreen(
                             Column(Modifier.padding(16.dp)) {
                                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(sportEmoji(event.sport), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(end = 8.dp))
+                                        SportIcon(event.sport, modifier = Modifier.size(20.dp).padding(end = 4.dp))
                                         Text(event.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
                                     }
                                     Card(colors = CardDefaults.cardColors(containerColor = if (event.spotsLeft == 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer)) {
@@ -183,7 +184,7 @@ fun PublicGamesScreen(
                                     }
                                 }
                                 Text("${formatRelativeDate(event.dateTime)} · ${event.playerCount}/${event.maxPlayers} players", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                                if (event.location.isNotBlank()) Text("\uD83D\uDCCD ${event.location}", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+                                if (event.location.isNotBlank()) Text(event.location, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
                             }
                         }
                     }

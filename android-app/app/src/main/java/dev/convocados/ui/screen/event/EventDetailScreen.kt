@@ -51,6 +51,12 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Place
 
 data class EventScreenState(
     val loading: Boolean = true,
@@ -495,7 +501,7 @@ fun EventDetailScreen(
             }
             state.locked -> {
                 Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text("\uD83D\uDD12 This game is password-protected", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                    Text("This game is password-protected", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     OutlinedTextField(value = password, onValueChange = { password = it }, placeholder = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
@@ -540,12 +546,12 @@ fun EventDetailScreen(
                                     (if (event.location.isNotBlank()) "\n\uD83D\uDCCD ${event.location}" else "") +
                                     "\n\uD83D\uDC65 ${if (spotsLeft > 0) "$spotsLeft spot(s) left" else "Full"}\n\n$url"
                                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, "Share"))
-                            }, label = { Text("\uD83D\uDCE4 Share") })
-                            if (activePlayers.size >= 2) AssistChip(onClick = { viewModel.randomize(eventId, event.balanced) }, label = { Text("\uD83C\uDFB2 Randomize") })
-                            if (isOwner || event.isAdmin) AssistChip(onClick = onSettings, label = { Text("\u2699\uFE0F") })
-                            AssistChip(onClick = onRankings, label = { Text("\uD83C\uDFC6 Rankings") })
-                            if (event.sport in PLAYTOMIC_SPORTS) AssistChip(onClick = onCourtAlternatives, label = { Text("\uD83C\uDFDF\uFE0F Courts") })
-                            AssistChip(onClick = onNotificationPrefs, label = { Text("\uD83D\uDD14") })
+                            }, label = { Text("Share") }, leadingIcon = { Icon(Icons.Default.Share, null, modifier = Modifier.size(18.dp)) })
+                            if (activePlayers.size >= 2) AssistChip(onClick = { viewModel.randomize(eventId, event.balanced) }, label = { Text("Randomize") }, leadingIcon = { Icon(Icons.Default.Shuffle, null, modifier = Modifier.size(18.dp)) })
+                            if (isOwner || event.isAdmin) AssistChip(onClick = onSettings, label = { Text("Settings") }, leadingIcon = { Icon(Icons.Default.Settings, null, modifier = Modifier.size(18.dp)) })
+                            AssistChip(onClick = onRankings, label = { Text("Rankings") }, leadingIcon = { Icon(Icons.Default.EmojiEvents, null, modifier = Modifier.size(18.dp)) })
+                            if (event.sport in PLAYTOMIC_SPORTS) AssistChip(onClick = onCourtAlternatives, label = { Text("Courts") }, leadingIcon = { Icon(Icons.Default.Place, null, modifier = Modifier.size(18.dp)) })
+                            AssistChip(onClick = onNotificationPrefs, label = { Text("Alerts") }, leadingIcon = { Icon(Icons.Default.Notifications, null, modifier = Modifier.size(18.dp)) })
                         }
 
                         // Post-game banner — prominent, right after action bar
@@ -556,7 +562,7 @@ fun EventDetailScreen(
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                                 ) {
                                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        Text("\uD83C\uDFC1 Game ended", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+                                        Text("Game ended", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
 
                                         if (!pg.hasScore && pg.latestHistoryId != null) {
                                             if (editingScoreId == pg.latestHistoryId) {
@@ -589,7 +595,7 @@ fun EventDetailScreen(
                                                     onClick = { editingScoreId = pg.latestHistoryId; scoreOne = ""; scoreTwo = "" },
                                                     modifier = Modifier.fillMaxWidth(),
                                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                                ) { Text("\u270F\uFE0F  Record score", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleSmall) }
+                                                ) { Text("Record score", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleSmall) }
                                             }
                                         }
 
@@ -598,7 +604,7 @@ fun EventDetailScreen(
                                                 onClick = onPayments,
                                                 modifier = Modifier.fillMaxWidth(),
                                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                                            ) { Text("\uD83D\uDCB0  Mark payments", color = MaterialTheme.colorScheme.background, style = MaterialTheme.typography.titleSmall) }
+                                            ) { Text("Mark payments", color = MaterialTheme.colorScheme.background, style = MaterialTheme.typography.titleSmall) }
                                         }
                                     }
                                 }
@@ -627,7 +633,7 @@ fun EventDetailScreen(
                                     // Streak
                                     if (callerBalance != null && callerBalance.streak > 1) {
                                         Text(
-                                            "\uD83D\uDD25 ${callerBalance.streak} game paid streak",
+                                            "${callerBalance.streak} game paid streak",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.padding(bottom = 8.dp),

@@ -165,7 +165,7 @@ fun RankingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("\uD83C\uDFC6 ${stringResource(R.string.rankings)}") },
+                title = { Text(stringResource(R.string.rankings)) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
                     if (isOwner) {
