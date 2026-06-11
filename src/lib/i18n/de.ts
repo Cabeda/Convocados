@@ -64,6 +64,7 @@ const de: TranslationKeys = {
   copyLink: "Link kopieren",
   players: "Spieler",
   addPlayerPlaceholder: "Spieler hinzufügen",
+  addPlayerPlaceholderOptional: "Leer lassen, um den Convocados-Namen zu verwenden",
   inviteByEmailPlaceholder: "Per E-Mail einladen (optional)",
   inviteByEmailHelper: "Benachrichtigt sie, wenn sie bei Convocados sind, sonst per E-Mail-Einladung",
   addPlayerHelper: "Enter drücken zum Hinzufügen, oder eine zeilengetrennte Liste einfügen",

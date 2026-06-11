@@ -93,7 +93,7 @@ class EventDetailViewModelTest {
         coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
         coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
-        coEvery { repository.addPlayer(eventId, "New Player", true) } coAnswers { Result.success(Unit) }
+        coEvery { repository.addPlayer(eventId, "New Player", true) } coAnswers { Result.success(null as String?) }
 
         val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
         viewModel.addPlayer(eventId, "New Player")

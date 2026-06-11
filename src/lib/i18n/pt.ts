@@ -73,6 +73,7 @@ const pt: TranslationKeys = {
   copyLink: "Copiar link",
   players: "Jogadores",
   addPlayerPlaceholder: "Adicionar jogador",
+  addPlayerPlaceholderOptional: "Deixa em branco para usar o nome Convocados",
   inviteByEmailPlaceholder: "Convidar por email (opcional)",
   inviteByEmailHelper: "Notifica-os se estiverem no Convocados, senão envia um convite por email",
   addPlayerHelper: "Prima Enter para adicionar, ou cola uma lista separada por linhas",
