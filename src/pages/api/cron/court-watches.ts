@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { watchQueries, matchWatchInCourts, type CourtWatchMatch } from "~/lib/standaloneCourtWatch.server";
-import { fetchAvailabilityGrouped, availabilityKeyStr } from "~/lib/availabilityCache.server";
+import { fetchAvailabilityGrouped, availabilityKeyStr, purgeStaleAvailabilityCache } from "~/lib/availabilityCache.server";
 import { sendPushToUser } from "~/lib/push.server";
 import { createLogger } from "~/lib/logger.server";
 
@@ -27,6 +27,9 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  // Housekeeping: drop stale availability cache rows so the table stays small.
+  const purged = await purgeStaleAvailabilityCache();
+
   // 1. Bounded batch, oldest first (nulls — never checked — first)
   const watches = await prisma.courtWatch.findMany({
     where: { active: true },
@@ -34,7 +37,7 @@ export const POST: APIRoute = async ({ request }) => {
     take: BATCH_SIZE,
   });
 
-  if (watches.length === 0) return Response.json({ ok: true, processed: 0, results: [] });
+  if (watches.length === 0) return Response.json({ ok: true, processed: 0, purged, results: [] });
 
   // 2. Unique availability queries across all watches
   const allKeys = watches.flatMap((w) => watchQueries(w, LOOKAHEAD_DAYS));
@@ -104,5 +107,5 @@ export const POST: APIRoute = async ({ request }) => {
     data: { lastCheckedAt: new Date() },
   });
 
-  return Response.json({ ok: true, processed: watches.length, found: newHits.length, results });
+  return Response.json({ ok: true, processed: watches.length, found: newHits.length, purged, results });
 };

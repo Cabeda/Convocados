@@ -17,6 +17,11 @@ vi.mock("~/lib/playtomic.server", () => ({
   isPlaytomicSport: (s: string) => ["padel", "football-5v5", "tennis-singles", "football-7v7", "tennis-doubles", "futsal"].includes(s),
 }));
 
+// searchCourtAlternatives reads availability through the cache layer
+vi.mock("~/lib/availabilityCache.server", () => ({
+  getCachedAvailability: (...args: unknown[]) => mockGetAvailability(...args),
+}));
+
 vi.mock("~/lib/playtomic", () => ({
   isPlaytomicSport: (s: string) => ["padel", "football-5v5", "tennis-singles", "football-7v7", "tennis-doubles", "futsal"].includes(s),
   mapSportToPlaytomic: (s: string) => {
