@@ -238,4 +238,6 @@
     <string name="attendance_streak">Présence : %1$d%% · Série : %2$d</string>
 
     <string name="user_not_found">Utilisateur introuvable</string>
+    <string name="quick_actions">Actions rapides</string>
+    <string name="open_settings">Ouvrir les paramètres</string>
 </resources>

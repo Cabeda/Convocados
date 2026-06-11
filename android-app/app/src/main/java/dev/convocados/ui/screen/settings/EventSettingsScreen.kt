@@ -34,7 +34,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class EventSettingsViewModel @Inject constructor(private val api: ConvocadosApi) : ViewModel() {
+class EventSettingsViewModel @Inject constructor(
+    private val api: ConvocadosApi,
+    private val repository: dev.convocados.data.repository.EventRepository,
+) : ViewModel() {
     private val _event = MutableStateFlow<EventDetail?>(null)
     val event: StateFlow<EventDetail?> = _event
     private val _loading = MutableStateFlow(true)
@@ -57,8 +60,8 @@ class EventSettingsViewModel @Inject constructor(private val api: ConvocadosApi)
     fun toggleHideEloInTeams(id: String, v: Boolean) = exec { api.updateHideEloInTeams(id, v); load(id) }
     fun toggleSplitCosts(id: String, v: Boolean) = exec { api.updateSplitCosts(id, v); load(id) }
     fun savePassword(id: String, pw: String?) = exec { api.updatePassword(id, pw); load(id) }
-    fun archive(id: String) = exec { api.archiveEvent(id) }
-    fun unarchive(id: String) = exec { api.unarchiveEvent(id); load(id) }
+    fun archive(id: String) = exec { repository.archiveEvent(id); _event.value = _event.value?.copy(archivedAt = "archived") }
+    fun unarchive(id: String) = exec { repository.unarchiveEvent(id); load(id) }
     fun transferOwnership(id: String, targetUserId: String) = exec { api.transferOwnership(id, targetUserId); load(id) }
 
     private fun exec(block: suspend () -> Unit) { viewModelScope.launch { runCatching { block() } } }

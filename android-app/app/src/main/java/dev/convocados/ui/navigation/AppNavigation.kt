@@ -121,6 +121,7 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
                         onEventClick = { navController.navigate(Route.EventDetail.create(it)) },
                         onCreateClick = { navController.navigate(Route.CreateEvent.route) },
                         onPublicClick = { navController.navigate(Route.PublicGames.route) },
+                        onOpenSettings = { navController.navigate(Route.EventSettings.create(it)) },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this@composable,
                     )

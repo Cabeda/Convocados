@@ -362,6 +362,9 @@ data class PublicStats(
 @Serializable
 data class OkResponse(val ok: Boolean = true)
 
+@Serializable
+data class ArchiveRequest(val archive: Boolean)
+
 // ── MVP Voting ──────────────────────────────────────────────────────────────
 
 @Serializable

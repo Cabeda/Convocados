@@ -256,4 +256,6 @@
 
     <!-- User profile -->
     <string name="user_not_found">User not found</string>
+    <string name="quick_actions">Quick actions</string>
+    <string name="open_settings">Open settings</string>
 </resources>

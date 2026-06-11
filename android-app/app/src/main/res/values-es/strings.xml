@@ -238,4 +238,6 @@
     <string name="attendance_streak">Asistencia: %1$d%% · Racha: %2$d</string>
 
     <string name="user_not_found">Usuario no encontrado</string>
+    <string name="quick_actions">Acciones rápidas</string>
+    <string name="open_settings">Abrir ajustes</string>
 </resources>

@@ -51,12 +51,21 @@ import androidx.compose.material.icons.filled.SportsCricket
 import androidx.compose.material.icons.filled.SportsMartialArts
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Stadium
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 
 @HiltViewModel
 class GamesViewModel @Inject constructor(
     private val repository: EventRepository,
-    private val api: ConvocadosApi
+    private val api: ConvocadosApi,
+    private val tokenStore: dev.convocados.data.auth.TokenStore,
 ) : ViewModel() {
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing
@@ -82,6 +91,16 @@ class GamesViewModel @Inject constructor(
             _refreshing.value = false
         }
     }
+
+    fun archive(eventId: String) {
+        viewModelScope.launch { repository.archiveEvent(eventId) }
+    }
+
+    fun unarchive(eventId: String) {
+        viewModelScope.launch { repository.unarchiveEvent(eventId) }
+    }
+
+    fun shareUrl(eventId: String): String = "${tokenStore.getServerUrl()}/events/$eventId"
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
@@ -90,6 +109,7 @@ fun GamesScreen(
     onEventClick: (String) -> Unit,
     onCreateClick: () -> Unit,
     onPublicClick: () -> Unit,
+    onOpenSettings: (String) -> Unit = {},
     viewModel: GamesViewModel = hiltViewModel(),
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -176,9 +196,27 @@ fun GamesScreen(
                 }
 
                 items(games, key = { it.id }) { game ->
+                    val ctx = LocalContext.current
                     GameCard(
                         game = game,
                         onClick = { onEventClick(game.id) },
+                        onOpenSettings = { onOpenSettings(game.id) },
+                        onArchiveToggle = {
+                            if (game.archivedAt != null) viewModel.unarchive(game.id) else viewModel.archive(game.id)
+                        },
+                        onShare = {
+                            val text = "${game.title}\n${formatRelativeDate(game.dateTime)}" +
+                                (if (game.location.isNotBlank()) "\n${game.location}" else "") +
+                                "\n\n${viewModel.shareUrl(game.id)}"
+                            ctx.startActivity(
+                                android.content.Intent.createChooser(
+                                    android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, text)
+                                    },
+                                    null,
+                                )
+                            )
+                        },
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
                     )
@@ -188,19 +226,27 @@ fun GamesScreen(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun GameCard(
     game: EventSummary,
     onClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
+    onOpenSettings: () -> Unit = {},
+    onArchiveToggle: () -> Unit = {},
+    onShare: () -> Unit = {},
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("game_card_${game.id}")
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { menuOpen = true },
+                onLongClickLabel = stringResource(R.string.quick_actions),
+            )
             .then(
                 with(sharedTransitionScope) {
                     Modifier.sharedElement(
@@ -216,7 +262,7 @@ fun GameCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SportIcon(game.sport, modifier = Modifier.size(24.dp).padding(end = 2.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(game.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text(game.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(6.dp))
             Text(
@@ -236,6 +282,25 @@ fun GameCard(
             if (game.archivedAt != null) {
                 Text(stringResource(R.string.archived_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
             }
+        }
+
+        // Long-press quick actions
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.open_settings)) },
+                leadingIcon = { Icon(Icons.Default.Settings, null) },
+                onClick = { menuOpen = false; onOpenSettings() },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.share)) },
+                leadingIcon = { Icon(Icons.Default.Share, null) },
+                onClick = { menuOpen = false; onShare() },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(if (game.archivedAt != null) R.string.unarchive_game else R.string.archive_game)) },
+                leadingIcon = { Icon(if (game.archivedAt != null) Icons.Default.Unarchive else Icons.Default.Archive, null) },
+                onClick = { menuOpen = false; onArchiveToggle() },
+            )
         }
     }
 }
