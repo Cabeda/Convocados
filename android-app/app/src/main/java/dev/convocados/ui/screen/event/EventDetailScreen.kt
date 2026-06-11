@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -496,7 +497,7 @@ fun EventDetailScreen(
                 Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Text("\uD83D\uDD12 This game is password-protected", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
-                    state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
+                    state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     OutlinedTextField(value = password, onValueChange = { password = it }, placeholder = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
                     Button(onClick = { viewModel.verifyPassword(eventId, password.trim()) }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
                         Text("Unlock", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
@@ -526,9 +527,9 @@ fun EventDetailScreen(
                 ) {
                     Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
                         // Header
-                        Text(event.title, color = MaterialTheme.colorScheme.onSurface, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                        Text(formatRelativeDate(event.dateTime), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
-                        if (event.location.isNotBlank()) Text(event.location, color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+                        Text(event.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge)
+                        Text(formatRelativeDate(event.dateTime), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        if (event.location.isNotBlank()) Text(event.location, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
 
                         // Action bar
                         Row(modifier = Modifier.padding(vertical = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -555,19 +556,19 @@ fun EventDetailScreen(
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                                 ) {
                                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        Text("\uD83C\uDFC1 Game ended", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                                        Text("\uD83C\uDFC1 Game ended", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
 
                                         if (!pg.hasScore && pg.latestHistoryId != null) {
                                             if (editingScoreId == pg.latestHistoryId) {
                                                 // Inline score entry
-                                                Text("Record the final score", color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 13.sp)
+                                                Text("Record the final score", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     OutlinedTextField(
                                                         value = scoreOne, onValueChange = { scoreOne = it.filter { c -> c.isDigit() } },
                                                         modifier = Modifier.width(64.dp), singleLine = true, placeholder = { Text("0") },
                                                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer, cursorColor = MaterialTheme.colorScheme.primary),
                                                     )
-                                                    Text("-", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                                    Text("-", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleLarge)
                                                     OutlinedTextField(
                                                         value = scoreTwo, onValueChange = { scoreTwo = it.filter { c -> c.isDigit() } },
                                                         modifier = Modifier.width(64.dp), singleLine = true, placeholder = { Text("0") },
@@ -588,7 +589,7 @@ fun EventDetailScreen(
                                                     onClick = { editingScoreId = pg.latestHistoryId; scoreOne = ""; scoreTwo = "" },
                                                     modifier = Modifier.fillMaxWidth(),
                                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                                ) { Text("\u270F\uFE0F  Record score", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp) }
+                                                ) { Text("\u270F\uFE0F  Record score", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleSmall) }
                                             }
                                         }
 
@@ -597,7 +598,7 @@ fun EventDetailScreen(
                                                 onClick = onPayments,
                                                 modifier = Modifier.fillMaxWidth(),
                                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                                            ) { Text("\uD83D\uDCB0  Mark payments", color = MaterialTheme.colorScheme.background, fontWeight = FontWeight.Bold, fontSize = 15.sp) }
+                                            ) { Text("\uD83D\uDCB0  Mark payments", color = MaterialTheme.colorScheme.background, style = MaterialTheme.typography.titleSmall) }
                                         }
                                     }
                                 }
@@ -709,19 +710,19 @@ fun EventDetailScreen(
                             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                                 Row(Modifier.padding(14.dp)) {
                                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(teams[0].name, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text(teams[0].name, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                                         teams[0].members.forEach { m ->
                                             val pid = event.players.find { it.name == m.name }?.id
-                                            Text(m.name, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp,
+                                            Text(m.name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
                                                 modifier = if (pid != null) Modifier.clickable { viewModel.movePlayerToTeam(eventId, pid, m.name, false) } else Modifier)
                                         }
                                     }
                                     Text("VS", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp))
                                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(teams[1].name, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text(teams[1].name, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                                         teams[1].members.forEach { m ->
                                             val pid = event.players.find { it.name == m.name }?.id
-                                            Text(m.name, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp,
+                                            Text(m.name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
                                                 modifier = if (pid != null) Modifier.clickable { viewModel.movePlayerToTeam(eventId, pid, m.name, true) } else Modifier)
                                         }
                                     }
@@ -800,7 +801,7 @@ fun EventDetailScreen(
                                                 Text(
                                                     "${s.name} (${s.gamesPlayed} games)",
                                                     modifier = Modifier.fillMaxWidth().clickable { viewModel.addPlayer(eventId, s.name); newPlayer = "" }.padding(horizontal = 16.dp, vertical = 10.dp),
-                                                    color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium,
                                                 )
                                             }
                                         }
@@ -813,7 +814,7 @@ fun EventDetailScreen(
                         if (state.history.isNotEmpty()) {
                             Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 SectionTitle(stringResource(R.string.history))
-                                TextButton(onClick = onLog) { Text(stringResource(R.string.view_log), color = MaterialTheme.colorScheme.primary, fontSize = 13.sp) }
+                                TextButton(onClick = onLog) { Text(stringResource(R.string.view_log), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
                             }
                             state.history.take(2).forEach { h ->
                                 HistoryCard(h, editingScoreId, scoreOne, scoreTwo,
@@ -829,7 +830,7 @@ fun EventDetailScreen(
                             }
                             if (state.history.size > 2) {
                                 TextButton(onClick = onAllHistory, modifier = Modifier.fillMaxWidth()) {
-                                    Text(stringResource(R.string.see_all_games, state.history.size), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                    Text(pluralStringResource(R.plurals.see_all_games, state.history.size, state.history.size), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -899,7 +900,7 @@ fun EventDetailScreen(
 
 @Composable
 fun SectionTitle(text: String) {
-    Text(text, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+    Text(text, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.sp, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -916,7 +917,7 @@ fun PlayerRow(
                 "${player.name}${if (isMe) youSuffix else ""}",
                 color = if (isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (isMe) FontWeight.SemiBold else FontWeight.Normal,
-                fontSize = 14.sp,
+                style = MaterialTheme.typography.bodyMedium,
             )
         },
         leadingContent = {
@@ -941,9 +942,9 @@ fun HistoryCard(
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).clickable(onClick = onClick)) {
         Column(Modifier.padding(12.dp)) {
-            Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
+            Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
             if (h.scoreOne != null && h.scoreTwo != null) {
-                Text("${h.teamOneName} ${h.scoreOne} - ${h.scoreTwo} ${h.teamTwoName}", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                Text("${h.teamOneName} ${h.scoreOne} - ${h.scoreTwo} ${h.teamTwoName}", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall,
                     modifier = if (h.editable) Modifier.clickable(onClick = onEditScore) else Modifier)
             } else if (h.editable) {
                 if (editingScoreId == h.id) {
@@ -957,14 +958,14 @@ fun HistoryCard(
                     TextButton(onClick = onEditScore) { Text("+ Score", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold) }
                 }
             } else {
-                Text(h.status, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                Text(h.status, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
             h.eloUpdates?.takeIf { it.isNotEmpty() }?.let { updates ->
                 Row(modifier = Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     updates.forEach { eu ->
                         Text("${eu.name} ${if (eu.delta > 0) "+" else ""}${eu.delta}",
                             color = if (eu.delta > 0) MaterialTheme.colorScheme.primary else if (eu.delta < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
-                            fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

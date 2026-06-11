@@ -134,13 +134,13 @@ fun NotificationPrefsScreen(onBack: () -> Unit, viewModel: NotificationPrefsView
 
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
             SECTIONS.forEach { section ->
-                Text(section.title.uppercase(), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
+                Text(section.title.uppercase(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.sp, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
                 section.items.forEach { item ->
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(item.label, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
-                                item.desc?.let { Text(it, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp) }
+                                Text(item.label, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall)
+                                item.desc?.let { Text(it, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall) }
                             }
                             Switch(
                                 checked = viewModel.getPrefValue(p, item.key),

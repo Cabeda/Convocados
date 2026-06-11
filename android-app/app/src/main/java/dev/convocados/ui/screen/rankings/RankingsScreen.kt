@@ -219,13 +219,13 @@ fun RankingsScreen(
                                 Text(
                                     r.name + if (r.userId == user?.id) " (you)" else "",
                                     color = if (r.userId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                                    style = MaterialTheme.typography.titleSmall,
                                     modifier = if (r.userId != null) Modifier.clickable { onUserClick(r.userId!!) } else Modifier,
                                 )
                                 if (r.rating != null) {
-                                    Text("${r.gamesPlayed}g \u00B7 W${r.wins}/D${r.draws}/L${r.losses}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                    Text("${r.gamesPlayed}g \u00B7 W${r.wins}/D${r.draws}/L${r.losses}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                 } else {
-                                    Text("New player", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                    Text("New player", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                             if (r.rating != null) {
@@ -236,11 +236,11 @@ fun RankingsScreen(
                                         r.rating >= 1000 -> MaterialTheme.colorScheme.primary
                                         else -> MaterialTheme.colorScheme.tertiary
                                     },
-                                    fontSize = 16.sp,
+                                    style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.ExtraBold,
                                 )
                             } else {
-                                Text("\u2014", color = MaterialTheme.colorScheme.outline, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                                Text("\u2014", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.titleMedium)
                             }
                             if (canClaim) {
                                 Spacer(Modifier.width(8.dp))

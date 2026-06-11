@@ -98,12 +98,12 @@ fun ProfileScreen(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(u.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(u.name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge)
                         IconButton(onClick = { editName = u.name; showEditName = true }) {
                             Icon(Icons.Default.Edit, stringResource(R.string.edit_name), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         }
                     }
-                    Text(u.email, color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+                    Text(u.email, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodyMedium)
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -220,8 +220,8 @@ fun MenuItem(title: String, subtitle: String, onClick: () -> Unit) {
         onClick = onClick,
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text(title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            Text(subtitle, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+            Text(title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall)
+            Text(subtitle, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }

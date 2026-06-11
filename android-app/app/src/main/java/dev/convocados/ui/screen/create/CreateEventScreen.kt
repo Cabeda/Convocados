@@ -114,7 +114,7 @@ fun CreateEventScreen(
         Column(
             modifier = Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
         ) {
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 14.sp, modifier = Modifier.padding(bottom = 12.dp)) }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 12.dp)) }
 
             Label("Game title")
             OutlinedTextField(
@@ -151,7 +151,7 @@ fun CreateEventScreen(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(14.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                     val fmt = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault())
-                    Text(fmt.format(dateTime), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text(fmt.format(dateTime), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(-86400L to "-1d", -3600L to "-1h", 3600L to "+1h", 86400L to "+1d").forEach { (secs, label) ->
@@ -167,7 +167,7 @@ fun CreateEventScreen(
                 modifier = Modifier.width(100.dp), singleLine = true,
                 colors = textFieldColors(),
             )
-            Text("Players beyond this limit go to the bench", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            Text("Players beyond this limit go to the bench", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
 
             TextButton(onClick = { showAdvanced = !showAdvanced }, modifier = Modifier.padding(top = 16.dp)) {
                 Text("${if (showAdvanced) "▼" else "▶"} Advanced options", color = MaterialTheme.colorScheme.outline)
@@ -208,7 +208,7 @@ fun CreateEventScreen(
                 shape = MaterialTheme.shapes.medium,
             ) {
                 if (creating) CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
-                else Text("Create game", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                else Text("Create game", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleMedium)
             }
             Spacer(Modifier.height(40.dp))
         }
@@ -217,7 +217,7 @@ fun CreateEventScreen(
 
 @Composable
 private fun Label(text: String) {
-    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
 }
 
 @Composable

@@ -150,7 +150,7 @@ fun PublicGamesScreen(
                     if (events.isEmpty()) {
                         item {
                             Column(Modifier.fillMaxWidth().padding(48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("🌍", fontSize = 40.sp)
+                                Text("🌍", style = MaterialTheme.typography.displaySmall)
                                 Spacer(Modifier.height(8.dp))
                                 Text("No public games right now", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                                 Text("Create a game and make it public so others can find it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
@@ -175,15 +175,15 @@ fun PublicGamesScreen(
                             Column(Modifier.padding(16.dp)) {
                                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(sportEmoji(event.sport), fontSize = 18.sp, modifier = Modifier.padding(end = 8.dp))
-                                        Text(event.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        Text(sportEmoji(event.sport), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(end = 8.dp))
+                                        Text(event.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
                                     }
                                     Card(colors = CardDefaults.cardColors(containerColor = if (event.spotsLeft == 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer)) {
-                                        Text(if (event.spotsLeft == 0) "Full" else "${event.spotsLeft} spots", color = if (event.spotsLeft == 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                                        Text(if (event.spotsLeft == 0) "Full" else "${event.spotsLeft} spots", color = if (event.spotsLeft == 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                                     }
                                 }
-                                Text("${formatRelativeDate(event.dateTime)} · ${event.playerCount}/${event.maxPlayers} players", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                                if (event.location.isNotBlank()) Text("\uD83D\uDCCD ${event.location}", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+                                Text("${formatRelativeDate(event.dateTime)} · ${event.playerCount}/${event.maxPlayers} players", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                if (event.location.isNotBlank()) Text("\uD83D\uDCCD ${event.location}", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
                             }
                         }
                     }

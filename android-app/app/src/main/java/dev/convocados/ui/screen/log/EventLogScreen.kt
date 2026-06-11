@@ -78,10 +78,10 @@ fun EventLogScreen(eventId: String, onBack: () -> Unit, viewModel: EventLogViewM
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text(entry.action.replace("_", " "), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                            Text(formatRelativeDate(entry.createdAt), color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+                            Text(entry.action.replace("_", " "), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                            Text(formatRelativeDate(entry.createdAt), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelSmall)
                         }
-                        entry.actor?.let { Text("by $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
+                        entry.actor?.let { Text("by $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
                     }
                 }
             }

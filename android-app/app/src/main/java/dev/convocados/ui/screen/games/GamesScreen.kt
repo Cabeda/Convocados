@@ -145,7 +145,7 @@ fun GamesScreen(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text("🏟️", fontSize = 48.sp)
+                            Text("🏟️", style = MaterialTheme.typography.displaySmall)
                             Spacer(Modifier.height(12.dp))
                             Text(stringResource(R.string.no_games_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
                             Spacer(Modifier.height(8.dp))
@@ -199,7 +199,7 @@ fun GameCard(
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(sportEmoji(game.sport), fontSize = 22.sp, modifier = Modifier.padding(end = 10.dp))
+                Text(sportEmoji(game.sport), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(end = 10.dp))
                 Text(game.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             }
             Spacer(Modifier.height(6.dp))

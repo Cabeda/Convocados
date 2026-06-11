@@ -104,11 +104,11 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(p.playerName, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
-                            p.method?.let { Text(it, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp) }
+                            p.method?.let { Text(it, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall) }
                         }
-                        d.totalAmount?.let { Text("${d.currency ?: "€"}${p.amount}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(end = 10.dp)) }
+                        d.totalAmount?.let { Text("${d.currency ?: "€"}${p.amount}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = 10.dp)) }
                         Card(colors = CardDefaults.cardColors(containerColor = if (p.status == "paid") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
-                            Text(if (p.status == "paid") "✓ Paid" else "Pending", color = if (p.status == "paid") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.outline, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                            Text(if (p.status == "paid") "✓ Paid" else "Pending", color = if (p.status == "paid") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                         }
                         Spacer(Modifier.width(4.dp))
                         IconButton(onClick = { overrideTarget = p.playerName; overrideAmount = p.amount.toString() }, modifier = Modifier.size(32.dp)) {
@@ -145,8 +145,8 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
 private fun SummaryCard(label: String, value: String, valueColor: androidx.compose.ui.graphics.Color, modifier: Modifier) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = modifier) {
         Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, color = valueColor, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-            Text(label, color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+            Text(value, color = valueColor, style = MaterialTheme.typography.titleLarge)
+            Text(label, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelSmall)
         }
     }
 }

@@ -71,17 +71,17 @@ fun UserProfileScreen(userId: String, onBack: () -> Unit, onEventClick: (String)
                 Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = CircleShape, modifier = Modifier.size(72.dp)) {
                         Box(Modifier.fillMaxSize(), Alignment.Center) {
-                            Text(p.name.first().uppercase(), color = MaterialTheme.colorScheme.primary, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(p.name.first().uppercase(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineLarge)
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text(p.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(p.name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge)
                 }
             }
 
             stats?.let { s ->
                 Spacer(Modifier.height(16.dp))
-                Text("OVERVIEW", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp)
+                Text("OVERVIEW", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.sp)
                 Spacer(Modifier.height(12.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StatBox("Games", "${s.summary.totalGames}", Modifier.weight(1f))
@@ -97,13 +97,13 @@ fun UserProfileScreen(userId: String, onBack: () -> Unit, onEventClick: (String)
 
                 if (s.events.isNotEmpty()) {
                     Spacer(Modifier.height(20.dp))
-                    Text("PER EVENT", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp)
+                    Text("PER EVENT", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.sp)
                     Spacer(Modifier.height(12.dp))
                     s.events.forEach { ev ->
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clickable { onEventClick(ev.eventId) }) {
                             Column(Modifier.padding(14.dp)) {
-                                Text(ev.eventTitle, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Text("${ev.gamesPlayed}g · Rating: ${ev.rating} · W${ev.wins}/D${ev.draws}/L${ev.losses}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                Text(ev.eventTitle, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall)
+                                Text("${ev.gamesPlayed}g · Rating: ${ev.rating} · W${ev.wins}/D${ev.draws}/L${ev.losses}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }

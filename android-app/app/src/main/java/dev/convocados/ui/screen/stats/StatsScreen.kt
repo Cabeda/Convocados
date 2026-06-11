@@ -67,7 +67,7 @@ fun StatsScreen(onEventClick: (String) -> Unit, viewModel: StatsViewModel = hilt
     val s = stats!!.summary
     PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = { isRefreshing = true; viewModel.load(); isRefreshing = false }, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Text(stringResource(R.string.overview), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 1.sp)
+            Text(stringResource(R.string.overview), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, letterSpacing = 1.sp)
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatBox("Games", "${s.totalGames}", Modifier.weight(1f))
@@ -83,7 +83,7 @@ fun StatsScreen(onEventClick: (String) -> Unit, viewModel: StatsViewModel = hilt
 
             if (stats!!.events.isNotEmpty()) {
                 Spacer(Modifier.height(20.dp))
-                Text(stringResource(R.string.per_event), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 1.sp)
+                Text(stringResource(R.string.per_event), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, letterSpacing = 1.sp)
                 Spacer(Modifier.height(12.dp))
                 stats!!.events.forEach { ev ->
                     Card(
@@ -91,15 +91,15 @@ fun StatsScreen(onEventClick: (String) -> Unit, viewModel: StatsViewModel = hilt
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clickable { onEventClick(ev.eventId) },
                     ) {
                         Column(Modifier.padding(14.dp)) {
-                            Text(ev.eventTitle, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                            Text("${ev.gamesPlayed} games · Rating: ${ev.rating}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                            Text(ev.eventTitle, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall)
+                            Text("${ev.gamesPlayed} games · Rating: ${ev.rating}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
-                                Text("W${ev.wins}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                Text("D${ev.draws}", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                Text("L${ev.losses}", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("W${ev.wins}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                                Text("D${ev.draws}", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium)
+                                Text("L${ev.losses}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
                             }
                             ev.attendance?.let { att ->
-                                Text("Attendance: ${(att.attendanceRate * 100).toInt()}% · Streak: ${att.currentStreak}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                                Text("Attendance: ${(att.attendanceRate * 100).toInt()}% · Streak: ${att.currentStreak}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                             }
                         }
                     }
@@ -114,8 +114,8 @@ fun StatsScreen(onEventClick: (String) -> Unit, viewModel: StatsViewModel = hilt
 fun StatBox(label: String, value: String, modifier: Modifier = Modifier) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = modifier) {
         Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, color = MaterialTheme.colorScheme.onSurface, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-            Text(label, color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+            Text(value, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge)
+            Text(label, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelSmall)
         }
     }
 }

@@ -56,7 +56,7 @@ fun AttendanceScreen(eventId: String, onBack: () -> Unit, viewModel: AttendanceV
         if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
 
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(padding)) {
-            item { Text("$totalGames games played", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp)) }
+            item { Text("$totalGames games played", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp)) }
             if (players.isEmpty()) {
                 item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text("No attendance data yet", color = MaterialTheme.colorScheme.outline) } }
             }
@@ -66,16 +66,16 @@ fun AttendanceScreen(eventId: String, onBack: () -> Unit, viewModel: AttendanceV
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("#${index + 1}", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(p.name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(p.name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall)
                             LinearProgressIndicator(
                                 progress = { p.attendanceRate.toFloat() },
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(4.dp),
                                 color = MaterialTheme.colorScheme.primaryContainer, trackColor = MaterialTheme.colorScheme.surfaceVariant,
                             )
-                            Text("${p.gamesPlayed}/${p.totalGames} games · streak: ${p.currentStreak}", color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+                            Text("${p.gamesPlayed}/${p.totalGames} games · streak: ${p.currentStreak}", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelSmall)
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text("$pct%", color = when { pct >= 80 -> MaterialTheme.colorScheme.primary; pct >= 50 -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.tertiary }, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("$pct%", color = when { pct >= 80 -> MaterialTheme.colorScheme.primary; pct >= 50 -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.tertiary }, style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
