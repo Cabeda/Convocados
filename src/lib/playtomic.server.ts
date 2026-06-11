@@ -176,7 +176,9 @@ export async function getAvailability(params: GetAvailabilityParams): Promise<Ge
     return { courts: [], error: "Unsupported sport for Playtomic search" };
   }
 
-  const duration = params.duration ?? 90;
+  // When duration is omitted, return all slots (used by the cache layer so a single
+  // fetch can serve watches with different durations).
+  const duration = params.duration;
   const url = `${PLAYTOMIC_API}/availability?tenant_id=${params.tenantId}&sport_id=${playtomicSport}&local_start_min=${params.date}T00:00:00&local_start_max=${params.date}T23:59:59`;
 
   try {

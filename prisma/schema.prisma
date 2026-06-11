@@ -741,6 +741,7 @@ model CourtWatch {
   timezone     String   @default("UTC") // label for display; matching is club-local
   maxPrice     Float?   // optional: only notify when price <= this
   active       Boolean  @default(true)
+  lastCheckedAt DateTime? // for chunked cron processing (oldest-first)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   hits         CourtWatchHit[]
@@ -761,4 +762,15 @@ model CourtWatchHit {
 
   @@unique([watchId, resourceId, slotDate, slotTime])
   @@index([watchId])
+}
+
+// Short-TTL cache of Playtomic availability, keyed by club+sport+date.
+// Lets many watches (and the live search) share a single upstream fetch and
+// avoids hammering Playtomic / getting the IP blocked.
+model PlaytomicAvailabilityCache {
+  cacheKey   String   @id // "{tenantId}|{sport}|{date}"
+  courtsJson String   // JSON array of PlaytomicCourtAvailability (all durations)
+  fetchedAt  DateTime @default(now())
+
+  @@index([fetchedAt])
 }
