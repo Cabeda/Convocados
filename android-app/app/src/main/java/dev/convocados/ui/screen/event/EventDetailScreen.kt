@@ -61,6 +61,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Balance
 
 data class EventScreenState(
     val loading: Boolean = true,
@@ -727,6 +728,11 @@ fun EventDetailScreen(
                                 players = event.players,
                                 onMovePlayer = { pid, name, toTeamOne -> viewModel.movePlayerToTeam(eventId, pid, name, toTeamOne) },
                             )
+                        } else if (activePlayers.size >= 2) {
+                            CreateTeamsCard(
+                                onBalanced = { viewModel.randomize(eventId, balanced = true) },
+                                onRandom = { viewModel.randomize(eventId, balanced = false) },
+                            )
                         }
 
                         // Players
@@ -906,6 +912,25 @@ fun EventHeader(title: String, dateLabel: String, location: String, modifier: Mo
         Text(title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
         Text(dateLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         if (location.isNotBlank()) Text(location, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** Discoverable affordance to generate teams when none exist yet. */
+@Composable
+fun CreateTeamsCard(onBalanced: () -> Unit, onRandom: () -> Unit, modifier: Modifier = Modifier) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.create_teams_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.semantics { heading() })
+            Text(stringResource(R.string.create_teams_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onBalanced, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                    Icon(Icons.Default.Balance, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.teams_balanced))
+                }
+                OutlinedButton(onClick = onRandom, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Shuffle, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.teams_random))
+                }
+            }
+        }
     }
 }
 

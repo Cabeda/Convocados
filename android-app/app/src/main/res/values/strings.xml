@@ -258,4 +258,8 @@
     <string name="user_not_found">User not found</string>
     <string name="quick_actions">Quick actions</string>
     <string name="open_settings">Open settings</string>
+    <string name="create_teams_title">Create teams</string>
+    <string name="create_teams_desc">Split the players into two teams.</string>
+    <string name="teams_balanced">Balanced</string>
+    <string name="teams_random">Random</string>
 </resources>

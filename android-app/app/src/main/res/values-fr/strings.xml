@@ -240,4 +240,8 @@
     <string name="user_not_found">Utilisateur introuvable</string>
     <string name="quick_actions">Actions rapides</string>
     <string name="open_settings">Ouvrir les paramètres</string>
+    <string name="create_teams_title">Créer les équipes</string>
+    <string name="create_teams_desc">Répartit les joueurs en deux équipes.</string>
+    <string name="teams_balanced">Équilibrées</string>
+    <string name="teams_random">Aléatoires</string>
 </resources>
