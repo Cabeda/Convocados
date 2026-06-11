@@ -1,11 +1,16 @@
 package dev.convocados.ui.screen.settings
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -13,10 +18,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.convocados.R
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventDetail
 import dev.convocados.ui.screen.create.SPORT_PRESETS
@@ -27,7 +34,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class EventSettingsViewModel @Inject constructor(private val api: ConvocadosApi) : ViewModel() {
+class EventSettingsViewModel @Inject constructor(
+    private val api: ConvocadosApi,
+    private val repository: dev.convocados.data.repository.EventRepository,
+) : ViewModel() {
     private val _event = MutableStateFlow<EventDetail?>(null)
     val event: StateFlow<EventDetail?> = _event
     private val _loading = MutableStateFlow(true)
@@ -50,8 +60,8 @@ class EventSettingsViewModel @Inject constructor(private val api: ConvocadosApi)
     fun toggleHideEloInTeams(id: String, v: Boolean) = exec { api.updateHideEloInTeams(id, v); load(id) }
     fun toggleSplitCosts(id: String, v: Boolean) = exec { api.updateSplitCosts(id, v); load(id) }
     fun savePassword(id: String, pw: String?) = exec { api.updatePassword(id, pw); load(id) }
-    fun archive(id: String) = exec { api.archiveEvent(id) }
-    fun unarchive(id: String) = exec { api.unarchiveEvent(id); load(id) }
+    fun archive(id: String) = exec { repository.archiveEvent(id); _event.value = _event.value?.copy(archivedAt = "archived") }
+    fun unarchive(id: String) = exec { repository.unarchiveEvent(id); load(id) }
     fun transferOwnership(id: String, targetUserId: String) = exec { api.transferOwnership(id, targetUserId); load(id) }
 
     private fun exec(block: suspend () -> Unit) { viewModelScope.launch { runCatching { block() } } }
@@ -80,9 +90,11 @@ fun EventSettingsScreen(
     var showPassword by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(title = { Text("Event Settings") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background))
+            TopAppBar(scrollBehavior = scrollBehavior, title = { Text(stringResource(R.string.event_settings)) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background))
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
@@ -91,28 +103,28 @@ fun EventSettingsScreen(
 
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
             // Title
-            SettingsLabel("Game title")
+            SettingsLabel(stringResource(R.string.game_title))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(value = title, onValueChange = { title = it }, modifier = Modifier.weight(1f), singleLine = true)
                 SaveButton { viewModel.saveTitle(eventId, title.trim()) }
             }
 
             // Location
-            SettingsLabel("Location")
+            SettingsLabel(stringResource(R.string.location))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(value = location, onValueChange = { location = it }, modifier = Modifier.weight(1f), singleLine = true)
                 SaveButton { viewModel.saveLocation(eventId, location.trim()) }
             }
 
             // Max players
-            SettingsLabel("Max players")
+            SettingsLabel(stringResource(R.string.max_players))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(value = maxPlayers, onValueChange = { maxPlayers = it.filter { c -> c.isDigit() } }, modifier = Modifier.width(100.dp), singleLine = true)
                 SaveButton { maxPlayers.toIntOrNull()?.let { viewModel.saveMaxPlayers(eventId, it) } }
             }
 
             // Sport
-            SettingsLabel("Sport")
+            SettingsLabel(stringResource(R.string.sport))
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SPORT_PRESETS.forEach { s ->
                     FilterChip(selected = sport == s.id, onClick = { sport = s.id; viewModel.saveSport(eventId, s.id) }, label = { Text(s.label) },
@@ -121,32 +133,32 @@ fun EventSettingsScreen(
             }
 
             // General
-            SectionTitle("General")
-            ToggleRow("Public game", isPublic) { isPublic = it; viewModel.togglePublic(eventId, it) }
+            SectionTitle(stringResource(R.string.general))
+            ToggleRow(stringResource(R.string.public_game), isPublic) { isPublic = it; viewModel.togglePublic(eventId, it) }
 
             // Teams & Ratings
-            SectionTitle("Teams & Ratings")
-            ToggleRow("ELO ratings", eloEnabled) { eloEnabled = it; viewModel.toggleElo(eventId, it) }
-            ToggleRow("Hide ELO in teams", hideEloInTeams, enabled = ev.balanced) { hideEloInTeams = it; viewModel.toggleHideEloInTeams(eventId, it) }
+            SectionTitle(stringResource(R.string.teams_ratings))
+            ToggleRow(stringResource(R.string.elo_ratings), eloEnabled) { eloEnabled = it; viewModel.toggleElo(eventId, it) }
+            ToggleRow(stringResource(R.string.hide_elo_teams), hideEloInTeams, enabled = ev.balanced) { hideEloInTeams = it; viewModel.toggleHideEloInTeams(eventId, it) }
 
             // Features
-            SectionTitle("Features")
-            ToggleRow("Split costs", splitCosts) { splitCosts = it; viewModel.toggleSplitCosts(eventId, it) }
+            SectionTitle(stringResource(R.string.features))
+            ToggleRow(stringResource(R.string.split_costs), splitCosts) { splitCosts = it; viewModel.toggleSplitCosts(eventId, it) }
 
             // Password
-            SectionTitle("Access")
+            SectionTitle(stringResource(R.string.access))
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = { showPassword = !showPassword }) {
-                Text(if (ev.hasPassword) "\uD83D\uDD12 Password set — tap to change/remove" else "\uD83D\uDD13 Set password", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(14.dp))
+                Text(if (ev.hasPassword) stringResource(R.string.password_set) else stringResource(R.string.set_password), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(14.dp))
             }
             if (showPassword) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(value = password, onValueChange = { password = it }, placeholder = { Text("New password (empty to remove)") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = password, onValueChange = { password = it }, placeholder = { Text(stringResource(R.string.new_password_placeholder)) }, modifier = Modifier.weight(1f), singleLine = true)
                     SaveButton { viewModel.savePassword(eventId, password.ifBlank { null }); showPassword = false; password = "" }
                 }
             }
 
             // Danger zone
-            SectionTitle("Danger zone")
+            SectionTitle(stringResource(R.string.danger_zone))
 
             // Transfer Ownership (owner only)
             if (ev.ownerId != null) {
@@ -158,15 +170,15 @@ fun EventSettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
                     enabled = candidates.isNotEmpty(),
-                ) { Text("Transfer Ownership", color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold) }
+                ) { Text(stringResource(R.string.transfer_ownership), color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold) }
 
                 if (showTransfer) {
                     AlertDialog(
                         onDismissRequest = { showTransfer = false },
-                        title = { Text("Transfer Ownership") },
+                        title = { Text(stringResource(R.string.transfer_ownership)) },
                         text = {
                             Column {
-                                Text("Select a player to transfer ownership to:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                                Text(stringResource(R.string.select_transfer_player), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                                 Spacer(Modifier.height(8.dp))
                                 candidates.forEach { player ->
                                     TextButton(onClick = {
@@ -179,7 +191,7 @@ fun EventSettingsScreen(
                             }
                         },
                         confirmButton = {},
-                        dismissButton = { TextButton(onClick = { showTransfer = false }) { Text("Cancel") } },
+                        dismissButton = { TextButton(onClick = { showTransfer = false }) { Text(stringResource(R.string.cancel)) } },
                     )
                 }
             }
@@ -187,28 +199,28 @@ fun EventSettingsScreen(
             Button(
                 onClick = { if (ev.archivedAt != null) viewModel.unarchive(eventId) else { viewModel.archive(eventId); onBack() } },
                 modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-            ) { Text(if (ev.archivedAt != null) "Unarchive game" else "Archive game", color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold) }
+            ) { Text(if (ev.archivedAt != null) stringResource(R.string.unarchive_game) else stringResource(R.string.archive_game), color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold) }
 
             // Navigation
             Spacer(Modifier.height(16.dp))
-            NavButton("\uD83C\uDFC6 Rankings / ELO", onRankings)
-            NavButton("\uD83D\uDCB0 Payments", onPayments)
-            NavButton("\uD83D\uDCCB Event log", onLog)
-            NavButton("\uD83D\uDCC5 Attendance stats", onAttendance)
+            NavButton(stringResource(R.string.rankings_elo), Icons.Default.EmojiEvents, onRankings)
+            NavButton(stringResource(R.string.payments), Icons.Default.Payments, onPayments)
+            NavButton(stringResource(R.string.event_log), Icons.AutoMirrored.Filled.List, onLog)
+            NavButton(stringResource(R.string.attendance_stats), Icons.Default.CalendarMonth, onAttendance)
             Spacer(Modifier.height(40.dp))
         }
     }
 }
 
-@Composable private fun SettingsLabel(text: String) = Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
-@Composable private fun SaveButton(onClick: () -> Unit) = Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) { Text("Save", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
-@Composable private fun NavButton(text: String, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = onClick) { Text(text, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(14.dp)) }
+@Composable private fun SettingsLabel(text: String) = Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+@Composable private fun SaveButton(onClick: () -> Unit) = Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) { Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium) }
+@Composable private fun NavButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), onClick = onClick) { Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) { Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)); Text(text, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge) } }
 
 @Composable
 private fun ToggleRow(label: String, checked: Boolean, enabled: Boolean = true, onCheckedChange: (Boolean) -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text(label, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled, colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary, checkedTrackColor = MaterialTheme.colorScheme.primaryContainer))
         }
     }

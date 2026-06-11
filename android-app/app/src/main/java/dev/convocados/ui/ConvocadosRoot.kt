@@ -39,6 +39,7 @@ class RootViewModel @Inject constructor(
 
     val isAuthenticated = tokenStore.isAuthenticated
     val themeMode = settingsStore.themeMode
+    val dynamicColor = settingsStore.dynamicColor
 
     private val _user = MutableStateFlow<UserProfile?>(null)
     val user: StateFlow<UserProfile?> = _user
@@ -99,7 +100,10 @@ fun ConvocadosRoot(deepLink: String? = null, intentVersion: Int = 0, viewModel: 
         activity?.intent?.let { viewModel.handleIntent(it) }
     }
 
-    ConvocadosTheme(themeMode = viewModel.themeMode.collectAsState(initial = ThemeMode.System).value) {
+    ConvocadosTheme(
+        themeMode = viewModel.themeMode.collectAsState(initial = ThemeMode.System).value,
+        dynamicColor = viewModel.dynamicColor.collectAsState(initial = false).value,
+    ) {
         AppNavigation(isAuthenticated = isAuthenticated, deepLink = deepLink)
     }
 }

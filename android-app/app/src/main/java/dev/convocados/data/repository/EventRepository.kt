@@ -72,6 +72,7 @@ class EventRepository @Inject constructor(
             eventDao.refreshEvents("owned", response.owned.map { it.toEntity("owned") })
             eventDao.refreshEvents("admin", response.admin.map { it.toEntity("admin") })
             eventDao.refreshEvents("followed", response.followed.map { it.toEntity("followed") })
+            eventDao.refreshEvents("archivedOwned", response.archivedOwned.map { it.toEntity("archivedOwned") })
         } catch (e: Exception) {
             uiEventManager.showSnackbar("Failed to refresh games: ${e.message}")
         }
@@ -96,6 +97,22 @@ class EventRepository @Inject constructor(
     suspend fun verifyPassword(eventId: String, password: String): Result<Unit> = try {
         api.verifyEventPassword(eventId, password)
         refreshEventDetail(eventId)
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    suspend fun archiveEvent(eventId: String): Result<Unit> = try {
+        api.archiveEvent(eventId)
+        refreshMyGames()
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    suspend fun unarchiveEvent(eventId: String): Result<Unit> = try {
+        api.unarchiveEvent(eventId)
+        refreshMyGames()
         Result.success(Unit)
     } catch (e: Exception) {
         Result.failure(e)

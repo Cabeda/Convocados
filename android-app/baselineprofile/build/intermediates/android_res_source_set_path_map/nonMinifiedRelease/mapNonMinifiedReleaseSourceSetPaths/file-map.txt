@@ -1,0 +1,7 @@
+dev.convocados.baselineprofile-pngs-0 /private/tmp/convocados-md3/android-app/baselineprofile/build/generated/res/pngs/nonMinifiedRelease
+dev.convocados.baselineprofile-updated_navigation_xml-1 /private/tmp/convocados-md3/android-app/baselineprofile/build/generated/updated_navigation_xml/nonMinifiedRelease
+dev.convocados.baselineprofile-packageNonMinifiedReleaseResources-2 /private/tmp/convocados-md3/android-app/baselineprofile/build/intermediates/incremental/nonMinifiedRelease/packageNonMinifiedReleaseResources/merged.dir
+dev.convocados.baselineprofile-packageNonMinifiedReleaseResources-3 /private/tmp/convocados-md3/android-app/baselineprofile/build/intermediates/incremental/nonMinifiedRelease/packageNonMinifiedReleaseResources/stripped.dir
+dev.convocados.baselineprofile-nonMinifiedRelease-4 /private/tmp/convocados-md3/android-app/baselineprofile/build/intermediates/merged_res/nonMinifiedRelease/mergeNonMinifiedReleaseResources
+dev.convocados.baselineprofile-main-5 /private/tmp/convocados-md3/android-app/baselineprofile/src/main/res
+dev.convocados.baselineprofile-nonMinifiedRelease-6 /private/tmp/convocados-md3/android-app/baselineprofile/src/nonMinifiedRelease/res

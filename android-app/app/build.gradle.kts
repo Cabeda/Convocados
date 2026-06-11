@@ -9,6 +9,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
     alias(libs.plugins.play.publisher)
+    alias(libs.plugins.baselineprofile)
+    alias(libs.plugins.roborazzi)
 }
 
 val keystoreProperties = Properties().apply {
@@ -49,7 +51,16 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            // Use the production keystore when configured (CI/release); otherwise fall
+            // back to debug signing so the baseline-profile variants (nonMinifiedRelease /
+            // benchmarkRelease) can still be built and installed locally.
+            val hasReleaseKeystore = keystoreProperties.getProperty("storeFile", "").isNotBlank() &&
+                rootProject.file(keystoreProperties.getProperty("storeFile", "")).exists()
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -62,6 +73,11 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
     }
 }
 
@@ -78,6 +94,8 @@ dependencies {
     // Compose BOM
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
+    implementation(libs.androidx.compose.material3.window.size)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.ui.tooling.preview)
@@ -122,6 +140,12 @@ dependencies {
     // Splash screen
     implementation(libs.androidx.core.splashscreen)
 
+    // Baseline profile installer — compiles the bundled baseline-prof.txt at install
+    // time for faster cold start and smoother first scroll.
+    implementation(libs.androidx.profileinstaller)
+    // Consumes the generated profile from the :baselineprofile module.
+    baselineProfile(project(":baselineprofile"))
+
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)
@@ -150,4 +174,11 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Screenshot testing (JVM, no device) via Roborazzi + Robolectric
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

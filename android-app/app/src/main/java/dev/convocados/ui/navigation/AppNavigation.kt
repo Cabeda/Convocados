@@ -4,7 +4,10 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SportsScore
@@ -72,34 +75,39 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
         bottomItems.any { it.route == dest.route }
     } == true
 
-    Scaffold(
-        bottomBar = {
+    // Adaptive navigation: bottom bar on phones, navigation rail/drawer on larger
+    // windows (tablets, foldables, landscape). NavigationSuiteScaffold also applies
+    // the correct window insets automatically.
+    NavigationSuiteScaffold(
+        navigationSuiteItems = {
             if (showBottomBar) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    bottomItems.forEach { item ->
-                        val selected = currentDestination?.hierarchy?.any { it.route == item.route } == true
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                navController.navigate(item.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = item.icon,
-                            label = { Text(item.label) },
-                        )
-                    }
+                bottomItems.forEach { item ->
+                    val selected = currentDestination?.hierarchy?.any { it.route == item.route } == true
+                    item(
+                        selected = selected,
+                        onClick = {
+                            navController.navigate(item.route) {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        icon = item.icon,
+                        label = { Text(item.label) },
+                    )
                 }
             }
-        }
-    ) { padding ->
+        },
+        layoutType = if (showBottomBar) {
+            NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(currentWindowAdaptiveInfo())
+        } else {
+            NavigationSuiteType.None
+        },
+    ) {
         SharedTransitionLayout {
             NavHost(
                 navController = navController,
                 startDestination = startDestination,
-                modifier = Modifier.padding(padding),
             ) {
                 composable(Route.Login.route) {
                     LoginScreen(onLoginSuccess = {
@@ -113,6 +121,7 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
                         onEventClick = { navController.navigate(Route.EventDetail.create(it)) },
                         onCreateClick = { navController.navigate(Route.CreateEvent.route) },
                         onPublicClick = { navController.navigate(Route.PublicGames.route) },
+                        onOpenSettings = { navController.navigate(Route.EventSettings.create(it)) },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this@composable,
                     )

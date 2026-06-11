@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.convocados.R
+import dev.convocados.ui.components.SectionCard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -54,6 +55,7 @@ class ProfileViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val locale = settingsStore.locale
     val themeMode = settingsStore.themeMode
+    val dynamicColor = settingsStore.dynamicColor
 
     init { viewModelScope.launch { repository.refreshUserProfile() } }
 
@@ -75,6 +77,7 @@ class ProfileViewModel @Inject constructor(
     fun setServerUrl(url: String) = tokenStore.setServerUrl(url)
     fun setLocale(code: String) { viewModelScope.launch { settingsStore.setLocale(code) } }
     fun setThemeMode(mode: ThemeMode) { viewModelScope.launch { settingsStore.setThemeMode(mode) } }
+    fun setDynamicColor(enabled: Boolean) { viewModelScope.launch { settingsStore.setDynamicColor(enabled) } }
 }
 
 @Composable
@@ -98,22 +101,22 @@ fun ProfileScreen(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(u.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(u.name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge)
                         IconButton(onClick = { editName = u.name; showEditName = true }) {
                             Icon(Icons.Default.Edit, stringResource(R.string.edit_name), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         }
                     }
-                    Text(u.email, color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+                    Text(u.email, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodyMedium)
                 }
             }
             Spacer(Modifier.height(16.dp))
         }
 
         // Notifications
-        MenuItem(title = "\uD83D\uDD14 ${stringResource(R.string.notifications_title)}", subtitle = stringResource(R.string.notifications_subtitle), onClick = onNotificationPrefs)
+        MenuItem(title = stringResource(R.string.notifications_title), subtitle = stringResource(R.string.notifications_subtitle), onClick = onNotificationPrefs)
 
         // Court Watches
-        MenuItem(title = "\uD83C\uDFDF\uFE0F Court Watches", subtitle = "Notify when booked courts free up", onClick = onCourtWatches)
+        MenuItem(title = stringResource(R.string.court_watches), subtitle = stringResource(R.string.court_watches_subtitle), onClick = onCourtWatches)
 
         // Language
         MenuItem(title = stringResource(R.string.language), subtitle = LOCALE_OPTIONS.find { it.code == locale }?.label ?: "English", onClick = { showLanguages = !showLanguages })
@@ -137,13 +140,13 @@ fun ProfileScreen(
 
         // Theme
         val themeMode by viewModel.themeMode.collectAsState(initial = ThemeMode.System)
-        val themeLabel = when (themeMode) { ThemeMode.System -> "System"; ThemeMode.Light -> "Light"; ThemeMode.Dark -> "Dark" }
+        val themeLabel = when (themeMode) { ThemeMode.System -> stringResource(R.string.theme_system); ThemeMode.Light -> stringResource(R.string.theme_light); ThemeMode.Dark -> stringResource(R.string.theme_dark) }
         var showTheme by remember { mutableStateOf(false) }
-        MenuItem(title = "Theme", subtitle = themeLabel, onClick = { showTheme = !showTheme })
+        MenuItem(title = stringResource(R.string.theme), subtitle = themeLabel, onClick = { showTheme = !showTheme })
         if (showTheme) {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Column {
-                    listOf(ThemeMode.System to "System", ThemeMode.Light to "Light", ThemeMode.Dark to "Dark").forEach { (mode, label) ->
+                    listOf(ThemeMode.System to stringResource(R.string.theme_system), ThemeMode.Light to stringResource(R.string.theme_light), ThemeMode.Dark to stringResource(R.string.theme_dark)).forEach { (mode, label) ->
                         Row(
                             Modifier.fillMaxWidth().clickable { viewModel.setThemeMode(mode); showTheme = false }.padding(horizontal = 16.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
@@ -155,6 +158,25 @@ fun ProfileScreen(
                     }
                 }
             }
+        }
+
+        // Material You dynamic color (Android 12+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            val dynamicColor by viewModel.dynamicColor.collectAsState(initial = false)
+            SectionCard {
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.material_you), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.material_you_desc), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = dynamicColor, onCheckedChange = { viewModel.setDynamicColor(it) })
+                }
+            }
+            Spacer(Modifier.height(8.dp))
         }
 
         // Server URL
@@ -171,13 +193,13 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
                     )
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { editingServer = false }) { Text("Cancel", color = MaterialTheme.colorScheme.outline) }
+                        TextButton(onClick = { editingServer = false }) { Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.outline) }
                         Spacer(Modifier.width(8.dp))
                         Button(onClick = {
                             viewModel.setServerUrl(serverUrl.trim().trimEnd('/'))
                             editingServer = false
                         }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                            Text("Save", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                     }
                 }
@@ -203,10 +225,10 @@ fun ProfileScreen(
             confirmButton = {
                 TextButton(onClick = {
                     if (editName.isNotBlank()) { viewModel.updateName(editName.trim()); showEditName = false }
-                }) { Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
+                }) { Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { showEditName = false }) { Text("Cancel", color = MaterialTheme.colorScheme.outline) }
+                TextButton(onClick = { showEditName = false }) { Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.outline) }
             },
         )
     }
@@ -220,8 +242,8 @@ fun MenuItem(title: String, subtitle: String, onClick: () -> Unit) {
         onClick = onClick,
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text(title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            Text(subtitle, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+            Text(title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall)
+            Text(subtitle, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }

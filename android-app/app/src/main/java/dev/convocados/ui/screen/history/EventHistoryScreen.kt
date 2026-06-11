@@ -1,6 +1,7 @@
 package dev.convocados.ui.screen.history
 
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -70,9 +71,11 @@ fun EventHistoryScreen(
     val hasMore by viewModel.hasMore.collectAsState()
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            TopAppBar(scrollBehavior = scrollBehavior, 
                 title = { Text(stringResource(R.string.game_history)) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
@@ -89,22 +92,22 @@ fun EventHistoryScreen(
                     modifier = Modifier.fillMaxWidth().clickable { onHistoryClick(h.id) },
                 ) {
                     Column(Modifier.padding(14.dp)) {
-                        Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
+                        Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
                         if (h.scoreOne != null && h.scoreTwo != null) {
                             Text(
                                 "${h.teamOneName} ${h.scoreOne} — ${h.scoreTwo} ${h.teamTwoName}",
-                                fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(top = 4.dp),
                             )
                         } else {
-                            Text(h.status.replaceFirstChar { it.uppercase() }, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+                            Text(h.status.replaceFirstChar { it.uppercase() }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
                         }
                         h.eloUpdates?.takeIf { it.isNotEmpty() }?.let { updates ->
                             Row(modifier = Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 updates.take(4).forEach { eu ->
                                     Text("${eu.name} ${if (eu.delta > 0) "+" else ""}${eu.delta}",
                                         color = if (eu.delta > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                        fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }

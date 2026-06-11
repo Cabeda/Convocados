@@ -1,6 +1,7 @@
 package dev.convocados.ui.screen.create
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -9,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -16,6 +18,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.convocados.R
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.CreateEventRequest
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -101,11 +104,13 @@ fun CreateEventScreen(
     var isRecurring by remember { mutableStateOf(false) }
     var recurrenceFreq by remember { mutableStateOf("weekly") }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = { Text("Create a Game") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+            TopAppBar(scrollBehavior = scrollBehavior, 
+                title = { Text(stringResource(R.string.create_game)) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
@@ -114,17 +119,17 @@ fun CreateEventScreen(
         Column(
             modifier = Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
         ) {
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 14.sp, modifier = Modifier.padding(bottom = 12.dp)) }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 12.dp)) }
 
-            Label("Game title")
+            Label(stringResource(R.string.game_title))
             OutlinedTextField(
                 value = title, onValueChange = { title = it },
-                placeholder = { Text("e.g. Tuesday 5-a-side") },
+                placeholder = { Text(stringResource(R.string.game_title_placeholder)) },
                 modifier = Modifier.fillMaxWidth(), singleLine = true,
                 colors = textFieldColors(),
             )
 
-            Label("Sport")
+            Label(stringResource(R.string.sport))
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SPORT_PRESETS.forEach { s ->
                     FilterChip(
@@ -138,20 +143,20 @@ fun CreateEventScreen(
                 }
             }
 
-            Label("Location (optional)")
+            Label(stringResource(R.string.location_optional))
             OutlinedTextField(
                 value = location, onValueChange = { location = it },
-                placeholder = { Text("e.g. Riverside Astro, Pitch 2") },
+                placeholder = { Text(stringResource(R.string.location_placeholder)) },
                 modifier = Modifier.fillMaxWidth(), singleLine = true,
                 colors = textFieldColors(),
             )
-            TextButton(onClick = onPickMap) { Text("\uD83D\uDDFA\uFE0F Pick on map", color = MaterialTheme.colorScheme.primary) }
+            TextButton(onClick = onPickMap) { Text(stringResource(R.string.pick_on_map), color = MaterialTheme.colorScheme.primary) }
 
-            Label("Date & time")
+            Label(stringResource(R.string.date_time))
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(14.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                     val fmt = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault())
-                    Text(fmt.format(dateTime), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text(fmt.format(dateTime), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(-86400L to "-1d", -3600L to "-1h", 3600L to "+1h", 86400L to "+1d").forEach { (secs, label) ->
@@ -161,26 +166,26 @@ fun CreateEventScreen(
                 }
             }
 
-            Label("Max players")
+            Label(stringResource(R.string.max_players))
             OutlinedTextField(
                 value = maxPlayers, onValueChange = { maxPlayers = it.filter { c -> c.isDigit() } },
                 modifier = Modifier.width(100.dp), singleLine = true,
                 colors = textFieldColors(),
             )
-            Text("Players beyond this limit go to the bench", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(stringResource(R.string.max_players_hint), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
 
             TextButton(onClick = { showAdvanced = !showAdvanced }, modifier = Modifier.padding(top = 16.dp)) {
-                Text("${if (showAdvanced) "▼" else "▶"} Advanced options", color = MaterialTheme.colorScheme.outline)
+                Text("${if (showAdvanced) "▼" else "▶"} ${stringResource(R.string.advanced_options)}", color = MaterialTheme.colorScheme.outline)
             }
 
             if (showAdvanced) {
-                Label("Team 1 name")
+                Label(stringResource(R.string.team_1_name))
                 OutlinedTextField(value = teamOneName, onValueChange = { teamOneName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, colors = textFieldColors())
-                Label("Team 2 name")
+                Label(stringResource(R.string.team_2_name))
                 OutlinedTextField(value = teamTwoName, onValueChange = { teamTwoName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, colors = textFieldColors())
 
                 Row(modifier = Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    Text("Recurring game", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.recurring_game), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                     Switch(checked = isRecurring, onCheckedChange = { isRecurring = it }, colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary, checkedTrackColor = MaterialTheme.colorScheme.primaryContainer))
                 }
                 if (isRecurring) {
@@ -208,7 +213,7 @@ fun CreateEventScreen(
                 shape = MaterialTheme.shapes.medium,
             ) {
                 if (creating) CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
-                else Text("Create game", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                else Text(stringResource(R.string.create_game_button), color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleMedium)
             }
             Spacer(Modifier.height(40.dp))
         }
@@ -217,7 +222,7 @@ fun CreateEventScreen(
 
 @Composable
 private fun Label(text: String) {
-    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
+    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp, bottom = 6.dp))
 }
 
 @Composable

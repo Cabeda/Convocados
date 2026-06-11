@@ -1,6 +1,7 @@
 package dev.convocados.ui.screen.log
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -64,8 +65,10 @@ fun EventLogScreen(eventId: String, onBack: () -> Unit, viewModel: EventLogViewM
     val hasMore by viewModel.hasMore.collectAsState()
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
-        topBar = { TopAppBar(title = { Text("\uD83D\uDCCB ${stringResource(R.string.event_log)}") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = { TopAppBar(scrollBehavior = scrollBehavior, title = { Text(stringResource(R.string.event_log)) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
@@ -78,10 +81,10 @@ fun EventLogScreen(eventId: String, onBack: () -> Unit, viewModel: EventLogViewM
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
                         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text(entry.action.replace("_", " "), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                            Text(formatRelativeDate(entry.createdAt), color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+                            Text(entry.action.replace("_", " "), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                            Text(formatRelativeDate(entry.createdAt), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelSmall)
                         }
-                        entry.actor?.let { Text("by $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
+                        entry.actor?.let { Text(stringResource(R.string.by_actor, it), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
                     }
                 }
             }

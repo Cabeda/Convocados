@@ -1,0 +1,62 @@
+INSTRUMENTATION_STATUS: class=dev.convocados.baselineprofile.BaselineProfileGenerator
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+dev.convocados.baselineprofile.BaselineProfileGenerator:
+INSTRUMENTATION_STATUS: test=generate
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof.txt=/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt
+INSTRUMENTATION_STATUS_CODE: 2
+INSTRUMENTATION_STATUS: additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt=/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt
+INSTRUMENTATION_STATUS_CODE: 2
+INSTRUMENTATION_STATUS: android.studio.display.benchmark=NOTE: Your device is running a version of ART where method tracing is known to
+affect performance measurement after trace capture, so method tracing is
+off by default.
+
+To use method tracing, either flash this device, use a different device, or
+enable method tracing with MicrobenchmarkConfig / instrumentation argument, and
+only run one test at a time.
+
+For more information, see https://issuetracker.google.com/issues/316174880
+BaselineProfileGenerator_generate
+Total run time Ns: 68546432908.
+Baseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt)
+
+To copy the profile use:
+adb -e pull "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt" .
+
+INSTRUMENTATION_STATUS: android.studio.v2display.benchmark=NOTE: Your device is running a version of ART where method tracing is known to
+affect performance measurement after trace capture, so method tracing is
+off by default.
+
+To use method tracing, either flash this device, use a different device, or
+enable method tracing with MicrobenchmarkConfig / instrumentation argument, and
+only run one test at a time.
+
+For more information, see https://issuetracker.google.com/issues/316174880
+BaselineProfileGenerator_generate
+Total run time Ns: 68546432908.
+Baseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt)
+
+To copy the profile use:
+adb -e pull "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt" .
+
+INSTRUMENTATION_STATUS: android.studio.v2display.benchmark.outputDirPath=/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output
+INSTRUMENTATION_STATUS_CODE: 2
+INSTRUMENTATION_STATUS: class=dev.convocados.baselineprofile.BaselineProfileGenerator
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=generate
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 68.682
+
+OK (1 test)
+
+
+INSTRUMENTATION_CODE: -1
+

@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 rootProject.name = "Convocados"
 include(":app")
 include(":wear")
+include(":baselineprofile")

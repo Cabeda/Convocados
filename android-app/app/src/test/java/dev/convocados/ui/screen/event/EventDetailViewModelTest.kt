@@ -28,6 +28,9 @@ class EventDetailViewModelTest {
     private val api = mockk<ConvocadosApi>(relaxed = true)
     private val tokenStore = mockk<TokenStore>(relaxed = true)
     private val client = mockk<ApiClient>(relaxed = true)
+    private val settingsStore = mockk<dev.convocados.data.datastore.SettingsStore>(relaxed = true) {
+        every { autoPayOnJoin } returns flowOf(false)
+    }
     private val testDispatcher = StandardTestDispatcher()
 
     private val eventId = "event-123"
@@ -58,7 +61,7 @@ class EventDetailViewModelTest {
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
         coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
 
-        val viewModel = EventDetailViewModel(repository, api, tokenStore, client)
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
 
         viewModel.event.test {
             viewModel.load(eventId)
@@ -75,7 +78,7 @@ class EventDetailViewModelTest {
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
         coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
 
-        val viewModel = EventDetailViewModel(repository, api, tokenStore, client)
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
 
         viewModel.state.test {
             viewModel.load(eventId)
@@ -92,7 +95,7 @@ class EventDetailViewModelTest {
         coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
         coEvery { repository.addPlayer(eventId, "New Player", true) } coAnswers { Result.success(Unit) }
 
-        val viewModel = EventDetailViewModel(repository, api, tokenStore, client)
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
         viewModel.addPlayer(eventId, "New Player")
         advanceUntilIdle()
 
@@ -108,7 +111,7 @@ class EventDetailViewModelTest {
         val undo = UndoData(name = "Player One", order = 1, userId = "p-1", removedAt = 123456789L)
         coEvery { repository.removePlayer(eventId, "p-1") } returns Result.success(undo)
 
-        val viewModel = EventDetailViewModel(repository, api, tokenStore, client)
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
         viewModel.removePlayer(eventId, "p-1")
         advanceUntilIdle()
 
@@ -123,7 +126,7 @@ class EventDetailViewModelTest {
         coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
         coEvery { repository.verifyPassword(eventId, "secret") } returns Result.success(Unit)
 
-        val viewModel = EventDetailViewModel(repository, api, tokenStore, client)
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
         viewModel.verifyPassword(eventId, "secret")
         advanceUntilIdle()
 
@@ -148,7 +151,7 @@ class EventDetailViewModelTest {
         )
         coEvery { api.fetchPostGameStatus(eventId) } returns postGame
 
-        val viewModel = EventDetailViewModel(repository, api, tokenStore, client)
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
 
         viewModel.state.test {
             viewModel.load(eventId)
@@ -172,7 +175,7 @@ class EventDetailViewModelTest {
         coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
         coEvery { api.fetchPostGameStatus(eventId) } throws RuntimeException("Network error")
 
-        val viewModel = EventDetailViewModel(repository, api, tokenStore, client)
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
 
         viewModel.state.test {
             viewModel.load(eventId)
@@ -191,7 +194,7 @@ class EventDetailViewModelTest {
         val postGame = PostGameStatus(gameEnded = true, hasScore = true, allPaid = true, allComplete = true)
         coEvery { api.fetchPostGameStatus(eventId) } returns postGame
 
-        val viewModel = EventDetailViewModel(repository, api, tokenStore, client)
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
 
         viewModel.state.test {
             viewModel.load(eventId)
