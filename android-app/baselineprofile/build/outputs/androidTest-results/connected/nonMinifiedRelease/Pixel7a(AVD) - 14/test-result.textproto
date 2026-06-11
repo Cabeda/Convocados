@@ -1,0 +1,175 @@
+# proto-message: google.testing.platform.proto.api.core.TestSuiteResult
+# 2026-06-11T17:15:54.946093Z:
+test_suite_meta_data {
+  scheduled_test_case_count: 1
+  device {
+    id: "emulator-5554"
+    friendly_name: "primary"
+  }
+}
+test_status: PASSED
+test_result {
+  test_case {
+    test_class: "BaselineProfileGenerator"
+    test_package: "dev.convocados.baselineprofile"
+    test_method: "generate"
+    start_time {
+      seconds: 1781198084
+      nanos: 908000000
+    }
+    end_time {
+      seconds: 1781198153
+      nanos: 598000000
+    }
+    device {
+      id: "emulator-5554"
+      friendly_name: "primary"
+    }
+  }
+  test_status: PASSED
+  output_artifact {
+    label {
+      label: "additionaltestoutput.benchmark.message"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/convocados-md3/android-app/baselineprofile/build/outputs/connected_android_test_additional_output/nonMinifiedRelease/connected/Pixel7a(AVD) - 14/additionaltestoutput.benchmark.message_dev.convocados.baselineprofile.BaselineProfileGenerator.generate.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "additionaltestoutput.benchmark.trace"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/convocados-md3/android-app/baselineprofile/build/outputs/connected_android_test_additional_output/nonMinifiedRelease/connected/Pixel7a(AVD) - 14/BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "logcat"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/convocados-md3/android-app/baselineprofile/build/outputs/androidTest-results/connected/nonMinifiedRelease/Pixel7a(AVD) - 14/logcat-dev.convocados.baselineprofile.BaselineProfileGenerator-generate.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/convocados-md3/android-app/baselineprofile/build/outputs/androidTest-results/connected/nonMinifiedRelease/Pixel7a(AVD) - 14/device-info.pb"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.meminfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/convocados-md3/android-app/baselineprofile/build/outputs/androidTest-results/connected/nonMinifiedRelease/Pixel7a(AVD) - 14/meminfo"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.cpuinfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/convocados-md3/android-app/baselineprofile/build/outputs/androidTest-results/connected/nonMinifiedRelease/Pixel7a(AVD) - 14/cpuinfo"
+    }
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof.txt"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt"
+  }
+  details {
+    key: "android.studio.display.benchmark"
+    value: "NOTE: Your device is running a version of ART where method tracing is known to\naffect performance measurement after trace capture, so method tracing is\noff by default.\n\nTo use method tracing, either flash this device, use a different device, or\nenable method tracing with MicrobenchmarkConfig / instrumentation argument, and\nonly run one test at a time.\n\nFor more information, see https://issuetracker.google.com/issues/316174880\nBaselineProfileGenerator_generate\nTotal run time Ns: 68546432908.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark"
+    value: "NOTE: Your device is running a version of ART where method tracing is known to\naffect performance measurement after trace capture, so method tracing is\noff by default.\n\nTo use method tracing, either flash this device, use a different device, or\nenable method tracing with MicrobenchmarkConfig / instrumentation argument, and\nonly run one test at a time.\n\nFor more information, see https://issuetracker.google.com/issues/316174880\nBaselineProfileGenerator_generate\nTotal run time Ns: 68546432908.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof.txt"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt"
+  }
+  details {
+    key: "android.studio.display.benchmark"
+    value: "NOTE: Your device is running a version of ART where method tracing is known to\naffect performance measurement after trace capture, so method tracing is\noff by default.\n\nTo use method tracing, either flash this device, use a different device, or\nenable method tracing with MicrobenchmarkConfig / instrumentation argument, and\nonly run one test at a time.\n\nFor more information, see https://issuetracker.google.com/issues/316174880\nBaselineProfileGenerator_generate\nTotal run time Ns: 68546432908.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark"
+    value: "NOTE: Your device is running a version of ART where method tracing is known to\naffect performance measurement after trace capture, so method tracing is\noff by default.\n\nTo use method tracing, either flash this device, use a different device, or\nenable method tracing with MicrobenchmarkConfig / instrumentation argument, and\nonly run one test at a time.\n\nFor more information, see https://issuetracker.google.com/issues/316174880\nBaselineProfileGenerator_generate\nTotal run time Ns: 68546432908.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof.txt"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt"
+  }
+  details {
+    key: "android.studio.display.benchmark"
+    value: "NOTE: Your device is running a version of ART where method tracing is known to\naffect performance measurement after trace capture, so method tracing is\noff by default.\n\nTo use method tracing, either flash this device, use a different device, or\nenable method tracing with MicrobenchmarkConfig / instrumentation argument, and\nonly run one test at a time.\n\nFor more information, see https://issuetracker.google.com/issues/316174880\nBaselineProfileGenerator_generate\nTotal run time Ns: 68546432908.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark"
+    value: "NOTE: Your device is running a version of ART where method tracing is known to\naffect performance measurement after trace capture, so method tracing is\noff by default.\n\nTo use method tracing, either flash this device, use a different device, or\nenable method tracing with MicrobenchmarkConfig / instrumentation argument, and\nonly run one test at a time.\n\nFor more information, see https://issuetracker.google.com/issues/316174880\nBaselineProfileGenerator_generate\nTotal run time Ns: 68546432908.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof.txt"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt"
+  }
+  details {
+    key: "android.studio.display.benchmark"
+    value: "NOTE: Your device is running a version of ART where method tracing is known to\naffect performance measurement after trace capture, so method tracing is\noff by default.\n\nTo use method tracing, either flash this device, use a different device, or\nenable method tracing with MicrobenchmarkConfig / instrumentation argument, and\nonly run one test at a time.\n\nFor more information, see https://issuetracker.google.com/issues/316174880\nBaselineProfileGenerator_generate\nTotal run time Ns: 68546432908.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark"
+    value: "NOTE: Your device is running a version of ART where method tracing is known to\naffect performance measurement after trace capture, so method tracing is\noff by default.\n\nTo use method tracing, either flash this device, use a different device, or\nenable method tracing with MicrobenchmarkConfig / instrumentation argument, and\nonly run one test at a time.\n\nFor more information, see https://issuetracker.google.com/issues/316174880\nBaselineProfileGenerator_generate\nTotal run time Ns: 68546432908.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-06-11-17-15-52.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/dev.convocados.baselineprofile/additional_test_output"
+  }
+}
+output_artifact {
+  label {
+    label: "test-results.log"
+    namespace: "com.google.testing.platform.runtime.android.driver.AndroidInstrumentationDriver"
+  }
+  source_path {
+    path: "/private/tmp/convocados-md3/android-app/baselineprofile/build/outputs/androidTest-results/connected/nonMinifiedRelease/Pixel7a(AVD) - 14/testlog/test-results.log"
+  }
+  type: TEST_DATA
+  mime_type: "text/plain"
+}

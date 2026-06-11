@@ -43,9 +43,9 @@ fun LoginScreen(
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-            Text("Convocados", color = MaterialTheme.colorScheme.primary, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Convocados", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineLarge)
             Spacer(Modifier.height(8.dp))
-            Text(stringResource(R.string.manage_games), color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
+            Text(stringResource(R.string.manage_games), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(48.dp))
             Button(
                 onClick = { viewModel.authManager.startLogin(context as Activity) },
@@ -53,7 +53,7 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = MaterialTheme.shapes.medium,
             ) {
-                Text(stringResource(R.string.sign_in), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(stringResource(R.string.sign_in), color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleMedium)
             }
 
             Spacer(Modifier.height(24.dp))
@@ -63,7 +63,7 @@ fun LoginScreen(
                 serverUrl = viewModel.getServerUrl()
                 showServerSettings = !showServerSettings
             }) {
-                Text(stringResource(R.string.server_url), color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+                Text(stringResource(R.string.server_url), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
             }
 
             if (showServerSettings) {
@@ -85,7 +85,7 @@ fun LoginScreen(
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                     TextButton(onClick = { showServerSettings = false }) {
-                        Text("Cancel", color = MaterialTheme.colorScheme.outline)
+                        Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.outline)
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(
@@ -95,7 +95,7 @@ fun LoginScreen(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                     ) {
-                        Text("Save", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

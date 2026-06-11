@@ -1,6 +1,7 @@
 package dev.convocados.ui.screen.history
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -133,9 +134,11 @@ fun HistoryDetailScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            TopAppBar(scrollBehavior = scrollBehavior, 
                 title = { Text(stringResource(R.string.game_details)) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
@@ -152,7 +155,7 @@ fun HistoryDetailScreen(
                                 editing = true
                             }
                         }) {
-                            Icon(if (editing) Icons.Default.Check else Icons.Default.Edit, if (editing) "Save" else "Edit")
+                            Icon(if (editing) Icons.Default.Check else Icons.Default.Edit, if (editing) stringResource(R.string.save) else stringResource(R.string.edit))
                         }
                     }
                 },
@@ -168,7 +171,7 @@ fun HistoryDetailScreen(
 
         val h = history
         if (h == null) {
-            Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { Text("Not found", color = MaterialTheme.colorScheme.error) }
+            Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { Text(stringResource(R.string.not_found), color = MaterialTheme.colorScheme.error) }
             return@Scaffold
         }
 
@@ -179,24 +182,24 @@ fun HistoryDetailScreen(
         ) {
             // Date & status
             item {
-                Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
 
             // Score section
             item {
                 ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(stringResource(R.string.score), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text(stringResource(R.string.score), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                         Spacer(Modifier.height(8.dp))
                         if (editing) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(h.teamOneName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(h.teamOneName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     OutlinedTextField(value = scoreOneText, onValueChange = { scoreOneText = it }, modifier = Modifier.width(60.dp), singleLine = true)
                                 }
-                                Text("—", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                Text("—", style = MaterialTheme.typography.titleLarge)
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(h.teamTwoName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(h.teamTwoName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     OutlinedTextField(value = scoreTwoText, onValueChange = { scoreTwoText = it }, modifier = Modifier.width(60.dp), singleLine = true)
                                 }
                             }
@@ -204,13 +207,13 @@ fun HistoryDetailScreen(
                         } else {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(h.teamOneName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("${h.scoreOne ?: "—"}", fontWeight = FontWeight.Bold, fontSize = 28.sp, color = MaterialTheme.colorScheme.primary)
+                                    Text(h.teamOneName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${h.scoreOne ?: "—"}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
                                 }
-                                Text(":", fontWeight = FontWeight.Bold, fontSize = 28.sp, color = MaterialTheme.colorScheme.outline)
+                                Text(":", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.outline)
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(h.teamTwoName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("${h.scoreTwo ?: "—"}", fontWeight = FontWeight.Bold, fontSize = 28.sp, color = MaterialTheme.colorScheme.primary)
+                                    Text(h.teamTwoName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${h.scoreTwo ?: "—"}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -221,24 +224,24 @@ fun HistoryDetailScreen(
             // Teams section
             if (teamOne.isNotEmpty() || teamTwo.isNotEmpty()) {
                 item {
-                    Text(stringResource(R.string.players), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp))
+                    Text(stringResource(R.string.players), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp))
                 }
                 item {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // Team One
                         ElevatedCard(modifier = Modifier.weight(1f)) {
                             Column(Modifier.padding(12.dp)) {
-                                Text(h.teamOneName, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                                Text(h.teamOneName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.height(6.dp))
-                                teamOne.forEach { p -> Text(p.name, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface) }
+                                teamOne.forEach { p -> Text(p.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface) }
                             }
                         }
                         // Team Two
                         ElevatedCard(modifier = Modifier.weight(1f)) {
                             Column(Modifier.padding(12.dp)) {
-                                Text(h.teamTwoName, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = MaterialTheme.colorScheme.tertiary)
+                                Text(h.teamTwoName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
                                 Spacer(Modifier.height(6.dp))
-                                teamTwo.forEach { p -> Text(p.name, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface) }
+                                teamTwo.forEach { p -> Text(p.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface) }
                             }
                         }
                     }
@@ -248,14 +251,14 @@ fun HistoryDetailScreen(
             // ELO updates
             h.eloUpdates?.takeIf { it.isNotEmpty() }?.let { updates ->
                 item {
-                    Text(stringResource(R.string.elo_changes), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp))
+                    Text(stringResource(R.string.elo_changes), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp))
                 }
                 items(updates) { eu ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(eu.name, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text(eu.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                         Text(
                             "${if (eu.delta > 0) "+" else ""}${eu.delta}",
-                            fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.labelMedium,
                             color = if (eu.delta > 0) MaterialTheme.colorScheme.primary else if (eu.delta < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
                         )
                     }
@@ -265,14 +268,14 @@ fun HistoryDetailScreen(
             // Payments section
             if (payments.isNotEmpty()) {
                 item {
-                    Text(stringResource(R.string.payments), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp))
+                    Text(stringResource(R.string.payments), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp))
                 }
                 items(payments) { p ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(p.name, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text(p.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                         Text(
                             p.status.replaceFirstChar { it.uppercase() },
-                            fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.labelMedium,
                             color = if (p.status == "paid") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                         )
                     }

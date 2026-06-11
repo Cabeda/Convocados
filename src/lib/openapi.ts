@@ -225,17 +225,23 @@ export const openApiSpec = {
       },
     },
     "/api/events/{id}/archive": {
-      post: {
-        summary: "Archive an event",
+      put: {
+        summary: "Archive or unarchive an event",
         tags: ["Events"],
         parameters: [eventIdParam],
-        responses: { "200": { description: "Event archived" }, ...errorResponses },
-      },
-      delete: {
-        summary: "Unarchive an event",
-        tags: ["Events"],
-        parameters: [eventIdParam],
-        responses: { "200": { description: "Event unarchived" }, ...errorResponses },
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["archive"],
+                properties: { archive: { type: "boolean" } },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Event archive state updated" }, ...errorResponses },
       },
     },
     "/api/events/{id}/post-game-status": {

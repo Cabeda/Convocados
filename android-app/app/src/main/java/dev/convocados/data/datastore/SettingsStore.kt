@@ -22,6 +22,7 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
     private val LOCALE_KEY = stringPreferencesKey("locale")
     private val THEME_KEY = stringPreferencesKey("theme_mode")
     private val AUTO_PAY_ON_JOIN_KEY = booleanPreferencesKey("auto_pay_on_join")
+    private val DYNAMIC_COLOR_KEY = booleanPreferencesKey("dynamic_color")
 
     val locale: Flow<String> = context.dataStore.data.map { it[LOCALE_KEY] ?: "en" }
 
@@ -53,5 +54,12 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
 
     suspend fun setAutoPayOnJoin(enabled: Boolean) {
         context.dataStore.edit { it[AUTO_PAY_ON_JOIN_KEY] = enabled }
+    }
+
+    /** Material You dynamic color (Android 12+). Defaults off to preserve brand palette. */
+    val dynamicColor: Flow<Boolean> = context.dataStore.data.map { it[DYNAMIC_COLOR_KEY] ?: false }
+
+    suspend fun setDynamicColor(enabled: Boolean) {
+        context.dataStore.edit { it[DYNAMIC_COLOR_KEY] = enabled }
     }
 }

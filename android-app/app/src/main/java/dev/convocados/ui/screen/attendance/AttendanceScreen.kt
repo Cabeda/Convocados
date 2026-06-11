@@ -1,6 +1,7 @@
 package dev.convocados.ui.screen.attendance
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
@@ -12,7 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -49,16 +52,18 @@ fun AttendanceScreen(eventId: String, onBack: () -> Unit, viewModel: AttendanceV
     val loading by viewModel.loading.collectAsState()
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
-        topBar = { TopAppBar(title = { Text("\uD83D\uDCC5 Attendance") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = { TopAppBar(scrollBehavior = scrollBehavior, title = { Text(stringResource(R.string.attendance)) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
 
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(padding)) {
-            item { Text("$totalGames games played", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp)) }
+            item { Text(stringResource(R.string.games_played_total, totalGames), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp)) }
             if (players.isEmpty()) {
-                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text("No attendance data yet", color = MaterialTheme.colorScheme.outline) } }
+                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text(stringResource(R.string.no_attendance_data), color = MaterialTheme.colorScheme.outline) } }
             }
             itemsIndexed(players, key = { _, p -> p.name }) { index, p ->
                 val pct = (p.attendanceRate * 100).toInt()
@@ -66,16 +71,16 @@ fun AttendanceScreen(eventId: String, onBack: () -> Unit, viewModel: AttendanceV
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("#${index + 1}", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(p.name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(p.name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall)
                             LinearProgressIndicator(
                                 progress = { p.attendanceRate.toFloat() },
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(4.dp),
                                 color = MaterialTheme.colorScheme.primaryContainer, trackColor = MaterialTheme.colorScheme.surfaceVariant,
                             )
-                            Text("${p.gamesPlayed}/${p.totalGames} games · streak: ${p.currentStreak}", color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+                            Text(stringResource(R.string.games_streak_format, p.gamesPlayed, p.totalGames, p.currentStreak), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelSmall)
                         }
                         Spacer(Modifier.width(10.dp))
-                        Text("$pct%", color = when { pct >= 80 -> MaterialTheme.colorScheme.primary; pct >= 50 -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.tertiary }, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("$pct%", color = when { pct >= 80 -> MaterialTheme.colorScheme.primary; pct >= 50 -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.tertiary }, style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }

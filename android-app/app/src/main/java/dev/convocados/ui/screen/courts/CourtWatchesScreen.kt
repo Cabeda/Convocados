@@ -1,6 +1,7 @@
 package dev.convocados.ui.screen.courts
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,10 +15,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.convocados.R
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.CourtWatch
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,11 +71,13 @@ fun CourtWatchesScreen(
 ) {
     val state by viewModel.state.collectAsState()
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = { Text("Court Watches") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+            TopAppBar(scrollBehavior = scrollBehavior, 
+                title = { Text(stringResource(R.string.court_watches)) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
             )
         },
     ) { padding ->
@@ -84,7 +89,7 @@ fun CourtWatchesScreen(
                 Text(state.error!!, color = MaterialTheme.colorScheme.error)
             }
             state.watches.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                Text("No court watches yet.\nCreate one from an event's Court Alternatives.", color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(32.dp))
+                Text(stringResource(R.string.no_court_watches), color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(32.dp))
             }
             else -> LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(state.watches, key = { it.id }) { watch ->
@@ -102,7 +107,7 @@ fun CourtWatchesScreen(
                                 Modifier.fillMaxSize().background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = 20.dp),
                                 contentAlignment = Alignment.CenterEnd,
                             ) {
-                                Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.onErrorContainer)
+                                Icon(Icons.Default.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onErrorContainer)
                             }
                         },
                         enableDismissFromStartToEnd = false,

@@ -86,10 +86,10 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
         client.put("/api/events/$eventId/access", PasswordRequest(password))
 
     suspend fun archiveEvent(eventId: String): OkResponse =
-        client.post("/api/events/$eventId/archive")
+        client.put("/api/events/$eventId/archive", ArchiveRequest(archive = true))
 
     suspend fun unarchiveEvent(eventId: String): OkResponse =
-        client.delete("/api/events/$eventId/archive")
+        client.put("/api/events/$eventId/archive", ArchiveRequest(archive = false))
 
     suspend fun verifyEventPassword(eventId: String, password: String): OkResponse =
         client.post("/api/events/$eventId/access/verify", PasswordVerifyRequest(password))

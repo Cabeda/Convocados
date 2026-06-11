@@ -15,6 +15,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,11 +39,33 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import javax.inject.Inject
+import androidx.compose.material.icons.filled.SportsSoccer
+import androidx.compose.material.icons.filled.SportsBasketball
+import androidx.compose.material.icons.filled.SportsVolleyball
+import androidx.compose.material.icons.filled.SportsTennis
+import androidx.compose.material.icons.filled.SportsRugby
+import androidx.compose.material.icons.filled.SportsHandball
+import androidx.compose.material.icons.filled.SportsHockey
+import androidx.compose.material.icons.filled.SportsBaseball
+import androidx.compose.material.icons.filled.SportsCricket
+import androidx.compose.material.icons.filled.SportsMartialArts
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Stadium
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 
 @HiltViewModel
 class GamesViewModel @Inject constructor(
     private val repository: EventRepository,
-    private val api: ConvocadosApi
+    private val api: ConvocadosApi,
+    private val tokenStore: dev.convocados.data.auth.TokenStore,
 ) : ViewModel() {
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing
@@ -68,6 +91,16 @@ class GamesViewModel @Inject constructor(
             _refreshing.value = false
         }
     }
+
+    fun archive(eventId: String) {
+        viewModelScope.launch { repository.archiveEvent(eventId) }
+    }
+
+    fun unarchive(eventId: String) {
+        viewModelScope.launch { repository.unarchiveEvent(eventId) }
+    }
+
+    fun shareUrl(eventId: String): String = "${tokenStore.getServerUrl()}/events/$eventId"
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
@@ -76,6 +109,7 @@ fun GamesScreen(
     onEventClick: (String) -> Unit,
     onCreateClick: () -> Unit,
     onPublicClick: () -> Unit,
+    onOpenSettings: (String) -> Unit = {},
     viewModel: GamesViewModel = hiltViewModel(),
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -89,8 +123,8 @@ fun GamesScreen(
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = onCreateClick, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
-                Icon(Icons.Default.Add, "Create game")
+            FloatingActionButton(onClick = onCreateClick, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.testTag("create_game_fab")) {
+                Icon(Icons.Default.Add, stringResource(R.string.create_game_button))
             }
         },
         containerColor = MaterialTheme.colorScheme.background,
@@ -134,8 +168,21 @@ fun GamesScreen(
                         FilterChip(
                             selected = false,
                             onClick = onPublicClick,
-                            label = { Text("\uD83C\uDF0D") },
+                            label = { Text(stringResource(R.string.public_label)) }, leadingIcon = { Icon(Icons.Default.Public, stringResource(R.string.public_label), modifier = Modifier.size(18.dp)) },
                         )
+                    }
+                }
+
+                if (games.isEmpty() && showArchived) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(12.dp))
+                            Text(stringResource(R.string.no_archived_games), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                        }
                     }
                 }
 
@@ -145,7 +192,7 @@ fun GamesScreen(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text("🏟️", fontSize = 48.sp)
+                            Icon(Icons.Default.Stadium, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(12.dp))
                             Text(stringResource(R.string.no_games_yet), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
                             Spacer(Modifier.height(8.dp))
@@ -162,9 +209,27 @@ fun GamesScreen(
                 }
 
                 items(games, key = { it.id }) { game ->
+                    val ctx = LocalContext.current
                     GameCard(
                         game = game,
                         onClick = { onEventClick(game.id) },
+                        onOpenSettings = { onOpenSettings(game.id) },
+                        onArchiveToggle = {
+                            if (game.archivedAt != null) viewModel.unarchive(game.id) else viewModel.archive(game.id)
+                        },
+                        onShare = {
+                            val text = "${game.title}\n${formatRelativeDate(game.dateTime)}" +
+                                (if (game.location.isNotBlank()) "\n${game.location}" else "") +
+                                "\n\n${viewModel.shareUrl(game.id)}"
+                            ctx.startActivity(
+                                android.content.Intent.createChooser(
+                                    android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, text)
+                                    },
+                                    null,
+                                )
+                            )
+                        },
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope,
                     )
@@ -174,18 +239,27 @@ fun GamesScreen(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun GameCard(
     game: EventSummary,
     onClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
+    onOpenSettings: () -> Unit = {},
+    onArchiveToggle: () -> Unit = {},
+    onShare: () -> Unit = {},
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .testTag("game_card_${game.id}")
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { menuOpen = true },
+                onLongClickLabel = stringResource(R.string.quick_actions),
+            )
             .then(
                 with(sharedTransitionScope) {
                     Modifier.sharedElement(
@@ -199,29 +273,66 @@ fun GameCard(
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(sportEmoji(game.sport), fontSize = 22.sp, modifier = Modifier.padding(end = 10.dp))
-                Text(game.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                SportIcon(game.sport, modifier = Modifier.size(24.dp).padding(end = 2.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(game.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "${formatRelativeDate(game.dateTime)} · ${game.playerCount}/${game.maxPlayers} players${if (game.isRecurring) " · \uD83D\uDD01" else ""}",
+                stringResource(R.string.event_meta, formatRelativeDate(game.dateTime), game.playerCount, game.maxPlayers) + (if (game.isRecurring) stringResource(R.string.recurring_suffix) else ""),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (game.lastScoreOne != null && game.lastScoreTwo != null) {
                 Text(
-                    "${sportEmoji(game.sport)} ${game.lastScoreOne}:${game.lastScoreTwo}",
+                    stringResource(R.string.last_score, game.lastScoreOne!!, game.lastScoreTwo!!),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
             if (game.location.isNotBlank()) {
-                Text("\uD83D\uDCCD ${game.location}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
+                Text(game.location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
             }
             if (game.archivedAt != null) {
-                Text("ARCHIVED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+                Text(stringResource(R.string.archived_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
             }
         }
+
+        // Long-press quick actions
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.open_settings)) },
+                leadingIcon = { Icon(Icons.Default.Settings, null) },
+                onClick = { menuOpen = false; onOpenSettings() },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.share)) },
+                leadingIcon = { Icon(Icons.Default.Share, null) },
+                onClick = { menuOpen = false; onShare() },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(if (game.archivedAt != null) R.string.unarchive_game else R.string.archive_game)) },
+                leadingIcon = { Icon(if (game.archivedAt != null) Icons.Default.Unarchive else Icons.Default.Archive, null) },
+                onClick = { menuOpen = false; onArchiveToggle() },
+            )
+        }
     }
+}
+
+@Composable
+fun SportIcon(sport: String, modifier: Modifier = Modifier, tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary) {
+    val icon = when {
+        sport.contains("football") || sport.contains("soccer") || sport.contains("futsal") -> Icons.Default.SportsSoccer
+        sport.contains("basketball") -> Icons.Default.SportsBasketball
+        sport.contains("volleyball") -> Icons.Default.SportsVolleyball
+        sport.contains("tennis") || sport.contains("padel") -> Icons.Default.SportsTennis
+        sport.contains("rugby") -> Icons.Default.SportsRugby
+        sport.contains("handball") -> Icons.Default.SportsHandball
+        sport.contains("hockey") -> Icons.Default.SportsHockey
+        sport.contains("baseball") -> Icons.Default.SportsBaseball
+        sport.contains("cricket") -> Icons.Default.SportsCricket
+        else -> Icons.Default.SportsMartialArts
+    }
+    Icon(icon, contentDescription = sport, modifier = modifier, tint = tint)
 }
 
 fun sportEmoji(sport: String): String = when {

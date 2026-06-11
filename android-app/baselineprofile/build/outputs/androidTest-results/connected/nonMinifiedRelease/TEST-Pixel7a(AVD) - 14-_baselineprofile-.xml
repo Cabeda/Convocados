@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuites tests="1" failures="0" errors="0" skipped="0" time="70.025" timestamp="2026-06-11T17:15:54" hostname="localhost">
+  <testsuite name="dev.convocados.baselineprofile.BaselineProfileGenerator" tests="1" failures="0" errors="0" skipped="0" time="68.868" timestamp="2026-06-11T17:15:54" hostname="localhost">
+    <properties>
+      <property name="device" value="Pixel7a(AVD) - 14" />
+      <property name="flavor" value="" />
+      <property name="project" value=":baselineprofile" />
+    </properties>
+    <testcase name="generate" classname="dev.convocados.baselineprofile.BaselineProfileGenerator" time="68.868" />
+  </testsuite>
+</testsuites>

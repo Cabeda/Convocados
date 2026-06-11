@@ -1,6 +1,7 @@
 package dev.convocados.ui.screen.payments
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -13,10 +14,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.convocados.R
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.PaymentsResponse
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,8 +71,10 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
     var overrideAmount by remember { mutableStateOf("") }
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
-        topBar = { TopAppBar(title = { Text("\uD83D\uDCB0 Payments") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = { TopAppBar(scrollBehavior = scrollBehavior, title = { Text(stringResource(R.string.payments)) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
@@ -79,9 +84,9 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
             // Summary
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryCard("Paid", "${d.summary.paidCount}", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
-                    SummaryCard("Pending", "${d.summary.pendingCount}", MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
-                    d.totalAmount?.let { SummaryCard("Total", "${d.currency ?: "€"}$it", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f)) }
+                    SummaryCard(stringResource(R.string.paid), "${d.summary.paidCount}", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
+                    SummaryCard(stringResource(R.string.pending), "${d.summary.pendingCount}", MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
+                    d.totalAmount?.let { SummaryCard(stringResource(R.string.total), "${d.currency ?: "€"}$it", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f)) }
                 }
             }
             // Bulk mark all as paid
@@ -92,27 +97,27 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                     ) {
-                        Text("✓ Mark all as paid", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
+                        Text("✓ ${stringResource(R.string.mark_all_paid)}", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
             if (d.payments.isEmpty()) {
-                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text("No payments set up", color = MaterialTheme.colorScheme.outline) } }
+                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text(stringResource(R.string.no_payments), color = MaterialTheme.colorScheme.outline) } }
             }
             items(d.payments, key = { it.id }) { p ->
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth(), onClick = { viewModel.toggle(eventId, p.playerName, p.status) }) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(p.playerName, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
-                            p.method?.let { Text(it, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp) }
+                            p.method?.let { Text(it, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall) }
                         }
-                        d.totalAmount?.let { Text("${d.currency ?: "€"}${p.amount}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, modifier = Modifier.padding(end = 10.dp)) }
+                        d.totalAmount?.let { Text("${d.currency ?: "€"}${p.amount}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = 10.dp)) }
                         Card(colors = CardDefaults.cardColors(containerColor = if (p.status == "paid") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
-                            Text(if (p.status == "paid") "✓ Paid" else "Pending", color = if (p.status == "paid") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.outline, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                            Text(if (p.status == "paid") "✓ ${stringResource(R.string.paid)}" else stringResource(R.string.pending), color = if (p.status == "paid") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                         }
                         Spacer(Modifier.width(4.dp))
                         IconButton(onClick = { overrideTarget = p.playerName; overrideAmount = p.amount.toString() }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Edit, "Set custom cost", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Edit, stringResource(R.string.set_custom_cost), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
@@ -123,18 +128,18 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
         overrideTarget?.let { name ->
             AlertDialog(
                 onDismissRequest = { overrideTarget = null },
-                title = { Text("Custom cost for $name") },
+                title = { Text(stringResource(R.string.custom_cost_for, name)) },
                 text = {
-                    OutlinedTextField(value = overrideAmount, onValueChange = { overrideAmount = it }, label = { Text("Amount") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = overrideAmount, onValueChange = { overrideAmount = it }, label = { Text(stringResource(R.string.amount)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 },
                 confirmButton = {
                     TextButton(onClick = {
                         overrideAmount.toDoubleOrNull()?.let { viewModel.setCostOverride(eventId, name, it) }
                         overrideTarget = null
-                    }) { Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
+                    }) { Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { overrideTarget = null }) { Text("Cancel") }
+                    TextButton(onClick = { overrideTarget = null }) { Text(stringResource(R.string.cancel)) }
                 },
             )
         }
@@ -145,8 +150,8 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
 private fun SummaryCard(label: String, value: String, valueColor: androidx.compose.ui.graphics.Color, modifier: Modifier) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = modifier) {
         Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, color = valueColor, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-            Text(label, color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+            Text(value, color = valueColor, style = MaterialTheme.typography.titleLarge)
+            Text(label, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelSmall)
         }
     }
 }

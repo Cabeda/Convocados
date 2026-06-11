@@ -2,33 +2,41 @@
 agp = "9.1.0"
 kotlin = "2.2.10"
 ksp = "2.2.10-2.0.2"
-googleServices = "4.4.2"
+googleServices = "4.4.4"
 hilt = "2.59.2"
-composeBom = "2025.02.00"
-androidxCore = "1.15.0"
-androidxLifecycle = "2.8.7"
-androidxActivity = "1.10.0"
+composeBom = "2025.06.00"
+androidxCore = "1.16.0"
+androidxLifecycle = "2.9.1"
+androidxActivity = "1.10.1"
 androidxNavigation = "2.9.8"
 androidxHiltNavigation = "1.3.0"
 ktor = "3.5.0"
 kotlinxSerializationJson = "1.8.0"
-androidxDataStore = "1.1.2"
+androidxDataStore = "1.1.4"
 androidxSecurity = "1.1.0-alpha06"
 androidxBrowser = "1.8.0"
-androidxSplashscreen = "1.0.1"
-firebaseBom = "33.9.0"
-accompanist = "0.37.0"
+androidxSplashscreen = "1.2.0"
+firebaseBom = "33.14.0"
+accompanist = "0.37.3"
 room = "2.8.4"
 wearCompose = "1.6.2"
 horologistComposeLayout = "0.7.15"
 playServicesWearable = "20.0.1"
 playServicesAuth = "21.3.0"
 googleIdIdentity = "1.1.1"
-workRuntime = "2.10.0"
+workRuntime = "2.10.1"
 hiltWork = "1.2.0"
+profileinstaller = "1.4.1"
+benchmarkMacro = "1.3.4"
+baselineProfilePlugin = "1.3.4"
+uiautomator = "2.3.0"
+androidTestRunner = "1.6.2"
+androidTestExtJunit = "1.2.1"
 turbine = "1.2.1"
-mockk = "1.13.16"
-osmdroid = "6.1.18"
+mockk = "1.14.2"
+roborazzi = "1.46.1"
+robolectric = "4.14.1"
+osmdroid = "6.1.20"
 kotlinxCoroutinesTest = "1.11.0"
 
 [libraries]
@@ -45,6 +53,8 @@ androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 wear-compose-ui-tooling = { group = "androidx.wear.compose", name = "compose-ui-tooling", version.ref = "wearCompose" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-material3-adaptive-navigation-suite = { group = "androidx.compose.material3", name = "material3-adaptive-navigation-suite" }
+androidx-compose-material3-window-size = { group = "androidx.compose.material3", name = "material3-window-size-class" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "androidxDataStore" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "androidxSecurity" }
@@ -80,6 +90,11 @@ androidx-credentials = { group = "androidx.credentials", name = "credentials", v
 androidx-credentials-play = { group = "androidx.credentials", name = "credentials-play-services-auth", version = "1.6.0" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntime" }
 androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWork" }
+androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmarkMacro" }
+androidx-test-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidTestRunner" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidTestExtJunit" }
 androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltWork" }
 androidx-wear = { group = "androidx.wear", name = "wear", version = "1.3.0" }
 
@@ -89,6 +104,12 @@ mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 osmdroid = { group = "org.osmdroid", name = "osmdroid-android", version.ref = "osmdroid" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
+roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -99,3 +120,6 @@ google-services = { id = "com.google.gms.google-services", version.ref = "google
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 play-publisher = { id = "com.github.triplet.play", version = "3.12.1" }
+android-test = { id = "com.android.test", version.ref = "agp" }
+baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineProfilePlugin" }
+roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }

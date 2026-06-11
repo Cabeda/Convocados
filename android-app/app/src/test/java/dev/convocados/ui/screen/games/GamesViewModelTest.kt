@@ -20,6 +20,7 @@ import org.junit.Test
 class GamesViewModelTest {
     private val repository = mockk<EventRepository>(relaxed = true)
     private val api = mockk<ConvocadosApi>(relaxed = true)
+    private val tokenStore = mockk<dev.convocados.data.auth.TokenStore>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
@@ -42,7 +43,7 @@ class GamesViewModelTest {
         coEvery { repository.getEventsByType("followed") } returns flowOf(followed)
         coEvery { repository.getEventsByType("archivedOwned") } returns flowOf(emptyList())
 
-        val viewModel = GamesViewModel(repository, api)
+        val viewModel = GamesViewModel(repository, api, tokenStore)
 
         viewModel.ownedGames.test {
             // stateIn starts with emptyList() initial value
@@ -58,7 +59,7 @@ class GamesViewModelTest {
     @Test
     fun `refresh calls repository refresh`() = runTest {
         coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
-        val viewModel = GamesViewModel(repository, api)
+        val viewModel = GamesViewModel(repository, api, tokenStore)
 
         // Let init { refresh() } complete
         advanceUntilIdle()
