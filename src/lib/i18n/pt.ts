@@ -705,6 +705,7 @@ const pt: TranslationKeys = {
   courtWatchesEmpty: "Ainda não tens vigilâncias de campo. Pesquisa alternativas e toca em \"Avisar quando livre\" num campo reservado.",
   courtWatchDelete: "Remover vigilância",
   courtWatchEveryWeekday: "Todas as {weekday}",
+  courtShowMore: "Mostrar mais",
   courtPreviousAlerts: "Encontrados anteriormente",
 
   // Admin dashboard (#159)

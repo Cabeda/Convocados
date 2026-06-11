@@ -87,7 +87,7 @@ export async function searchCourtAlternatives(params: SearchAlternativesParams):
     return { alternatives: [], error: "Sport not supported by Playtomic" };
   }
 
-  const maxClubs = params.maxClubs ?? 5;
+  const maxClubs = params.maxClubs ?? 15;
   const dateStr = toDateStr(params.dateTime);
 
   // 1. Find nearby clubs

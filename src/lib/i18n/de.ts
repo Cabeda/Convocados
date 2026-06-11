@@ -656,6 +656,7 @@ const de: TranslationKeys = {
   courtWatchesEmpty: "Du hast noch keine Platz-Beobachtungen. Suche Alternativen und tippe bei einem belegten Platz auf „Benachrichtigen, wenn frei“.",
   courtWatchDelete: "Beobachtung entfernen",
   courtWatchEveryWeekday: "Jeden {weekday}",
+  courtShowMore: "Mehr anzeigen",
   courtPreviousAlerts: "Zuvor gefunden",
 
   // Admin dashboard (#159)
