@@ -90,7 +90,7 @@ export async function findWatchMatches(
         const slotMin = timeToMinutes(slot.start_time);
         if (slotMin < windowStart || slotMin > windowEnd) continue;
         if (slot.duration < watch.durationMinutes) continue;
-        if (watch.maxPrice != null && slot.price != null && slot.price > watch.maxPrice) continue;
+        if (watch.maxPrice !== null && watch.maxPrice !== undefined && slot.price !== null && slot.price > watch.maxPrice) continue;
         matches.push({
           resourceId: court.resource_id,
           resourceName: court.resource_name,
