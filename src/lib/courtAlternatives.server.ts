@@ -5,7 +5,7 @@
 
 import { searchClubs, getClubResources } from "./playtomic.server";
 import { getCachedAvailability } from "./availabilityCache.server";
-import { isPlaytomicSport } from "./playtomic";
+import { isPlaytomicSport, mapSportToPlaytomic } from "./playtomic";
 
 export interface CourtWatchConfig {
   radius: number;        // meters, default 10000
@@ -140,7 +140,7 @@ export async function searchCourtAlternatives(params: SearchAlternativesParams):
           currency: slot.currency,
           coordinate: club.coordinate,
           address,
-          playtomicUrl: `https://playtomic.io/tenant/${club.tenant_id}/booking/${dateStr}?resource_id=${court.resource_id}&start=${slot.start_time}`,
+          playtomicUrl: `https://playtomic.io/tenant/${club.tenant_id}/booking/${dateStr}?resource_id=${court.resource_id}&start=${slot.start_time}&sport_id=${mapSportToPlaytomic(params.sport) ?? ""}`,
           imageUrl: club.images[0] || null,
           distanceKm,
           status: "available",
@@ -166,7 +166,7 @@ export async function searchCourtAlternatives(params: SearchAlternativesParams):
           currency: null,
           coordinate: club.coordinate,
           address,
-          playtomicUrl: `https://playtomic.io/tenant/${club.tenant_id}`,
+          playtomicUrl: `https://playtomic.io/tenant/${club.tenant_id}?sport_id=${mapSportToPlaytomic(params.sport) ?? ""}`,
           imageUrl: club.images[0] || null,
           distanceKm,
           status: "booked",
