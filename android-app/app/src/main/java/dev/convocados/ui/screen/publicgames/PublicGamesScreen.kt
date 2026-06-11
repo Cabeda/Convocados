@@ -118,7 +118,7 @@ fun PublicGamesScreen(
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
                     IconButton(onClick = { showMap = !showMap }) {
-                        Icon(if (showMap) Icons.Default.ViewList else Icons.Default.Map, "Toggle view")
+                        Icon(if (showMap) Icons.Default.ViewList else Icons.Default.Map, stringResource(R.string.toggle_view))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
@@ -138,7 +138,7 @@ fun PublicGamesScreen(
                     FilterChip(
                         selected = sportFilter == sport,
                         onClick = { viewModel.setSportFilter(sport) },
-                        label = { Text(if (sport == "all") "All" else sport.replaceFirstChar { it.uppercase() }) },
+                        label = { Text(if (sport == "all") stringResource(R.string.all) else sport.replaceFirstChar { it.uppercase() }) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -156,8 +156,8 @@ fun PublicGamesScreen(
                             Column(Modifier.fillMaxWidth().padding(48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.Public, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(Modifier.height(8.dp))
-                                Text("No public games right now", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                                Text("Create a game and make it public so others can find it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                                Text(stringResource(R.string.no_public_games), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                                Text(stringResource(R.string.no_public_games_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                             }
                         }
                     }
@@ -183,10 +183,10 @@ fun PublicGamesScreen(
                                         Text(event.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
                                     }
                                     Card(colors = CardDefaults.cardColors(containerColor = if (event.spotsLeft == 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer)) {
-                                        Text(if (event.spotsLeft == 0) "Full" else "${event.spotsLeft} spots", color = if (event.spotsLeft == 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                                        Text(if (event.spotsLeft == 0) stringResource(R.string.full) else stringResource(R.string.spots_left, event.spotsLeft), color = if (event.spotsLeft == 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                                     }
                                 }
-                                Text("${formatRelativeDate(event.dateTime)} · ${event.playerCount}/${event.maxPlayers} players", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                Text(stringResource(R.string.event_meta, formatRelativeDate(event.dateTime), event.playerCount, event.maxPlayers), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                 if (event.location.isNotBlank()) Text(event.location, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
                             }
                         }
@@ -211,7 +211,7 @@ private fun PublicGamesMapView(events: List<PublicEvent>, onEventClick: (String)
 
     if (geoEvents.isEmpty()) {
         Box(Modifier.fillMaxSize(), Alignment.Center) {
-            Text("No events with location data", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+            Text(stringResource(R.string.no_events_location), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
         }
         return
     }

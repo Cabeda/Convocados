@@ -63,4 +63,179 @@
     <string name="payments">Pagamentos</string>
     <string name="overview">RESUMO</string>
     <string name="per_event">POR EVENTO</string>
+
+    <string name="attendance">Presenças</string>
+    <string name="games_played_total">%1$d jogos disputados</string>
+    <string name="no_attendance_data">Ainda sem dados de presença</string>
+    <string name="games_streak_format">%1$d/%2$d jogos · sequência: %3$d</string>
+
+    <string name="watch_created">Alerta criado! Serás notificado quando estiver livre.</string>
+    <string name="court_alternatives">Campos alternativos</string>
+    <string name="from">De</string>
+    <string name="to">Até</string>
+    <string name="search">Procurar</string>
+    <string name="no_courts_found">Não há campos para este intervalo de tempo.</string>
+    <string name="notify_when_free">Notificar quando livre</string>
+    <string name="book_on_playtomic">Reservar no Playtomic</string>
+    <string name="court_watches">Alertas de campos</string>
+    <string name="delete">Eliminar</string>
+    <string name="no_court_watches">Ainda sem alertas de campos.\nCria um a partir dos campos alternativos de um evento.</string>
+
+    <string name="game_title">Título do jogo</string>
+    <string name="game_title_placeholder">ex. Futebol de terça</string>
+    <string name="sport">Desporto</string>
+    <string name="location_optional">Local (opcional)</string>
+    <string name="location_placeholder">ex. Campo do rio, Pista 2</string>
+    <string name="pick_on_map">Escolher no mapa</string>
+    <string name="date_time">Data e hora</string>
+    <string name="max_players">Máx. jogadores</string>
+    <string name="max_players_hint">Jogadores acima deste limite ficam nos suplentes</string>
+    <string name="advanced_options">Opções avançadas</string>
+    <string name="team_1_name">Nome da equipa 1</string>
+    <string name="team_2_name">Nome da equipa 2</string>
+    <string name="recurring_game">Jogo recorrente</string>
+    <string name="create_game_button">Criar jogo</string>
+
+    <string name="event_fallback">Evento</string>
+    <string name="follow">Seguir</string>
+    <string name="following">A seguir</string>
+    <string name="notification_settings">Definições de notificações</string>
+    <string name="player_activity">Atividade dos jogadores</string>
+    <string name="game_reminders">Lembretes de jogos</string>
+    <string name="post_game_results">Resultados pós-jogo</string>
+    <string name="event_changes">Alterações do evento</string>
+    <string name="unfollow">Deixar de seguir</string>
+    <string name="leave">Sair</string>
+    <string name="password_protected">Este jogo está protegido por palavra-passe</string>
+    <string name="password">Palavra-passe</string>
+    <string name="unlock">Desbloquear</string>
+    <string name="event_not_found">Evento não encontrado</string>
+    <string name="go_back">Voltar</string>
+    <string name="share">Partilhar</string>
+    <string name="randomize">Sortear</string>
+    <string name="settings">Definições</string>
+    <string name="courts">Campos</string>
+    <string name="alerts">Alertas</string>
+    <string name="game_ended">Jogo terminado</string>
+    <string name="record_final_score">Registar o resultado final</string>
+    <string name="record_score">Registar resultado</string>
+    <string name="mark_payments">Marcar pagamentos</string>
+    <string name="paid_for_last_game">%1$d de %2$d pagaram o último jogo</string>
+    <string name="paid_streak">sequência de %1$d jogos pagos</string>
+    <string name="on_bench">Estás nos suplentes</string>
+    <string name="joined_as">Entraste como %1$s</string>
+    <string name="owe_amount">Deves €%1$s de %2$d jogo(s)</string>
+    <string name="settle_balance">Regulariza o teu saldo pendente para entrar.</string>
+    <string name="pay_and_join">Pagar €%1$s e entrar</string>
+    <string name="join_as">Entrar (%1$s)</string>
+    <string name="removed_tap_undo">%1$s removido — toca para anular</string>
+    <string name="vs">VS</string>
+    <string name="linked">Associado</string>
+    <string name="player_moved">%1$s movido</string>
+    <string name="undo">Anular</string>
+    <string name="add_score">+ Resultado</string>
+    <string name="player_games_count">%1$s (%2$d jogos)</string>
+    <string name="settle_up_title">Regulariza antes de jogar</string>
+    <string name="always_show_payment">Mostrar sempre o pagamento ao entrar</string>
+    <string name="sent_confirmation">Já enviei ✓</string>
+    <string name="join_pay_later">Entrar e pagar depois</string>
+
+    <string name="public_label">Públicos</string>
+    <string name="event_meta">%1$s · %2$d/%3$d jogadores</string>
+    <string name="recurring_suffix"> · Recorrente</string>
+    <string name="last_score">Último: %1$d:%2$d</string>
+    <string name="archived_label">ARQUIVADO</string>
+
+    <string name="by_actor">por %1$s</string>
+
+    <string name="edit">Editar</string>
+    <string name="not_found">Não encontrado</string>
+
+    <string name="pick_location">Escolher local</string>
+    <string name="confirm">Confirmar</string>
+    <string name="tap_place_pin">Toca para colocar o pino</string>
+
+    <string name="push_notifications">Notificações push</string>
+    <string name="enable_push">Ativar push</string>
+    <string name="enable_push_desc">Interruptor geral de todas as notificações push</string>
+    <string name="player_activity_desc">Quando jogadores entram ou saem</string>
+    <string name="game_reminders_desc">Antes do início do jogo</string>
+    <string name="event_updates">Atualizações do evento</string>
+    <string name="event_updates_desc">Quando os detalhes do evento mudam</string>
+    <string name="payment_reminders">Lembretes de pagamento</string>
+    <string name="email_notifications">Notificações por email</string>
+    <string name="enable_email">Ativar email</string>
+    <string name="enable_email_desc">Interruptor geral de todos os emails</string>
+    <string name="game_invites">Convites para jogos</string>
+    <string name="weekly_summary">Resumo semanal</string>
+    <string name="reminder_timing">Antecedência dos lembretes</string>
+    <string name="reminder_24h">24 horas antes</string>
+    <string name="reminder_2h">2 horas antes</string>
+    <string name="reminder_1h">1 hora antes</string>
+
+    <string name="paid">Pago</string>
+    <string name="pending">Pendente</string>
+    <string name="total">Total</string>
+    <string name="mark_all_paid">Marcar tudo como pago</string>
+    <string name="no_payments">Sem pagamentos configurados</string>
+    <string name="set_custom_cost">Definir custo personalizado</string>
+    <string name="custom_cost_for">Custo personalizado para %1$s</string>
+    <string name="amount">Valor</string>
+
+    <string name="court_watches_subtitle">Notificar quando campos reservados ficarem livres</string>
+    <string name="theme">Tema</string>
+    <string name="theme_system">Sistema</string>
+    <string name="theme_light">Claro</string>
+    <string name="theme_dark">Escuro</string>
+    <string name="material_you">Material You</string>
+    <string name="material_you_desc">Usar as cores do teu fundo de ecrã</string>
+
+    <string name="toggle_view">Alternar vista</string>
+    <string name="all">Todos</string>
+    <string name="no_public_games">Sem jogos públicos de momento</string>
+    <string name="no_public_games_desc">Cria um jogo e torna-o público para outros o encontrarem.</string>
+    <string name="full">Cheio</string>
+    <string name="spots_left">%1$d vagas</string>
+    <string name="no_events_location">Sem eventos com dados de localização</string>
+
+    <string name="recalculating">A recalcular classificações…</string>
+    <string name="recalculate">Recalcular</string>
+    <string name="new_player">Novo jogador</string>
+    <string name="claim_as_me">Reivindicar como eu</string>
+    <string name="claim_player">Reivindicar jogador</string>
+    <string name="claim_confirm">Tens a certeza de que queres reivindicar \"%1$s\"? Este jogador será associado à tua conta.</string>
+    <string name="claim">Reivindicar</string>
+
+    <string name="event_settings">Definições do evento</string>
+    <string name="location">Local</string>
+    <string name="general">Geral</string>
+    <string name="teams_ratings">Equipas e classificações</string>
+    <string name="features">Funcionalidades</string>
+    <string name="access">Acesso</string>
+    <string name="danger_zone">Zona de perigo</string>
+    <string name="public_game">Jogo público</string>
+    <string name="elo_ratings">Classificações ELO</string>
+    <string name="hide_elo_teams">Ocultar ELO nas equipas</string>
+    <string name="split_costs">Dividir custos</string>
+    <string name="password_set">Palavra-passe definida — toca para alterar/remover</string>
+    <string name="set_password">Definir palavra-passe</string>
+    <string name="new_password_placeholder">Nova palavra-passe (vazio para remover)</string>
+    <string name="transfer_ownership">Transferir propriedade</string>
+    <string name="select_transfer_player">Seleciona um jogador para transferir a propriedade:</string>
+    <string name="unarchive_game">Desarquivar jogo</string>
+    <string name="archive_game">Arquivar jogo</string>
+    <string name="rankings_elo">Rankings / ELO</string>
+    <string name="attendance_stats">Estatísticas de presença</string>
+
+    <string name="something_wrong">Algo correu mal</string>
+    <string name="games_stat">Jogos</string>
+    <string name="wins">Vitórias</string>
+    <string name="draws">Empates</string>
+    <string name="losses">Derrotas</string>
+    <string name="win_rate">Taxa de vitórias</string>
+    <string name="avg_rating">Classificação média</string>
+    <string name="games_rating">%1$d jogos · Classificação: %2$d</string>
+    <string name="attendance_streak">Presença: %1$d%% · Sequência: %2$d</string>
+
+    <string name="user_not_found">Utilizador não encontrado</string>
 </resources>

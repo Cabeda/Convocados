@@ -11,9 +11,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.annotation.StringRes
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -21,6 +23,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.convocados.R
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.NotificationPrefs
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,28 +33,28 @@ import javax.inject.Inject
 import android.Manifest
 import android.os.Build
 
-data class PrefItem(val key: String, val label: String, val desc: String? = null)
-data class PrefSection(val title: String, val items: List<PrefItem>)
+data class PrefItem(val key: String, @StringRes val labelRes: Int, @StringRes val descRes: Int? = null)
+data class PrefSection(@StringRes val titleRes: Int, val items: List<PrefItem>)
 
 val SECTIONS = listOf(
-    PrefSection("Push notifications", listOf(
-        PrefItem("pushEnabled", "Enable push", "Master toggle for all push notifications"),
-        PrefItem("playerActivityPush", "Player activity", "When players join or leave"),
-        PrefItem("gameReminderPush", "Game reminders", "Before your game starts"),
-        PrefItem("eventDetailsPush", "Event updates", "When event details change"),
-        PrefItem("paymentReminderPush", "Payment reminders"),
+    PrefSection(R.string.push_notifications, listOf(
+        PrefItem("pushEnabled", R.string.enable_push, R.string.enable_push_desc),
+        PrefItem("playerActivityPush", R.string.player_activity, R.string.player_activity_desc),
+        PrefItem("gameReminderPush", R.string.game_reminders, R.string.game_reminders_desc),
+        PrefItem("eventDetailsPush", R.string.event_updates, R.string.event_updates_desc),
+        PrefItem("paymentReminderPush", R.string.payment_reminders),
     )),
-    PrefSection("Email notifications", listOf(
-        PrefItem("emailEnabled", "Enable email", "Master toggle for all emails"),
-        PrefItem("gameReminderEmail", "Game reminders"),
-        PrefItem("gameInviteEmail", "Game invites"),
-        PrefItem("weeklySummaryEmail", "Weekly summary"),
-        PrefItem("paymentReminderEmail", "Payment reminders"),
+    PrefSection(R.string.email_notifications, listOf(
+        PrefItem("emailEnabled", R.string.enable_email, R.string.enable_email_desc),
+        PrefItem("gameReminderEmail", R.string.game_reminders),
+        PrefItem("gameInviteEmail", R.string.game_invites),
+        PrefItem("weeklySummaryEmail", R.string.weekly_summary),
+        PrefItem("paymentReminderEmail", R.string.payment_reminders),
     )),
-    PrefSection("Reminder timing", listOf(
-        PrefItem("reminder24h", "24 hours before"),
-        PrefItem("reminder2h", "2 hours before"),
-        PrefItem("reminder1h", "1 hour before"),
+    PrefSection(R.string.reminder_timing, listOf(
+        PrefItem("reminder24h", R.string.reminder_24h),
+        PrefItem("reminder2h", R.string.reminder_2h),
+        PrefItem("reminder1h", R.string.reminder_1h),
     )),
 )
 
@@ -129,7 +132,7 @@ fun NotificationPrefsScreen(onBack: () -> Unit, viewModel: NotificationPrefsView
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = { TopAppBar(scrollBehavior = scrollBehavior, title = { Text("Notifications") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+        topBar = { TopAppBar(scrollBehavior = scrollBehavior, title = { Text(stringResource(R.string.notifications_title)) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
@@ -137,13 +140,13 @@ fun NotificationPrefsScreen(onBack: () -> Unit, viewModel: NotificationPrefsView
 
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
             SECTIONS.forEach { section ->
-                Text(section.title.uppercase(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.sp, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
+                Text(stringResource(section.titleRes).uppercase(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.sp, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
                 section.items.forEach { item ->
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(item.label, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall)
-                                item.desc?.let { Text(it, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall) }
+                                Text(stringResource(item.labelRes), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall)
+                                item.descRes?.let { Text(stringResource(it), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall) }
                             }
                             Switch(
                                 checked = viewModel.getPrefValue(p, item.key),

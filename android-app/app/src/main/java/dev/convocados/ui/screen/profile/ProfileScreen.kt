@@ -116,7 +116,7 @@ fun ProfileScreen(
         MenuItem(title = stringResource(R.string.notifications_title), subtitle = stringResource(R.string.notifications_subtitle), onClick = onNotificationPrefs)
 
         // Court Watches
-        MenuItem(title = "Court Watches", subtitle = "Notify when booked courts free up", onClick = onCourtWatches)
+        MenuItem(title = stringResource(R.string.court_watches), subtitle = stringResource(R.string.court_watches_subtitle), onClick = onCourtWatches)
 
         // Language
         MenuItem(title = stringResource(R.string.language), subtitle = LOCALE_OPTIONS.find { it.code == locale }?.label ?: "English", onClick = { showLanguages = !showLanguages })
@@ -140,13 +140,13 @@ fun ProfileScreen(
 
         // Theme
         val themeMode by viewModel.themeMode.collectAsState(initial = ThemeMode.System)
-        val themeLabel = when (themeMode) { ThemeMode.System -> "System"; ThemeMode.Light -> "Light"; ThemeMode.Dark -> "Dark" }
+        val themeLabel = when (themeMode) { ThemeMode.System -> stringResource(R.string.theme_system); ThemeMode.Light -> stringResource(R.string.theme_light); ThemeMode.Dark -> stringResource(R.string.theme_dark) }
         var showTheme by remember { mutableStateOf(false) }
-        MenuItem(title = "Theme", subtitle = themeLabel, onClick = { showTheme = !showTheme })
+        MenuItem(title = stringResource(R.string.theme), subtitle = themeLabel, onClick = { showTheme = !showTheme })
         if (showTheme) {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Column {
-                    listOf(ThemeMode.System to "System", ThemeMode.Light to "Light", ThemeMode.Dark to "Dark").forEach { (mode, label) ->
+                    listOf(ThemeMode.System to stringResource(R.string.theme_system), ThemeMode.Light to stringResource(R.string.theme_light), ThemeMode.Dark to stringResource(R.string.theme_dark)).forEach { (mode, label) ->
                         Row(
                             Modifier.fillMaxWidth().clickable { viewModel.setThemeMode(mode); showTheme = false }.padding(horizontal = 16.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
@@ -170,8 +170,8 @@ fun ProfileScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Material You", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
-                        Text("Use colors from your wallpaper", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.material_you), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.material_you_desc), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(checked = dynamicColor, onCheckedChange = { viewModel.setDynamicColor(it) })
                 }
@@ -193,13 +193,13 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
                     )
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { editingServer = false }) { Text("Cancel", color = MaterialTheme.colorScheme.outline) }
+                        TextButton(onClick = { editingServer = false }) { Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.outline) }
                         Spacer(Modifier.width(8.dp))
                         Button(onClick = {
                             viewModel.setServerUrl(serverUrl.trim().trimEnd('/'))
                             editingServer = false
                         }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                            Text("Save", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                     }
                 }
@@ -225,10 +225,10 @@ fun ProfileScreen(
             confirmButton = {
                 TextButton(onClick = {
                     if (editName.isNotBlank()) { viewModel.updateName(editName.trim()); showEditName = false }
-                }) { Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
+                }) { Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { showEditName = false }) { Text("Cancel", color = MaterialTheme.colorScheme.outline) }
+                TextButton(onClick = { showEditName = false }) { Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.outline) }
             },
         )
     }

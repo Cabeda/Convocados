@@ -155,7 +155,7 @@ fun HistoryDetailScreen(
                                 editing = true
                             }
                         }) {
-                            Icon(if (editing) Icons.Default.Check else Icons.Default.Edit, if (editing) "Save" else "Edit")
+                            Icon(if (editing) Icons.Default.Check else Icons.Default.Edit, if (editing) stringResource(R.string.save) else stringResource(R.string.edit))
                         }
                     }
                 },
@@ -171,7 +171,7 @@ fun HistoryDetailScreen(
 
         val h = history
         if (h == null) {
-            Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { Text("Not found", color = MaterialTheme.colorScheme.error) }
+            Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { Text(stringResource(R.string.not_found), color = MaterialTheme.colorScheme.error) }
             return@Scaffold
         }
 

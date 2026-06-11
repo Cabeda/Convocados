@@ -84,7 +84,7 @@ fun EventLogScreen(eventId: String, onBack: () -> Unit, viewModel: EventLogViewM
                             Text(entry.action.replace("_", " "), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                             Text(formatRelativeDate(entry.createdAt), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelSmall)
                         }
-                        entry.actor?.let { Text("by $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+                        entry.actor?.let { Text(stringResource(R.string.by_actor, it), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
                     }
                 }
             }

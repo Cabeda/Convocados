@@ -60,7 +60,7 @@ fun StatsScreen(onEventClick: (String) -> Unit, viewModel: StatsViewModel = hilt
         return
     }
     if (error != null || stats == null) {
-        Box(Modifier.fillMaxSize(), Alignment.Center) { Text(error ?: "Something went wrong", color = MaterialTheme.colorScheme.error) }
+        Box(Modifier.fillMaxSize(), Alignment.Center) { Text(error ?: stringResource(R.string.something_wrong), color = MaterialTheme.colorScheme.error) }
         return
     }
 
@@ -70,15 +70,15 @@ fun StatsScreen(onEventClick: (String) -> Unit, viewModel: StatsViewModel = hilt
             Text(stringResource(R.string.overview), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, letterSpacing = 1.sp)
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatBox("Games", "${s.totalGames}", Modifier.weight(1f))
-                StatBox("Wins", "${s.totalWins}", Modifier.weight(1f))
-                StatBox("Draws", "${s.totalDraws}", Modifier.weight(1f))
+                StatBox(stringResource(R.string.games_stat), "${s.totalGames}", Modifier.weight(1f))
+                StatBox(stringResource(R.string.wins), "${s.totalWins}", Modifier.weight(1f))
+                StatBox(stringResource(R.string.draws), "${s.totalDraws}", Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatBox("Losses", "${s.totalLosses}", Modifier.weight(1f))
-                StatBox("Win Rate", "${(s.winRate * 100).toInt()}%", Modifier.weight(1f))
-                StatBox("Avg Rating", "${s.avgRating}", Modifier.weight(1f))
+                StatBox(stringResource(R.string.losses), "${s.totalLosses}", Modifier.weight(1f))
+                StatBox(stringResource(R.string.win_rate), "${(s.winRate * 100).toInt()}%", Modifier.weight(1f))
+                StatBox(stringResource(R.string.avg_rating), "${s.avgRating}", Modifier.weight(1f))
             }
 
             if (stats!!.events.isNotEmpty()) {
@@ -92,14 +92,14 @@ fun StatsScreen(onEventClick: (String) -> Unit, viewModel: StatsViewModel = hilt
                     ) {
                         Column(Modifier.padding(14.dp)) {
                             Text(ev.eventTitle, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall)
-                            Text("${ev.gamesPlayed} games · Rating: ${ev.rating}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.games_rating, ev.gamesPlayed, ev.rating), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                                 Text("W${ev.wins}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                                 Text("D${ev.draws}", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium)
                                 Text("L${ev.losses}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
                             }
                             ev.attendance?.let { att ->
-                                Text("Attendance: ${(att.attendanceRate * 100).toInt()}% · Streak: ${att.currentStreak}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                                Text(stringResource(R.string.attendance_streak, (att.attendanceRate * 100).toInt(), att.currentStreak), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                             }
                         }
                     }

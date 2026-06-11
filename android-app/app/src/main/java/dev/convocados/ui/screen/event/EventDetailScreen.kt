@@ -426,8 +426,8 @@ fun EventDetailScreen(
     LaunchedEffect(state.teamMoveUndo) {
         val undo = state.teamMoveUndo ?: return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
-            message = "${undo.playerName} moved",
-            actionLabel = "Undo",
+            message = context.getString(R.string.player_moved, undo.playerName),
+            actionLabel = context.getString(R.string.undo),
             duration = SnackbarDuration.Short,
         )
         if (result == SnackbarResult.ActionPerformed) {
@@ -448,18 +448,18 @@ fun EventDetailScreen(
     if (state.showNotificationSheet) {
         ModalBottomSheet(onDismissRequest = { viewModel.dismissNotificationSheet() }) {
             Column(Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
-                Text("Notification Settings", style = MaterialTheme.typography.titleLarge)
+                Text(stringResource(R.string.notification_settings), style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(16.dp))
-                NotificationToggleRow("Player activity", state.mutePlayerActivity) { value ->
+                NotificationToggleRow(stringResource(R.string.player_activity), state.mutePlayerActivity) { value ->
                     viewModel.updateNotificationOverride(eventId, "mutePlayerActivity", value)
                 }
-                NotificationToggleRow("Game reminders", state.muteReminders) { value ->
+                NotificationToggleRow(stringResource(R.string.game_reminders), state.muteReminders) { value ->
                     viewModel.updateNotificationOverride(eventId, "muteReminders", value)
                 }
-                NotificationToggleRow("Post-game results", state.mutePostGame) { value ->
+                NotificationToggleRow(stringResource(R.string.post_game_results), state.mutePostGame) { value ->
                     viewModel.updateNotificationOverride(eventId, "mutePostGame", value)
                 }
-                NotificationToggleRow("Event changes", state.muteEventDetails) { value ->
+                NotificationToggleRow(stringResource(R.string.event_changes), state.muteEventDetails) { value ->
                     viewModel.updateNotificationOverride(eventId, "muteEventDetails", value)
                 }
                 Spacer(Modifier.height(24.dp))
@@ -467,7 +467,7 @@ fun EventDetailScreen(
                     onClick = { viewModel.unfollow(eventId) },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Unfollow") }
+                ) { Text(stringResource(R.string.unfollow)) }
                 Spacer(Modifier.height(16.dp))
             }
         }
@@ -478,13 +478,13 @@ fun EventDetailScreen(
         topBar = {
             TopAppBar(
                 scrollBehavior = scrollBehavior,
-                title = { Text(event?.title ?: "Event", maxLines = 1) },
+                title = { Text(event?.title ?: stringResource(R.string.event_fallback), maxLines = 1) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
                     IconButton(onClick = { viewModel.toggleFollow(eventId) }) {
                         Icon(
                             if (state.isFollowing) Icons.Default.Notifications else Icons.Default.NotificationsNone,
-                            contentDescription = if (state.isFollowing) "Following" else "Follow",
+                            contentDescription = if (state.isFollowing) stringResource(R.string.following) else stringResource(R.string.follow),
                             tint = if (state.isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -507,19 +507,19 @@ fun EventDetailScreen(
             }
             state.locked -> {
                 Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text("This game is password-protected", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.password_protected), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                    OutlinedTextField(value = password, onValueChange = { password = it }, placeholder = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
+                    OutlinedTextField(value = password, onValueChange = { password = it }, placeholder = { Text(stringResource(R.string.password)) }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
                     Button(onClick = { viewModel.verifyPassword(eventId, password.trim()) }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
-                        Text("Unlock", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.unlock), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                     }
                 }
             }
             state.error != null && state.event == null -> {
                 Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text(state.error ?: "Event not found", color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = onBack) { Text("Go back", color = MaterialTheme.colorScheme.primary) }
+                    Text(state.error ?: stringResource(R.string.event_not_found), color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = onBack) { Text(stringResource(R.string.go_back), color = MaterialTheme.colorScheme.primary) }
                 }
             }
             else -> {
@@ -554,13 +554,13 @@ fun EventDetailScreen(
                                 val text = "\u26BD ${event.title}\n\uD83D\uDCC5 ${formatRelativeDate(event.dateTime)}" +
                                     (if (event.location.isNotBlank()) "\n\uD83D\uDCCD ${event.location}" else "") +
                                     "\n\uD83D\uDC65 ${if (spotsLeft > 0) "$spotsLeft spot(s) left" else "Full"}\n\n$url"
-                                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, "Share"))
-                            }, label = { Text("Share") }, leadingIcon = { Icon(Icons.Default.Share, null, modifier = Modifier.size(18.dp)) })
-                            if (activePlayers.size >= 2) AssistChip(onClick = { viewModel.randomize(eventId, event.balanced) }, label = { Text("Randomize") }, leadingIcon = { Icon(Icons.Default.Shuffle, null, modifier = Modifier.size(18.dp)) })
-                            if (isOwner || event.isAdmin) AssistChip(onClick = onSettings, label = { Text("Settings") }, leadingIcon = { Icon(Icons.Default.Settings, null, modifier = Modifier.size(18.dp)) })
-                            AssistChip(onClick = onRankings, label = { Text("Rankings") }, leadingIcon = { Icon(Icons.Default.EmojiEvents, null, modifier = Modifier.size(18.dp)) })
-                            if (event.sport in PLAYTOMIC_SPORTS) AssistChip(onClick = onCourtAlternatives, label = { Text("Courts") }, leadingIcon = { Icon(Icons.Default.Place, null, modifier = Modifier.size(18.dp)) })
-                            AssistChip(onClick = onNotificationPrefs, label = { Text("Alerts") }, leadingIcon = { Icon(Icons.Default.Notifications, null, modifier = Modifier.size(18.dp)) })
+                                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, context.getString(R.string.share)))
+                            }, label = { Text(stringResource(R.string.share)) }, leadingIcon = { Icon(Icons.Default.Share, null, modifier = Modifier.size(18.dp)) })
+                            if (activePlayers.size >= 2) AssistChip(onClick = { viewModel.randomize(eventId, event.balanced) }, label = { Text(stringResource(R.string.randomize)) }, leadingIcon = { Icon(Icons.Default.Shuffle, null, modifier = Modifier.size(18.dp)) })
+                            if (isOwner || event.isAdmin) AssistChip(onClick = onSettings, label = { Text(stringResource(R.string.settings)) }, leadingIcon = { Icon(Icons.Default.Settings, null, modifier = Modifier.size(18.dp)) })
+                            AssistChip(onClick = onRankings, label = { Text(stringResource(R.string.rankings)) }, leadingIcon = { Icon(Icons.Default.EmojiEvents, null, modifier = Modifier.size(18.dp)) })
+                            if (event.sport in PLAYTOMIC_SPORTS) AssistChip(onClick = onCourtAlternatives, label = { Text(stringResource(R.string.courts)) }, leadingIcon = { Icon(Icons.Default.Place, null, modifier = Modifier.size(18.dp)) })
+                            AssistChip(onClick = onNotificationPrefs, label = { Text(stringResource(R.string.alerts)) }, leadingIcon = { Icon(Icons.Default.Notifications, null, modifier = Modifier.size(18.dp)) })
                         }
 
                         // Post-game banner — prominent, right after action bar
@@ -571,12 +571,12 @@ fun EventDetailScreen(
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                                 ) {
                                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        Text("Game ended", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+                                        Text(stringResource(R.string.game_ended), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
 
                                         if (!pg.hasScore && pg.latestHistoryId != null) {
                                             if (editingScoreId == pg.latestHistoryId) {
                                                 // Inline score entry
-                                                Text("Record the final score", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
+                                                Text(stringResource(R.string.record_final_score), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     OutlinedTextField(
                                                         value = scoreOne, onValueChange = { scoreOne = it.filter { c -> c.isDigit() } },
@@ -597,14 +597,14 @@ fun EventDetailScreen(
                                                             editingScoreId = null
                                                         },
                                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                                    ) { Text("Save", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
+                                                    ) { Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
                                                 }
                                             } else {
                                                 Button(
                                                     onClick = { editingScoreId = pg.latestHistoryId; scoreOne = ""; scoreTwo = "" },
                                                     modifier = Modifier.fillMaxWidth(),
                                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                                ) { Text("Record score", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleSmall) }
+                                                ) { Text(stringResource(R.string.record_score), color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleSmall) }
                                             }
                                         }
 
@@ -613,7 +613,7 @@ fun EventDetailScreen(
                                                 onClick = onPayments,
                                                 modifier = Modifier.fillMaxWidth(),
                                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                                            ) { Text("Mark payments", color = MaterialTheme.colorScheme.background, style = MaterialTheme.typography.titleSmall) }
+                                            ) { Text(stringResource(R.string.mark_payments), color = MaterialTheme.colorScheme.background, style = MaterialTheme.typography.titleSmall) }
                                         }
                                     }
                                 }
@@ -632,7 +632,7 @@ fun EventDetailScreen(
                                     // Social proof
                                     if (aggregate != null && aggregate.totalCount > 0) {
                                         Text(
-                                            "${aggregate.paidCount} of ${aggregate.totalCount} paid for the last game",
+                                            stringResource(R.string.paid_for_last_game, aggregate.paidCount, aggregate.totalCount),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.padding(bottom = 8.dp),
@@ -642,7 +642,7 @@ fun EventDetailScreen(
                                     // Streak
                                     if (callerBalance != null && callerBalance.streak > 1) {
                                         Text(
-                                            "${callerBalance.streak} game paid streak",
+                                            stringResource(R.string.paid_streak, callerBalance.streak),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.padding(bottom = 8.dp),
@@ -652,18 +652,18 @@ fun EventDetailScreen(
                                     if (myPlayer != null) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                if (isOnBench) "You're on the bench" else "You joined as ${myPlayer.name}",
+                                                if (isOnBench) stringResource(R.string.on_bench) else stringResource(R.string.joined_as, myPlayer.name),
                                                 color = if (isOnBench) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
                                             )
                                             OutlinedButton(onClick = { viewModel.removePlayer(eventId, myPlayer.id) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                                                Text("Leave")
+                                                Text(stringResource(R.string.leave))
                                             }
                                         }
                                     } else {
                                         // Debt warning
                                         if (hasDebt && enforcement != "off") {
                                             Text(
-                                                "You owe €${"%.2f".format(callerBalance!!.amount)} from ${callerBalance.gamesOwed} game(s)",
+                                                stringResource(R.string.owe_amount, "%.2f".format(callerBalance!!.amount), callerBalance.gamesOwed),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.error,
                                                 modifier = Modifier.padding(bottom = 8.dp),
@@ -673,7 +673,7 @@ fun EventDetailScreen(
                                         // Gate blocked alert
                                         if (state.paymentGateBlocked) {
                                             Text(
-                                                "Settle your outstanding balance to join.",
+                                                stringResource(R.string.settle_balance),
                                                 color = MaterialTheme.colorScheme.error,
                                                 fontWeight = FontWeight.SemiBold,
                                                 modifier = Modifier.padding(bottom = 8.dp),
@@ -698,8 +698,8 @@ fun EventDetailScreen(
                                         ) {
                                             Text(
                                                 if (hasDebt && enforcement != "off")
-                                                    "Pay €${"%.2f".format(callerBalance!!.amount)} & join"
-                                                else "Join (${user!!.name})",
+                                                    stringResource(R.string.pay_and_join, "%.2f".format(callerBalance!!.amount))
+                                                else stringResource(R.string.join_as, user!!.name),
                                                 color = MaterialTheme.colorScheme.onPrimary,
                                                 fontWeight = FontWeight.Bold,
                                             )
@@ -715,7 +715,7 @@ fun EventDetailScreen(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clickable { viewModel.undoRemove(eventId) },
                             ) {
-                                Text("${undo.name} removed — tap to undo", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.padding(12.dp).fillMaxWidth())
+                                Text(stringResource(R.string.removed_tap_undo, undo.name), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.padding(12.dp).fillMaxWidth())
                             }
                         }
 
@@ -795,7 +795,7 @@ fun EventDetailScreen(
                                         Column {
                                             filteredSuggestions.forEach { s ->
                                                 Text(
-                                                    "${s.name} (${s.gamesPlayed} games)",
+                                                    stringResource(R.string.player_games_count, s.name, s.gamesPlayed),
                                                     modifier = Modifier.fillMaxWidth().clickable { viewModel.addPlayer(eventId, s.name); newPlayer = "" }.padding(horizontal = 16.dp, vertical = 10.dp),
                                                     color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium,
                                                 )
@@ -843,17 +843,17 @@ fun EventDetailScreen(
         val autoPayPref by viewModel.autoPayOnJoin.collectAsStateWithLifecycle()
         AlertDialog(
             onDismissRequest = { viewModel.dismissPaymentNudge() },
-            title = { Text("Settle up before you play") },
+            title = { Text(stringResource(R.string.settle_up_title)) },
             text = {
                 Column {
                     if (callerBalance != null) {
-                        Text("You owe €${"%.2f".format(callerBalance.amount)} from ${callerBalance.gamesOwed} game(s)")
+                        Text(stringResource(R.string.owe_amount, "%.2f".format(callerBalance.amount), callerBalance.gamesOwed))
                     }
                     state.balance?.aggregate?.let { agg ->
                         if (agg.totalCount > 0) {
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "${agg.paidCount} of ${agg.totalCount} paid for the last game",
+                                stringResource(R.string.paid_for_last_game, agg.paidCount, agg.totalCount),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -862,7 +862,7 @@ fun EventDetailScreen(
                     Spacer(Modifier.height(16.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "Always show payment when I join",
+                            stringResource(R.string.always_show_payment),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
@@ -880,14 +880,14 @@ fun EventDetailScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
                 ) {
                     Text(
-                        if (callerBalance != null) "Pay €${"%.2f".format(callerBalance.amount)} & join" else "I've sent it ✓",
+                        if (callerBalance != null) stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.sent_confirmation),
                         color = MaterialTheme.colorScheme.onTertiary,
                     )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user!!.name) }) {
-                    Text("Join and pay later", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    Text(stringResource(R.string.join_pay_later), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                 }
             },
         )
@@ -920,7 +920,7 @@ fun TeamsCard(
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = modifier.fillMaxWidth().padding(bottom = 12.dp)) {
         Row(Modifier.padding(14.dp)) {
             TeamColumn(teams[0], players, toTeamOne = false, onMovePlayer = onMovePlayer, modifier = Modifier.weight(1f))
-            Text("VS", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp))
+            Text(stringResource(R.string.vs), color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp))
             TeamColumn(teams[1], players, toTeamOne = true, onMovePlayer = onMovePlayer, modifier = Modifier.weight(1f))
         }
     }
@@ -1009,7 +1009,7 @@ fun PlayerRow(
         },
         leadingContent = {
             if (player.userId != null) {
-                Icon(Icons.Default.Person, "Linked", tint = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.Person, stringResource(R.string.linked), tint = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
             } else {
                 Spacer(Modifier.size(20.dp))
             }
@@ -1039,10 +1039,10 @@ fun HistoryCard(
                         OutlinedTextField(value = scoreOne, onValueChange = onScoreOneChange, modifier = Modifier.width(50.dp), singleLine = true)
                         Text("-", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold)
                         OutlinedTextField(value = scoreTwo, onValueChange = onScoreTwoChange, modifier = Modifier.width(50.dp), singleLine = true)
-                        Button(onClick = onSaveScore, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) { Text("Save", color = MaterialTheme.colorScheme.onPrimaryContainer) }
+                        Button(onClick = onSaveScore, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) { Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.onPrimaryContainer) }
                     }
                 } else {
-                    TextButton(onClick = onEditScore) { Text("+ Score", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold) }
+                    TextButton(onClick = onEditScore) { Text(stringResource(R.string.add_score), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold) }
                 }
             } else {
                 Text(h.status, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)

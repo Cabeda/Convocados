@@ -85,7 +85,7 @@ fun LoginScreen(
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                     TextButton(onClick = { showServerSettings = false }) {
-                        Text("Cancel", color = MaterialTheme.colorScheme.outline)
+                        Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.outline)
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(
@@ -95,7 +95,7 @@ fun LoginScreen(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                     ) {
-                        Text("Save", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

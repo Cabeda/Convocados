@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,6 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.convocados.R
 import dev.convocados.data.api.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -113,9 +115,10 @@ fun CourtAlternativesScreen(
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val watchCreatedMsg = stringResource(R.string.watch_created)
     LaunchedEffect(state.watchCreated) {
         if (state.watchCreated) {
-            snackbarHostState.showSnackbar("Watch created! You'll be notified when it's free.")
+            snackbarHostState.showSnackbar(watchCreatedMsg)
             viewModel.dismissWatchCreated()
         }
     }
@@ -125,8 +128,8 @@ fun CourtAlternativesScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(scrollBehavior = scrollBehavior, 
-                title = { Text("Court Alternatives") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.court_alternatives)) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -139,18 +142,18 @@ fun CourtAlternativesScreen(
                 OutlinedTextField(
                     value = state.startTime,
                     onValueChange = { viewModel.setStartTime(it) },
-                    label = { Text("From") },
+                    label = { Text(stringResource(R.string.from)) },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                 )
                 OutlinedTextField(
                     value = state.endTime,
                     onValueChange = { viewModel.setEndTime(it) },
-                    label = { Text("To") },
+                    label = { Text(stringResource(R.string.to)) },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                 )
-                FilledTonalButton(onClick = { viewModel.load(eventId) }) { Text("Search") }
+                FilledTonalButton(onClick = { viewModel.load(eventId) }) { Text(stringResource(R.string.search)) }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -160,7 +163,7 @@ fun CourtAlternativesScreen(
                     CircularProgressIndicator()
                 }
                 state.error != null -> Text(state.error!!, color = MaterialTheme.colorScheme.error)
-                state.alternatives.isEmpty() -> Text("No courts found for this time range.", color = MaterialTheme.colorScheme.outline)
+                state.alternatives.isEmpty() -> Text(stringResource(R.string.no_courts_found), color = MaterialTheme.colorScheme.outline)
                 else -> {
                     // Group by club
                     val grouped = state.alternatives.groupBy { it.tenantName }
@@ -197,7 +200,7 @@ fun CourtAlternativesScreen(
                                         trailingIcon = {
                                             Icon(
                                                 Icons.Default.Notifications,
-                                                "Notify when free",
+                                                stringResource(R.string.notify_when_free),
                                                 modifier = Modifier.size(16.dp),
                                             )
                                         },
@@ -235,10 +238,10 @@ fun CourtAlternativesScreen(
                     if (slot.playtomicUrl.isNotBlank()) {
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(slot.playtomicUrl)))
                     }
-                }) { Text("Book on Playtomic", fontWeight = FontWeight.Bold) }
+                }) { Text(stringResource(R.string.book_on_playtomic), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { selectedSlot = null }) { Text("Cancel") }
+                TextButton(onClick = { selectedSlot = null }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }

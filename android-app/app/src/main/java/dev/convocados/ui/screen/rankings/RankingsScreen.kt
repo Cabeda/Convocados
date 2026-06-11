@@ -162,6 +162,7 @@ fun RankingsScreen(
     var claimTarget by remember { mutableStateOf<RankingRow?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val recalculatingMsg = stringResource(R.string.recalculating)
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
@@ -174,8 +175,8 @@ fun RankingsScreen(
                     if (isOwner) {
                         IconButton(onClick = {
                             viewModel.recalculate(eventId)
-                            scope.launch { snackbarHostState.showSnackbar("Recalculating ratings...") }
-                        }) { Icon(Icons.Default.Refresh, "Recalculate", tint = MaterialTheme.colorScheme.primary) }
+                            scope.launch { snackbarHostState.showSnackbar(recalculatingMsg) }
+                        }) { Icon(Icons.Default.Refresh, stringResource(R.string.recalculate), tint = MaterialTheme.colorScheme.primary) }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
@@ -220,7 +221,7 @@ fun RankingsScreen(
                             )
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    r.name + if (r.userId == user?.id) " (you)" else "",
+                                    r.name + if (r.userId == user?.id) stringResource(R.string.you_suffix) else "",
                                     color = if (r.userId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                     style = MaterialTheme.typography.titleSmall,
                                     modifier = if (r.userId != null) Modifier.clickable { onUserClick(r.userId!!) } else Modifier,
@@ -228,7 +229,7 @@ fun RankingsScreen(
                                 if (r.rating != null) {
                                     Text("${r.gamesPlayed}g \u00B7 W${r.wins}/D${r.draws}/L${r.losses}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                 } else {
-                                    Text("New player", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                                    Text(stringResource(R.string.new_player), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                             if (r.rating != null) {
@@ -251,7 +252,7 @@ fun RankingsScreen(
                                     onClick = { claimTarget = r },
                                     modifier = Modifier.size(48.dp),
                                 ) {
-                                    Icon(Icons.Default.HowToReg, "Claim as me", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                                    Icon(Icons.Default.HowToReg, stringResource(R.string.claim_as_me), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                                 }
                             }
                         }
@@ -265,10 +266,10 @@ fun RankingsScreen(
     claimTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { claimTarget = null },
-            title = { Text("Claim player", color = MaterialTheme.colorScheme.onSurface) },
+            title = { Text(stringResource(R.string.claim_player), color = MaterialTheme.colorScheme.onSurface) },
             text = {
                 Text(
-                    "Are you sure you want to claim \"${target.name}\"? This player will be linked to your account.",
+                    stringResource(R.string.claim_confirm, target.name),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             },
@@ -276,10 +277,10 @@ fun RankingsScreen(
                 TextButton(onClick = {
                     target.playerId?.let { viewModel.claimPlayer(eventId, it) }
                     claimTarget = null
-                }) { Text("Claim", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
+                }) { Text(stringResource(R.string.claim), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { claimTarget = null }) { Text("Cancel", color = MaterialTheme.colorScheme.outline) }
+                TextButton(onClick = { claimTarget = null }) { Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.outline) }
             },
             containerColor = MaterialTheme.colorScheme.surface,
         )

@@ -104,7 +104,7 @@ fun GamesScreen(
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = onCreateClick, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.testTag("create_game_fab")) {
-                Icon(Icons.Default.Add, "Create game")
+                Icon(Icons.Default.Add, stringResource(R.string.create_game_button))
             }
         },
         containerColor = MaterialTheme.colorScheme.background,
@@ -148,7 +148,7 @@ fun GamesScreen(
                         FilterChip(
                             selected = false,
                             onClick = onPublicClick,
-                            label = { Text("Public") }, leadingIcon = { Icon(Icons.Default.Public, "Public", modifier = Modifier.size(18.dp)) },
+                            label = { Text(stringResource(R.string.public_label)) }, leadingIcon = { Icon(Icons.Default.Public, stringResource(R.string.public_label), modifier = Modifier.size(18.dp)) },
                         )
                     }
                 }
@@ -220,12 +220,12 @@ fun GameCard(
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "${formatRelativeDate(game.dateTime)} · ${game.playerCount}/${game.maxPlayers} players${if (game.isRecurring) " · Recurring" else ""}",
+                stringResource(R.string.event_meta, formatRelativeDate(game.dateTime), game.playerCount, game.maxPlayers) + (if (game.isRecurring) stringResource(R.string.recurring_suffix) else ""),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (game.lastScoreOne != null && game.lastScoreTwo != null) {
                 Text(
-                    "Last: ${game.lastScoreOne}:${game.lastScoreTwo}",
+                    stringResource(R.string.last_score, game.lastScoreOne!!, game.lastScoreTwo!!),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 2.dp),
                 )
@@ -234,7 +234,7 @@ fun GameCard(
                 Text(game.location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
             }
             if (game.archivedAt != null) {
-                Text("ARCHIVED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+                Text(stringResource(R.string.archived_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }

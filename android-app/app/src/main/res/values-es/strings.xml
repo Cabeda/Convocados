@@ -63,4 +63,179 @@
     <string name="payments">Pagos</string>
     <string name="overview">RESUMEN</string>
     <string name="per_event">POR EVENTO</string>
+
+    <string name="attendance">Asistencia</string>
+    <string name="games_played_total">%1$d partidos jugados</string>
+    <string name="no_attendance_data">Aún no hay datos de asistencia</string>
+    <string name="games_streak_format">%1$d/%2$d partidos · racha: %3$d</string>
+
+    <string name="watch_created">¡Alerta creada! Te avisaremos cuando esté libre.</string>
+    <string name="court_alternatives">Pistas alternativas</string>
+    <string name="from">Desde</string>
+    <string name="to">Hasta</string>
+    <string name="search">Buscar</string>
+    <string name="no_courts_found">No hay pistas para este intervalo de tiempo.</string>
+    <string name="notify_when_free">Avisar cuando esté libre</string>
+    <string name="book_on_playtomic">Reservar en Playtomic</string>
+    <string name="court_watches">Alertas de pistas</string>
+    <string name="delete">Eliminar</string>
+    <string name="no_court_watches">Aún no hay alertas de pistas.\nCrea una desde las pistas alternativas de un evento.</string>
+
+    <string name="game_title">Título del partido</string>
+    <string name="game_title_placeholder">ej. Fútbol del martes</string>
+    <string name="sport">Deporte</string>
+    <string name="location_optional">Ubicación (opcional)</string>
+    <string name="location_placeholder">ej. Campo del río, Pista 2</string>
+    <string name="pick_on_map">Elegir en el mapa</string>
+    <string name="date_time">Fecha y hora</string>
+    <string name="max_players">Máx. jugadores</string>
+    <string name="max_players_hint">Los jugadores que superen este límite pasan al banquillo</string>
+    <string name="advanced_options">Opciones avanzadas</string>
+    <string name="team_1_name">Nombre del equipo 1</string>
+    <string name="team_2_name">Nombre del equipo 2</string>
+    <string name="recurring_game">Partido recurrente</string>
+    <string name="create_game_button">Crear partido</string>
+
+    <string name="event_fallback">Evento</string>
+    <string name="follow">Seguir</string>
+    <string name="following">Siguiendo</string>
+    <string name="notification_settings">Ajustes de notificaciones</string>
+    <string name="player_activity">Actividad de jugadores</string>
+    <string name="game_reminders">Recordatorios de partidos</string>
+    <string name="post_game_results">Resultados posjuego</string>
+    <string name="event_changes">Cambios del evento</string>
+    <string name="unfollow">Dejar de seguir</string>
+    <string name="leave">Salir</string>
+    <string name="password_protected">Este partido está protegido con contraseña</string>
+    <string name="password">Contraseña</string>
+    <string name="unlock">Desbloquear</string>
+    <string name="event_not_found">Evento no encontrado</string>
+    <string name="go_back">Volver</string>
+    <string name="share">Compartir</string>
+    <string name="randomize">Sortear</string>
+    <string name="settings">Ajustes</string>
+    <string name="courts">Pistas</string>
+    <string name="alerts">Alertas</string>
+    <string name="game_ended">Partido terminado</string>
+    <string name="record_final_score">Registrar el resultado final</string>
+    <string name="record_score">Registrar resultado</string>
+    <string name="mark_payments">Marcar pagos</string>
+    <string name="paid_for_last_game">%1$d de %2$d pagaron el último partido</string>
+    <string name="paid_streak">racha de %1$d partidos pagados</string>
+    <string name="on_bench">Estás en el banquillo</string>
+    <string name="joined_as">Te uniste como %1$s</string>
+    <string name="owe_amount">Debes €%1$s de %2$d partido(s)</string>
+    <string name="settle_balance">Salda tu saldo pendiente para unirte.</string>
+    <string name="pay_and_join">Pagar €%1$s y unirse</string>
+    <string name="join_as">Unirse (%1$s)</string>
+    <string name="removed_tap_undo">%1$s eliminado — toca para deshacer</string>
+    <string name="vs">VS</string>
+    <string name="linked">Vinculado</string>
+    <string name="player_moved">%1$s movido</string>
+    <string name="undo">Deshacer</string>
+    <string name="add_score">+ Resultado</string>
+    <string name="player_games_count">%1$s (%2$d partidos)</string>
+    <string name="settle_up_title">Salda cuentas antes de jugar</string>
+    <string name="always_show_payment">Mostrar siempre el pago al unirme</string>
+    <string name="sent_confirmation">Ya lo envié ✓</string>
+    <string name="join_pay_later">Unirse y pagar luego</string>
+
+    <string name="public_label">Públicos</string>
+    <string name="event_meta">%1$s · %2$d/%3$d jugadores</string>
+    <string name="recurring_suffix"> · Recurrente</string>
+    <string name="last_score">Último: %1$d:%2$d</string>
+    <string name="archived_label">ARCHIVADO</string>
+
+    <string name="by_actor">por %1$s</string>
+
+    <string name="edit">Editar</string>
+    <string name="not_found">No encontrado</string>
+
+    <string name="pick_location">Elegir ubicación</string>
+    <string name="confirm">Confirmar</string>
+    <string name="tap_place_pin">Toca para colocar el pin</string>
+
+    <string name="push_notifications">Notificaciones push</string>
+    <string name="enable_push">Activar push</string>
+    <string name="enable_push_desc">Interruptor general de todas las notificaciones push</string>
+    <string name="player_activity_desc">Cuando los jugadores se unen o salen</string>
+    <string name="game_reminders_desc">Antes de que empiece tu partido</string>
+    <string name="event_updates">Actualizaciones del evento</string>
+    <string name="event_updates_desc">Cuando cambian los detalles del evento</string>
+    <string name="payment_reminders">Recordatorios de pago</string>
+    <string name="email_notifications">Notificaciones por correo</string>
+    <string name="enable_email">Activar correo</string>
+    <string name="enable_email_desc">Interruptor general de todos los correos</string>
+    <string name="game_invites">Invitaciones a partidos</string>
+    <string name="weekly_summary">Resumen semanal</string>
+    <string name="reminder_timing">Antelación de recordatorios</string>
+    <string name="reminder_24h">24 horas antes</string>
+    <string name="reminder_2h">2 horas antes</string>
+    <string name="reminder_1h">1 hora antes</string>
+
+    <string name="paid">Pagado</string>
+    <string name="pending">Pendiente</string>
+    <string name="total">Total</string>
+    <string name="mark_all_paid">Marcar todo como pagado</string>
+    <string name="no_payments">Sin pagos configurados</string>
+    <string name="set_custom_cost">Definir coste personalizado</string>
+    <string name="custom_cost_for">Coste personalizado para %1$s</string>
+    <string name="amount">Importe</string>
+
+    <string name="court_watches_subtitle">Avisar cuando pistas reservadas queden libres</string>
+    <string name="theme">Tema</string>
+    <string name="theme_system">Sistema</string>
+    <string name="theme_light">Claro</string>
+    <string name="theme_dark">Oscuro</string>
+    <string name="material_you">Material You</string>
+    <string name="material_you_desc">Usar los colores de tu fondo de pantalla</string>
+
+    <string name="toggle_view">Cambiar vista</string>
+    <string name="all">Todos</string>
+    <string name="no_public_games">No hay partidos públicos ahora mismo</string>
+    <string name="no_public_games_desc">Crea un partido y hazlo público para que otros lo encuentren.</string>
+    <string name="full">Completo</string>
+    <string name="spots_left">%1$d plazas</string>
+    <string name="no_events_location">Sin eventos con datos de ubicación</string>
+
+    <string name="recalculating">Recalculando clasificaciones…</string>
+    <string name="recalculate">Recalcular</string>
+    <string name="new_player">Nuevo jugador</string>
+    <string name="claim_as_me">Reclamar como yo</string>
+    <string name="claim_player">Reclamar jugador</string>
+    <string name="claim_confirm">¿Seguro que quieres reclamar \"%1$s\"? Este jugador se vinculará a tu cuenta.</string>
+    <string name="claim">Reclamar</string>
+
+    <string name="event_settings">Ajustes del evento</string>
+    <string name="location">Ubicación</string>
+    <string name="general">General</string>
+    <string name="teams_ratings">Equipos y clasificaciones</string>
+    <string name="features">Funciones</string>
+    <string name="access">Acceso</string>
+    <string name="danger_zone">Zona de peligro</string>
+    <string name="public_game">Partido público</string>
+    <string name="elo_ratings">Clasificaciones ELO</string>
+    <string name="hide_elo_teams">Ocultar ELO en los equipos</string>
+    <string name="split_costs">Dividir costes</string>
+    <string name="password_set">Contraseña definida — toca para cambiar/quitar</string>
+    <string name="set_password">Establecer contraseña</string>
+    <string name="new_password_placeholder">Nueva contraseña (vacío para quitar)</string>
+    <string name="transfer_ownership">Transferir propiedad</string>
+    <string name="select_transfer_player">Selecciona un jugador para transferir la propiedad:</string>
+    <string name="unarchive_game">Desarchivar partido</string>
+    <string name="archive_game">Archivar partido</string>
+    <string name="rankings_elo">Clasificaciones / ELO</string>
+    <string name="attendance_stats">Estadísticas de asistencia</string>
+
+    <string name="something_wrong">Algo salió mal</string>
+    <string name="games_stat">Partidos</string>
+    <string name="wins">Victorias</string>
+    <string name="draws">Empates</string>
+    <string name="losses">Derrotas</string>
+    <string name="win_rate">Tasa de victorias</string>
+    <string name="avg_rating">Clasificación media</string>
+    <string name="games_rating">%1$d partidos · Clasificación: %2$d</string>
+    <string name="attendance_streak">Asistencia: %1$d%% · Racha: %2$d</string>
+
+    <string name="user_not_found">Usuario no encontrado</string>
 </resources>
