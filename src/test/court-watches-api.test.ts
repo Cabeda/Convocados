@@ -68,6 +68,50 @@ describe("POST /api/court-watches", () => {
     expect(data.watch.dayOfWeek).toBe(1);
   });
 
+  it("applies defaults for optional fields (minimal body)", async () => {
+    await makeUser();
+    mockAuthenticate.mockResolvedValue({ userId: "u1" });
+    const res = await POST(req({
+      sport: "padel", tenantId: "club1", tenantName: "Club One",
+      dayOfWeek: 3, startTime: "09:00", endTime: "11:00",
+    }));
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.watch.resourceId).toBeNull();
+    expect(data.watch.resourceName).toBeNull();
+    expect(data.watch.durationMinutes).toBe(90);
+    expect(data.watch.timezone).toBe("UTC");
+    expect(data.watch.maxPrice).toBeNull();
+  });
+
+  it("stores maxPrice and custom duration when provided", async () => {
+    await makeUser();
+    mockAuthenticate.mockResolvedValue({ userId: "u1" });
+    const res = await POST(req({ ...validBody, durationMinutes: 60, maxPrice: 20 }));
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.watch.durationMinutes).toBe(60);
+    expect(data.watch.maxPrice).toBe(20);
+  });
+
+  it("rejects invalid JSON body", async () => {
+    await makeUser();
+    mockAuthenticate.mockResolvedValue({ userId: "u1" });
+    const ctx = { request: new Request("http://localhost/api/court-watches", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{bad" }) } as any;
+    const res = await POST(ctx);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 429 when the active watch limit is reached", async () => {
+    await makeUser();
+    mockAuthenticate.mockResolvedValue({ userId: "u1" });
+    await prisma.courtWatch.createMany({
+      data: Array.from({ length: 20 }, () => ({ ...validBody, userId: "u1" })),
+    });
+    const res = await POST(req(validBody));
+    expect(res.status).toBe(429);
+  });
+
   it("rejects invalid sport", async () => {
     await makeUser();
     mockAuthenticate.mockResolvedValue({ userId: "u1" });
