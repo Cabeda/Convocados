@@ -5,8 +5,8 @@
  */
 
 // Re-export shared utilities
-export { mapSportToPlaytomic, isPlaytomicSport } from "./playtomic";
-import { mapSportToPlaytomic } from "./playtomic";
+export { mapSportToPlaytomic, isPlaytomicSport, playtomicSportIds } from "./playtomic";
+import { mapSportToPlaytomic, playtomicSportIds } from "./playtomic";
 
 const PLAYTOMIC_API = "https://api.playtomic.io/v1";
 
@@ -108,60 +108,62 @@ export interface SearchClubsResult {
 
 /** Search for clubs near a location. */
 export async function searchClubs(params: SearchClubsParams): Promise<SearchClubsResult> {
-  const playtomicSport = mapSportToPlaytomic(params.sport);
-  if (!playtomicSport) {
+  const sportIds = playtomicSportIds(params.sport);
+  if (!sportIds) {
     return { clubs: [], error: "Unsupported sport for Playtomic search" };
   }
 
   const radius = params.radius ?? 15000;
   const size = params.size ?? 20;
 
-  const url = `${PLAYTOMIC_API}/tenants?coordinate=${params.lat},${params.lng}&sport_id=${playtomicSport}&radius=${radius}&size=${size}&playtomic_status=ACTIVE`;
+  const allClubs: PlaytomicClub[] = [];
+  const seenIds = new Set<string>();
 
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Convocados/1.0", Accept: "application/json" },
-      signal: AbortSignal.timeout(10_000),
-    });
+  let lastError: string | undefined;
 
-    if (!res.ok) {
-      return { clubs: [], error: `Playtomic API returned ${res.status}` };
+  for (const sportId of sportIds) {
+    const url = `${PLAYTOMIC_API}/tenants?coordinate=${params.lat},${params.lng}&sport_id=${sportId}&radius=${radius}&size=${size}&playtomic_status=ACTIVE`;
+
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "Convocados/1.0", Accept: "application/json" },
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      if (!res.ok) { lastError = `Playtomic API returned ${res.status}`; continue; }
+
+      const data = await res.json();
+      if (!Array.isArray(data)) { lastError = "Unexpected response format"; continue; }
+
+      for (const t of data as PlaytomicRawClub[]) {
+        const id = t.tenant_id ?? "";
+        if (!id || seenIds.has(id)) continue;
+        seenIds.add(id);
+        allClubs.push({
+          tenant_id: id,
+          tenant_name: t.tenant_name ?? "",
+          address: t.address
+            ? { street: t.address.street ?? "", city: t.address.city ?? "", postal_code: t.address.postal_code ?? "", country: t.address.country ?? "" }
+            : null,
+          coordinate: t.address?.coordinate ? { lat: t.address.coordinate.lat, lon: t.address.coordinate.lon } : null,
+          images: Array.isArray(t.images) ? t.images.map((img: { image_url?: string }) => img.image_url ?? "") : [],
+        });
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "Unknown error";
     }
-
-    const data = await res.json();
-    if (!Array.isArray(data)) {
-      return { clubs: [], error: "Unexpected response format" };
-    }
-
-    const clubs: PlaytomicClub[] = data.map((t: PlaytomicRawClub) => ({
-      tenant_id: t.tenant_id ?? "",
-      tenant_name: t.tenant_name ?? "",
-      address: t.address
-        ? {
-            street: t.address.street ?? "",
-            city: t.address.city ?? "",
-            postal_code: t.address.postal_code ?? "",
-            country: t.address.country ?? "",
-          }
-        : null,
-      coordinate: t.address?.coordinate
-        ? { lat: t.address.coordinate.lat, lon: t.address.coordinate.lon }
-        : null,
-      images: Array.isArray(t.images) ? t.images.map((img: { image_url?: string }) => img.image_url ?? "") : [],
-    }));
-
-    return { clubs };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return { clubs: [], error: message };
   }
+
+  if (allClubs.length === 0 && lastError) return { clubs: [], error: lastError };
+  return { clubs: allClubs.slice(0, size) };
 }
 
 export interface GetAvailabilityParams {
   tenantId: string;
   date: string; // YYYY-MM-DD
   sport: string; // Convocados sport ID
-  duration?: number; // minutes, default 90
+  duration?: number; // minutes; omit to return all durations
+  _sportIdOverride?: string; // internal: use this Playtomic sport_id instead of deriving from sport
 }
 
 export interface GetAvailabilityResult {
@@ -171,7 +173,7 @@ export interface GetAvailabilityResult {
 
 /** Get court availability for a specific club and date. */
 export async function getAvailability(params: GetAvailabilityParams): Promise<GetAvailabilityResult> {
-  const playtomicSport = mapSportToPlaytomic(params.sport);
+  const playtomicSport = params._sportIdOverride ?? mapSportToPlaytomic(params.sport);
   if (!playtomicSport) {
     return { courts: [], error: "Unsupported sport for Playtomic search" };
   }

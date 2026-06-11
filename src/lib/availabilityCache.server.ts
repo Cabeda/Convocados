@@ -7,6 +7,7 @@
 
 import { prisma } from "./db.server";
 import { getAvailability, type PlaytomicCourtAvailability } from "./playtomic.server";
+import { playtomicSportIds } from "./playtomic";
 
 export const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const DEFAULT_CONCURRENCY = 5;
@@ -20,6 +21,33 @@ export interface AvailabilityKey {
 
 export function availabilityKeyStr(k: AvailabilityKey): string {
   return `${k.tenantId}|${k.sport}|${k.date}`;
+}
+
+/**
+ * Fetch availability for all Playtomic sport variants of a Convocados sport and
+ * merge the court results (deduped by resource_id). This handles clubs that
+ * register courts under different sport IDs (e.g. FUTSAL vs FOOTBALL_OTHERS).
+ */
+async function fetchAllSportVariants(key: AvailabilityKey): Promise<{ courts: PlaytomicCourtAvailability[]; error?: string }> {
+  const ids = playtomicSportIds(key.sport);
+  if (!ids) return { courts: [], error: "Unsupported sport" };
+
+  const allCourts: PlaytomicCourtAvailability[] = [];
+  const seenResourceIds = new Set<string>();
+  let lastError: string | undefined;
+
+  for (const sportId of ids) {
+    const { courts, error } = await getAvailability({ tenantId: key.tenantId, sport: key.sport, date: key.date, _sportIdOverride: sportId });
+    if (error) { lastError = error; continue; }
+    for (const court of courts) {
+      if (seenResourceIds.has(court.resource_id)) continue;
+      seenResourceIds.add(court.resource_id);
+      allCourts.push(court);
+    }
+  }
+
+  if (allCourts.length === 0 && lastError) return { courts: [], error: lastError };
+  return { courts: allCourts };
 }
 
 /**
@@ -41,7 +69,7 @@ export async function getCachedAvailability(
     }
   }
 
-  const { courts, error } = await getAvailability({ tenantId: key.tenantId, sport: key.sport, date: key.date });
+  const { courts, error } = await fetchAllSportVariants(key);
   if (error) {
     // On error, serve stale cache if we have any rather than failing the watch
     if (cached) {
