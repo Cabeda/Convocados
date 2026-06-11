@@ -25,6 +25,8 @@ export interface CourtAlternative {
   coordinate: { lat: number; lon: number } | null;
   address: string | null;
   playtomicUrl: string;
+  imageUrl: string | null;
+  distanceKm: number | null;
 }
 
 export interface SearchAlternativesParams {
@@ -35,9 +37,20 @@ export interface SearchAlternativesParams {
   longitude: number;
   config: CourtWatchConfig;
   maxClubs?: number; // default 5
+  startTime?: string; // "HH:mm" — override time filter start
+  endTime?: string;   // "HH:mm" — override time filter end
 }
 
-const TIME_TOLERANCE_MINUTES = 30;
+const DEFAULT_TIME_TOLERANCE_MINUTES = 30;
+
+/** Haversine distance in km */
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 /** Parse "HH:mm:ss" or "HH:mm" to minutes since midnight */
 function timeToMinutes(time: string): number {
@@ -45,11 +58,16 @@ function timeToMinutes(time: string): number {
   return h * 60 + m;
 }
 
-/** Check if a slot's start time is within ±30 min of the target time */
-function isTimeMatch(slotTime: string, targetDate: Date): boolean {
-  const targetMinutes = targetDate.getUTCHours() * 60 + targetDate.getUTCMinutes();
+/** Check if a slot's start time is within the time window */
+function isTimeMatch(slotTime: string, targetDate: Date, startTime?: string, endTime?: string): boolean {
   const slotMinutes = timeToMinutes(slotTime);
-  return Math.abs(slotMinutes - targetMinutes) <= TIME_TOLERANCE_MINUTES;
+  if (startTime && endTime) {
+    const start = timeToMinutes(startTime);
+    const end = timeToMinutes(endTime);
+    return slotMinutes >= start && slotMinutes <= end;
+  }
+  const targetMinutes = targetDate.getUTCHours() * 60 + targetDate.getUTCMinutes();
+  return Math.abs(slotMinutes - targetMinutes) <= DEFAULT_TIME_TOLERANCE_MINUTES;
 }
 
 /** Format Date to YYYY-MM-DD */
@@ -96,10 +114,14 @@ export async function searchCourtAlternatives(params: SearchAlternativesParams):
 
     for (const court of courts) {
       const matchingSlots = court.slots.filter(
-        (s) => isTimeMatch(s.start_time, params.dateTime) && s.duration >= params.durationMinutes,
+        (s) => isTimeMatch(s.start_time, params.dateTime, params.startTime, params.endTime) && s.duration >= params.durationMinutes,
       );
 
       for (const slot of matchingSlots) {
+        const distanceKm = club.coordinate
+          ? Math.round(haversineKm(params.latitude, params.longitude, club.coordinate.lat, club.coordinate.lon) * 10) / 10
+          : null;
+
         alternatives.push({
           tenantId: club.tenant_id,
           tenantName: club.tenant_name,
@@ -112,7 +134,9 @@ export async function searchCourtAlternatives(params: SearchAlternativesParams):
           currency: slot.currency,
           coordinate: club.coordinate,
           address: club.address ? [club.address.street, club.address.city].filter(Boolean).join(", ") : null,
-          playtomicUrl: `https://playtomic.io/tenant/${club.tenant_id}`,
+          playtomicUrl: `https://playtomic.io/tenant/${club.tenant_id}/booking/${dateStr}?resource_id=${court.resource_id}&start=${slot.start_time}`,
+          imageUrl: club.images[0] || null,
+          distanceKm,
         });
       }
     }
