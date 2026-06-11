@@ -722,56 +722,31 @@ fun EventDetailScreen(
                         // Teams
                         val teams = event.teamResults
                         if (teams != null && teams.size == 2) {
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                                Row(Modifier.padding(14.dp)) {
-                                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(teams[0].name, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
-                                        teams[0].members.forEach { m ->
-                                            val pid = event.players.find { it.name == m.name }?.id
-                                            Text(m.name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
-                                                modifier = if (pid != null) Modifier.clickable { viewModel.movePlayerToTeam(eventId, pid, m.name, false) } else Modifier)
-                                        }
-                                    }
-                                    Text("VS", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp))
-                                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(teams[1].name, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
-                                        teams[1].members.forEach { m ->
-                                            val pid = event.players.find { it.name == m.name }?.id
-                                            Text(m.name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
-                                                modifier = if (pid != null) Modifier.clickable { viewModel.movePlayerToTeam(eventId, pid, m.name, true) } else Modifier)
-                                        }
-                                    }
-                                }
-                            }
+                            TeamsCard(
+                                teams = teams,
+                                players = event.players,
+                                onMovePlayer = { pid, name, toTeamOne -> viewModel.movePlayerToTeam(eventId, pid, name, toTeamOne) },
+                            )
                         }
 
                         // Players
                         SectionTitle(stringResource(R.string.playing_count, activePlayers.size, event.maxPlayers))
-                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
-                            Column {
-                                activePlayers.forEachIndexed { i, p ->
-                                    PlayerRow(
-                                        player = p, isMe = p.userId == user?.id,
-                                        onRemove = { viewModel.removePlayer(eventId, p.id) },
-                                        canRemove = isOwner || p.userId == user?.id || p.userId == null,
-                                    )
-                                    if (i < activePlayers.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                }
-                            }
-                        }
+                        PlayerListCard(
+                            players = activePlayers,
+                            currentUserId = user?.id,
+                            isOwner = isOwner,
+                            onRemove = { viewModel.removePlayer(eventId, it) },
+                        )
 
                         if (benchPlayers.isNotEmpty()) {
                             SectionTitle(stringResource(R.string.bench_count, benchPlayers.size))
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
-                                Column {
-                                    benchPlayers.forEachIndexed { i, p ->
-                                        PlayerRow(player = p, isMe = p.userId == user?.id, isBench = true,
-                                            onRemove = { viewModel.removePlayer(eventId, p.id) },
-                                            canRemove = isOwner || p.userId == user?.id || p.userId == null)
-                                        if (i < benchPlayers.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                    }
-                                }
-                            }
+                            PlayerListCard(
+                                players = benchPlayers,
+                                currentUserId = user?.id,
+                                isOwner = isOwner,
+                                isBench = true,
+                                onRemove = { viewModel.removePlayer(eventId, it) },
+                            )
                         }
 
                         // Suggestions (quick-add chips when input is empty)
@@ -931,6 +906,71 @@ fun EventHeader(title: String, dateLabel: String, location: String, modifier: Mo
         Text(title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
         Text(dateLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         if (location.isNotBlank()) Text(location, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** Stateless two-team card. Tapping a member moves them to the other team. */
+@Composable
+fun TeamsCard(
+    teams: List<TeamResult>,
+    players: List<Player>,
+    onMovePlayer: (playerId: String, name: String, toTeamOne: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Row(Modifier.padding(14.dp)) {
+            TeamColumn(teams[0], players, toTeamOne = false, onMovePlayer = onMovePlayer, modifier = Modifier.weight(1f))
+            Text("VS", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp))
+            TeamColumn(teams[1], players, toTeamOne = true, onMovePlayer = onMovePlayer, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun TeamColumn(
+    team: TeamResult,
+    players: List<Player>,
+    toTeamOne: Boolean,
+    onMovePlayer: (playerId: String, name: String, toTeamOne: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(team.name, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+        team.members.forEach { m ->
+            val pid = players.find { it.name == m.name }?.id
+            Text(
+                m.name,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = if (pid != null) Modifier.clickable { onMovePlayer(pid, m.name, toTeamOne) } else Modifier,
+            )
+        }
+    }
+}
+
+/** Stateless card listing a set of players (active or bench) with dividers. */
+@Composable
+fun PlayerListCard(
+    players: List<Player>,
+    currentUserId: String?,
+    isOwner: Boolean,
+    onRemove: (playerId: String) -> Unit,
+    modifier: Modifier = Modifier,
+    isBench: Boolean = false,
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = modifier.fillMaxWidth()) {
+        Column {
+            players.forEachIndexed { i, p ->
+                PlayerRow(
+                    player = p,
+                    isMe = p.userId == currentUserId,
+                    isBench = isBench,
+                    onRemove = { onRemove(p.id) },
+                    canRemove = isOwner || p.userId == currentUserId || p.userId == null,
+                )
+                if (i < players.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+        }
     }
 }
 
