@@ -124,6 +124,10 @@ dependencies {
     // Splash screen
     implementation(libs.androidx.core.splashscreen)
 
+    // Baseline profile installer — compiles the bundled baseline-prof.txt at install
+    // time for faster cold start and smoother first scroll.
+    implementation(libs.androidx.profileinstaller)
+
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)
