@@ -411,7 +411,7 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
                           {group.slots.filter((s) => sortedAlternatives.find((a) => a.tenantId === alt.tenantId && a.resourceId === s.resourceId && a.slotTime === s.slotTime)?.status === "available").map((s) => (
                             <Chip
                               key={`${s.resourceId}-${s.slotTime}`}
-                              label={`${s.slotTime}${s.resourceName !== alt.resourceName ? ` (${s.resourceName})` : ""}${formatPrice(s.price, s.currency) ? ` ${formatPrice(s.price, s.currency)}` : ""}`}
+                              label={`${s.slotTime}${new Set(group.slots.map((x) => x.resourceId)).size > 1 ? ` · ${s.resourceName}` : ""}${formatPrice(s.price, s.currency) ? ` · ${formatPrice(s.price, s.currency)}` : ""}`}
                               size="small" color="primary" variant="outlined"
                               onClick={() => setSwitchTarget(sortedAlternatives.find((a) => a.tenantId === alt.tenantId && a.resourceId === s.resourceId && a.slotTime === s.slotTime)!)}
                             />
