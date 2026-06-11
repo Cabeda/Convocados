@@ -10,7 +10,6 @@ import SearchIcon from "@mui/icons-material/Search";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import PlaceIcon from "@mui/icons-material/Place";
 import SortIcon from "@mui/icons-material/Sort";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import MapIcon from "@mui/icons-material/Map";
@@ -385,62 +384,56 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
                   <Stack spacing={1.5} divider={<Divider />}>
                     {groupedAlternatives.slice(0, visibleCount).map((group) => {
                   const alt = group.primary;
+                  const multiCourt = new Set(group.slots.map((x) => x.resourceId)).size > 1;
                   return (
                   <Box key={alt.tenantId} sx={{ py: 1 }}>
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                      {alt.imageUrl && (
-                        <Avatar src={alt.imageUrl} variant="rounded" sx={{ width: 48, height: 48 }} />
-                      )}
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Stack direction="row" spacing={0.5} alignItems="center">
-                          <Typography variant="body2" fontWeight={600}>{alt.tenantName}</Typography>
-                          <IconButton size="small" href={alt.playtomicUrl} target="_blank" rel="noopener noreferrer" title={t("playtomicBookOnPlaytomic")}>
-                            <OpenInNewIcon sx={{ fontSize: 14 }} />
-                          </IconButton>
-                        </Stack>
-                        {alt.address && (
-                          <Stack direction="row" spacing={0.5} alignItems="center">
-                            <PlaceIcon sx={{ fontSize: 12, color: "text.secondary" }} />
-                            <Typography variant="caption" color="text.secondary">
+                    <Stack spacing={0.5}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        {alt.imageUrl && (
+                          <Avatar src={alt.imageUrl} variant="rounded" sx={{ width: 36, height: 36 }} />
+                        )}
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography
+                            variant="body2" fontWeight={600}
+                            component="a" href={alt.playtomicUrl} target="_blank" rel="noopener noreferrer"
+                            sx={{ textDecoration: "none", color: "inherit", "&:hover": { textDecoration: "underline" } }}
+                          >
+                            {alt.tenantName}
+                          </Typography>
+                          {alt.address && (
+                            <Typography variant="caption" color="text.secondary" display="block">
                               {alt.address}{alt.distanceKm !== null && ` · ${alt.distanceKm} km`}
                             </Typography>
-                          </Stack>
-                        )}
-                        {/* Available slots as chips */}
-                        <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
-                          {group.slots.filter((s) => sortedAlternatives.find((a) => a.tenantId === alt.tenantId && a.resourceId === s.resourceId && a.slotTime === s.slotTime)?.status === "available").map((s) => (
-                            <Chip
-                              key={`${s.resourceId}-${s.slotTime}`}
-                              label={`${s.slotTime}${new Set(group.slots.map((x) => x.resourceId)).size > 1 && s.resourceName ? ` · ${s.resourceName}` : ""}${formatPrice(s.price, s.currency) ? ` · ${formatPrice(s.price, s.currency)}` : ""}`}
-                              size="small" color="primary" variant="outlined"
-                              onClick={() => setSwitchTarget(sortedAlternatives.find((a) => a.tenantId === alt.tenantId && a.resourceId === s.resourceId && a.slotTime === s.slotTime)!)}
-                            />
-                          ))}
-                          {group.hasBooked && (
-                            <Chip label={t("courtStatusBooked")} size="small" color="default" variant="filled" />
                           )}
-                        </Stack>
-                      </Box>
-                      {/* Actions */}
-                      <Stack spacing={0.5} alignItems="flex-end">
-                        {alt.status === "available" && (
-                          <Button size="small" variant="outlined" startIcon={<SwapHorizIcon />} onClick={() => setSwitchTarget(alt)}>
-                            {t("courtSwitchButton")}
-                          </Button>
+                        </Box>
+                        {/* Notify button for booked clubs */}
+                        {group.hasBooked && (
+                          watchedResourceIds.has(alt.resourceId) ? (
+                            <Chip label={t("courtWatchCreated")} size="small" color="success" icon={<NotificationsActiveIcon />} />
+                          ) : (
+                            <IconButton
+                              size="small"
+                              onClick={() => createWatch(alt)}
+                              disabled={watchingResourceId === alt.resourceId}
+                              title={t("courtNotifyWhenFree")}
+                            >
+                              {watchingResourceId === alt.resourceId ? <CircularProgress size={16} /> : <NotificationsActiveIcon fontSize="small" />}
+                            </IconButton>
+                          )
                         )}
-                        {group.hasBooked && !watchedResourceIds.has(alt.resourceId) && (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={watchingResourceId === alt.resourceId ? <CircularProgress size={14} /> : <NotificationsActiveIcon />}
-                            onClick={() => createWatch(alt)}
-                            disabled={watchingResourceId === alt.resourceId}
-                          >
-                            {t("courtNotifyWhenFree")}
-                          </Button>
-                        )}
-                        {watchedResourceIds.has(alt.resourceId) && (
-                          <Chip label={t("courtWatchCreated")} size="small" color="success" icon={<NotificationsActiveIcon />} />
+                      </Stack>
+                      {/* Slot chips — tap to get action menu */}
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                        {group.slots.filter((s) => sortedAlternatives.find((a) => a.tenantId === alt.tenantId && a.resourceId === s.resourceId && a.slotTime === s.slotTime)?.status === "available").map((s) => (
+                          <Chip
+                            key={`${s.resourceId}-${s.slotTime}`}
+                            label={`${s.slotTime}${multiCourt && s.resourceName ? ` · ${s.resourceName}` : ""}${formatPrice(s.price, s.currency) ? ` · ${formatPrice(s.price, s.currency)}` : ""}`}
+                            size="small" color="primary" variant="outlined" clickable
+                            onClick={() => setSwitchTarget(sortedAlternatives.find((a) => a.tenantId === alt.tenantId && a.resourceId === s.resourceId && a.slotTime === s.slotTime)!)}
+                          />
+                        ))}
+                        {group.hasBooked && (
+                          <Chip label={t("courtStatusBooked")} size="small" color="default" variant="filled" />
                         )}
                       </Stack>
                     </Stack>
@@ -460,25 +453,43 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
         </Box>
       </Collapse>
 
-      {/* Switch confirmation dialog */}
-      <Dialog open={!!switchTarget} onClose={() => setSwitchTarget(null)}>
-        <DialogTitle>{t("courtSwitchButton")}</DialogTitle>
-        <DialogContent>
-          {switchTarget && switchTarget.slotTime !== gameTime && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              {t("courtSwitchConfirmTime").replace("{time}", switchTarget.slotTime).replace("{currentTime}", gameTime)}
-            </Alert>
-          )}
-          <Typography>{switchTarget?.tenantName} — {switchTarget?.resourceName}</Typography>
+      {/* Slot action dialog — tap a chip to open */}
+      <Dialog open={!!switchTarget} onClose={() => setSwitchTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ pb: 1 }}>
+          {switchTarget?.tenantName}
+          {switchTarget?.resourceName && <Typography variant="caption" display="block" color="text.secondary">{switchTarget.resourceName} · {switchTarget?.slotTime}</Typography>}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 0 }}>
+          <Stack spacing={1.5}>
+            <Button
+              variant="contained"
+              startIcon={<OpenInNewIcon />}
+              href={switchTarget?.playtomicUrl ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setSwitchTarget(null)}
+              fullWidth
+            >
+              {t("playtomicBookOnPlaytomic")}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<SwapHorizIcon />}
+              onClick={() => handleSwitch(switchTarget?.slotTime !== gameTime)}
+              disabled={switching}
+              fullWidth
+            >
+              {switching ? <CircularProgress size={16} /> : t("courtSwitchButton")}
+            </Button>
+            {switchTarget && switchTarget.slotTime !== gameTime && (
+              <Typography variant="caption" color="text.secondary">
+                {t("courtSwitchConfirmTime").replace("{time}", switchTarget.slotTime).replace("{currentTime}", gameTime)}
+              </Typography>
+            )}
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSwitchTarget(null)} disabled={switching}>{t("cancel")}</Button>
-          {switchTarget && switchTarget.slotTime !== gameTime && (
-            <Button onClick={() => handleSwitch(true)} disabled={switching} variant="contained">{t("courtSwitchConfirmTimeYes")}</Button>
-          )}
-          <Button onClick={() => handleSwitch(false)} disabled={switching} variant={switchTarget?.slotTime === gameTime ? "contained" : "outlined"}>
-            {switchTarget?.slotTime === gameTime ? t("courtSwitchButton") : t("courtSwitchConfirmTimeNo")}
-          </Button>
+          <Button onClick={() => setSwitchTarget(null)} size="small">{t("cancel")}</Button>
         </DialogActions>
       </Dialog>
     </Box>
