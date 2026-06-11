@@ -712,8 +712,8 @@ model CourtWatchAlert {
   slotTime    String   // "HH:mm" of the available slot
   slotDate    String   // "YYYY-MM-DD"
   duration    Int      // minutes
-  price       Float
-  currency    String   @default("EUR")
+  price       Float?
+  currency    String?  @default("EUR")
   coordinate  String?  // JSON: {lat, lon}
   address     String?  // club address string
   notifiedAt  DateTime @default(now())

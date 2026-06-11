@@ -22,8 +22,8 @@ interface CourtAlternative {
   slotTime: string;
   slotDate: string;
   duration: number;
-  price: number;
-  currency: string;
+  price: number | null;
+  currency: string | null;
   address: string | null;
   playtomicUrl: string;
   imageUrl: string | null;
@@ -131,13 +131,13 @@ export default function CourtAlternatives({ eventId, hasCoordinates, courtWatchC
   }, [eventId, switchTarget]);
 
   const sortedAlternatives = [...alternatives].sort((a, b) => {
-    if (sortBy === "price") return a.price - b.price;
+    if (sortBy === "price") return (a.price ?? Infinity) - (b.price ?? Infinity);
     if (sortBy === "time") return a.slotTime.localeCompare(b.slotTime);
     if (sortBy === "distance") return (a.distanceKm ?? 999) - (b.distanceKm ?? 999);
     return 0;
   });
 
-  const formatPrice = (price: number, currency: string) =>
+  const formatPrice = (price: number | null, currency: string | null) =>
     price !== null && price !== undefined && !isNaN(price) && currency
       ? new Intl.NumberFormat(undefined, { style: "currency", currency }).format(price)
       : null;

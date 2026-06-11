@@ -24,8 +24,8 @@ interface Club {
 interface Slot {
   start_time: string;
   duration: number;
-  price: number;
-  currency: string;
+  price: number | null;
+  currency: string | null;
 }
 
 interface Court {
@@ -143,7 +143,7 @@ export default function PlaytomicCourtFinder({ open, onClose, sport, date, onSel
   };
 
   const formatTime = (time: string) => time.slice(0, 5); // "HH:mm:ss" -> "HH:mm"
-  const formatPrice = (price: number, currency: string) =>
+  const formatPrice = (price: number | null, currency: string | null) =>
     price !== null && price !== undefined && !isNaN(price) && currency
       ? new Intl.NumberFormat(undefined, { style: "currency", currency }).format(price)
       : null;

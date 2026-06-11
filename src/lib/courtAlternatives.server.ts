@@ -20,8 +20,8 @@ export interface CourtAlternative {
   slotTime: string;    // "HH:mm"
   slotDate: string;    // "YYYY-MM-DD"
   duration: number;
-  price: number;
-  currency: string;
+  price: number | null;
+  currency: string | null;
   coordinate: { lat: number; lon: number } | null;
   address: string | null;
   playtomicUrl: string;
@@ -147,8 +147,8 @@ export async function searchCourtAlternatives(params: SearchAlternativesParams):
     }
   }
 
-  // Sort by price ascending
-  alternatives.sort((a, b) => a.price - b.price);
+  // Sort by price ascending (slots without a price go last)
+  alternatives.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
 
   return { alternatives };
 }
