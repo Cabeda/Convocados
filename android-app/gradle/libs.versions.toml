@@ -34,6 +34,8 @@ androidTestRunner = "1.6.2"
 androidTestExtJunit = "1.2.1"
 turbine = "1.2.1"
 mockk = "1.14.2"
+roborazzi = "1.46.1"
+robolectric = "4.14.1"
 osmdroid = "6.1.20"
 kotlinxCoroutinesTest = "1.11.0"
 
@@ -102,6 +104,12 @@ mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 osmdroid = { group = "org.osmdroid", name = "osmdroid-android", version.ref = "osmdroid" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
+roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -114,3 +122,4 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 play-publisher = { id = "com.github.triplet.play", version = "3.12.1" }
 android-test = { id = "com.android.test", version.ref = "agp" }
 baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineProfilePlugin" }
+roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
