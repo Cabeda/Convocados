@@ -951,6 +951,7 @@ const pt: TranslationKeys = {
   landingFeatureRankings: "Acompanha classificações ELO",
   landingFeatureNotifications: "Recebe notificações push",
   landingFeatureReminders: "Lembretes para jogar e pagar",
+  landingFeatureCourtFinder: "Encontra e compara campos próximos",
   landingOpenSource: "Open source · Grátis para sempre",
 
   // MVP voting (#200)
