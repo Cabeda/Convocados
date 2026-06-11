@@ -184,6 +184,7 @@ export async function sendPlayerInviteToRegister(to: string, data: PlayerInviteD
   const when = new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   const inviter = data.inviterName ? `${data.inviterName} added you to` : "You've been added to";
   const signupUrl = `${getAppUrl()}/auth/signup?email=${encodeURIComponent(to)}`;
+  const inviterLabel = data.inviterName ?? "Someone";
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -193,7 +194,7 @@ export async function sendPlayerInviteToRegister(to: string, data: PlayerInviteD
       body: `📍 ${data.location}<br/>🕐 ${when}<br/><br/>Create a free Convocados account to confirm your spot, see the team and get reminders.`,
       buttonText: "Join Convocados",
       buttonUrl: signupUrl,
-      footnote: `Or just view the game: <a href="${data.eventUrl}" style="color:#1b6b4a;">${data.eventTitle}</a>`,
+      footnote: `Or just view the game: <a href="${data.eventUrl}" style="color:#1b6b4a;">${data.eventTitle}</a><br/><br/>Didn't expect this? This is a one-time invite from ${inviterLabel}. You won't receive further emails unless you create an account. <a href="mailto:abuse@convocados.cabeda.dev" style="color:#1b6b4a;">Report abuse</a>`,
     }),
   });
   if (result.error) throw new Error(`Failed to send player invite: ${result.error.message}`);

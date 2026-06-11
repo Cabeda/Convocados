@@ -33,7 +33,7 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
         client.get("/api/events/$id/post-game-status")
 
     // ── Players ───────────────────────────────────────────────────────────
-    suspend fun addPlayer(eventId: String, name: String, linkToAccount: Boolean = true, email: String? = null): OkResponse =
+    suspend fun addPlayer(eventId: String, name: String, linkToAccount: Boolean = true, email: String? = null): AddPlayerResponse =
         client.post("/api/events/$eventId/players", AddPlayerRequest(name, linkToAccount, email))
 
     suspend fun removePlayer(eventId: String, playerId: String): RemovePlayerResponse =

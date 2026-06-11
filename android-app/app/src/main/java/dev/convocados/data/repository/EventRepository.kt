@@ -81,10 +81,10 @@ class EventRepository @Inject constructor(
         }
     }
 
-    suspend fun addPlayer(eventId: String, name: String, link: Boolean, email: String? = null): Result<Unit> = try {
-        api.addPlayer(eventId, name, link, email)
+    suspend fun addPlayer(eventId: String, name: String, link: Boolean, email: String? = null): Result<String?> = try {
+        val response = api.addPlayer(eventId, name, link, email)
         refreshEventDetail(eventId)
-        Result.success(Unit)
+        Result.success(response.resolvedName)
     } catch (e: Exception) {
         Result.failure(e)
     }

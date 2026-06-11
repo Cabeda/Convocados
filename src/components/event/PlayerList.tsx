@@ -148,21 +148,25 @@ export function PlayerList({
             <TextField
               {...params}
               variant="outlined"
-              placeholder={t("addPlayerPlaceholder")}
+              placeholder={inviteEmail.trim() ? t("addPlayerPlaceholderOptional") : t("addPlayerPlaceholder")}
               helperText={t("addPlayerHelper")}
               fullWidth
               inputProps={{ ...params.inputProps, maxLength: 50 }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && playerInput.trim()) {
+                if (e.key === "Enter") {
                   const trimmed = playerInput.trim();
-                  const hasExactMatch = availableSuggestions.some(
-                    (s) => s.name.toLowerCase() === trimmed.toLowerCase()
-                  );
-                  if (hasExactMatch) return;
-                  const hasPartialMatch = availableSuggestions.some(
-                    (s) => matchesWithName(s.name, trimmed)
-                  );
-                  if (hasPartialMatch) return;
+                  // Allow submission with empty name when email is provided
+                  if (!trimmed && !inviteEmail.trim()) return;
+                  if (trimmed) {
+                    const hasExactMatch = availableSuggestions.some(
+                      (s) => s.name.toLowerCase() === trimmed.toLowerCase()
+                    );
+                    if (hasExactMatch) return;
+                    const hasPartialMatch = availableSuggestions.some(
+                      (s) => matchesWithName(s.name, trimmed)
+                    );
+                    if (hasPartialMatch) return;
+                  }
                   e.preventDefault();
                   e.stopPropagation();
                   onAddPlayer(trimmed, inviteEmail.trim() || undefined);
@@ -183,8 +187,8 @@ export function PlayerList({
                 endAdornment: (
                   <InputAdornment position="end">
                     <IconButton color="primary" edge="end"
-                      disabled={!playerInput.trim()}
-                      onClick={() => { onAddPlayer(playerInput, inviteEmail.trim() || undefined); setPlayerInput(""); setInviteEmail(""); }}>
+                      disabled={!playerInput.trim() && !inviteEmail.trim()}
+                      onClick={() => { onAddPlayer(playerInput.trim(), inviteEmail.trim() || undefined); setPlayerInput(""); setInviteEmail(""); }}>
                       <PersonAddIcon />
                     </IconButton>
                   </InputAdornment>
