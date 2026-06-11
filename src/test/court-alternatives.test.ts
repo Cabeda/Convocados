@@ -4,10 +4,12 @@ import { parseCourtWatchConfig } from "~/lib/courtAlternatives.server";
 // Define mock fns at module level
 const mockSearchClubs = vi.fn();
 const mockGetAvailability = vi.fn();
+const mockGetClubResources = vi.fn();
 
 vi.mock("~/lib/playtomic.server", () => ({
   searchClubs: (...args: unknown[]) => mockSearchClubs(...args),
   getAvailability: (...args: unknown[]) => mockGetAvailability(...args),
+  getClubResources: (...args: unknown[]) => mockGetClubResources(...args),
   mapSportToPlaytomic: (s: string) => {
     const map: Record<string, string> = { padel: "PADEL", "football-5v5": "FUTSAL" };
     return map[s] ?? null;
@@ -29,6 +31,7 @@ const { searchCourtAlternatives } = await import("~/lib/courtAlternatives.server
 afterEach(() => {
   mockSearchClubs.mockReset();
   mockGetAvailability.mockReset();
+  mockGetClubResources.mockReset();
 });
 
 // ── parseCourtWatchConfig ──────────────────────────────────────────────────────
@@ -190,5 +193,40 @@ describe("searchCourtAlternatives", () => {
     const result = await searchCourtAlternatives(baseParams);
     expect(result.alternatives).toHaveLength(1);
     expect(result.error).toBeUndefined();
+  });
+
+  it("does not call getClubResources unless includeBooked is set", async () => {
+    mockSearchClubs.mockResolvedValue({
+      clubs: [{ tenant_id: "club1", tenant_name: "Club 1", address: null, coordinate: null, images: [] }],
+    });
+    mockGetAvailability.mockResolvedValue({ courts: [] });
+
+    await searchCourtAlternatives(baseParams);
+    expect(mockGetClubResources).not.toHaveBeenCalled();
+  });
+
+  it("includes booked courts (no slot in window) when includeBooked is true", async () => {
+    mockSearchClubs.mockResolvedValue({
+      clubs: [{ tenant_id: "club1", tenant_name: "Club 1", address: null, coordinate: null, images: [] }],
+    });
+    // court1 is available at 20:00; court2 has no slot → booked
+    mockGetAvailability.mockResolvedValue({
+      courts: [{ resource_id: "court1", resource_name: "Court 1", slots: [{ start_time: "20:00:00", duration: 60, price: 15, currency: "EUR" }] }],
+    });
+    mockGetClubResources.mockResolvedValue({
+      resources: [
+        { resource_id: "court1", name: "Court 1", sport_id: "PADEL", indoor: true },
+        { resource_id: "court2", name: "Court 2", sport_id: "PADEL", indoor: false },
+      ],
+    });
+
+    const result = await searchCourtAlternatives({ ...baseParams, includeBooked: true });
+    const available = result.alternatives.filter((a) => a.status === "available");
+    const booked = result.alternatives.filter((a) => a.status === "booked");
+    expect(available).toHaveLength(1);
+    expect(available[0].resourceId).toBe("court1");
+    expect(booked).toHaveLength(1);
+    expect(booked[0].resourceId).toBe("court2");
+    expect(booked[0].price).toBeNull();
   });
 });

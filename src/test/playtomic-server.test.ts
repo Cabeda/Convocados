@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { searchClubs, getAvailability, parsePlaytomicPrice } from "~/lib/playtomic.server";
+import { searchClubs, getAvailability, parsePlaytomicPrice, getClubResources } from "~/lib/playtomic.server";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -173,6 +173,70 @@ describe("getAvailability", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(mockData) }));
     const result = await getAvailability({ tenantId: "t1", date: "2024-01-01", sport: "padel" });
     expect(result.courts[0].slots).toEqual([]);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("getClubResources", () => {
+  it("returns error for unsupported sport", async () => {
+    const result = await getClubResources("t1", "cricket");
+    expect(result.resources).toEqual([]);
+    expect(result.error).toContain("Unsupported sport");
+  });
+
+  it("returns error when API returns non-200", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+    const result = await getClubResources("t1");
+    expect(result.resources).toEqual([]);
+    expect(result.error).toContain("404");
+    vi.unstubAllGlobals();
+  });
+
+  it("returns error when resources is missing", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) }));
+    const result = await getClubResources("t1");
+    expect(result.resources).toEqual([]);
+    expect(result.error).toContain("Unexpected response");
+    vi.unstubAllGlobals();
+  });
+
+  it("maps resources with indoor/outdoor feature", async () => {
+    const mockData = {
+      resources: [
+        { resource_id: "r1", name: "Court 1", sport_id: "PADEL", properties: { resource_feature: "indoor" } },
+        { resource_id: "r2", name: "Court 2", sport_id: "PADEL", properties: { resource_feature: "outdoor" } },
+        { resource_id: "r3", name: "Court 3", sport_id: "PADEL" },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(mockData) }));
+    const result = await getClubResources("t1", "padel");
+    expect(result.error).toBeUndefined();
+    expect(result.resources).toHaveLength(3);
+    expect(result.resources[0]).toEqual({ resource_id: "r1", name: "Court 1", sport_id: "PADEL", indoor: true });
+    expect(result.resources[1].indoor).toBe(false);
+    expect(result.resources[2].indoor).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("filters resources by sport when provided", async () => {
+    const mockData = {
+      resources: [
+        { resource_id: "r1", name: "Padel 1", sport_id: "PADEL" },
+        { resource_id: "r2", name: "Tennis 1", sport_id: "TENNIS" },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(mockData) }));
+    const result = await getClubResources("t1", "padel");
+    expect(result.resources).toHaveLength(1);
+    expect(result.resources[0].resource_id).toBe("r1");
+    vi.unstubAllGlobals();
+  });
+
+  it("handles network errors gracefully", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network fail")));
+    const result = await getClubResources("t1");
+    expect(result.resources).toEqual([]);
+    expect(result.error).toBe("network fail");
     vi.unstubAllGlobals();
   });
 });

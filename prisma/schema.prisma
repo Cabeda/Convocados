@@ -39,6 +39,7 @@ model User {
   oauthTokens             OauthAccessToken[] @relation("OAuthTokens")
   oauthRefreshTokens      OauthRefreshToken[] @relation("OAuthRefreshTokens")
   oauthConsents           OauthConsent[]     @relation("OAuthConsents")
+  courtWatches            CourtWatch[]       @relation("UserCourtWatches")
 }
 
 model Session {
@@ -720,4 +721,44 @@ model CourtWatchAlert {
 
   @@unique([eventId, tenantId, resourceId, slotDate, slotTime])
   @@index([eventId])
+}
+
+// Standalone recurring court watch: notify a user when a specific Playtomic
+// court becomes available in a recurring weekday/time window. Independent of events.
+model CourtWatch {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation("UserCourtWatches", fields: [userId], references: [id], onDelete: Cascade)
+  sport        String   // Convocados sport id (e.g. "padel")
+  tenantId     String   // Playtomic club id
+  tenantName   String
+  resourceId   String?  // specific court; null = any court at the club
+  resourceName String?
+  dayOfWeek    Int      // 0=Sunday .. 6=Saturday (matched in club-local time)
+  startTime    String   // "HH:mm" window start (club-local)
+  endTime      String   // "HH:mm" window end (club-local)
+  durationMinutes Int   @default(90)
+  timezone     String   @default("UTC") // label for display; matching is club-local
+  maxPrice     Float?   // optional: only notify when price <= this
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  hits         CourtWatchHit[]
+
+  @@index([userId])
+  @@index([active])
+}
+
+// Dedup record: a specific available slot already notified for a watch.
+model CourtWatchHit {
+  id           String     @id @default(cuid())
+  watchId      String
+  watch        CourtWatch @relation(fields: [watchId], references: [id], onDelete: Cascade)
+  resourceId   String
+  slotDate     String     // "YYYY-MM-DD"
+  slotTime     String     // "HH:mm"
+  notifiedAt   DateTime   @default(now())
+
+  @@unique([watchId, resourceId, slotDate, slotTime])
+  @@index([watchId])
 }
