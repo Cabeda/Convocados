@@ -204,7 +204,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const origin = `${proto}://${host}`;
   const session = await getSession(request);
-  const senderClientId = request.headers.get("x-client-id") ?? session?.user?.id ?? undefined;
+  const senderClientId = session?.user?.id ?? request.headers.get("x-client-id") ?? undefined;
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     include: { players: { orderBy: { order: "asc" } } },
@@ -407,7 +407,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const origin = `${proto}://${host}`;
   const { playerId } = await request.json();
   const session = await getSession(request);
-  const senderClientId = request.headers.get("x-client-id") ?? session?.user?.id ?? undefined;
+  const senderClientId = session?.user?.id ?? request.headers.get("x-client-id") ?? undefined;
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
