@@ -37,6 +37,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const locale = detectLocale();
   const { data: session } = useSession();
 
+  // Detect ?action=pay from payment reminder deep link
+  const [autoOpenPay] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("action") === "pay";
+  });
+
   // ── UI state ────────────────────────────────────────────────────────────────
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -570,6 +577,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 maxPlayers={event.maxPlayers}
                 onJoin={addPlayer}
                 onLeave={removePlayer}
+                autoOpenPay={autoOpenPay}
               />
             )}
 

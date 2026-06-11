@@ -276,6 +276,14 @@ export const openApiSpec = {
         responses: { "200": { description: "Payment updated" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/payments/bulk": {
+      put: {
+        summary: "Bulk mark all pending/sent payments as paid",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "All payments marked as paid" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/balance": {
       get: {
         summary: "Get outstanding balance and enforcement info for the caller",

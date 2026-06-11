@@ -438,6 +438,8 @@ const en = {
   paymentNudgeSentConfirmation: "Marked as sent — the organizer will confirm receipt",
   paymentNudgeMarkSent: "I've sent it ✓",
   paymentNudgeSettleUp: "Settle up",
+  bulkMarkAllPaid: "Mark all as paid",
+  autoPayOnJoinLabel: "Always show payment when I join",
   paymentEnforcementOff: "Off",
   paymentEnforcementNudge: "Nudge",
   paymentEnforcementSoftGate: "Require acknowledgment",

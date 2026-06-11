@@ -439,6 +439,8 @@ const pt: TranslationKeys = {
   paymentNudgeSentConfirmation: "Marcado como enviado — o organizador vai confirmar",
   paymentNudgeMarkSent: "Já enviei ✓",
   paymentNudgeSettleUp: "Acertar",
+  bulkMarkAllPaid: "Marcar todos como pago",
+  autoPayOnJoinLabel: "Mostrar pagamento ao entrar",
   paymentEnforcementOff: "Desligado",
   paymentEnforcementNudge: "Lembrete",
   paymentEnforcementSoftGate: "Exigir confirmação",
