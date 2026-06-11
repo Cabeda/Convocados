@@ -704,6 +704,7 @@ const en = {
   courtWatchesEmpty: "You have no court watches yet. Search court alternatives and tap \"Notify when free\" on a booked court.",
   courtWatchDelete: "Remove watch",
   courtWatchEveryWeekday: "Every {weekday}",
+  courtShowMore: "Show more",
   courtPreviousAlerts: "Previously found",
 
   // Admin dashboard (#159)

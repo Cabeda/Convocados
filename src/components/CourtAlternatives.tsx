@@ -13,6 +13,8 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import PlaceIcon from "@mui/icons-material/Place";
 import SortIcon from "@mui/icons-material/Sort";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
+import MapIcon from "@mui/icons-material/Map";
+import ListIcon from "@mui/icons-material/ViewList";
 import { useT } from "~/lib/useT";
 
 interface CourtAlternative {
@@ -29,6 +31,7 @@ interface CourtAlternative {
   playtomicUrl: string;
   imageUrl: string | null;
   distanceKm: number | null;
+  coordinate: { lat: number; lon: number } | null;
   status: "available" | "booked";
 }
 
@@ -41,6 +44,66 @@ interface Props {
 }
 
 type SortOption = "price" | "time" | "distance";
+
+// ── Map sub-component (lazy: only loaded when map view is toggled) ─────────────
+
+function CourtAlternativesMap({ alternatives }: { alternatives: CourtAlternative[] }) {
+  // eslint-disable-next-line @eslint-react/static-components
+  const [loaded, setLoaded] = React.useState(false);
+  const ref = React.useRef<{
+    MapContainer: typeof import("react-leaflet").MapContainer;
+    TileLayer: typeof import("react-leaflet").TileLayer;
+    Marker: typeof import("react-leaflet").Marker;
+    Popup: typeof import("react-leaflet").Popup;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (ref.current) return;
+    Promise.all([import("react-leaflet"), import("leaflet"), import("leaflet/dist/leaflet.css")] as const).then(
+      ([rl, L]) => {
+        delete (L.Icon.Default.prototype as L.Icon.Default & { _getIconUrl?: unknown })._getIconUrl;
+        L.Icon.Default.mergeOptions({
+          iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+          iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+          shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+        });
+        ref.current = { MapContainer: rl.MapContainer, TileLayer: rl.TileLayer, Marker: rl.Marker, Popup: rl.Popup };
+        setLoaded(true);
+      },
+    );
+  }, []);
+
+  if (!loaded || !ref.current) return <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={24} /></Box>;
+
+  const { MapContainer, TileLayer, Marker, Popup } = ref.current;
+  const markers = alternatives.filter((a) => a.coordinate);
+  const center: [number, number] = markers.length > 0
+    ? [markers[0].coordinate!.lat, markers[0].coordinate!.lon]
+    : [41.15, -8.63];
+
+  const unique = new Map<string, CourtAlternative>();
+  for (const m of markers) {
+    const k = `${m.coordinate!.lat},${m.coordinate!.lon}`;
+    if (!unique.has(k)) unique.set(k, m);
+  }
+
+  return (
+    <MapContainer center={center} zoom={12} style={{ height: "100%", width: "100%" }} scrollWheelZoom={false}>
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' />
+      {[...unique.values()].map((alt) => (
+        <Marker key={`${alt.coordinate!.lat}-${alt.coordinate!.lon}`} position={[alt.coordinate!.lat, alt.coordinate!.lon]}>
+          <Popup>
+            <strong>{alt.tenantName}</strong><br />
+            {alt.resourceName} · {alt.slotTime}<br />
+            {alt.status === "booked" ? "Booked" : alt.price !== null ? `${alt.price} ${alt.currency}` : ""}
+          </Popup>
+        </Marker>
+      ))}
+    </MapContainer>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 
 export default function CourtAlternatives({ eventId, sport, hasCoordinates, courtWatchConfig, gameTime }: Props) {
   const t = useT();
@@ -66,6 +129,8 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
   });
   const [sortBy, setSortBy] = useState<SortOption>("price");
   const [includeBooked, setIncludeBooked] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(5);
+  const [mapView, setMapView] = useState(false);
 
   // Watch config
   const [watchEnabled, setWatchEnabled] = useState(!!courtWatchConfig);
@@ -280,10 +345,21 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
                   <MenuItem value="time">{t("courtSortTime")}</MenuItem>
                   <MenuItem value="distance">{t("courtSortDistance")}</MenuItem>
                 </Select>
+                <Box sx={{ flex: 1 }} />
+                <IconButton size="small" onClick={() => setMapView(!mapView)} title={mapView ? "List" : "Map"}>
+                  {mapView ? <ListIcon fontSize="small" /> : <MapIcon fontSize="small" />}
+                </IconButton>
+                <Typography variant="caption" color="text.secondary">{sortedAlternatives.length} {t("courtAlternativesSearch").toLowerCase()}</Typography>
               </Stack>
 
-              <Stack spacing={1} divider={<Divider />}>
-                {sortedAlternatives.map((alt) => (
+              {mapView ? (
+                <Box sx={{ height: 300, borderRadius: 1, overflow: "hidden", border: 1, borderColor: "divider" }}>
+                  <CourtAlternativesMap alternatives={sortedAlternatives} />
+                </Box>
+              ) : (
+                <>
+                  <Stack spacing={1} divider={<Divider />}>
+                    {sortedAlternatives.slice(0, visibleCount).map((alt) => (
                   <Box key={`${alt.tenantId}-${alt.resourceId}-${alt.slotTime}`} sx={{ py: 1, opacity: alt.status === "booked" ? 0.7 : 1 }}>
                     <Stack direction="row" spacing={1.5} alignItems="flex-start">
                       {/* Court photo */}
@@ -346,6 +422,13 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
                   </Box>
                 ))}
               </Stack>
+              {visibleCount < sortedAlternatives.length && (
+                <Button size="small" sx={{ mt: 1 }} onClick={() => setVisibleCount((c) => c + 5)}>
+                  {t("courtShowMore")} ({sortedAlternatives.length - visibleCount} more)
+                </Button>
+              )}
+                </>
+              )}
             </>
           )}
         </Box>
@@ -375,3 +458,4 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
     </Box>
   );
 }
+

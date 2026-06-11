@@ -656,6 +656,7 @@ const fr: TranslationKeys = {
   courtWatchesEmpty: "Vous n'avez pas encore d'alertes de terrain. Cherchez des alternatives et touchez « Prévenir quand libre » sur un terrain réservé.",
   courtWatchDelete: "Supprimer l'alerte",
   courtWatchEveryWeekday: "Chaque {weekday}",
+  courtShowMore: "Afficher plus",
   courtPreviousAlerts: "Trouvés précédemment",
 
   // Admin dashboard (#159)

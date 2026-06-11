@@ -656,6 +656,7 @@ const es: TranslationKeys = {
   courtWatchesEmpty: "Aún no tienes alertas de pista. Busca alternativas y pulsa \"Avisar cuando esté libre\" en una pista reservada.",
   courtWatchDelete: "Eliminar alerta",
   courtWatchEveryWeekday: "Cada {weekday}",
+  courtShowMore: "Mostrar más",
   courtPreviousAlerts: "Encontrados anteriormente",
 
   // Admin dashboard (#159)

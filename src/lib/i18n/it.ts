@@ -656,6 +656,7 @@ const it: TranslationKeys = {
   courtWatchesEmpty: "Non hai ancora monitoraggi campo. Cerca alternative e tocca \"Avvisa quando libero\" su un campo prenotato.",
   courtWatchDelete: "Rimuovi monitoraggio",
   courtWatchEveryWeekday: "Ogni {weekday}",
+  courtShowMore: "Mostra di più",
   courtPreviousAlerts: "Trovati in precedenza",
 
   // Admin dashboard (#159)
