@@ -64,6 +64,8 @@ npm run setup-hooks
 ```
 This installs a pre-push hook that runs `lint`, `typecheck` and `vitest --coverage` before every push.
 
+**NEVER use `git push --no-verify`**. If the pre-push hook fails, fix the underlying issue (lint errors, type errors, failing tests) rather than bypassing the hook. The hook exists to prevent broken code from reaching the remote.
+
 ### Branch Naming
 ```
 feat/short-description    # New features
