@@ -121,6 +121,10 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun markPaymentSent(eventId: String, playerName: String): OkResponse =
         client.put("/api/events/$eventId/payments", PaymentUpdateRequest(playerName, "sent"))
 
+    /** Bulk mark all pending/sent as paid (owner/admin only). */
+    suspend fun bulkMarkAllPaid(eventId: String): OkResponse =
+        client.put("/api/events/$eventId/payments/bulk")
+
     // ── Balance / Payment Nudge ───────────────────────────────────────────
     suspend fun fetchBalance(eventId: String): BalanceResponse =
         client.get("/api/events/$eventId/balance")

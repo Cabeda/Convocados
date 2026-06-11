@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Paper, Typography, Box, Stack, Chip, Button, alpha, useTheme,
   Dialog, DialogTitle, DialogContent, DialogActions, Alert,
+  FormControlLabel, Switch,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
@@ -31,15 +32,18 @@ interface Props {
   maxPlayers: number;
   onJoin: (name: string, linkToAccount?: boolean) => Promise<void>;
   onLeave: (id: string) => Promise<void>;
+  autoOpenPay?: boolean;
 }
 
-export function QuickJoin({ eventId, userName, players, maxPlayers, onJoin, onLeave }: Props) {
+export function QuickJoin({ eventId, userName, players, maxPlayers, onJoin, onLeave, autoOpenPay }: Props) {
   const t = useT();
   const theme = useTheme();
   const [joining, setJoining] = useState(false);
   const [balanceData, setBalanceData] = useState<BalanceData | null>(null);
   const [showInterstitial, setShowInterstitial] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [autoPayOnJoin, setAutoPayOnJoin] = useState(false);
+  const [autoOpenTriggered, setAutoOpenTriggered] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<ReturnType<typeof parsePaymentMethods>>([]);
   const [costCurrency, setCostCurrency] = useState("EUR");
   const [perPlayer, setPerPlayer] = useState(0);
@@ -69,6 +73,23 @@ export function QuickJoin({ eventId, userName, players, maxPlayers, onJoin, onLe
 
   useEffect(() => { fetchBalance(); }, [fetchBalance]);
 
+  // Auto-open payment sheet from ?action=pay deep link
+  useEffect(() => {
+    if (autoOpenPay && balanceData && !autoOpenTriggered) {
+      setAutoOpenTriggered(true);
+      if (balanceData.callerBalance && balanceData.callerBalance.amount > 0) {
+        setShowInterstitial(true);
+      }
+    }
+  }, [autoOpenPay, balanceData, autoOpenTriggered]);
+
+  // Load auto-pay-on-join preference from localStorage
+  useEffect(() => {
+    try {
+      setAutoPayOnJoin(localStorage.getItem("autoPayOnJoin") === "true");
+    } catch { /* ignore */ }
+  }, []);
+
   const balance = balanceData?.callerBalance;
   const hasDebt = balance && balance.amount > 0;
   const enforcement = balanceData?.enforcement ?? "off";
@@ -88,6 +109,10 @@ export function QuickJoin({ eventId, userName, players, maxPlayers, onJoin, onLe
     setJoining(true);
     try {
       await onJoin(userName, true);
+      // Auto-open payment sheet after join if user opted in
+      if (autoPayOnJoin && hasDebt) {
+        setTimeout(() => setShowInterstitial(true), 300);
+      }
     } catch (err: unknown) {
       // Check if it's a 402 PAYMENT_GATE response
       if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "PAYMENT_GATE") {
@@ -260,6 +285,21 @@ export function QuickJoin({ eventId, userName, players, maxPlayers, onJoin, onLe
               {t("paymentNudgeJoinLater")}
             </Button>
           )}
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={autoPayOnJoin}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setAutoPayOnJoin(val);
+                  try { localStorage.setItem("autoPayOnJoin", String(val)); } catch {}
+                }}
+              />
+            }
+            label={<Typography variant="caption" color="text.secondary">{t("autoPayOnJoinLabel")}</Typography>}
+            sx={{ mt: 1 }}
+          />
         </DialogActions>
       </Dialog>
     </>

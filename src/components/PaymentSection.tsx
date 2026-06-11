@@ -170,6 +170,12 @@ export function PaymentSection({
     onPaymentChange?.();
   };
 
+  const handleBulkMarkPaid = async () => {
+    await fetch(`/api/events/${eventId}/payments/bulk`, { method: "PUT" });
+    fetchCost();
+    onPaymentChange?.();
+  };
+
   const handleCopy = async (text: string, id: string) => {
     await navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -593,6 +599,19 @@ export function PaymentSection({
                     />
                   ))}
                 </Box>
+
+                {/* Bulk mark all as paid */}
+                {canEdit && costData.payments.some((p) => p.status !== "paid") && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="success"
+                    onClick={handleBulkMarkPaid}
+                    startIcon={<CheckIcon />}
+                  >
+                    {t("bulkMarkAllPaid")}
+                  </Button>
+                )}
 
                 {/* Legend */}
                 <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>

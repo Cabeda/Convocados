@@ -3,6 +3,7 @@ package dev.convocados.data.datastore
 import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -20,6 +21,7 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
 
     private val LOCALE_KEY = stringPreferencesKey("locale")
     private val THEME_KEY = stringPreferencesKey("theme_mode")
+    private val AUTO_PAY_ON_JOIN_KEY = booleanPreferencesKey("auto_pay_on_join")
 
     val locale: Flow<String> = context.dataStore.data.map { it[LOCALE_KEY] ?: "en" }
 
@@ -45,5 +47,11 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
                 ThemeMode.System -> "system"
             }
         }
+    }
+
+    val autoPayOnJoin: Flow<Boolean> = context.dataStore.data.map { it[AUTO_PAY_ON_JOIN_KEY] ?: false }
+
+    suspend fun setAutoPayOnJoin(enabled: Boolean) {
+        context.dataStore.edit { it[AUTO_PAY_ON_JOIN_KEY] = enabled }
     }
 }

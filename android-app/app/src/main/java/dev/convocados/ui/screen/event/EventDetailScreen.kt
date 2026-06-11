@@ -33,6 +33,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.*
 import dev.convocados.data.auth.TokenStore
+import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.repository.EventRepository
 import dev.convocados.ui.screen.games.formatRelativeDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -87,6 +88,7 @@ class EventDetailViewModel @Inject constructor(
     private val api: ConvocadosApi,
     private val tokenStore: TokenStore,
     private val client: ApiClient,
+    private val settingsStore: SettingsStore,
 ) : ViewModel() {
     private val _eventId = MutableStateFlow<String?>(null)
 
@@ -111,6 +113,13 @@ class EventDetailViewModel @Inject constructor(
             locked = if (e?.locked == true) s.locked else false
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EventScreenState(locked = true))
+
+    val autoPayOnJoin: StateFlow<Boolean> = settingsStore.autoPayOnJoin
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setAutoPayOnJoin(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setAutoPayOnJoin(enabled) }
+    }
 
     private val _user = MutableStateFlow<UserProfile?>(null)
     val user: StateFlow<UserProfile?> = _user
@@ -194,6 +203,12 @@ class EventDetailViewModel @Inject constructor(
     fun addPlayer(eventId: String, name: String, link: Boolean = true) {
         viewModelScope.launch {
             repository.addPlayer(eventId, name, link)
+                .onSuccess {
+                    // Auto-open payment dialog after join if preference is set
+                    if (autoPayOnJoin.value && _state.value.balance?.callerBalance?.let { it.amount > 0 } == true) {
+                        _state.value = _state.value.copy(showPaymentNudge = true)
+                    }
+                }
                 .onFailure { e ->
                     if (e is ApiException && e.code == 402) {
                         // Parse the PAYMENT_GATE response
@@ -367,6 +382,7 @@ private fun parseApiErrorMessage(e: Throwable): String? {
 @Composable
 fun EventDetailScreen(
     eventId: String,
+    autoOpenPay: Boolean = false,
     onBack: () -> Unit,
     onSettings: () -> Unit,
     onRankings: () -> Unit,
@@ -407,6 +423,13 @@ fun EventDetailScreen(
     }
 
     LaunchedEffect(eventId) { viewModel.load(eventId) }
+
+    // Auto-open payment dialog from ?action=pay deep link
+    LaunchedEffect(autoOpenPay, state.balance) {
+        if (autoOpenPay && state.balance?.callerBalance != null && state.balance!!.callerBalance!!.amount > 0) {
+            viewModel.showPaymentNudge()
+        }
+    }
 
     // Notification preferences bottom sheet
     if (state.showNotificationSheet) {
@@ -817,6 +840,7 @@ fun EventDetailScreen(
     // ── Payment Nudge Dialog ──────────────────────────────────────────────
     if (state.showPaymentNudge && user?.name != null) {
         val callerBalance = state.balance?.callerBalance
+        val autoPayPref by viewModel.autoPayOnJoin.collectAsStateWithLifecycle()
         AlertDialog(
             onDismissRequest = { viewModel.dismissPaymentNudge() },
             title = { Text("Settle up before you play") },
@@ -835,6 +859,19 @@ fun EventDetailScreen(
                             )
                         }
                     }
+                    Spacer(Modifier.height(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Always show payment when I join",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Switch(
+                            checked = autoPayPref,
+                            onCheckedChange = { viewModel.setAutoPayOnJoin(it) },
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -843,7 +880,7 @@ fun EventDetailScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
                 ) {
                     Text(
-                        if (callerBalance != null) "Pay €${"%.2f".format(callerBalance.amount)} & join" else "Pay & join",
+                        if (callerBalance != null) "Pay €${"%.2f".format(callerBalance.amount)} & join" else "I've sent it ✓",
                         color = MaterialTheme.colorScheme.onTertiary,
                     )
                 }

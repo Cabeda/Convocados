@@ -51,6 +51,12 @@ class PaymentsViewModel @Inject constructor(private val api: ConvocadosApi) : Vi
             runCatching { api.setCostOverride(eventId, playerName, amount) }.onSuccess { load(eventId) }
         }
     }
+
+    fun bulkMarkAllPaid(eventId: String) {
+        viewModelScope.launch {
+            runCatching { api.bulkMarkAllPaid(eventId) }.onSuccess { load(eventId) }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,6 +82,18 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
                     SummaryCard("Paid", "${d.summary.paidCount}", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
                     SummaryCard("Pending", "${d.summary.pendingCount}", MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
                     d.totalAmount?.let { SummaryCard("Total", "${d.currency ?: "€"}$it", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f)) }
+                }
+            }
+            // Bulk mark all as paid
+            if (d.payments.any { it.status != "paid" }) {
+                item {
+                    Button(
+                        onClick = { viewModel.bulkMarkAllPaid(eventId) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    ) {
+                        Text("✓ Mark all as paid", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
             if (d.payments.isEmpty()) {
