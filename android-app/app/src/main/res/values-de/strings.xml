@@ -246,4 +246,5 @@
     <string name="teams_random">Zufällig</string>
     <string name="add_from_contacts">Aus Kontakten hinzufügen</string>
     <string name="no_archived_games">Keine archivierten Spiele</string>
+    <string name="will_invite">Lädt %1$s ein</string>
 </resources>

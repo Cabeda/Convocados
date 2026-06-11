@@ -215,9 +215,9 @@ class EventDetailViewModel @Inject constructor(
         load(eventId)
     }
 
-    fun addPlayer(eventId: String, name: String, link: Boolean = true) {
+    fun addPlayer(eventId: String, name: String, link: Boolean = true, email: String? = null) {
         viewModelScope.launch {
-            repository.addPlayer(eventId, name, link)
+            repository.addPlayer(eventId, name, link, email)
                 .onSuccess {
                     // Auto-open payment dialog after join if preference is set
                     if (autoPayOnJoin.value && _state.value.balance?.callerBalance?.let { it.amount > 0 } == true) {
@@ -781,16 +781,30 @@ fun EventDetailScreen(
                             }
 
                             Column {
+                                var pickedEmail by remember { mutableStateOf<String?>(null) }
+                                // Pick a contact's email directly (ACTION_PICK on the Email table):
+                                // the picker grants temporary access to the chosen row, so we read
+                                // the name + email without the READ_CONTACTS permission.
                                 val contactPicker = rememberLauncherForActivityResult(
-                                    androidx.activity.result.contract.ActivityResultContracts.PickContact()
-                                ) { uri ->
-                                    uri?.let {
-                                        runCatching {
-                                            context.contentResolver.query(
-                                                it,
-                                                arrayOf(android.provider.ContactsContract.Contacts.DISPLAY_NAME),
-                                                null, null, null,
-                                            )?.use { c -> if (c.moveToFirst()) c.getString(0)?.let { name -> newPlayer = name } }
+                                    androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+                                ) { result ->
+                                    if (result.resultCode == android.app.Activity.RESULT_OK) {
+                                        result.data?.data?.let { uri ->
+                                            runCatching {
+                                                context.contentResolver.query(
+                                                    uri,
+                                                    arrayOf(
+                                                        android.provider.ContactsContract.CommonDataKinds.Email.ADDRESS,
+                                                        android.provider.ContactsContract.CommonDataKinds.Email.DISPLAY_NAME,
+                                                    ),
+                                                    null, null, null,
+                                                )?.use { c ->
+                                                    if (c.moveToFirst()) {
+                                                        c.getString(1)?.takeIf { it.isNotBlank() }?.let { name -> newPlayer = name }
+                                                        pickedEmail = c.getString(0)?.takeIf { it.isNotBlank() }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -799,15 +813,28 @@ fun EventDetailScreen(
                                         value = newPlayer, onValueChange = { newPlayer = it },
                                         placeholder = { Text(stringResource(R.string.add_player_placeholder)) }, singleLine = true,
                                         modifier = Modifier.weight(1f),
+                                        supportingText = pickedEmail?.let { { Text(stringResource(R.string.will_invite, it)) } },
                                         trailingIcon = {
-                                            IconButton(onClick = { contactPicker.launch(null) }) {
+                                            IconButton(onClick = {
+                                                contactPicker.launch(
+                                                    android.content.Intent(
+                                                        android.content.Intent.ACTION_PICK,
+                                                        android.provider.ContactsContract.CommonDataKinds.Email.CONTENT_URI,
+                                                    )
+                                                )
+                                            }) {
                                                 Icon(Icons.Default.Contacts, contentDescription = stringResource(R.string.add_from_contacts), tint = MaterialTheme.colorScheme.primary)
                                             }
                                         },
                                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline, cursorColor = MaterialTheme.colorScheme.primary, focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant),
                                     )
                                     Button(
-                                        onClick = { viewModel.addPlayer(eventId, newPlayer.trim()); newPlayer = "" },
+                                        onClick = {
+                                            val em = pickedEmail
+                                            if (em != null) viewModel.addPlayer(eventId, newPlayer.trim(), link = false, email = em)
+                                            else viewModel.addPlayer(eventId, newPlayer.trim())
+                                            newPlayer = ""; pickedEmail = null
+                                        },
                                         enabled = newPlayer.isNotBlank(),
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                                     ) { Text(stringResource(R.string.add_button), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold) }

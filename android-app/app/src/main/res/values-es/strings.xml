@@ -246,4 +246,5 @@
     <string name="teams_random">Aleatorios</string>
     <string name="add_from_contacts">Añadir desde contactos</string>
     <string name="no_archived_games">No hay partidos archivados</string>
+    <string name="will_invite">Invitará a %1$s</string>
 </resources>
