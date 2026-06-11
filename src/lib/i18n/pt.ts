@@ -437,6 +437,7 @@ const pt: TranslationKeys = {
   paymentNudgeSocialProof: "{paid} de {total} pagaram o último jogo",
   paymentNudgeStreak: "🔥 {count} jogos pagos seguidos",
   paymentNudgeSentConfirmation: "Marcado como enviado — o organizador vai confirmar",
+  paymentNudgeMarkSent: "Já enviei ✓",
   paymentNudgeSettleUp: "Acertar",
   paymentEnforcementOff: "Desligado",
   paymentEnforcementNudge: "Lembrete",

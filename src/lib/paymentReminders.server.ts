@@ -12,19 +12,22 @@ export interface PendingPaymentPlayer {
 
 /**
  * Find all authenticated players with pending payments for games that have been played.
+ * Only fires after the game's dateTime + duration has passed (not before the game).
  * Only returns players linked to a user account (userId != null) with a verified email.
  */
 export async function getPlayersWithPendingPayments(): Promise<PendingPaymentPlayer[]> {
-  // Find events that have at least one played game history AND have a cost set with pending payments
+  const now = new Date();
+
+  // Find events that have pending payments AND whose game time has already passed
   const eventCosts = await prisma.eventCost.findMany({
     where: {
       payments: { some: { status: "pending" } },
       event: {
-        history: { some: { status: "played" } },
+        dateTime: { lt: now }, // game started before now (duration handled below)
       },
     },
     include: {
-      event: { select: { id: true, title: true } },
+      event: { select: { id: true, title: true, dateTime: true, durationMinutes: true, history: { select: { status: true }, orderBy: { dateTime: "desc" }, take: 1 } } },
       payments: {
         where: { status: "pending" },
       },
@@ -34,6 +37,14 @@ export async function getPlayersWithPendingPayments(): Promise<PendingPaymentPla
   const results: PendingPaymentPlayer[] = [];
 
   for (const ec of eventCosts) {
+    // Only remind after the game has ended (dateTime + duration)
+    const gameEnd = new Date(ec.event.dateTime.getTime() + ec.event.durationMinutes * 60_000);
+    if (now < gameEnd) continue;
+
+    // Skip if the latest history entry is cancelled (game didn't happen)
+    const latestHistory = ec.event.history[0];
+    if (latestHistory?.status === "cancelled") continue;
+
     for (const payment of ec.payments) {
       // Find the player record to get the userId
       const player = await prisma.player.findFirst({
