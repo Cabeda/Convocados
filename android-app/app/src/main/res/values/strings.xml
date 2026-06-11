@@ -263,4 +263,5 @@
     <string name="teams_balanced">Balanced</string>
     <string name="teams_random">Random</string>
     <string name="add_from_contacts">Add from contacts</string>
+    <string name="no_archived_games">No archived games</string>
 </resources>

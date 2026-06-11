@@ -173,6 +173,19 @@ fun GamesScreen(
                     }
                 }
 
+                if (games.isEmpty() && showArchived) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(12.dp))
+                            Text(stringResource(R.string.no_archived_games), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
+                }
+
                 if (games.isEmpty() && !showArchived) {
                     item {
                         Column(
