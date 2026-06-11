@@ -56,13 +56,12 @@ export default function CourtAlternatives({ eventId, sport, hasCoordinates, cour
     courtWatchConfig?.indoor === true ? "indoor" : courtWatchConfig?.indoor === false ? "outdoor" : "any",
   );
   const [startTime, setStartTime] = useState(() => {
-    const [h, m] = gameTime.split(":").map(Number);
-    const start = Math.max(0, h * 60 + m - 60);
-    return `${String(Math.floor(start / 60)).padStart(2, "0")}:${String(start % 60).padStart(2, "0")}`;
+    // Default: from game time onward
+    return gameTime;
   });
   const [endTime, setEndTime] = useState(() => {
     const [h, m] = gameTime.split(":").map(Number);
-    const end = Math.min(23 * 60 + 59, h * 60 + m + 60);
+    const end = Math.min(23 * 60 + 59, h * 60 + m + 120);
     return `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
   });
   const [sortBy, setSortBy] = useState<SortOption>("price");
