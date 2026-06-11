@@ -521,6 +521,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {canEditSettings && event && isPlaytomicSport(event.sport) && (
               <CourtAlternatives
                 eventId={eventId}
+                sport={event.sport}
                 hasCoordinates={!!(event.latitude && event.longitude)}
                 courtWatchConfig={event.courtWatchConfig ? JSON.parse(event.courtWatchConfig) : null}
                 gameTime={gameDate ? `${String(gameDate.getUTCHours()).padStart(2, "0")}:${String(gameDate.getUTCMinutes()).padStart(2, "0")}` : "00:00"}

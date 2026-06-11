@@ -647,6 +647,15 @@ const fr: TranslationKeys = {
   courtSortPrice: "Prix",
   courtSortTime: "Heure",
   courtSortDistance: "Distance",
+  courtIncludeBooked: "Inclure les terrains réservés",
+  courtStatusBooked: "Réservé",
+  courtNotifyWhenFree: "Prévenir quand libre",
+  courtWatchCreated: "Surveillé",
+  courtWatchesTitle: "Alertes de terrain",
+  courtWatchesDesc: "Soyez prévenu lorsqu'un terrain précis se libère un jour et une heure récurrents.",
+  courtWatchesEmpty: "Vous n'avez pas encore d'alertes de terrain. Cherchez des alternatives et touchez « Prévenir quand libre » sur un terrain réservé.",
+  courtWatchDelete: "Supprimer l'alerte",
+  courtWatchEveryWeekday: "Chaque {weekday}",
   courtPreviousAlerts: "Trouvés précédemment",
 
   // Admin dashboard (#159)

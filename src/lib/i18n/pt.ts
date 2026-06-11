@@ -696,6 +696,15 @@ const pt: TranslationKeys = {
   courtSortPrice: "Preço",
   courtSortTime: "Hora",
   courtSortDistance: "Distância",
+  courtIncludeBooked: "Incluir campos reservados",
+  courtStatusBooked: "Reservado",
+  courtNotifyWhenFree: "Avisar quando livre",
+  courtWatchCreated: "A vigiar",
+  courtWatchesTitle: "Vigilâncias de campo",
+  courtWatchesDesc: "Recebe um aviso quando um campo específico fica livre num dia e hora recorrentes.",
+  courtWatchesEmpty: "Ainda não tens vigilâncias de campo. Pesquisa alternativas e toca em \"Avisar quando livre\" num campo reservado.",
+  courtWatchDelete: "Remover vigilância",
+  courtWatchEveryWeekday: "Todas as {weekday}",
   courtPreviousAlerts: "Encontrados anteriormente",
 
   // Admin dashboard (#159)
