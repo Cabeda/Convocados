@@ -14,6 +14,7 @@ Web app for organizing pickup sports games — manage events, randomize teams, t
 - Game history with editable scores
 - Public events page with filters and map view
 - Push notifications (Web Push + mobile)
+- Court finder with Playtomic integration (search nearby, compare prices, watch for availability)
 - OAuth 2.1 / OIDC provider with PKCE, magic link, and Google SSO
 - Webhook integrations
 - Full REST API

@@ -952,6 +952,7 @@ const en = {
   landingFeatureRankings: "Track ELO rankings",
   landingFeatureNotifications: "Get push notifications",
   landingFeatureReminders: "Reminders to play and pay",
+  landingFeatureCourtFinder: "Find & compare nearby courts",
   landingOpenSource: "Open source · Free forever",
 
   // MVP voting (#200)

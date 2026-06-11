@@ -1,0 +1,77 @@
+---
+export const prerender = true;
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Court Finder" description="Find and compare nearby courts via Playtomic integration.">
+  <h1>Court Finder</h1>
+  <p class="subtitle">Search nearby Playtomic courts, compare prices and availability, and get notified when booked courts free up.</p>
+
+  <h2>Overview</h2>
+  <p>
+    When editing a game event that uses a Playtomic-supported sport (football, futsal, padel, tennis),
+    you can search for alternative courts nearby. The court finder shows available time slots with prices,
+    lets you switch your event's venue in one tap, or book directly on Playtomic.
+  </p>
+
+  <h2>How to use</h2>
+  <ol>
+    <li>Open your event and tap <strong>Edit</strong> (pencil icon)</li>
+    <li>Below the location field, tap <strong>Court Alternatives</strong></li>
+    <li>Adjust the time range, distance radius, and indoor/outdoor filter</li>
+    <li>Tap <strong>Search now</strong></li>
+    <li>Browse results in list or map view</li>
+    <li>Tap a time slot chip → choose <strong>Book on Playtomic</strong> or <strong>Switch event to this court</strong></li>
+  </ol>
+
+  <h2>Features</h2>
+  <ul>
+    <li><strong>Time range filter</strong> — defaults to your game time +2h, adjustable</li>
+    <li><strong>Sort by price, time, or distance</strong></li>
+    <li><strong>Map view</strong> — toggle between list and map with markers per club</li>
+    <li><strong>Multiple sport variants</strong> — searches both FUTSAL and FOOTBALL_OTHERS for 5-a-side</li>
+    <li><strong>Court photos</strong> — shows club thumbnail when available</li>
+    <li><strong>Deep links</strong> — opens Playtomic with the correct sport and date pre-selected</li>
+    <li><strong>Show more</strong> — paginated results (5 at a time, up to 15 clubs)</li>
+    <li><strong>Grouped by club</strong> — multiple slots merged into one row with clickable chips</li>
+  </ul>
+
+  <h2>Court Watch (availability alerts)</h2>
+  <p>
+    See a court that's booked but cheaper than your current one? Toggle <strong>"Include booked courts"</strong>
+    in the search filters to see unavailable courts too. Then tap the bell icon to create a
+    <strong>recurring court watch</strong>.
+  </p>
+  <p>
+    A court watch monitors a specific court on a recurring weekday and time window (e.g. "every Monday 18:00–20:00").
+    When that court becomes available, you'll receive a push notification and an in-app alert.
+  </p>
+  <p>
+    Manage your watches at <a href="/court-watches">/court-watches</a>.
+  </p>
+
+  <h3>How it works (technical)</h3>
+  <ul>
+    <li>A cron job processes active watches every 10–15 minutes</li>
+    <li>Watches are batched and grouped — identical club/date queries are deduped</li>
+    <li>Availability is cached (10-minute TTL) to minimise upstream calls</li>
+    <li>You're notified only once per slot (deduplication via <code>CourtWatchHit</code>)</li>
+    <li>Max 20 active watches per user</li>
+  </ul>
+
+  <h2>Supported sports</h2>
+  <p>The court finder works for any sport that Playtomic supports:</p>
+  <ul>
+    <li>Football 5v5 (searches FOOTBALL_OTHERS + FUTSAL)</li>
+    <li>Futsal</li>
+    <li>Football 7v7</li>
+    <li>Padel</li>
+    <li>Tennis (singles &amp; doubles)</li>
+  </ul>
+
+  <h2>Requirements</h2>
+  <ul>
+    <li>Your event must have <strong>coordinates</strong> (set via Google Maps link or the Playtomic court finder during creation)</li>
+    <li>You must be the event <strong>owner or admin</strong></li>
+  </ul>
+</DocsLayout>
