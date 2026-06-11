@@ -88,6 +88,8 @@ data class EventScreenState(
     val balance: BalanceResponse? = null,
     val paymentGateBlocked: Boolean = false,
     val showPaymentNudge: Boolean = false,
+    // Contact-pick auto-add
+    val addedPlayerName: String? = null,
 )
 
 data class TeamMoveUndo(
@@ -218,7 +220,8 @@ class EventDetailViewModel @Inject constructor(
     fun addPlayer(eventId: String, name: String, link: Boolean = true, email: String? = null) {
         viewModelScope.launch {
             repository.addPlayer(eventId, name, link, email)
-                .onSuccess {
+                .onSuccess { resolvedName ->
+                    _state.value = _state.value.copy(addedPlayerName = resolvedName ?: name)
                     // Auto-open payment dialog after join if preference is set
                     if (autoPayOnJoin.value && _state.value.balance?.callerBalance?.let { it.amount > 0 } == true) {
                         _state.value = _state.value.copy(showPaymentNudge = true)
@@ -242,6 +245,10 @@ class EventDetailViewModel @Inject constructor(
                     }
                 }
         }
+    }
+
+    fun dismissAddedPlayerSnackbar() {
+        _state.value = _state.value.copy(addedPlayerName = null)
     }
 
     fun fetchBalance(eventId: String) {
@@ -436,6 +443,15 @@ fun EventDetailScreen(
         if (result == SnackbarResult.ActionPerformed) {
             viewModel.undoTeamMove(eventId)
         }
+    }
+
+    LaunchedEffect(state.addedPlayerName) {
+        val name = state.addedPlayerName ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(
+            message = context.getString(R.string.added_player_confirm, name),
+            duration = SnackbarDuration.Short,
+        )
+        viewModel.dismissAddedPlayerSnackbar()
     }
 
     LaunchedEffect(eventId) { viewModel.load(eventId) }
@@ -800,8 +816,16 @@ fun EventDetailScreen(
                                                     null, null, null,
                                                 )?.use { c ->
                                                     if (c.moveToFirst()) {
-                                                        c.getString(1)?.takeIf { it.isNotBlank() }?.let { name -> newPlayer = name }
-                                                        pickedEmail = c.getString(0)?.takeIf { it.isNotBlank() }
+                                                        val contactName = c.getString(1)?.takeIf { it.isNotBlank() } ?: ""
+                                                        val contactEmail = c.getString(0)?.takeIf { it.isNotBlank() }
+                                                        if (contactEmail != null) {
+                                                            // Auto-add immediately (zero taps)
+                                                            viewModel.addPlayer(eventId, contactName, link = false, email = contactEmail)
+                                                            newPlayer = ""
+                                                        } else {
+                                                            // No email — just prefill name
+                                                            newPlayer = contactName
+                                                        }
                                                     }
                                                 }
                                             }

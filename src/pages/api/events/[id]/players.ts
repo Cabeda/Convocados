@@ -196,6 +196,60 @@ async function tryBalancedSwap(eventId: string, promotedName: string, promotedTe
   });
 }
 
+// ── Invite email rate-limit stores ────────────────────────────────────────────
+// Per-event: max 10 unique invite emails per event per 24h
+// Per-sender: max 20 invite emails per authenticated user per 24h across all events
+interface InviteRateEntry { emails: Set<string>; expiresAt: number }
+const invitePerEventStore = new Map<string, InviteRateEntry>();
+const invitePerSenderStore = new Map<string, InviteRateEntry>();
+const INVITE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const MAX_INVITES_PER_EVENT = 10;
+const MAX_INVITES_PER_SENDER = 20;
+
+function canSendInviteEmail(eventId: string, senderId: string, email: string): boolean {
+  const now = Date.now();
+  // Per-event check
+  let eventEntry = invitePerEventStore.get(eventId);
+  if (!eventEntry || eventEntry.expiresAt < now) {
+    eventEntry = { emails: new Set(), expiresAt: now + INVITE_WINDOW_MS };
+    invitePerEventStore.set(eventId, eventEntry);
+  }
+  if (eventEntry.emails.size >= MAX_INVITES_PER_EVENT && !eventEntry.emails.has(email)) return false;
+
+  // Per-sender check
+  let senderEntry = invitePerSenderStore.get(senderId);
+  if (!senderEntry || senderEntry.expiresAt < now) {
+    senderEntry = { emails: new Set(), expiresAt: now + INVITE_WINDOW_MS };
+    invitePerSenderStore.set(senderId, senderEntry);
+  }
+  if (senderEntry.emails.size >= MAX_INVITES_PER_SENDER && !senderEntry.emails.has(email)) return false;
+
+  return true;
+}
+
+function recordInviteEmail(eventId: string, senderId: string, email: string): void {
+  const now = Date.now();
+  let eventEntry = invitePerEventStore.get(eventId);
+  if (!eventEntry || eventEntry.expiresAt < now) {
+    eventEntry = { emails: new Set(), expiresAt: now + INVITE_WINDOW_MS };
+    invitePerEventStore.set(eventId, eventEntry);
+  }
+  eventEntry.emails.add(email);
+
+  let senderEntry = invitePerSenderStore.get(senderId);
+  if (!senderEntry || senderEntry.expiresAt < now) {
+    senderEntry = { emails: new Set(), expiresAt: now + INVITE_WINDOW_MS };
+    invitePerSenderStore.set(senderId, senderEntry);
+  }
+  senderEntry.emails.add(email);
+}
+
+/** Reset invite rate-limit stores. Used in tests. */
+export function resetInviteRateLimitStores(): void {
+  invitePerEventStore.clear();
+  invitePerSenderStore.clear();
+}
+
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
@@ -213,14 +267,37 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const { name, linkToAccount, email } = await request.json();
-  const trimmed = String(name ?? "").trim().slice(0, 50);
-  if (!trimmed) return Response.json({ error: "Player name is required." }, { status: 400 });
 
   // Optional email — used to notify a registered user or invite an unregistered
   // one to join Convocados. Validated loosely; ignored if malformed.
   const normalizedEmail = typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
     ? email.trim().toLowerCase()
     : null;
+
+  // ── Resolve user by email (needed before name validation) ──────────────────
+  let resolvedUser: { id: string; name: string } | null = null;
+  if (normalizedEmail) {
+    const found = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true, name: true },
+    });
+    if (found) resolvedUser = found;
+  }
+
+  // ── Name resolution ────────────────────────────────────────────────────────
+  // If email resolves to a registered user, always use User.name
+  let trimmed: string;
+  if (resolvedUser) {
+    trimmed = resolvedUser.name.trim().slice(0, 50);
+  } else {
+    trimmed = String(name ?? "").trim().slice(0, 50);
+    if (!trimmed) {
+      if (normalizedEmail) {
+        return Response.json({ error: "Player name is required (email does not match a registered user)." }, { status: 400 });
+      }
+      return Response.json({ error: "Player name is required." }, { status: 400 });
+    }
+  }
 
   // Bench cap: max bench size equals maxPlayers (total players = 2 * maxPlayers)
   const maxTotal = event.maxPlayers * 2;
@@ -233,14 +310,16 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   // Resolve the userId to link, in priority order:
   //   1. Explicit linkToAccount: true from an authenticated client (QuickJoin flow)
-  //   2. Auto-link: name matches exactly one registered user account
-  //      (accent + case insensitive), and that user has no player in this event yet
-  // The auto-link prevents anonymous duplicate records (e.g. an owner adding a
-  // player by typing a known user's name) and is a no-op when the name is unique
-  // to the event's anonymous players.
+  //   2. Email resolved to a registered user
+  //   3. Auto-link: name matches exactly one registered user account
   let linkedUserId: string | null = null;
   if (linkToAccount === true && session?.user) {
     linkedUserId = session.user.id;
+  } else if (resolvedUser) {
+    const alreadyInEvent = await prisma.player.count({ where: { eventId, userId: resolvedUser.id } });
+    if (alreadyInEvent === 0) {
+      linkedUserId = resolvedUser.id;
+    }
   } else {
     const target = normalizeForMatch(trimmed);
     const allUsers = await prisma.user.findMany({
@@ -258,23 +337,12 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
   }
 
-  // Email-based invite resolution. If an email was supplied, decide whether the
-  // invitee is already a Convocados user (→ notify) or not (→ email invite).
+  // Email-based invite resolution
   let notifyRegisteredUserId: string | null = null;
   let inviteUnregisteredEmail: string | null = null;
   if (normalizedEmail) {
-    const invited = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
-      select: { id: true },
-    });
-    if (invited) {
-      // Link the new player record to their account (if not already in the event)
-      // so the game shows up for them, and flag them for a push notification.
-      const alreadyInEvent = await prisma.player.count({ where: { eventId, userId: invited.id } });
-      if (alreadyInEvent === 0 && !linkedUserId) {
-        linkedUserId = invited.id;
-      }
-      notifyRegisteredUserId = invited.id;
+    if (resolvedUser) {
+      notifyRegisteredUserId = resolvedUser.id;
     } else {
       inviteUnregisteredEmail = normalizedEmail;
     }
@@ -287,7 +355,6 @@ export const POST: APIRoute = async ({ params, request }) => {
     const threshold = event.paymentGateThreshold ?? 0;
 
     if (event.paymentEnforcementLevel === "hard_gate") {
-      // Gate uses pending-only balance (sent clears the gate per ADR 0006)
       const gateAmount = await getGateBalance(eventId, trimmed);
       if (gateAmount > threshold) {
         return Response.json({
@@ -300,10 +367,10 @@ export const POST: APIRoute = async ({ params, request }) => {
         }, { status: 402 });
       }
     }
-
-    // soft_gate and nudge: include balance info in the response but don't block
-    // (the client-side interstitial handles them)
   }
+
+  // Audit trail: who invited this player
+  const invitedByUserId = (session?.user && linkToAccount !== true) ? session.user.id : null;
 
   try {
     const nextOrder = event.players.length;
@@ -313,10 +380,32 @@ export const POST: APIRoute = async ({ params, request }) => {
         eventId,
         order: nextOrder,
         userId: linkedUserId,
+        invitedByUserId,
       },
     });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      // ── P2002 merge logic ──────────────────────────────────────────────
+      if (resolvedUser) {
+        const existing = await prisma.player.findUnique({
+          where: { eventId_name: { eventId, name: trimmed } },
+          select: { id: true, userId: true },
+        });
+        if (existing) {
+          if (!existing.userId) {
+            // Merge: link existing unlinked player to the resolved user
+            await prisma.player.update({
+              where: { id: existing.id },
+              data: { userId: resolvedUser.id },
+            });
+            return Response.json({ ok: true, invited: null, resolvedName: trimmed });
+          } else if (existing.userId === resolvedUser.id) {
+            return Response.json({ error: `"${trimmed}" is already in the list.` }, { status: 409 });
+          } else {
+            return Response.json({ error: `"${trimmed}" is already linked to a different account.` }, { status: 409 });
+          }
+        }
+      }
       return Response.json({ error: `"${trimmed}" is already in the list.` }, { status: 409 });
     }
     throw e;
@@ -331,25 +420,24 @@ export const POST: APIRoute = async ({ params, request }) => {
     });
   }
 
-  // Auto-add player to ranking system with default ELO (upsert to avoid overwriting existing ratings)
+  // Auto-add player to ranking system with default ELO
   await prisma.playerRating.upsert({
     where: { eventId_name: { eventId, name: trimmed } },
     create: { eventId, name: trimmed, rating: 1000 },
     update: {},
   });
 
-  // spotsLeft after adding: if going to bench, active count unchanged
+  // spotsLeft after adding
   const activeBefore = Math.min(event.players.length, event.maxPlayers);
   const isOnBench = event.players.length >= event.maxPlayers;
   const spotsLeft = isOnBench ? 0 : Math.max(0, event.maxPlayers - activeBefore - 1);
   const url = `${origin}/events/${eventId}`;
 
-  // Auto-sync teams: if player is active (not bench), add to smaller team
+  // Auto-sync teams
   if (!isOnBench) {
     await addPlayerToTeams(eventId, trimmed);
   }
 
-  // Validate teams: ensure no bench players are in teams
   await validateTeams(eventId, event.maxPlayers);
 
   if (isOnBench) {
@@ -358,8 +446,6 @@ export const POST: APIRoute = async ({ params, request }) => {
     await enqueueNotification(eventId, "player_joined", { title: event.title, key: "notifyPlayerJoined", params: { name: trimmed }, url, spotsLeft }, senderClientId);
   }
 
-  // Drain notification queue before responding so push is sent immediately.
-  // Must be awaited — fire-and-forget gets killed when the response completes.
   if (!process.env.VITEST) {
     await drainNotificationQueue().catch((err) => {
       log.error({ eventId, err }, "Failed to drain notification queue");
@@ -384,12 +470,12 @@ export const POST: APIRoute = async ({ params, request }) => {
           });
         }
       } catch (_err) {
-        // Non-blocking — don't fail the join if email fails
+        // Non-blocking
       }
     }
   }
 
-  // Notify the event owner when someone joins (skip if owner is the one joining)
+  // Notify the event owner when someone joins
   if (event.ownerId && event.ownerId !== session?.user?.id) {
     try {
       const owner = await prisma.user.findUnique({ where: { id: event.ownerId }, select: { email: true, id: true } });
@@ -409,7 +495,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
   }
 
-  // Fire webhooks (non-blocking)
+  // Fire webhooks
   const webhookData = { playerName: trimmed, isActive: !isOnBench, spotsLeft };
   fireWebhooks(eventId, "player_joined", webhookData).catch(() => {});
   if (spotsLeft === 0) {
@@ -417,16 +503,16 @@ export const POST: APIRoute = async ({ params, request }) => {
     await enqueueNotification(eventId, "game_full", { title: event.title, key: "notifyGameFullAlert", params: { name: trimmed }, url, spotsLeft: 0 }, senderClientId);
   }
 
-  // Recalculate payment shares if a cost is set
   await syncPaymentsForEvent(eventId);
-
 
   logEvent(eventId, "player_added", session?.user?.name ?? trimmed, session?.user?.id ?? null, { playerName: trimmed }).catch(() => {});
 
-  // ── Invite-by-email: notify a registered user, or email an unregistered one ──
+  // ── Invite-by-email: notify or email (auth-gated + rate-limited) ───────────
   let inviteResult: "notified" | "emailed" | null = null;
   const inviterName = session?.user?.name ?? null;
-  if (notifyRegisteredUserId && notifyRegisteredUserId !== session?.user?.id) {
+  const isAuthenticated = !!session?.user;
+
+  if (isAuthenticated && notifyRegisteredUserId && notifyRegisteredUserId !== session?.user?.id) {
     try {
       await sendPushToUser(
         notifyRegisteredUserId,
@@ -438,22 +524,27 @@ export const POST: APIRoute = async ({ params, request }) => {
     } catch (err) {
       log.error({ eventId, err }, "Failed to send invite push");
     }
-  } else if (inviteUnregisteredEmail) {
-    try {
-      await sendPlayerInviteToRegister(inviteUnregisteredEmail, {
-        eventTitle: event.title,
-        dateTime: event.dateTime.toISOString(),
-        location: event.location,
-        eventUrl: url,
-        inviterName,
-      });
-      inviteResult = "emailed";
-    } catch (err) {
-      log.error({ eventId, err }, "Failed to send invite email");
+  } else if (isAuthenticated && inviteUnregisteredEmail) {
+    // Rate-limit check: only send if under per-event and per-sender limits
+    const senderId = session!.user!.id;
+    if (canSendInviteEmail(eventId, senderId, inviteUnregisteredEmail)) {
+      try {
+        await sendPlayerInviteToRegister(inviteUnregisteredEmail, {
+          eventTitle: event.title,
+          dateTime: event.dateTime.toISOString(),
+          location: event.location,
+          eventUrl: url,
+          inviterName,
+        });
+        recordInviteEmail(eventId, senderId, inviteUnregisteredEmail);
+        inviteResult = "emailed";
+      } catch (err) {
+        log.error({ eventId, err }, "Failed to send invite email");
+      }
     }
   }
 
-  return Response.json({ ok: true, invited: inviteResult });
+  return Response.json({ ok: true, invited: inviteResult, resolvedName: trimmed });
 };
 
 export const DELETE: APIRoute = async ({ params, request }) => {

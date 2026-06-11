@@ -194,16 +194,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── Player CRUD ─────────────────────────────────────────────────────────────
 
   const addPlayer = async (name: string, linkToAccount = false, email?: string) => {
-    if (!name.trim()) return;
+    if (!name.trim() && !email?.trim()) return;
     setPlayerError(null);
     const trimmed = name.trim().slice(0, 50);
 
-    // Optimistic update
-    setEvent((current) => {
-      if (!current) return current;
-      const optimisticPlayer: Player = { id: `temp-${Date.now()}`, name: trimmed, userId: null };
-      return { ...current, players: [...current.players, optimisticPlayer] };
-    });
+    // Optimistic update (only if we have a name to show)
+    if (trimmed) {
+      setEvent((current) => {
+        if (!current) return current;
+        const optimisticPlayer: Player = { id: `temp-${Date.now()}`, name: trimmed, userId: null };
+        return { ...current, players: [...current.players, optimisticPlayer] };
+      });
+    }
 
     const res = await fetch(`/api/events/${eventId}/players`, {
       method: "POST",
@@ -216,7 +218,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
       fetchEvent(); // revert optimistic update
       return;
     }
-    addKnownName(trimmed);
+    const resolvedName: string | undefined = json.resolvedName;
+    if (resolvedName && resolvedName !== trimmed && trimmed) {
+      setSnackbar(`Added ${resolvedName} ✓`);
+    }
+    addKnownName(resolvedName ?? trimmed);
     fetchEvent();
   };
 
