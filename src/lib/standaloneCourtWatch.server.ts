@@ -4,7 +4,8 @@
  * Matching is performed against the court's local time (what Playtomic returns).
  */
 
-import { getAvailability } from "./playtomic.server";
+import { getAvailability, type PlaytomicCourtAvailability } from "./playtomic.server";
+import type { AvailabilityKey } from "./availabilityCache.server";
 
 export interface CourtWatchInput {
   sport: string;
@@ -70,8 +71,6 @@ export async function findWatchMatches(
   const dates = upcomingDatesForWeekday(watch.dayOfWeek, lookaheadDays, options.from);
   if (dates.length === 0) return { matches: [] };
 
-  const windowStart = timeToMinutes(watch.startTime);
-  const windowEnd = timeToMinutes(watch.endTime);
   const matches: CourtWatchMatch[] = [];
 
   for (let i = 0; i < dates.length; i++) {
@@ -84,28 +83,60 @@ export async function findWatchMatches(
     });
     if (error) return { matches, error };
 
-    for (const court of courts) {
-      if (watch.resourceId && court.resource_id !== watch.resourceId) continue;
-      for (const slot of court.slots) {
-        const slotMin = timeToMinutes(slot.start_time);
-        if (slotMin < windowStart || slotMin > windowEnd) continue;
-        if (slot.duration < watch.durationMinutes) continue;
-        if (watch.maxPrice !== null && watch.maxPrice !== undefined && slot.price !== null && slot.price > watch.maxPrice) continue;
-        matches.push({
-          resourceId: court.resource_id,
-          resourceName: court.resource_name,
-          slotDate: date,
-          slotTime: slot.start_time.slice(0, 5),
-          duration: slot.duration,
-          price: slot.price,
-          currency: slot.currency,
-        });
-      }
-    }
+    matches.push(...matchWatchInCourts(watch, date, courts));
 
     // Rate-limit between Playtomic calls
     if (i < dates.length - 1) await new Promise((r) => setTimeout(r, 200));
   }
 
   return { matches };
+}
+
+/** Availability query keys (tenant, sport, date) a watch needs to be evaluated. */
+export function watchQueries(
+  watch: Pick<CourtWatchInput, "sport" | "tenantId" | "dayOfWeek">,
+  lookaheadDays: number,
+  from?: Date,
+): AvailabilityKey[] {
+  return upcomingDatesForWeekday(watch.dayOfWeek, lookaheadDays, from).map((date) => ({
+    tenantId: watch.tenantId,
+    sport: watch.sport,
+    date,
+  }));
+}
+
+/**
+ * Pure matcher: given pre-fetched availability for a single date, return the
+ * slots matching the watch's court, time window, duration and maxPrice.
+ * No network — used by the grouped/cached cron path.
+ */
+export function matchWatchInCourts(
+  watch: CourtWatchInput,
+  date: string,
+  courts: PlaytomicCourtAvailability[],
+): CourtWatchMatch[] {
+  const windowStart = timeToMinutes(watch.startTime);
+  const windowEnd = timeToMinutes(watch.endTime);
+  const matches: CourtWatchMatch[] = [];
+
+  for (const court of courts) {
+    if (watch.resourceId && court.resource_id !== watch.resourceId) continue;
+    for (const slot of court.slots) {
+      const slotMin = timeToMinutes(slot.start_time);
+      if (slotMin < windowStart || slotMin > windowEnd) continue;
+      if (slot.duration < watch.durationMinutes) continue;
+      if (watch.maxPrice !== null && watch.maxPrice !== undefined && slot.price !== null && slot.price > watch.maxPrice) continue;
+      matches.push({
+        resourceId: court.resource_id,
+        resourceName: court.resource_name,
+        slotDate: date,
+        slotTime: slot.start_time.slice(0, 5),
+        duration: slot.duration,
+        price: slot.price,
+        currency: slot.currency,
+      });
+    }
+  }
+
+  return matches;
 }

@@ -162,9 +162,9 @@ describe("getAvailability", () => {
       ],
     }];
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(mockData) }));
-    // Default duration is 90, so it will filter
+    // No duration passed → all slots returned
     const result = await getAvailability({ tenantId: "t1", date: "2024-01-01", sport: "padel" });
-    expect(result.courts[0].slots).toHaveLength(1); // only 90min slot
+    expect(result.courts[0].slots).toHaveLength(2);
     vi.unstubAllGlobals();
   });
 
