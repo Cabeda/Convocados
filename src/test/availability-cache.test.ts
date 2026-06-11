@@ -6,7 +6,7 @@ vi.mock("~/lib/playtomic.server", () => ({
   getAvailability: (...args: unknown[]) => mockGetAvailability(...args),
 }));
 
-const { getCachedAvailability, fetchAvailabilityGrouped, mapWithConcurrency, availabilityKeyStr } =
+const { getCachedAvailability, fetchAvailabilityGrouped, mapWithConcurrency, availabilityKeyStr, purgeStaleAvailabilityCache } =
   await import("~/lib/availabilityCache.server");
 
 beforeEach(async () => {
@@ -91,5 +91,25 @@ describe("mapWithConcurrency", () => {
       active--;
     });
     expect(maxActive).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("purgeStaleAvailabilityCache", () => {
+  it("removes only entries older than maxAge", async () => {
+    mockGetAvailability.mockResolvedValue({ courts });
+    // fresh entry
+    await getCachedAvailability({ tenantId: "fresh", sport: "padel", date: "2026-06-15" });
+    // stale entry
+    await getCachedAvailability({ tenantId: "stale", sport: "padel", date: "2026-06-15" });
+    await prisma.playtomicAvailabilityCache.update({
+      where: { cacheKey: "stale|padel|2026-06-15" },
+      data: { fetchedAt: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+    });
+
+    const removed = await purgeStaleAvailabilityCache(24 * 60 * 60 * 1000);
+    expect(removed).toBe(1);
+    expect(await prisma.playtomicAvailabilityCache.count()).toBe(1);
+    const remaining = await prisma.playtomicAvailabilityCache.findFirst();
+    expect(remaining?.cacheKey).toBe("fresh|padel|2026-06-15");
   });
 });

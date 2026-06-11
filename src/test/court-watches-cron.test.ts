@@ -14,6 +14,7 @@ const mockFetchGrouped = vi.fn();
 vi.mock("~/lib/availabilityCache.server", () => ({
   fetchAvailabilityGrouped: (...args: unknown[]) => mockFetchGrouped(...args),
   availabilityKeyStr: (k: { tenantId: string; sport: string; date: string }) => `${k.tenantId}|${k.sport}|${k.date}`,
+  purgeStaleAvailabilityCache: vi.fn().mockResolvedValue(0),
 }));
 
 const mockSendPush = vi.fn().mockResolvedValue(undefined);

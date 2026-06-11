@@ -3,7 +3,8 @@
  * Finds Playtomic slots matching an event's time (±30 min) and filters.
  */
 
-import { searchClubs, getAvailability, getClubResources } from "./playtomic.server";
+import { searchClubs, getClubResources } from "./playtomic.server";
+import { getCachedAvailability } from "./availabilityCache.server";
 import { isPlaytomicSport } from "./playtomic";
 
 export interface CourtWatchConfig {
@@ -101,15 +102,14 @@ export async function searchCourtAlternatives(params: SearchAlternativesParams):
   if (clubsError) return { alternatives: [], error: clubsError };
   if (clubs.length === 0) return { alternatives: [] };
 
-  // 2. Check availability for each club (with 200ms delay between calls)
+  // 2. Check availability for each club (cached; shared with the watch cron)
   const alternatives: CourtAlternative[] = [];
 
   for (const club of clubs.slice(0, maxClubs)) {
-    const { courts, error: availError } = await getAvailability({
+    const { courts, error: availError } = await getCachedAvailability({
       tenantId: club.tenant_id,
-      date: dateStr,
       sport: params.sport,
-      duration: params.durationMinutes,
+      date: dateStr,
     });
 
     if (availError) continue; // skip this club, don't fail entire search
@@ -172,11 +172,6 @@ export async function searchCourtAlternatives(params: SearchAlternativesParams):
           status: "booked",
         });
       }
-    }
-
-    // Rate limiting: 200ms delay between Playtomic API calls
-    if (clubs.indexOf(club) < clubs.length - 1) {
-      await new Promise((r) => setTimeout(r, 200));
     }
   }
 
