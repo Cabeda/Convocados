@@ -10,6 +10,8 @@ import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatRecline
 import PaymentsIcon from "@mui/icons-material/Payments";
 import WhatshotIcon from "@mui/icons-material/Whatshot";
 import { useT } from "~/lib/useT";
+import { parsePaymentMethods } from "~/lib/paymentMethods";
+import { PaymentMethodsList } from "~/components/PaymentMethodsList";
 import type { Player } from "./types";
 
 interface BalanceData {
@@ -17,6 +19,9 @@ interface BalanceData {
   threshold: number;
   callerBalance: { playerName: string; amount: number; gamesOwed: number; streak: number } | null;
   aggregate: { paidCount: number; totalCount: number };
+  paymentMethods?: string | null;
+  currency?: string;
+  perPlayer?: number;
 }
 
 interface Props {
@@ -35,14 +40,30 @@ export function QuickJoin({ eventId, userName, players, maxPlayers, onJoin, onLe
   const [balanceData, setBalanceData] = useState<BalanceData | null>(null);
   const [showInterstitial, setShowInterstitial] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<ReturnType<typeof parsePaymentMethods>>([]);
+  const [costCurrency, setCostCurrency] = useState("EUR");
+  const [perPlayer, setPerPlayer] = useState(0);
 
   const joined = players.find((p) => p.name.toLowerCase() === userName.toLowerCase());
   const isOnBench = joined ? players.indexOf(joined) >= maxPlayers : false;
 
   const fetchBalance = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/balance`);
-      if (res.ok) setBalanceData(await res.json());
+      const [balRes, costRes] = await Promise.all([
+        fetch(`/api/events/${eventId}/balance`),
+        fetch(`/api/events/${eventId}/cost`),
+      ]);
+      if (balRes.ok) setBalanceData(await balRes.json());
+      if (costRes.ok) {
+        const cost = await costRes.json();
+        if (cost) {
+          const methods = parsePaymentMethods(cost.effectivePaymentMethods);
+          setPaymentMethods(methods);
+          setCostCurrency(cost.currency ?? "EUR");
+          const playerCount = cost.payments?.length ?? 1;
+          setPerPlayer(playerCount > 0 ? cost.totalAmount / playerCount : 0);
+        }
+      }
     } catch { /* ignore */ }
   }, [eventId]);
 
@@ -162,6 +183,18 @@ export function QuickJoin({ eventId, userName, players, maxPlayers, onJoin, onLe
                 color={isOnBench ? "warning" : "success"}
                 variant="filled"
               />
+              {/* Pay button for joined players with pending payment */}
+              {hasDebt && enforcement !== "off" && (
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="warning"
+                  startIcon={<PaymentsIcon />}
+                  onClick={() => setShowInterstitial(true)}
+                >
+                  {t("paymentNudgePayAndJoin", { amount: balance.amount.toFixed(2) })}
+                </Button>
+              )}
               <Button size="small" variant="outlined" color="error" onClick={handleLeave} disabled={joining}>
                 {t("quickJoinLeave")}
               </Button>
@@ -188,10 +221,14 @@ export function QuickJoin({ eventId, userName, players, maxPlayers, onJoin, onLe
             <Typography>
               {t("paymentNudgeBalance", {
                 amount: balance?.amount.toFixed(2) ?? "0",
-                currency: "EUR",
+                currency: costCurrency,
                 games: String(balance?.gamesOwed ?? 0),
               })}
             </Typography>
+            {/* Payment methods with deep links */}
+            {paymentMethods.length > 0 && (
+              <PaymentMethodsList methods={paymentMethods} amount={perPlayer} currency={costCurrency} />
+            )}
             {aggregate && aggregate.totalCount > 0 && (
               <Typography variant="body2" color="text.secondary">
                 {t("paymentNudgeSocialProof", {
@@ -210,17 +247,19 @@ export function QuickJoin({ eventId, userName, players, maxPlayers, onJoin, onLe
             onClick={handlePayAndJoin}
             startIcon={<PaymentsIcon />}
           >
-            {t("paymentNudgePayAndJoin", { amount: balance?.amount.toFixed(2) ?? "0" })}
+            {joined ? t("paymentNudgeMarkSent") : t("paymentNudgePayAndJoin", { amount: balance?.amount.toFixed(2) ?? "0" })}
           </Button>
-          <Button
-            variant="text"
-            size="small"
-            color="inherit"
-            onClick={doJoin}
-            sx={{ opacity: 0.7 }}
-          >
-            {t("paymentNudgeJoinLater")}
-          </Button>
+          {!joined && (
+            <Button
+              variant="text"
+              size="small"
+              color="inherit"
+              onClick={doJoin}
+              sx={{ opacity: 0.7 }}
+            >
+              {t("paymentNudgeJoinLater")}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </>
