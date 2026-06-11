@@ -524,7 +524,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 sport={event.sport}
                 hasCoordinates={!!(event.latitude && event.longitude)}
                 courtWatchConfig={event.courtWatchConfig ? JSON.parse(event.courtWatchConfig) : null}
-                gameTime={gameDate ? `${String(gameDate.getUTCHours()).padStart(2, "0")}:${String(gameDate.getUTCMinutes()).padStart(2, "0")}` : "00:00"}
+                gameTime={gameDate ? (() => { const parts = new Intl.DateTimeFormat("en-GB", { timeZone: event.timezone || "UTC", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(gameDate); const h = parts.find(p => p.type === "hour")?.value ?? "00"; const m = parts.find(p => p.type === "minute")?.value ?? "00"; return `${h}:${m}`; })() : "00:00"}
               />
             )}
 
