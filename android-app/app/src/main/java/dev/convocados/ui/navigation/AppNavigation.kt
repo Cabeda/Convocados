@@ -146,12 +146,17 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
                     )
                 }
                 composable(
-                    Route.EventDetail().route,
-                    arguments = listOf(navArgument("eventId") { type = NavType.StringType }),
+                    Route.EventDetail().route + "?action={action}",
+                    arguments = listOf(
+                        navArgument("eventId") { type = NavType.StringType },
+                        navArgument("action") { type = NavType.StringType; defaultValue = "" },
+                    ),
                 ) { entry ->
                     val eventId = entry.arguments?.getString("eventId") ?: return@composable
+                    val autoOpenPay = entry.arguments?.getString("action") == "pay"
                     EventDetailScreen(
                         eventId = eventId,
+                        autoOpenPay = autoOpenPay,
                         onBack = { navController.popBackStack() },
                         onSettings = { navController.navigate(Route.EventSettings.create(eventId)) },
                         onRankings = { navController.navigate(Route.EventRankings.create(eventId)) },
@@ -265,8 +270,12 @@ private fun deepLinkToRoute(url: String): String? {
     // Handle paths like /events/{id} or full URLs
     val path = url.removePrefix("https://convocados.cabeda.dev")
         .removePrefix("http://localhost:4321")
-    val eventMatch = Regex("/events?/([^/]+)").find(path)
-    if (eventMatch != null) return Route.EventDetail.create(eventMatch.groupValues[1])
+    val eventMatch = Regex("/events?/([^/?]+)").find(path)
+    if (eventMatch != null) {
+        val id = eventMatch.groupValues[1]
+        val actionPay = url.contains("action=pay")
+        return Route.EventDetail.create(id) + if (actionPay) "?action=pay" else ""
+    }
     if (path == "/games" || url == "games") return Route.Games.route
     if (path == "/create" || url == "create") return Route.CreateEvent.route
     return null
