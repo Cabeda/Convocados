@@ -33,8 +33,8 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
         client.get("/api/events/$id/post-game-status")
 
     // ── Players ───────────────────────────────────────────────────────────
-    suspend fun addPlayer(eventId: String, name: String, linkToAccount: Boolean = true): OkResponse =
-        client.post("/api/events/$eventId/players", AddPlayerRequest(name, linkToAccount))
+    suspend fun addPlayer(eventId: String, name: String, linkToAccount: Boolean = true, email: String? = null): OkResponse =
+        client.post("/api/events/$eventId/players", AddPlayerRequest(name, linkToAccount, email))
 
     suspend fun removePlayer(eventId: String, playerId: String): RemovePlayerResponse =
         client.delete("/api/events/$eventId/players", RemovePlayerRequest(playerId))
@@ -243,7 +243,7 @@ data class CreateEventRequest(
     val recurrenceInterval: Int? = null,
 )
 
-@Serializable data class AddPlayerRequest(val name: String, val linkToAccount: Boolean = true)
+@Serializable data class AddPlayerRequest(val name: String, val linkToAccount: Boolean = true, val email: String? = null)
 @Serializable data class RemovePlayerRequest(val playerId: String)
 @Serializable data class ClaimPlayerRequest(val playerId: String)
 @Serializable data class TitleRequest(val title: String)

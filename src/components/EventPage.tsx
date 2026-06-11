@@ -193,7 +193,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ── Player CRUD ─────────────────────────────────────────────────────────────
 
-  const addPlayer = async (name: string, linkToAccount = false) => {
+  const addPlayer = async (name: string, linkToAccount = false, email?: string) => {
     if (!name.trim()) return;
     setPlayerError(null);
     const trimmed = name.trim().slice(0, 50);
@@ -208,7 +208,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     const res = await fetch(`/api/events/${eventId}/players`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Client-Id": clientIdRef.current },
-      body: JSON.stringify({ name: trimmed, linkToAccount }),
+      body: JSON.stringify({ name: trimmed, linkToAccount, ...(email ? { email: email.trim() } : {}) }),
     });
     const json = await res.json();
     if (!res.ok) {
@@ -579,7 +579,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               availableSuggestions={availableSuggestions}
               playerError={playerError}
               onPlayerErrorChange={setPlayerError}
-              onAddPlayer={addPlayer}
+              onAddPlayer={(name, email) => addPlayer(name, false, email)}
               onRemovePlayer={removePlayer}
               onReorderPlayers={reorderPlayers}
               onResetPlayerOrder={resetPlayerOrder}

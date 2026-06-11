@@ -166,6 +166,39 @@ export async function sendGameInvite(to: string, data: GameInviteData) {
   if (result.error) throw new Error(`Failed to send game invite: ${result.error.message}`);
 }
 
+export interface PlayerInviteData {
+  eventTitle: string;
+  dateTime: string;
+  location: string;
+  eventUrl: string;
+  /** Who added them, for context (optional). */
+  inviterName?: string | null;
+}
+
+/**
+ * Sent when someone adds a player by email and that email is NOT yet a
+ * registered Convocados account — invites them to register and claim their spot.
+ */
+export async function sendPlayerInviteToRegister(to: string, data: PlayerInviteData) {
+  const resend = await getResend();
+  const when = new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  const inviter = data.inviterName ? `${data.inviterName} added you to` : "You've been added to";
+  const signupUrl = `${getAppUrl()}/auth/signup?email=${encodeURIComponent(to)}`;
+  const result = await resend.emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: `You're in: ${data.eventTitle} — join Convocados`,
+    html: emailTemplate({
+      heading: `${inviter} ${data.eventTitle}`,
+      body: `📍 ${data.location}<br/>🕐 ${when}<br/><br/>Create a free Convocados account to confirm your spot, see the team and get reminders.`,
+      buttonText: "Join Convocados",
+      buttonUrl: signupUrl,
+      footnote: `Or just view the game: <a href="${data.eventUrl}" style="color:#1b6b4a;">${data.eventTitle}</a>`,
+    }),
+  });
+  if (result.error) throw new Error(`Failed to send player invite: ${result.error.message}`);
+}
+
 export interface ReminderData {
   eventTitle: string;
   dateTime: string;
