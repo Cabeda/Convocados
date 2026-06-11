@@ -19,7 +19,9 @@ export async function syncPaymentsForEvent(eventId: string): Promise<void> {
   const share = activePlayers.length > 0 ? eventCost.totalAmount / activePlayers.length : 0;
 
   // Upsert payment for each active player (preserves status)
+  // Owner is auto-marked paid (they front the cost and collect from others)
   for (const player of activePlayers) {
+    const isOwner = event.ownerId && player.userId === event.ownerId;
     await prisma.playerPayment.upsert({
       where: {
         eventCostId_playerName: { eventCostId: eventCost.id, playerName: player.name },
@@ -28,6 +30,7 @@ export async function syncPaymentsForEvent(eventId: string): Promise<void> {
         eventCostId: eventCost.id,
         playerName: player.name,
         amount: share,
+        ...(isOwner && { status: "paid", paidAt: new Date() }),
       },
       update: {
         amount: share,
