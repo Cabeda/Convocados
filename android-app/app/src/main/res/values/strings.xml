@@ -138,6 +138,7 @@
     <string name="vs">VS</string>
     <string name="linked">Linked</string>
     <string name="player_moved">%1$s moved</string>
+    <string name="added_player_confirm">Added %1$s ✓</string>
     <string name="undo">Undo</string>
     <string name="add_score">+ Score</string>
     <string name="player_games_count">%1$s (%2$d games)</string>

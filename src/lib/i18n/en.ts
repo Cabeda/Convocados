@@ -72,6 +72,7 @@ const en = {
   copyLink: "Copy link",
   players: "Players",
   addPlayerPlaceholder: "Add player name",
+  addPlayerPlaceholderOptional: "Leave blank to use their Convocados name",
   inviteByEmailPlaceholder: "Invite by email (optional)",
   inviteByEmailHelper: "Notifies them if they're on Convocados, otherwise emails an invite to join",
   addPlayerHelper: "Press Enter to add, or paste a newline-separated list",
