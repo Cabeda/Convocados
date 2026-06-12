@@ -7,6 +7,7 @@ import { getNotificationPrefs, wantsEmailReminder, wantsPaymentReminderEmail, wa
 import { getPlayersWithPendingPayments, shouldSendPaymentReminder, markPaymentReminderSent } from "~/lib/paymentReminders.server";
 import { cleanupExpiredRateLimits } from "~/lib/apiRateLimit.server";
 import { expireUnconfirmed } from "~/lib/priority.server";
+import { expireOldCredits } from "~/lib/creditExpiry.server";
 import { createLogger } from "~/lib/logger.server";
 import { prisma } from "~/lib/db.server";
 import pLimit from "p-limit";
@@ -185,6 +186,15 @@ export const POST: APIRoute = async ({ request }) => {
     log.error({ err }, "Failed to expire unconfirmed priority spots");
   }
 
+  // Expire old wallet credits (ADR 0008) — moves unspent Game Units into the
+  // organizer's Extras Pot. Idempotent.
+  let walletCreditsExpired = { expiredCount: 0, totalAmountExpiredCents: 0 };
+  try {
+    walletCreditsExpired = await expireOldCredits();
+  } catch (err) {
+    log.error({ err }, "Failed to expire old wallet credits");
+  }
+
   // Drain the notification job queue — must happen before marking reminders sent
   // so that if the cron is killed mid-run, reminders are not marked sent without push delivery
   let notificationJobsDrained = 0;
@@ -217,7 +227,7 @@ export const POST: APIRoute = async ({ request }) => {
   ]);
 
   return new Response(
-    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, postGameRemindersSent, rateLimitsCleaned, priorityExpired, notificationJobsDrained, stalePushTokensCleaned }),
+    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned }),
     { headers: { "Content-Type": "application/json" } },
   );
 };

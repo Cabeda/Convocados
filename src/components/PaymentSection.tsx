@@ -4,7 +4,8 @@ import {
   Accordion, AccordionSummary, AccordionDetails, Box, Typography, TextField,
   Button, Stack, Chip, IconButton, Tooltip, Paper, alpha, useTheme,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
-  Select, MenuItem, FormControl, InputAdornment,
+  Select, MenuItem, FormControl, FormControlLabel, Switch, Divider,
+  InputAdornment,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PaymentsIcon from "@mui/icons-material/Payments";
@@ -44,6 +45,11 @@ interface CostData {
   hasOverride: boolean;
   tempPaymentMethods: string | null;
   payments: PaymentData[];
+  monthlyEnabled: boolean;
+  monthlyFeeCents: number | null;
+  monthlyGamesCovered: number;
+  dropInSurchargeCents: number;
+  organizerExtrasCents: number;
   summary: {
     paidCount: number;
     totalCount: number;
@@ -102,6 +108,12 @@ export function PaymentSection({
   const [overrideMethodsDraft, setOverrideMethodsDraft] = useState<PaymentMethod[]>([]);
   const [confirmClearOverride, setConfirmClearOverride] = useState(false);
 
+  // Monthly subscription / drop-in surcharge drafts (ADR 0008)
+  const [monthlyEnabledDraft, setMonthlyEnabledDraft] = useState(false);
+  const [monthlyFeeDraft, setMonthlyFeeDraft] = useState("");
+  const [monthlyGamesCoveredDraft, setMonthlyGamesCoveredDraft] = useState("5");
+  const [dropInSurchargeDraft, setDropInSurchargeDraft] = useState("");
+
   const fetchCost = useCallback(async () => {
     const r = await fetch(`/api/events/${eventId}/cost`);
     const data = await r.json();
@@ -141,6 +153,18 @@ export function PaymentSection({
     const amount = parseFloat(costDraft);
     if (!amount || amount <= 0) return;
     setEditing(false);
+
+    // Convert UI strings to integer cents for the new fields.
+    const monthlyFeeMajor = parseFloat(monthlyFeeDraft);
+    const monthlyFeeCents = Number.isFinite(monthlyFeeMajor) && monthlyFeeMajor >= 0
+      ? Math.round(monthlyFeeMajor * 100)
+      : null;
+    const gamesCovered = parseInt(monthlyGamesCoveredDraft, 10);
+    const surchargeMajor = parseFloat(dropInSurchargeDraft);
+    const dropInSurchargeCents = Number.isFinite(surchargeMajor) && surchargeMajor >= 0
+      ? Math.round(surchargeMajor * 100)
+      : 0;
+
     await fetch(`/api/events/${eventId}/cost`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -148,6 +172,10 @@ export function PaymentSection({
         totalAmount: amount,
         currency: currencyDraft,
         paymentMethods: methodsDraft.length > 0 ? methodsDraft : null,
+        monthlyEnabled: monthlyEnabledDraft,
+        monthlyFeeCents: monthlyEnabledDraft ? monthlyFeeCents : null,
+        monthlyGamesCovered: Number.isFinite(gamesCovered) && gamesCovered > 0 ? gamesCovered : 5,
+        dropInSurchargeCents,
       }),
     });
     fetchCost();
@@ -186,6 +214,11 @@ export function PaymentSection({
     setCostDraft(hasCost ? String(costData.totalAmount) : "");
     setCurrencyDraft(hasCost ? costData.currency : "EUR");
     setMethodsDraft(hasCost ? parsePaymentMethods(costData.paymentMethods) : []);
+    setMonthlyEnabledDraft(hasCost ? Boolean(costData.monthlyEnabled) : false);
+    setMonthlyFeeDraft(hasCost && costData.monthlyFeeCents !== null && costData.monthlyFeeCents !== undefined
+      ? (costData.monthlyFeeCents / 100).toFixed(2) : "");
+    setMonthlyGamesCoveredDraft(hasCost ? String(costData.monthlyGamesCovered) : "5");
+    setDropInSurchargeDraft(hasCost ? (costData.dropInSurchargeCents / 100).toFixed(2) : "");
     setEditing(true);
   };
 
@@ -372,6 +405,72 @@ export function PaymentSection({
                       {t("perPlayer", { amount: (parseFloat(costDraft) / activePlayerCount).toFixed(2) })}
                     </Typography>
                   )}
+
+                  {/* Monthly subscription + drop-in surcharge (ADR 0008) */}
+                  <Divider sx={{ my: 1 }} />
+                  <Box>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={monthlyEnabledDraft}
+                          onChange={(e) => setMonthlyEnabledDraft(e.target.checked)}
+                          size="small"
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2" fontWeight={600}>
+                            {t("costMonthlyEnabled") ?? "Monthly subscriptions"}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {t("costMonthlyEnabledTooltip") ?? "Allow players to pay a fixed monthly fee covering N games, with credit on misses."}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                    {monthlyEnabledDraft && (
+                      <Stack direction="row" spacing={1} sx={{ mt: 1, ml: 1 }}>
+                        <TextField
+                          label={t("costMonthlyFee") ?? "Monthly fee"}
+                          type="number"
+                          size="small"
+                          value={monthlyFeeDraft}
+                          onChange={(e) => setMonthlyFeeDraft(e.target.value)}
+                          inputProps={{ min: 0, step: 0.01 }}
+                          sx={{ width: 130 }}
+                        />
+                        <TextField
+                          label={t("costMonthlyGamesCovered") ?? "Games covered per month"}
+                          type="number"
+                          size="small"
+                          value={monthlyGamesCoveredDraft}
+                          onChange={(e) => setMonthlyGamesCoveredDraft(e.target.value)}
+                          inputProps={{ min: 1, step: 1 }}
+                          sx={{ width: 110 }}
+                        />
+                        <TextField
+                          label={t("currency") ?? "Currency"}
+                          size="small"
+                          value={currencyDraft}
+                          onChange={(e) => setCurrencyDraft(e.target.value)}
+                          sx={{ width: 90 }}
+                        />
+                      </Stack>
+                    )}
+                  </Box>
+
+                  <Box>
+                    <TextField
+                      label={t("costDropInSurcharge") ?? "Drop-in surcharge"}
+                      type="number"
+                      size="small"
+                      value={dropInSurchargeDraft}
+                      onChange={(e) => setDropInSurchargeDraft(e.target.value)}
+                      helperText={t("costDropInSurchargeTooltip") ?? "Extra amount added to per-game payers who are not monthly subscribers."}
+                      inputProps={{ min: 0, step: 0.01 }}
+                      sx={{ width: 200 }}
+                    />
+                  </Box>
                   <Box sx={{ display: "flex", gap: 1 }}>
                     <Button variant="contained" size="small" onClick={handleSaveCost}>
                       {hasCost ? t("updateCost") : t("setCost")}
@@ -396,6 +495,16 @@ export function PaymentSection({
                   <Typography variant="body2" color="text.secondary">
                     ({t("perPlayer", { amount: perPlayer.toFixed(2) })})
                   </Typography>
+                  <Box sx={{ flex: 1 }} />
+                  <Button
+                    size="small"
+                    component="a"
+                    href={`/events/${eventId}/settle`}
+                    startIcon={<OpenInNewIcon fontSize="small" />}
+                    sx={{ textTransform: "none" }}
+                  >
+                    {t("settleUpTitle") ?? "Settle Up"}
+                  </Button>
                   {canEdit && (
                     <Box sx={{ ml: "auto", display: "flex", gap: 0.5 }}>
                       <Button size="small" variant="text" onClick={startEditing}>

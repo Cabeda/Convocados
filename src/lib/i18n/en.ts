@@ -978,6 +978,37 @@ const en = {
   mvpEloEnabled: "MVP ELO bonus",
   mvpEloEnabledTooltip: "Award +10 ELO points to the MVP of each game",
   mvpEloDisabledBecauseMvpOff: "Enable MVP voting first to use the ELO bonus",
+
+  // Settle Up
+  settleUpTitle: "Settle Up",
+  settleTabSettle: "Settle",
+  settleTabActivity: "Your activity",
+  settleTabExtras: "Extras",
+  settleYouBalance: "Balance",
+  settleYouGameUnits: "Game units",
+  settleYouStreak: "Streak",
+  settleYouSubscribed: "Subscribed",
+  settleAdminBalances: "Outstanding balances",
+  settleAdminNoDebts: "Nobody owes anything.",
+  settleAdminSubscriptions: "Monthly subscriptions",
+  settleAdminSubscribe: "Subscribe",
+  settleAdminNoSubs: "No active subscriptions.",
+  settleAdminDeclareSpend: "Declare a spend from the pot",
+  settleAdminDeclare: "Declare",
+  settleActivityLoginRequired: "Log in to see your activity.",
+  settleActivityEmpty: "No transactions yet.",
+  settleExtrasCurrentPot: "Extras pot",
+  settleExtrasExplanation: "Forfeited Game Units from expired credits. Visible to everyone in the group.",
+  settleExtrasSpendingLog: "Spending log",
+  settleExtrasNoDeclarations: "No spends declared yet.",
+
+  // Cost — monthly
+  costMonthlyEnabled: "Monthly subscriptions",
+  costMonthlyEnabledTooltip: "Allow players to pay a fixed monthly fee covering N games, with credit on misses.",
+  costMonthlyFee: "Monthly fee",
+  costMonthlyGamesCovered: "Games covered per month",
+  costDropInSurcharge: "Drop-in surcharge",
+  costDropInSurchargeTooltip: "Extra amount added to per-game payers who are not monthly subscribers.",
 } as const;
 
 export default en;
