@@ -32,6 +32,33 @@ export const PUT: APIRoute = async ({ params, request }) => {
     ? String(body.paymentDetails).trim().slice(0, 500) || null
     : undefined;
 
+  // Monthly subscription fields (ADR 0008) + Drop-in Surcharge
+  const monthlyEnabled = body.monthlyEnabled !== undefined ? Boolean(body.monthlyEnabled) : undefined;
+  let monthlyFeeCents: number | null | undefined = undefined;
+  if (body.monthlyFeeCents !== undefined && body.monthlyFeeCents !== null) {
+    const n = Number(body.monthlyFeeCents);
+    if (!Number.isInteger(n) || n < 0) {
+      return Response.json({ error: "monthlyFeeCents must be a non-negative integer." }, { status: 400 });
+    }
+    monthlyFeeCents = n;
+  }
+  let monthlyGamesCovered: number | undefined = undefined;
+  if (body.monthlyGamesCovered !== undefined && body.monthlyGamesCovered !== null) {
+    const n = Number(body.monthlyGamesCovered);
+    if (!Number.isInteger(n) || n <= 0) {
+      return Response.json({ error: "monthlyGamesCovered must be a positive integer." }, { status: 400 });
+    }
+    monthlyGamesCovered = n;
+  }
+  let dropInSurchargeCents: number | undefined = undefined;
+  if (body.dropInSurchargeCents !== undefined && body.dropInSurchargeCents !== null) {
+    const n = Number(body.dropInSurchargeCents);
+    if (!Number.isInteger(n) || n < 0) {
+      return Response.json({ error: "dropInSurchargeCents must be a non-negative integer." }, { status: 400 });
+    }
+    dropInSurchargeCents = n;
+  }
+
   // Validate structured payment methods (if provided)
   let paymentMethodsJson: string | undefined;
   if (body.paymentMethods !== undefined) {
@@ -61,6 +88,10 @@ export const PUT: APIRoute = async ({ params, request }) => {
         currency,
         ...(paymentDetails !== undefined && { paymentDetails }),
         ...(paymentMethodsJson !== undefined && { paymentMethods: paymentMethodsJson }),
+        ...(monthlyEnabled !== undefined && { monthlyEnabled }),
+        ...(monthlyFeeCents !== undefined && { monthlyFeeCents }),
+        ...(monthlyGamesCovered !== undefined && { monthlyGamesCovered }),
+        ...(dropInSurchargeCents !== undefined && { dropInSurchargeCents }),
       },
     });
   } else {
@@ -71,6 +102,10 @@ export const PUT: APIRoute = async ({ params, request }) => {
         currency,
         paymentDetails: paymentDetails ?? null,
         paymentMethods: paymentMethodsJson ?? null,
+        ...(monthlyEnabled !== undefined && { monthlyEnabled }),
+        ...(monthlyFeeCents !== undefined && { monthlyFeeCents }),
+        ...(monthlyGamesCovered !== undefined && { monthlyGamesCovered }),
+        ...(dropInSurchargeCents !== undefined && { dropInSurchargeCents }),
       },
     });
   }
