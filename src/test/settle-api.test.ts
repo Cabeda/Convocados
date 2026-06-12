@@ -12,7 +12,7 @@ import { getSession, checkOwnership } from "~/lib/auth.helpers.server";
 const mockGetSession = vi.mocked(getSession);
 const mockCheckOwnership = vi.mocked(checkOwnership);
 
-import { GET as getSettle } from "~/pages/api/events/[id]/settle";
+import { GET as getSettle, POST as postSettle } from "~/pages/api/events/[id]/settle";
 import { GET as getTransactions } from "~/pages/api/events/[id]/settle/transactions";
 import {
   GET as getExtras,
@@ -107,6 +107,17 @@ describe("GET /api/events/[id]/settle", () => {
     await prisma.playerPayment.create({
       data: { eventCostId: event.eventCost!.id, playerName: "Alice", amount: 5, status: "pending" },
     });
+    // Seed wallet transactions so the map branches execute (covers
+    // per_game_share, missed_game_credit, and credit_expired reasons).
+    await prisma.walletTransaction.create({
+      data: { eventId: event.id, userId: alice.id, amountCents: 500, currency: "EUR", direction: "debit", gameUnits: 0, reason: "per_game_share" },
+    });
+    await prisma.walletTransaction.create({
+      data: { eventId: event.id, userId: alice.id, amountCents: 500, currency: "EUR", direction: "credit", gameUnits: 1, reason: "missed_game_credit" },
+    });
+    await prisma.walletTransaction.create({
+      data: { eventId: event.id, userId: alice.id, amountCents: 500, currency: "EUR", direction: "credit", gameUnits: -1, reason: "credit_expired" },
+    });
     mockGetSession.mockResolvedValue({ user: { id: alice.id } } as any);
     mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
 
@@ -115,7 +126,9 @@ describe("GET /api/events/[id]/settle", () => {
     expect(body.you).toBeDefined();
     expect(body.you.playerName).toBe("Alice");
     expect(body.you.balanceCents).toBe(500);
-    expect(body.you.transactions).toHaveLength(0);
+    expect(body.you.transactions).toHaveLength(3);
+    expect(body.you.availableGameUnits).toBe(0); // 1 earned, 1 expired
+    expect(body.you.walletRunningTotal).toBe(0);
   });
 
   it("includes admin breakdown (balances + subscriptions) for owner", async () => {
@@ -129,6 +142,56 @@ describe("GET /api/events/[id]/settle", () => {
     expect(body.admin).toBeDefined();
     expect(body.admin.aggregate).toBeDefined();
     expect(body.admin.subscriptions).toEqual([]);
+  });
+
+  it("returns 404 for non-existent event", async () => {
+    mockGetSession.mockResolvedValue(null);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    const res = await getSettle(getCtx({ id: "nonexistent" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("uses defaults for pot/currency when the event has no cost", async () => {
+    mockGetSession.mockResolvedValue(null);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    const event = await prisma.event.create({ data: { title: "NoCost", location: "X", dateTime: new Date() } });
+    const res = await getSettle(getCtx({ id: event.id }));
+    const body = await res.json();
+    expect(body.extras.potCents).toBe(0);
+    expect(body.extras.currency).toBe("EUR");
+  });
+
+  it("includes activeSubscription when the player has one for the current month", async () => {
+    const alice = await prisma.user.create({ data: { id: "alice-1", name: "Alice", email: "alice@settle.test", emailVerified: true } });
+    const event = await seedEventWithCost({ monthlyEnabled: true, monthlyFeeCents: 2000 });
+    await prisma.player.create({ data: { name: "Alice", eventId: event.id, userId: alice.id, order: 0 } });
+    const { subscriptionWindowFor } = await import("~/lib/monthly");
+    const win = subscriptionWindowFor(new Date(), "UTC");
+    await prisma.monthlySubscription.create({
+      data: {
+        eventId: event.id, userId: alice.id, mode: "monthly",
+        windowStart: win.windowStart, windowEnd: win.windowEnd,
+        feeCents: 2000, gamesCovered: 5, status: "active",
+      },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: alice.id } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+
+    const res = await getSettle(getCtx({ id: event.id }));
+    const body = await res.json();
+    expect(body.you.activeSubscription).not.toBeNull();
+    expect(body.you.activeSubscription.feeCents).toBe(2000);
+    expect(body.you.activeSubscription.gamesCovered).toBe(5);
+  });
+});
+
+describe("POST /api/events/[id]/settle", () => {
+  it("returns 405 Method Not Allowed", async () => {
+    mockGetSession.mockResolvedValue(null);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    const event = await seedEventWithCost();
+    const res = await postSettle(postCtx({ id: event.id }, {}));
+    expect(res.status).toBe(405);
   });
 });
 
@@ -169,6 +232,21 @@ describe("GET /api/events/[id]/settle/extras", () => {
     expect(body.potCents).toBe(2000);
     expect(body.declarations).toHaveLength(1);
     expect(body.declarations[0].label).toBe("ball");
+  });
+
+  it("returns 404 for a non-existent event", async () => {
+    const res = await getExtras(getCtx({ id: "missing" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns defaults for an event with no cost", async () => {
+    const event = await prisma.event.create({ data: { title: "NoCost", location: "X", dateTime: new Date() } });
+    const res = await getExtras(getCtx({ id: event.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.potCents).toBe(0);
+    expect(body.currency).toBe("EUR");
+    expect(body.declarations).toEqual([]);
   });
 });
 
@@ -254,6 +332,42 @@ describe("POST /api/events/[id]/settle/subscriptions", () => {
     expect(enrollment?.optedIn).toBe(true);
     expect(enrollment?.source).toBe("auto");
   });
+
+  it("rejects a non-owner (403)", async () => {
+    const owner = await prisma.user.create({ data: { id: "owner-1", name: "Owner", email: "owner@settle.test", emailVerified: true } });
+    const target = await prisma.user.create({ data: { id: "target-1", name: "Target", email: "target@settle.test", emailVerified: true } });
+    const event = await seedEventWithCost({ ownerId: owner.id, monthlyEnabled: true, monthlyFeeCents: 2000 });
+    mockGetSession.mockResolvedValue({ user: { id: "u-other" } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    const res = await postSubscription(postCtx({ id: event.id }, { userId: target.id }));
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects a missing userId (400)", async () => {
+    const owner = await prisma.user.create({ data: { id: "owner-1", name: "Owner", email: "owner@settle.test", emailVerified: true } });
+    const event = await seedEventWithCost({ ownerId: owner.id, monthlyEnabled: true, monthlyFeeCents: 2000 });
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
+    const res = await postSubscription(postCtx({ id: event.id }, {}));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an invalid windowStart (400)", async () => {
+    const owner = await prisma.user.create({ data: { id: "owner-1", name: "Owner", email: "owner@settle.test", emailVerified: true } });
+    const target = await prisma.user.create({ data: { id: "target-1", name: "Target", email: "target@settle.test", emailVerified: true } });
+    const event = await seedEventWithCost({ ownerId: owner.id, monthlyEnabled: true, monthlyFeeCents: 2000 });
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
+    const res = await postSubscription(postCtx({ id: event.id }, { userId: target.id, windowStart: "not-a-date" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 for non-existent event", async () => {
+    mockGetSession.mockResolvedValue(null);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    const res = await postSubscription(postCtx({ id: "missing" }, { userId: "u" }));
+    expect(res.status).toBe(404);
+  });
 });
 
 describe("DELETE /api/events/[id]/settle/subscriptions/[subId]", () => {
@@ -277,5 +391,34 @@ describe("DELETE /api/events/[id]/settle/subscriptions/[subId]", () => {
 
     const after = await prisma.monthlySubscription.findUnique({ where: { id: sub.id } });
     expect(after?.status).toBe("cancelled");
+  });
+
+  it("returns 404 when the subscription doesn't exist", async () => {
+    const owner = await prisma.user.create({ data: { id: "owner-1", name: "Owner", email: "owner@settle.test", emailVerified: true } });
+    const event = await seedEventWithCost({ ownerId: owner.id });
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
+    const res = await deleteSubscription(deleteCtx({ id: event.id, subId: "missing" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for non-existent event", async () => {
+    mockGetSession.mockResolvedValue(null);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    const res = await deleteSubscription(deleteCtx({ id: "missing", subId: "x" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 403 for non-owner", async () => {
+    const owner = await prisma.user.create({ data: { id: "owner-1", name: "Owner", email: "owner@settle.test", emailVerified: true } });
+    const target = await prisma.user.create({ data: { id: "target-1", name: "Target", email: "target@settle.test", emailVerified: true } });
+    const event = await seedEventWithCost({ ownerId: owner.id });
+    const sub = await prisma.monthlySubscription.create({
+      data: { eventId: event.id, userId: target.id, mode: "monthly", windowStart: new Date("2026-06-01T00:00:00Z"), windowEnd: new Date("2026-07-01T00:00:00Z"), feeCents: 2000, gamesCovered: 5, status: "active" },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "u-other" } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    const res = await deleteSubscription(deleteCtx({ id: event.id, subId: sub.id }));
+    expect(res.status).toBe(403);
   });
 });
