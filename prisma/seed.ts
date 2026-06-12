@@ -170,9 +170,6 @@ async function main() {
     const event = await prisma.event.create({
       data: {
         title,
-        // Pick from a fixed list of venues — Math.random() below is for sport/maxPlayers,
-        // not for the coordinates themselves. CodeQL's insecure-randomness alert is a
-        // data-flow false positive triggered by the pick() call. Safe in this dev-only seed.
         location: venue.name,
         // codeql[js/insecure-randomness] false-positive: dev seed data, not security-sensitive
         latitude: venue.lat,
