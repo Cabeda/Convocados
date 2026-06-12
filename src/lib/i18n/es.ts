@@ -87,6 +87,7 @@ const es: TranslationKeys = {
   quickJoinTitle: "Unirse al juego",
   quickJoinPlaceholder: "Tu nombre",
   quickJoinBtn: "Unirse",
+  quickJoinPillLabel: "Unirse a este juego como {name}",
   quickJoinedAs: "Te uniste como {name}",
   quickJoinLeave: "Salir",
   recentPlayers: "Jugadores recientes",

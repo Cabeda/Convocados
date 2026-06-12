@@ -5,6 +5,7 @@ import {
   List, ListItem, ListItemText, alpha, useTheme,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
 import CloseIcon from "@mui/icons-material/Close";
 import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatReclineNormal";
@@ -38,6 +39,11 @@ interface Props {
   onRandomize: () => void;
   onConfirmReRandomize: () => void;
   canRemovePlayer: (player: Player) => boolean;
+  /** When provided (authenticated user), renders a "Join this game as {name}" pill as the first pill. */
+  quickJoinUserName?: string;
+  /** Optional: if provided, the Quick Join pill calls this instead of joining directly.
+      The host typically opens the payment-nudge dialog from here when the user has a balance. */
+  onQuickJoinPillClick?: (name: string) => void;
 }
 
 export function PlayerList({
@@ -45,6 +51,8 @@ export function PlayerList({
   availableSuggestions, playerError, onPlayerErrorChange,
   onAddPlayer, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
   onRandomize, onConfirmReRandomize, canRemovePlayer,
+  quickJoinUserName,
+  onQuickJoinPillClick,
 }: Props) {
   const t = useT();
   const theme = useTheme();
@@ -310,31 +318,66 @@ export function PlayerList({
           </Typography>
         )}
 
-        {/* Recent players — quick-add chips (idle state only) */}
-        {availableSuggestions.length > 0 && !playerInput.trim() && !inviteEmail.trim() && (
-          <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
-              {t("recentPlayers")}:
-            </Typography>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-              {availableSuggestions.slice(0, 12).map((s) => (
-                <Chip
-                  key={s.name}
-                  icon={s.userId ? <ShieldIcon sx={{ color: "primary.main !important" }} /> : undefined}
-                  label={s.name}
-                  variant="outlined"
-                  size="small"
-                  onClick={() => { onAddPlayer(s.name); }}
-                  title={s.userId ? t("protectedPlayer") : undefined}
-                  sx={{
-                    cursor: "pointer",
-                    "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
-                  }}
-                />
-              ))}
+        {/* Quick-join pill (first, when authenticated and not yet joined) + recent players.
+            The whole row hides when the user is mid-typing, so the focus stays on the input. */}
+        {(() => {
+          const trimmedName = quickJoinUserName?.trim();
+          const alreadyJoined = !!trimmedName && players.some(
+            (p) => p.name.toLowerCase() === trimmedName.toLowerCase(),
+          );
+          const showQuickJoin = !!trimmedName && !alreadyJoined;
+          const showRecents = availableSuggestions.length > 0;
+          const idle = !playerInput.trim() && !inviteEmail.trim();
+          if (!idle || (!showQuickJoin && !showRecents)) return null;
+
+          return (
+            <Box>
+              {showRecents && (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+                  {t("recentPlayers")}:
+                </Typography>
+              )}
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                {showQuickJoin && (
+                  <Chip
+                    data-testid="quick-join-pill"
+                    icon={<EmojiPeopleIcon fontSize="small" />}
+                    label={t("quickJoinPillLabel", { name: trimmedName })}
+                    variant="filled"
+                    color="primary"
+                    size="small"
+                    onClick={() => {
+                      if (onQuickJoinPillClick) {
+                        onQuickJoinPillClick(trimmedName);
+                      } else {
+                        onAddPlayer(trimmedName);
+                      }
+                    }}
+                    sx={{
+                      cursor: "pointer",
+                      fontWeight: 600,
+                    }}
+                  />
+                )}
+                {showRecents && availableSuggestions.slice(0, 12).map((s) => (
+                  <Chip
+                    key={s.name}
+                    icon={s.userId ? <ShieldIcon sx={{ color: "primary.main !important" }} /> : undefined}
+                    label={s.name}
+                    variant="outlined"
+                    size="small"
+                    onClick={() => { onAddPlayer(s.name); }}
+                    title={s.userId ? t("protectedPlayer") : undefined}
+                    sx={{
+                      cursor: "pointer",
+                      "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
+                    }}
+                  />
+                ))}
+              </Box>
             </Box>
-          </Box>
-        )}
+          );
+        })()}
 
         {active.length > 0 && (
           <Paper variant="outlined" sx={{

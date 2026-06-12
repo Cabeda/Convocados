@@ -87,6 +87,7 @@ const de: TranslationKeys = {
   quickJoinTitle: "Diesem Spiel beitreten",
   quickJoinPlaceholder: "Dein Name",
   quickJoinBtn: "Beitreten",
+  quickJoinPillLabel: "Diesem Spiel als {name} beitreten",
   quickJoinedAs: "Du bist beigetreten als {name}",
   quickJoinLeave: "Verlassen",
   recentPlayers: "Letzte Spieler",

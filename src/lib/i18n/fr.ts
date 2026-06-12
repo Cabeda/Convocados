@@ -87,6 +87,7 @@ const fr: TranslationKeys = {
   quickJoinTitle: "Rejoindre ce match",
   quickJoinPlaceholder: "Ton nom",
   quickJoinBtn: "Rejoindre",
+  quickJoinPillLabel: "Rejoindre ce match en tant que {name}",
   quickJoinedAs: "Tu as rejoint en tant que {name}",
   quickJoinLeave: "Quitter",
   recentPlayers: "Joueurs récents",
