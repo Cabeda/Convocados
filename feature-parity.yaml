@@ -43,6 +43,7 @@ event-detail:
     undo-remove: { web: true, android: true, wearos: false }
     reorder-players: { web: true, android: false, wearos: false }
     known-players-autocomplete: { web: true, android: true, wearos: false }
+    contact-picker-invite: { web: true, android: false, wearos: false }
 
 teams:
   web: true
