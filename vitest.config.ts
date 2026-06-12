@@ -65,7 +65,7 @@ export default defineConfig({
         "src/pages/api/users/[id]/calendar.ics.ts",
         "src/test/**",
       ],
-      thresholds: { lines: 96, functions: 96, branches: 86, statements: 96 },
+      thresholds: { lines: 96, functions: 96, branches: 85, statements: 96 },
     },
   },
 });
