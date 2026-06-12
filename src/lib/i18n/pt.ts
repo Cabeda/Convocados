@@ -100,6 +100,7 @@ const pt: TranslationKeys = {
   quickJoinTitle: "Entrar no jogo",
   quickJoinPlaceholder: "O teu nome",
   quickJoinBtn: "Entrar",
+  quickJoinPillLabel: "Entrar neste jogo como {name}",
   quickJoinedAs: "Entraste como {name}",
   quickJoinLeave: "Sair",
   recentPlayers: "Jogadores recentes",

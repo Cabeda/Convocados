@@ -87,6 +87,7 @@ const it: TranslationKeys = {
   quickJoinTitle: "Unisciti a questa partita",
   quickJoinPlaceholder: "Il tuo nome",
   quickJoinBtn: "Unisciti",
+  quickJoinPillLabel: "Unisciti a questa partita come {name}",
   quickJoinedAs: "Ti sei unito come {name}",
   quickJoinLeave: "Esci",
   recentPlayers: "Giocatori recenti",

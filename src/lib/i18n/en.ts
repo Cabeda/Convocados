@@ -99,6 +99,7 @@ const en = {
   quickJoinTitle: "Join this game",
   quickJoinPlaceholder: "Your name",
   quickJoinBtn: "Join",
+  quickJoinPillLabel: "Join this game as {name}",
   quickJoinedAs: "You joined as {name}",
   quickJoinLeave: "Leave",
   recentPlayers: "Recent players",
