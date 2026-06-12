@@ -10,6 +10,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatReclineNormal";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ShieldIcon from "@mui/icons-material/Shield";
+import ContactsIcon from "@mui/icons-material/Contacts";
 
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useT } from "~/lib/useT";
@@ -49,6 +50,43 @@ export function PlayerList({
   const theme = useTheme();
   const [playerInput, setPlayerInput] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
+
+  // Feature-detect the Contact Picker API. Available in Chromium-based browsers
+  // (Chrome, Edge, Opera, Samsung Internet). Hidden on Safari / Firefox — see ADR-0010.
+  const contactPickerSupported =
+    typeof navigator !== "undefined" &&
+    "contacts" in navigator &&
+    typeof (navigator as unknown as { contacts?: { select?: unknown } }).contacts?.select === "function";
+
+  const handlePickContact = useCallback(async () => {
+    if (!contactPickerSupported) return;
+    try {
+      const nav = navigator as unknown as {
+        contacts: {
+          select: (
+            fields: ("name" | "email" | "tel")[],
+            options?: { multiple?: boolean },
+          ) => Promise<Array<{ name?: string[]; email?: string[] }>>;
+        };
+      };
+      const contacts = await nav.contacts.select(["name", "email"], { multiple: false });
+      const picked = contacts[0];
+      if (!picked) return;
+      const name = (picked.name?.[0] ?? "").trim();
+      const email = (picked.email?.[0] ?? "").trim();
+      if (email) {
+        // Android parity: auto-add when we have both name and email.
+        await onAddPlayer(name, email);
+        setPlayerInput("");
+        setInviteEmail("");
+      } else if (name) {
+        // No email — prefill name only, let the user type an email to invite.
+        setPlayerInput(name);
+      }
+    } catch {
+      // User cancelled, or browser blocked the picker. Silent — falls through to the typed flow.
+    }
+  }, [contactPickerSupported, onAddPlayer]);
 
   // ── Player reorder drag state ──────────────────────────────────────────────
   const [dragPlayer, setDragPlayer] = useState<{ id: string; index: number } | null>(null);
@@ -103,146 +141,177 @@ export function PlayerList({
 
         {playerError && <Alert severity="error" onClose={() => onPlayerErrorChange(null)}>{playerError}</Alert>}
 
-        <Autocomplete<PlayerOption, false, false, true>
-          freeSolo
-          options={(() => {
-            const trimmed = playerInput.trim();
-            const filtered: PlayerOption[] = availableSuggestions
-              .filter((s) => matchesWithName(s.name, trimmed))
-              .map((s) => ({
-                type: "existing" as const,
-                name: s.name,
-                gamesPlayed: s.gamesPlayed,
-                userId: s.userId ?? null,
-              }));
-            // Add "Create new player" option when input doesn't exactly match an existing suggestion
-            if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
-              filtered.push({ type: "create" as const, name: trimmed });
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems="stretch">
+          <Autocomplete<PlayerOption, false, false, true>
+            sx={{ flex: 2, minWidth: 0 }}
+            freeSolo
+            options={(() => {
+              const trimmed = playerInput.trim();
+              const filtered: PlayerOption[] = availableSuggestions
+                .filter((s) => matchesWithName(s.name, trimmed))
+                .map((s) => ({
+                  type: "existing" as const,
+                  name: s.name,
+                  gamesPlayed: s.gamesPlayed,
+                  userId: s.userId ?? null,
+                }));
+              // Add "Create new player" option when input doesn't exactly match an existing suggestion
+              if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
+                filtered.push({ type: "create" as const, name: trimmed });
+              }
+              return filtered;
+            })()}
+            filterOptions={(options) => options}
+            getOptionLabel={(option) =>
+              typeof option === "string" ? option : option.name
             }
-            return filtered;
-          })()}
-          filterOptions={(options) => options}
-          getOptionLabel={(option) =>
-            typeof option === "string" ? option : option.name
-          }
-          isOptionEqualToValue={(option, value) =>
-            option.type === value.type && option.name === value.name
-          }
-          value={null}
-          inputValue={playerInput}
-          onInputChange={(_, newInputValue, reason) => {
-            if (reason === "reset") return;
-            setPlayerInput(newInputValue);
-            onPlayerErrorChange(null);
-          }}
-          onChange={(_, newValue) => {
-            if (!newValue) return;
-            if (typeof newValue === "string") {
-              if (newValue.trim()) { onAddPlayer(newValue); setPlayerInput(""); }
-            } else {
-              onAddPlayer(newValue.name);
-              setPlayerInput("");
+            isOptionEqualToValue={(option, value) =>
+              option.type === value.type && option.name === value.name
             }
-          }}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              variant="outlined"
-              placeholder={inviteEmail.trim() ? t("addPlayerPlaceholderOptional") : t("addPlayerPlaceholder")}
-              helperText={t("addPlayerHelper")}
-              fullWidth
-              inputProps={{ ...params.inputProps, maxLength: 50 }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const trimmed = playerInput.trim();
-                  // Allow submission with empty name when email is provided
-                  if (!trimmed && !inviteEmail.trim()) return;
-                  if (trimmed) {
-                    const hasExactMatch = availableSuggestions.some(
-                      (s) => s.name.toLowerCase() === trimmed.toLowerCase()
-                    );
-                    if (hasExactMatch) return;
-                    const hasPartialMatch = availableSuggestions.some(
-                      (s) => matchesWithName(s.name, trimmed)
-                    );
-                    if (hasPartialMatch) return;
+            value={null}
+            inputValue={playerInput}
+            onInputChange={(_, newInputValue, reason) => {
+              if (reason === "reset") return;
+              setPlayerInput(newInputValue);
+              onPlayerErrorChange(null);
+            }}
+            onChange={(_, newValue) => {
+              if (!newValue) return;
+              if (typeof newValue === "string") {
+                if (newValue.trim()) { onAddPlayer(newValue); setPlayerInput(""); }
+              } else {
+                onAddPlayer(newValue.name);
+                setPlayerInput("");
+              }
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                variant="outlined"
+                size="small"
+                placeholder={inviteEmail.trim() ? t("addPlayerPlaceholderOptional") : t("addPlayerPlaceholder")}
+                fullWidth
+                inputProps={{ ...params.inputProps, maxLength: 50 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const trimmed = playerInput.trim();
+                    if (!trimmed && !inviteEmail.trim()) return;
+                    if (trimmed) {
+                      const hasExactMatch = availableSuggestions.some(
+                        (s) => s.name.toLowerCase() === trimmed.toLowerCase()
+                      );
+                      if (hasExactMatch) return;
+                      const hasPartialMatch = availableSuggestions.some(
+                        (s) => matchesWithName(s.name, trimmed)
+                      );
+                      if (hasPartialMatch) return;
+                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onAddPlayer(trimmed, inviteEmail.trim() || undefined);
+                    setPlayerInput("");
+                    setInviteEmail("");
                   }
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onAddPlayer(trimmed, inviteEmail.trim() || undefined);
-                  setPlayerInput("");
-                  setInviteEmail("");
-                }
-              }}
-              onPaste={(e) => {
-                const text = e.clipboardData.getData("Text");
-                const names = text.split("\n").map((n) => n.trim()).filter(Boolean);
-                if (names.length > 1) {
-                  e.preventDefault();
-                  Promise.all(names.map((n) => onAddPlayer(n))).then(() => setPlayerInput(""));
-                }
-              }}
-              InputProps={{
-                ...params.InputProps,
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton color="primary" edge="end"
-                      disabled={!playerInput.trim() && !inviteEmail.trim()}
-                      onClick={() => { onAddPlayer(playerInput.trim(), inviteEmail.trim() || undefined); setPlayerInput(""); setInviteEmail(""); }}>
-                      <PersonAddIcon />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-          )}
-          renderOption={(props, option) => {
-            const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
-            if (option.type === "create") {
+                }}
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData("Text");
+                  const names = text.split("\n").map((n) => n.trim()).filter(Boolean);
+                  if (names.length > 1) {
+                    e.preventDefault();
+                    Promise.all(names.map((n) => onAddPlayer(n))).then(() => setPlayerInput(""));
+                  }
+                }}
+                InputProps={{
+                  ...params.InputProps,
+                  startAdornment: contactPickerSupported ? (
+                    <InputAdornment position="start">
+                      <Tooltip title={t("addFromContacts")}>
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          edge="start"
+                          data-testid="pick-contact"
+                          aria-label={t("addFromContacts")}
+                          onClick={handlePickContact}
+                        >
+                          <ContactsIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </InputAdornment>
+                  ) : undefined,
+                }}
+              />
+            )}
+            renderOption={(props, option) => {
+              const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
+              if (option.type === "create") {
+                return (
+                  <li key={key} {...otherProps} style={{ minHeight: 44, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>
+                    <PersonAddIcon fontSize="small" color="primary" />
+                    {t("createNewPlayer", { name: option.name })}
+                  </li>
+                );
+              }
               return (
-                <li key={key} {...otherProps} style={{ minHeight: 44, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>
-                  <PersonAddIcon fontSize="small" color="primary" />
-                  {t("createNewPlayer", { name: option.name })}
+                <li key={key} {...otherProps} style={{ minHeight: 44, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, width: "100%" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, overflow: "hidden" }}>
+                    {option.userId ? (
+                      <Tooltip title={t("protectedPlayer")}>
+                        <ShieldIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
+                      </Tooltip>
+                    ) : null}
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{option.name}</span>
+                  </Box>
+                  {option.gamesPlayed > 0 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
+                      {t("nGamesPlayed", { n: option.gamesPlayed })}
+                    </Typography>
+                  )}
                 </li>
               );
-            }
-            return (
-              <li key={key} {...otherProps} style={{ minHeight: 44, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, width: "100%" }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, overflow: "hidden" }}>
-                  {option.userId ? (
-                    <Tooltip title={t("protectedPlayer")}>
-                      <ShieldIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
-                    </Tooltip>
-                  ) : null}
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{option.name}</span>
-                </Box>
-                {option.gamesPlayed > 0 && (
-                  <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
-                    {t("nGamesPlayed", { n: option.gamesPlayed })}
-                  </Typography>
-                )}
-              </li>
-            );
-          }}
-          noOptionsText={t("noSuggestions")}
-        />
+            }}
+            noOptionsText={t("noSuggestions")}
+          />
 
-        {/* Optional: notify a registered player or email an invite to register */}
-        <TextField
-          type="email"
-          size="small"
-          variant="outlined"
-          fullWidth
-          value={inviteEmail}
-          onChange={(e) => setInviteEmail(e.target.value)}
-          placeholder={t("inviteByEmailPlaceholder")}
-          helperText={t("inviteByEmailHelper")}
-          inputProps={{ inputMode: "email", maxLength: 120 }}
-          sx={{ mt: 1 }}
-        />
+          <TextField
+            type="email"
+            size="small"
+            variant="outlined"
+            sx={{ flex: 1.4, minWidth: { xs: 0, sm: 200 } }}
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            placeholder={t("inviteByEmailPlaceholder")}
+            inputProps={{ inputMode: "email", maxLength: 120, "aria-label": t("inviteByEmailPlaceholder") }}
+          />
 
-        {/* Recent players — quick-add chips */}
-        {availableSuggestions.length > 0 && (
+          <IconButton
+            color="primary"
+            data-testid="add-player-submit"
+            aria-label={t("addPlayerSubmit")}
+            disabled={!playerInput.trim() && !inviteEmail.trim()}
+            onClick={() => {
+              onAddPlayer(playerInput.trim(), inviteEmail.trim() || undefined);
+              setPlayerInput("");
+              setInviteEmail("");
+            }}
+            sx={{ alignSelf: "stretch", borderRadius: 1, border: 1, borderColor: "divider", px: 1.5 }}
+          >
+            <PersonAddIcon />
+          </IconButton>
+        </Stack>
+
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+          {playerInput.trim() || inviteEmail.trim() ? t("addPlayerHelper") : t("inviteByEmailHelper")}
+        </Typography>
+
+        {contactPickerSupported && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontStyle: "italic" }}>
+            {t("addFromContactsHint")}
+          </Typography>
+        )}
+
+        {/* Recent players — quick-add chips (idle state only) */}
+        {availableSuggestions.length > 0 && !playerInput.trim() && !inviteEmail.trim() && (
           <Box>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
               {t("recentPlayers")}:
