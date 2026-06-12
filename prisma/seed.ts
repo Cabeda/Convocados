@@ -171,10 +171,8 @@ async function main() {
       data: {
         title,
         location: venue.name,
-        // codeql[js/insecure-randomness] false-positive: dev seed data, not security-sensitive
-        latitude: venue.lat,
-        // codeql[js/insecure-randomness] false-positive: dev seed data, not security-sensitive
-        longitude: venue.lng,
+        latitude: venue.lat, // codeql[js/insecure-randomness] false-positive: dev seed data
+        longitude: venue.lng, // codeql[js/insecure-randomness] false-positive: dev seed data
         dateTime,
         maxPlayers,
         sport,
