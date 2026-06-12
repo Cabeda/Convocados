@@ -1,0 +1,67 @@
+/* General */
+"app_name" = "Convocados";
+"games_tab" = "Games";
+"stats_tab" = "Stats";
+"profile_tab" = "Profile";
+
+/* Login */
+"sign_in" = "Sign In";
+"sign_in_subtitle" = "Organize pickup sports games in seconds";
+
+/* Games */
+"my_games" = "My Games";
+"following" = "Following";
+"archived" = "Archived";
+"no_games" = "No games";
+"create_game" = "Create Game";
+
+/* Event Detail */
+"players" = "Players";
+"teams" = "Teams";
+"history" = "History";
+"rankings" = "Rankings";
+"payments" = "Payments";
+"share" = "Share";
+"randomize_teams" = "Randomize Teams";
+"balanced_teams" = "Balanced Teams";
+"add_player" = "Add Player";
+"remove" = "Remove";
+
+/* Create Event */
+"new_event" = "New Event";
+"title" = "Title";
+"location" = "Location";
+"date_time" = "Date & Time";
+"sport" = "Sport";
+"max_players" = "Max Players";
+"recurring" = "Recurring";
+"frequency" = "Frequency";
+"create_event" = "Create Event";
+
+/* Profile */
+"theme" = "Theme";
+"notifications" = "Notifications";
+"server_url" = "Server URL";
+"sign_out" = "Sign Out";
+"sign_out_confirm" = "Sign out?";
+
+/* Stats */
+"no_stats" = "No Stats";
+"games_played" = "Games";
+"win_rate" = "Win Rate";
+"wins" = "Wins";
+"avg_rating" = "Avg Rating";
+
+/* Payments */
+"paid" = "Paid";
+"pending" = "Pending";
+"sent" = "Sent";
+
+/* Sports */
+"football" = "Football";
+"futsal" = "Futsal";
+"basketball" = "Basketball";
+"padel" = "Padel";
+"tennis" = "Tennis";
+"volleyball" = "Volleyball";
+"other" = "Other";

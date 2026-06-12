@@ -1,0 +1,73 @@
+name: Convocados
+options:
+  bundleIdPrefix: dev.convocados
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "Apple Development"
+    # Alt-store distribution: no App Store provisioning needed
+    # Sign with a development cert + ad-hoc profile or leave unsigned for sideloading
+    ENABLE_BITCODE: NO
+    SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
+    INFOPLIST_KEY_CFBundleDisplayName: Convocados
+    INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.sports"
+
+targets:
+  Convocados:
+    type: application
+    platform: iOS
+    sources:
+      - path: Convocados
+        excludes:
+          - "**/*.xcassets"
+    resources:
+      - path: Convocados/Resources
+    info:
+      path: Convocados/Resources/Info.plist
+      properties:
+        CFBundleName: Convocados
+        CFBundleDisplayName: Convocados
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleIdentifier: dev.convocados.ios
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        # OAuth callback URL scheme
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: ["convocados"]
+            CFBundleURLName: "OAuth Callback"
+        # Push notifications
+        UIBackgroundModes:
+          - remote-notification
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.convocados.ios
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    entitlements:
+      path: Convocados/Resources/Convocados.entitlements
+      properties:
+        aps-environment: development
+        com.apple.developer.associated-domains:
+          - "applinks:convocados.cabeda.dev"
