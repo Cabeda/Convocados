@@ -93,6 +93,28 @@ class ScoreViewModelTest {
     }
 
     @Test
+    fun `load fetches keepScreenOn from settings`() = runTest {
+        val game = makeGame("e1")
+        val history = makeHistory("h1", "e1", 0, 0)
+        val settingsFlow = MutableStateFlow(GameSettings(keepScreenOn = false))
+
+        every { settingsStore.settings("e1") } returns settingsFlow
+        coEvery { repository.getGame("e1") } returns game
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistory("e1") } returns flowOf(history)
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertFalse(state.keepScreenOn)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `load is idempotent for same eventId`() = runTest {
         coEvery { repository.getGame("e1") } returns makeGame("e1")
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)

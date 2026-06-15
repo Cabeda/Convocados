@@ -95,6 +95,21 @@ fun GameSettingsScreen(
                 }
             }
 
+            item {
+                ToggleChip(
+                    checked = state.keepScreenOn,
+                    onCheckedChange = { viewModel.setKeepScreenOn(it) },
+                    label = { Text(stringResource(R.string.keep_screen_on_label)) },
+                    toggleControl = {
+                        Switch(
+                            checked = state.keepScreenOn,
+                            onCheckedChange = null
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
             // ── Exact-alarm permission fallback ─────────────────────
             if (!state.canScheduleExact) {
                 item {

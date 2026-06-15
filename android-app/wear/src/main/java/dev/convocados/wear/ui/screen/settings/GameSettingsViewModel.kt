@@ -25,6 +25,7 @@ data class GameSettingsUiState(
     val isKickoffOverridden: Boolean = false,
     val alarms: List<GameAlarm> = emptyList(),
     val canScheduleExact: Boolean = true,
+    val keepScreenOn: Boolean = true,
 )
 
 @HiltViewModel
@@ -60,6 +61,7 @@ class GameSettingsViewModel @Inject constructor(
                     isKickoffOverridden = s.kickoffEpochMs != null,
                     alarms = s.alarms,
                     canScheduleExact = scheduler.canScheduleExact(),
+                    keepScreenOn = s.keepScreenOn,
                 )
             }
         }
@@ -95,6 +97,10 @@ class GameSettingsViewModel @Inject constructor(
 
     fun removeAlarm(id: String) = apply {
         it.copy(alarms = it.alarms.filterNot { a -> a.id == id })
+    }
+
+    fun setKeepScreenOn(enabled: Boolean) = apply {
+        it.copy(keepScreenOn = enabled)
     }
 
     private fun newAlarm(existing: List<GameAlarm>, type: AlarmType, minute: Int) =

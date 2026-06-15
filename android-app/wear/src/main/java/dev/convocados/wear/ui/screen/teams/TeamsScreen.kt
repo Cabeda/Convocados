@@ -247,6 +247,22 @@ fun TeamsScreen(
                         }
                     }
 
+                    // Keep Screen On Toggle
+                    item {
+                        ToggleChip(
+                            checked = settingsState.keepScreenOn,
+                            onCheckedChange = { settingsViewModel.setKeepScreenOn(it) },
+                            label = { Text(stringResource(R.string.keep_screen_on_label)) },
+                            toggleControl = {
+                                Switch(
+                                    checked = settingsState.keepScreenOn,
+                                    onCheckedChange = null
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
                     // Exact-alarm permission
                     if (!settingsState.canScheduleExact) {
                         item {

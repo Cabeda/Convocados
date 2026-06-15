@@ -44,6 +44,17 @@ fun ScoreScreen(
     val columnState = rememberColumnState()
     val isAmbient = LocalAmbientMode.current
 
+    val shouldKeepScreenOn = state.history != null && state.keepScreenOn
+    if (shouldKeepScreenOn) {
+        val view = LocalView.current
+        DisposableEffect(view) {
+            view.keepScreenOn = true
+            onDispose {
+                view.keepScreenOn = false
+            }
+        }
+    }
+
     ScreenScaffold(scrollState = columnState) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             when {
