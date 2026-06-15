@@ -249,16 +249,10 @@ fun TeamsScreen(
 
                     // Keep Screen On Toggle
                     item {
-                        ToggleChip(
+                        SwitchButton(
                             checked = settingsState.keepScreenOn,
                             onCheckedChange = { settingsViewModel.setKeepScreenOn(it) },
                             label = { Text(stringResource(R.string.keep_screen_on_label)) },
-                            toggleControl = {
-                                Switch(
-                                    checked = settingsState.keepScreenOn,
-                                    onCheckedChange = null
-                                )
-                            },
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }

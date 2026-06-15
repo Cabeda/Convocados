@@ -12,6 +12,8 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import dev.convocados.wear.R
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -96,16 +98,10 @@ fun GameSettingsScreen(
             }
 
             item {
-                ToggleChip(
+                SwitchButton(
                     checked = state.keepScreenOn,
                     onCheckedChange = { viewModel.setKeepScreenOn(it) },
                     label = { Text(stringResource(R.string.keep_screen_on_label)) },
-                    toggleControl = {
-                        Switch(
-                            checked = state.keepScreenOn,
-                            onCheckedChange = null
-                        )
-                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
