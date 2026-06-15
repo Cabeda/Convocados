@@ -639,6 +639,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
               canRemovePlayer={canRemovePlayer}
               quickJoinUserName={isAuthenticated ? session?.user?.name : undefined}
               onQuickJoinPillClick={handleQuickJoinPillClick}
+              onQuickLeave={isAuthenticated && session?.user ? (() => {
+                const myPlayer = event.players.find(p => p.userId === session.user!.id);
+                if (myPlayer) removePlayer(myPlayer.id);
+              }) : undefined}
             />
 
             {/* Payment nudge dialog — opened by the Quick Join pill on tap when the user
