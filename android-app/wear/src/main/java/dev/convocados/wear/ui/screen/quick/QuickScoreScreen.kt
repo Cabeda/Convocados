@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.MaterialTheme
@@ -23,6 +24,14 @@ import java.time.Instant
 fun QuickScoreScreen(viewModel: QuickScoreViewModel) {
     val state by viewModel.uiState.collectAsState()
     val columnState = rememberColumnState()
+
+    val view = LocalView.current
+    DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose {
+            view.keepScreenOn = false
+        }
+    }
 
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(Unit) {
