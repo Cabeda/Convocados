@@ -14,6 +14,7 @@ import ShieldIcon from "@mui/icons-material/Shield";
 import ContactsIcon from "@mui/icons-material/Contacts";
 
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import type { Player, PlayerOption } from "./types";
@@ -44,6 +45,8 @@ interface Props {
   /** Optional: if provided, the Quick Join pill calls this instead of joining directly.
       The host typically opens the payment-nudge dialog from here when the user has a balance. */
   onQuickJoinPillClick?: (name: string) => void;
+  /** Called when the user clicks the "Leave game" pill. Removes the user's player entry. */
+  onQuickLeave?: () => void;
 }
 
 export function PlayerList({
@@ -53,11 +56,14 @@ export function PlayerList({
   onRandomize, onConfirmReRandomize, canRemovePlayer,
   quickJoinUserName,
   onQuickJoinPillClick,
+  onQuickLeave,
 }: Props) {
   const t = useT();
   const theme = useTheme();
   const [playerInput, setPlayerInput] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
+
+  // Detect if the current input looks like an email address
+  const isEmailInput = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(playerInput.trim());
 
   // Feature-detect the Contact Picker API. Available in Chromium-based browsers
   // (Chrome, Edge, Opera, Samsung Internet). Hidden on Safari / Firefox — see ADR-0010.
@@ -86,7 +92,6 @@ export function PlayerList({
         // Android parity: auto-add when we have both name and email.
         await onAddPlayer(name, email);
         setPlayerInput("");
-        setInviteEmail("");
       } else if (name) {
         // No email — prefill name only, let the user type an email to invite.
         setPlayerInput(name);
@@ -149,12 +154,16 @@ export function PlayerList({
 
         {playerError && <Alert severity="error" onClose={() => onPlayerErrorChange(null)}>{playerError}</Alert>}
 
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems="stretch">
+        <Stack direction="row" spacing={1} alignItems="stretch">
           <Autocomplete<PlayerOption, false, false, true>
-            sx={{ flex: 2, minWidth: 0 }}
+            sx={{ flex: 1, minWidth: 0 }}
             freeSolo
             options={(() => {
               const trimmed = playerInput.trim();
+              // If it looks like an email, show an "invite by email" option instead of player suggestions
+              if (isEmailInput) {
+                return [{ type: "create" as const, name: trimmed }];
+              }
               const filtered: PlayerOption[] = availableSuggestions
                 .filter((s) => matchesWithName(s.name, trimmed))
                 .map((s) => ({
@@ -185,40 +194,47 @@ export function PlayerList({
             }}
             onChange={(_, newValue) => {
               if (!newValue) return;
-              if (typeof newValue === "string") {
-                if (newValue.trim()) { onAddPlayer(newValue); setPlayerInput(""); }
+              const val = typeof newValue === "string" ? newValue.trim() : newValue.name;
+              if (!val) return;
+              if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+                onAddPlayer(val.split("@")[0], val);
               } else {
-                onAddPlayer(newValue.name);
-                setPlayerInput("");
+                onAddPlayer(val);
               }
+              setPlayerInput("");
             }}
             renderInput={(params) => (
               <TextField
                 {...params}
                 variant="outlined"
                 size="small"
-                placeholder={inviteEmail.trim() ? t("addPlayerPlaceholderOptional") : t("addPlayerPlaceholder")}
+                placeholder={t("addPlayerPlaceholder")}
                 fullWidth
-                inputProps={{ ...params.inputProps, maxLength: 50 }}
+                inputProps={{ ...params.inputProps, maxLength: 120 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     const trimmed = playerInput.trim();
-                    if (!trimmed && !inviteEmail.trim()) return;
-                    if (trimmed) {
-                      const hasExactMatch = availableSuggestions.some(
-                        (s) => s.name.toLowerCase() === trimmed.toLowerCase()
-                      );
-                      if (hasExactMatch) return;
-                      const hasPartialMatch = availableSuggestions.some(
-                        (s) => matchesWithName(s.name, trimmed)
-                      );
-                      if (hasPartialMatch) return;
+                    if (!trimmed) return;
+                    // Email detection: submit as email invite
+                    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onAddPlayer(trimmed.split("@")[0], trimmed);
+                      setPlayerInput("");
+                      return;
                     }
+                    const hasExactMatch = availableSuggestions.some(
+                      (s) => s.name.toLowerCase() === trimmed.toLowerCase()
+                    );
+                    if (hasExactMatch) return;
+                    const hasPartialMatch = availableSuggestions.some(
+                      (s) => matchesWithName(s.name, trimmed)
+                    );
+                    if (hasPartialMatch) return;
                     e.preventDefault();
                     e.stopPropagation();
-                    onAddPlayer(trimmed, inviteEmail.trim() || undefined);
+                    onAddPlayer(trimmed);
                     setPlayerInput("");
-                    setInviteEmail("");
                   }
                 }}
                 onPaste={(e) => {
@@ -253,10 +269,11 @@ export function PlayerList({
             renderOption={(props, option) => {
               const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
               if (option.type === "create") {
+                const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(option.name);
                 return (
                   <li key={key} {...otherProps} style={{ minHeight: 44, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>
                     <PersonAddIcon fontSize="small" color="primary" />
-                    {t("createNewPlayer", { name: option.name })}
+                    {isEmail ? t("inviteByEmailOption", { email: option.name }) : t("createNewPlayer", { name: option.name })}
                   </li>
                 );
               }
@@ -281,26 +298,19 @@ export function PlayerList({
             noOptionsText={t("noSuggestions")}
           />
 
-          <TextField
-            type="email"
-            size="small"
-            variant="outlined"
-            sx={{ flex: 1.4, minWidth: { xs: 0, sm: 200 } }}
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            placeholder={t("inviteByEmailPlaceholder")}
-            inputProps={{ inputMode: "email", maxLength: 120, "aria-label": t("inviteByEmailPlaceholder") }}
-          />
-
           <IconButton
             color="primary"
             data-testid="add-player-submit"
             aria-label={t("addPlayerSubmit")}
-            disabled={!playerInput.trim() && !inviteEmail.trim()}
+            disabled={!playerInput.trim()}
             onClick={() => {
-              onAddPlayer(playerInput.trim(), inviteEmail.trim() || undefined);
+              const trimmed = playerInput.trim();
+              if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+                onAddPlayer(trimmed.split("@")[0], trimmed);
+              } else {
+                onAddPlayer(trimmed);
+              }
               setPlayerInput("");
-              setInviteEmail("");
             }}
             sx={{ alignSelf: "stretch", borderRadius: 1, border: 1, borderColor: "divider", px: 1.5 }}
           >
@@ -309,7 +319,7 @@ export function PlayerList({
         </Stack>
 
         <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-          {playerInput.trim() || inviteEmail.trim() ? t("addPlayerHelper") : t("inviteByEmailHelper")}
+          {isEmailInput ? t("inviteByEmailHelper") : t("addPlayerOrEmailHelper")}
         </Typography>
 
         {contactPickerSupported && (
@@ -326,9 +336,10 @@ export function PlayerList({
             (p) => p.name.toLowerCase() === trimmedName.toLowerCase(),
           );
           const showQuickJoin = !!trimmedName && !alreadyJoined;
+          const showQuickLeave = !!trimmedName && alreadyJoined && !!onQuickLeave;
           const showRecents = availableSuggestions.length > 0;
-          const idle = !playerInput.trim() && !inviteEmail.trim();
-          if (!idle || (!showQuickJoin && !showRecents)) return null;
+          const idle = !playerInput.trim();
+          if (!idle || (!showQuickJoin && !showQuickLeave && !showRecents)) return null;
 
           return (
             <Box>
@@ -353,6 +364,21 @@ export function PlayerList({
                         onAddPlayer(trimmedName);
                       }
                     }}
+                    sx={{
+                      cursor: "pointer",
+                      fontWeight: 600,
+                    }}
+                  />
+                )}
+                {showQuickLeave && (
+                  <Chip
+                    data-testid="quick-leave-pill"
+                    icon={<ExitToAppIcon fontSize="small" />}
+                    label={t("quickLeavePillLabel")}
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    onClick={onQuickLeave}
                     sx={{
                       cursor: "pointer",
                       fontWeight: 600,

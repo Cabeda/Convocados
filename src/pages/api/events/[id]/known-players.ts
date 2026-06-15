@@ -47,6 +47,18 @@ export const GET: APIRoute = async ({ params }) => {
     }
   }
 
+  // Also include followers of this event who aren't current players
+  const followers = await prisma.eventFollow.findMany({
+    where: { eventId },
+    include: { user: { select: { id: true, name: true } } },
+  });
+  for (const f of followers) {
+    const name = f.user.name.trim();
+    if (name && !nameCounts.has(name)) {
+      nameCounts.set(name, 0);
+    }
+  }
+
   // Annotate each suggestion with the userId of the matching registered user
   // (if any). Ambiguous matches (multiple users sharing the name) stay null.
   const allUsers = await prisma.user.findMany({

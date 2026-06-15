@@ -75,10 +75,9 @@ describe("PlayerList — contact picker invite (Android parity)", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it("renders name and email fields as a single row (merged component)", () => {
+  it("renders the unified name/email input field", () => {
     renderList(baseProps());
     expect(screen.getByPlaceholderText("addPlayerPlaceholder")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("inviteByEmailPlaceholder")).toBeInTheDocument();
   });
 
   it("renders the Contacts icon when navigator.contacts is supported", () => {
@@ -130,7 +129,6 @@ describe("PlayerList — contact picker invite (Android parity)", () => {
       expect(screen.getByPlaceholderText("addPlayerPlaceholder")).toHaveValue("Phone Only");
     });
     expect(onAddPlayer).not.toHaveBeenCalled();
-    expect(screen.getByPlaceholderText("inviteByEmailPlaceholder")).toHaveValue("");
   });
 
   it("Add button is disabled when both name and email are empty", () => {
@@ -149,16 +147,13 @@ describe("PlayerList — contact picker invite (Android parity)", () => {
     expect(addBtn).not.toBeDisabled();
   });
 
-  it("Enter key submits with current name+email values", () => {
-    renderList(baseProps());
+  it("Enter key submits with email detection when input is an email", () => {
+    const onAddPlayer = vi.fn().mockResolvedValue(undefined);
+    renderList({ ...baseProps(), onAddPlayer });
     const nameInput = screen.getByPlaceholderText("addPlayerPlaceholder");
-    const emailInput = screen.getByPlaceholderText("inviteByEmailPlaceholder");
-    fireEvent.change(nameInput, { target: { value: "Mario" } });
-    fireEvent.change(emailInput, { target: { value: "mario@x.com" } });
+    fireEvent.change(nameInput, { target: { value: "mario@x.com" } });
     fireEvent.keyDown(nameInput, { key: "Enter" });
-    // The actual submit is wired through onAddPlayer(name, email)
-    // We just check the helper text under the email field stays visible.
-    expect(screen.getByText("inviteByEmailHelper")).toBeInTheDocument();
+    expect(onAddPlayer).toHaveBeenCalledWith("mario", "mario@x.com");
   });
 
   // ── Quick Join pill (first pill, authenticated-only) ──────────────────────
