@@ -1,10 +1,10 @@
 {
   "name": "convocados",
-  "version": "3.95.0",
+  "version": "3.96.4",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file=.env node_modules/.bin/astro dev",
+    "dev": "node --env-file=.env node_modules/astro/bin/astro.mjs dev",
     "build": "astro build",
     "preview": "astro preview",
     "start": "sh ./scripts/start.sh",
@@ -77,5 +77,5 @@
     "vitest": "^3.2.6",
     "yaml": "^2.9.0"
   },
-  "packageManager": "pnpm@10.33.3"
+  "packageManager": "pnpm@11.6.0"
 }
