@@ -34,7 +34,7 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
 COPY package.json ./
-RUN pnpm prisma generate
+RUN node node_modules/prisma/build/index.js generate
 COPY public ./public
 COPY litestream.yml ./litestream.yml
 COPY scripts/start.sh ./scripts/start.sh
