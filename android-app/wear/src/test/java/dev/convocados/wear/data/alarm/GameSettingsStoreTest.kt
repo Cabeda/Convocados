@@ -38,6 +38,8 @@ class GameSettingsStoreTest {
         assertNull(s.kickoffEpochMs)
         assertTrue(s.alarms.isEmpty())
         assertTrue(s.keepScreenOn)
+        assertFalse(s.vibrationEnabled)
+        assertEquals(5, s.vibrationIntervalMinutes)
     }
 
     @Test

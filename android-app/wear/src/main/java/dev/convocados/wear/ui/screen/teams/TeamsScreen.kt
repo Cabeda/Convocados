@@ -24,8 +24,6 @@ import com.google.android.horologist.compose.layout.ScalingLazyColumnDefaults
 import com.google.android.horologist.compose.layout.ScreenScaffold
 import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.R
-import dev.convocados.wear.data.alarm.AlarmType
-import dev.convocados.wear.data.alarm.GameAlarm
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
 import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
 import java.time.Instant
@@ -257,55 +255,62 @@ fun TeamsScreen(
                         )
                     }
 
-                    // Exact-alarm permission
-                    if (!settingsState.canScheduleExact) {
-                        item {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Alarms may be delayed. Allow exact alarms for on-time buzzes.",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                    textAlign = TextAlign.Center,
-                                )
-                                CompactButton(onClick = {
-                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                                        runCatching {
-                                            context.startActivity(
-                                                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                                                    .setData(android.net.Uri.parse("package:${context.packageName}"))
-                                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                                            )
-                                        }
-                                    }
-                                }) { Text("Allow") }
-                            }
-                        }
-                    }
-
-                    // Alarms
+                    // Vibration alerts toggle
                     item {
-                        Text(
-                            text = "Vibration alarms",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                        SwitchButton(
+                            checked = settingsState.vibrationEnabled,
+                            onCheckedChange = { settingsViewModel.setVibrationEnabled(it) },
+                            label = { Text("Vibration alerts") },
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
 
-                    items(settingsState.alarms, key = { it.id }) { alarm ->
-                        AlarmRow(
-                            alarm = alarm,
-                            onToggle = { settingsViewModel.toggleAlarm(alarm.id) },
-                            onMinus = { settingsViewModel.changeMinute(alarm.id, -1) },
-                            onPlus = { settingsViewModel.changeMinute(alarm.id, 1) },
-                            onRemove = { settingsViewModel.removeAlarm(alarm.id) },
-                        )
-                    }
+                    if (settingsState.vibrationEnabled) {
+                        item {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = "Every",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                ) {
+                                    CompactButton(onClick = { settingsViewModel.setVibrationInterval(settingsState.vibrationIntervalMinutes - 1) }) { Text("−") }
+                                    Text(
+                                        text = "${settingsState.vibrationIntervalMinutes} min",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.padding(horizontal = 12.dp),
+                                    )
+                                    CompactButton(onClick = { settingsViewModel.setVibrationInterval(settingsState.vibrationIntervalMinutes + 1) }) { Text("+") }
+                                }
+                            }
+                        }
 
-                    item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            CompactButton(onClick = { settingsViewModel.addRecurring() }) { Text("+ Every") }
-                            CompactButton(onClick = { settingsViewModel.addSingle() }) { Text("+ Once") }
+                        // Exact-alarm permission
+                        if (!settingsState.canScheduleExact) {
+                            item {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "Alarms may be delayed. Allow exact alarms for on-time buzzes.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                    CompactButton(onClick = {
+                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                            runCatching {
+                                                context.startActivity(
+                                                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                                                        .setData(android.net.Uri.parse("package:${context.packageName}"))
+                                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                                )
+                                            }
+                                        }
+                                    }) { Text("Allow") }
+                                }
+                            }
                         }
                     }
 
@@ -352,25 +357,6 @@ private fun UnassignedPlayerChip(player: WearPlayerEntity, onMoveToOne: () -> Un
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
             CompactButton(onClick = onMoveToOne) { Text(text = stringResource(R.string.move_to_team, "1"), style = MaterialTheme.typography.labelSmall) }
             CompactButton(onClick = onMoveToTwo) { Text(text = stringResource(R.string.move_to_team, "2"), style = MaterialTheme.typography.labelSmall) }
-        }
-    }
-}
-
-@Composable
-private fun AlarmRow(alarm: GameAlarm, onToggle: () -> Unit, onMinus: () -> Unit, onPlus: () -> Unit, onRemove: () -> Unit) {
-    val label = if (alarm.type == AlarmType.RECURRING) "Every ${alarm.minute}m" else "At ${alarm.minute}m"
-    val dots = "•".repeat(alarm.pulses)
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = "$label  $dots",
-            style = MaterialTheme.typography.labelMedium,
-            color = if (alarm.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
-            CompactButton(onClick = onMinus) { Text("−") }
-            CompactButton(onClick = onPlus) { Text("+") }
-            CompactButton(onClick = onToggle) { Text(if (alarm.enabled) "On" else "Off") }
-            CompactButton(onClick = onRemove) { Text("✕") }
         }
     }
 }
