@@ -19,7 +19,7 @@ import { useSession } from "~/lib/auth.client";
 import {
   EventHeader,
   PlayerList,
-  QuickJoin,
+  PaymentNudgeDialog,
   EventDialogs,
   PasswordPrompt,
   useCountdown,
@@ -140,6 +140,29 @@ export default function EventPage({ eventId }: { eventId: string }) {
     return () => controller.abort();
   }, [eventId]);
 
+  // ── Payment-nudge state ────────────────────────────────────────────────────
+  // Fetched lazily on first pill click; controls whether the Quick Join pill
+  // routes through the payment-nudge dialog (when the user has a balance) or
+  // joins directly. The dialog also re-fetches its own copy of the balance.
+  const [paymentNudgeOpen, setPaymentNudgeOpen] = useState(false);
+  const [cachedBalance, setCachedBalance] = useState<{ hasDebt: boolean; enforcement: string } | null>(null);
+  const refreshBalance = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/events/${eventId}/balance`);
+      if (!r.ok) return;
+      const j = await r.json();
+      const amt = j?.callerBalance?.amount ?? 0;
+      setCachedBalance({ hasDebt: amt > 0, enforcement: j?.enforcement ?? "off" });
+    } catch { /* ignore */ }
+  }, [eventId]);
+
+  useEffect(() => {
+    if (autoOpenPay) {
+      refreshBalance();
+      setPaymentNudgeOpen(true);
+    }
+  }, [autoOpenPay, refreshBalance]);
+
   const mergedSuggestions = useMemo(() => {
     const qjName = getQjName().trim();
     return (knownPlayersData?.players ?? [])
@@ -224,6 +247,40 @@ export default function EventPage({ eventId }: { eventId: string }) {
     }
     addKnownName(resolvedName ?? trimmed);
     fetchEvent();
+  };
+
+  // Routes the Quick Join pill click: opens the payment-nudge dialog when the user
+  // has a balance, otherwise joins directly. Server PAYMENT_GATE 402 falls back to the dialog.
+  const handleQuickJoinPillClick = (name: string) => {
+    const openDialog = () => setPaymentNudgeOpen(true);
+    if (cachedBalance) {
+      if (cachedBalance.hasDebt && cachedBalance.enforcement !== "off") {
+        openDialog();
+      } else {
+        addPlayer(name, true).catch((err: unknown) => {
+          if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "PAYMENT_GATE") {
+            openDialog();
+          } else {
+            throw err;
+          }
+        });
+      }
+      return;
+    }
+    // No cached balance yet — fetch, then decide.
+    fetch(`/api/events/${eventId}/balance`)
+      .then((r) => r.json())
+      .then((j: { callerBalance?: { amount?: number }; enforcement?: string }) => {
+        const amt = j?.callerBalance?.amount ?? 0;
+        const enforcement = j?.enforcement ?? "off";
+        setCachedBalance({ hasDebt: amt > 0, enforcement });
+        if (amt > 0 && enforcement !== "off") {
+          openDialog();
+        } else {
+          return addPlayer(name, true);
+        }
+      })
+      .catch(() => { /* swallow — player can retry */ });
   };
 
   const removePlayer = async (playerId: string) => {
@@ -563,20 +620,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
               </Paper>
             )}
 
-            {/* Quick join — authenticated users only */}
-            {isAuthenticated && session?.user?.name && (
-              <QuickJoin
-                eventId={event.id}
-                userName={session.user.name}
-                players={event.players}
-                maxPlayers={event.maxPlayers}
-                onJoin={addPlayer}
-                onLeave={removePlayer}
-                autoOpenPay={autoOpenPay}
-              />
-            )}
-
-            {/* Players */}
+            {/* Players — single merged component (name+email+contacts+pills).
+                The Quick Join pill is the first pill in the row when authenticated. */}
             <PlayerList
               players={event.players}
               maxPlayers={event.maxPlayers}
@@ -592,7 +637,27 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onRandomize={doRandomize}
               onConfirmReRandomize={() => setConfirmOpen(true)}
               canRemovePlayer={canRemovePlayer}
+              quickJoinUserName={isAuthenticated ? session?.user?.name : undefined}
+              onQuickJoinPillClick={handleQuickJoinPillClick}
+              onQuickLeave={isAuthenticated && session?.user ? (() => {
+                const myPlayer = event.players.find(p => p.userId === session.user!.id);
+                if (myPlayer) removePlayer(myPlayer.id);
+              }) : undefined}
             />
+
+            {/* Payment nudge dialog — opened by the Quick Join pill on tap when the user
+                has an outstanding balance. Also auto-opens from ?action=pay deep link. */}
+            {isAuthenticated && session?.user?.name && (
+              <PaymentNudgeDialog
+                eventId={event.id}
+                open={paymentNudgeOpen}
+                onClose={() => setPaymentNudgeOpen(false)}
+                onJoin={async () => {
+                  setPaymentNudgeOpen(false);
+                  await addPlayer(session.user!.name, true);
+                }}
+              />
+            )}
 
             {/* Teams — shown below players after randomization */}
             {localMatches && localMatches.length > 0 && (
