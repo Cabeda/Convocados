@@ -33,8 +33,8 @@ RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
-RUN npx prisma generate
 COPY package.json ./
+RUN pnpm prisma generate
 COPY public ./public
 COPY litestream.yml ./litestream.yml
 COPY scripts/start.sh ./scripts/start.sh
