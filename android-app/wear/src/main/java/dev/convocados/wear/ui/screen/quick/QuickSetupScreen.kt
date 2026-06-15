@@ -21,7 +21,8 @@ fun QuickSetupScreen(
     onStart: (durationMinutes: Int, alarmIntervalMinutes: Int) -> Unit,
 ) {
     var duration by remember { mutableIntStateOf(60) }
-    var alarmInterval by remember { mutableIntStateOf(10) }
+    var vibrationEnabled by remember { mutableStateOf(false) }
+    var alarmInterval by remember { mutableIntStateOf(5) }
     val columnState = rememberColumnState(ScalingLazyColumnDefaults.responsive())
 
     ScreenScaffold(scrollState = columnState) {
@@ -62,25 +63,37 @@ fun QuickSetupScreen(
                 }
             }
 
-            // Alarm interval picker
+            // Vibration toggle
             item {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = stringResource(R.string.alarm_label),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        CompactButton(onClick = { alarmInterval = maxOf(5, alarmInterval - 5) }) { Text("−") }
+                SwitchButton(
+                    checked = vibrationEnabled,
+                    onCheckedChange = { vibrationEnabled = it },
+                    label = { Text("Vibration alerts") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            // Alarm interval picker (only when vibration enabled)
+            if (vibrationEnabled) {
+                item {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            text = stringResource(R.string.minutes_value, alarmInterval),
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(horizontal = 12.dp),
+                            text = "Every",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        CompactButton(onClick = { alarmInterval = minOf(30, alarmInterval + 5) }) { Text("+") }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            CompactButton(onClick = { alarmInterval = maxOf(1, alarmInterval - 1) }) { Text("−") }
+                            Text(
+                                text = stringResource(R.string.minutes_value, alarmInterval),
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                            )
+                            CompactButton(onClick = { alarmInterval = minOf(30, alarmInterval + 1) }) { Text("+") }
+                        }
                     }
                 }
             }
@@ -89,7 +102,7 @@ fun QuickSetupScreen(
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = { onStart(duration, alarmInterval) },
+                    onClick = { onStart(duration, if (vibrationEnabled) alarmInterval else 0) },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(stringResource(R.string.start_quick_game))

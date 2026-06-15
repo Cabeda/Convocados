@@ -25,6 +25,9 @@ data class GameSettingsUiState(
     val isKickoffOverridden: Boolean = false,
     val alarms: List<GameAlarm> = emptyList(),
     val canScheduleExact: Boolean = true,
+    val keepScreenOn: Boolean = true,
+    val vibrationEnabled: Boolean = false,
+    val vibrationIntervalMinutes: Int = 5,
 )
 
 @HiltViewModel
@@ -60,6 +63,9 @@ class GameSettingsViewModel @Inject constructor(
                     isKickoffOverridden = s.kickoffEpochMs != null,
                     alarms = s.alarms,
                     canScheduleExact = scheduler.canScheduleExact(),
+                    keepScreenOn = s.keepScreenOn,
+                    vibrationEnabled = s.vibrationEnabled,
+                    vibrationIntervalMinutes = s.vibrationIntervalMinutes,
                 )
             }
         }
@@ -95,6 +101,29 @@ class GameSettingsViewModel @Inject constructor(
 
     fun removeAlarm(id: String) = apply {
         it.copy(alarms = it.alarms.filterNot { a -> a.id == id })
+    }
+
+    fun setKeepScreenOn(enabled: Boolean) = apply {
+        it.copy(keepScreenOn = enabled)
+    }
+
+    fun setVibrationEnabled(enabled: Boolean) = apply { s ->
+        val updated = s.copy(vibrationEnabled = enabled)
+        // When enabling, ensure a recurring alarm exists; when disabling, clear alarms
+        if (enabled && s.alarms.none { it.type == AlarmType.RECURRING && it.enabled }) {
+            updated.copy(alarms = listOf(GameAlarm(UUID.randomUUID().toString(), AlarmType.RECURRING, s.vibrationIntervalMinutes, pulses = 1)))
+        } else if (!enabled) {
+            updated.copy(alarms = emptyList())
+        } else updated
+    }
+
+    fun setVibrationInterval(minutes: Int) = apply { s ->
+        val interval = minutes.coerceIn(1, 30)
+        val updated = s.copy(vibrationIntervalMinutes = interval)
+        // Update existing recurring alarm's minute value
+        updated.copy(alarms = updated.alarms.map { a ->
+            if (a.type == AlarmType.RECURRING) a.copy(minute = interval) else a
+        })
     }
 
     private fun newAlarm(existing: List<GameAlarm>, type: AlarmType, minute: Int) =

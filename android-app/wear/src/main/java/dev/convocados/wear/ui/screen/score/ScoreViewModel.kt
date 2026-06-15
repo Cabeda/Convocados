@@ -34,6 +34,7 @@ data class ScoreUiState(
     val kickoffEpochMs: Long? = null,
     val nextAlarmAtMs: Long? = null,
     val error: String? = null,
+    val keepScreenOn: Boolean = true,
 )
 
 @HiltViewModel
@@ -85,6 +86,7 @@ class ScoreViewModel @Inject constructor(
                         teamTwoName = history?.teamTwoName ?: game?.teamTwoName ?: "Team 2",
                         kickoffEpochMs = kickoffMs,
                         nextAlarmAtMs = nextAlarm,
+                        keepScreenOn = settings.keepScreenOn,
                         isLoading = false,
                     )
                 }

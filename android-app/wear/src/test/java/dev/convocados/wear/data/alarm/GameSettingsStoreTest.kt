@@ -37,6 +37,17 @@ class GameSettingsStoreTest {
         val s = store.current("missing")
         assertNull(s.kickoffEpochMs)
         assertTrue(s.alarms.isEmpty())
+        assertTrue(s.keepScreenOn)
+        assertFalse(s.vibrationEnabled)
+        assertEquals(5, s.vibrationIntervalMinutes)
+    }
+
+    @Test
+    fun `update changes keepScreenOn value`() {
+        every { prefs.getString("e1", null) } returns null
+        val result = store.update("e1") { it.copy(keepScreenOn = false) }
+        assertFalse(result.keepScreenOn)
+        verify { editor.putString("e1", any()) }
     }
 
     @Test
