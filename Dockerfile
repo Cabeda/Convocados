@@ -30,11 +30,10 @@ ENV NODE_ENV=production
 ADD https://github.com/benbjohnson/litestream/releases/download/v0.5.11/litestream-0.5.11-linux-x86_64.tar.gz /tmp/litestream.tar.gz
 RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.gz
 
-COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
 COPY package.json ./
-RUN node node_modules/prisma/build/index.js generate
 COPY public ./public
 COPY litestream.yml ./litestream.yml
 COPY scripts/start.sh ./scripts/start.sh
