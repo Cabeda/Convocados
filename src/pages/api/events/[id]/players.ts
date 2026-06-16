@@ -13,8 +13,19 @@ import { getOutstandingBalance, getGateBalance } from "../../../../lib/balance.s
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
+import {
+  IDEMPOTENCY_HEADER,
+  getCachedResponse,
+  hasConflictingEntry,
+  hashPayload,
+  makeCacheKey,
+  storeCachedResponse,
+  startIdempotencySweep,
+} from "../../../../lib/idempotency";
 
 const log = createLogger("players-api");
+
+startIdempotencySweep();
 
 /**
  * Validate that all team members are active players (order < maxPlayers).
@@ -255,6 +266,12 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (limited) return limited;
 
   const eventId = params.id ?? "";
+  const idemKey = request.headers.get(IDEMPOTENCY_HEADER);
+  const sessionForIdem = idemKey ? await getSession(request) : null;
+  const idemUserId = sessionForIdem?.user?.id ?? null;
+  const idemPath = `/api/events/${eventId}/players`;
+  const idemCacheKey = idemKey ? makeCacheKey(idemKey, idemPath, idemUserId) : null;
+
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const origin = `${proto}://${host}`;
@@ -267,6 +284,25 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const { name, linkToAccount, email } = await request.json();
+
+  // Idempotency replay check: if the same key + same body was already processed,
+  // return the cached 2xx response. Mismatched body returns 422.
+  if (idemKey && idemCacheKey) {
+    const bodyHash = hashPayload({ name, linkToAccount, email } as Record<string, unknown>);
+    const cached = getCachedResponse(idemCacheKey, bodyHash);
+    if (cached) {
+      return new Response(cached.body, {
+        status: cached.status,
+        headers: { "content-type": cached.contentType },
+      });
+    }
+    if (hasConflictingEntry(idemCacheKey, bodyHash)) {
+      return Response.json(
+        { error: "Idempotency-Key reused with different payload" },
+        { status: 422 },
+      );
+    }
+  }
 
   // Optional email — used to notify a registered user or invite an unregistered
   // one to join Convocados. Validated loosely; ignored if malformed.
@@ -544,7 +580,18 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
   }
 
-  return Response.json({ ok: true, invited: inviteResult, resolvedName: trimmed });
+  const successResponse = Response.json({ ok: true, invited: inviteResult, resolvedName: trimmed });
+
+  // Cache the 2xx response for replay on retry with the same Idempotency-Key.
+  if (idemKey && idemCacheKey) {
+    const bodyHash = hashPayload({ name, linkToAccount, email } as Record<string, unknown>);
+    const cloned = successResponse.clone();
+    const text = await cloned.text();
+    const contentType = successResponse.headers.get("content-type") ?? "application/json";
+    storeCachedResponse(idemCacheKey, bodyHash, 200, text, contentType);
+  }
+
+  return successResponse;
 };
 
 export const DELETE: APIRoute = async ({ params, request }) => {

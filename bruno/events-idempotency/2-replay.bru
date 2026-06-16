@@ -1,0 +1,40 @@
+meta {
+  name: Idempotent Replay
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/events/{{eventId}}/players
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+  Idempotency-Key: bruno-idem-replay-{{eventId}}
+}
+
+body:json {
+  {
+    "name": "IdemTestPlayer",
+    "linkToAccount": false
+  }
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+  var eventId = bru.getEnvVar("eventId");
+  if (eventId) {
+    req.setUrl(bru.getEnvVar("baseUrl") + "/api/events/" + eventId + "/players");
+  }
+  req.setHeader("Cookie", "");
+  // Reuse the same key as the previous request to assert replay.
+  req.setHeader("Idempotency-Key", "bruno-idem-replay-" + bru.getEnvVar("eventId"));
+}
+
+tests {
+  test("should replay cached response with same Idempotency-Key", function() {
+    expect(res.status).to.equal(200);
+  });
+}

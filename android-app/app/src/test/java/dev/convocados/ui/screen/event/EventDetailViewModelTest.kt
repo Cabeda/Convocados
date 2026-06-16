@@ -6,6 +6,7 @@ import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.repository.EventRepository
 import io.mockk.coEvery
 import io.mockk.coJustRun
+import io.mockk.slot
 import kotlinx.coroutines.flow.flowOf
 import io.mockk.coVerify
 import io.mockk.every
@@ -93,13 +94,36 @@ class EventDetailViewModelTest {
         coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
         coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
-        coEvery { repository.addPlayer(eventId, "New Player", true) } coAnswers { Result.success(null as String?) }
+        coEvery { repository.addPlayer(eventId, "New Player", true, null, any()) } coAnswers { Result.success(null as String?) }
 
         val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
         viewModel.addPlayer(eventId, "New Player")
         advanceUntilIdle()
 
-        coVerify { repository.addPlayer(eventId, "New Player", true) }
+        coVerify { repository.addPlayer(eventId, "New Player", true, null, any()) }
+    }
+
+    @Test
+    fun `addPlayer generates a fresh Idempotency-Key per call`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        val keySlot1 = slot<String>()
+        val keySlot2 = slot<String>()
+        coEvery { repository.addPlayer(eventId, "P1", true, null, capture(keySlot1)) } coAnswers { Result.success(null as String?) }
+        coEvery { repository.addPlayer(eventId, "P2", true, null, capture(keySlot2)) } coAnswers { Result.success(null as String?) }
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.addPlayer(eventId, "P1")
+        viewModel.addPlayer(eventId, "P2")
+        advanceUntilIdle()
+
+        // Two distinct UUID-shaped keys.
+        val k1 = keySlot1.captured
+        val k2 = keySlot2.captured
+        assertTrue(k1.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")))
+        assertTrue(k2.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")))
+        assertTrue(k1 != k2)
     }
 
     @Ignore("MockK cannot handle kotlin.Result inline class — ClassCastException at runtime (pre-existing)")

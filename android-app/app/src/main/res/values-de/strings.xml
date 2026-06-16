@@ -24,6 +24,12 @@
     <string name="bench_count">Bank (%1$d)</string>
     <string name="add_player_placeholder">Spielernamen hinzufügen</string>
     <string name="add_button">Hinzufügen</string>
+    <string name="add_player_confirm_title">%1$s hinzufügen?</string>
+    <string name="add_player_confirm_desc">%1$s zu %2$s hinzufügen?</string>
+    <string name="add_player_confirm_desc_email">%1$s zu %2$s hinzufügen? Eine Einladung wird an %3$s per E-Mail gesendet.</string>
+    <string name="add_player_confirm_desc_bench">%1$s zu %2$s hinzufügen? Das Team ist voll — %1$s wird auf die Bank gesetzt.</string>
+    <string name="add_player_confirm_desc_both">%1$s zu %2$s hinzufügen? Eine Einladung wird an %3$s per E-Mail gesendet. Das Team ist voll — %1$s wird auf die Bank gesetzt.</string>
+    <string name="add_player_in_flight">%1$s wird hinzugefügt — bitte warten</string>
     <plurals name="see_all_games">
         <item quantity="one">%1$d Spiel ansehen →</item>
         <item quantity="other">Alle %1$d Spiele ansehen →</item>

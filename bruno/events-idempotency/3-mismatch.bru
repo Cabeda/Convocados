@@ -1,0 +1,40 @@
+meta {
+  name: Idempotency Mismatch
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/events/{{eventId}}/players
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+  Idempotency-Key: bruno-idem-replay-{{eventId}}
+}
+
+body:json {
+  {
+    "name": "DifferentName",
+    "linkToAccount": false
+  }
+}
+
+script:pre-request {
+  req.setHeader("Authorization", "Bearer " + bru.getEnvVar("accessToken"));
+  var eventId = bru.getEnvVar("eventId");
+  if (eventId) {
+    req.setUrl(bru.getEnvVar("baseUrl") + "/api/events/" + eventId + "/players");
+  }
+  req.setHeader("Cookie", "");
+  // Reuse the same key as request 1 with a DIFFERENT body to assert 422.
+  req.setHeader("Idempotency-Key", "bruno-idem-replay-" + bru.getEnvVar("eventId"));
+}
+
+tests {
+  test("should return 422 when Idempotency-Key is reused with different payload", function() {
+    expect(res.status).to.equal(422);
+  });
+}

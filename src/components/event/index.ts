@@ -7,5 +7,7 @@ export { InlineEdit } from "./InlineEdit";
 export { ShareBar } from "./ShareBar";
 export { NotifyButton } from "./NotifyButton";
 export { MoreActionsMenu } from "./MoreActionsMenu";
+export { AddPlayerConfirmDialog } from "./AddPlayerConfirmDialog";
+export type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 export { useCountdown } from "./useCountdown";
 export type { Player, TeamMember, TeamResult, EventData, KnownPlayer, PlayerOption } from "./types";

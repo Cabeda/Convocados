@@ -42,12 +42,14 @@ class ApiClient @Inject constructor(private val tokenStore: TokenStore) {
         path: String,
         body: Any? = null,
         retry: Boolean = true,
+        extraHeaders: Map<String, String> = emptyMap(),
     ): HttpResponse {
         val tokens = tokenStore.getTokens() ?: throw ApiException(401, "Not authenticated")
 
         var response = client.request("$baseUrl$path") {
             this.method = method
             header("Authorization", "Bearer ${tokens.accessToken}")
+            extraHeaders.forEach { (k, v) -> header(k, v) }
             if (body != null) setBody(body)
         }
 
@@ -57,6 +59,7 @@ class ApiClient @Inject constructor(private val tokenStore: TokenStore) {
             response = client.request("$baseUrl$path") {
                 this.method = method
                 header("Authorization", "Bearer ${newTokens.accessToken}")
+                extraHeaders.forEach { (k, v) -> header(k, v) }
                 if (body != null) setBody(body)
             }
         }
@@ -103,6 +106,14 @@ class ApiClient @Inject constructor(private val tokenStore: TokenStore) {
 
     suspend inline fun <reified T> delete(path: String, body: Any? = null): T =
         authenticatedRequest(HttpMethod.Delete, path, body).body()
+
+    suspend inline fun <reified T> postWithHeader(
+        path: String,
+        headerName: String,
+        headerValue: String,
+        body: Any? = null,
+    ): T =
+        authenticatedRequest(HttpMethod.Post, path, body, extraHeaders = mapOf(headerName to headerValue)).body()
 
     /** Unauthenticated POST for token exchange */
     suspend fun exchangeCode(code: String): OAuthTokenResponse {

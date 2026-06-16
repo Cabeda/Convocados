@@ -40,6 +40,8 @@ model User {
   oauthRefreshTokens      OauthRefreshToken[] @relation("OAuthRefreshTokens")
   oauthConsents           OauthConsent[]     @relation("OAuthConsents")
   courtWatches            CourtWatch[]       @relation("UserCourtWatches")
+  monthlySubscriptions    MonthlySubscription[]
+  walletTransactions      WalletTransaction[]
 }
 
 model Session {
@@ -120,6 +122,9 @@ model Event {
   followers        EventFollow[]
   notificationJobs NotificationJob[]
   inAppNotifications InAppNotification[] @relation("EventNotifications")
+  monthlySubscriptions  MonthlySubscription[]
+  walletTransactions    WalletTransaction[]
+  extrasDeclarations    ExtrasDeclaration[]
 
   // Priority enrollment settings
   priorityEnabled       Boolean @default(false)
@@ -356,6 +361,14 @@ model EventCost {
   tempPaymentMethods String? // JSON override, same format as paymentMethods — auto-cleared on recurrence reset
   tempPaymentDetails String? // free-text override, same format as paymentDetails — auto-cleared on recurrence reset
   payments       PlayerPayment[]
+  // Monthly subscription (ADR 0008)
+  monthlyEnabled        Boolean @default(false)
+  monthlyFeeCents       Int?    // event currency, integer cents
+  monthlyGamesCovered   Int     @default(5)
+  // Drop-in surcharge (CONTEXT: Drop-in Surcharge)
+  dropInSurchargeCents  Int     @default(0)
+  // Extras pot (ADR 0009) — single running integer, never real money
+  organizerExtrasCents  Int     @default(0)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -374,6 +387,77 @@ model PlayerPayment {
   updatedAt   DateTime  @updatedAt
 
   @@unique([eventCostId, playerName])
+}
+
+// ── Wallet / monthly subscription (ADR 0007, 0008, 0009) ────────────────────
+
+model MonthlySubscription {
+  id           String   @id @default(cuid())
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode         String   @default("monthly") // "monthly" (extensible to "season_pass" etc.)
+  // Subscription Window — [windowStart, windowEnd) in the Event's timezone
+  windowStart  DateTime
+  windowEnd    DateTime
+  // Snapshots of the EventCost config at the time the subscription was created
+  feeCents     Int
+  gamesCovered Int
+  status       String   @default("active") // "active" | "cancelled"
+  markedById   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([eventId, userId, windowStart])
+  @@index([eventId, windowStart])
+  @@index([userId])
+}
+
+model WalletTransaction {
+  id              String   @id @default(cuid())
+  eventId         String
+  event           Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Money
+  amountCents     Int      // positive integer in Event currency
+  currency        String   // snapshot of EventCost.currency at write time
+  direction       String   // "debit" | "credit"
+  // Game Units (only for missed_game_credit, credit_redeemed, credit_expired)
+  gameUnits       Int      @default(0)
+  // Categorisation
+  reason          String   // "per_game_share" | "monthly_fee" | "missed_game_credit"
+                           // | "credit_redeemed" | "credit_expired" | "extras_declare"
+                           // | "payment_received" | "payment_self_reported"
+  statusAfter     String?  // for payment_* rows: "sent" | "paid"
+  // References
+  eventInstanceId String?  // Event.id of the instance this row is about
+  subscriptionId  String?  // MonthlySubscription.id
+  extrasId        String?  // ExtrasDeclaration.id
+  // Idempotency / authorship
+  idempotencyKey  String?  // unique key for system-generated rows (expiry, etc.)
+  markedById      String?  // who recorded this
+  note            String?
+  createdAt       DateTime @default(now())
+
+  @@unique([idempotencyKey])
+  @@index([eventId, userId, createdAt])
+  @@index([eventId, createdAt])
+  @@index([eventInstanceId])
+}
+
+model ExtrasDeclaration {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  amountCents Int
+  currency    String
+  label       String
+  declaredBy  String   // userId of the organizer
+  declaredAt  DateTime @default(now())
+
+  @@index([eventId, declaredAt])
 }
 
 // ── Notification preferences ──────────────────────────────────────────────────
