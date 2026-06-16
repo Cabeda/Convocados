@@ -26,6 +26,12 @@
     <string name="bench_count">Bench (%1$d)</string>
     <string name="add_player_placeholder">Add player name</string>
     <string name="add_button">Add</string>
+    <string name="add_player_confirm_title">Add %1$s?</string>
+    <string name="add_player_confirm_desc">Add %1$s to %2$s?</string>
+    <string name="add_player_confirm_desc_email">Add %1$s to %2$s? An invite will be emailed to %3$s.</string>
+    <string name="add_player_confirm_desc_bench">Add %1$s to %2$s? The roster is full — %1$s will be added to the bench.</string>
+    <string name="add_player_confirm_desc_both">Add %1$s to %2$s? An invite will be emailed to %3$s. The roster is full — %1$s will be added to the bench.</string>
+    <string name="add_player_in_flight">Adding %1$s — please wait</string>
     <plurals name="see_all_games">
         <item quantity="one">See all %1$d game →</item>
         <item quantity="other">See all %1$d games →</item>

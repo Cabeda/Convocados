@@ -24,6 +24,12 @@
     <string name="bench_count">Panchina (%1$d)</string>
     <string name="add_player_placeholder">Aggiungi nome giocatore</string>
     <string name="add_button">Aggiungi</string>
+    <string name="add_player_confirm_title">Aggiungere %1$s?</string>
+    <string name="add_player_confirm_desc">Aggiungere %1$s a %2$s?</string>
+    <string name="add_player_confirm_desc_email">Aggiungere %1$s a %2$s? Un invito verrà inviato via email a %3$s.</string>
+    <string name="add_player_confirm_desc_bench">Aggiungere %1$s a %2$s? La rosa è piena — %1$s verrà aggiunto alla panchina.</string>
+    <string name="add_player_confirm_desc_both">Aggiungere %1$s a %2$s? Un invito verrà inviato via email a %3$s. La rosa è piena — %1$s verrà aggiunto alla panchina.</string>
+    <string name="add_player_in_flight">Aggiunta di %1$s in corso — attendi</string>
     <plurals name="see_all_games">
         <item quantity="one">Vedi %1$d partita →</item>
         <item quantity="other">Vedi tutte le %1$d partite →</item>

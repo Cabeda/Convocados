@@ -18,6 +18,7 @@ import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import type { Player, PlayerOption } from "./types";
+import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 
 interface PlayerSuggestion {
   name: string;
@@ -34,6 +35,8 @@ interface Props {
   playerError: string | null;
   onPlayerErrorChange: (error: string | null) => void;
   onAddPlayer: (name: string, email?: string) => Promise<void>;
+  /** Trigger the confirmation dialog. Used by single-tap paths (chip, dropdown). */
+  onRequestAdd?: (intent: AddPlayerIntent) => void;
   onRemovePlayer: (playerId: string) => Promise<void>;
   onReorderPlayers: (playerIds: string[]) => Promise<void>;
   onResetPlayerOrder: () => Promise<void>;
@@ -52,7 +55,7 @@ interface Props {
 export function PlayerList({
   players, maxPlayers, isOwner, hasTeams,
   availableSuggestions, playerError, onPlayerErrorChange,
-  onAddPlayer, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
+  onAddPlayer, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
   onRandomize, onConfirmReRandomize, canRemovePlayer,
   quickJoinUserName,
   onQuickJoinPillClick,
@@ -197,7 +200,11 @@ export function PlayerList({
               const val = typeof newValue === "string" ? newValue.trim() : newValue.name;
               if (!val) return;
               if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+                // Email address — direct add (typing is deliberate).
                 onAddPlayer(val.split("@")[0], val);
+              } else if (onRequestAdd) {
+                // Dropdown row tap — single-tap surface, requires confirmation.
+                onRequestAdd({ kind: "single", name: val, source: "dropdown" });
               } else {
                 onAddPlayer(val);
               }
@@ -392,7 +399,13 @@ export function PlayerList({
                     label={s.name}
                     variant="outlined"
                     size="small"
-                    onClick={() => { onAddPlayer(s.name); }}
+                    onClick={() => {
+                      if (onRequestAdd) {
+                        onRequestAdd({ kind: "single", name: s.name, source: "chip" });
+                      } else {
+                        onAddPlayer(s.name);
+                      }
+                    }}
                     title={s.userId ? t("protectedPlayer") : undefined}
                     sx={{
                       cursor: "pointer",

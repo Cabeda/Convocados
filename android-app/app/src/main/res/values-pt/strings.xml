@@ -24,6 +24,12 @@
     <string name="bench_count">Suplentes (%1$d)</string>
     <string name="add_player_placeholder">Adicionar nome do jogador</string>
     <string name="add_button">Adicionar</string>
+    <string name="add_player_confirm_title">Adicionar %1$s?</string>
+    <string name="add_player_confirm_desc">Adicionar %1$s a %2$s?</string>
+    <string name="add_player_confirm_desc_email">Adicionar %1$s a %2$s? Será enviado um convite por email para %3$s.</string>
+    <string name="add_player_confirm_desc_bench">Adicionar %1$s a %2$s? O plantel está cheio — %1$s será adicionado ao banco.</string>
+    <string name="add_player_confirm_desc_both">Adicionar %1$s a %2$s? Será enviado um convite por email para %3$s. O plantel está cheio — %1$s será adicionado ao banco.</string>
+    <string name="add_player_in_flight">A adicionar %1$s — aguarda por favor</string>
     <plurals name="see_all_games">
         <item quantity="one">Ver %1$d jogo →</item>
         <item quantity="other">Ver todos os %1$d jogos →</item>

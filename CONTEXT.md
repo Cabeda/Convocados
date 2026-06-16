@@ -111,6 +111,14 @@ A `PlayerPayment` (and each entry in a `GameHistory.paymentsSnapshot`) moves thr
 
 The Owner/Admin remains the single source of truth for money actually received; `sent` is a courtesy signal that gives the payer closure and gives the organizer a "confirm received" worklist. It never auto-promotes to `paid`.
 
+## Manager-initiated add
+A Player record created by the Event Owner or an Admin acting on behalf of someone else — typically a guest with no Convocados account, or a registered user the organizer is adding. Distinct from a self-initiated add (Quick Join, Claim), where the player themselves triggered the action.
+
+Domain consequences of the distinction:
+- **Confirmation**: manager-initiated adds surface a confirmation dialog in the web and Android apps; self-initiated adds do not. The misclick surface lives almost entirely in the manager path.
+- **Auto-follow**: a manager-initiated add does **not** create an `EventFollow` on the added user's behalf; a self-initiated add does.
+- **Payment enforcement**: manager-initiated adds always bypass the outstanding balance gate; self-initiated adds respect it.
+
 ## Payment enforcement level
 A per-Game setting controlling how the Outstanding Balance is surfaced at join time. Stored on `Event`. Levels:
 - **off** — balance not surfaced at join; current behaviour.
@@ -127,6 +135,40 @@ How Outstanding Balances are exposed:
 - The **Owner/Admin** always sees the full per-Player breakdown.
 
 A per-Game `showDebtorNames` toggle (default **off**) lets the Owner reveal individual debtor names to the whole group for clubs that want full transparency. Default is privacy-preserving to keep casual groups friendly.
+
+## Monthly Subscription
+A Player's standing relationship with an Event for one calendar month, granting the right to attend non-cancelled Event instances in that month without per-game payment, in exchange for a fixed monthly fee paid outside the app. The organizer marks the subscription `active` in Convocados once the money is received.
+_Avoid_: membership, plan, subscription
+
+A Monthly Subscription is **per-Event** — a player can be Monthly on Event A and Per-game on Event B at the same time.
+
+## Per-game Player
+A player paying the existing per-game share (`eventCost.totalAmount / maxPlayers`) on each Event instance. The default model.
+_Avoid_: pay-as-you-go player, casual player
+
+## Wallet
+A per-(User, Event) running balance of **Game Units** — currency-agnostic "missed games." A Monthly subscriber earns 1 Game Unit per missed non-cancelled Event instance; redeemed automatically (1 unit = 1 free per-game share) on the player's next join. Game Units expire at the end of the calendar month following the month they were earned (in the Event's timezone).
+_Avoid_: credits, balance, tab (tab remains the *currency* balance for Per-game Players)
+
+## Drop-in Surcharge
+A configurable per-Event amount added to the `PlayerPayment` of a Per-game Player who is not a Monthly subscriber for the Event in the current month. Incentivises monthly sign-up.
+_Avoid_: penalty, casual surcharge
+
+## Subscription Window
+The calendar month (in the Event's timezone) a Monthly Subscription is valid for. A subscription for "2026-06" covers any Event instance whose `dateTime` is in June 2026. Outside the window, the player falls back to Per-game.
+_Avoid_: billing period, cycle
+
+## Game Unit
+The abstract denomination of Wallet credit. 1 unit = 1 missed non-cancelled Event instance. The € value displayed next to a Game Unit is informational, **locked at the per-game share in effect on the day of the miss** (snapshot, not recompute).
+_Avoid_: credit, token
+
+## Transaction
+An immutable row in the per-Event ledger recording a money or Game-Unit movement on behalf of a player. `amountCents` (in Event currency), `direction` (`debit` | `credit`), `reason` (enum: `per_game_share`, `monthly_fee`, `missed_game_credit`, `credit_redeemed`, `credit_expired`, `extras_declare`, `payment_received`, `payment_self_reported`), references to the source (`eventInstanceId`, `subscriptionId`, `extrasId`). The ledger is the single source of truth for balances, the join gate, and per-player history. `PlayerPayment.status` becomes a *projection* of the ledger.
+_Avoid_: payment, ledger entry, journal line
+
+## Extras Pot
+The per-Event running balance of *forfeited* credit and declared spends, in Event currency. Credited by `credit_expired` transactions; debited by `extras_declare` transactions the organizer enters. Visible to all members of the Event. The pot is an honest ledger, not a money account — the app never touches real funds.
+_Avoid_: surplus, organizer wallet, kitty
 
 ## Invite
 A request to participate in a **Game**, sent to a person on behalf of the inviting **User** when a **Player** is being added by an Owner/Admin. Carried as a push notification (to a registered **User** whose email matches) or an email (to an unregistered address, asking them to register). Triggered automatically by the add-player action whenever the email resolves to a non-self **User** or is provided without resolving. Single-shot: not stored, not retried, not visible to the recipient before they accept. On the web/Android client, an Owner/Admin can also pick a contact from the device address book to populate the player's name and email in one step.
