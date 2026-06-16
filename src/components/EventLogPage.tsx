@@ -103,6 +103,8 @@ const ACTION_I18N: Record<string, TranslationKey> = {
   ownership_transferred: "logOwnershipTransferred",
   cost_set: "logCostSet",
   cost_removed: "logCostRemoved",
+  rsvp_yes: "logRsvpYes",
+  rsvp_no: "logRsvpNo",
   payment_updated: "logPaymentUpdated",
   recurrence_reset: "logRecurrenceReset",
   event_archived: "logEventArchived",

@@ -8,6 +8,13 @@ import { getPlayersWithPendingPayments, shouldSendPaymentReminder, markPaymentRe
 import { cleanupExpiredRateLimits } from "~/lib/apiRateLimit.server";
 import { expireUnconfirmed } from "~/lib/priority.server";
 import { expireOldCredits } from "~/lib/creditExpiry.server";
+import {
+  getEventsNeedingRsvpPing,
+  getEventsNeedingRsvpSummary,
+  getRsvpRecipients,
+  getRsvpSummary,
+  markRsvpCutoffSent,
+} from "~/lib/rsvp.server";
 import { createLogger } from "~/lib/logger.server";
 import { prisma } from "~/lib/db.server";
 import pLimit from "p-limit";
@@ -195,6 +202,54 @@ export const POST: APIRoute = async ({ request }) => {
     log.error({ err }, "Failed to expire old wallet credits");
   }
 
+  // ── #457 RSVP 48h fanout + 24h organizer summary ──────────────────────────
+  const rsvpPingsSent: string[] = [];
+  const rsvpSummariesSent: string[] = [];
+  try {
+    const rsvpEvents = await getEventsNeedingRsvpPing();
+    for (const e of rsvpEvents) {
+      const recipientIds = await getRsvpRecipients(e.id);
+      if (recipientIds.length === 0) {
+        // nothing to ping — still mark sent so we don't re-check this event
+        await markRsvpCutoffSent(e.id);
+        continue;
+      }
+      for (const userId of recipientIds) {
+        try {
+          await sendPushToUser(
+            userId,
+            e.title,
+            `Are you coming to ${e.title}?`,
+            `/events/${e.id}`,
+          );
+          rsvpPingsSent.push(`${userId}:${e.id}`);
+        } catch (err) {
+          log.error({ userId, eventId: e.id, err }, "Failed to send RSVP ping");
+        }
+      }
+      await markRsvpCutoffSent(e.id);
+    }
+
+    const summaryEvents = await getEventsNeedingRsvpSummary();
+    for (const e of summaryEvents) {
+      if (!e.ownerId) continue;
+      const summary = await getRsvpSummary(e.id);
+      // Skip if organizer is the only recipient (no point)
+      const recipients = await getRsvpRecipients(e.id);
+      if (recipients.length <= 1) continue;
+      const title = e.title;
+      const body = `${summary.yes} confirmed, ${summary.no} declined, ${summary.pending} pending`;
+      try {
+        await sendPushToUser(e.ownerId, `${title} — attendance check`, body, `/events/${e.id}`);
+        rsvpSummariesSent.push(`${e.ownerId}:${e.id}`);
+      } catch (err) {
+        log.error({ eventId: e.id, err }, "Failed to send RSVP organizer summary push");
+      }
+    }
+  } catch (err) {
+    log.error({ err }, "Failed to process RSVP 48h/24h ticks");
+  }
+
   // Drain the notification job queue — must happen before marking reminders sent
   // so that if the cron is killed mid-run, reminders are not marked sent without push delivery
   let notificationJobsDrained = 0;
@@ -227,7 +282,7 @@ export const POST: APIRoute = async ({ request }) => {
   ]);
 
   return new Response(
-    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned }),
+    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent }),
     { headers: { "Content-Type": "application/json" } },
   );
 };

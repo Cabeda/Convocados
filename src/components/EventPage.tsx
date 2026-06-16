@@ -29,6 +29,8 @@ import {
 import type { EventData, Player, KnownPlayer } from "./event";
 import { PostGameBanner } from "./PostGameBanner";
 import type { PostGameStatus } from "./PostGameBanner";
+import { AttendanceCard } from "./event/AttendanceCard";
+import { PushPromptBanner } from "./PushPromptBanner";
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -625,6 +627,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 })}
               </Alert>
             )}
+
+            {/* #457 Push prompt banner — event-detail trigger */}
+            <PushPromptBanner followCount={0} forceOnEventDetail={isAuthenticated} />
+
+            {/* #457 Organizer-only attendance card (Owner + Admins) */}
+            {(isOwner || isAdmin) && <AttendanceCard eventId={eventId} />}
 
             {/* Header */}
             <EventHeader

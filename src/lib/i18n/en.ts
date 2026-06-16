@@ -611,7 +611,21 @@ const en = {
   logCostRemoved: "Cost was removed",
   logPaymentUpdated: "Payment status was updated",
   logRecurrenceReset: "Recurring game was reset",
+  logRsvpYes: "{actor} confirmed attendance",
+  logRsvpNo: "{actor} declined attendance",
   logAnonymous: "Someone",
+
+  // #457 RSVP
+  rsvpPromptTitle: "Are you coming to {title}?",
+  rsvpYes: "Yes",
+  rsvpNo: "No",
+  rsvpYesToast: "Got it — see you on the pitch",
+  rsvpNoToast: "Marked as not coming",
+  rsvpOrganizerSummary: "{yes} confirmed, {no} declined, {pending} pending",
+  rsvpOrganizerSummaryTitle: "{title} — attendance check",
+  attendanceCard: "Attendance",
+  attendanceEmpty: "RSVP requests will be sent 48 hours before kickoff.",
+  pushBlockedHint: "Notifications are blocked. Enable them in your browser settings to receive game reminders.",
 
   // Priority enrollment (#136)
   priorityEnrollment: "Priority Enrollment",

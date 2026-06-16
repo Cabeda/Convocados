@@ -563,7 +563,21 @@ const de: TranslationKeys = {
   logCostRemoved: "Die Kosten wurden entfernt",
   logPaymentUpdated: "Der Zahlungsstatus wurde aktualisiert",
   logRecurrenceReset: "Das wiederkehrende Spiel wurde zurückgesetzt",
+  logRsvpYes: "{actor} hat zugesagt",
+  logRsvpNo: "{actor} hat abgesagt",
   logAnonymous: "Jemand",
+
+  // #457 RSVP
+  rsvpPromptTitle: "Kommst du zu {title}?",
+  rsvpYes: "Ja",
+  rsvpNo: "Nein",
+  rsvpYesToast: "Notiert — bis auf dem Platz",
+  rsvpNoToast: "Als abwesend markiert",
+  rsvpOrganizerSummary: "{yes} zugesagt, {no} abgesagt, {pending} ausstehend",
+  rsvpOrganizerSummaryTitle: "{title} — Anwesenheitscheck",
+  attendanceCard: "Anwesenheit",
+  attendanceEmpty: "RSVP-Anfragen werden 48 Stunden vor dem Spiel gesendet.",
+  pushBlockedHint: "Benachrichtigungen sind blockiert. Aktiviere sie in den Browser-Einstellungen, um Spielerinnerungen zu erhalten.",
 
   // Priority enrollment (#136)
   priorityEnrollment: "Prioritätsanmeldung",
