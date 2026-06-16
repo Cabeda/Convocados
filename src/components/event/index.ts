@@ -1,6 +1,6 @@
 export { EventHeader } from "./EventHeader";
 export { PlayerList } from "./PlayerList";
-export { QuickJoin } from "./QuickJoin";
+export { PaymentNudgeDialog } from "./PaymentNudgeDialog";
 export { EventDialogs } from "./EventDialogs";
 export { PasswordPrompt } from "./PasswordPrompt";
 export { InlineEdit } from "./InlineEdit";

@@ -1,10 +1,10 @@
 {
   "name": "convocados",
-  "version": "3.94.1",
+  "version": "3.97.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
+    "dev": "node --env-file=.env node_modules/astro/bin/astro.mjs dev",
     "build": "astro build",
     "preview": "astro preview",
     "start": "sh ./scripts/start.sh",
@@ -17,10 +17,10 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:seed": "npx tsx prisma/seed.ts",
-    "db:seed:settle": "npx tsx prisma/seed-settle-demo.ts",
+    "db:seed": "sh -c 'set -a; . ./.env; set +a; npx tsx prisma/seed.ts'",
+    "db:seed:settle": "sh -c 'set -a; . ./.env; set +a; npx tsx prisma/seed-settle-demo.ts'",
     "db:pull-prod": "sh ./scripts/pull-prod-db.sh",
-    "dev:prod-db": "npm run db:pull-prod && DATABASE_URL=file:./prod-debug.db astro dev --host 0.0.0.0",
+    "dev:prod-db": "npm run db:pull-prod && DATABASE_URL=file:./prod-debug.db node --env-file=.env node_modules/.bin/astro dev --host 0.0.0.0",
     "lhci": "lhci autorun --config=lighthouserc.cjs",
     "k6:smoke": "k6 run k6/scripts/smoke.js",
     "k6:load": "k6 run k6/scripts/load.js",
@@ -78,5 +78,5 @@
     "vitest": "^3.2.6",
     "yaml": "^2.9.0"
   },
-  "packageManager": "pnpm@10.33.3"
+  "packageManager": "pnpm@11.6.0"
 }

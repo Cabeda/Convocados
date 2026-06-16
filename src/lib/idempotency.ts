@@ -10,9 +10,9 @@ import { createHash } from "node:crypto";
  *
  * The cache is in-process; a single Astro server instance is assumed
  * (Litestream + single VM). On horizontal scale, idempotency degrades to
- * "best effort" per instance — see ADR 0010.
+ * "best effort" per instance — see ADR 0012.
  *
- * @see docs/adr/0010-idempotency-middleware.md
+ * @see docs/adr/0012-idempotency-middleware.md
  */
 
 export const IDEMPOTENCY_HEADER = "Idempotency-Key";

@@ -11,7 +11,7 @@ web and Android apps. The endpoint is idempotent in effect (the
 in contract: a network retry of the same logical "add Alice" can return 409
 on the second attempt, which the client surfaces as a soft error in the
 `playerError` Alert. The issue is amplified by the new confirmation dialog
-(see ADR 0011), which is followed by an `addPlayer` call; on flaky networks
+(see ADR 0013), which is followed by an `addPlayer` call; on flaky networks
 the user can confirm once and see a misleading "duplicate" error from a retry
 the browser fired automatically.
 

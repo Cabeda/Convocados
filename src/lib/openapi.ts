@@ -380,7 +380,7 @@ export const openApiSpec = {
             name: "Idempotency-Key",
             in: "header",
             required: false,
-            description: "Optional client-generated UUID. Replays the cached 2xx response on retry with the same key + same body. Reusing the key with a different payload returns 422. See ADR 0010.",
+            description: "Optional client-generated UUID. Replays the cached 2xx response on retry with the same key + same body. Reusing the key with a different payload returns 422. See ADR 0012.",
             schema: { type: "string" },
           },
         ],

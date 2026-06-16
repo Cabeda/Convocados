@@ -34,20 +34,22 @@ const SPORTS = [
   "other",
 ];
 
+// Each venue has a {name, lat, lng} triple so the public-games map view can plot
+// them. Coordinates are approximate (Lisbon-area) — not real-world surveyed, just
+// spread enough to make the map useful in dev. Update both halves together.
 const LOCATIONS = [
-  "Riverside Astro, Pitch 1",
-  "Central Park Courts",
-  "Downtown Sports Hall",
-  "Beachside Arena",
-  "University Gym",
-  "Olympic Stadium, Field B",
-  "Sunset Recreation Center",
-  "Hilltop Tennis Club",
-  "Padel World, Court 3",
-  "Community Center Gym",
-  "Eastside Football Ground",
-  "Lakefront Sports Complex",
-  "",
+  { name: "Riverside Astro, Pitch 1", lat: 38.7075, lng: -9.1369 },
+  { name: "Central Park Courts", lat: 38.7000, lng: -9.1900 },
+  { name: "Downtown Sports Hall", lat: 38.7220, lng: -9.1390 },
+  { name: "Beachside Arena", lat: 38.6970, lng: -9.4220 },
+  { name: "University Gym", lat: 38.7530, lng: -9.1590 },
+  { name: "Olympic Stadium, Field B", lat: 38.7050, lng: -9.2540 },
+  { name: "Sunset Recreation Center", lat: 38.6800, lng: -9.3380 },
+  { name: "Hilltop Tennis Club", lat: 38.8000, lng: -9.3880 },
+  { name: "Padel World, Court 3", lat: 38.7170, lng: -9.1410 },
+  { name: "Community Center Gym", lat: 38.7390, lng: -9.1300 },
+  { name: "Eastside Football Ground", lat: 38.7750, lng: -9.0940 },
+  { name: "Lakefront Sports Complex", lat: 38.7680, lng: -9.0940 },
 ];
 
 const FIRST_NAMES = [
@@ -144,7 +146,7 @@ async function main() {
 
   for (let i = 0; i < 100; i++) {
     const sport = pick(SPORTS);
-    const location = pick(LOCATIONS);
+    const venue = pick(LOCATIONS);
     const maxPlayers = SPORT_MAX_PLAYERS[sport] ?? 10;
 
     // Spread dates: ~30% in the past, ~70% in the future
@@ -153,7 +155,7 @@ async function main() {
     const dateTime = new Date(now + offsetDays * 86400000);
     dateTime.setHours(offsetHours, 0, 0, 0);
 
-    const title = generateTitle(sport, location);
+    const title = generateTitle(sport, venue.name);
     const isPublic = Math.random() < 0.4;
     const isRecurring = Math.random() < 0.25;
     const balanced = Math.random() < 0.2;
@@ -168,7 +170,9 @@ async function main() {
     const event = await prisma.event.create({
       data: {
         title,
-        location,
+        location: venue.name,
+        latitude: venue.lat, // codeql[js/insecure-randomness] false-positive: dev seed data
+        longitude: venue.lng, // codeql[js/insecure-randomness] false-positive: dev seed data
         dateTime,
         maxPlayers,
         sport,
@@ -441,6 +445,8 @@ async function main() {
       data: {
         title: "Just Ended — Close the Game!",
         location: "Riverside Astro, Pitch 1",
+        latitude: 38.7075,
+        longitude: -9.1369,
         dateTime: justEndedDate,
         maxPlayers: justEndedMaxPlayers,
         sport: justEndedSport,

@@ -69,7 +69,7 @@ added one at a time by the manager (with the dialog). The "bulk endpoint"
   is in flight, it returns early. The caller surfaces a snackbar:
   `Adding {name} — please wait`.
 
-**Idempotency** (Q9, ADR 0010): the request carries an `Idempotency-Key`
+**Idempotency** (Q9, ADR 0012): the request carries an `Idempotency-Key`
 header (client-generated UUIDv4). The server's idempotency middleware
 replays the cached response on a network retry. The Android client sends
 the same header.
@@ -100,7 +100,7 @@ enforces Android parity.
   dropdown select → dialog, Enter / IconButton no-dialog.
 - Vitest component tests: `QuickJoin.test.tsx` (new) covers
   self-join has no dialog.
-- Vitest integration: covered by `idempotency.test.ts` (ADR 0010).
+- Vitest integration: covered by `idempotency.test.ts` (ADR 0012).
 - JUnit: `EventDetailViewModelTest.kt` asserts `Idempotency-Key` header
   on the outgoing request.
 - E2E (Playwright) and Compose UI tests are *not* in v1; filed as

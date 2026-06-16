@@ -169,3 +169,11 @@ _Avoid_: payment, ledger entry, journal line
 ## Extras Pot
 The per-Event running balance of *forfeited* credit and declared spends, in Event currency. Credited by `credit_expired` transactions; debited by `extras_declare` transactions the organizer enters. Visible to all members of the Event. The pot is an honest ledger, not a money account — the app never touches real funds.
 _Avoid_: surplus, organizer wallet, kitty
+
+## Invite
+A request to participate in a **Game**, sent to a person on behalf of the inviting **User** when a **Player** is being added by an Owner/Admin. Carried as a push notification (to a registered **User** whose email matches) or an email (to an unregistered address, asking them to register). Triggered automatically by the add-player action whenever the email resolves to a non-self **User** or is provided without resolving. Single-shot: not stored, not retried, not visible to the recipient before they accept. On the web/Android client, an Owner/Admin can also pick a contact from the device address book to populate the player's name and email in one step.
+_Avoid_: notify, ask to join, request access
+
+## EventInvite
+An entry in the per-**Game** access-bypass list. Grants the linked **User** access to a password-protected **Game** without supplying the event password. Distinct from `Invite` — this is about *access* to a private game, not *participation* in any game.
+_Avoid_: guest pass, share code
