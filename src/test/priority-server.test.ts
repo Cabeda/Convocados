@@ -99,6 +99,40 @@ describe("confirmSpot", () => {
     });
     expect(enrollment!.declineStreak).toBe(0);
   });
+
+  it("allows late confirmation of an expired spot before kickoff (#454)", async () => {
+    const { user, event } = await seedEventAndUser();
+    const pastDeadline = new Date(Date.now() - 1000);
+    await createConfirmations(event.id, [user.id], event.dateTime, pastDeadline);
+    await expireUnconfirmed();
+
+    const result = await confirmSpot(event.id, user.id, event.dateTime);
+    expect(result).not.toBeNull();
+    expect(result!.status).toBe("confirmed");
+  });
+
+  it("refuses late confirmation after the game has started (#454)", async () => {
+    const pastEvent = await prisma.event.create({
+      data: {
+        title: "Past Game", location: "Pitch", dateTime: new Date(Date.now() - 60000),
+        maxPlayers: 10, priorityEnabled: true, priorityThreshold: 70,
+        priorityWindow: 10, priorityMaxPercent: 50, priorityDeadlineHours: 24, priorityMinGames: 3,
+      },
+    });
+    const user = await prisma.user.create({
+      data: { id: "prio-late", name: "Late", email: "l@t.com", emailVerified: true },
+    });
+    await prisma.priorityEnrollment.create({
+      data: { eventId: pastEvent.id, userId: user.id, source: "auto", optedIn: true },
+    });
+    const pastDeadline = new Date(Date.now() - 120000);
+    await createConfirmations(pastEvent.id, [user.id], pastEvent.dateTime, pastDeadline);
+    await expireUnconfirmed();
+
+    const result = await confirmSpot(pastEvent.id, user.id, pastEvent.dateTime);
+    expect(result).not.toBeNull();
+    expect(result!.status).toBe("expired");
+  });
 });
 
 describe("declineSpot", () => {

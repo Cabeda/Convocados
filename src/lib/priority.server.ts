@@ -116,7 +116,24 @@ export async function confirmSpot(eventId: string, userId: string, gameDate: Dat
     where: { eventId_userId_gameDate: { eventId, userId, gameDate } },
   });
   if (!confirmation) return null;
-  if (confirmation.status !== "pending") return confirmation;
+  if (confirmation.status !== "pending") {
+    // #454: allow late confirmation of an expired spot, up until kickoff.
+    // The deadline is a nudge, not a hard wall — if the game has not
+    // started yet, the player can still claim their spot.
+    const gameStarted = gameDate.getTime() <= Date.now();
+    if (confirmation.status === "expired" && !gameStarted) {
+      const updated = await prisma.priorityConfirmation.update({
+        where: { id: confirmation.id },
+        data: { status: "confirmed", respondedAt: new Date() },
+      });
+      await prisma.priorityEnrollment.updateMany({
+        where: { eventId, userId },
+        data: { declineStreak: 0 },
+      });
+      return updated;
+    }
+    return confirmation;
+  }
 
   const updated = await prisma.priorityConfirmation.update({
     where: { id: confirmation.id },

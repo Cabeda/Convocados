@@ -386,6 +386,58 @@ describe("POST /api/events/:id/priority/confirm", () => {
     const res = await confirmPriority(ctx({ id: event.id }, {}));
     expect(res.status).toBe(404);
   });
+
+  it("allows late confirmation of an expired spot before kickoff (#454)", async () => {
+    const owner = await seedUser();
+    const player = await seedUser({ name: "LatePlayer" });
+    const gameDate = new Date(Date.now() + 3600_000);
+    const event = await seedEvent(owner.id, { priorityEnabled: true, dateTime: gameDate });
+
+    await testPrisma.priorityEnrollment.create({
+      data: { eventId: event.id, userId: player.id, source: "auto" },
+    });
+    await testPrisma.priorityConfirmation.create({
+      data: {
+        eventId: event.id,
+        userId: player.id,
+        gameDate,
+        status: "expired",
+        notifiedAt: new Date(),
+        deadline: new Date(Date.now() - 60_000),
+      },
+    });
+
+    mockAuth(player.id);
+    const res = await confirmPriority(ctx({ id: event.id }, {}));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("confirmed");
+  });
+
+  it("rejects confirmation of an expired spot after kickoff (#454)", async () => {
+    const owner = await seedUser();
+    const player = await seedUser({ name: "TooLate" });
+    const gameDate = new Date(Date.now() - 60_000);
+    const event = await seedEvent(owner.id, { priorityEnabled: true, dateTime: gameDate });
+
+    await testPrisma.priorityEnrollment.create({
+      data: { eventId: event.id, userId: player.id, source: "auto" },
+    });
+    await testPrisma.priorityConfirmation.create({
+      data: {
+        eventId: event.id,
+        userId: player.id,
+        gameDate,
+        status: "expired",
+        notifiedAt: new Date(),
+        deadline: new Date(Date.now() - 120_000),
+      },
+    });
+
+    mockAuth(player.id);
+    const res = await confirmPriority(ctx({ id: event.id }, {}));
+    expect(res.status).toBe(409);
+  });
 });
 
 describe("POST /api/events/:id/priority/decline", () => {

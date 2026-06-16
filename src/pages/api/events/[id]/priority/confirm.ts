@@ -21,6 +21,14 @@ export const POST: APIRoute = async ({ params, request }) => {
   const result = await confirmSpot(event.id, session.user.id, event.dateTime);
   if (!result) return Response.json({ error: "No pending confirmation found." }, { status: 404 });
 
+  // #454: if the game has already started, an expired spot stays expired.
+  if (result.status === "expired" && event.dateTime.getTime() <= Date.now()) {
+    return Response.json(
+      { error: "The game has already started — you can no longer claim a priority spot." },
+      { status: 409 },
+    );
+  }
+
   if (result.status === "confirmed") {
     // Auto-add player to the event if not already there
     const existingPlayer = await prisma.player.findFirst({
