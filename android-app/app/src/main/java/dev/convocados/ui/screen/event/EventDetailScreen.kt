@@ -403,6 +403,13 @@ private fun parseApiErrorMessage(e: Throwable): String? {
     return match?.groupValues?.get(1)
 }
 
+/**
+ * Top-level so the type can be referenced both at the call site of
+ * `mutableStateOf` and from the AlertDialog body (forward references
+ * inside a composable are not always resolved by the Kotlin compiler).
+ */
+internal data class PendingAdd(val name: String, val email: String? = null)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun EventDetailScreen(
@@ -438,8 +445,6 @@ fun EventDetailScreen(
     // Pending add intent for the confirmation dialog. Lifted to the top-level
     // composable so the AlertDialog can read it from anywhere in the screen.
     var pendingAdd by remember { mutableStateOf<PendingAdd?>(null) }
-
-    data class PendingAdd(val name: String, val email: String? = null)
 
     LaunchedEffect(state.teamMoveUndo) {
         val undo = state.teamMoveUndo ?: return@LaunchedEffect
