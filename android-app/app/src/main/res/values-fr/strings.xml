@@ -24,6 +24,12 @@
     <string name="bench_count">Remplaçants (%1$d)</string>
     <string name="add_player_placeholder">Ajouter le nom du joueur</string>
     <string name="add_button">Ajouter</string>
+    <string name="add_player_confirm_title">Ajouter %1$s ?</string>
+    <string name="add_player_confirm_desc">Ajouter %1$s à %2$s ?</string>
+    <string name="add_player_confirm_desc_email">Ajouter %1$s à %2$s ? Une invitation sera envoyée par e-mail à %3$s.</string>
+    <string name="add_player_confirm_desc_bench">Ajouter %1$s à %2$s ? L\'effectif est complet — %1$s sera ajouté au banc.</string>
+    <string name="add_player_confirm_desc_both">Ajouter %1$s à %2$s ? Une invitation sera envoyée par e-mail à %3$s. L\'effectif est complet — %1$s sera ajouté au banc.</string>
+    <string name="add_player_in_flight">Ajout de %1$s — patiente</string>
     <plurals name="see_all_games">
         <item quantity="one">Voir %1$d match →</item>
         <item quantity="other">Voir les %1$d matchs →</item>

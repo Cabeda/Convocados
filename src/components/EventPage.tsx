@@ -23,6 +23,8 @@ import {
   EventDialogs,
   PasswordPrompt,
   useCountdown,
+  AddPlayerConfirmDialog,
+  type AddPlayerIntent,
 } from "./event";
 import type { EventData, Player, KnownPlayer } from "./event";
 import { PostGameBanner } from "./PostGameBanner";
@@ -54,6 +56,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [_postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
   const [paymentExpanded, setPaymentExpanded] = useState<boolean | undefined>(undefined);
   const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
+
+  // Live invite-email value from PlayerList so the confirmation dialog can
+  // mention the email footnote when the user has typed an email.
+  const inviteEmailRef = useRef<string>("");
 
   // ── ELO ratings for balanced mode ───────────────────────────────────────────
   const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
@@ -193,10 +199,32 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ── Player CRUD ─────────────────────────────────────────────────────────────
 
-  const addPlayer = async (name: string, linkToAccount = false, email?: string) => {
+  // In-flight guard: a single addPlayer call is allowed at a time.
+  // Subsequent calls (from a different chip, dropdown row, or confirm button)
+  // return early and surface an "in flight" snackbar.
+  const addInFlightRef = useRef<{ name: string; idempotencyKey: string } | null>(null);
+  const [addInFlightName, setAddInFlightName] = useState<string | null>(null);
+
+  // Confirmation dialog state. Lifted to EventPage so the dialog content
+  // (bench/email footnotes) can read the same event state that addPlayer uses.
+  const [addIntent, setAddIntent] = useState<AddPlayerIntent | null>(null);
+
+  const performAdd = async (
+    name: string,
+    linkToAccount: boolean,
+    email: string | undefined,
+    idempotencyKey: string,
+  ) => {
+    if (addInFlightRef.current) {
+      setSnackbar(t("addPlayerInFlight", { name: addInFlightRef.current.name }));
+      return;
+    }
     if (!name.trim() && !email?.trim()) return;
     setPlayerError(null);
     const trimmed = name.trim().slice(0, 50);
+
+    addInFlightRef.current = { name: trimmed || email!, idempotencyKey };
+    setAddInFlightName(trimmed || email!);
 
     // Optimistic update (only if we have a name to show)
     if (trimmed) {
@@ -207,23 +235,66 @@ export default function EventPage({ eventId }: { eventId: string }) {
       });
     }
 
-    const res = await fetch(`/api/events/${eventId}/players`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Client-Id": clientIdRef.current },
-      body: JSON.stringify({ name: trimmed, linkToAccount, ...(email ? { email: email.trim() } : {}) }),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      setPlayerError(json.error);
-      fetchEvent(); // revert optimistic update
+    try {
+      const res = await fetch(`/api/events/${eventId}/players`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Client-Id": clientIdRef.current,
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({ name: trimmed, linkToAccount, ...(email ? { email: email.trim() } : {}) }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setPlayerError(json.error);
+        fetchEvent(); // revert optimistic update
+        return;
+      }
+      const resolvedName: string | undefined = json.resolvedName;
+      if (resolvedName && resolvedName !== trimmed && trimmed) {
+        setSnackbar(`Added ${resolvedName} ✓`);
+      }
+      addKnownName(resolvedName ?? trimmed);
+      fetchEvent();
+    } finally {
+      addInFlightRef.current = null;
+      setAddInFlightName(null);
+    }
+  };
+
+  /**
+   * Direct add: bypasses the confirmation dialog. Used by Quick Join
+   * (self-initiated) and by the Enter/IconButton paths in PlayerList
+   * (typing is itself a deliberate action).
+   */
+  const addPlayer = async (name: string, linkToAccount = false, email?: string) => {
+    const idempotencyKey = crypto.randomUUID();
+    await performAdd(name, linkToAccount, email, idempotencyKey);
+  };
+
+  /**
+   * Request an add that should be confirmed. Opens the dialog; the actual
+   * add is dispatched from the dialog's confirm handler. Used by chip and
+   * dropdown paths in PlayerList / PlayerAutocomplete (single-tap surfaces).
+   */
+  const requestAddPlayer = (intent: AddPlayerIntent) => {
+    if (addInFlightRef.current) {
+      setSnackbar(t("addPlayerInFlight", { name: addInFlightRef.current.name }));
       return;
     }
-    const resolvedName: string | undefined = json.resolvedName;
-    if (resolvedName && resolvedName !== trimmed && trimmed) {
-      setSnackbar(`Added ${resolvedName} ✓`);
-    }
-    addKnownName(resolvedName ?? trimmed);
-    fetchEvent();
+    setAddIntent(intent);
+  };
+
+  const handleConfirmAdd = async (intent: AddPlayerIntent) => {
+    const idempotencyKey = crypto.randomUUID();
+    const confirmedName = intent.name;
+    setAddIntent(null);
+    await performAdd(intent.name, false, intent.email, idempotencyKey);
+    // If performAdd did nothing because of the in-flight guard, the snackbar
+    // already informed the user. Otherwise, use the resolved name from
+    // performAdd for the snackbar (the snackbar is set inside performAdd).
+    void confirmedName;
   };
 
   const removePlayer = async (playerId: string) => {
@@ -586,12 +657,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
               playerError={playerError}
               onPlayerErrorChange={setPlayerError}
               onAddPlayer={(name, email) => addPlayer(name, false, email)}
+              onRequestAdd={requestAddPlayer}
               onRemovePlayer={removePlayer}
               onReorderPlayers={reorderPlayers}
               onResetPlayerOrder={resetPlayerOrder}
               onRandomize={doRandomize}
               onConfirmReRandomize={() => setConfirmOpen(true)}
               canRemovePlayer={canRemovePlayer}
+              inviteEmail={inviteEmailRef.current}
+              onInviteEmailChange={(v) => { inviteEmailRef.current = v; }}
             />
 
             {/* Teams — shown below players after randomization */}
@@ -636,6 +710,16 @@ export default function EventPage({ eventId }: { eventId: string }) {
           undoData={undoData}
           onUndoDismiss={() => setUndoData(null)}
           onUndo={handleUndo}
+        />
+
+        <AddPlayerConfirmDialog
+          intent={addIntent}
+          eventName={event.title}
+          isBench={event.players.length >= event.maxPlayers}
+          hasInviteEmail={!!(addIntent?.email && addIntent.email.trim())}
+          isAdding={!!addInFlightName}
+          onConfirm={handleConfirmAdd}
+          onClose={() => setAddIntent(null)}
         />
       </ResponsiveLayout>
     </ThemeModeProvider>

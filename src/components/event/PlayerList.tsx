@@ -15,6 +15,7 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import type { Player, PlayerOption } from "./types";
+import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 
 interface PlayerSuggestion {
   name: string;
@@ -31,24 +32,37 @@ interface Props {
   playerError: string | null;
   onPlayerErrorChange: (error: string | null) => void;
   onAddPlayer: (name: string, email?: string) => Promise<void>;
+  /** Trigger the confirmation dialog. Used by single-tap paths (chip, dropdown). */
+  onRequestAdd: (intent: AddPlayerIntent) => void;
   onRemovePlayer: (playerId: string) => Promise<void>;
   onReorderPlayers: (playerIds: string[]) => Promise<void>;
   onResetPlayerOrder: () => Promise<void>;
   onRandomize: () => void;
   onConfirmReRandomize: () => void;
   canRemovePlayer: (player: Player) => boolean;
+  /** Live invite-email value, used by the confirmation dialog's email footnote. */
+  inviteEmail?: string;
+  onInviteEmailChange?: (value: string) => void;
 }
 
 export function PlayerList({
   players, maxPlayers, isOwner, hasTeams,
   availableSuggestions, playerError, onPlayerErrorChange,
-  onAddPlayer, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
-  onRandomize, onConfirmReRandomize, canRemovePlayer,
+  onAddPlayer, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
+  onRandomize, onConfirmReRandomize, canRemovePlayer, inviteEmail, onInviteEmailChange,
 }: Props) {
   const t = useT();
   const theme = useTheme();
   const [playerInput, setPlayerInput] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteEmailLocal, setInviteEmailLocal] = useState("");
+  // The local state is the source of truth inside the component; we forward
+  // changes to the parent via onInviteEmailChange so the confirmation dialog
+  // can read the latest value.
+  const setInviteEmail = (v: string) => {
+    setInviteEmailLocal(v);
+    onInviteEmailChange?.(v);
+  };
+  const inviteEmailDisplay = inviteEmail ?? inviteEmailLocal;
 
   // ── Player reorder drag state ──────────────────────────────────────────────
   const [dragPlayer, setDragPlayer] = useState<{ id: string; index: number } | null>(null);
@@ -140,7 +154,8 @@ export function PlayerList({
             if (typeof newValue === "string") {
               if (newValue.trim()) { onAddPlayer(newValue); setPlayerInput(""); }
             } else {
-              onAddPlayer(newValue.name);
+              // Dropdown row tap — single-tap surface, requires confirmation.
+              onRequestAdd({ kind: "single", name: newValue.name, email: inviteEmailDisplay.trim() || undefined, source: "dropdown" });
               setPlayerInput("");
             }
           }}
@@ -148,7 +163,7 @@ export function PlayerList({
             <TextField
               {...params}
               variant="outlined"
-              placeholder={inviteEmail.trim() ? t("addPlayerPlaceholderOptional") : t("addPlayerPlaceholder")}
+              placeholder={inviteEmailDisplay.trim() ? t("addPlayerPlaceholderOptional") : t("addPlayerPlaceholder")}
               helperText={t("addPlayerHelper")}
               fullWidth
               inputProps={{ ...params.inputProps, maxLength: 50 }}
@@ -156,7 +171,7 @@ export function PlayerList({
                 if (e.key === "Enter") {
                   const trimmed = playerInput.trim();
                   // Allow submission with empty name when email is provided
-                  if (!trimmed && !inviteEmail.trim()) return;
+                  if (!trimmed && !inviteEmailDisplay.trim()) return;
                   if (trimmed) {
                     const hasExactMatch = availableSuggestions.some(
                       (s) => s.name.toLowerCase() === trimmed.toLowerCase()
@@ -169,17 +184,9 @@ export function PlayerList({
                   }
                   e.preventDefault();
                   e.stopPropagation();
-                  onAddPlayer(trimmed, inviteEmail.trim() || undefined);
+                  onAddPlayer(trimmed, inviteEmailDisplay.trim() || undefined);
                   setPlayerInput("");
                   setInviteEmail("");
-                }
-              }}
-              onPaste={(e) => {
-                const text = e.clipboardData.getData("Text");
-                const names = text.split("\n").map((n) => n.trim()).filter(Boolean);
-                if (names.length > 1) {
-                  e.preventDefault();
-                  Promise.all(names.map((n) => onAddPlayer(n))).then(() => setPlayerInput(""));
                 }
               }}
               InputProps={{
@@ -187,8 +194,8 @@ export function PlayerList({
                 endAdornment: (
                   <InputAdornment position="end">
                     <IconButton color="primary" edge="end"
-                      disabled={!playerInput.trim() && !inviteEmail.trim()}
-                      onClick={() => { onAddPlayer(playerInput.trim(), inviteEmail.trim() || undefined); setPlayerInput(""); setInviteEmail(""); }}>
+                      disabled={!playerInput.trim() && !inviteEmailDisplay.trim()}
+                      onClick={() => { onAddPlayer(playerInput.trim(), inviteEmailDisplay.trim() || undefined); setPlayerInput(""); setInviteEmail(""); }}>
                       <PersonAddIcon />
                     </IconButton>
                   </InputAdornment>
@@ -233,8 +240,10 @@ export function PlayerList({
           size="small"
           variant="outlined"
           fullWidth
-          value={inviteEmail}
-          onChange={(e) => setInviteEmail(e.target.value)}
+          value={inviteEmailDisplay}
+          onChange={(e) => {
+            setInviteEmail(e.target.value);
+          }}
           placeholder={t("inviteByEmailPlaceholder")}
           helperText={t("inviteByEmailHelper")}
           inputProps={{ inputMode: "email", maxLength: 120 }}
@@ -255,10 +264,11 @@ export function PlayerList({
                   label={s.name}
                   variant="outlined"
                   size="small"
-                  onClick={() => { onAddPlayer(s.name); }}
+                  onClick={() => { onRequestAdd({ kind: "single", name: s.name, email: inviteEmailDisplay.trim() || undefined, source: "chip" }); }}
                   title={s.userId ? t("protectedPlayer") : undefined}
                   sx={{
                     cursor: "pointer",
+                    minHeight: 32,
                     "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
                   }}
                 />

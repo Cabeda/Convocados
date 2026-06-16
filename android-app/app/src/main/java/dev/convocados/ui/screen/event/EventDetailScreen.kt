@@ -218,8 +218,11 @@ class EventDetailViewModel @Inject constructor(
     }
 
     fun addPlayer(eventId: String, name: String, link: Boolean = true, email: String? = null) {
+        // Generate a fresh UUID per add. Server replays the cached 2xx response
+        // if the same key + same body is sent twice (e.g. on a network retry).
+        val idempotencyKey = java.util.UUID.randomUUID().toString()
         viewModelScope.launch {
-            repository.addPlayer(eventId, name, link, email)
+            repository.addPlayer(eventId, name, link, email, idempotencyKey)
                 .onSuccess { resolvedName ->
                     _state.value = _state.value.copy(addedPlayerName = resolvedName ?: name)
                     // Auto-open payment dialog after join if preference is set
@@ -432,6 +435,11 @@ fun EventDetailScreen(
     var scoreTwo by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val snackbarHostState = remember { SnackbarHostState() }
+    // Pending add intent for the confirmation dialog. Lifted to the top-level
+    // composable so the AlertDialog can read it from anywhere in the screen.
+    var pendingAdd by remember { mutableStateOf<PendingAdd?>(null) }
+
+    data class PendingAdd(val name: String, val email: String? = null)
 
     LaunchedEffect(state.teamMoveUndo) {
         val undo = state.teamMoveUndo ?: return@LaunchedEffect
@@ -777,7 +785,7 @@ fun EventDetailScreen(
                         if (suggestions.isNotEmpty() && newPlayer.isBlank()) {
                             Row(modifier = Modifier.padding(top = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 suggestions.forEach { s ->
-                                    AssistChip(onClick = { viewModel.addPlayer(eventId, s.name) }, label = { Text("${s.name} (${s.gamesPlayed}g)") })
+                                    AssistChip(onClick = { pendingAdd = PendingAdd(s.name) }, label = { Text("${s.name} (${s.gamesPlayed}g)") })
                                 }
                             }
                         }
@@ -873,7 +881,7 @@ fun EventDetailScreen(
                                             filteredSuggestions.forEach { s ->
                                                 Text(
                                                     stringResource(R.string.player_games_count, s.name, s.gamesPlayed),
-                                                    modifier = Modifier.fillMaxWidth().clickable { viewModel.addPlayer(eventId, s.name); newPlayer = "" }.padding(horizontal = 16.dp, vertical = 10.dp),
+                                                    modifier = Modifier.fillMaxWidth().clickable { pendingAdd = PendingAdd(s.name); newPlayer = "" }.padding(horizontal = 16.dp, vertical = 10.dp),
                                                     color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium,
                                                 )
                                             }
@@ -912,6 +920,42 @@ fun EventDetailScreen(
                 }
             }
         }
+    }
+
+    // ── Add-Player Confirmation Dialog ───────────────────────────────────
+    val pending = pendingAdd
+    if (pending != null) {
+        val eventForDialog = state.event
+        val activeCount = eventForDialog?.players?.size ?: 0
+        val max = eventForDialog?.maxPlayers ?: 0
+        val isBench = activeCount >= max
+        val email = pending.email
+        val bodyResId = when {
+            email != null && isBench -> R.string.add_player_confirm_desc_both
+            email != null -> R.string.add_player_confirm_desc_email
+            isBench -> R.string.add_player_confirm_desc_bench
+            else -> R.string.add_player_confirm_desc
+        }
+        val eventName = eventForDialog?.title ?: ""
+        AlertDialog(
+            onDismissRequest = { pendingAdd = null },
+            title = { Text(stringResource(R.string.add_player_confirm_title, pending.name)) },
+            text = {
+                Text(
+                    if (email != null) stringResource(bodyResId, pending.name, eventName, email)
+                    else stringResource(bodyResId, pending.name, eventName),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email)
+                    pendingAdd = null
+                }) { Text(stringResource(R.string.add_button)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingAdd = null }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
     }
 
     // ── Payment Nudge Dialog ──────────────────────────────────────────────

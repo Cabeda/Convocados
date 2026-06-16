@@ -111,6 +111,14 @@ A `PlayerPayment` (and each entry in a `GameHistory.paymentsSnapshot`) moves thr
 
 The Owner/Admin remains the single source of truth for money actually received; `sent` is a courtesy signal that gives the payer closure and gives the organizer a "confirm received" worklist. It never auto-promotes to `paid`.
 
+## Manager-initiated add
+A Player record created by the Event Owner or an Admin acting on behalf of someone else — typically a guest with no Convocados account, or a registered user the organizer is adding. Distinct from a self-initiated add (Quick Join, Claim), where the player themselves triggered the action.
+
+Domain consequences of the distinction:
+- **Confirmation**: manager-initiated adds surface a confirmation dialog in the web and Android apps; self-initiated adds do not. The misclick surface lives almost entirely in the manager path.
+- **Auto-follow**: a manager-initiated add does **not** create an `EventFollow` on the added user's behalf; a self-initiated add does.
+- **Payment enforcement**: manager-initiated adds always bypass the outstanding balance gate; self-initiated adds respect it.
+
 ## Payment enforcement level
 A per-Game setting controlling how the Outstanding Balance is surfaced at join time. Stored on `Event`. Levels:
 - **off** — balance not surfaced at join; current behaviour.

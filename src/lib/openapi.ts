@@ -374,13 +374,23 @@ export const openApiSpec = {
       post: {
         summary: "Add a player to the event",
         tags: ["Players"],
-        parameters: [eventIdParam],
+        parameters: [
+          eventIdParam,
+          {
+            name: "Idempotency-Key",
+            in: "header",
+            required: false,
+            description: "Optional client-generated UUID. Replays the cached 2xx response on retry with the same key + same body. Reusing the key with a different payload returns 422. See ADR 0010.",
+            schema: { type: "string" },
+          },
+        ],
         requestBody: {
           required: true,
-          content: { "application/json": { schema: { type: "object", required: ["name"], properties: { name: { type: "string" } } } } },
+          content: { "application/json": { schema: { type: "object", required: ["name"], properties: { name: { type: "string" }, linkToAccount: { type: "boolean" }, email: { type: "string" } } } } },
         },
         responses: {
           "200": { description: "Player added" },
+          "422": { description: "Idempotency-Key reused with different payload" },
           ...errorResponses,
         },
       },

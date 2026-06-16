@@ -5,18 +5,26 @@ import ShieldIcon from "@mui/icons-material/Shield";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import type { PlayerOption } from "./types";
+import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
+  /** Direct add (Enter / IconButton / create-option Enter). No confirmation. */
   onAdd: (name: string) => void;
+  /** Confirm-required add (dropdown row tap). Optional — falls back to onAdd. */
+  onRequestAdd?: (intent: AddPlayerIntent) => void;
   suggestions: { name: string; gamesPlayed: number; userId?: string | null }[];
   disabled?: boolean;
   label?: string;
 }
 
-export function PlayerAutocomplete({ value, onChange, onAdd, suggestions, disabled, label }: Props) {
+export function PlayerAutocomplete({ value, onChange, onAdd, onRequestAdd, suggestions, disabled, label }: Props) {
   const t = useT();
+  const dispatchAdd = (name: string) => {
+    if (onRequestAdd) onRequestAdd({ kind: "single", name, source: "dropdown" });
+    else onAdd(name);
+  };
 
   return (
     <Autocomplete<PlayerOption, false, false, true>
@@ -49,7 +57,13 @@ export function PlayerAutocomplete({ value, onChange, onAdd, suggestions, disabl
       onChange={(_, newValue) => {
         if (!newValue) return;
         const name = typeof newValue === "string" ? newValue.trim() : newValue.name;
-        if (name) { onAdd(name); onChange(""); }
+        if (name) {
+          // Dropdown row tap — single-tap surface, requires confirmation if
+          // a request handler is provided; otherwise direct add (e.g. for
+          // historical-game dialogs that don't have the confirmation flow).
+          dispatchAdd(name);
+          onChange("");
+        }
       }}
       disabled={disabled}
       renderInput={(params) => (
