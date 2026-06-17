@@ -7,8 +7,14 @@ const log = createLogger("rsvp");
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-/** 30 days. Re-prompt floor after an in-app banner dismissal. */
-export const PUSH_PROMPT_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+/** 14 days. Re-prompt floor after an in-app banner dismissal.
+ *  Was 30d in v1 (#457); tightened to 14d after push-conversion data showed the
+ *  30-day gap let the dismissed cohort drift out of the habit before re-prompt. */
+export const PUSH_PROMPT_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** 7 days. Accounts younger than this skip the cooldown gate entirely on first
+ *  high-intent surface — fresh users are most receptive to enabling push. */
+export const FRESH_ACCOUNT_DAYS = 7;
 
 /** Rolling 7-day window for the "engagement accelerator" rule. */
 export const APP_OPEN_LOOKBACK_DAYS = 7;
@@ -166,6 +172,17 @@ export async function userHasPendingRsvp(userId: string, now: Date = new Date())
   return !!row;
 }
 
+/** Number of whole days since the user account was created (UTC, fractional). */
+export async function userAccountAgeDays(userId: string, now: Date = new Date()): Promise<number> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { createdAt: true },
+  });
+  if (!u) return Number.POSITIVE_INFINITY;
+  const ms = now.getTime() - u.createdAt.getTime();
+  return ms / (24 * 60 * 60 * 1000);
+}
+
 // ─── Push prompt state ─────────────────────────────────────────────────────
 
 export async function getPushPromptState(userId: string): Promise<PushPromptState> {
@@ -185,10 +202,12 @@ export async function setPushPromptState(userId: string, state: PushPromptState)
 /**
  * Should the soft banner appear for this user on this page render?
  * - granted / denied → never (granted = no banner; denied = show "blocked" hint instead, separate branch).
- * - dismissed + <30d → false (cooldown).
- * - dismissed + ≥30d → true.
- * - default → true (subject to the 30d cooldown on future dismissals).
+ * - dismissed + <14d → false (cooldown).
+ * - dismissed + ≥14d → true.
+ * - default → true (subject to the 14d cooldown on future dismissals).
  * - Accelerator: dismissed + ≥3 app-open days in last 7d + has pending RSVP → true regardless of cooldown.
+ * - Fresh account: account age ≤ FRESH_ACCOUNT_DAYS → true even within cooldown
+ *   (first-7d onboarding — skip the gate for new signups).
  */
 export async function shouldShowPushPrompt(
   userId: string,
@@ -197,6 +216,10 @@ export async function shouldShowPushPrompt(
 ): Promise<boolean> {
   const state = await getPushPromptState(userId);
   if (state === "granted" || state === "denied") return false;
+
+  // Fresh account bypass — applies to dismissed AND default states.
+  const ageDays = await userAccountAgeDays(userId, now);
+  if (ageDays <= FRESH_ACCOUNT_DAYS) return true;
 
   if (state === "dismissed") {
     const u = await prisma.user.findUnique({

@@ -578,6 +578,8 @@ const it: TranslationKeys = {
   attendanceCard: "Presenze",
   attendanceEmpty: "Le richieste RSVP saranno inviate 48 ore prima della partita.",
   pushBlockedHint: "Le notifiche sono bloccate. Attivale nelle impostazioni del browser per ricevere i promemoria delle partite.",
+  pushPromptHighIntentBody: "Hai un RSVP in sospeso. Attiva le notifiche così ti avvisiamo prima del fischio d'inizio se qualcosa cambia.",
+  pushPromptTitle: "Vuoi restare aggiornato?",
 
   // Priority enrollment (#136)
   priorityEnrollment: "Iscrizione Prioritaria",

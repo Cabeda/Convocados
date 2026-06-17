@@ -578,6 +578,8 @@ const de: TranslationKeys = {
   attendanceCard: "Anwesenheit",
   attendanceEmpty: "RSVP-Anfragen werden 48 Stunden vor dem Spiel gesendet.",
   pushBlockedHint: "Benachrichtigungen sind blockiert. Aktiviere sie in den Browser-Einstellungen, um Spielerinnerungen zu erhalten.",
+  pushPromptHighIntentBody: "Du hast eine offene RSVP. Aktiviere Benachrichtigungen, damit wir dich vor dem Anpfiff informieren, falls sich etwas ändert.",
+  pushPromptTitle: "Auf dem Laufenden bleiben?",
 
   // Priority enrollment (#136)
   priorityEnrollment: "Prioritätsanmeldung",

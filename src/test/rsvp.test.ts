@@ -10,12 +10,14 @@ import {
   getEventsNeedingRsvpPing,
   getEventsNeedingRsvpSummary,
   userHasPendingRsvp,
+  userAccountAgeDays,
   recordAppOpen,
   countAppOpenDays,
   setPushPromptState,
   getPushPromptState,
   shouldShowPushPrompt,
   PUSH_PROMPT_COOLDOWN_MS,
+  FRESH_ACCOUNT_DAYS,
   APP_OPEN_LOOKBACK_DAYS,
   APP_OPEN_THRESHOLD,
 } from "~/lib/rsvp.server";
@@ -35,12 +37,16 @@ beforeEach(async () => {
 });
 
 async function seedUser(overrides: Record<string, unknown> = {}) {
+  // Default to an account older than FRESH_ACCOUNT_DAYS so existing tests
+  // don't accidentally hit the #463 first-7d onboarding bypass.
+  const createdAt = new Date(Date.now() - 30 * 86400_000);
   return prisma.user.create({
     data: {
       id: `u-${Math.random().toString(36).slice(2, 8)}`,
       name: "Alice",
       email: `a-${Math.random().toString(36).slice(2, 8)}@t.com`,
       emailVerified: true,
+      createdAt,
       ...overrides,
     },
   });
@@ -258,7 +264,8 @@ describe("recordAppOpen + countAppOpenDays", () => {
   it("exposes the constants used by the re-prompt rule", () => {
     expect(APP_OPEN_LOOKBACK_DAYS).toBe(7);
     expect(APP_OPEN_THRESHOLD).toBe(3);
-    expect(PUSH_PROMPT_COOLDOWN_MS).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(PUSH_PROMPT_COOLDOWN_MS).toBe(14 * 24 * 60 * 60 * 1000);
+    expect(FRESH_ACCOUNT_DAYS).toBe(7);
   });
 });
 
@@ -332,14 +339,46 @@ describe("push prompt state machine", () => {
     expect(await shouldShowPushPrompt(user.id, false)).toBe(false);
   });
 
-  it("shouldShowPushPrompt: dismissed, dismissal older than cooldown → true (30d floor unlocks)", async () => {
+  it("shouldShowPushPrompt: dismissed, dismissal older than cooldown → true (14d floor unlocks)", async () => {
     const user = await seedUser();
-    // Backdate the dismissal by 31 days
-    const longAgo = new Date(Date.now() - 31 * 86400_000);
+    // Backdate the dismissal by 15 days (cooldown is 14d)
+    const longAgo = new Date(Date.now() - 15 * 86400_000);
     await prisma.user.update({
       where: { id: user.id },
       data: { pushPromptState: "dismissed", pushPromptLastDismissedAt: longAgo },
     });
     expect(await shouldShowPushPrompt(user.id, false)).toBe(true);
+  });
+
+  it("shouldShowPushPrompt: fresh account (≤7d) bypasses cooldown (#463 first-7d onboarding)", async () => {
+    const user = await seedUser();
+    // Dismissed 1 day ago — within cooldown — would normally be false
+    const recent = new Date(Date.now() - 1 * 86400_000);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { pushPromptState: "dismissed", pushPromptLastDismissedAt: recent },
+    });
+    expect(await shouldShowPushPrompt(user.id, false)).toBe(false);
+
+    // But if the account is ≤7 days old, bypass the cooldown
+    const fresh = new Date(Date.now() - 3 * 86400_000);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { createdAt: fresh },
+    });
+    expect(await shouldShowPushPrompt(user.id, false)).toBe(true);
+  });
+
+  it("userAccountAgeDays returns fractional days since createdAt", async () => {
+    const user = await seedUser();
+    const fiveDaysAgo = new Date(Date.now() - 5 * 86400_000);
+    await prisma.user.update({ where: { id: user.id }, data: { createdAt: fiveDaysAgo } });
+    const age = await userAccountAgeDays(user.id);
+    expect(age).toBeGreaterThan(4.99);
+    expect(age).toBeLessThan(5.01);
+  });
+
+  it("userAccountAgeDays returns Infinity for non-existent user", async () => {
+    expect(await userAccountAgeDays("does-not-exist")).toBe(Number.POSITIVE_INFINITY);
   });
 });

@@ -578,6 +578,8 @@ const es: TranslationKeys = {
   attendanceCard: "Asistencia",
   attendanceEmpty: "Las solicitudes de RSVP se enviarán 48 horas antes del partido.",
   pushBlockedHint: "Las notificaciones están bloqueadas. Actívalas en los ajustes del navegador para recibir recordatorios de partidos.",
+  pushPromptHighIntentBody: "Tienes un RSVP pendiente. Activa las notificaciones para que te avisemos antes del partido si algo cambia.",
+  pushPromptTitle: "¿Quieres estar al tanto?",
 
   // Priority enrollment (#136)
   priorityEnrollment: "Inscripción Prioritaria",

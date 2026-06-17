@@ -1,24 +1,28 @@
 import React, { useState, useEffect } from "react";
-import { Alert, Button, Collapse, Link } from "@mui/material";
+import { Alert, Button, Collapse, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Link } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import BlockIcon from "@mui/icons-material/Block";
 import { useT } from "~/lib/useT";
 
 const DISMISS_KEY = "push_prompt_dismissed_at";
-const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days (tightened from 30d after #463)
 
 interface Props {
   followCount: number;
   /** #457: event-detail trigger. When true, suppress the followCount gate. */
   forceOnEventDetail?: boolean;
+  /** #463 high-intent: user has a pending RSVP for an event <48h away.
+   *  Renders as a centered modal Dialog instead of a banner — harder to ignore. */
+  highIntent?: boolean;
 }
 
 /**
  * Non-intrusive banner prompting the user to enable push notifications on this device.
  * #457: four-state model — granted/denied/dismissed/default. Denied is terminal and
  * renders a "blocked" hint with browser-settings instructions instead of re-prompting.
+ * #463 escalation: high-intent surfaces render as a modal Dialog, not a banner.
  */
-export function PushPromptBanner({ followCount, forceOnEventDetail = false }: Props) {
+export function PushPromptBanner({ followCount, forceOnEventDetail = false, highIntent = false }: Props) {
   const t = useT();
   const [visible, setVisible] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -36,7 +40,7 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false }: Pr
 
     if (!forceOnEventDetail && followCount < 1) return;
 
-    // Check cooldown (30 days since last in-app dismiss)
+    // Check cooldown (14 days since last in-app dismiss)
     const dismissed = localStorage.getItem(DISMISS_KEY);
     if (dismissed && Date.now() - Number(dismissed) < COOLDOWN_MS) return;
 
@@ -100,6 +104,26 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false }: Pr
           {t("enable")}
         </Link>
       </Alert>
+    );
+  }
+
+  // #463 high-intent: render as a centered modal Dialog — harder to ignore
+  // when the user has a pending RSVP for a near-term event.
+  if (highIntent && visible) {
+    return (
+      <Dialog open onClose={handleDismiss} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <NotificationsIcon color="primary" />
+          {t("pushPromptTitle")}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>{t("pushPromptHighIntentBody")}</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDismiss} color="inherit">{t("dismiss")}</Button>
+          <Button onClick={handleEnable} variant="contained" color="primary">{t("enable")}</Button>
+        </DialogActions>
+      </Dialog>
     );
   }
 

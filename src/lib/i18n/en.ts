@@ -626,6 +626,8 @@ const en = {
   attendanceCard: "Attendance",
   attendanceEmpty: "RSVP requests will be sent 48 hours before kickoff.",
   pushBlockedHint: "Notifications are blocked. Enable them in your browser settings to receive game reminders.",
+  pushPromptHighIntentBody: "You have a pending RSVP. Enable notifications so we can ping you before kickoff if anything changes.",
+  pushPromptTitle: "Stay in the loop?",
 
   // Priority enrollment (#136)
   priorityEnrollment: "Priority Enrollment",
