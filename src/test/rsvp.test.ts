@@ -153,6 +153,10 @@ describe("rsvpCutoffSent idempotency", () => {
     await markRsvpCutoffSent(event.id);
     expect(await isRsvpCutoffSent(event.id)).toBe(true);
   });
+
+  it("returns false for a non-existent event", async () => {
+    expect(await isRsvpCutoffSent("does-not-exist")).toBe(false);
+  });
 });
 
 describe("getEventsNeedingRsvpPing", () => {
@@ -264,6 +268,10 @@ describe("push prompt state machine", () => {
     expect(await getPushPromptState(user.id)).toBe("default");
   });
 
+  it("returns 'default' for a non-existent user", async () => {
+    expect(await getPushPromptState("does-not-exist")).toBe("default");
+  });
+
   it("stores state transitions", async () => {
     const user = await seedUser();
     await setPushPromptState(user.id, "dismissed");
@@ -322,5 +330,16 @@ describe("push prompt state machine", () => {
       await recordAppOpen(user.id, new Date(Date.now() - i * 86400_000));
     }
     expect(await shouldShowPushPrompt(user.id, false)).toBe(false);
+  });
+
+  it("shouldShowPushPrompt: dismissed, dismissal older than cooldown → true (30d floor unlocks)", async () => {
+    const user = await seedUser();
+    // Backdate the dismissal by 31 days
+    const longAgo = new Date(Date.now() - 31 * 86400_000);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { pushPromptState: "dismissed", pushPromptLastDismissedAt: longAgo },
+    });
+    expect(await shouldShowPushPrompt(user.id, false)).toBe(true);
   });
 });
