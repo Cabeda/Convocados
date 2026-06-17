@@ -22,7 +22,8 @@ export type NotificationJobType =
   | "reminder"
   | "post_game"
   | "game_full"
-  | "spot_available";
+  | "spot_available"
+  | "rsvp_request";
 
 export interface NotificationJobPayload {
   title: string;

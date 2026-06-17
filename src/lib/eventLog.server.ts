@@ -36,7 +36,9 @@ export type EventAction =
   | "player_unarchived"
   | "player_merged"
   | "override_set"
-  | "override_cleared";
+  | "override_cleared"
+  | "rsvp_yes"
+  | "rsvp_no";
 
 /**
  * Append an entry to the event activity log.

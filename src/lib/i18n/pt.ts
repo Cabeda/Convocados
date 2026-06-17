@@ -612,7 +612,23 @@ const pt: TranslationKeys = {
   logCostRemoved: "O custo foi removido",
   logPaymentUpdated: "O estado do pagamento foi atualizado",
   logRecurrenceReset: "O jogo recorrente foi reposto",
+  logRsvpYes: "{actor} confirmou presença",
+  logRsvpNo: "{actor} recusou a presença",
   logAnonymous: "Alguém",
+
+  // #457 RSVP
+  rsvpPromptTitle: "Vais vir a {title}?",
+  rsvpYes: "Sim",
+  rsvpNo: "Não",
+  rsvpYesToast: "Combinado — até ao campo",
+  rsvpNoToast: "Marcado como ausente",
+  rsvpOrganizerSummary: "{yes} confirmados, {no} a recusar, {pending} sem resposta",
+  rsvpOrganizerSummaryTitle: "{title} — confirmação de presenças",
+  attendanceCard: "Presenças",
+  attendanceEmpty: "Os pedidos de RSVP são enviados 48 horas antes do jogo.",
+  pushBlockedHint: "As notificações estão bloqueadas. Ativa-as nas definições do navegador para receberes lembretes de jogos.",
+  pushPromptHighIntentBody: "Tens um RSVP pendente. Ativa as notificações para te avisarmos antes do jogo se algo mudar.",
+  pushPromptTitle: "Ficas a par de tudo?",
 
   // Priority enrollment (#136)
   priorityEnrollment: "Inscrição Prioritária",

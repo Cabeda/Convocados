@@ -18,6 +18,9 @@ model User {
   role           String          @default("user") // "user" | "admin"
   publicStats    Boolean         @default(true)
   profileVisibility String       @default("public") // "public" | "participants" | "private"
+  // #457 push prompt state machine
+  pushPromptState          String    @default("default") // "default" | "granted" | "dismissed" | "denied"
+  pushPromptLastDismissedAt DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   sessions       Session[]
@@ -28,6 +31,7 @@ model User {
   apiKeys        ApiKey[]
   notificationPreferences NotificationPreferences?
   priorityEnrollments     PriorityEnrollment[]
+  rsvps                   Rsvp[]
   priorityConfirmations   PriorityConfirmation[]
   eventInvites            EventInvite[]
   adminEvents             EventAdmin[]  @relation("EventAdmins")
@@ -38,9 +42,10 @@ model User {
   oauthClients            OauthClient[]      @relation("OAuthClients")
   oauthTokens             OauthAccessToken[] @relation("OAuthTokens")
   oauthRefreshTokens      OauthRefreshToken[] @relation("OAuthRefreshTokens")
-  oauthConsents           OauthConsent[]     @relation("OAuthConsents")
-  courtWatches            CourtWatch[]       @relation("UserCourtWatches")
+  oauthConsents           OauthConsent[]      @relation("OAuthConsents")
+  courtWatches            CourtWatch[]        @relation("UserCourtWatches")
   monthlySubscriptions    MonthlySubscription[]
+  appOpens                UserAppOpen[]
   walletTransactions      WalletTransaction[]
 }
 
@@ -117,6 +122,7 @@ model Event {
   eventLogs      EventLog[]
   priorityEnrollments PriorityEnrollment[]
   priorityConfirmations PriorityConfirmation[]
+  rsvps                Rsvp[]
   invites         EventInvite[]
   admins          EventAdmin[]
   followers        EventFollow[]
@@ -133,6 +139,9 @@ model Event {
   priorityMaxPercent    Int     @default(70)  // max % of maxPlayers reserved
   priorityDeadlineHours Int     @default(48)  // hours before game to close confirmations
   priorityMinGames      Int     @default(3)   // min total games before eligible
+
+  // #457 RSVP — 48h-before ping idempotency
+  rsvpCutoffSent Boolean @default(false)
 
   // Access control
   accessPassword        String?               // bcrypt-hashed password (null = no password)
@@ -858,4 +867,30 @@ model PlaytomicAvailabilityCache {
   fetchedAt  DateTime @default(now())
 
   @@index([fetchedAt])
+}
+
+// #457 RSVP per (User, Event). status null == pending.
+model Rsvp {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId    String
+  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  status     String?   // "yes" | "no" | null
+  respondedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([userId, eventId])
+  @@index([eventId, status])
+}
+
+// #457 daily heartbeat for "≥3 app-open days in rolling 7d" re-prompt rule.
+model UserAppOpen {
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day    DateTime // truncated to date (UTC)
+
+  @@unique([userId, day])
+  @@index([userId, day])
 }
