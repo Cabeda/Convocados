@@ -45,6 +45,20 @@ val SPORT_PRESETS = listOf(
     SportPreset("other", "Other", 10),
 )
 
+/** #454 quick-adjust offsets for the date/time picker. 15/30-minute steps let the
+ *  user set non-hour-aligned times (e.g. 18:30, 19:45) without going through
+ *  the full TimePicker dialog. */
+val TIME_QUICK_OFFSETS: List<Pair<Long, String>> = listOf(
+    -86400L to "-1d",
+    -3600L to "-1h",
+    -1800L to "-30m",
+    -900L to "-15m",
+    900L to "+15m",
+    1800L to "+30m",
+    3600L to "+1h",
+    86400L to "+1d",
+)
+
 @HiltViewModel
 class CreateEventViewModel @Inject constructor(private val api: ConvocadosApi) : ViewModel() {
     private val _creating = MutableStateFlow(false)
@@ -93,9 +107,9 @@ fun CreateEventScreen(
 
     var title by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
-    var dateTime by remember { mutableStateOf(Instant.now().plusSeconds(3600).let {
-        it.minusMillis(it.toEpochMilli() % 3_600_000)
-    }) }
+    // #454: keep the current minutes/seconds — don't snap to the top of the hour.
+    // The user must be able to pick 18:30, 19:45, etc.
+    var dateTime by remember { mutableStateOf(Instant.now().plusSeconds(3600)) }
     var sport by remember { mutableStateOf("football-5v5") }
     var maxPlayers by remember { mutableStateOf("10") }
     var showAdvanced by remember { mutableStateOf(false) }
@@ -153,17 +167,54 @@ fun CreateEventScreen(
             TextButton(onClick = onPickMap) { Text(stringResource(R.string.pick_on_map), color = MaterialTheme.colorScheme.primary) }
 
             Label(stringResource(R.string.date_time))
+            // #454: tap the displayed time to open a Material 3 TimePicker dialog
+            // for precise hour/minute selection (18:30, 19:45, etc).
+            var showTimePicker by remember { mutableStateOf(false) }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(14.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                     val fmt = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault())
-                    Text(fmt.format(dateTime), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(-86400L to "-1d", -3600L to "-1h", 3600L to "+1h", 86400L to "+1d").forEach { (secs, label) ->
+                    TextButton(onClick = { showTimePicker = true }) {
+                        Text(fmt.format(dateTime), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    // #454: 15/30-minute quick adjustments so the user can fine-tune
+                    // without going through the TimePicker dialog.
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                        TIME_QUICK_OFFSETS.forEach { (secs, label) ->
                             FilledTonalButton(onClick = { dateTime = dateTime.plusSeconds(secs) }) { Text(label) }
                         }
                     }
                 }
+            }
+
+            if (showTimePicker) {
+                val zone = ZoneId.systemDefault()
+                val current = dateTime.atZone(zone)
+                val timePickerState = rememberTimePickerState(
+                    initialHour = current.hour,
+                    initialMinute = current.minute,
+                    is24Hour = true,
+                )
+                AlertDialog(
+                    onDismissRequest = { showTimePicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val newDateTime = current
+                                .withHour(timePickerState.hour)
+                                .withMinute(timePickerState.minute)
+                                .withSecond(0)
+                                .withNano(0)
+                                .toInstant()
+                            dateTime = newDateTime
+                            showTimePicker = false
+                        }) { Text(stringResource(android.R.string.ok)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showTimePicker = false }) { Text(stringResource(android.R.string.cancel)) }
+                    },
+                    title = { Text(stringResource(R.string.date_time)) },
+                    text = { TimePicker(state = timePickerState) },
+                )
             }
 
             Label(stringResource(R.string.max_players))
