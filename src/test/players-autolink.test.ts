@@ -36,6 +36,7 @@ async function seedEvent() {
 }
 
 beforeEach(async () => {
+  await prisma.eventLog.deleteMany();
   await prisma.playerRating.deleteMany();
   await prisma.teamResult.deleteMany();
   await prisma.player.deleteMany();
@@ -155,5 +156,24 @@ describe("POST /api/events/[id]/players — auto-link on name match", () => {
     expect(normalizeForMatch("Gonçalo")).toBe(normalizeForMatch("GONCALO"));
     expect(normalizeForMatch("Gonçalo")).toBe(normalizeForMatch("goncalo"));
     expect(normalizeForMatch("Gonçalo")).not.toBe(normalizeForMatch("João"));
+  });
+
+  it("logs actor as null (anonymous) when no session is present (#456)", async () => {
+    const event = await seedEvent();
+    const res = await POST(ctx(event.id, { name: "Stranger" }, null));
+    expect(res.status).toBe(200);
+
+    // logEvent is fire-and-forget in the handler — wait for the row.
+    let log: Awaited<ReturnType<typeof prisma.eventLog.findFirst>> = null;
+    for (let i = 0; i < 20 && !log; i++) {
+      log = await prisma.eventLog.findFirst({ where: { eventId: event.id, action: "player_added" } });
+      if (!log) await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(log).not.toBeNull();
+    // #456: actor must NOT be the added player's name; it should be null so
+    // EventLogPage renders the i18n "logAnonymous" fallback.
+    expect(log!.actor).toBeNull();
+    expect(log!.actorId).toBeNull();
+    expect(JSON.parse(log!.details)).toEqual({ playerName: "Stranger" });
   });
 });
