@@ -1,4 +1,8 @@
+@file:Suppress("DEPRECATION") // AGP 9.x deprecates `android { }` Project extension + kotlinOptions DSL
+                // while we wait for KSP to support android.builtInKotlin=true.
+
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -68,9 +72,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
     }
@@ -87,6 +88,14 @@ play {
     val credFile = rootProject.file("play-service-account.json")
     if (credFile.exists()) {
         serviceAccountCredentials.set(credFile)
+    }
+}
+
+// Kotlin 2.0+ compilerOptions DSL — replaces the deprecated
+// `android { kotlinOptions { jvmTarget = "..." } }` pattern.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
