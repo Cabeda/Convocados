@@ -99,7 +99,9 @@ android {
         buildConfig = true
     }
     composeCompiler {
-        stabilityConfigurationFile = rootProject.layout.projectDirectory.file("wear/stability-config.txt")
+        stabilityConfigurationFiles.add(
+            rootProject.layout.projectDirectory.file("wear/stability-config.txt"),
+        )
     }
 }
 
