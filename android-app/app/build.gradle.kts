@@ -1,3 +1,6 @@
+@file:Suppress("DEPRECATION") // AGP 9.x deprecates `android { }` Project extension + kotlinOptions DSL
+                // while we wait for KSP to support android.builtInKotlin=true.
+
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
