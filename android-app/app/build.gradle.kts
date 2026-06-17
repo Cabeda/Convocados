@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
@@ -76,12 +77,6 @@ android {
             isIncludeAndroidResources = true
         }
     }
-    // #457 — Kotlin 2.0+ compilerOptions DSL (AGP 9 built-in Kotlin).
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
 }
 
 play {
@@ -90,6 +85,14 @@ play {
     val credFile = rootProject.file("play-service-account.json")
     if (credFile.exists()) {
         serviceAccountCredentials.set(credFile)
+    }
+}
+
+// Kotlin 2.0+ compilerOptions DSL — replaces the deprecated
+// `android { kotlinOptions { jvmTarget = "..." } }` pattern.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 

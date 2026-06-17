@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.test)
+    id("org.jetbrains.kotlin.android")
     alias(libs.plugins.baselineprofile)
 }
 
@@ -21,11 +22,11 @@ android {
     }
 
     targetProjectPath = ":app"
+}
 
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
