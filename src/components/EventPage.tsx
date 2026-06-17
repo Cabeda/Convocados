@@ -29,9 +29,24 @@ import {
 import type { EventData, Player, KnownPlayer } from "./event";
 import { PostGameBanner } from "./PostGameBanner";
 import type { PostGameStatus } from "./PostGameBanner";
+import { AttendanceCard } from "./event/AttendanceCard";
+import { PushPromptBanner } from "./PushPromptBanner";
 
 
 // ── Main component ────────────────────────────────────────────────────────────
+
+// #463 high-intent: pending RSVP + event kicking off within 48h.
+// Render the push prompt as a centered modal so it's harder to ignore.
+const PUSH_PROMPT_HIGH_INTENT_HOURS = 48;
+function isHighIntentForPush(
+  eventDateTime: string | Date,
+  myRsvpStatus: string | null,
+): boolean {
+  if (myRsvpStatus !== null) return false; // user has answered — no need to nag
+  const date = typeof eventDateTime === "string" ? new Date(eventDateTime) : eventDateTime;
+  const hoursUntil = (date.getTime() - Date.now()) / (60 * 60 * 1000);
+  return hoursUntil > 0 && hoursUntil <= PUSH_PROMPT_HIGH_INTENT_HOURS;
+}
 
 export default function EventPage({ eventId }: { eventId: string }) {
   const t = useT();
@@ -534,6 +549,27 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const isAdmin = !!event?.isAdmin;
   const canEditSettings = isOwnerless || isOwner || isAdmin;
 
+  // #463 high-intent: fetch the signed-in user's RSVP for this event so the
+  // PushPromptBanner can render as a modal when the user has a pending RSVP
+  // and the game kicks off within 48h.
+  const [myRsvpStatus, setMyRsvpStatus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isAuthenticated || !eventId) {
+      setMyRsvpStatus(null);
+      return;
+    }
+    let alive = true;
+    fetch(`/api/events/${eventId}/rsvp`, { credentials: "include" })
+      .then(async (r) => {
+        if (!alive) return;
+        if (!r.ok) { setMyRsvpStatus(null); return; }
+        const data = await r.json();
+        setMyRsvpStatus(data.status ?? null);
+      })
+      .catch(() => alive && setMyRsvpStatus(null));
+    return () => { alive = false; };
+  }, [eventId, isAuthenticated]);
+
   const canRemovePlayer = (player: Player) => {
     if (isOwner || isAdmin) return true;
     if (session?.user && player.userId === session.user.id) return true;
@@ -625,6 +661,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 })}
               </Alert>
             )}
+
+            {/* #457 Push prompt banner — event-detail trigger. #463 high-intent:
+                render as a centered modal when the user has a pending RSVP and
+                the event kicks off within 48h. */}
+            <PushPromptBanner
+              followCount={0}
+              forceOnEventDetail={isAuthenticated}
+              highIntent={isAuthenticated && event ? isHighIntentForPush(event.dateTime, myRsvpStatus) : false}
+            />
+
+            {/* #457 Organizer-only attendance card (Owner + Admins) */}
+            {(isOwner || isAdmin) && <AttendanceCard eventId={eventId} />}
 
             {/* Header */}
             <EventHeader
