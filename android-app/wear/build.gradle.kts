@@ -3,7 +3,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
@@ -97,6 +96,11 @@ android {
     }
     composeCompiler {
         stabilityConfigurationFile = rootProject.layout.projectDirectory.file("wear/stability-config.txt")
+    }
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
     }
 }
 
@@ -202,10 +206,4 @@ dependencies {
     androidTestImplementation("androidx.room:room-testing:${libs.versions.room.get()}")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
-    }
 }
