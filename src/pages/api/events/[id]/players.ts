@@ -541,7 +541,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   await syncPaymentsForEvent(eventId);
 
-  logEvent(eventId, "player_added", session?.user?.name ?? trimmed, session?.user?.id ?? null, { playerName: trimmed }).catch(() => {});
+  logEvent(eventId, "player_added", session?.user?.name ?? null, session?.user?.id ?? null, { playerName: trimmed }).catch(() => {});
 
   // ── Invite-by-email: notify or email (auth-gated + rate-limited) ───────────
   let inviteResult: "notified" | "emailed" | null = null;
