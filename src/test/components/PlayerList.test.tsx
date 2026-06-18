@@ -104,3 +104,229 @@ describe("PlayerList — confirmation dialog trigger", () => {
     expect(baseProps.onAddPlayer).toHaveBeenCalledWith("Charlie");
   });
 });
+
+describe("PlayerList — attendance UI (You row + guest pill)", () => {
+  const linkedPlayer: Player = { id: "p-linked", name: "LinkedAlice", userId: "u-1" };
+  const guestPlayer: Player = { id: "p-guest", name: "GuestBob", userId: null };
+
+  const attendanceBase = {
+    players: [linkedPlayer, guestPlayer],
+    maxPlayers: 10,
+    isOwner: true,
+    hasTeams: false,
+    availableSuggestions: baseSuggestions,
+    playerError: null as string | null,
+    onPlayerErrorChange: vi.fn(),
+    onAddPlayer: vi.fn().mockResolvedValue(undefined),
+    onRequestAdd: vi.fn(),
+    onRemovePlayer: vi.fn().mockResolvedValue(undefined),
+    onReorderPlayers: vi.fn().mockResolvedValue(undefined),
+    onResetPlayerOrder: vi.fn().mockResolvedValue(undefined),
+    onRandomize: vi.fn(),
+    onConfirmReRandomize: vi.fn(),
+    canRemovePlayer: () => true,
+    onSetMyRsvp: vi.fn().mockResolvedValue(undefined),
+    onSetGuestRsvp: vi.fn().mockResolvedValue(undefined),
+  };
+
+  it("does not render the You row when currentUserId is null (anonymous)", () => {
+    renderWithTheme(
+      <PlayerList {...attendanceBase} currentUserId={null} myRsvpStatus={null} guestRsvpMap={{}} />,
+    );
+    expect(screen.queryByTestId("rsvp-you-row")).toBeNull();
+  });
+
+  it("does not render the You row when the user is not on the active list (follower-only)", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-someone-else"
+        myRsvpStatus={null}
+        guestRsvpMap={{}}
+      />,
+    );
+    expect(screen.queryByTestId("rsvp-you-row")).toBeNull();
+  });
+
+  it("renders the You row at the top of the active list when the user is on it", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus={null}
+        guestRsvpMap={{}}
+      />,
+    );
+    const youRow = screen.getByTestId("rsvp-you-row");
+    expect(youRow).toBeInTheDocument();
+    expect(youRow).toHaveTextContent(/You/i);
+    expect(youRow).toHaveTextContent(/LinkedAlice/);
+  });
+
+  it("reflects the current RSVP status on the You row chip", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus="yes"
+        guestRsvpMap={{}}
+      />,
+    );
+    const status = screen.getByTestId("rsvp-you-status");
+    expect(status).toHaveAttribute("data-status", "yes");
+  });
+
+  it("calls onSetMyRsvp('yes') when the Yes button is clicked", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus={null}
+        guestRsvpMap={{}}
+      />,
+    );
+    await user.click(screen.getByTestId("rsvp-you-yes"));
+    expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("yes");
+  });
+
+  it("calls onSetMyRsvp('no') when the No button is clicked", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus="yes"
+        guestRsvpMap={{}}
+      />,
+    );
+    await user.click(screen.getByTestId("rsvp-you-no"));
+    expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("no");
+  });
+
+  it("disables the matching button when the user is already at that status", () => {
+    const { rerender } = renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus="yes"
+        guestRsvpMap={{}}
+      />,
+    );
+    expect(screen.getByTestId("rsvp-you-yes")).toBeDisabled();
+    expect(screen.getByTestId("rsvp-you-no")).not.toBeDisabled();
+
+    rerender(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus="no"
+        guestRsvpMap={{}}
+      />,
+    );
+    expect(screen.getByTestId("rsvp-you-no")).toBeDisabled();
+  });
+
+  it("does not render a guest pill on linked (userId set) rows", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId={null}
+        myRsvpStatus={null}
+        guestRsvpMap={{ [guestPlayer.id]: "yes" }}
+      />,
+    );
+    expect(screen.queryByTestId(`rsvp-guest-pill-${linkedPlayer.id}`)).toBeNull();
+    expect(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`)).toBeInTheDocument();
+  });
+
+  it("renders the guest pill as a non-interactive Chip when canEditGuestAttendance is false (anon viewer)", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId={null}
+        myRsvpStatus={null}
+        guestRsvpMap={{ [guestPlayer.id]: "yes" }}
+        canEditGuestAttendance={false}
+      />,
+    );
+    const pill = screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`);
+    expect(pill).toBeInTheDocument();
+    expect(pill).toHaveAttribute("data-status", "yes");
+  });
+
+  it("calls onSetGuestRsvp with the next state when admin clicks the pill (Pending → Yes)", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId={null}
+        myRsvpStatus={null}
+        guestRsvpMap={{ [guestPlayer.id]: null }}
+        canEditGuestAttendance
+      />,
+    );
+    await user.click(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`));
+    expect(attendanceBase.onSetGuestRsvp).toHaveBeenCalledWith(guestPlayer.id, "yes");
+  });
+
+  it("cycles Yes → No when admin clicks the pill again", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId={null}
+        myRsvpStatus={null}
+        guestRsvpMap={{ [guestPlayer.id]: "yes" }}
+        canEditGuestAttendance
+      />,
+    );
+    await user.click(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`));
+    expect(attendanceBase.onSetGuestRsvp).toHaveBeenCalledWith(guestPlayer.id, "no");
+  });
+
+  it("cycles No → null (clear) when admin clicks the pill again", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId={null}
+        myRsvpStatus={null}
+        guestRsvpMap={{ [guestPlayer.id]: "no" }}
+        canEditGuestAttendance
+      />,
+    );
+    await user.click(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`));
+    expect(attendanceBase.onSetGuestRsvp).toHaveBeenCalledWith(guestPlayer.id, null);
+  });
+
+  it("does not let an anonymous viewer click the pill (outlined, non-interactive)", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId={null}
+        myRsvpStatus={null}
+        guestRsvpMap={{ [guestPlayer.id]: "yes" }}
+        canEditGuestAttendance={false}
+      />,
+    );
+    const pill = screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`);
+    // When canEditGuestAttendance is false the chip is rendered with the outlined (read-only)
+    // variant — distinct from the filled variant we use for the admin-clickable pill.
+    expect(pill.className).toMatch(/MuiChip-outlined/);
+  });
+
+  it("renders the pill in the filled variant for the admin (clickable)", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId={null}
+        myRsvpStatus={null}
+        guestRsvpMap={{ [guestPlayer.id]: "yes" }}
+        canEditGuestAttendance
+      />,
+    );
+    const pill = screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`);
+    expect(pill.className).toMatch(/MuiChip-filled/);
+  });
+});

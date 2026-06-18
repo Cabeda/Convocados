@@ -552,7 +552,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // #463 high-intent: fetch the signed-in user's RSVP for this event so the
   // PushPromptBanner can render as a modal when the user has a pending RSVP
   // and the game kicks off within 48h.
-  const [myRsvpStatus, setMyRsvpStatus] = useState<string | null>(null);
+  const [myRsvpStatus, setMyRsvpStatus] = useState<"yes" | "no" | null>(null);
   useEffect(() => {
     if (!isAuthenticated || !eventId) {
       setMyRsvpStatus(null);
@@ -564,11 +564,70 @@ export default function EventPage({ eventId }: { eventId: string }) {
         if (!alive) return;
         if (!r.ok) { setMyRsvpStatus(null); return; }
         const data = await r.json();
-        setMyRsvpStatus(data.status ?? null);
+        setMyRsvpStatus((data.status ?? null) as "yes" | "no" | null);
       })
       .catch(() => alive && setMyRsvpStatus(null));
     return () => { alive = false; };
   }, [eventId, isAuthenticated]);
+
+  // #XXX Guest attendance — fetched for the player-list pills (visible to all, clickable to owner/admin).
+  const [guestRsvpMap, setGuestRsvpMap] = useState<Record<string, "yes" | "no" | null>>({});
+  const fetchGuestRsvpMap = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/events/${eventId}/rsvp/guests`, { credentials: "include" });
+      if (!r.ok) return;
+      const data = await r.json();
+      setGuestRsvpMap(data.guests ?? {});
+    } catch { /* ignore */ }
+  }, [eventId]);
+  useEffect(() => { fetchGuestRsvpMap(); }, [fetchGuestRsvpMap]);
+
+  const handleSetMyRsvp = useCallback(async (status: "yes" | "no") => {
+    const prev = myRsvpStatus;
+    setMyRsvpStatus(status); // optimistic
+    try {
+      const r = await fetch(`/api/events/${eventId}/rsvp`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      if (!r.ok) {
+        setMyRsvpStatus(prev);
+        const j = await r.json().catch(() => ({}));
+        setSnackbar(j.error ?? t("somethingWentWrong"));
+        return;
+      }
+      setSnackbar(status === "yes" ? t("rsvpYesToast") : t("rsvpNoToast"));
+    } catch {
+      setMyRsvpStatus(prev);
+      setSnackbar(t("somethingWentWrong"));
+    }
+  }, [eventId, myRsvpStatus, t]);
+
+  const handleSetGuestRsvp = useCallback(async (playerId: string, status: "yes" | "no" | null) => {
+    const prev = guestRsvpMap[playerId] ?? null;
+    setGuestRsvpMap((m) => ({ ...m, [playerId]: status })); // optimistic
+    try {
+      const r = await fetch(`/api/events/${eventId}/players/${playerId}/rsvp`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      if (!r.ok) {
+        setGuestRsvpMap((m) => ({ ...m, [playerId]: prev }));
+        const j = await r.json().catch(() => ({}));
+        setSnackbar(j.error ?? t("somethingWentWrong"));
+        return;
+      }
+      // Refresh summary chips (used by AttendanceCard)
+      fetchEvent();
+    } catch {
+      setGuestRsvpMap((m) => ({ ...m, [playerId]: prev }));
+      setSnackbar(t("somethingWentWrong"));
+    }
+  }, [eventId, guestRsvpMap, fetchEvent, t]);
 
   const canRemovePlayer = (player: Player) => {
     if (isOwner || isAdmin) return true;
@@ -759,6 +818,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 const myPlayer = event.players.find(p => p.userId === session.user!.id);
                 if (myPlayer) removePlayer(myPlayer.id);
               }) : undefined}
+              currentUserId={isAuthenticated ? session?.user?.id : null}
+              myRsvpStatus={myRsvpStatus}
+              guestRsvpMap={guestRsvpMap}
+              canEditGuestAttendance={isOwner || isAdmin}
+              onSetMyRsvp={handleSetMyRsvp}
+              onSetGuestRsvp={handleSetGuestRsvp}
               />
 
             {/* Payment nudge dialog — opened by the Quick Join pill on tap when the user
