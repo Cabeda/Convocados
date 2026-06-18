@@ -12,6 +12,11 @@ import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatRecline
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ShieldIcon from "@mui/icons-material/Shield";
 import ContactsIcon from "@mui/icons-material/Contacts";
+import HowToRegIcon from "@mui/icons-material/HowToReg";
+import CancelIcon from "@mui/icons-material/Cancel";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import CheckIcon from "@mui/icons-material/Check";
+import RemoveIcon from "@mui/icons-material/Remove";
 
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
@@ -19,6 +24,8 @@ import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import type { Player, PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
+
+export type RsvpStatus = "yes" | "no" | null;
 
 interface PlayerSuggestion {
   name: string;
@@ -50,6 +57,19 @@ interface Props {
   onQuickJoinPillClick?: (name: string) => void;
   /** Called when the user clicks the "Leave game" pill. Removes the user's player entry. */
   onQuickLeave?: () => void;
+  // #XXX Attendance UI
+  /** Current authenticated user's id, if any. When set, a "You" row is rendered at the top of the active list. */
+  currentUserId?: string | null;
+  /** Current user's RSVP status, fetched separately. When currentUserId is set, the You row uses this to render its current state. */
+  myRsvpStatus?: RsvpStatus;
+  /** Map of guest-playerId → RSVP status. When provided, every guest row renders an inline pill. */
+  guestRsvpMap?: Record<string, RsvpStatus>;
+  /** True for the owner or an admin. Controls whether the guest pill is clickable. */
+  canEditGuestAttendance?: boolean;
+  /** Set the current user's own RSVP. */
+  onSetMyRsvp?: (status: "yes" | "no") => Promise<void>;
+  /** Set a guest player's RSVP (owner/admin only). Pass null to clear. */
+  onSetGuestRsvp?: (playerId: string, status: RsvpStatus) => Promise<void>;
 }
 
 export function PlayerList({
@@ -60,6 +80,12 @@ export function PlayerList({
   quickJoinUserName,
   onQuickJoinPillClick,
   onQuickLeave,
+  currentUserId,
+  myRsvpStatus,
+  guestRsvpMap,
+  canEditGuestAttendance,
+  onSetMyRsvp,
+  onSetGuestRsvp,
 }: Props) {
   const t = useT();
   const theme = useTheme();
@@ -138,6 +164,24 @@ export function PlayerList({
 
   const active = players.slice(0, maxPlayers);
   const bench = players.slice(maxPlayers);
+
+  // #XXX Attendance — only show the You row if the user is on the active list as themselves
+  // (covers linked players + owners). Followers-only users can use the Quick Join pill to join first.
+  const myPlayerOnActiveList = !!currentUserId && active.some(
+    (p) => p.userId === currentUserId,
+  );
+  const showYouRow = myPlayerOnActiveList && !!onSetMyRsvp;
+  const youPlayer = showYouRow
+    ? active.find((p) => p.userId === currentUserId)
+    : undefined;
+
+  // #XXX Attendance — guest pill click cycles Pending → Yes → No → Pending
+  const cycleGuestRsvp = useCallback((playerId: string) => {
+    if (!onSetGuestRsvp) return;
+    const current = guestRsvpMap?.[playerId] ?? null;
+    const next: RsvpStatus = current === null ? "yes" : current === "yes" ? "no" : null;
+    onSetGuestRsvp(playerId, next);
+  }, [guestRsvpMap, onSetGuestRsvp]);
 
   return (
     <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
@@ -423,6 +467,84 @@ export function PlayerList({
             p: 1, backgroundColor: alpha(theme.palette.primary.main, 0.06),
           }}>
             <List dense disablePadding>
+              {/* #XXX "You" row — pinned at top of the active list for the signed-in user. */}
+              {showYouRow && youPlayer && (
+                <ListItem
+                  data-testid="rsvp-you-row"
+                  sx={{
+                    borderRadius: 2, px: 1, py: 0.75, mb: 0.5,
+                    bgcolor: alpha(theme.palette.primary.main, 0.12),
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.4)}`,
+                  }}
+                  secondaryAction={
+                    <Stack direction="row" spacing={0.5} alignItems="center">
+                      {myRsvpStatus === "yes" ? (
+                        <Chip
+                          size="small"
+                          color="success"
+                          icon={<HowToRegIcon />}
+                          label={t("rsvpGoing")}
+                          data-testid="rsvp-you-status"
+                          data-status="yes"
+                        />
+                      ) : myRsvpStatus === "no" ? (
+                        <Chip
+                          size="small"
+                          color="error"
+                          icon={<CancelIcon />}
+                          label={t("rsvpDeclined")}
+                          data-testid="rsvp-you-status"
+                          data-status="no"
+                        />
+                      ) : (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          icon={<HelpOutlineIcon />}
+                          label={t("rsvpNoResponse")}
+                          data-testid="rsvp-you-status"
+                          data-status="none"
+                        />
+                      )}
+                      <Tooltip title={t("rsvpSetGoing")}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color={myRsvpStatus === "yes" ? "success" : "default"}
+                            data-testid="rsvp-you-yes"
+                            disabled={myRsvpStatus === "yes" || !onSetMyRsvp}
+                            onClick={() => onSetMyRsvp?.("yes")}
+                            aria-label={t("rsvpSetGoing")}
+                          >
+                            <CheckIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title={t("rsvpSetDeclined")}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color={myRsvpStatus === "no" ? "error" : "default"}
+                            data-testid="rsvp-you-no"
+                            disabled={myRsvpStatus === "no" || !onSetMyRsvp}
+                            onClick={() => onSetMyRsvp?.("no")}
+                            aria-label={t("rsvpSetDeclined")}
+                          >
+                            <RemoveIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </Stack>
+                  }
+                >
+                  <ShieldIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5, flexShrink: 0 }} />
+                  <ListItemText
+                    primary={<span style={{ fontWeight: 700, fontSize: "0.9rem" }}>{t("rsvpYouRow")}</span>}
+                    secondary={youPlayer.name}
+                    secondaryTypographyProps={{ fontSize: "0.75rem", color: "text.secondary" }}
+                  />
+                </ListItem>
+              )}
               {active.map((player, i) => (
                 <ListItem
                   key={player.id}
@@ -440,11 +562,56 @@ export function PlayerList({
                     "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.04) },
                   }}
                   secondaryAction={
-                    canRemovePlayer(player) ? (
-                      <IconButton edge="end" size="small" onClick={() => onRemovePlayer(player.id)}>
-                        <CloseIcon fontSize="small" />
-                      </IconButton>
-                    ) : undefined
+                    <Stack direction="row" spacing={0.5} alignItems="center">
+                      {/* #XXX Guest attendance pill — visible to all, clickable to owner/admin only. */}
+                      {player.userId === null && guestRsvpMap && (
+                        <Tooltip
+                          title={canEditGuestAttendance
+                            ? (guestRsvpMap[player.id] === "yes"
+                                ? t("rsvpSetDeclined")
+                                : guestRsvpMap[player.id] === "no"
+                                  ? t("rsvpClearAttendance")
+                                  : t("rsvpSetGoing"))
+                            : t("rsvpSetByOrganizer")}
+                        >
+                          <span>
+                            <Chip
+                              size="small"
+                              data-testid={`rsvp-guest-pill-${player.id}`}
+                              data-status={guestRsvpMap[player.id] ?? "none"}
+                              icon={guestRsvpMap[player.id] === "yes"
+                                ? <HowToRegIcon />
+                                : guestRsvpMap[player.id] === "no"
+                                  ? <CancelIcon />
+                                  : <HelpOutlineIcon />}
+                              label={guestRsvpMap[player.id] === "yes"
+                                ? t("rsvpGoing")
+                                : guestRsvpMap[player.id] === "no"
+                                  ? t("rsvpDeclined")
+                                  : t("rsvpNoResponse")}
+                              color={guestRsvpMap[player.id] === "yes"
+                                ? "success"
+                                : guestRsvpMap[player.id] === "no"
+                                  ? "error"
+                                  : "default"}
+                              variant={canEditGuestAttendance ? "filled" : "outlined"}
+                              onClick={canEditGuestAttendance && onSetGuestRsvp
+                                ? () => cycleGuestRsvp(player.id)
+                                : undefined}
+                              sx={{
+                                cursor: canEditGuestAttendance ? "pointer" : "default",
+                                pointerEvents: canEditGuestAttendance ? "auto" : "none",
+                              }}
+                            />
+                          </span>
+                        </Tooltip>
+                      )}
+                      {canRemovePlayer(player) ? (
+                        <IconButton edge="end" size="small" onClick={() => onRemovePlayer(player.id)}>
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      ) : undefined}
+                    </Stack>
                   }
                 >
                   {isOwner && (
