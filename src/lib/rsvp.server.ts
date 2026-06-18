@@ -33,7 +33,7 @@ export type PushPromptState = "default" | "granted" | "dismissed" | "denied";
 
 // ─── RSVP upsert + read ────────────────────────────────────────────────────
 
-/** Idempotent RSVP upsert. status ∈ {"yes", "no"} — null is "pending" and represented as a missing row. */
+/** Idempotent RSVP upsert for a linked user. status ∈ {"yes", "no"} — null is "pending" and represented as a missing row. */
 export async function upsertRsvp(eventId: string, userId: string, status: "yes" | "no") {
   return prisma.rsvp.upsert({
     where: { userId_eventId: { userId, eventId } },
@@ -48,6 +48,53 @@ export async function getRsvpForUser(eventId: string, userId: string) {
   });
 }
 
+/** Idempotent RSVP upsert for a guest Player. Admin/owner acts on the guest's behalf — `actorUserId` is recorded for audit. Refuses if the player is linked to a User (linked users self-RSVP via upsertRsvp). */
+export async function upsertGuestRsvp(
+  eventId: string,
+  playerId: string,
+  status: "yes" | "no" | null,
+  actorUserId: string,
+) {
+  const player = await prisma.player.findUnique({
+    where: { id: playerId },
+    select: { eventId: true, userId: true },
+  });
+  if (!player) throw new Error("Player not found.");
+  if (player.eventId !== eventId) throw new Error("Player does not belong to this event.");
+  if (player.userId) throw new Error("Player is linked to a User — that user must self-RSVP.");
+
+  const respondedAt = status === null ? null : new Date();
+  return prisma.rsvp.upsert({
+    where: { playerId_eventId: { playerId, eventId } },
+    create: { eventId, playerId, status, respondedAt, respondedByUserId: actorUserId },
+    update: { status, respondedAt, respondedByUserId: actorUserId },
+  });
+}
+
+export async function getRsvpForGuest(eventId: string, playerId: string) {
+  return prisma.rsvp.findUnique({
+    where: { playerId_eventId: { playerId, eventId } },
+  });
+}
+
+/** Map of playerId → status for all active (non-archived) guest Players in the event. Public — used to render the read-only pill on the player list for everyone (incl. anonymous viewers). */
+export async function getGuestRsvpMap(eventId: string): Promise<Record<string, "yes" | "no" | null>> {
+  const guests = await prisma.player.findMany({
+    where: { eventId, userId: null, archivedAt: null },
+    select: { id: true },
+  });
+  const rsvps = await prisma.rsvp.findMany({
+    where: { eventId, playerId: { in: guests.map((g) => g.id) } },
+    select: { playerId: true, status: true },
+  });
+  const map: Record<string, "yes" | "no" | null> = {};
+  for (const g of guests) map[g.id] = null;
+  for (const r of rsvps) {
+    if (r.playerId) map[r.playerId] = (r.status as "yes" | "no" | null) ?? null;
+  }
+  return map;
+}
+
 export interface RsvpSummary {
   yes: number;
   no: number;
@@ -57,14 +104,14 @@ export interface RsvpSummary {
   pendingUserIds: string[];
 }
 
-/** Counted across: EventFollow ∪ Player.userId ∪ Owner. Unlinked guests excluded. */
+/** User-recipient set: EventFollow ∪ active Player.userId ∪ Owner. Unlinked guests excluded (they have their own Rsvp keyed on playerId). Archived linked players excluded — see #XXX off-by-one fix. */
 export async function getRsvpRecipients(eventId: string): Promise<string[]> {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: {
       ownerId: true,
       followers: { select: { userId: true } },
-      players: { select: { userId: true } },
+      players: { where: { archivedAt: null }, select: { userId: true } },
     },
   });
   if (!event) return [];
@@ -75,28 +122,66 @@ export async function getRsvpRecipients(eventId: string): Promise<string[]> {
   return [...set];
 }
 
+/** Guest-recipient set: active Player rows with userId IS NULL. */
+async function getActiveGuestPlayers(eventId: string): Promise<{ id: string }[]> {
+  return prisma.player.findMany({
+    where: { eventId, userId: null, archivedAt: null },
+    select: { id: true },
+  });
+}
+
 export async function getRsvpSummary(eventId: string): Promise<RsvpSummary> {
   const recipientIds = await getRsvpRecipients(eventId);
+  const guestPlayers = await getActiveGuestPlayers(eventId);
+  const guestIds = guestPlayers.map((p) => p.id);
+
   const rsvps = await prisma.rsvp.findMany({
-    where: { eventId, userId: { in: recipientIds } },
-    select: { userId: true, status: true },
+    where: {
+      eventId,
+      OR: [
+        { userId: { in: recipientIds } },
+        { playerId: { in: guestIds } },
+      ],
+    },
+    select: { userId: true, playerId: true, status: true },
   });
 
-  const responded = new Map<string, "yes" | "no">();
+  const respondedUser = new Map<string, "yes" | "no">();
+  const respondedGuest = new Map<string, "yes" | "no">();
   for (const r of rsvps) {
-    if (r.status === "yes" || r.status === "no") responded.set(r.userId, r.status);
+    if (r.status !== "yes" && r.status !== "no") continue;
+    if (r.userId) respondedUser.set(r.userId, r.status);
+    else if (r.playerId) respondedGuest.set(r.playerId, r.status);
   }
 
-  const yes: string[] = [];
-  const no: string[] = [];
-  const pending: string[] = [];
+  const yesUserIds: string[] = [];
+  const noUserIds: string[] = [];
+  const pendingUserIds: string[] = [];
   for (const uid of recipientIds) {
-    const s = responded.get(uid);
-    if (s === "yes") yes.push(uid);
-    else if (s === "no") no.push(uid);
-    else pending.push(uid);
+    const s = respondedUser.get(uid);
+    if (s === "yes") yesUserIds.push(uid);
+    else if (s === "no") noUserIds.push(uid);
+    else pendingUserIds.push(uid);
   }
-  return { yes: yes.length, no: no.length, pending: pending.length, yesUserIds: yes, noUserIds: no, pendingUserIds: pending };
+
+  let yesGuestCount = 0;
+  let noGuestCount = 0;
+  let pendingGuestCount = 0;
+  for (const gid of guestIds) {
+    const s = respondedGuest.get(gid);
+    if (s === "yes") yesGuestCount++;
+    else if (s === "no") noGuestCount++;
+    else pendingGuestCount++;
+  }
+
+  return {
+    yes: yesUserIds.length + yesGuestCount,
+    no: noUserIds.length + noGuestCount,
+    pending: pendingUserIds.length + pendingGuestCount,
+    yesUserIds: yesUserIds,
+    noUserIds: noUserIds,
+    pendingUserIds: pendingUserIds,
+  };
 }
 
 // ─── 48h fanout ────────────────────────────────────────────────────────────

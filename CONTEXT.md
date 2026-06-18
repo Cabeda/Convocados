@@ -177,3 +177,17 @@ _Avoid_: notify, ask to join, request access
 ## EventInvite
 An entry in the per-**Game** access-bypass list. Grants the linked **User** access to a password-protected **Game** without supplying the event password. Distinct from `Invite` — this is about *access* to a private game, not *participation* in any game.
 _Avoid_: guest pass, share code
+
+## Attendance
+A User's response to an upcoming **Game** — yes / no / pending — captured before kickoff so the organizer can plan teams, refs, and benches. Distinct from **attendance rate** (a historical statistic computed from `GameHistory`).
+
+The user-facing term is **Attendance**; the data model is the `Rsvp` table. Each row is keyed on exactly one subject:
+- **`userId`** — the signed-in User's own response (self-RSVP via `POST /api/events/[id]/rsvp`).
+- **`playerId`** — an admin/owner setting attendance on behalf of a **Player** with no linked account (a guest), via `POST /api/events/[id]/players/[playerId]/rsvp`. The admin's `userId` is recorded in `respondedByUserId` for audit.
+
+Application invariant (not enforced by the schema because SQLite unique constraints treat NULL as distinct): exactly one of `{userId, playerId}` is set per row. `upsertGuestRsvp` rejects linked players (where `Player.userId` is set) — those users self-RSVP.
+
+The recipient set for a Game is the union of: **EventFollow** (followers), `Player.userId` (linked players), and the **Owner**. The summary counts `yes`/`no`/`pending` across both the user recipient set and active guest players (`Player.userId IS NULL AND archivedAt IS NULL`).
+
+Distinguished from the historical-stats API at `/api/events/[id]/attendance` (which computes per-player attendance rate from `GameHistory`); that endpoint shares the user-facing word but is a different concept.
+_Avoid_: RSVP (table name only), response
