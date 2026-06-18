@@ -3,6 +3,8 @@ import { prisma } from "~/lib/db.server";
 import {
   upsertRsvp,
   getRsvpForUser,
+  upsertGuestRsvp,
+  getRsvpForGuest,
   getRsvpSummary,
   getRsvpRecipients,
   markRsvpCutoffSent,
@@ -149,6 +151,167 @@ describe("getRsvpRecipients", () => {
 
     const recipients = await getRsvpRecipients(event.id);
     expect(recipients.sort()).toEqual([owner.id, follower.id, playerUser.id].sort());
+  });
+
+  it("excludes soft-archived players from the recipient set (#XXX off-by-one fix)", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const playerUser = await seedUser({ name: "PlayerUser" });
+    const event = await seedEvent(owner.id);
+    await prisma.player.create({
+      data: {
+        eventId: event.id,
+        name: playerUser.name,
+        userId: playerUser.id,
+        order: 0,
+        archivedAt: new Date(),
+      },
+    });
+
+    const recipients = await getRsvpRecipients(event.id);
+    expect(recipients).toEqual([owner.id]);
+  });
+});
+
+describe("upsertGuestRsvp", () => {
+  it("creates a new RSVP row keyed on playerId with respondedByUserId audit", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+    const guest = await prisma.player.create({
+      data: { eventId: event.id, name: "Guest", order: 0 },
+    });
+
+    const rsvp = await upsertGuestRsvp(event.id, guest.id, "yes", owner.id);
+    expect(rsvp.status).toBe("yes");
+    expect(rsvp.respondedAt).not.toBeNull();
+    expect(rsvp.playerId).toBe(guest.id);
+    expect(rsvp.userId).toBeNull();
+    expect(rsvp.respondedByUserId).toBe(owner.id);
+  });
+
+  it("is idempotent on (playerId, eventId)", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+    const guest = await prisma.player.create({
+      data: { eventId: event.id, name: "Guest", order: 0 },
+    });
+
+    await upsertGuestRsvp(event.id, guest.id, "yes", owner.id);
+    const rsvp = await upsertGuestRsvp(event.id, guest.id, "no", owner.id);
+    expect(rsvp.status).toBe("no");
+
+    const count = await prisma.rsvp.count({ where: { playerId: guest.id, eventId: event.id } });
+    expect(count).toBe(1);
+  });
+
+  it("accepts null status (clears the RSVP)", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+    const guest = await prisma.player.create({
+      data: { eventId: event.id, name: "Guest", order: 0 },
+    });
+
+    await upsertGuestRsvp(event.id, guest.id, "yes", owner.id);
+    const rsvp = await upsertGuestRsvp(event.id, guest.id, null, owner.id);
+    expect(rsvp.status).toBeNull();
+    expect(rsvp.respondedAt).toBeNull();
+  });
+
+  it("refuses to write a guest RSVP for a linked player (userId set)", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const linked = await seedUser({ name: "Linked" });
+    const event = await seedEvent(owner.id);
+    const linkedPlayer = await prisma.player.create({
+      data: { eventId: event.id, name: linked.name, userId: linked.id, order: 0 },
+    });
+
+    await expect(upsertGuestRsvp(event.id, linkedPlayer.id, "yes", owner.id))
+      .rejects.toThrow(/linked/i);
+  });
+});
+
+describe("getRsvpForGuest", () => {
+  it("returns null when no row", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+    const guest = await prisma.player.create({
+      data: { eventId: event.id, name: "Guest", order: 0 },
+    });
+
+    expect(await getRsvpForGuest(event.id, guest.id)).toBeNull();
+  });
+
+  it("returns the row when present", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+    const guest = await prisma.player.create({
+      data: { eventId: event.id, name: "Guest", order: 0 },
+    });
+    await upsertGuestRsvp(event.id, guest.id, "yes", owner.id);
+
+    const rsvp = await getRsvpForGuest(event.id, guest.id);
+    expect(rsvp?.status).toBe("yes");
+  });
+});
+
+describe("getRsvpSummary (with guests)", () => {
+  it("counts yes/no/pending for user RSVPs AND guest player RSVPs", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const follower = await seedUser({ name: "Follower" });
+    const event = await seedEvent(owner.id);
+
+    await prisma.eventFollow.create({ data: { eventId: event.id, userId: follower.id } });
+
+    const guest1 = await prisma.player.create({ data: { eventId: event.id, name: "G1", order: 0 } });
+    const guest2 = await prisma.player.create({ data: { eventId: event.id, name: "G2", order: 1 } });
+
+    // User RSVPs: 1 yes, 1 pending (owner)
+    await upsertRsvp(event.id, follower.id, "yes");
+    // Guest RSVPs: 1 yes, 1 no, owner pending
+    await upsertGuestRsvp(event.id, guest1.id, "yes", owner.id);
+    await upsertGuestRsvp(event.id, guest2.id, "no", owner.id);
+
+    const summary = await getRsvpSummary(event.id);
+    expect(summary.yes).toBe(2);          // follower + guest1
+    expect(summary.no).toBe(1);           // guest2
+    expect(summary.pending).toBe(1);      // owner (no userId-guests not in recipient set)
+  });
+
+  it("excludes soft-archived players from the summary (regression for 10-going/9-pending bug)", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+
+    // 10 active guests, 1 of them archived (would previously inflate yes+1 and miss pending-1)
+    const active: string[] = [];
+    for (let i = 0; i < 9; i++) {
+      const g = await prisma.player.create({ data: { eventId: event.id, name: `A${i}`, order: i } });
+      active.push(g.id);
+    }
+    const archived = await prisma.player.create({
+      data: { eventId: event.id, name: "Archived", order: 99, archivedAt: new Date() },
+    });
+
+    // 9 active guests say yes, the archived player has a stale yes from before being archived
+    for (const gid of active) await upsertGuestRsvp(event.id, gid, "yes", owner.id);
+    await upsertGuestRsvp(event.id, archived.id, "yes", owner.id);
+
+    const summary = await getRsvpSummary(event.id);
+    expect(summary.yes).toBe(9);    // only the 9 active guests
+    expect(summary.no).toBe(0);
+    expect(summary.pending).toBe(1); // owner only
+  });
+
+  it("does not count an archived player's stale 'no' toward the no bucket either", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+    const archived = await prisma.player.create({
+      data: { eventId: event.id, name: "Archived", order: 0, archivedAt: new Date() },
+    });
+    await upsertGuestRsvp(event.id, archived.id, "no", owner.id);
+
+    const summary = await getRsvpSummary(event.id);
+    expect(summary.no).toBe(0);
+    expect(summary.yes).toBe(0);
+    expect(summary.pending).toBe(1); // owner
   });
 });
 

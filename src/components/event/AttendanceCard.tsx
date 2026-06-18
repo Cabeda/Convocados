@@ -73,7 +73,7 @@ export function AttendanceCard({ eventId }: Props) {
           />
           <Chip
             icon={<HelpOutlineIcon />}
-            label={`${summary.pending} pending`}
+            label={`${summary.pending} ${t("rsvpPending")}`}
             variant="outlined"
             sx={{ borderColor: theme.palette.divider }}
           />

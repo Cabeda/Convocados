@@ -32,6 +32,7 @@ model User {
   notificationPreferences NotificationPreferences?
   priorityEnrollments     PriorityEnrollment[]
   rsvps                   Rsvp[]
+  rsvpsActedOn            Rsvp[]            @relation("RsvpActedBy")
   priorityConfirmations   PriorityConfirmation[]
   eventInvites            EventInvite[]
   adminEvents             EventAdmin[]  @relation("EventAdmins")
@@ -225,6 +226,7 @@ model Player {
   invitedByUserId String?
   archivedAt      DateTime?
   createdAt       DateTime  @default(now())
+  rsvps           Rsvp[]
 
   @@unique([eventId, name])
   @@index([userId])
@@ -869,18 +871,31 @@ model PlaytomicAvailabilityCache {
   @@index([fetchedAt])
 }
 
-// #457 RSVP per (User, Event). status null == pending.
+// #457 RSVP per (subject, Event). status null == pending.
+// A row is keyed by exactly one of {userId, playerId}: userId for linked accounts
+// (the user self-RSVPs), playerId for guest Players (the admin RSVPs on their
+// behalf). respondedByUserId audits who set a guest RSVP — null for self-RSVPs.
+// Application invariant: (userId IS NULL) XOR (playerId IS NULL) must be false
+// i.e. exactly one is set. SQLite unique constraints on nullable columns treat
+// NULL as distinct, so this is enforced in lib/rsvp.server.ts, not in the schema.
 model Rsvp {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  eventId    String
-  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  status     String?   // "yes" | "no" | null
-  respondedAt DateTime?
-  createdAt  DateTime  @default(now())
+  id                String    @id @default(cuid())
+  userId            String?
+  playerId          String?
+  eventId           String
+  status            String?   // "yes" | "no" | null
+  respondedAt       DateTime?
+  respondedByUserId String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user              User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  player            Player?   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  respondedBy       User?     @relation("RsvpActedBy", fields: [respondedByUserId], references: [id], onDelete: SetNull)
+  event             Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@unique([userId, eventId])
+  @@unique([playerId, eventId])
   @@index([eventId, status])
 }
 
