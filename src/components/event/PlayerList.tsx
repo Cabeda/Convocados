@@ -247,21 +247,18 @@ export function PlayerList({
         await onSetMyRsvp?.("no");
       } else {
         // Organizer X (any row) OR admin declining a guest pill cycling to "no".
-        // We need to figure out which handler to call. The convention:
-        //   - If the player has a userId, the X is the organizer's remove. Use onRemovePlayer.
-        //   - If the player has no userId, the click came from the guest pill cycling to "no".
-        //     Use onSetGuestRsvp(playerId, "no") — that endpoint also archives the guest.
-        const target = players.find((p) => p.id === playerId);
-        if (target && !target.userId && onSetGuestRsvp) {
-          await onSetGuestRsvp(playerId, "no");
-        } else if (onRemovePlayer) {
-          await onRemovePlayer(playerId);
-        }
+        // The DELETE endpoint (onRemovePlayer) handles all cases: it soft-archives, writes
+        // Rsvp=no for the linked-user and guest-decline cases, and tolerates unauthenticated
+        // requests (the lib skips the Rsvp audit row when there's no actor userId).
+        // The guest RSVP endpoint (onSetGuestRsvp) is reserved for the inline status changes
+        // from the guest pill menu (Going / Clear / No response — not Declined).
+        await onRemovePlayer(playerId);
+        return;
       }
     } finally {
       setLeaveDialog((d) => ({ ...d, open: false, busy: false }));
     }
-  }, [leaveDialog, onSetMyRsvp, onSetGuestRsvp, onRemovePlayer, players]);
+  }, [leaveDialog, onSetMyRsvp, onRemovePlayer, players]);
 
   return (
     <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
