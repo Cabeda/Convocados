@@ -209,7 +209,7 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
     expect(attendanceBase.onSetMyRsvp).not.toHaveBeenCalled();
   });
 
-  it("opens the confirm dialog when the Not Coming button is clicked and the user IS on the list", async () => {
+  it("does NOT open the confirm dialog when no warning applies (event > 48h away) — one-click Not coming", async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <PlayerList
@@ -221,8 +221,69 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
       />,
     );
     await user.click(screen.getByTestId("attendance-cta-not-coming"));
+    // No dialog, just the immediate leave.
+    expect(screen.queryByTestId("leave-dialog-confirm")).toBeNull();
+    expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("no");
+  });
+
+  it("does NOT open the confirm dialog when no warning applies (bench has players) — one-click Not coming", async () => {
+    const user = userEvent.setup();
+    // Add 3 more players so the bench is not empty after Alice leaves.
+    const players = [
+      { id: "p-linked", name: "LinkedAlice", userId: "u-1" },
+      { id: "p-guest", name: "GuestBob", userId: null },
+      { id: "p2", name: "P2", userId: null },
+      { id: "p3", name: "P3", userId: null },
+      { id: "p4", name: "P4", userId: null },
+      { id: "p5", name: "P5", userId: null }, // bench
+    ];
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        players={players}
+        maxPlayers={5}
+        currentUserId="u-1"
+        myRsvpStatus="yes"
+        guestRsvpMap={{}}
+        eventDateTime={new Date(Date.now() + 12 * 3600_000).toISOString()} // 12h
+      />,
+    );
+    await user.click(screen.getByTestId("attendance-cta-not-coming"));
+    // Within 48h but bench has a player → no warning → one-click.
+    expect(screen.queryByTestId("leave-dialog-confirm")).toBeNull();
+    expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("no");
+  });
+
+  it("opens the confirm dialog when the warning applies (within 48h + bench empty)", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus="yes"
+        guestRsvpMap={{}}
+        eventDateTime={new Date(Date.now() + 12 * 3600_000).toISOString()} // 12h
+      />,
+    );
+    await user.click(screen.getByTestId("attendance-cta-not-coming"));
     expect(await screen.findByTestId("leave-dialog-confirm")).toBeInTheDocument();
     expect(attendanceBase.onSetMyRsvp).not.toHaveBeenCalled();
+  });
+
+  it("calls onSetMyRsvp('no') after the user confirms the leave dialog", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus="yes"
+        guestRsvpMap={{}}
+        eventDateTime={new Date(Date.now() + 12 * 3600_000).toISOString()} // 12h — triggers dialog
+      />,
+    );
+    await user.click(screen.getByTestId("attendance-cta-not-coming"));
+    await user.click(await screen.findByTestId("leave-dialog-confirm"));
+    expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("no");
   });
 
   it("calls onSetMyRsvp('no') when the Not Coming button is clicked and the user is NOT on the list (just records, no leave)", async () => {
@@ -236,22 +297,6 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
       />,
     );
     await user.click(screen.getByTestId("attendance-cta-not-coming"));
-    expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("no");
-  });
-
-  it("calls onSetMyRsvp('no') after the user confirms the leave dialog", async () => {
-    const user = userEvent.setup();
-    renderWithTheme(
-      <PlayerList
-        {...attendanceBase}
-        currentUserId="u-1"
-        myRsvpStatus="yes"
-        guestRsvpMap={{}}
-        eventDateTime={new Date(Date.now() + 7 * 86400_000).toISOString()}
-      />,
-    );
-    await user.click(screen.getByTestId("attendance-cta-not-coming"));
-    await user.click(await screen.findByTestId("leave-dialog-confirm"));
     expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("no");
   });
 
