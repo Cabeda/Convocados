@@ -422,12 +422,53 @@ export const POST: APIRoute = async ({ params, request }) => {
     });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      // ── P2002 merge logic ──────────────────────────────────────────────
-      if (resolvedUser) {
-        const existing = await prisma.player.findUnique({
-          where: { eventId_name: { eventId, name: trimmed } },
-          select: { id: true, userId: true },
+      // ── P2002 merge / re-add logic ─────────────────────────────────────
+      const existing = await prisma.player.findUnique({
+        where: { eventId_name: { eventId, name: trimmed } },
+        select: { id: true, userId: true, order: true, archivedAt: true },
+      });
+      if (existing?.archivedAt) {
+        // ── Re-add: un-archive + restore order + reset Rsvp=yes ──────
+        const restoredOrder = existing.order;
+        const occupant = await prisma.player.findFirst({
+          where: { eventId, archivedAt: null, order: restoredOrder, id: { not: existing.id } },
+          select: { id: true, order: true },
         });
+        if (occupant) {
+          // Bump the occupant to the end of the bench (maxPlayers + bench count).
+          const benchSize = await prisma.player.count({
+            where: { eventId, archivedAt: null, order: { gte: event.maxPlayers } },
+          });
+          await prisma.player.update({
+            where: { id: occupant.id },
+            data: { order: event.maxPlayers + benchSize },
+          });
+        }
+        const reactivatedUserId = resolvedUser?.id ?? existing.userId;
+        await prisma.player.update({
+          where: { id: existing.id },
+          data: {
+            archivedAt: null,
+            order: restoredOrder,
+            ...(resolvedUser && !existing.userId ? { userId: resolvedUser.id } : {}),
+          },
+        });
+        if (reactivatedUserId) {
+          await prisma.rsvp.upsert({
+            where: { userId_eventId: { userId: reactivatedUserId, eventId } },
+            create: { eventId, userId: reactivatedUserId, status: "yes", respondedAt: new Date() },
+            update: { status: "yes", respondedAt: new Date() },
+          });
+        } else {
+          // Guest re-add: reset their guest Rsvp to "yes" if it was "no".
+          await prisma.rsvp.updateMany({
+            where: { playerId: existing.id, status: "no" },
+            data: { status: "yes", respondedAt: new Date() },
+          });
+        }
+        return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
+      }
+      if (resolvedUser) {
         if (existing) {
           if (!existing.userId) {
             // Merge: link existing unlinked player to the resolved user

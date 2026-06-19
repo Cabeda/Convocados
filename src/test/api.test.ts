@@ -293,6 +293,67 @@ describe("POST /api/events/[id]/players", () => {
     const res = await addPlayer(ctx({ id }, { name: "Bob" }));
     expect(res.status).toBe(409);
   });
+
+  it("re-adding a soft-archived player un-archives them and restores their order", async () => {
+    const id = await seedEvent();
+    // Add three players: Alice (order 0), Bob (order 1), Charlie (order 2)
+    await prisma.player.createMany({
+      data: [
+        { name: "Alice", eventId: id, order: 0 },
+        { name: "Bob", eventId: id, order: 1 },
+        { name: "Charlie", eventId: id, order: 2 },
+      ],
+    });
+    // Soft-archive Bob directly (simulating DELETE /players behaviour).
+    await prisma.player.updateMany({
+      where: { eventId: id, name: "Bob" },
+      data: { archivedAt: new Date() },
+    });
+
+    // Re-add Bob → should un-archive, not 409.
+    const res = await addPlayer(ctx({ id }, { name: "Bob" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.reactivated).toBe(true);
+    expect(body.resolvedName).toBe("Bob");
+
+    // Bob is back at order 1 (his original slot).
+    const players = await prisma.player.findMany({
+      where: { eventId: id },
+      orderBy: { order: "asc" },
+    });
+    expect(players.map((p) => p.name)).toEqual(["Alice", "Bob", "Charlie"]);
+    expect(players.find((p) => p.name === "Bob")?.archivedAt).toBeNull();
+  });
+
+  it("re-adding a player bumps the new occupant of the slot to the bench", async () => {
+    const id = await seedEvent(); // maxPlayers: 5
+    // Alice is at order 0. She leaves (gets archived).
+    const alice = await prisma.player.create({
+      data: { name: "Alice", eventId: id, order: 0 },
+    });
+    await prisma.player.update({
+      where: { id: alice.id },
+      data: { archivedAt: new Date() },
+    });
+
+    // Dave takes her slot (order 0).
+    await prisma.player.create({ data: { name: "Dave", eventId: id, order: 0 } });
+
+    // Alice re-joins. Dave should be bumped.
+    const res = await addPlayer(ctx({ id }, { name: "Alice" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.reactivated).toBe(true);
+
+    // Alice is back at order 0. Dave is on the bench.
+    const players = await prisma.player.findMany({
+      where: { eventId: id, archivedAt: null },
+      orderBy: { order: "asc" },
+    });
+    expect(players.find((p) => p.name === "Alice")?.order).toBe(0);
+    expect(players.find((p) => p.name === "Dave")?.order).toBeGreaterThanOrEqual(5);
+  });
 });
 
 // ─── DELETE /api/events/[id]/players ────────────────────────────────────────
