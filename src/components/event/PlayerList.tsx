@@ -2,10 +2,10 @@ import React, { useState, useCallback, useRef } from "react";
 import {
   Paper, Typography, Box, Stack, Chip, Button, Alert,
   IconButton, Tooltip, InputAdornment, TextField, Autocomplete,
-  List, ListItem, ListItemText, alpha, useTheme,
+  List, ListItem, ListItemText, Menu, MenuItem, ListItemIcon, Divider,
+  alpha, useTheme,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
 import CloseIcon from "@mui/icons-material/Close";
 import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatReclineNormal";
@@ -15,17 +15,14 @@ import ContactsIcon from "@mui/icons-material/Contacts";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
 import CancelIcon from "@mui/icons-material/Cancel";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
-import CheckIcon from "@mui/icons-material/Check";
-import RemoveIcon from "@mui/icons-material/Remove";
-
+import BackspaceIcon from "@mui/icons-material/Backspace";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
-import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import type { Player, PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
-import { AttendanceCard } from "./AttendanceCard";
 import { ConfirmLeaveDialog, type LeaveContext } from "./ConfirmLeaveDialog";
+import { AttendanceCta } from "./AttendanceCta";
 
 export type RsvpStatus = "yes" | "no" | null;
 
@@ -71,17 +68,10 @@ interface Props {
   onRandomize: () => void;
   onConfirmReRandomize: () => void;
   canRemovePlayer: (player: Player) => boolean;
-  /** When provided (authenticated user), renders a "Join this game as {name}" pill as the first pill. */
-  quickJoinUserName?: string;
-  /** Optional: if provided, the Quick Join pill calls this instead of joining directly.
-      The host typically opens the payment-nudge dialog from here when the user has a balance. */
-  onQuickJoinPillClick?: (name: string) => void;
-  /** Called when the user clicks the "Leave game" pill. Removes the user's player entry. */
-  onQuickLeave?: () => void;
-  // #XXX Attendance UI
-  /** Current authenticated user's id, if any. When set, a "You" row is rendered at the top of the active list. */
+  // #XXX Attendance UI (simplified — Quick Join / Quick Leave / You row are gone; replaced by AttendanceCta)
+  /** Current authenticated user's id, if any. When set, the AttendanceCta is rendered above the list. */
   currentUserId?: string | null;
-  /** Current user's RSVP status, fetched separately. When currentUserId is set, the You row uses this to render its current state. */
+  /** Current user's RSVP status, fetched separately. */
   myRsvpStatus?: RsvpStatus;
   /** Map of guest-playerId → RSVP status. When provided, every guest row renders an inline pill. */
   guestRsvpMap?: Record<string, RsvpStatus>;
@@ -91,8 +81,9 @@ interface Props {
   onSetMyRsvp?: (status: "yes" | "no") => Promise<void>;
   /** Set a guest player's RSVP (owner/admin only). Pass null to clear. */
   onSetGuestRsvp?: (playerId: string, status: RsvpStatus) => Promise<void>;
-  /** When set, the AttendanceCard summary renders as a footer inside this Paper, below the player list. The card itself enforces owner/admin-only visibility. */
-  attendanceSummaryEventId?: string;
+  /** Called by AttendanceCta's "Going" button when the user is NOT on the list. The parent
+   *  typically routes this through the payment-nudge dialog before adding the user. */
+  onJoinAsSelf?: () => void;
   // #XXX Leave flow
   /** ISO dateTime of the event. Used to determine if we're within 48h before kickoff for the leave-warning copy. */
   eventDateTime?: string;
@@ -103,16 +94,13 @@ export function PlayerList({
   availableSuggestions, playerError, onPlayerErrorChange,
   onAddPlayer, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
   onRandomize, onConfirmReRandomize, canRemovePlayer,
-  quickJoinUserName,
-  onQuickJoinPillClick,
-  onQuickLeave,
   currentUserId,
   myRsvpStatus,
   guestRsvpMap,
   canEditGuestAttendance,
   onSetMyRsvp,
   onSetGuestRsvp,
-  attendanceSummaryEventId,
+  onJoinAsSelf,
   eventDateTime,
 }: Props) {
   const t = useT();
@@ -193,23 +181,15 @@ export function PlayerList({
   const active = players.slice(0, maxPlayers);
   const bench = players.slice(maxPlayers);
 
-  // #XXX Attendance — only show the You row if the user is on the active list as themselves
-  // (covers linked players + owners). Followers-only users can use the Quick Join pill to join first.
-  const myPlayerOnActiveList = !!currentUserId && active.some(
-    (p) => p.userId === currentUserId,
-  );
-  const showYouRow = myPlayerOnActiveList && !!onSetMyRsvp;
-  const youPlayer = showYouRow
-    ? active.find((p) => p.userId === currentUserId)
+  // #XXX Attendance — the user's own player record (null if not on the list).
+  // Drives the "Join this game" vs "Going" copy on the AttendanceCta.
+  const myPlayer: Player | undefined = currentUserId
+    ? players.find((p) => p.userId === currentUserId)
     : undefined;
 
-  // #XXX Attendance — guest pill click cycles Pending → Yes → No → Pending
-  const cycleGuestRsvp = useCallback((playerId: string) => {
-    if (!onSetGuestRsvp) return;
-    const current = guestRsvpMap?.[playerId] ?? null;
-    const next: RsvpStatus = current === null ? "yes" : current === "yes" ? "no" : null;
-    onSetGuestRsvp(playerId, next);
-  }, [guestRsvpMap, onSetGuestRsvp]);
+  // #XXX Attendance — guest pill opens a small menu (set Going / Declined / No response / Clear).
+  // The previous cycle (Pending → Yes → No → Pending) was error-prone; the menu makes the action
+  // explicit and supports clearing back to null.
 
   // #XXX Leave flow — confirm dialog state. All four "remove from list" paths converge here.
   const [leaveDialog, setLeaveDialog] = useState<{
@@ -283,6 +263,28 @@ export function PlayerList({
   return (
     <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
       <Stack spacing={2}>
+        {/* #XXX AttendanceCta — "Your response" widget for the signed-in user. Two buttons,
+            always rendered for users on the list or following the event. Anonymous = nothing. */}
+        {currentUserId && (myPlayer || players.length >= 0) && (
+          <AttendanceCta
+            myRsvpStatus={myRsvpStatus ?? null}
+            isOnList={!!myPlayer}
+            onGoing={() => {
+              if (myPlayer) {
+                onSetMyRsvp?.("yes");
+              } else {
+                onJoinAsSelf?.();
+              }
+            }}
+            onNotComing={() => {
+              if (myPlayer) {
+                openLeaveDialog(myPlayer.id, "self");
+              } else {
+                onSetMyRsvp?.("no");
+              }
+            }}
+          />
+        )}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Typography variant="h6" fontWeight={600}>{t("players")}</Typography>
           <Chip label={t("activePlayers", { n: active.length, max: maxPlayers })} size="small" color="primary" />
@@ -476,177 +478,44 @@ export function PlayerList({
           </Typography>
         )}
 
-        {/* Quick-join pill (first, when authenticated and not yet joined) + recent players.
-            The whole row hides when the user is mid-typing, so the focus stays on the input. */}
-        {(() => {
-          const trimmedName = quickJoinUserName?.trim();
-          const alreadyJoined = !!trimmedName && players.some(
-            (p) => p.name.toLowerCase() === trimmedName.toLowerCase(),
-          );
-          const showQuickJoin = !!trimmedName && !alreadyJoined;
-          const showQuickLeave = !!trimmedName && alreadyJoined && !!onQuickLeave;
-          const showRecents = availableSuggestions.length > 0;
-          const idle = !playerInput.trim();
-          if (!idle || (!showQuickJoin && !showQuickLeave && !showRecents)) return null;
-
-          return (
-            <Box>
-              {showRecents && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
-                  {t("recentPlayers")}:
-                </Typography>
-              )}
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                {showQuickJoin && (
-                  <Chip
-                    data-testid="quick-join-pill"
-                    icon={<EmojiPeopleIcon fontSize="small" />}
-                    label={t("quickJoinPillLabel", { name: trimmedName })}
-                    variant="filled"
-                    color="primary"
-                    size="small"
-                    onClick={() => {
-                      if (onQuickJoinPillClick) {
-                        onQuickJoinPillClick(trimmedName);
-                      } else {
-                        onAddPlayer(trimmedName);
-                      }
-                    }}
-                    sx={{
-                      cursor: "pointer",
-                      fontWeight: 600,
-                    }}
-                  />
-                )}
-                {showQuickLeave && (
-                  <Chip
-                    data-testid="quick-leave-pill"
-                    icon={<ExitToAppIcon fontSize="small" />}
-                    label={t("quickLeavePillLabel")}
-                    variant="outlined"
-                    color="error"
-                    size="small"
-                    onClick={() => {
-                      // Find the current user's player in the active+bench list and open the confirm dialog.
-                      const myPlayer = players.find((p) => p.userId === currentUserId);
-                      if (myPlayer) openLeaveDialog(myPlayer.id, "self");
-                      else onQuickLeave?.();
-                    }}
-                    sx={{
-                      cursor: "pointer",
-                      fontWeight: 600,
-                    }}
-                  />
-                )}
-                {showRecents && availableSuggestions.slice(0, 12).map((s) => (
-                  <Chip
-                    key={s.name}
-                    icon={s.userId ? <ShieldIcon sx={{ color: "primary.main !important" }} /> : undefined}
-                    label={s.name}
-                    variant="outlined"
-                    size="small"
-                    onClick={() => {
-                      if (onRequestAdd) {
-                        onRequestAdd({ kind: "single", name: s.name, source: "chip" });
-                      } else {
-                        onAddPlayer(s.name);
-                      }
-                    }}
-                    title={s.userId ? t("protectedPlayer") : undefined}
-                    sx={{
-                      cursor: "pointer",
-                      "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
-                    }}
-                  />
-                ))}
-              </Box>
+        {/* Recent players chips (organizer convenience for re-adding past players).
+            The self Quick Join / Quick Leave pills are gone — replaced by the AttendanceCta below. */}
+        {availableSuggestions.length > 0 && !playerInput.trim() && (
+          <Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              {t("recentPlayers")}:
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+              {availableSuggestions.slice(0, 12).map((s) => (
+                <Chip
+                  key={s.name}
+                  icon={s.userId ? <ShieldIcon sx={{ color: "primary.main !important" }} /> : undefined}
+                  label={s.name}
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    if (onRequestAdd) {
+                      onRequestAdd({ kind: "single", name: s.name, source: "chip" });
+                    } else {
+                      onAddPlayer(s.name);
+                    }
+                  }}
+                  title={s.userId ? t("protectedPlayer") : undefined}
+                  sx={{
+                    cursor: "pointer",
+                    "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
+                  }}
+                />
+              ))}
             </Box>
-          );
-        })()}
+          </Box>
+        )}
 
         {active.length > 0 && (
           <Paper variant="outlined" sx={{
             p: 1, backgroundColor: alpha(theme.palette.primary.main, 0.06),
           }}>
             <List dense disablePadding>
-              {/* #XXX "You" row — pinned at top of the active list for the signed-in user. */}
-              {showYouRow && youPlayer && (
-                <ListItem
-                  data-testid="rsvp-you-row"
-                  sx={{
-                    borderRadius: 2, px: 1, py: 0.75, mb: 0.5,
-                    bgcolor: alpha(theme.palette.primary.main, 0.12),
-                    border: `1px solid ${alpha(theme.palette.primary.main, 0.4)}`,
-                  }}
-                  secondaryAction={
-                    <Stack direction="row" spacing={0.5} alignItems="center">
-                      {myRsvpStatus === "yes" ? (
-                        <Chip
-                          size="small"
-                          color="success"
-                          icon={<HowToRegIcon />}
-                          label={t("rsvpGoing")}
-                          data-testid="rsvp-you-status"
-                          data-status="yes"
-                        />
-                      ) : myRsvpStatus === "no" ? (
-                        <Chip
-                          size="small"
-                          color="error"
-                          icon={<CancelIcon />}
-                          label={t("rsvpDeclined")}
-                          data-testid="rsvp-you-status"
-                          data-status="no"
-                        />
-                      ) : (
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          icon={<HelpOutlineIcon />}
-                          label={t("rsvpNoResponse")}
-                          data-testid="rsvp-you-status"
-                          data-status="none"
-                        />
-                      )}
-                      <Tooltip title={t("rsvpSetGoing")}>
-                        <span>
-                          <IconButton
-                            size="small"
-                            color={myRsvpStatus === "yes" ? "success" : "default"}
-                            data-testid="rsvp-you-yes"
-                            disabled={myRsvpStatus === "yes" || !onSetMyRsvp}
-                            onClick={() => onSetMyRsvp?.("yes")}
-                            aria-label={t("rsvpSetGoing")}
-                          >
-                            <CheckIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip title={t("rsvpSetDeclined")}>
-                        <span>
-                          <IconButton
-                            size="small"
-                            color={myRsvpStatus === "no" ? "error" : "default"}
-                            data-testid="rsvp-you-no"
-                            disabled={myRsvpStatus === "no" || !youPlayer}
-                            onClick={() => youPlayer && openLeaveDialog(youPlayer.id, "self")}
-                            aria-label={t("rsvpSetDeclined")}
-                          >
-                            <RemoveIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </Stack>
-                  }
-                >
-                  <ShieldIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5, flexShrink: 0 }} />
-                  <ListItemText
-                    primary={<span style={{ fontWeight: 700, fontSize: "0.9rem" }}>{t("rsvpYouRow")}</span>}
-                    secondary={youPlayer.name}
-                    secondaryTypographyProps={{ fontSize: "0.75rem", color: "text.secondary" }}
-                  />
-                </ListItem>
-              )}
               {active.map((player, i) => (
                 <ListItem
                   key={player.id}
@@ -667,57 +536,15 @@ export function PlayerList({
                     <Stack direction="row" spacing={0.5} alignItems="center">
                       {/* #XXX Guest attendance pill — visible to all, clickable to owner/admin only. */}
                       {player.userId === null && guestRsvpMap && (
-                        <Tooltip
-                          title={canEditGuestAttendance
-                            ? (guestRsvpMap[player.id] === "yes"
-                                ? t("rsvpSetDeclined")
-                                : guestRsvpMap[player.id] === "no"
-                                  ? t("rsvpClearAttendance")
-                                  : t("rsvpSetGoing"))
-                            : t("rsvpSetByOrganizer")}
-                        >
-                          <span>
-                            <Chip
-                              size="small"
-                              data-testid={`rsvp-guest-pill-${player.id}`}
-                              data-status={guestRsvpMap[player.id] ?? "none"}
-                              icon={guestRsvpMap[player.id] === "yes"
-                                ? <HowToRegIcon />
-                                : guestRsvpMap[player.id] === "no"
-                                  ? <CancelIcon />
-                                  : <HelpOutlineIcon />}
-                              label={guestRsvpMap[player.id] === "yes"
-                                ? t("rsvpGoing")
-                                : guestRsvpMap[player.id] === "no"
-                                  ? t("rsvpDeclined")
-                                  : t("rsvpNoResponse")}
-                              color={guestRsvpMap[player.id] === "yes"
-                                ? "success"
-                                : guestRsvpMap[player.id] === "no"
-                                  ? "error"
-                                  : "default"}
-                              variant={canEditGuestAttendance ? "filled" : "outlined"}
-                              onClick={canEditGuestAttendance
-                                ? () => {
-                                    // Cycling to "no" opens the confirm dialog (it also archives the guest).
-                                    // Cycling to "yes" or back to null stays inline.
-                                    const current = guestRsvpMap?.[player.id] ?? null;
-                                    if (current === "yes") {
-                                      // going yes → next would be no. Intercept for confirm.
-                                      openLeaveDialog(player.id, "organizer");
-                                    } else {
-                                      // current === null → yes (no removal); current === "no" → null (clears, no removal)
-                                      cycleGuestRsvp(player.id);
-                                    }
-                                  }
-                                : undefined}
-                              sx={{
-                                cursor: canEditGuestAttendance ? "pointer" : "default",
-                                pointerEvents: canEditGuestAttendance ? "auto" : "none",
-                              }}
-                            />
-                          </span>
-                        </Tooltip>
+                        <GuestAttendancePill
+                          playerId={player.id}
+                          status={guestRsvpMap[player.id] ?? null}
+                          canEdit={!!canEditGuestAttendance}
+                          onSet={onSetGuestRsvp ? (status) => onSetGuestRsvp(player.id, status) : undefined}
+                          onRequestDecline={canEditGuestAttendance
+                            ? () => openLeaveDialog(player.id, "organizer")
+                            : undefined}
+                        />
                       )}
                       {canRemovePlayer(player) ? (
                         <IconButton edge="end" size="small" data-testid={`remove-player-${player.id}`} onClick={() => openLeaveDialog(player.id, "organizer")}>
@@ -822,10 +649,6 @@ export function PlayerList({
           </Button>
         </Box>
 
-        {attendanceSummaryEventId && (
-          <AttendanceCard eventId={attendanceSummaryEventId} />
-        )}
-
         <ConfirmLeaveDialog
           open={leaveDialog.open}
           onClose={closeLeaveDialog}
@@ -838,5 +661,117 @@ export function PlayerList({
         />
       </Stack>
     </Paper>
+  );
+}
+
+/**
+ * #XXX Guest attendance pill + owner/admin menu.
+ * - Non-admin viewers: read-only chip showing the current state.
+ * - Owner/admin: click → small popover with 3 status options + a Clear action.
+ *   The "Declined" option routes through the confirm-leave dialog (it also archives the player).
+ */
+function GuestAttendancePill({
+  playerId, status, canEdit, onSet, onRequestDecline,
+}: {
+  playerId: string;
+  status: RsvpStatus;
+  canEdit: boolean;
+  onSet?: (status: RsvpStatus) => void;
+  onRequestDecline?: () => void;
+}) {
+  const t = useT();
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const open = !!anchorEl;
+  const handleOpen = (e: React.MouseEvent<HTMLElement>) => {
+    if (!canEdit) return;
+    e.stopPropagation();
+    setAnchorEl(e.currentTarget);
+  };
+  const handleClose = () => setAnchorEl(null);
+  const pick = (next: RsvpStatus) => {
+    handleClose();
+    if (next === "no") {
+      // Declining a guest = leave flow (archive + Rsvp.no). The parent routes through confirm-leave.
+      onRequestDecline?.();
+    } else {
+      onSet?.(next);
+    }
+  };
+
+  const chip = (
+    <Chip
+      size="small"
+      data-testid={`rsvp-guest-pill-${playerId}`}
+      data-status={status ?? "none"}
+      icon={status === "yes"
+        ? <HowToRegIcon />
+        : status === "no"
+          ? <CancelIcon />
+          : <HelpOutlineIcon />}
+      label={status === "yes"
+        ? t("rsvpGoing")
+        : status === "no"
+          ? t("rsvpDeclined")
+          : t("rsvpNoResponse")}
+      color={status === "yes" ? "success" : status === "no" ? "error" : "default"}
+      variant={canEdit ? "filled" : "outlined"}
+      onClick={handleOpen}
+      sx={{
+        cursor: canEdit ? "pointer" : "default",
+        pointerEvents: canEdit ? "auto" : "none",
+      }}
+    />
+  );
+
+  return (
+    <>
+      {canEdit
+        ? <Tooltip title={t("guestPillMenuSet")}>{chip}</Tooltip>
+        : <Tooltip title={t("rsvpSetByOrganizer")}><span>{chip}</span></Tooltip>}
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleClose}
+        data-testid={`rsvp-guest-menu-${playerId}`}
+      >
+        <MenuItem
+          data-testid={`rsvp-guest-menu-going-${playerId}`}
+          selected={status === "yes"}
+          onClick={() => pick("yes")}
+        >
+          <ListItemIcon><HowToRegIcon fontSize="small" /></ListItemIcon>
+          {t("rsvpGoing")}
+        </MenuItem>
+        <MenuItem
+          data-testid={`rsvp-guest-menu-declined-${playerId}`}
+          selected={status === "no"}
+          onClick={() => pick("no")}
+        >
+          <ListItemIcon><CancelIcon fontSize="small" /></ListItemIcon>
+          {t("rsvpDeclined")}
+        </MenuItem>
+        <MenuItem
+          data-testid={`rsvp-guest-menu-noresponse-${playerId}`}
+          selected={status === null}
+          onClick={() => pick(null)}
+        >
+          <ListItemIcon><HelpOutlineIcon fontSize="small" /></ListItemIcon>
+          {t("rsvpNoResponse")}
+        </MenuItem>
+        {status !== null && (
+          [
+            <Divider key="divider" />,
+            <MenuItem
+              key="clear"
+              data-testid={`rsvp-guest-menu-clear-${playerId}`}
+              onClick={() => pick(null)}
+            >
+              <ListItemIcon><BackspaceIcon fontSize="small" /></ListItemIcon>
+              {t("guestPillMenuClear")}
+            </MenuItem>,
+          ]
+        )}
+      </Menu>
+    </>
   );
 }

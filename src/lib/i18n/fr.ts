@@ -585,6 +585,13 @@ const fr: TranslationKeys = {
   rsvpSetDeclined: "Marquer absent",
   rsvpClearAttendance: "Effacer la présence",
   rsvpSetByOrganizer: "Défini par l'organisateur",
+  attendanceCtaTitle: "Ta réponse",
+  attendanceCtaGoing: "Présent",
+  attendanceCtaNotComing: "Absent",
+  attendanceCtaJoinGame: "Rejoindre ce match",
+  attendanceCtaNotOnListHint: "Ta réponse est enregistrée. L'organisateur la verra.",
+  guestPillMenuSet: "Définir la présence",
+  guestPillMenuClear: "Effacer la présence",
   // Leave flow (#XXX)
   leaveDialogSelfTitle: "Quitter ce match ?",
   leaveDialogSelfBody: "Tu seras retiré de la liste des joueurs. S'il n'y a personne sur le banc pour te remplacer, le reste du groupe sera prévenu.",

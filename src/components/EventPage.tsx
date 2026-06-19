@@ -817,19 +817,15 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onRandomize={doRandomize}
               onConfirmReRandomize={() => setConfirmOpen(true)}
               canRemovePlayer={canRemovePlayer}
-              quickJoinUserName={isAuthenticated ? session?.user?.name : undefined}
-              onQuickJoinPillClick={handleQuickJoinPillClick}
-              onQuickLeave={isAuthenticated && session?.user ? (() => {
-                const myPlayer = event.players.find(p => p.userId === session.user!.id);
-                if (myPlayer) removePlayer(myPlayer.id);
-              }) : undefined}
               currentUserId={isAuthenticated ? session?.user?.id : null}
               myRsvpStatus={myRsvpStatus}
               guestRsvpMap={guestRsvpMap}
               canEditGuestAttendance={isOwner || isAdmin}
               onSetMyRsvp={handleSetMyRsvp}
               onSetGuestRsvp={handleSetGuestRsvp}
-              attendanceSummaryEventId={isOwner || isAdmin ? eventId : undefined}
+              onJoinAsSelf={isAuthenticated && session?.user?.name
+                ? () => handleQuickJoinPillClick(session.user!.name)
+                : undefined}
               eventDateTime={event.dateTime}
               />
 
