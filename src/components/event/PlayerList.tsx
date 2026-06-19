@@ -35,7 +35,10 @@ function computeBenchEmptyAfter(
   maxPlayers: number,
 ): boolean {
   const wasActive = active.some((p) => p.id === playerId);
-  return wasActive && active.length - 1 <= maxPlayers;
+  if (!wasActive) return false; // bench player leaving — not "no replacement" for the active roster
+  // Bench is currently empty iff total players fit within maxPlayers. If there are already
+  // bench players, the leave flow promotes the first one to active, so the slot IS filled.
+  return players.length <= maxPlayers;
 }
 
 function computeWithin48h(eventDateTime: string | undefined): boolean {
@@ -277,7 +280,21 @@ export function PlayerList({
               }
             }}
             onNotComing={() => {
-              if (myPlayer) {
+              if (!myPlayer) {
+                // Follower-only: no removal needed, just record Rsvp=no. One-click.
+                onSetMyRsvp?.("no");
+                return;
+              }
+              // On-list user: only show the confirm dialog when the "no replacement" warning
+              // is warranted (within 48h + bench empty). For the simple case, archive + Rsvp=no
+              // happen in one click — the slot is freed up immediately. The 60s undo snackbar
+              // (wired in EventPage) gives the user a way back if they fat-fingered.
+              const snapshot = leaveSnapshotRef.current;
+              const benchEmptyAfter = computeBenchEmptyAfter(
+                myPlayer.id, snapshot.players, snapshot.active, snapshot.maxPlayers,
+              );
+              const within48h = computeWithin48h(snapshot.eventDateTime);
+              if (within48h && benchEmptyAfter) {
                 openLeaveDialog(myPlayer.id, "self");
               } else {
                 onSetMyRsvp?.("no");

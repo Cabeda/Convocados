@@ -125,9 +125,11 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     : Math.min(event.players.length - 1, event.maxPlayers);
   const spotsLeft = Math.max(0, event.maxPlayers - activeAfter);
 
-  // Bench-empty after the removal (only meaningful for active-player removals)
+  // Bench-empty after the removal. A bench is currently empty iff the total players fit
+  // within maxPlayers (i.e. there were no bench players to start with). If the bench already
+  // has players, the leave flow promotes the first one to active, so the slot is filled.
   const benchEmptyAfter: boolean | undefined = wasActive
-    ? !firstBench && event.players.length - 1 <= event.maxPlayers
+    ? event.players.length <= event.maxPlayers
     : undefined;
 
   // Warn-the-rest push: within 48h AND wasActive AND bench is empty after.
