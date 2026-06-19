@@ -19,8 +19,8 @@ import { RSVP_WINDOW_HOURS } from "./rsvp.server";
 const log = createLogger("leave");
 
 export type LeaveActor =
-  | { kind: "self"; userId: string }
-  | { kind: "organizer"; userId: string };
+  | { kind: "self"; userId: string | null }
+  | { kind: "organizer"; userId: string | null };
 
 export interface ArchiveAndLeaveInput {
   eventId: string;
@@ -85,14 +85,32 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     data: { archivedAt: new Date() },
   });
 
-  // Write Rsvp for the self-leave case. The organizer paths (X button, admin-decline-guest)
-  // do not write Rsvp here — the caller is responsible (the guest RSVP endpoint writes its own
-  // audit row via upsertGuestRsvp; the X button doesn't need to touch Rsvp at all).
+  // Write Rsvp. Two cases:
+  //   - Self-leave (linked user): status="no" + respondedAt
+  //   - Admin declining a guest (organizer + no userId): status="no" + respondedByUserId audit.
+  //   - Organizer X on a linked user: do not touch Rsvp (the user can still respond later).
+  // The Rsvp audit is only written when there's a real actor userId (FK to User).
   if (actor.kind === "self" && player.userId) {
     await prisma.rsvp.upsert({
       where: { userId_eventId: { userId: player.userId, eventId } },
       create: { eventId, userId: player.userId, status: "no", respondedAt: new Date() },
       update: { status: "no", respondedAt: new Date() },
+    });
+  } else if (actor.kind === "organizer" && !player.userId && actor.userId) {
+    await prisma.rsvp.upsert({
+      where: { playerId_eventId: { playerId, eventId } },
+      create: {
+        eventId,
+        playerId,
+        status: "no",
+        respondedAt: new Date(),
+        respondedByUserId: actor.userId ?? undefined,
+      },
+      update: {
+        status: "no",
+        respondedAt: new Date(),
+        respondedByUserId: actor.userId ?? undefined,
+      },
     });
   }
 
@@ -150,7 +168,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
         url,
         spotsLeft,
       },
-      actor.userId,
+      actor.userId ?? undefined,
     );
   } else if (wasActive && firstBench) {
     // Existing promotion notification (unchanged from prior behavior — always fires on promotion)
@@ -164,7 +182,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
         url,
         spotsLeft,
       },
-      actor.userId,
+      actor.userId ?? undefined,
     );
   } else if (!wasActive) {
     // Existing bench-leave notification (unchanged)
@@ -178,7 +196,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
         url,
         spotsLeft,
       },
-      actor.userId,
+      actor.userId ?? undefined,
     );
   }
 
@@ -195,7 +213,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
         url,
         spotsLeft,
       },
-      actor.userId,
+      actor.userId ?? undefined,
     );
   }
 
