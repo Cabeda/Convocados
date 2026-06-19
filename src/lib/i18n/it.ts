@@ -585,6 +585,13 @@ const it: TranslationKeys = {
   rsvpSetDeclined: "Segna come assente",
   rsvpClearAttendance: "Cancella presenza",
   rsvpSetByOrganizer: "Impostato dall'organizzatore",
+  attendanceCtaTitle: "La tua risposta",
+  attendanceCtaGoing: "Presente",
+  attendanceCtaNotComing: "Assente",
+  attendanceCtaJoinGame: "Partecipa a questa partita",
+  attendanceCtaNotOnListHint: "La tua risposta è registrata. L'organizzatore la vedrà.",
+  guestPillMenuSet: "Imposta presenza",
+  guestPillMenuClear: "Cancella presenza",
   // Leave flow (#XXX)
   leaveDialogSelfTitle: "Uscire da questa partita?",
   leaveDialogSelfBody: "Verrai rimosso dalla lista dei giocatori. Se non c'è nessuno in panchina a prendere il tuo posto, il resto del gruppo verrà avvisato.",
