@@ -585,7 +585,12 @@ export default function EventPage({ eventId }: { eventId: string }) {
     const prev = myRsvpStatus;
     setMyRsvpStatus(status); // optimistic
     try {
-      const r = await fetch(`/api/events/${eventId}/rsvp`, {
+      // #XXX "no" goes through the leave endpoint: it sets Rsvp="no" AND archives the player.
+      // "yes" stays on the plain rsvp endpoint (user stays on the player list).
+      const url = status === "no"
+        ? `/api/events/${eventId}/leave`
+        : `/api/events/${eventId}/rsvp`;
+      const r = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
@@ -598,11 +603,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
         return;
       }
       setSnackbar(status === "yes" ? t("rsvpYesToast") : t("rsvpNoToast"));
+      // Refetch event so the archived player disappears from the list.
+      fetchEvent();
     } catch {
       setMyRsvpStatus(prev);
       setSnackbar(t("somethingWentWrong"));
     }
-  }, [eventId, myRsvpStatus, t]);
+  }, [eventId, myRsvpStatus, t, fetchEvent]);
 
   const handleSetGuestRsvp = useCallback(async (playerId: string, status: "yes" | "no" | null) => {
     const prev = guestRsvpMap[playerId] ?? null;
@@ -823,6 +830,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onSetMyRsvp={handleSetMyRsvp}
               onSetGuestRsvp={handleSetGuestRsvp}
               attendanceSummaryEventId={isOwner || isAdmin ? eventId : undefined}
+              eventDateTime={event.dateTime}
               />
 
             {/* Payment nudge dialog — opened by the Quick Join pill on tap when the user
