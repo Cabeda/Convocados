@@ -111,11 +111,16 @@ test.describe("Event lifecycle — create, add players, randomize", () => {
   });
 
   test("duplicate player name returns 409", async ({ request }) => {
+    // Use a unique IP so this test doesn't share the per-IP event-create rate limit with
+    // the other tests in this file (which all hit the same 127.0.0.1).
+    const ip = `10.99.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
+    const headers = { "X-Forwarded-For": ip };
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(20, 0, 0, 0);
 
     const createRes = await request.post("/api/events", {
+      headers,
       data: {
         title: "E2E Duplicate Test",
         dateTime: tomorrow.toISOString(),
@@ -127,12 +132,14 @@ test.describe("Event lifecycle — create, add players, randomize", () => {
 
     // Add player
     const res1 = await request.post(`/api/events/${id}/players`, {
+      headers,
       data: { name: "Alice" },
     });
     expect(res1.status()).toBe(200);
 
     // Add same player again
     const res2 = await request.post(`/api/events/${id}/players`, {
+      headers,
       data: { name: "Alice" },
     });
     expect(res2.status()).toBe(409);
