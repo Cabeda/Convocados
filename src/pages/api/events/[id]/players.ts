@@ -624,11 +624,15 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   // Soft-archive + notify + log + re-index, with the warn-the-rest push gated on (48h + bench-empty).
   // Self-removal (the player is removing themselves) uses actor.kind="self" so the auto-unfollow fires.
   const isSelf = session?.user?.id && player.userId === session.user.id;
-  const actorUserId = session?.user?.id ?? player.event.ownerId ?? "system";
+  // For unauthenticated requests, pass null as the actor id (lib skips the Rsvp audit row,
+  // which has a FK to User). Real authenticated users get a FK-safe actor id.
+  const actorUserId = session?.user?.id ?? player.event.ownerId ?? null;
   const result = await archiveAndLeave({
     eventId,
     playerId,
-    actor: isSelf ? { kind: "self", userId: actorUserId } : { kind: "organizer", userId: actorUserId },
+    actor: isSelf
+      ? { kind: "self", userId: actorUserId }
+      : { kind: "organizer", userId: actorUserId },
     origin,
   });
   return Response.json({

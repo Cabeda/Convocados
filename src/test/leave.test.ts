@@ -146,7 +146,7 @@ describe("archiveAndLeave — self-leave", () => {
 });
 
 describe("archiveAndLeave — admin decline guest (organizer path)", () => {
-  it("soft-archives the guest player. The Rsvp write is the caller's responsibility (see guest-rsvp API test).", async () => {
+  it("soft-archives the guest player AND writes Rsvp.status='no' with respondedByUserId audit", async () => {
     const owner = await seedUser("Owner", "u-owner");
     const event = await seedEvent(owner.id);
     const guest = await prisma.player.create({
@@ -161,12 +161,13 @@ describe("archiveAndLeave — admin decline guest (organizer path)", () => {
 
     const updated = await prisma.player.findUnique({ where: { id: guest.id } });
     expect(updated?.archivedAt).not.toBeNull();
-    // The organizer path in archiveAndLeave does NOT touch the Rsvp table — the caller (guest-rsvp API)
-    // is responsible for writing the Rsvp keyed on playerId with the audit field.
+    // The organizer + guest branch writes Rsvp.status="no" with the respondedByUserId audit field,
+    // so the summary chips reflect the decline even though the guest can't self-RSVP.
     const rsvp = await prisma.rsvp.findUnique({
       where: { playerId_eventId: { playerId: guest.id, eventId: event.id } },
     });
-    expect(rsvp).toBeNull();
+    expect(rsvp?.status).toBe("no");
+    expect(rsvp?.respondedByUserId).toBe(owner.id);
   });
 });
 
