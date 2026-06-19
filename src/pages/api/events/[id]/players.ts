@@ -428,28 +428,20 @@ export const POST: APIRoute = async ({ params, request }) => {
         select: { id: true, userId: true, order: true, archivedAt: true },
       });
       if (existing?.archivedAt) {
-        // ── Re-add: un-archive + restore order + reset Rsvp=yes ──────
-        const restoredOrder = existing.order;
-        const occupant = await prisma.player.findFirst({
-          where: { eventId, archivedAt: null, order: restoredOrder, id: { not: existing.id } },
-          select: { id: true, order: true },
+        // ── Re-add: un-archive + place at end of list + reset Rsvp=yes ─
+        // New joiners go to the end of the list (the "Queue" mental model).
+        // A re-add follows the same rule — the player loses their prior slot.
+        const maxOrder = await prisma.player.aggregate({
+          where: { eventId, archivedAt: null },
+          _max: { order: true },
         });
-        if (occupant) {
-          // Bump the occupant to the end of the bench (maxPlayers + bench count).
-          const benchSize = await prisma.player.count({
-            where: { eventId, archivedAt: null, order: { gte: event.maxPlayers } },
-          });
-          await prisma.player.update({
-            where: { id: occupant.id },
-            data: { order: event.maxPlayers + benchSize },
-          });
-        }
+        const newOrder = (maxOrder._max.order ?? -1) + 1;
         const reactivatedUserId = resolvedUser?.id ?? existing.userId;
         await prisma.player.update({
           where: { id: existing.id },
           data: {
             archivedAt: null,
-            order: restoredOrder,
+            order: newOrder,
             ...(resolvedUser && !existing.userId ? { userId: resolvedUser.id } : {}),
           },
         });
