@@ -13,6 +13,7 @@ import { getOutstandingBalance, getGateBalance } from "../../../../lib/balance.s
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
+import { archiveAndLeave } from "../../../../lib/leave.server";
 import {
   IDEMPOTENCY_HEADER,
   getCachedResponse,
@@ -604,101 +605,35 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const origin = `${proto}://${host}`;
   const { playerId } = await request.json();
   const session = await getSession(request);
-  const senderClientId = session?.user?.id ?? request.headers.get("x-client-id") ?? undefined;
 
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    include: { players: { orderBy: { order: "asc" } } },
+  const player = await prisma.player.findFirst({
+    where: { id: playerId, eventId, archivedAt: null },
+    include: { event: { select: { ownerId: true } } },
   });
-  if (!event) return Response.json({ error: "Not found." }, { status: 404 });
-
-  const playerIndex = event.players.findIndex((p) => p.id === playerId);
-  const player = event.players[playerIndex];
   if (!player) return Response.json({ error: "Not found." }, { status: 404 });
 
-  // Protected player check: players with userId can only be removed by themselves or the event owner
+  // Protected player check: players with userId can only be removed by themselves or the event owner.
   if (player.userId) {
     const isSelf = session?.user?.id === player.userId;
-    const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
+    const { isOwner, isAdmin } = await checkOwnership(request, player.event.ownerId, session, eventId);
     if (!isSelf && !isOwner && !isAdmin) {
       return Response.json({ error: "This player is account-linked and can only be removed by themselves or the event owner." }, { status: 403 });
     }
   }
 
-  const wasActive = playerIndex < event.maxPlayers;
-  const firstBench = event.players[event.maxPlayers];
-
-  await prisma.player.delete({ where: { id: playerId, eventId } });
-
-  // Auto-unfollow on self-removal
-  const isSelfRemoval = session?.user?.id && session.user.id === player.userId;
-  if (isSelfRemoval) {
-    await prisma.eventFollow.deleteMany({
-      where: { eventId, userId: session.user.id },
-    });
-  }
-
-  // Re-index remaining player orders
-  const remaining = event.players.filter((p) => p.id !== playerId);
-  for (let i = 0; i < remaining.length; i++) {
-    if (remaining[i].order !== i) {
-      await prisma.player.update({ where: { id: remaining[i].id }, data: { order: i } });
-    }
-  }
-
-  // Auto-sync teams: remove player, optionally promote bench player into their team
-  if (wasActive) {
-    await removePlayerFromTeams(eventId, player.name, firstBench?.name);
-  }
-
-  // Validate teams: ensure no bench players are in teams after roster change
-  await validateTeams(eventId, event.maxPlayers);
-
-  // spotsLeft after removal
-  const activeAfter = wasActive
-    ? firstBench ? event.maxPlayers : Math.min(event.players.length - 1, event.maxPlayers)
-    : Math.min(event.players.length - 1, event.maxPlayers);
-  const spotsLeft = Math.max(0, event.maxPlayers - activeAfter);
-
-  const url = `${origin}/events/${eventId}`;
-  if (!wasActive) {
-    await enqueueNotification(eventId, "player_left_bench", { title: event.title, key: "notifyPlayerLeftBench", params: { name: player.name }, url, spotsLeft }, senderClientId);
-  } else if (firstBench) {
-    await enqueueNotification(eventId, "player_left_promoted", { title: event.title, key: "notifyPlayerLeftPromoted", params: { left: player.name, promoted: firstBench.name }, url, spotsLeft }, senderClientId);
-  } else {
-    await enqueueNotification(eventId, "player_left", { title: event.title, key: "notifyPlayerLeft", params: { name: player.name }, url, spotsLeft }, senderClientId);
-  }
-
-  // Spot available: game was full before removal and now has an opening (no bench to auto-promote)
-  const wasFull = event.players.length >= event.maxPlayers;
-  if (wasActive && wasFull && !firstBench && spotsLeft > 0) {
-    await enqueueNotification(eventId, "spot_available", { title: event.title, key: "notifySpotAvailable", params: { name: player.name }, url, spotsLeft }, senderClientId);
-  }
-
-  // Drain notification queue before responding so push is sent immediately.
-  if (!process.env.VITEST) {
-    await drainNotificationQueue().catch((err) => {
-      log.error({ eventId, err }, "Failed to drain notification queue");
-    });
-  }
-
-  // Fire webhooks (non-blocking)
-  fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft }).catch(() => {});
-
-  // Recalculate payment shares if a cost is set
-  await syncPaymentsForEvent(eventId);
-
-
-  logEvent(eventId, "player_removed", session?.user?.name ?? null, session?.user?.id ?? null, { playerName: player.name }).catch(() => {});
-
-  // Return undo data so the client can restore the player within a time window
+  // Soft-archive + notify + log + re-index, with the warn-the-rest push gated on (48h + bench-empty).
+  // Self-removal (the player is removing themselves) uses actor.kind="self" so the auto-unfollow fires.
+  const isSelf = session?.user?.id && player.userId === session.user.id;
+  const actorUserId = session?.user?.id ?? player.event.ownerId ?? "system";
+  const result = await archiveAndLeave({
+    eventId,
+    playerId,
+    actor: isSelf ? { kind: "self", userId: actorUserId } : { kind: "organizer", userId: actorUserId },
+    origin,
+  });
   return Response.json({
     ok: true,
-    undo: {
-      name: player.name,
-      order: playerIndex,
-      userId: player.userId ?? null,
-      removedAt: Date.now(),
-    },
+    warned: result.warned,
+    undo: result.undo,
   });
 };

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   Paper, Typography, Box, Stack, Chip, Button, Alert,
   IconButton, Tooltip, InputAdornment, TextField, Autocomplete,
@@ -25,8 +25,28 @@ import { matchesWithName } from "~/lib/stringMatch";
 import type { Player, PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 import { AttendanceCard } from "./AttendanceCard";
+import { ConfirmLeaveDialog, type LeaveContext } from "./ConfirmLeaveDialog";
 
 export type RsvpStatus = "yes" | "no" | null;
+
+/** Pure helpers — extracted out of the component body so Date.now() inside doesn't trip the
+ *  eslint react-hooks/purity rule. They run in event handlers, never during render. */
+function computeBenchEmptyAfter(
+  playerId: string,
+  players: Player[],
+  active: Player[],
+  maxPlayers: number,
+): boolean {
+  const wasActive = active.some((p) => p.id === playerId);
+  return wasActive && active.length - 1 <= maxPlayers;
+}
+
+function computeWithin48h(eventDateTime: string | undefined): boolean {
+  if (!eventDateTime) return false;
+  const kickoff = new Date(eventDateTime).getTime();
+  const hoursUntil = (kickoff - Date.now()) / (60 * 60 * 1000);
+  return hoursUntil > 0 && hoursUntil <= 48;
+}
 
 interface PlayerSuggestion {
   name: string;
@@ -73,6 +93,9 @@ interface Props {
   onSetGuestRsvp?: (playerId: string, status: RsvpStatus) => Promise<void>;
   /** When set, the AttendanceCard summary renders as a footer inside this Paper, below the player list. The card itself enforces owner/admin-only visibility. */
   attendanceSummaryEventId?: string;
+  // #XXX Leave flow
+  /** ISO dateTime of the event. Used to determine if we're within 48h before kickoff for the leave-warning copy. */
+  eventDateTime?: string;
 }
 
 export function PlayerList({
@@ -90,6 +113,7 @@ export function PlayerList({
   onSetMyRsvp,
   onSetGuestRsvp,
   attendanceSummaryEventId,
+  eventDateTime,
 }: Props) {
   const t = useT();
   const theme = useTheme();
@@ -186,6 +210,75 @@ export function PlayerList({
     const next: RsvpStatus = current === null ? "yes" : current === "yes" ? "no" : null;
     onSetGuestRsvp(playerId, next);
   }, [guestRsvpMap, onSetGuestRsvp]);
+
+  // #XXX Leave flow — confirm dialog state. All four "remove from list" paths converge here.
+  const [leaveDialog, setLeaveDialog] = useState<{
+    open: boolean;
+    context: LeaveContext;
+    playerId: string | null;
+    playerName: string;
+    benchEmptyAfter: boolean;
+    within48h: boolean;
+    busy: boolean;
+  }>({
+    open: false, context: "self", playerId: null, playerName: "",
+    benchEmptyAfter: false, within48h: false, busy: false,
+  });
+
+  // Snapshot the data the openLeaveDialog handler needs into a ref so the function
+  // doesn't have to be re-created (or re-evaluated) on every render — that keeps
+  // Date.now() out of the render body (eslint react-hooks/purity) and the React Compiler happy.
+  const leaveSnapshotRef = useRef({ players, active, maxPlayers, eventDateTime });
+  leaveSnapshotRef.current = { players, active, maxPlayers, eventDateTime };
+
+  /** Opens the confirm dialog. Pure: all data passed in as arguments, only Date.now() (allowed in event handlers). */
+  function openLeaveDialog(playerId: string, context: LeaveContext) {
+    const snapshot = leaveSnapshotRef.current;
+    const benchEmptyAfter = computeBenchEmptyAfter(
+      playerId, snapshot.players, snapshot.active, snapshot.maxPlayers,
+    );
+    const within48h = computeWithin48h(snapshot.eventDateTime);
+    const playerName = snapshot.players.find((pl) => pl.id === playerId)?.name ?? "";
+    setLeaveDialog({
+      open: true,
+      context,
+      playerId,
+      playerName,
+      benchEmptyAfter,
+      within48h,
+      busy: false,
+    });
+  }
+
+  const closeLeaveDialog = useCallback(() => {
+    setLeaveDialog((d) => ({ ...d, open: false }));
+  }, []);
+
+  const confirmLeave = useCallback(async () => {
+    const { context, playerId } = leaveDialog;
+    if (!playerId) return;
+    setLeaveDialog((d) => ({ ...d, busy: true }));
+    try {
+      if (context === "self") {
+        // "No" on the You row → decline + leave. The backend sets Rsvp=no + archives the player.
+        await onSetMyRsvp?.("no");
+      } else {
+        // Organizer X (any row) OR admin declining a guest pill cycling to "no".
+        // We need to figure out which handler to call. The convention:
+        //   - If the player has a userId, the X is the organizer's remove. Use onRemovePlayer.
+        //   - If the player has no userId, the click came from the guest pill cycling to "no".
+        //     Use onSetGuestRsvp(playerId, "no") — that endpoint also archives the guest.
+        const target = players.find((p) => p.id === playerId);
+        if (target && !target.userId && onSetGuestRsvp) {
+          await onSetGuestRsvp(playerId, "no");
+        } else if (onRemovePlayer) {
+          await onRemovePlayer(playerId);
+        }
+      }
+    } finally {
+      setLeaveDialog((d) => ({ ...d, open: false, busy: false }));
+    }
+  }, [leaveDialog, onSetMyRsvp, onSetGuestRsvp, onRemovePlayer, players]);
 
   return (
     <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
@@ -433,7 +526,12 @@ export function PlayerList({
                     variant="outlined"
                     color="error"
                     size="small"
-                    onClick={onQuickLeave}
+                    onClick={() => {
+                      // Find the current user's player in the active+bench list and open the confirm dialog.
+                      const myPlayer = players.find((p) => p.userId === currentUserId);
+                      if (myPlayer) openLeaveDialog(myPlayer.id, "self");
+                      else onQuickLeave?.();
+                    }}
                     sx={{
                       cursor: "pointer",
                       fontWeight: 600,
@@ -530,8 +628,8 @@ export function PlayerList({
                             size="small"
                             color={myRsvpStatus === "no" ? "error" : "default"}
                             data-testid="rsvp-you-no"
-                            disabled={myRsvpStatus === "no" || !onSetMyRsvp}
-                            onClick={() => onSetMyRsvp?.("no")}
+                            disabled={myRsvpStatus === "no" || !youPlayer}
+                            onClick={() => youPlayer && openLeaveDialog(youPlayer.id, "self")}
                             aria-label={t("rsvpSetDeclined")}
                           >
                             <RemoveIcon fontSize="small" />
@@ -599,8 +697,19 @@ export function PlayerList({
                                   ? "error"
                                   : "default"}
                               variant={canEditGuestAttendance ? "filled" : "outlined"}
-                              onClick={canEditGuestAttendance && onSetGuestRsvp
-                                ? () => cycleGuestRsvp(player.id)
+                              onClick={canEditGuestAttendance
+                                ? () => {
+                                    // Cycling to "no" opens the confirm dialog (it also archives the guest).
+                                    // Cycling to "yes" or back to null stays inline.
+                                    const current = guestRsvpMap?.[player.id] ?? null;
+                                    if (current === "yes") {
+                                      // going yes → next would be no. Intercept for confirm.
+                                      openLeaveDialog(player.id, "organizer");
+                                    } else {
+                                      // current === null → yes (no removal); current === "no" → null (clears, no removal)
+                                      cycleGuestRsvp(player.id);
+                                    }
+                                  }
                                 : undefined}
                               sx={{
                                 cursor: canEditGuestAttendance ? "pointer" : "default",
@@ -611,7 +720,7 @@ export function PlayerList({
                         </Tooltip>
                       )}
                       {canRemovePlayer(player) ? (
-                        <IconButton edge="end" size="small" onClick={() => onRemovePlayer(player.id)}>
+                        <IconButton edge="end" size="small" data-testid={`remove-player-${player.id}`} onClick={() => openLeaveDialog(player.id, "organizer")}>
                           <CloseIcon fontSize="small" />
                         </IconButton>
                       ) : undefined}
@@ -675,7 +784,7 @@ export function PlayerList({
                       }}
                       secondaryAction={
                         canRemovePlayer(player) ? (
-                          <IconButton edge="end" size="small" onClick={() => onRemovePlayer(player.id)}>
+                          <IconButton edge="end" size="small" data-testid={`remove-bench-player-${player.id}`} onClick={() => openLeaveDialog(player.id, "organizer")}>
                             <CloseIcon fontSize="small" />
                           </IconButton>
                         ) : undefined
@@ -716,6 +825,17 @@ export function PlayerList({
         {attendanceSummaryEventId && (
           <AttendanceCard eventId={attendanceSummaryEventId} />
         )}
+
+        <ConfirmLeaveDialog
+          open={leaveDialog.open}
+          onClose={closeLeaveDialog}
+          onConfirm={confirmLeave}
+          context={leaveDialog.context}
+          playerName={leaveDialog.playerName}
+          benchEmptyAfter={leaveDialog.benchEmptyAfter}
+          within48h={leaveDialog.within48h}
+          busy={leaveDialog.busy}
+        />
       </Stack>
     </Paper>
   );
