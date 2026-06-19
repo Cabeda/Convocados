@@ -24,6 +24,7 @@ import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import type { Player, PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
+import { AttendanceCard } from "./AttendanceCard";
 
 export type RsvpStatus = "yes" | "no" | null;
 
@@ -70,6 +71,8 @@ interface Props {
   onSetMyRsvp?: (status: "yes" | "no") => Promise<void>;
   /** Set a guest player's RSVP (owner/admin only). Pass null to clear. */
   onSetGuestRsvp?: (playerId: string, status: RsvpStatus) => Promise<void>;
+  /** When set, the AttendanceCard summary renders as a footer inside this Paper, below the player list. The card itself enforces owner/admin-only visibility. */
+  attendanceSummaryEventId?: string;
 }
 
 export function PlayerList({
@@ -86,6 +89,7 @@ export function PlayerList({
   canEditGuestAttendance,
   onSetMyRsvp,
   onSetGuestRsvp,
+  attendanceSummaryEventId,
 }: Props) {
   const t = useT();
   const theme = useTheme();
@@ -708,6 +712,10 @@ export function PlayerList({
             {t("randomizeTeams")}
           </Button>
         </Box>
+
+        {attendanceSummaryEventId && (
+          <AttendanceCard eventId={attendanceSummaryEventId} />
+        )}
       </Stack>
     </Paper>
   );

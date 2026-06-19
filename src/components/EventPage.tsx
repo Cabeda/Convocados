@@ -29,7 +29,6 @@ import {
 import type { EventData, Player, KnownPlayer } from "./event";
 import { PostGameBanner } from "./PostGameBanner";
 import type { PostGameStatus } from "./PostGameBanner";
-import { AttendanceCard } from "./event/AttendanceCard";
 import { PushPromptBanner } from "./PushPromptBanner";
 
 
@@ -730,8 +729,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               highIntent={isAuthenticated && event ? isHighIntentForPush(event.dateTime, myRsvpStatus) : false}
             />
 
-            {/* #457 Organizer-only attendance card (Owner + Admins) */}
-            {(isOwner || isAdmin) && <AttendanceCard eventId={eventId} />}
+            {/* #457 Organizer-only attendance summary — now rendered inside the PlayerList footer. */}
 
             {/* Header */}
             <EventHeader
@@ -824,6 +822,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               canEditGuestAttendance={isOwner || isAdmin}
               onSetMyRsvp={handleSetMyRsvp}
               onSetGuestRsvp={handleSetGuestRsvp}
+              attendanceSummaryEventId={isOwner || isAdmin ? eventId : undefined}
               />
 
             {/* Payment nudge dialog — opened by the Quick Join pill on tap when the user
