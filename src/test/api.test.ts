@@ -298,7 +298,7 @@ describe("POST /api/events/[id]/players", () => {
 // ─── DELETE /api/events/[id]/players ────────────────────────────────────────
 
 describe("DELETE /api/events/[id]/players", () => {
-  it("deletes a player by id", async () => {
+  it("archives a player by id", async () => {
     const id = await seedEvent();
     await prisma.player.create({ data: { name: "Carol", eventId: id } });
     const player = await prisma.player.findFirst({ where: { eventId: id } });
@@ -310,8 +310,11 @@ describe("DELETE /api/events/[id]/players", () => {
     });
     const res = await deletePlayer({ request, params: { id } } as any);
     expect(res.status).toBe(200);
-    const remaining = await prisma.player.findMany({ where: { eventId: id } });
+    // Soft-archive: the row is preserved with archivedAt set, but excluded from the active list.
+    const remaining = await prisma.player.findMany({ where: { eventId: id, archivedAt: null } });
     expect(remaining).toHaveLength(0);
+    const archived = await prisma.player.findFirst({ where: { eventId: id } });
+    expect(archived?.archivedAt).not.toBeNull();
   });
 });
 

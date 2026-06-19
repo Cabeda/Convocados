@@ -3,8 +3,11 @@ import { prisma } from "~/lib/db.server";
 import { getSession, checkOwnership } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { upsertGuestRsvp } from "~/lib/rsvp.server";
+import { archiveAndLeave } from "~/lib/leave.server";
 
-/** POST /api/events/[id]/players/[playerId]/rsvp — owner/admin only. Body { status: "yes" | "no" | null }. */
+/** POST /api/events/[id]/players/[playerId]/rsvp — owner/admin only. Body { status: "yes" | "no" | null }.
+ *  status="no" on a guest Player also archives the player (the "leave on behalf" flow).
+ *  status="yes" or status=null is a no-op on the roster. */
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
@@ -49,12 +52,30 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   try {
+    // 1. Write the Rsvp row (keyed on playerId, with respondedByUserId audit).
     const rsvp = await upsertGuestRsvp(eventId, playerId, status, session.user.id);
+
+    // 2. status="no" → also archive the player (admin declines on behalf of the guest).
+    let warned = false;
+    if (status === "no") {
+      const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";
+      const proto = request.headers.get("x-forwarded-proto") ?? "https";
+      const origin = `${proto}://${host}`;
+      const result = await archiveAndLeave({
+        eventId,
+        playerId,
+        actor: { kind: "organizer", userId: session.user.id },
+        origin,
+      });
+      warned = result.warned;
+    }
+
     return Response.json({
       ok: true,
       status: rsvp.status,
       respondedAt: rsvp.respondedAt,
       respondedByUserId: rsvp.respondedByUserId,
+      warned,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to set attendance.";

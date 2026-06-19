@@ -348,7 +348,7 @@ export async function syncPaymentsForEvent(eventId: string): Promise<void> {
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    include: { players: { orderBy: { order: "asc" } } },
+    include: { players: { where: { archivedAt: null }, orderBy: { order: "asc" } } },
   });
   if (!event) return;
 
