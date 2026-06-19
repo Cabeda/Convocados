@@ -329,4 +329,32 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
     const pill = screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`);
     expect(pill.className).toMatch(/MuiChip-filled/);
   });
+
+  it("does not render the AttendanceCard when attendanceSummaryEventId is not provided", () => {
+    renderWithTheme(<PlayerList {...attendanceBase} />);
+    expect(screen.queryByText(/attendance/i)).toBeNull();
+  });
+
+  it("renders the AttendanceCard footer when attendanceSummaryEventId is provided", async () => {
+    // Mock the summary endpoint to return a known payload.
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ yes: 3, no: 1, pending: 2 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        attendanceSummaryEventId="evt-1"
+      />,
+    );
+    // The card fetches the summary on mount; the heading copy uses t("attendanceCard") → "Attendance".
+    expect(await screen.findByText(/attendance/i)).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/events/evt-1/rsvp/summary",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    fetchSpy.mockRestore();
+  });
 });
