@@ -134,6 +134,8 @@ test.describe("Snackbar notifications", () => {
     const listItem = page.locator(`[data-testid="player-item-UndoTestPlayer"], li:has-text("UndoTestPlayer")`).first();
     const deleteBtn = listItem.locator('button').last();
     await deleteBtn.click();
+    // The X button now opens a confirm-leave dialog (#469). Confirm the removal.
+    await page.getByTestId("leave-dialog-confirm").click();
 
     // Undo snackbar should appear
     await expect(page.locator('.MuiSnackbar-root')).toBeVisible({ timeout: 5_000 });

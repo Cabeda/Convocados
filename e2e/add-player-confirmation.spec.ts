@@ -166,10 +166,12 @@ test.describe("Event page — add and remove players (issue #455)", () => {
     // Pre-condition: both are on the roster.
     expect((await getRoster(request, eventId)).sort()).toEqual([keep, remove].sort());
 
-    // Action: click the remove IconButton on the row for `remove`.
+    // Action: click the remove IconButton on the row for `remove`, then confirm in the dialog.
     const removeRow = page.locator(".MuiListItem-root", { hasText: remove }).first();
     await expect(removeRow).toBeVisible();
     await removeRow.locator("button").last().click();
+    // The X button now opens a confirm-leave dialog (#469). Confirm the removal.
+    await page.getByTestId("leave-dialog-confirm").click();
 
     // Post-condition: remove is gone, keep is still there (DOM + server).
     await expectRosterOmits(page, request, eventId, remove);
