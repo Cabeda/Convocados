@@ -191,3 +191,9 @@ The recipient set for a Game is the union of: **EventFollow** (followers), `Play
 
 Distinguished from the historical-stats API at `/api/events/[id]/attendance` (which computes per-player attendance rate from `GameHistory`); that endpoint shares the user-facing word but is a different concept.
 _Avoid_: RSVP (table name only), response
+
+### Leave / Re-join round-trip
+A **Player** can leave a Game via the X button (admin) or the "Not coming" CTA (self). The leave is a **soft-archive**: `Player.archivedAt` is set, the row is hidden from the active list, and an `Rsvp` audit row with `status="no"` is written. The `Rsvp` recipient set filters out archived players.
+
+Re-adding the same name (self or by an organizer) is a **silent un-archive** handled in the `POST /api/events/[id]/players` P2002 branch: the original `order` is restored, any current occupant of that slot is bumped to the bench, `archivedAt` is cleared, and the `Rsvp` is reset to `status="yes"`. The response carries `reactivated: true` so the client can show an "Undo" snackbar.
+
