@@ -109,6 +109,10 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
   const linkedPlayer: Player = { id: "p-linked", name: "LinkedAlice", userId: "u-1" };
   const guestPlayer: Player = { id: "p-guest", name: "GuestBob", userId: null };
 
+  const onSetMyRsvp = vi.fn().mockResolvedValue(undefined);
+  const onSetGuestRsvp = vi.fn().mockResolvedValue(undefined);
+  const onRemovePlayer = vi.fn().mockResolvedValue(undefined);
+
   const attendanceBase = {
     players: [linkedPlayer, guestPlayer],
     maxPlayers: 10,
@@ -125,9 +129,15 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
     onRandomize: vi.fn(),
     onConfirmReRandomize: vi.fn(),
     canRemovePlayer: () => true,
-    onSetMyRsvp: vi.fn().mockResolvedValue(undefined),
-    onSetGuestRsvp: vi.fn().mockResolvedValue(undefined),
+    onSetMyRsvp,
+    onSetGuestRsvp,
   };
+
+  beforeEach(() => {
+    onSetMyRsvp.mockClear();
+    onSetGuestRsvp.mockClear();
+    onRemovePlayer.mockClear();
+  });
 
   it("does not render the You row when currentUserId is null (anonymous)", () => {
     renderWithTheme(
@@ -190,7 +200,7 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
     expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("yes");
   });
 
-  it("calls onSetMyRsvp('no') when the No button is clicked", async () => {
+  it("opens the confirm dialog when the No button is clicked (does not call onSetMyRsvp directly)", async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <PlayerList
@@ -198,9 +208,28 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
         currentUserId="u-1"
         myRsvpStatus="yes"
         guestRsvpMap={{}}
+        eventDateTime={new Date(Date.now() + 7 * 86400_000).toISOString()}
       />,
     );
     await user.click(screen.getByTestId("rsvp-you-no"));
+    // The dialog should be open. onSetMyRsvp is called only after the user confirms.
+    expect(await screen.findByTestId("leave-dialog-confirm")).toBeInTheDocument();
+    expect(attendanceBase.onSetMyRsvp).not.toHaveBeenCalled();
+  });
+
+  it("calls onSetMyRsvp('no') after the user confirms the leave dialog", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus="yes"
+        guestRsvpMap={{}}
+        eventDateTime={new Date(Date.now() + 7 * 86400_000).toISOString()}
+      />,
+    );
+    await user.click(screen.getByTestId("rsvp-you-no"));
+    await user.click(await screen.findByTestId("leave-dialog-confirm"));
     expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("no");
   });
 
@@ -270,7 +299,7 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
     expect(attendanceBase.onSetGuestRsvp).toHaveBeenCalledWith(guestPlayer.id, "yes");
   });
 
-  it("cycles Yes → No when admin clicks the pill again", async () => {
+  it("opens the confirm dialog when admin clicks a guest pill cycling to 'no'", async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <PlayerList
@@ -279,10 +308,13 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
         myRsvpStatus={null}
         guestRsvpMap={{ [guestPlayer.id]: "yes" }}
         canEditGuestAttendance
+        eventDateTime={new Date(Date.now() + 7 * 86400_000).toISOString()}
       />,
     );
     await user.click(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`));
-    expect(attendanceBase.onSetGuestRsvp).toHaveBeenCalledWith(guestPlayer.id, "no");
+    // Confirm dialog opens (not a direct call to onSetGuestRsvp).
+    expect(await screen.findByTestId("leave-dialog-confirm")).toBeInTheDocument();
+    expect(attendanceBase.onSetGuestRsvp).not.toHaveBeenCalled();
   });
 
   it("cycles No → null (clear) when admin clicks the pill again", async () => {
