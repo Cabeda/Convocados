@@ -112,6 +112,7 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
   const onSetMyRsvp = vi.fn().mockResolvedValue(undefined);
   const onSetGuestRsvp = vi.fn().mockResolvedValue(undefined);
   const onRemovePlayer = vi.fn().mockResolvedValue(undefined);
+  const onJoinAsSelf = vi.fn();
 
   const attendanceBase = {
     players: [linkedPlayer, guestPlayer],
@@ -131,22 +132,38 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
     canRemovePlayer: () => true,
     onSetMyRsvp,
     onSetGuestRsvp,
+    onJoinAsSelf,
   };
 
   beforeEach(() => {
     onSetMyRsvp.mockClear();
     onSetGuestRsvp.mockClear();
     onRemovePlayer.mockClear();
+    onJoinAsSelf.mockClear();
   });
 
-  it("does not render the You row when currentUserId is null (anonymous)", () => {
+  it("does not render the AttendanceCta when currentUserId is null (anonymous)", () => {
     renderWithTheme(
       <PlayerList {...attendanceBase} currentUserId={null} myRsvpStatus={null} guestRsvpMap={{}} />,
     );
-    expect(screen.queryByTestId("rsvp-you-row")).toBeNull();
+    expect(screen.queryByTestId("attendance-cta")).toBeNull();
   });
 
-  it("does not render the You row when the user is not on the active list (follower-only)", () => {
+  it("renders the AttendanceCta when the current user is on the list", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus={null}
+        guestRsvpMap={{}}
+      />,
+    );
+    expect(screen.getByTestId("attendance-cta")).toBeInTheDocument();
+    expect(screen.getByTestId("attendance-cta-going")).toBeInTheDocument();
+    expect(screen.getByTestId("attendance-cta-not-coming")).toBeInTheDocument();
+  });
+
+  it("renders the AttendanceCta for a follower-only user (with 'Join this game' copy on Going)", () => {
     renderWithTheme(
       <PlayerList
         {...attendanceBase}
@@ -155,38 +172,12 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
         guestRsvpMap={{}}
       />,
     );
-    expect(screen.queryByTestId("rsvp-you-row")).toBeNull();
+    expect(screen.getByTestId("attendance-cta")).toBeInTheDocument();
+    // Going button is labeled "Join this game" when the user isn't on the list.
+    expect(screen.getByTestId("attendance-cta-going")).toHaveTextContent(/join/i);
   });
 
-  it("renders the You row at the top of the active list when the user is on it", () => {
-    renderWithTheme(
-      <PlayerList
-        {...attendanceBase}
-        currentUserId="u-1"
-        myRsvpStatus={null}
-        guestRsvpMap={{}}
-      />,
-    );
-    const youRow = screen.getByTestId("rsvp-you-row");
-    expect(youRow).toBeInTheDocument();
-    expect(youRow).toHaveTextContent(/You/i);
-    expect(youRow).toHaveTextContent(/LinkedAlice/);
-  });
-
-  it("reflects the current RSVP status on the You row chip", () => {
-    renderWithTheme(
-      <PlayerList
-        {...attendanceBase}
-        currentUserId="u-1"
-        myRsvpStatus="yes"
-        guestRsvpMap={{}}
-      />,
-    );
-    const status = screen.getByTestId("rsvp-you-status");
-    expect(status).toHaveAttribute("data-status", "yes");
-  });
-
-  it("calls onSetMyRsvp('yes') when the Yes button is clicked", async () => {
+  it("calls onSetMyRsvp('yes') when the Going button is clicked and the user IS on the list", async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <PlayerList
@@ -196,11 +187,29 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
         guestRsvpMap={{}}
       />,
     );
-    await user.click(screen.getByTestId("rsvp-you-yes"));
+    await user.click(screen.getByTestId("attendance-cta-going"));
     expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("yes");
+    expect(attendanceBase.onJoinAsSelf).not.toHaveBeenCalled();
   });
 
-  it("opens the confirm dialog when the No button is clicked (does not call onSetMyRsvp directly)", async () => {
+  it("calls onJoinAsSelf when the Going button is clicked and the user is NOT on the list", async () => {
+    const user = userEvent.setup();
+    const onJoinAsSelf = vi.fn();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-someone-else"
+        myRsvpStatus={null}
+        guestRsvpMap={{}}
+        onJoinAsSelf={onJoinAsSelf}
+      />,
+    );
+    await user.click(screen.getByTestId("attendance-cta-going"));
+    expect(onJoinAsSelf).toHaveBeenCalledTimes(1);
+    expect(attendanceBase.onSetMyRsvp).not.toHaveBeenCalled();
+  });
+
+  it("opens the confirm dialog when the Not Coming button is clicked and the user IS on the list", async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <PlayerList
@@ -211,10 +220,23 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
         eventDateTime={new Date(Date.now() + 7 * 86400_000).toISOString()}
       />,
     );
-    await user.click(screen.getByTestId("rsvp-you-no"));
-    // The dialog should be open. onSetMyRsvp is called only after the user confirms.
+    await user.click(screen.getByTestId("attendance-cta-not-coming"));
     expect(await screen.findByTestId("leave-dialog-confirm")).toBeInTheDocument();
     expect(attendanceBase.onSetMyRsvp).not.toHaveBeenCalled();
+  });
+
+  it("calls onSetMyRsvp('no') when the Not Coming button is clicked and the user is NOT on the list (just records, no leave)", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-someone-else"
+        myRsvpStatus={null}
+        guestRsvpMap={{}}
+      />,
+    );
+    await user.click(screen.getByTestId("attendance-cta-not-coming"));
+    expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("no");
   });
 
   it("calls onSetMyRsvp('no') after the user confirms the leave dialog", async () => {
@@ -228,13 +250,13 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
         eventDateTime={new Date(Date.now() + 7 * 86400_000).toISOString()}
       />,
     );
-    await user.click(screen.getByTestId("rsvp-you-no"));
+    await user.click(screen.getByTestId("attendance-cta-not-coming"));
     await user.click(await screen.findByTestId("leave-dialog-confirm"));
     expect(attendanceBase.onSetMyRsvp).toHaveBeenCalledWith("no");
   });
 
-  it("disables the matching button when the user is already at that status", () => {
-    const { rerender } = renderWithTheme(
+  it("disables the Going button when the user is already 'yes'", () => {
+    renderWithTheme(
       <PlayerList
         {...attendanceBase}
         currentUserId="u-1"
@@ -242,18 +264,21 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
         guestRsvpMap={{}}
       />,
     );
-    expect(screen.getByTestId("rsvp-you-yes")).toBeDisabled();
-    expect(screen.getByTestId("rsvp-you-no")).not.toBeDisabled();
+    expect(screen.getByTestId("attendance-cta-going")).toBeDisabled();
+    expect(screen.getByTestId("attendance-cta-not-coming")).not.toBeDisabled();
+  });
 
-    rerender(
+  it("disables neither button when the user has not responded yet", () => {
+    renderWithTheme(
       <PlayerList
         {...attendanceBase}
         currentUserId="u-1"
-        myRsvpStatus="no"
+        myRsvpStatus={null}
         guestRsvpMap={{}}
       />,
     );
-    expect(screen.getByTestId("rsvp-you-no")).toBeDisabled();
+    expect(screen.getByTestId("attendance-cta-going")).not.toBeDisabled();
+    expect(screen.getByTestId("attendance-cta-not-coming")).not.toBeDisabled();
   });
 
   it("does not render a guest pill on linked (userId set) rows", () => {
@@ -284,7 +309,7 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
     expect(pill).toHaveAttribute("data-status", "yes");
   });
 
-  it("calls onSetGuestRsvp with the next state when admin clicks the pill (Pending → Yes)", async () => {
+  it("opens the menu when admin clicks the guest pill, with all 3 status options", async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <PlayerList
@@ -296,10 +321,31 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
       />,
     );
     await user.click(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`));
+    // Menu opens with 3 status options
+    expect(await screen.findByTestId(`rsvp-guest-menu-going-${guestPlayer.id}`)).toBeInTheDocument();
+    expect(screen.getByTestId(`rsvp-guest-menu-declined-${guestPlayer.id}`)).toBeInTheDocument();
+    expect(screen.getByTestId(`rsvp-guest-menu-noresponse-${guestPlayer.id}`)).toBeInTheDocument();
+    // No "clear" option when status is null
+    expect(screen.queryByTestId(`rsvp-guest-menu-clear-${guestPlayer.id}`)).toBeNull();
+  });
+
+  it("calls onSetGuestRsvp(yes) when the 'Going' menu option is clicked", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId={null}
+        myRsvpStatus={null}
+        guestRsvpMap={{ [guestPlayer.id]: null }}
+        canEditGuestAttendance
+      />,
+    );
+    await user.click(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`));
+    await user.click(await screen.findByTestId(`rsvp-guest-menu-going-${guestPlayer.id}`));
     expect(attendanceBase.onSetGuestRsvp).toHaveBeenCalledWith(guestPlayer.id, "yes");
   });
 
-  it("opens the confirm dialog when admin clicks a guest pill cycling to 'no'", async () => {
+  it("opens the confirm dialog when the 'Declined' menu option is clicked (admin declines a guest)", async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <PlayerList
@@ -312,12 +358,28 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
       />,
     );
     await user.click(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`));
+    await user.click(screen.getByTestId(`rsvp-guest-menu-declined-${guestPlayer.id}`));
     // Confirm dialog opens (not a direct call to onSetGuestRsvp).
     expect(await screen.findByTestId("leave-dialog-confirm")).toBeInTheDocument();
     expect(attendanceBase.onSetGuestRsvp).not.toHaveBeenCalled();
   });
 
-  it("cycles No → null (clear) when admin clicks the pill again", async () => {
+  it("shows a 'Clear attendance' option when the current status is not null", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId={null}
+        myRsvpStatus={null}
+        guestRsvpMap={{ [guestPlayer.id]: "yes" }}
+        canEditGuestAttendance
+      />,
+    );
+    await user.click(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`));
+    expect(await screen.findByTestId(`rsvp-guest-menu-clear-${guestPlayer.id}`)).toBeInTheDocument();
+  });
+
+  it("calls onSetGuestRsvp(null) when the 'Clear' menu option is clicked", async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <PlayerList
@@ -329,6 +391,7 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
       />,
     );
     await user.click(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`));
+    await user.click(await screen.findByTestId(`rsvp-guest-menu-clear-${guestPlayer.id}`));
     expect(attendanceBase.onSetGuestRsvp).toHaveBeenCalledWith(guestPlayer.id, null);
   });
 
@@ -343,8 +406,9 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
       />,
     );
     const pill = screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`);
-    // When canEditGuestAttendance is false the chip is rendered with the outlined (read-only)
-    // variant — distinct from the filled variant we use for the admin-clickable pill.
+    expect(pill).toBeInTheDocument();
+    expect(pill).toHaveAttribute("data-status", "yes");
+    // The pill is rendered as the outlined (read-only) variant when canEditGuestAttendance is false.
     expect(pill.className).toMatch(/MuiChip-outlined/);
   });
 
@@ -362,31 +426,10 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
     expect(pill.className).toMatch(/MuiChip-filled/);
   });
 
-  it("does not render the AttendanceCard when attendanceSummaryEventId is not provided", () => {
+  // #XXX AttendanceCard was removed (#XXX simplification). The AttendanceCta + guest pills
+  // carry the same info inline. This test slot is kept to make the removal explicit.
+  it("does not render the AttendanceCard component anywhere (removed in #XXX)", () => {
     renderWithTheme(<PlayerList {...attendanceBase} />);
     expect(screen.queryByText(/attendance/i)).toBeNull();
-  });
-
-  it("renders the AttendanceCard footer when attendanceSummaryEventId is provided", async () => {
-    // Mock the summary endpoint to return a known payload.
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ yes: 3, no: 1, pending: 2 }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
-    renderWithTheme(
-      <PlayerList
-        {...attendanceBase}
-        attendanceSummaryEventId="evt-1"
-      />,
-    );
-    // The card fetches the summary on mount; the heading copy uses t("attendanceCard") → "Attendance".
-    expect(await screen.findByText(/attendance/i)).toBeInTheDocument();
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/events/evt-1/rsvp/summary",
-      expect.objectContaining({ credentials: "include" }),
-    );
-    fetchSpy.mockRestore();
   });
 });

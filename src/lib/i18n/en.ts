@@ -635,6 +635,15 @@ const en = {
   rsvpSetDeclined: "Mark as declined",
   rsvpClearAttendance: "Clear attendance",
   rsvpSetByOrganizer: "Set by the organizer",
+  // Simplified attendance CTA (replaces QuickJoin + QuickLeave + You row)
+  attendanceCtaTitle: "Your response",
+  attendanceCtaGoing: "Going",
+  attendanceCtaNotComing: "Not coming",
+  attendanceCtaJoinGame: "Join this game",
+  attendanceCtaNotOnListHint: "Your response is recorded. The organizer will see it.",
+  // Guest pill popover (owner/admin only)
+  guestPillMenuSet: "Set attendance",
+  guestPillMenuClear: "Clear attendance",
   // Leave flow (#XXX)
   leaveDialogSelfTitle: "Leave this game?",
   leaveDialogSelfBody: "You'll be removed from the player list. If there's no one on the bench to take your spot, the rest of the group will be notified.",

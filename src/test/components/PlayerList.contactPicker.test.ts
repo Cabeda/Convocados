@@ -155,64 +155,30 @@ describe("PlayerList — contact picker invite (Android parity)", () => {
     fireEvent.keyDown(nameInput, { key: "Enter" });
     expect(onAddPlayer).toHaveBeenCalledWith("mario", "mario@x.com");
   });
+  // ── Quick Join pill removed (replaced by AttendanceCta in #XXX). Recent-players chips still
+  //    render when the user is authenticated and idle. ───────────────────────────
 
-  // ── Quick Join pill (first pill, authenticated-only) ──────────────────────
-
-  it("renders the Quick Join pill when quickJoinUserName is set and user is not joined", () => {
-    renderList({ ...baseProps(), quickJoinUserName: "Alex" });
-    // The pill is rendered (label text depends on the i18n mock returning the key).
-    expect(screen.getByTestId("quick-join-pill")).toBeInTheDocument();
-  });
-
-  it("does NOT render the Quick Join pill when quickJoinUserName is omitted (anonymous)", () => {
-    renderList(baseProps());
-    expect(screen.queryByTestId("quick-join-pill")).not.toBeInTheDocument();
-  });
-
-  it("hides the Quick Join pill when the user is already in the players list", () => {
+  it("renders the recent-players chips when authenticated and idle", () => {
     renderList({
       ...baseProps(),
-      quickJoinUserName: "Alex",
-      players: [{ id: "p1", name: "Alex", userId: "u-alex" }] as Player[],
-    });
-    expect(screen.queryByTestId("quick-join-pill")).not.toBeInTheDocument();
-  });
-
-  it("hides the Quick Join pill when the user is mid-typing (idle-only)", () => {
-    renderList({ ...baseProps(), quickJoinUserName: "Alex" });
-    const nameInput = screen.getByPlaceholderText("addPlayerPlaceholder");
-    fireEvent.change(nameInput, { target: { value: "M" } });
-    expect(screen.queryByTestId("quick-join-pill")).not.toBeInTheDocument();
-  });
-
-  it("calls onQuickJoinPillClick when the pill is tapped (host owns the routing)", () => {
-    const onQuickJoinPillClick = vi.fn();
-    renderList({ ...baseProps(), quickJoinUserName: "Alex", onQuickJoinPillClick });
-    fireEvent.click(screen.getByTestId("quick-join-pill"));
-    expect(onQuickJoinPillClick).toHaveBeenCalledWith("Alex");
-  });
-
-  it("falls back to onAddPlayer when no onQuickJoinPillClick is provided", () => {
-    const onAddPlayer = vi.fn().mockResolvedValue(undefined);
-    renderList({ ...baseProps(), quickJoinUserName: "Alex", onAddPlayer });
-    fireEvent.click(screen.getByTestId("quick-join-pill"));
-    expect(onAddPlayer).toHaveBeenCalledWith("Alex");
-  });
-
-  it("places the Quick Join pill before the recent-players chips in the same row", () => {
-    renderList({
-      ...baseProps(),
-      quickJoinUserName: "Alex",
       availableSuggestions: [
         { name: "Bruno", gamesPlayed: 3, userId: null },
         { name: "Carla", gamesPlayed: 2, userId: "u-carla" },
-      ] as { name: string; gamesPlayed: number; userId: string | null }[],
+      ] as PlayerSuggestion[],
     });
-    const qj = screen.getByTestId("quick-join-pill");
-    const bruno = screen.getByText("Bruno");
-    expect(qj).toBeInTheDocument();
-    expect(bruno).toBeInTheDocument();
-    // DOM order: Quick Join precedes Bruno
-    expect(qj.compareDocumentPosition(bruno) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Bruno")).toBeInTheDocument();
+    expect(screen.getByText("Carla")).toBeInTheDocument();
+  });
+
+  it("hides the recent-players chips when the user is mid-typing", () => {
+    renderList({
+      ...baseProps(),
+      availableSuggestions: [
+        { name: "Bruno", gamesPlayed: 3, userId: null },
+      ] as PlayerSuggestion[],
+    });
+    const nameInput = screen.getByPlaceholderText("addPlayerPlaceholder");
+    fireEvent.change(nameInput, { target: { value: "M" } });
+    expect(screen.queryByText("Bruno")).not.toBeInTheDocument();
   });
 });
