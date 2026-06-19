@@ -294,7 +294,7 @@ describe("POST /api/events/[id]/players", () => {
     expect(res.status).toBe(409);
   });
 
-  it("re-adding a soft-archived player un-archives them and restores their order", async () => {
+  it("re-adding a soft-archived player un-archives them and places them at the end of the list", async () => {
     const id = await seedEvent();
     // Add three players: Alice (order 0), Bob (order 1), Charlie (order 2)
     await prisma.player.createMany({
@@ -317,16 +317,16 @@ describe("POST /api/events/[id]/players", () => {
     expect(body.reactivated).toBe(true);
     expect(body.resolvedName).toBe("Bob");
 
-    // Bob is back at order 1 (his original slot).
+    // Bob is at the END of the list (queue mental model — joining = enqueue).
     const players = await prisma.player.findMany({
-      where: { eventId: id },
+      where: { eventId: id, archivedAt: null },
       orderBy: { order: "asc" },
     });
-    expect(players.map((p) => p.name)).toEqual(["Alice", "Bob", "Charlie"]);
+    expect(players.map((p) => p.name)).toEqual(["Alice", "Charlie", "Bob"]);
     expect(players.find((p) => p.name === "Bob")?.archivedAt).toBeNull();
   });
 
-  it("re-adding a player bumps the new occupant of the slot to the bench", async () => {
+  it("re-adding a player does not bump the current occupant of the original slot", async () => {
     const id = await seedEvent(); // maxPlayers: 5
     // Alice is at order 0. She leaves (gets archived).
     const alice = await prisma.player.create({
@@ -340,19 +340,18 @@ describe("POST /api/events/[id]/players", () => {
     // Dave takes her slot (order 0).
     await prisma.player.create({ data: { name: "Dave", eventId: id, order: 0 } });
 
-    // Alice re-joins. Dave should be bumped.
+    // Alice re-joins. She goes to the end; Dave stays at order 0.
     const res = await addPlayer(ctx({ id }, { name: "Alice" }));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.reactivated).toBe(true);
 
-    // Alice is back at order 0. Dave is on the bench.
     const players = await prisma.player.findMany({
       where: { eventId: id, archivedAt: null },
       orderBy: { order: "asc" },
     });
-    expect(players.find((p) => p.name === "Alice")?.order).toBe(0);
-    expect(players.find((p) => p.name === "Dave")?.order).toBeGreaterThanOrEqual(5);
+    expect(players.find((p) => p.name === "Dave")?.order).toBe(0);
+    expect(players.find((p) => p.name === "Alice")?.order).toBe(1);
   });
 });
 
