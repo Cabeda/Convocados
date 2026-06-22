@@ -60,7 +60,7 @@ export default function SignUpPage() {
       <ResponsiveLayout>
         <Container maxWidth="xs" sx={{ py: 8 }}>
           <Paper elevation={2} sx={{ borderRadius: 3, p: 4 }}>
-            <Stack spacing={3} component="form" onSubmit={handleSubmit}>
+            <Stack spacing={3} component="form" action="#" method="post" onSubmit={handleSubmit}>
               <Typography variant="h5" fontWeight={700} textAlign="center">
                 {t("signUp")}
               </Typography>
