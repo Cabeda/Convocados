@@ -80,10 +80,21 @@ describe("POST /api/events/[id]/rsvp", () => {
     expect(res.status).toBe(401);
   });
 
-  it("rejects invalid status", async () => {
+  it("accepts 'maybe' status", async () => {
     const ev = await seedEvent(7 * 86400_000);
+    await testPrisma.user.create({ data: { id: "u1", name: "U", email: "u1@t.com", emailVerified: true } });
     const user = { user: { id: "u1", name: "U" } };
     const res = await rsvpPost(ctx(ev.id, { status: "maybe" }, user));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("maybe");
+  });
+
+  it("rejects truly invalid status", async () => {
+    const ev = await seedEvent(7 * 86400_000);
+    await testPrisma.user.create({ data: { id: "u1", name: "U", email: "u1@t.com", emailVerified: true } });
+    const user = { user: { id: "u1", name: "U" } };
+    const res = await rsvpPost(ctx(ev.id, { status: "wat" }, user));
     expect(res.status).toBe(400);
   });
 
