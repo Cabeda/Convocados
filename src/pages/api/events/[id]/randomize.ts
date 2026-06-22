@@ -16,9 +16,12 @@ export const POST: APIRoute = async ({ params, url, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  // Get ALL players first to validate team membership
+  // Get ALL non-archived players first to validate team membership. The
+  // `archivedAt: null` filter is critical: archiveAndLeave leaves archived
+  // rows in place (for audit + undo) but never re-indexes their `order`, so
+  // they can collide with the re-indexed bench replacement at the same slot.
   const allPlayers = await prisma.player.findMany({
-    where: { eventId },
+    where: { eventId, archivedAt: null },
     orderBy: { order: "asc" },
   });
 
