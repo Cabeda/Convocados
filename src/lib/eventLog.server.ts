@@ -38,7 +38,8 @@ export type EventAction =
   | "override_set"
   | "override_cleared"
   | "rsvp_yes"
-  | "rsvp_no";
+  | "rsvp_no"
+  | "rsvp_maybe";
 
 /**
  * Append an entry to the event activity log.

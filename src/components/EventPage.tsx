@@ -15,6 +15,7 @@ import { detectLocale } from "~/lib/i18n";
 import { addKnownName, getQjName } from "~/lib/knownNames";
 import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
 import { useSession } from "~/lib/auth.client";
+import type { RsvpStatus } from "~/lib/rsvp";
 
 import {
   EventHeader,
@@ -551,7 +552,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // #463 high-intent: fetch the signed-in user's RSVP for this event so the
   // PushPromptBanner can render as a modal when the user has a pending RSVP
   // and the game kicks off within 48h.
-  const [myRsvpStatus, setMyRsvpStatus] = useState<"yes" | "no" | null>(null);
+  const [myRsvpStatus, setMyRsvpStatus] = useState<"yes" | "no" | "maybe" | null>(null);
   useEffect(() => {
     if (!isAuthenticated || !eventId) {
       setMyRsvpStatus(null);
@@ -563,14 +564,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
         if (!alive) return;
         if (!r.ok) { setMyRsvpStatus(null); return; }
         const data = await r.json();
-        setMyRsvpStatus((data.status ?? null) as "yes" | "no" | null);
+        setMyRsvpStatus((data.status ?? null) as "yes" | "no" | "maybe" | null);
       })
       .catch(() => alive && setMyRsvpStatus(null));
     return () => { alive = false; };
   }, [eventId, isAuthenticated]);
 
   // #XXX Guest attendance — fetched for the player-list pills (visible to all, clickable to owner/admin).
-  const [guestRsvpMap, setGuestRsvpMap] = useState<Record<string, "yes" | "no" | null>>({});
+  const [guestRsvpMap, setGuestRsvpMap] = useState<Record<string, "yes" | "no" | "maybe" | null>>({});
   const fetchGuestRsvpMap = useCallback(async () => {
     try {
       const r = await fetch(`/api/events/${eventId}/rsvp/guests`, { credentials: "include" });
@@ -580,6 +581,21 @@ export default function EventPage({ eventId }: { eventId: string }) {
     } catch { /* ignore */ }
   }, [eventId]);
   useEffect(() => { fetchGuestRsvpMap(); }, [fetchGuestRsvpMap]);
+
+  // #XXX User attendance — fetched for the player-list pills on linked-user rows.
+  // The server returns an empty map for anonymous viewers (one-way privacy), so this
+  // is also implicitly the visibility gate: the PlayerList only renders the pill
+  // when the current viewer is logged in.
+  const [userRsvpMap, setUserRsvpMap] = useState<Record<string, "yes" | "no" | "maybe" | null>>({});
+  const fetchUserRsvpMap = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/events/${eventId}/rsvp/users`, { credentials: "include" });
+      if (!r.ok) return;
+      const data = await r.json();
+      setUserRsvpMap(data.users ?? {});
+    } catch { /* ignore */ }
+  }, [eventId]);
+  useEffect(() => { fetchUserRsvpMap(); }, [fetchUserRsvpMap]);
 
   const handleSetMyRsvp = useCallback(async (status: "yes" | "no") => {
     const prev = myRsvpStatus;
@@ -611,7 +627,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     }
   }, [eventId, myRsvpStatus, t, fetchEvent]);
 
-  const handleSetGuestRsvp = useCallback(async (playerId: string, status: "yes" | "no" | null) => {
+  const handleSetGuestRsvp = useCallback(async (playerId: string, status: RsvpStatus) => {
     const prev = guestRsvpMap[playerId] ?? null;
     setGuestRsvpMap((m) => ({ ...m, [playerId]: status })); // optimistic
     try {
@@ -820,6 +836,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               currentUserId={isAuthenticated ? session?.user?.id : null}
               myRsvpStatus={myRsvpStatus}
               guestRsvpMap={guestRsvpMap}
+              userRsvpMap={userRsvpMap}
               canEditGuestAttendance={isOwner || isAdmin}
               onSetMyRsvp={handleSetMyRsvp}
               onSetGuestRsvp={handleSetGuestRsvp}
