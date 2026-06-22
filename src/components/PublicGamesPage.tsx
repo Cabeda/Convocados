@@ -13,6 +13,8 @@ import PeopleIcon from "@mui/icons-material/People";
 import GridViewIcon from "@mui/icons-material/GridView";
 import TableRowsIcon from "@mui/icons-material/TableRows";
 import MapIcon from "@mui/icons-material/Map";
+import { ThemeModeProvider } from "./ThemeModeProvider";
+import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale, type TFunction } from "~/lib/i18n";
 import { getSportPreset } from "~/lib/sports";
@@ -393,118 +395,122 @@ export default function PublicGamesPage() {
   }, [events, filterSport, filterHasSpots]);
 
   return (
-    <Container maxWidth="md" sx={{ py: 6 }}>
-      <Stack spacing={3}>
-        <Box textAlign="center">
-          <SportsIcon sx={{ fontSize: 56, color: "primary.main", mb: 1 }} />
-          <Typography variant="h4" fontWeight={700}>{t("publicGames")}</Typography>
-          <Typography variant="body1" color="text.secondary" mt={1}>
-            {t("publicGamesSubtitle")}
-          </Typography>
-        </Box>
+    <ThemeModeProvider>
+      <ResponsiveLayout>
+        <Container maxWidth="md" sx={{ py: 6 }}>
+          <Stack spacing={3}>
+            <Box textAlign="center">
+              <SportsIcon sx={{ fontSize: 56, color: "primary.main", mb: 1 }} />
+              <Typography variant="h4" fontWeight={700}>{t("publicGames")}</Typography>
+              <Typography variant="body1" color="text.secondary" mt={1}>
+                {t("publicGamesSubtitle")}
+              </Typography>
+            </Box>
 
-        {/* Filter bar + view toggle */}
-        <Paper elevation={1} sx={{ borderRadius: 3, p: 2 }}>
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={2}
-            alignItems={{ sm: "center" }}
-            justifyContent="space-between"
-          >
-            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-              <FormControl size="small" sx={{ minWidth: 160 }}>
-                <InputLabel>{t("filterSport")}</InputLabel>
-                <Select
-                  value={filterSport}
-                  label={t("filterSport")}
-                  onChange={(e) => setFilterSport(e.target.value)}
-                >
-                  <MenuItem value="">{t("allSports")}</MenuItem>
-                  {availableSports.map((s) => (
-                    <MenuItem key={s.id} value={s.id}>{t(s.labelKey as Parameters<typeof t>[0])}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControlLabel
-                control={
-                  <Switch
-                    size="small"
-                    checked={filterHasSpots}
-                    onChange={(e) => setFilterHasSpots(e.target.checked)}
+            {/* Filter bar + view toggle */}
+            <Paper elevation={1} sx={{ borderRadius: 3, p: 2 }}>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={2}
+                alignItems={{ sm: "center" }}
+                justifyContent="space-between"
+              >
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                  <FormControl size="small" sx={{ minWidth: 160 }}>
+                    <InputLabel>{t("filterSport")}</InputLabel>
+                    <Select
+                      value={filterSport}
+                      label={t("filterSport")}
+                      onChange={(e) => setFilterSport(e.target.value)}
+                    >
+                      <MenuItem value="">{t("allSports")}</MenuItem>
+                      {availableSports.map((s) => (
+                        <MenuItem key={s.id} value={s.id}>{t(s.labelKey as Parameters<typeof t>[0])}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={filterHasSpots}
+                        onChange={(e) => setFilterHasSpots(e.target.checked)}
+                      />
+                    }
+                    label={<Typography variant="body2">{t("filterHasSpots")}</Typography>}
                   />
-                }
-                label={<Typography variant="body2">{t("filterHasSpots")}</Typography>}
-              />
-            </Stack>
-            <ToggleButtonGroup
-              value={viewMode}
-              exclusive
-              onChange={(_, v) => v && setViewMode(v)}
-              size="small"
-            >
-              <ToggleButton value="cards" aria-label={t("viewCards")}>
-                <GridViewIcon fontSize="small" />
-              </ToggleButton>
-              <ToggleButton value="table" aria-label={t("viewTable")}>
-                <TableRowsIcon fontSize="small" />
-              </ToggleButton>
-              <ToggleButton value="map" aria-label={t("viewMap")}>
-                <MapIcon fontSize="small" />
-              </ToggleButton>
-            </ToggleButtonGroup>
+                </Stack>
+                <ToggleButtonGroup
+                  value={viewMode}
+                  exclusive
+                  onChange={(_, v) => v && setViewMode(v)}
+                  size="small"
+                >
+                  <ToggleButton value="cards" aria-label={t("viewCards")}>
+                    <GridViewIcon fontSize="small" />
+                  </ToggleButton>
+                  <ToggleButton value="table" aria-label={t("viewTable")}>
+                    <TableRowsIcon fontSize="small" />
+                  </ToggleButton>
+                  <ToggleButton value="map" aria-label={t("viewMap")}>
+                    <MapIcon fontSize="small" />
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Stack>
+            </Paper>
+
+            {isLoading && (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+                <CircularProgress />
+              </Box>
+            )}
+
+            {!isLoading && events.length === 0 && (
+              <Paper elevation={2} sx={{ borderRadius: 3, p: 4, textAlign: "center" }}>
+                <Typography variant="h6" color="text.secondary" gutterBottom>
+                  {t("noPublicGames")}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                  {t("noPublicGamesDesc")}
+                </Typography>
+                <Button variant="contained" href="/">{t("createGameBtn")}</Button>
+              </Paper>
+            )}
+
+            {!isLoading && events.length > 0 && filtered.length === 0 && (
+              <Paper elevation={2} sx={{ borderRadius: 3, p: 4, textAlign: "center" }}>
+                <Typography variant="body1" color="text.secondary">
+                  {t("noMatchingGames")}
+                </Typography>
+              </Paper>
+            )}
+
+            {!isLoading && filtered.length > 0 && viewMode === "cards" && (
+              <CardView events={filtered} locale={locale} t={t} />
+            )}
+
+            {!isLoading && filtered.length > 0 && viewMode === "table" && (
+              <TableView events={filtered} locale={locale} t={t} />
+            )}
+
+            {!isLoading && filtered.length > 0 && viewMode === "map" && (
+              <MapView events={filtered} t={t} />
+            )}
+
+            {!isLoading && hasMore && (
+              <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
+                <Button
+                  variant="outlined"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? t("loading") : t("loadMore")}
+                </Button>
+              </Box>
+            )}
           </Stack>
-        </Paper>
-
-        {isLoading && (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        {!isLoading && events.length === 0 && (
-          <Paper elevation={2} sx={{ borderRadius: 3, p: 4, textAlign: "center" }}>
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              {t("noPublicGames")}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" mb={2}>
-              {t("noPublicGamesDesc")}
-            </Typography>
-            <Button variant="contained" href="/">{t("createGameBtn")}</Button>
-          </Paper>
-        )}
-
-        {!isLoading && events.length > 0 && filtered.length === 0 && (
-          <Paper elevation={2} sx={{ borderRadius: 3, p: 4, textAlign: "center" }}>
-            <Typography variant="body1" color="text.secondary">
-              {t("noMatchingGames")}
-            </Typography>
-          </Paper>
-        )}
-
-        {!isLoading && filtered.length > 0 && viewMode === "cards" && (
-          <CardView events={filtered} locale={locale} t={t} />
-        )}
-
-        {!isLoading && filtered.length > 0 && viewMode === "table" && (
-          <TableView events={filtered} locale={locale} t={t} />
-        )}
-
-        {!isLoading && filtered.length > 0 && viewMode === "map" && (
-          <MapView events={filtered} t={t} />
-        )}
-
-        {!isLoading && hasMore && (
-          <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
-            <Button
-              variant="outlined"
-              onClick={loadMore}
-              disabled={loadingMore}
-            >
-              {loadingMore ? t("loading") : t("loadMore")}
-            </Button>
-          </Box>
-        )}
-      </Stack>
-    </Container>
+        </Container>
+      </ResponsiveLayout>
+    </ThemeModeProvider>
   );
 }

@@ -5,6 +5,8 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PlaceIcon from "@mui/icons-material/Place";
+import { ThemeModeProvider } from "./ThemeModeProvider";
+import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 
@@ -59,47 +61,51 @@ export default function CourtWatchesPage() {
   const weekdayLabel = (dow: number) => t(WEEKDAY_KEYS[dow] ?? "sunday");
 
   return (
-    <Container maxWidth="sm" sx={{ py: 3 }}>
-      <Typography variant="h5" gutterBottom>{t("courtWatchesTitle")}</Typography>
-      <Typography variant="body2" color="text.secondary" gutterBottom>{t("courtWatchesDesc")}</Typography>
+    <ThemeModeProvider>
+      <ResponsiveLayout>
+        <Container maxWidth="sm" sx={{ py: 3 }}>
+          <Typography variant="h5" gutterBottom>{t("courtWatchesTitle")}</Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>{t("courtWatchesDesc")}</Typography>
 
-      {error && <Alert severity="error" sx={{ my: 2 }}>{error}</Alert>}
+          {error && <Alert severity="error" sx={{ my: 2 }}>{error}</Alert>}
 
-      {loading ? (
-        <Box textAlign="center" py={4}><CircularProgress /></Box>
-      ) : watches.length === 0 ? (
-        <Alert severity="info" sx={{ mt: 2 }}>{t("courtWatchesEmpty")}</Alert>
-      ) : (
-        <Stack spacing={1.5} sx={{ mt: 2 }}>
-          {watches.map((w) => (
-            <Card key={w.id} variant="outlined">
-              <CardContent sx={{ pb: "12px !important" }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="subtitle2" fontWeight={600}>{w.tenantName}</Typography>
-                    {w.resourceName && (
-                      <Stack direction="row" spacing={0.5} alignItems="center">
-                        <PlaceIcon sx={{ fontSize: 12, color: "text.secondary" }} />
-                        <Typography variant="caption" color="text.secondary">{w.resourceName}</Typography>
-                      </Stack>
-                    )}
-                    <Stack direction="row" spacing={0.5} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
-                      <Chip size="small" label={t("courtWatchEveryWeekday").replace("{weekday}", weekdayLabel(w.dayOfWeek))} />
-                      <Chip size="small" variant="outlined" label={`${w.startTime}–${w.endTime} ${w.timezone}`} />
-                      <Chip size="small" variant="outlined" label={`${w.durationMinutes}min`} />
-                      {w.maxPrice !== null && <Chip size="small" color="success" variant="outlined" label={`≤ ${w.maxPrice}`} />}
+          {loading ? (
+            <Box textAlign="center" py={4}><CircularProgress /></Box>
+          ) : watches.length === 0 ? (
+            <Alert severity="info" sx={{ mt: 2 }}>{t("courtWatchesEmpty")}</Alert>
+          ) : (
+            <Stack spacing={1.5} sx={{ mt: 2 }}>
+              {watches.map((w) => (
+                <Card key={w.id} variant="outlined">
+                  <CardContent sx={{ pb: "12px !important" }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="subtitle2" fontWeight={600}>{w.tenantName}</Typography>
+                        {w.resourceName && (
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            <PlaceIcon sx={{ fontSize: 12, color: "text.secondary" }} />
+                            <Typography variant="caption" color="text.secondary">{w.resourceName}</Typography>
+                          </Stack>
+                        )}
+                        <Stack direction="row" spacing={0.5} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
+                          <Chip size="small" label={t("courtWatchEveryWeekday").replace("{weekday}", weekdayLabel(w.dayOfWeek))} />
+                          <Chip size="small" variant="outlined" label={`${w.startTime}–${w.endTime} ${w.timezone}`} />
+                          <Chip size="small" variant="outlined" label={`${w.durationMinutes}min`} />
+                          {w.maxPrice !== null && <Chip size="small" color="success" variant="outlined" label={`≤ ${w.maxPrice}`} />}
+                        </Stack>
+                      </Box>
+                      <IconButton size="small" color="error" onClick={() => remove(w.id)} title={t("courtWatchDelete")}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
                     </Stack>
-                  </Box>
-                  <IconButton size="small" color="error" onClick={() => remove(w.id)} title={t("courtWatchDelete")}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-              </CardContent>
-            </Card>
-          ))}
-        </Stack>
-      )}
-      <Divider sx={{ mt: 3 }} />
-    </Container>
+                  </CardContent>
+                </Card>
+              ))}
+            </Stack>
+          )}
+          <Divider sx={{ mt: 3 }} />
+        </Container>
+      </ResponsiveLayout>
+    </ThemeModeProvider>
   );
 }

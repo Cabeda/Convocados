@@ -1,5 +1,4 @@
 ---
-import { ClientRouter } from "astro:transitions";
 
 interface MetaTag {
   property: string;
@@ -82,7 +81,18 @@ const {
       }
     </style>
 
-    <ClientRouter fallback="animate" />
+    <!--
+      ClientRouter is intentionally disabled. With Astro 6 and React 19
+      islands using `client:only="react"`, the ClientRouter's hidden-iframe
+      mechanism (used to render the next page's client:only islands before
+      swapping the body) does not work — the new page's React component
+      never mounts after the swap, leaving the page blank. The white-blink
+      fix (inline shell paint above) and the per-page `view-transition-name`
+      still apply, but until Astro upstream fixes the iframe approach, every
+      navigation is a full document load. See ADR 0015 and 0016 for the
+      design history.
+    -->
+    <!-- <ClientRouter fallback="swap" /> -->
   </head>
   <body>
     <main
