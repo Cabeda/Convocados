@@ -31,6 +31,13 @@ export default function SignInPage() {
   // Sanitize callbackURL: only allow relative paths to prevent open redirects
   const callbackURL = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/";
 
+  if (typeof window !== "undefined" && !new URLSearchParams(window.location.search).get("callbackURL")) {
+    // ADR-0012: missing callbackURL means the user landed on /auth/signin without
+    // a deep-link entry point — they'll be redirected to /dashboard after signin.
+    // Log so the upstream link rot (push notification, share link, email link) is visible.
+    console.warn("[SignInPage] no callbackURL on /auth/signin — post-login destination will fall back to /dashboard");
+  }
+
   // Compute the safe post-login destination
   const postLoginURL = callbackURL === "/" ? "/dashboard" : callbackURL;
 
@@ -153,7 +160,7 @@ export default function SignInPage() {
 
               {/* Magic link tab */}
               <TabPanel value={tab} index={0}>
-                <Stack spacing={3} component="form" onSubmit={handleMagicLinkSubmit}>
+                <Stack spacing={3} component="form" action="#" method="post" onSubmit={handleMagicLinkSubmit}>
                   <Typography variant="body2" color="text.secondary">
                     {t("magicLinkDesc")}
                   </Typography>
@@ -181,7 +188,7 @@ export default function SignInPage() {
 
               {/* Password tab */}
               <TabPanel value={tab} index={1}>
-                <Stack spacing={3} component="form" onSubmit={handlePasswordSubmit}>
+                <Stack spacing={3} component="form" action="#" method="post" onSubmit={handlePasswordSubmit}>
                   <TextField
                     label={t("email")}
                     type="email"
