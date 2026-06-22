@@ -629,6 +629,7 @@ const en = {
   rsvpYouRow: "You",
   rsvpGoing: "Going",
   rsvpDeclined: "Declined",
+  rsvpMaybe: "Maybe",
   rsvpNoResponse: "No response",
   rsvpPending: "pending",
   rsvpSetGoing: "Mark as going",
@@ -659,6 +660,11 @@ const en = {
   pushBlockedHint: "Notifications are blocked. Enable them in your browser settings to receive game reminders.",
   pushPromptHighIntentBody: "You have a pending RSVP. Enable notifications so we can ping you before kickoff if anything changes.",
   pushPromptTitle: "Stay in the loop?",
+  // #457 RSVP answer notifications (rich payload when actor is logged; generic when anon)
+  notifyRsvpAnswerYes: "{name} confirmed they're coming to {title}",
+  notifyRsvpAnswerNo: "{name} declined {title}",
+  notifyRsvpAnswerMaybe: "{name} is unsure about {title}",
+  notifyRsvpAnswerAnon: "Someone answered {title}",
 
   // Priority enrollment (#136)
   priorityEnrollment: "Priority Enrollment",

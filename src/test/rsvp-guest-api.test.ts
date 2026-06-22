@@ -85,11 +85,21 @@ describe("POST /api/events/[id]/players/[playerId]/rsvp", () => {
     expect(res.status).toBe(403);
   });
 
-  it("rejects invalid status", async () => {
+  it("accepts 'maybe' status for a guest", async () => {
     const owner = await testPrisma.user.create({ data: { id: "owner", name: "O", email: "o@t.com", emailVerified: true } });
     const ev = await seedEvent(owner.id);
     const guest = await testPrisma.player.create({ data: { eventId: ev.id, name: "Guest", order: 0 } });
     const res = await guestRsvpPost(ctx(ev.id, guest.id, { status: "maybe" }, { user: { id: "owner", name: "O" } }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("maybe");
+  });
+
+  it("rejects truly invalid status for a guest", async () => {
+    const owner = await testPrisma.user.create({ data: { id: "owner", name: "O", email: "o@t.com", emailVerified: true } });
+    const ev = await seedEvent(owner.id);
+    const guest = await testPrisma.player.create({ data: { eventId: ev.id, name: "Guest", order: 0 } });
+    const res = await guestRsvpPost(ctx(ev.id, guest.id, { status: "wat" }, { user: { id: "owner", name: "O" } }));
     expect(res.status).toBe(400);
   });
 

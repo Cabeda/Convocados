@@ -5,8 +5,9 @@ import {
 import HowToRegIcon from "@mui/icons-material/HowToReg";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import { useT } from "~/lib/useT";
+import type { RsvpStatus } from "~/lib/rsvp";
 
-export type RsvpStatus = "yes" | "no" | null;
+export type { RsvpStatus } from "~/lib/rsvp";
 
 interface Props {
   /** Current Rsvp status for the user (yes / no / pending). */
