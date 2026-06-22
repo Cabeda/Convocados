@@ -24,7 +24,11 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 /** Security headers applied to all responses */
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
+  // X-Frame-Options: SAMEORIGIN (not DENY) so Astro's ClientRouter can load
+  // the next page in a hidden same-origin iframe to render its client:only
+  // islands during the view transition. External framing is still blocked by
+  // the CSP frame-ancestors directive below.
+  "X-Frame-Options": "SAMEORIGIN",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(self)",
   "Content-Security-Policy": [
@@ -34,7 +38,10 @@ const SECURITY_HEADERS: Record<string, string> = {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https://*.tile.openstreetmap.org https://maps.googleapis.com https://maps.gstatic.com",
     "connect-src 'self' https://maps.googleapis.com",
-    "frame-ancestors 'none'",
+    // frame-ancestors 'self' (not 'none') so Astro's ClientRouter can embed
+    // the next page in a same-origin hidden iframe while preparing the view
+    // transition. External framing is still blocked.
+    "frame-ancestors 'self'",
     "base-uri 'self'",
     "form-action 'self'",
   ].join("; "),
