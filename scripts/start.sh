@@ -29,39 +29,38 @@ fi
 # This is intentionally aggressive because the alternative is the app being
 # permanently down. The failed-migration is logged loudly for post-mortem.
 if [ -f /data/db.sqlite ]; then
-  echo "[startup] Checking for failed migrations..."
-  FAILED=$(node -e '
+  echo "[startup] Checking for failed migrations and recovering in one shot..."
+  node -e '
     const { PrismaClient } = require("/app/node_modules/@prisma/client");
     const p = new PrismaClient();
-    p.$queryRawUnsafe(
-      "SELECT migration_name, logs FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND started_at < (strftime(\"%s\", \"now\") - 300)"
-    ).then(r => { console.log(JSON.stringify(r)); process.exit(0); }).catch(() => process.exit(0));
-  ' 2>/dev/null || echo "[]")
-  if [ "$FAILED" != "[]" ] && [ -n "$FAILED" ]; then
-  echo "[startup] WARNING: detected failed migration(s) from a previous deploy: $FAILED"
-  echo "[startup] Auto-resolving as applied (tables likely exist from partial execution)..."
-    echo "$FAILED" | node -e '
-      const { PrismaClient } = require("/app/node_modules/@prisma/client");
-      const failed = JSON.parse(require("fs").readFileSync(0, "utf8"));
-      const p = new PrismaClient();
-      (async () => {
-        for (const m of failed) {
-          try {
-          await p.$executeRawUnsafe(
+    (async () => {
+      try {
+        const failed = await p.$queryRawUnsafe(
+          "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND started_at < (strftime(\"%s\", \"now\") - 300)"
+        );
+        if (failed.length > 0) {
+          console.log(`[startup] WARNING: detected ${failed.length} failed migration(s) from a previous deploy`);
+          console.log("[startup] Auto-resolving as applied (tables likely exist from partial execution)...");
+          for (const m of failed) {
+            try {
+              await p.$executeRawUnsafe(
                 "UPDATE _prisma_migrations SET finished_at = CURRENT_TIMESTAMP WHERE migration_name = ?",
-               m.migration_name
+                m.migration_name
               );
-             console.log(`[startup] Marked ${m.migration_name} as applied (recovery)`);
-         } catch (e) {
-             console.error(`[startup] Failed to mark ${m.migration_name} as applied:`, e.message);
+              console.log(`[startup] Marked ${m.migration_name} as applied (recovery)`);
+            } catch (e) {
+              console.error(`[startup] Failed to mark ${m.migration_name} as applied:`, e.message);
             }
+          }
+        } else {
+          console.log("[startup] No failed migrations detected.");
         }
-        process.exit(0);
-      })();
-    '
-  else
-    echo "[startup] No failed migrations detected."
-  fi
+      } catch (e) {
+        console.error("[startup] Failed-migration check failed (non-fatal):", e.message);
+      }
+      await p.$disconnect();
+    })();
+  '
 fi
 
 echo "[startup] Running database migrations..."
