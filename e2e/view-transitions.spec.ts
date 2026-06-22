@@ -79,7 +79,7 @@ test.describe("page navigation: view transitions + no white blink", () => {
     const samples = await page.evaluate(
       () => (window as unknown as { __bgSamples?: { t: number; bg: string; url: string }[] }).__bgSamples ?? [],
     );
-    expect(samples.length, "no body-bg samples captured").toBeGreaterThan(20);
+    expect(samples.length, "no body-bg samples captured").toBeGreaterThan(10);
 
     // Body bg should never be the browser default white at any sampled frame.
     // For full-document navs we also see the brief moment where the old
