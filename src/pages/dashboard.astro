@@ -1,16 +1,12 @@
 ---
 export const prerender = true;
 import BaseLayout from "../layouts/BaseLayout.astro";
-import SpaRoot from "../components/SpaRoot";
+import DashboardPage from "../components/DashboardPage";
 ---
 
 <BaseLayout
   title="My Games — Convocados"
   mainTransitionName="page-dashboard"
 >
-  <SpaRoot
-    client:only="react"
-    transition:persist="convocados-shell"
-    pageKey="dashboard"
-  />
+  <DashboardPage client:only="react" />
 </BaseLayout>
