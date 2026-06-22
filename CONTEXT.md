@@ -197,3 +197,24 @@ A **Player** can leave a Game via the X button (admin) or the "Not coming" CTA (
 
 Re-adding the same name (self or by an organizer) is a **silent un-archive** handled in the `POST /api/events/[id]/players` P2002 branch. The player is placed at the **end of the list** (queue/join semantics — joining is enqueuing, regardless of past membership), `archivedAt` is cleared, and the `Rsvp` is reset to `status="yes"`. The response carries `reactivated: true` so the client can show an "Undo" snackbar.
 
+## App Deep Link
+A `convocados://` URL handled by the Android app's manifest intent-filter. Paths under the scheme (e.g. `convocados://events/<id>`, `convocados://auth?code=...`) launch the app and arrive as `Intent.data` on `MainActivity`. The intent can be inspected at cold start (`onCreate`) or on resume (`onNewIntent`). Two distinct consumers:
+- **Navigation deep link** (`convocados://events/<id>`, `convocados://games`, `convocados://create`) — must be resolved to a Compose `Route` and navigated to. Preserved across login so a user who taps a link while logged out lands on the destination after authenticating.
+- **OAuth callback** (`convocados://auth?code=...`) — handled by `RootViewModel.handleIntent`, exchanged for tokens via `ApiClient.exchangeCode`. Distinct from navigation: never fed to the navigation router.
+
+The Android app extracts only the **extras** (`intent.getStringExtra("deep_link" | "navigate_to")`) but **not** `intent.data`, so scheme-URL deep links silently never reach the navigation layer. See ADR-0012.
+_Avoid_: deeplink (one word), intent URL, app link
+
+## Auth Callback URL
+The URL the user lands on after a successful sign-in. Three transport paths, all converging on the same shape — a **relative path** on the app's own origin (validated against the open-redirect pattern `//evil`):
+1. **Email/password or magic-link** (`web`) — read from `?callbackURL=` on the signin page, used by `SignInPage.handlePasswordSubmit` and the already-authenticated `useEffect` redirect.
+2. **Google OAuth** (`web`) — passed to `signIn.social({callbackURL})`, written into the `better-auth.state` cookie, and read back server-side on the `/api/auth/callback/google` handler to issue the final 302. The state is the single source of truth for the destination.
+3. **Mobile OAuth** (`android`) — there is no per-flow callback URL: `AuthManager.startLogin` hardcodes `convocados://auth`. Navigation to a deep-linked screen is a separate concern (see App Deep Link).
+
+Sanitization: the web `SignInPage` rejects `//` prefixed values to block open redirects. The default fallback (when no callbackURL is present) is `/dashboard` on web, `Route.Games.route` on Android.
+_Avoid_: postLoginURL (component-internal only), returnUrl, redirect_to
+
+## OAuth State
+A better-auth-managed, short-lived, HttpOnly cookie (`better-auth.state`) that carries authentication-flow context across the OAuth round-trip. On `POST /api/auth/sign-in/social` the server stores the requested `callbackURL` in the state, then redirects the browser to the provider with a `state` query param. On the provider callback (`/api/auth/callback/<provider>?state=...&code=...`) the server reads the state cookie, extracts the callbackURL, and 302-redirects the browser there. The cookie is single-use (consumed on read) and expires in 5 minutes — long enough to survive a Google sign-in, short enough that a leaked state cannot be replayed. State is the **only** carrier of the post-auth destination for social sign-in; losing it means the user lands on the default landing page.
+_Avoid_: nonce (overloaded with CSRF), request_token, oauth_token
+
