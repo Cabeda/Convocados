@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { addPlayerToTeams, validateTeams } from "./players";
+import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 
 const UNDO_WINDOW_MS = 60_000; // 60 seconds
 
@@ -57,6 +58,7 @@ export const POST: APIRoute = async ({ params, request }) => {
       create: { eventId, userId },
       update: {},
     });
+    enqueuePushSetupHintSafe(userId, eventId);
   }
 
   // Re-sync teams if the restored player is in the active range

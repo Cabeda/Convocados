@@ -549,6 +549,27 @@ export const openApiSpec = {
         responses: { "200": { description: "VAPID public key" } },
       },
     },
+    "/api/push/test": {
+      post: {
+        summary: "Send a self-test push to the caller's web subscriptions",
+        description: "Used by the push-prompt banner to confirm the channel works. Returns the number of subscriptions that accepted the test.",
+        tags: ["Push"],
+        responses: {
+          "200": {
+            description: "Test push sent",
+            content: { "application/json": { schema: {
+              type: "object",
+              properties: {
+                ok: { type: "boolean" },
+                delivered: { type: "integer", description: "Number of subscriptions that accepted the push" },
+                total: { type: "integer", description: "Total subscriptions attempted" },
+              },
+            }}},
+          },
+          "401": { description: "Not authenticated" },
+        },
+      },
+    },
 
     // ── Webhooks ────────────────────────────────────────────────────────
     "/api/events/{id}/webhooks": {

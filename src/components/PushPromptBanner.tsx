@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Alert, Button, Collapse, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Link } from "@mui/material";
+import { Alert, Button, Collapse, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Link, Snackbar } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import BlockIcon from "@mui/icons-material/Block";
 import { useT } from "~/lib/useT";
+import { resolveIosHelpLink } from "~/lib/pushPrompt";
 
 const DISMISS_KEY = "push_prompt_dismissed_at";
 const COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days (tightened from 30d after #463)
@@ -14,6 +15,10 @@ interface Props {
   /** #463 high-intent: user has a pending RSVP for an event <48h away.
    *  Renders as a centered modal Dialog instead of a banner — harder to ignore. */
   highIntent?: boolean;
+  /** Optional callback fired after a successful enable, e.g. to surface a
+   *  dashboard-level Snackbar. Receives `{ delivered, total }` from the
+   *  server's test-push response. */
+  onEnabled?: (result: { delivered: number; total: number }) => void;
 }
 
 /**
@@ -21,11 +26,18 @@ interface Props {
  * #457: four-state model — granted/denied/dismissed/default. Denied is terminal and
  * renders a "blocked" hint with browser-settings instructions instead of re-prompting.
  * #463 escalation: high-intent surfaces render as a modal Dialog, not a banner.
+ * #136: on successful enable, fires a test push so the user gets an instant
+ *   "it works" moment, and surfaces the result via Snackbar.
  */
-export function PushPromptBanner({ followCount, forceOnEventDetail = false, highIntent = false }: Props) {
+export function PushPromptBanner({ followCount, forceOnEventDetail = false, highIntent = false, onEnabled }: Props) {
   const t = useT();
   const [visible, setVisible] = useState(false);
   const [denied, setDenied] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
+    open: false,
+    message: "",
+    severity: "success",
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -73,7 +85,29 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ state: "granted" }),
       }).catch(() => {});
+
       setVisible(false);
+
+      // #136: send a self-test push so the user gets immediate confirmation
+      // the channel works. Snackbar doubles as a UX moment AND a fallback
+      // when the OS suppressed the notification.
+      let result: { delivered: number; total: number } = { delivered: 0, total: 0 };
+      try {
+        const r = await fetch("/api/push/test", { method: "POST" });
+        if (r.ok) result = await r.json();
+      } catch { /* network blip — non-fatal */ }
+
+      if (onEnabled) onEnabled(result);
+
+      if (result.total === 0) {
+        // No subscriptions registered server-side (race or older client) — still
+        // tell the user it worked, since the browser-level permission succeeded.
+        setSnackbar({ open: true, message: t("pushTestSent"), severity: "success" });
+      } else if (result.delivered > 0) {
+        setSnackbar({ open: true, message: t("pushTestSent"), severity: "success" });
+      } else {
+        setSnackbar({ open: true, message: t("pushTestFailed"), severity: "error" });
+      }
     } catch {
       // User denied or error — record dismissal
       handleDismiss();
@@ -92,18 +126,23 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
 
   if (denied) {
     const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
-    const helpHref = /Firefox/i.test(ua)
-      ? "about:preferences#content-notifications"
-      : /Chrome|Edg/i.test(ua)
-        ? "chrome://settings/content/notifications"
-        : "/docs/push";
+    const helpHref = resolveIosHelpLink(ua);
+    const isIos = /iPhone|iPad|iPod/.test(ua) && !/MSStream/.test(ua);
     return (
-      <Alert severity="warning" icon={<BlockIcon />} sx={{ mb: 2 }}>
-        {t("pushBlockedHint")}{" "}
-        <Link href={helpHref} target="_blank" rel="noopener">
-          {t("enable")}
-        </Link>
-      </Alert>
+      <>
+        <Alert severity="warning" icon={<BlockIcon />} sx={{ mb: 2 }}>
+          {(isIos ? t("pushBlockedIosHint") : t("pushBlockedHint"))}{" "}
+          <Link href={helpHref} target="_blank" rel="noopener">
+            {t("enable")}
+          </Link>
+        </Alert>
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={4000}
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          message={snackbar.message}
+        />
+      </>
     );
   }
 
@@ -111,19 +150,27 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
   // when the user has a pending RSVP for a near-term event.
   if (highIntent && visible) {
     return (
-      <Dialog open onClose={handleDismiss} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <NotificationsIcon color="primary" />
-          {t("pushPromptTitle")}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t("pushPromptHighIntentBody")}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleDismiss} color="inherit">{t("dismiss")}</Button>
-          <Button onClick={handleEnable} variant="contained" color="primary">{t("enable")}</Button>
-        </DialogActions>
-      </Dialog>
+      <>
+        <Dialog open onClose={handleDismiss} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <NotificationsIcon color="primary" />
+            {t("pushPromptTitle")}
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText>{t("pushPromptHighIntentBody")}</DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleDismiss} color="inherit">{t("dismiss")}</Button>
+            <Button onClick={handleEnable} variant="contained" color="primary">{t("enable")}</Button>
+          </DialogActions>
+        </Dialog>
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={4000}
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          message={snackbar.message}
+        />
+      </>
     );
   }
 
@@ -146,6 +193,12 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
       >
         {t("pushPromptBanner")}
       </Alert>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        message={snackbar.message}
+      />
     </Collapse>
   );
 }

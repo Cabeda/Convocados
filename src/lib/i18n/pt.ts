@@ -547,10 +547,19 @@ const pt: TranslationKeys = {
   // PWA install prompt (#135)
   installApp: "Instalar Convocados",
   installAppDesc: "Adiciona ao ecrã inicial para acesso rápido — sem app store.",
+  installAppDescNotifications: "Recebe lembretes 24h e 2h antes dos jogos — mesmo com o separador fechado.",
+  installAppDescIos: "Adiciona ao ecrã inicial primeiro, depois ativa as notificações. No iOS só há push a partir da app instalada.",
   installBtn: "Instalar",
   installDismiss: "Agora não",
   installIosHint: "Toca no botão de partilha e depois em \"Adicionar ao ecrã inicial\"",
   versionAvailable: "Versão {version} disponível",
+
+  // Push onboarding (#136)
+  pushSetupHintTitle: "Não percas o próximo jogo",
+  pushSetupHintBody: "Ativa as notificações para receberes lembretes a 24h e 2h neste dispositivo.",
+  pushBlockedIosHint: "As notificações estão bloqueadas. Abre Definições → Safari → Notificações e ativa-as para o Convocados.",
+  pushTestSent: "Notificação de teste enviada — deve aparecer a qualquer momento.",
+  pushTestFailed: "Não foi possível enviar uma notificação de teste. Verifica as definições do navegador.",
 
   // Notification settings (#112)
   notificationSettings: "Definições de notificações",

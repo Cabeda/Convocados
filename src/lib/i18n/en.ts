@@ -546,10 +546,19 @@ const en = {
   // PWA install prompt (#135)
   installApp: "Install Convocados",
   installAppDesc: "Add to your home screen for quick access — no app store needed.",
+  installAppDescNotifications: "Get 24h and 2h game reminders — even when the tab is closed.",
+  installAppDescIos: "Add to your home screen first, then enable notifications. iOS only delivers push from the installed app.",
   installBtn: "Install",
   installDismiss: "Not now",
   installIosHint: "Tap the share button, then \"Add to Home Screen\"",
   versionAvailable: "Version {version} available",
+
+  // Push onboarding (#136)
+  pushSetupHintTitle: "Don't miss the next game",
+  pushSetupHintBody: "Turn on notifications to get 24h and 2h reminders on this device.",
+  pushBlockedIosHint: "Notifications are blocked. Open Settings → Safari → Notifications, then turn them on for Convocados.",
+  pushTestSent: "Test notification sent — you should see it pop up any second.",
+  pushTestFailed: "Couldn't send a test notification. Check your browser's notification settings.",
 
   // Notification settings (#112)
   notificationSettings: "Notification settings",

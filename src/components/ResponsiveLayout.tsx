@@ -163,14 +163,29 @@ function InstallBanner() {
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [showIos, setShowIos] = useState(false);
+  // #136: track the live Notification.permission so the copy can pitch the
+  // *notification* win, not just the "quick access" win.
+  const [permission, setPermission] = useState<"default" | "granted" | "denied" | "unsupported">("default");
 
   useEffect(() => {
     // Don't show if already installed or recently dismissed
     if (isStandalone() || isDismissed()) return;
 
+    if (typeof Notification !== "undefined") {
+      setPermission(Notification.permission);
+    } else {
+      setPermission("unsupported");
+    }
+
     // iOS: show manual instructions
     if (isIos()) {
       setShowIos(true);
+      return;
+    }
+
+    // #136: if push is already granted, the install banner has no value-prop
+    // left to pitch — silently suppress.
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
       return;
     }
 
@@ -221,6 +236,20 @@ function InstallBanner() {
 
   if (!showBanner && !showIos) return null;
 
+  // #136: permission-aware description copy.
+  // - iOS + notif default: pitch the iOS-specific two-step flow.
+  // - desktop + notif default: pitch the notification win.
+  // - iOS + notif denied: keep the manual hint.
+  // - desktop + notif denied: same as default (the install doesn't unblock
+  //   the system permission, but the banner is still useful for app UX).
+  const descKey = showIos && permission === "default"
+    ? "installAppDescIos"
+    : showIos
+      ? "installIosHint"
+      : permission === "default"
+        ? "installAppDescNotifications"
+        : "installAppDesc";
+
   return (
     <Slide in direction="up">
       <Paper elevation={6} sx={{
@@ -247,7 +276,7 @@ function InstallBanner() {
             {t("installApp")}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {showIos ? t("installIosHint") : t("installAppDesc")}
+            {t(descKey)}
           </Typography>
         </Box>
         {showIos ? (
