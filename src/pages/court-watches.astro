@@ -1,20 +1,16 @@
 ---
 export const prerender = true;
-import CourtWatchesPage from "../components/CourtWatchesPage";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import SpaRoot from "../components/SpaRoot";
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Court watches — Convocados</title>
-    <link rel="icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#1b6b4a" />
-  </head>
-  <body>
-    <CourtWatchesPage client:only="react" />
-  </body>
-</html>
+<BaseLayout
+  title="Court watches — Convocados"
+  mainTransitionName="page-court-watches"
+>
+  <SpaRoot
+    client:only="react"
+    transition:persist="convocados-shell"
+    pageKey="court-watches"
+  />
+</BaseLayout>

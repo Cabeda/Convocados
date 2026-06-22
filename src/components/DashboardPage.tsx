@@ -7,8 +7,6 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import UnfollowIcon from "@mui/icons-material/VisibilityOff";
-import { ThemeModeProvider } from "./ThemeModeProvider";
-import { ResponsiveLayout } from "./ResponsiveLayout";
 import { PushPromptBanner } from "./PushPromptBanner";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
@@ -154,33 +152,25 @@ export default function DashboardPage() {
 
   if (sessionLoading) {
     return (
-      <ThemeModeProvider>
-        <ResponsiveLayout>
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress />
-          </Box>
-        </ResponsiveLayout>
-      </ThemeModeProvider>
+      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+        <CircularProgress />
+      </Box>
     );
   }
 
   if (!session?.user) {
     return (
-      <ThemeModeProvider>
-        <ResponsiveLayout>
-          <Container maxWidth="sm" sx={{ py: 8, textAlign: "center" }}>
-            <Typography variant="h5" fontWeight={700} gutterBottom>
-              {t("myGames")}
-            </Typography>
-            <Typography color="text.secondary" gutterBottom>
-              {t("signIn")}
-            </Typography>
-            <Button variant="contained" href="/auth/signin" sx={{ mt: 2 }}>
-              {t("signIn")}
-            </Button>
-          </Container>
-        </ResponsiveLayout>
-      </ThemeModeProvider>
+      <Container maxWidth="sm" sx={{ py: 8, textAlign: "center" }}>
+        <Typography variant="h5" fontWeight={700} gutterBottom>
+          {t("myGames")}
+        </Typography>
+        <Typography color="text.secondary" gutterBottom>
+          {t("signIn")}
+        </Typography>
+        <Button variant="contained" href="/auth/signin" sx={{ mt: 2 }}>
+          {t("signIn")}
+        </Button>
+      </Container>
     );
   }
 
@@ -188,117 +178,113 @@ export default function DashboardPage() {
   const hasActive = owned.length > 0 || admin.length > 0 || followed.length > 0;
 
   return (
-    <ThemeModeProvider>
-      <ResponsiveLayout>
-        <Container maxWidth="md" sx={{ py: 4 }}>
-          <Stack spacing={4}>
-            <Typography variant="h4" fontWeight={700}>{t("myGames")}</Typography>
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Stack spacing={4}>
+        <Typography variant="h4" fontWeight={700}>{t("myGames")}</Typography>
 
-            <PushPromptBanner
-              followCount={hasActive ? 1 : 0}
-              highIntent={hasActive && highIntent}
-            />
+        <PushPromptBanner
+          followCount={hasActive ? 1 : 0}
+          highIntent={hasActive && highIntent}
+        />
 
-            {isLoading ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : (
+        {isLoading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <>
+            {owned.length > 0 && (
               <>
-                {owned.length > 0 && (
-                  <>
-                    <Box>
-                      <Typography variant="h6" fontWeight={600} gutterBottom>
-                        {t("ownedGames")}
-                      </Typography>
-                      <Stack spacing={1.5}>
-                        {owned.map((g) => <GameCard key={g.id} game={g} />)}
-                        {ownedHasMore && (
-                          <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
-                            <Button variant="outlined" size="small" onClick={loadMoreOwned} disabled={loadingOwned}>
-                              {loadingOwned ? t("loading") : t("loadMore")}
-                            </Button>
-                          </Box>
-                        )}
-                      </Stack>
-                    </Box>
-                    <Divider />
-                  </>
-                )}
-
-                {admin.length > 0 && (
-                  <>
-                    <Box>
-                      <Typography variant="h6" fontWeight={600} gutterBottom>
-                        {t("adminGames")}
-                      </Typography>
-                      <Stack spacing={1.5}>
-                        {admin.map((g) => <GameCard key={g.id} game={g} />)}
-                      </Stack>
-                    </Box>
-                    <Divider />
-                  </>
-                )}
-
-                {followed.length > 0 && (
-                  <Box>
-                    <Typography variant="h6" fontWeight={600} gutterBottom>
-                      {t("followedGames")}
-                    </Typography>
-                    <Stack spacing={1.5}>
-                      {followed.map((g) => (
-                        <Box key={g.id} sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
-                          <Box sx={{ flex: 1 }}>
-                            <GameCard game={g} />
-                          </Box>
-                          <Tooltip title={t("unfollow")}>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleUnfollow(g.id)}
-                              sx={{ mt: 1 }}
-                            >
-                              <UnfollowIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      ))}
-                      {followedHasMore && (
-                        <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
-                          <Button variant="outlined" size="small" onClick={loadMoreFollowed} disabled={loadingFollowed}>
-                            {loadingFollowed ? t("loading") : t("loadMore")}
-                          </Button>
-                        </Box>
-                      )}
-                    </Stack>
-                  </Box>
-                )}
-
-                {!hasActive && (
-                  <Alert severity="info">{t("noFollowedGames")}</Alert>
-                )}
-
-                {allArchived.length > 0 && (
-                  <>
-                    <Divider />
-                    <Accordion defaultExpanded={false} variant="outlined" sx={{ borderRadius: 2, "&:before": { display: "none" } }}>
-                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                        <Typography variant="h6" fontWeight={600}>
-                          {t("archivedGames")} ({allArchived.length})
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails>
-                        <Stack spacing={1.5}>
-                          {allArchived.map((g) => <GameCard key={g.id} game={g} />)}
-                        </Stack>
-                      </AccordionDetails>
-                    </Accordion>
-                  </>
-                )}
+                <Box>
+                  <Typography variant="h6" fontWeight={600} gutterBottom>
+                    {t("ownedGames")}
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    {owned.map((g) => <GameCard key={g.id} game={g} />)}
+                    {ownedHasMore && (
+                      <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
+                        <Button variant="outlined" size="small" onClick={loadMoreOwned} disabled={loadingOwned}>
+                          {loadingOwned ? t("loading") : t("loadMore")}
+                        </Button>
+                      </Box>
+                    )}
+                  </Stack>
+                </Box>
+                <Divider />
               </>
             )}
-          </Stack>
-        </Container>
-      </ResponsiveLayout>
-    </ThemeModeProvider>
+
+            {admin.length > 0 && (
+              <>
+                <Box>
+                  <Typography variant="h6" fontWeight={600} gutterBottom>
+                    {t("adminGames")}
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    {admin.map((g) => <GameCard key={g.id} game={g} />)}
+                  </Stack>
+                </Box>
+                <Divider />
+              </>
+            )}
+
+            {followed.length > 0 && (
+              <Box>
+                <Typography variant="h6" fontWeight={600} gutterBottom>
+                  {t("followedGames")}
+                </Typography>
+                <Stack spacing={1.5}>
+                  {followed.map((g) => (
+                    <Box key={g.id} sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                      <Box sx={{ flex: 1 }}>
+                        <GameCard game={g} />
+                      </Box>
+                      <Tooltip title={t("unfollow")}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleUnfollow(g.id)}
+                          sx={{ mt: 1 }}
+                        >
+                          <UnfollowIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  ))}
+                  {followedHasMore && (
+                    <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
+                      <Button variant="outlined" size="small" onClick={loadMoreFollowed} disabled={loadingFollowed}>
+                        {loadingFollowed ? t("loading") : t("loadMore")}
+                      </Button>
+                    </Box>
+                  )}
+                </Stack>
+              </Box>
+            )}
+
+            {!hasActive && (
+              <Alert severity="info">{t("noFollowedGames")}</Alert>
+            )}
+
+            {allArchived.length > 0 && (
+              <>
+                <Divider />
+                <Accordion defaultExpanded={false} variant="outlined" sx={{ borderRadius: 2, "&:before": { display: "none" } }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="h6" fontWeight={600}>
+                      {t("archivedGames")} ({allArchived.length})
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Stack spacing={1.5}>
+                      {allArchived.map((g) => <GameCard key={g.id} game={g} />)}
+                    </Stack>
+                  </AccordionDetails>
+                </Accordion>
+              </>
+            )}
+          </>
+        )}
+      </Stack>
+    </Container>
   );
 }
