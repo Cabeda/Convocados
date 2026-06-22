@@ -31,8 +31,8 @@ importers:
         specifier: ^5.0.7
         version: 5.0.7(@types/node@25.9.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(jiti@2.7.0)(lightningcss@1.27.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(terser@5.46.1)(yaml@2.9.0)
       '@better-auth/oauth-provider':
-        specifier: ^1.6.19
-        version: 1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.19(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.27.0)(terser@5.46.1)(yaml@2.9.0)))(better-call@1.3.6(zod@4.4.3))
+        specifier: ^1.6.20
+        version: 1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.20(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.27.0)(terser@5.46.1)(yaml@2.9.0)))(better-call@1.3.6(zod@4.4.3))
       '@emotion/react':
         specifier: ^11.14.0
         version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
@@ -58,8 +58,8 @@ importers:
         specifier: ^6.4.7
         version: 6.4.7(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.27.0)(rollup@4.62.0)(terser@5.46.1)(yaml@2.9.0)
       better-auth:
-        specifier: ^1.6.19
-        version: 1.6.19(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.27.0)(terser@5.46.1)(yaml@2.9.0))
+        specifier: ^1.6.20
+        version: 1.6.20(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.27.0)(terser@5.46.1)(yaml@2.9.0))
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
@@ -82,15 +82,15 @@ importers:
         specifier: ^3.8.1
         version: 3.8.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react-is@19.2.6)(react@19.2.7)(redux@5.0.1)
       resend:
-        specifier: ^6.12.4
-        version: 6.12.4
+        specifier: ^6.14.0
+        version: 6.14.0
       web-push:
         specifier: ^3.6.7
         version: 3.6.7
     devDependencies:
       '@eslint-react/eslint-plugin':
-        specifier: ^5.9.0
-        version: 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+        specifier: ^5.9.1
+        version: 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.5.0(jiti@2.7.0))
@@ -304,8 +304,8 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@better-auth/core@1.6.19':
-    resolution: {integrity: sha512-ddE3Y9MoQ8t32QSO5Y8mV7pmnDAv5LdJjX1SPWUH6JUUmuOc7YEy3B5JfXZIJbRaXFdnAitN7pHPVa5u/dYAZA==}
+  '@better-auth/core@1.6.20':
+    resolution: {integrity: sha512-y73I1xNXuNYiHBFduWGRcJ2ro2rNuVDEYkgVMJtIaRXtbosdXHs9gfyQrHecgeHMHKx1SYSBT/CExak0vVMTng==}
     peerDependencies:
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
@@ -321,55 +321,55 @@ packages:
       '@opentelemetry/api':
         optional: true
 
-  '@better-auth/drizzle-adapter@1.6.19':
-    resolution: {integrity: sha512-57C9ePorPmIEez6dHuQMz3hCTkYim0lfVRIoRtX7PiVfiRFB2bjXseQwrCJfQmkgMFlkp1s/c9nKgAjc2EvAIg==}
+  '@better-auth/drizzle-adapter@1.6.20':
+    resolution: {integrity: sha512-hJHfCdAiZrC7EmZAt3NAiGgcNo9Y5Qz3PLL+a9rODXaAJGCMvzUJniqef9wHuJBwU0SWW+2f4wXe8xQmaC/IKQ==}
     peerDependencies:
-      '@better-auth/core': ^1.6.19
+      '@better-auth/core': ^1.6.20
       '@better-auth/utils': 0.4.2
       drizzle-orm: ^0.45.2
     peerDependenciesMeta:
       drizzle-orm:
         optional: true
 
-  '@better-auth/kysely-adapter@1.6.19':
-    resolution: {integrity: sha512-DlmvllEd0nv8JL+plX3JB3WTmqDFnGFOmjmIiUDHo8R3PTAvC0ZaJq3Jk+LQLN5PyVQSUzXZKtvTQYaqRHzBaw==}
+  '@better-auth/kysely-adapter@1.6.20':
+    resolution: {integrity: sha512-Uvpmgbx5y8JqXroVanNzDdKzOl3HojoTz+/X6MR6zOUr25IzlYz660mjnu0rxKiIF55kD3CroqFsDzjNUw7ERw==}
     peerDependencies:
-      '@better-auth/core': ^1.6.19
+      '@better-auth/core': ^1.6.20
       '@better-auth/utils': 0.4.2
       kysely: ^0.28.17 || ^0.29.0
     peerDependenciesMeta:
       kysely:
         optional: true
 
-  '@better-auth/memory-adapter@1.6.19':
-    resolution: {integrity: sha512-cZ8iLRG/T8Oi/CqE9FTHj3z8pIOqRsINi50trWxPNwyY/Eyb7YCljrBi0PuqgIdyVs7BWfrrtEYTpO4ddfuwEw==}
+  '@better-auth/memory-adapter@1.6.20':
+    resolution: {integrity: sha512-J5Ni0LlFijbzXlwu2rFHaD8zEFocmajyzWkRnHsq8LhV/Dk4iWQwwnqzLrPoDQEj8roECAUF03hrIeMzqWRqJQ==}
     peerDependencies:
-      '@better-auth/core': ^1.6.19
+      '@better-auth/core': ^1.6.20
       '@better-auth/utils': 0.4.2
 
-  '@better-auth/mongo-adapter@1.6.19':
-    resolution: {integrity: sha512-8AReXqhMGiGQIPEpGbmAhh+R4g70TsAVvzwdd6Aj4q+LTSwd3tqC89TFJ4eX8KSplxm9PFBZ6g6gsRmDd7urQg==}
+  '@better-auth/mongo-adapter@1.6.20':
+    resolution: {integrity: sha512-ClDBJf6h4g85WJswxwQwxLaiyRU67Gmz/uaIf19tY1gqlLJDykSGjmqRNSBMG5rWABNzcNqbO4KG31rYUldbIw==}
     peerDependencies:
-      '@better-auth/core': ^1.6.19
+      '@better-auth/core': ^1.6.20
       '@better-auth/utils': 0.4.2
       mongodb: ^6.0.0 || ^7.0.0
     peerDependenciesMeta:
       mongodb:
         optional: true
 
-  '@better-auth/oauth-provider@1.6.19':
-    resolution: {integrity: sha512-tGY9zvoActfrwlHBIOBN3Y6Sh/UtyzP4s2tBI3pjW0h7HptTbPvB8wyNMBMK7YT7ztsEPYY1OoY3WnMnxaqzxw==}
+  '@better-auth/oauth-provider@1.6.20':
+    resolution: {integrity: sha512-+YzrmMN9N5pv8s/nOaF6dUS3s0yH4PykZWLdaEeT7ZMWB+zEAa4E8TYKBH2CcWmlXmoYR4uAHtZYI+QiEu/guw==}
     peerDependencies:
-      '@better-auth/core': ^1.6.19
+      '@better-auth/core': ^1.6.20
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
-      better-auth: ^1.6.19
+      better-auth: ^1.6.20
       better-call: 1.3.6
 
-  '@better-auth/prisma-adapter@1.6.19':
-    resolution: {integrity: sha512-pXZBhR7/bzJb48IUHlGMyz9SM9h1OCO5GIIuHEllJYt8MKgrjtsnXfUkwZh6pAUEIp3WxBEYMMK96bfkqHiWEg==}
+  '@better-auth/prisma-adapter@1.6.20':
+    resolution: {integrity: sha512-WhYdhSGuVSfu1peCSf2snmmVzfWjRaEvbSrsNCusiwGE9l94HlES4mjSPM48fed24hL7yg4j1dYK/yjEt87FpQ==}
     peerDependencies:
-      '@better-auth/core': ^1.6.19
+      '@better-auth/core': ^1.6.20
       '@better-auth/utils': 0.4.2
       '@prisma/client': ^5.0.0 || ^6.0.0 || ^7.0.0
       prisma: ^5.0.0 || ^6.0.0 || ^7.0.0
@@ -379,10 +379,10 @@ packages:
       prisma:
         optional: true
 
-  '@better-auth/telemetry@1.6.19':
-    resolution: {integrity: sha512-bBaB6SMIsrD3WutDdm5YQ1bQyinANTimHD8RtpLWhNh/jIXvzgwVVCrDFqA256vcGC/ZRCydmtW8ZrUqNMW9Og==}
+  '@better-auth/telemetry@1.6.20':
+    resolution: {integrity: sha512-3BhbY3naQDERvdJvJ7fGszVY6rpsVfc6c9uyBVZlC1coVEF/rkM0rIcjtMVI1GUH7vWy1wjR6qF5vQnMun3XNQ==}
     peerDependencies:
-      '@better-auth/core': ^1.6.19
+      '@better-auth/core': ^1.6.20
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
 
@@ -667,50 +667,50 @@ packages:
     resolution: {integrity: sha512-EriSTlt5OC9/7SXkRSCAhfSxxoSUgBm33OH+IkwbdpgoqsSsUg7y3uh+IICI/Qg4BBWr3U2i39RpmycbxMq4ew==}
     engines: {node: ^12.0.0 || ^14.0.0 || >=16.0.0}
 
-  '@eslint-react/ast@5.9.0':
-    resolution: {integrity: sha512-D5DmbsEGYYmHOC2J68BRC2iJhYsD4K0x8mllgB08SeSQ0T/nP2BRogg/ohn5ZeRMb87ZDqN6NtGR7G7qTwgOSw==}
+  '@eslint-react/ast@5.9.1':
+    resolution: {integrity: sha512-PEBHBKxuKGrseO828u5/HFo89TdOa946q5veEjdDR+BjxlMuxhZxIqHkPyoS93dh6E+9mkZkcDerSGY5nCsm8Q==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
       typescript: '*'
 
-  '@eslint-react/core@5.9.0':
-    resolution: {integrity: sha512-GzARSlLTJT3FY9sUO9bYLoFtgiuUoNKzVv68oJkjAIembiu/6s1vyjs/I/1PEt+pEU6eu5hPjKHJXzd4boSDmQ==}
+  '@eslint-react/core@5.9.1':
+    resolution: {integrity: sha512-CQ7ZQCRoqaHSBxld2zzfvjPBWuH0R6Op9FvCq+Nfennv/k6gbecA7IV47SlaXC7TKVB7zxiiwD3kD8ftaL8+xA==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
       typescript: '*'
 
-  '@eslint-react/eslint-plugin@5.9.0':
-    resolution: {integrity: sha512-BQFiLhxgYnGldiydecjjRXSIixHUsYb8YNSdlrGkoQU3ZFidW6d5R0I1Reooz8DAg/m6sjwZ17MRVRNm3Z4PyA==}
+  '@eslint-react/eslint-plugin@5.9.1':
+    resolution: {integrity: sha512-UVkd9g/NzpyoBIJb8O1OcjNLKe5BNGg+IZH5Pns/aPFdkdXqzmVHpgTtLg+w2fDNzv+hivqjUdWw99EQ7kC0fA==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
       typescript: '*'
 
-  '@eslint-react/eslint@5.9.0':
-    resolution: {integrity: sha512-PEJPNXLjzlpdq2A4+9XlVdYziZPGq7wM+PB8jtmUzurQuZ8dqfCoBiQNuu+8TYMPGet1lUjHhijCO8MM9mEfrg==}
+  '@eslint-react/eslint@5.9.1':
+    resolution: {integrity: sha512-YJVfj1Z0+uaYI+KmdNDQpLT8KceLRjf8UH3gd/fJJ+Ye3jBuS5sXDxBBoG74OF61/mtTugrc9aBCes4hlouwBg==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
       typescript: '*'
 
-  '@eslint-react/jsx@5.9.0':
-    resolution: {integrity: sha512-dc6hBagLgCt+CSkWSJjbyPDGGcs/J9qHTdymMQrw51bO+DIztQpuy42E42EjOdxWcaw3U0eUtu330nZEcKqGMw==}
+  '@eslint-react/jsx@5.9.1':
+    resolution: {integrity: sha512-rZVIWotHLOYdbsmBEMJCQlu2gUeHcU8dYa7EkhWPwuh3p1q1ydV+Jfn4whJwHVb/mTI8zy4957RnFbGGWVLa6g==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
       typescript: '*'
 
-  '@eslint-react/shared@5.9.0':
-    resolution: {integrity: sha512-Ln255YTTUSlONr+e0Lu1wi2X9fTuOlNNJNXTz6PYaNZFAwCNWdlhkzFL8HdIBgPiWPUKrt+OMuah8o0xVoHswA==}
+  '@eslint-react/shared@5.9.1':
+    resolution: {integrity: sha512-6VBZo5KTlyUrn27aW6u6nqVvX9igWxzQX0vVNCv/ObnCA6ElOn1TBC9ENwRoK73FJ86PcT25PWyz1LJRgwnefw==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
       typescript: '*'
 
-  '@eslint-react/var@5.9.0':
-    resolution: {integrity: sha512-vNz4y4eFKRYetihXiiZueGgClsyTFhR3kltMDPwoZyJaERdkyeoUylY09OnWakJFitao1+s2eBkSVuFqA8dqrA==}
+  '@eslint-react/var@5.9.1':
+    resolution: {integrity: sha512-s+hb4H+6CzFsL2E6Yw6/c3bzSFfNc2XNOP2Q60k4G05VCbUew30Aqcf0Ehiac5wgGmpDZ9/9wkJiNanW2M1viA==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
@@ -1836,8 +1836,8 @@ packages:
     resolution: {integrity: sha512-3ilxa3n4276wGQp/ImRAuz4ALdsj/2Wd3FqoZBZlajDYnByCZ0JMb4+26Rde0wGXIbM0G2HWSfr/Fi8b21KX8g==}
     engines: {node: '>=10.0.0'}
 
-  better-auth@1.6.19:
-    resolution: {integrity: sha512-68eXWKj0sxa0xW4+n4tENd6Co94UCynPKe1fncmO6kIB3XhSXWgwDEpiUouJV2dmLBrHM1FPkoI6Q5597zCGpQ==}
+  better-auth@1.6.20:
+    resolution: {integrity: sha512-fSpGHGRKiGRiYVd3QTQtuVZ8oxpiSe/7ip0Rpvt/Sy8zQbEbVKUPMOhE0gLXg+FjqTUsIo7582hxUYxtEcqUpA==}
     peerDependencies:
       '@lynx-js/react': '*'
       '@prisma/client': ^5.0.0 || ^6.0.0 || ^7.0.0
@@ -2494,8 +2494,8 @@ packages:
     engines: {node: '>=6.0'}
     hasBin: true
 
-  eslint-plugin-react-dom@5.9.0:
-    resolution: {integrity: sha512-gBlV304swaW2S0MqVFkQhii0C+KAy2WmxFtVtho39h5GzWdjKjNIxdUdOPQvLAFd7B1/lkbJflqGQKf6sjWGTg==}
+  eslint-plugin-react-dom@5.9.1:
+    resolution: {integrity: sha512-e0NpfKZOOvdTkYQEDJT7qLKoTX4jAjH8/qcCuOrp8zqX1LMKPrKgPe8DXGyXG5T+Bt4b81/ZQ/s3S2zkJLFuNg==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
@@ -2507,36 +2507,36 @@ packages:
     peerDependencies:
       eslint: ^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0-0 || ^9.0.0 || ^10.0.0
 
-  eslint-plugin-react-jsx@5.9.0:
-    resolution: {integrity: sha512-K/8RtAb8GDuhoIsR+Feo5Cr57Ts1N2juekocxk9TuF3azx2bCOuHiuU/rqMStMWi5oLTPrg2XqquD2LeS7x6iQ==}
+  eslint-plugin-react-jsx@5.9.1:
+    resolution: {integrity: sha512-zzhCRbuXFiGMhvCrjpcwKsob0Gos8o7d28EnhGw28YapHXx1KYt0fzUDuWDoRZ2bhYhlDHzeU+l+jEgemPpaaw==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
       typescript: '*'
 
-  eslint-plugin-react-naming-convention@5.9.0:
-    resolution: {integrity: sha512-0VYdfPXZZLDiNzvp8DmgYFwZ+vO8pljU0Pcr83/Hj8PSilF4kL2rZWh4fkh+IVQv8iIpIv7HLRbBD/nU/QSh+w==}
+  eslint-plugin-react-naming-convention@5.9.1:
+    resolution: {integrity: sha512-Ce1oAL4Et3RB+3akTSiFIZIYCexyG+oYrGYGKps0dky5iaRy8MUskh4EXcq4yI109IkBCVt52gtybmR3Te0lrQ==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
       typescript: '*'
 
-  eslint-plugin-react-rsc@5.9.0:
-    resolution: {integrity: sha512-hcP7lTqV5JNx8QpmMKric50IBEuFwj5mlM7cyaYB/2UWJaaQvScywHeg/CRZrDauFxkIVx9JXcORBqW+h7VGdQ==}
+  eslint-plugin-react-rsc@5.9.1:
+    resolution: {integrity: sha512-+XNAuJeGZ6ld1jknOPOeJ8gdTINZeQjw2sbBP213+QdTmwJqZLV+CrwaAN63O+8D+EIGtdnSkfpYDBcm3jiSGg==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
       typescript: '*'
 
-  eslint-plugin-react-web-api@5.9.0:
-    resolution: {integrity: sha512-AlKMpAFHbgJ10hcTIw80NXzEPKxB1zugA98joPnMKDSuf/wScoWGwl5X6SmigVn4KChPBudYchdN0OrBUqO02g==}
+  eslint-plugin-react-web-api@5.9.1:
+    resolution: {integrity: sha512-D9M6wKT1fPxAy70YebHbfU+gzYv8k9RUtODXjUJYLjxrXoq2Z7o5kjB1yAZ1vi31EzbLJ+UYzGKi4hw98iwPjg==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
       typescript: '*'
 
-  eslint-plugin-react-x@5.9.0:
-    resolution: {integrity: sha512-urgjMTtZpUzhkFBbQqp4+vdFhQmSkgeLnpq1h/2gemnzKjiMpDa9cCbo1vhjHnYQLzU6YRbxJ1hhqVv+9nXbjw==}
+  eslint-plugin-react-x@5.9.1:
+    resolution: {integrity: sha512-0GwMpLdYx3HWMbDd1vqNr9VImkq34x/lQaLch2qDQmPOmi1DULL3yndl347wFhH4SbE6OUoJV2z0KCA72qnv5g==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       eslint: '*'
@@ -4027,8 +4027,8 @@ packages:
   reselect@5.1.1:
     resolution: {integrity: sha512-K/BG6eIky/SBpzfHZv/dd+9JBFiS4SWV7FIujVyJRux6e45+73RaUHXLmIR1f7WOMaQ0U1km6qwklRQxpJJY0w==}
 
-  resend@6.12.4:
-    resolution: {integrity: sha512-lRpJ2Hxd+ht+JPDm97juRcUp9HOMuZyxaRFRFmc9Tx8iNWiei94Dx9v6SWufgKk2667C/uCeKKspMotOHSpCSg==}
+  resend@6.14.0:
+    resolution: {integrity: sha512-jVdpUgOoWGLjaP64lo8KwzHT9gY4w6Dl8c36CIb2F+ayYOMLr3khqs8xrNjXM2k19b+lPoj0VWQFhVNLiToBjA==}
     engines: {node: '>=20'}
     peerDependencies:
       '@react-email/render': '*'
@@ -5133,7 +5133,7 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)':
+  '@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)':
     dependencies:
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
@@ -5147,49 +5147,49 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
 
-  '@better-auth/drizzle-adapter@1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)':
+  '@better-auth/drizzle-adapter@1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)':
     dependencies:
-      '@better-auth/core': 1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
+      '@better-auth/core': 1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
       '@better-auth/utils': 0.4.2
 
-  '@better-auth/kysely-adapter@1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(kysely@0.29.2)':
+  '@better-auth/kysely-adapter@1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(kysely@0.29.2)':
     dependencies:
-      '@better-auth/core': 1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
+      '@better-auth/core': 1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
       '@better-auth/utils': 0.4.2
     optionalDependencies:
       kysely: 0.29.2
 
-  '@better-auth/memory-adapter@1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)':
+  '@better-auth/memory-adapter@1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)':
     dependencies:
-      '@better-auth/core': 1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
+      '@better-auth/core': 1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
       '@better-auth/utils': 0.4.2
 
-  '@better-auth/mongo-adapter@1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)':
+  '@better-auth/mongo-adapter@1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)':
     dependencies:
-      '@better-auth/core': 1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
+      '@better-auth/core': 1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
       '@better-auth/utils': 0.4.2
 
-  '@better-auth/oauth-provider@1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.19(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.27.0)(terser@5.46.1)(yaml@2.9.0)))(better-call@1.3.6(zod@4.4.3))':
+  '@better-auth/oauth-provider@1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.20(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.27.0)(terser@5.46.1)(yaml@2.9.0)))(better-call@1.3.6(zod@4.4.3))':
     dependencies:
-      '@better-auth/core': 1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
+      '@better-auth/core': 1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
-      better-auth: 1.6.19(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.27.0)(terser@5.46.1)(yaml@2.9.0))
+      better-auth: 1.6.20(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.27.0)(terser@5.46.1)(yaml@2.9.0))
       better-call: 1.3.6(zod@4.4.3)
       jose: 6.2.3
       zod: 4.4.3
 
-  '@better-auth/prisma-adapter@1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))':
+  '@better-auth/prisma-adapter@1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))':
     dependencies:
-      '@better-auth/core': 1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
+      '@better-auth/core': 1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
       '@better-auth/utils': 0.4.2
     optionalDependencies:
       '@prisma/client': 6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3)
       prisma: 6.19.3(magicast@0.3.5)(typescript@6.0.3)
 
-  '@better-auth/telemetry@1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)':
+  '@better-auth/telemetry@1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)':
     dependencies:
-      '@better-auth/core': 1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
+      '@better-auth/core': 1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
 
@@ -5416,7 +5416,7 @@ snapshots:
 
   '@eslint-community/regexpp@4.12.2': {}
 
-  '@eslint-react/ast@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
+  '@eslint-react/ast@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
       '@typescript-eslint/types': 8.61.1
       '@typescript-eslint/typescript-estree': 8.61.1(typescript@6.0.3)
@@ -5427,13 +5427,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@eslint-react/core@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
+  '@eslint-react/core@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
-      '@eslint-react/ast': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/eslint': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/jsx': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/shared': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/var': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/ast': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/eslint': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/jsx': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/shared': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/var': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/scope-manager': 8.61.1
       '@typescript-eslint/types': 8.61.1
       '@typescript-eslint/utils': 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
@@ -5443,21 +5443,21 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@eslint-react/eslint-plugin@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
+  '@eslint-react/eslint-plugin@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
-      '@eslint-react/shared': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/shared': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       eslint: 10.5.0(jiti@2.7.0)
-      eslint-plugin-react-dom: 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      eslint-plugin-react-jsx: 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      eslint-plugin-react-naming-convention: 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      eslint-plugin-react-rsc: 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      eslint-plugin-react-web-api: 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      eslint-plugin-react-x: 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      eslint-plugin-react-dom: 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      eslint-plugin-react-jsx: 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      eslint-plugin-react-naming-convention: 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      eslint-plugin-react-rsc: 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      eslint-plugin-react-web-api: 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      eslint-plugin-react-x: 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
 
-  '@eslint-react/eslint@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
+  '@eslint-react/eslint@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
       '@typescript-eslint/utils': 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       eslint: 10.5.0(jiti@2.7.0)
@@ -5465,12 +5465,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@eslint-react/jsx@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
+  '@eslint-react/jsx@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
-      '@eslint-react/ast': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/eslint': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/shared': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/var': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/ast': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/eslint': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/shared': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/var': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/types': 8.61.1
       '@typescript-eslint/utils': 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       eslint: 10.5.0(jiti@2.7.0)
@@ -5479,9 +5479,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@eslint-react/shared@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
+  '@eslint-react/shared@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
-      '@eslint-react/eslint': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/eslint': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/utils': 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       eslint: 10.5.0(jiti@2.7.0)
       ts-pattern: 5.9.0
@@ -5490,10 +5490,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@eslint-react/var@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
+  '@eslint-react/var@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
-      '@eslint-react/ast': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/eslint': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/ast': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/eslint': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/scope-manager': 8.61.1
       '@typescript-eslint/types': 8.61.1
       '@typescript-eslint/utils': 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
@@ -6674,15 +6674,15 @@ snapshots:
 
   basic-ftp@6.0.1: {}
 
-  better-auth@1.6.19(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.27.0)(terser@5.46.1)(yaml@2.9.0)):
+  better-auth@1.6.20(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.6(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.27.0)(terser@5.46.1)(yaml@2.9.0)):
     dependencies:
-      '@better-auth/core': 1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
-      '@better-auth/drizzle-adapter': 1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)
-      '@better-auth/kysely-adapter': 1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(kysely@0.29.2)
-      '@better-auth/memory-adapter': 1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)
-      '@better-auth/mongo-adapter': 1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)
-      '@better-auth/prisma-adapter': 1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))
-      '@better-auth/telemetry': 1.6.19(@better-auth/core@1.6.19(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)
+      '@better-auth/core': 1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0)
+      '@better-auth/drizzle-adapter': 1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)
+      '@better-auth/kysely-adapter': 1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(kysely@0.29.2)
+      '@better-auth/memory-adapter': 1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)
+      '@better-auth/mongo-adapter': 1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)
+      '@better-auth/prisma-adapter': 1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@prisma/client@6.19.3(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))(typescript@6.0.3))(prisma@6.19.3(magicast@0.3.5)(typescript@6.0.3))
+      '@better-auth/telemetry': 1.6.20(@better-auth/core@1.6.20(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
       '@noble/ciphers': 2.2.0
@@ -7293,12 +7293,12 @@ snapshots:
     optionalDependencies:
       source-map: 0.6.1
 
-  eslint-plugin-react-dom@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
+  eslint-plugin-react-dom@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
     dependencies:
-      '@eslint-react/ast': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/eslint': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/jsx': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/shared': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/ast': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/eslint': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/jsx': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/shared': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/types': 8.61.1
       '@typescript-eslint/utils': 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       compare-versions: 6.1.1
@@ -7318,13 +7318,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-react-jsx@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
+  eslint-plugin-react-jsx@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
     dependencies:
-      '@eslint-react/ast': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/core': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/eslint': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/jsx': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/shared': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/ast': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/core': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/eslint': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/jsx': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/shared': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/types': 8.61.1
       '@typescript-eslint/utils': 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       eslint: 10.5.0(jiti@2.7.0)
@@ -7332,12 +7332,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-react-naming-convention@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
+  eslint-plugin-react-naming-convention@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
     dependencies:
-      '@eslint-react/ast': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/core': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/eslint': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/var': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/ast': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/core': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/eslint': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/var': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/types': 8.61.1
       '@typescript-eslint/utils': 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       eslint: 10.5.0(jiti@2.7.0)
@@ -7346,13 +7346,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-react-rsc@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
+  eslint-plugin-react-rsc@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
     dependencies:
-      '@eslint-react/ast': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/core': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/eslint': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/shared': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/var': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/ast': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/core': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/eslint': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/shared': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/var': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/types': 8.61.1
       '@typescript-eslint/utils': 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       eslint: 10.5.0(jiti@2.7.0)
@@ -7360,13 +7360,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-react-web-api@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
+  eslint-plugin-react-web-api@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
     dependencies:
-      '@eslint-react/ast': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/core': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/eslint': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/shared': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/var': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/ast': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/core': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/eslint': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/shared': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/var': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/types': 8.61.1
       '@typescript-eslint/utils': 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       birecord: 0.1.1
@@ -7376,14 +7376,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-react-x@5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
+  eslint-plugin-react-x@5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3):
     dependencies:
-      '@eslint-react/ast': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/core': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/eslint': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/jsx': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/shared': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
-      '@eslint-react/var': 5.9.0(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/ast': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/core': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/eslint': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/jsx': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/shared': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
+      '@eslint-react/var': 5.9.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/scope-manager': 8.61.1
       '@typescript-eslint/type-utils': 8.61.1(eslint@10.5.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/types': 8.61.1
@@ -9215,7 +9215,7 @@ snapshots:
 
   reselect@5.1.1: {}
 
-  resend@6.12.4:
+  resend@6.14.0:
     dependencies:
       postal-mime: 2.7.4
       standardwebhooks: 1.0.0
