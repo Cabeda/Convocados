@@ -1,12 +1,16 @@
 ---
 export const prerender = true;
 import BaseLayout from "../layouts/BaseLayout.astro";
-import AdminDashboardPage from "../components/AdminDashboardPage";
+import SpaRoot from "../components/SpaRoot";
 ---
 
 <BaseLayout
   title="Admin Dashboard — Convocados"
   mainTransitionName="page-admin"
 >
-  <AdminDashboardPage client:only="react" />
+  <SpaRoot
+    client:only="react"
+    transition:persist="convocados-shell"
+    pageKey="admin"
+  />
 </BaseLayout>

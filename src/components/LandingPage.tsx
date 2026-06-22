@@ -98,6 +98,12 @@ function HeroContent() {
   );
 }
 
+/**
+ * Page content only. The shell (ThemeModeProvider + ResponsiveLayout) is
+ * provided by the persistent SpaRoot island. Use this default export from
+ * the SPA. `LandingPageWithProviders` below wraps it in the shell for
+ * tests and any standalone use.
+ */
 export default function LandingPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));

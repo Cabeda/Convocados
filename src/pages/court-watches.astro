@@ -1,12 +1,16 @@
 ---
 export const prerender = true;
 import BaseLayout from "../layouts/BaseLayout.astro";
-import CourtWatchesPage from "../components/CourtWatchesPage";
+import SpaRoot from "../components/SpaRoot";
 ---
 
 <BaseLayout
   title="Court watches — Convocados"
   mainTransitionName="page-court-watches"
 >
-  <CourtWatchesPage client:only="react" />
+  <SpaRoot
+    client:only="react"
+    transition:persist="convocados-shell"
+    pageKey="court-watches"
+  />
 </BaseLayout>
