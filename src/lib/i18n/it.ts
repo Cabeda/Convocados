@@ -498,10 +498,19 @@ const it: TranslationKeys = {
   // PWA install prompt (#135)
   installApp: "Installa Convocados",
   installAppDesc: "Aggiungi alla schermata iniziale per un accesso rapido — senza app store.",
+  installAppDescNotifications: "Ricevi promemoria 24h e 2h prima delle partite — anche con la scheda chiusa.",
+  installAppDescIos: "Prima aggiungi alla schermata Home, poi attiva le notifiche. Su iOS il push funziona solo dall'app installata.",
   installBtn: "Installa",
   installDismiss: "Non ora",
   installIosHint: "Tocca il pulsante di condivisione, poi \"Aggiungi alla schermata Home\"",
   versionAvailable: "Versione {version} disponibile",
+
+  // Push onboarding (#136)
+  pushSetupHintTitle: "Non perderti la prossima partita",
+  pushSetupHintBody: "Attiva le notifiche per ricevere promemoria a 24h e 2h su questo dispositivo.",
+  pushBlockedIosHint: "Le notifiche sono bloccate. Apri Impostazioni → Safari → Notifiche e attivale per Convocados.",
+  pushTestSent: "Notifica di test inviata — dovrebbe apparire da un momento all'altro.",
+  pushTestFailed: "Impossibile inviare una notifica di test. Controlla le impostazioni delle notifiche del browser.",
 
   // Notification settings (#112)
   notificationSettings: "Impostazioni notifiche",

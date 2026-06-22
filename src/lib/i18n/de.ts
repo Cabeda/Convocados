@@ -498,10 +498,19 @@ const de: TranslationKeys = {
   // PWA install prompt (#135)
   installApp: "Convocados installieren",
   installAppDesc: "Zum Startbildschirm hinzufügen für schnellen Zugriff — kein App Store nötig.",
+  installAppDescNotifications: "Erinnerungen 24h und 2h vor dem Spiel erhalten — auch wenn der Tab geschlossen ist.",
+  installAppDescIos: "Zuerst zum Home-Bildschirm hinzufügen, dann Benachrichtigungen aktivieren. iOS liefert Push nur aus der installierten App.",
   installBtn: "Installieren",
   installDismiss: "Nicht jetzt",
   installIosHint: "Tippe auf den Teilen-Button und dann auf \"Zum Home-Bildschirm\"",
   versionAvailable: "Version {version} verfügbar",
+
+  // Push onboarding (#136)
+  pushSetupHintTitle: "Verpasse das nächste Spiel nicht",
+  pushSetupHintBody: "Aktiviere Benachrichtigungen, um 24h- und 2h-Erinnerungen auf diesem Gerät zu erhalten.",
+  pushBlockedIosHint: "Benachrichtigungen sind blockiert. Öffne Einstellungen → Safari → Mitteilungen und aktiviere sie für Convocados.",
+  pushTestSent: "Test-Benachrichtigung gesendet — sie sollte jeden Moment erscheinen.",
+  pushTestFailed: "Test-Benachrichtigung konnte nicht gesendet werden. Überprüfe die Benachrichtigungseinstellungen des Browsers.",
 
   // Notification settings (#112)
   notificationSettings: "Benachrichtigungseinstellungen",

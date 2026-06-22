@@ -440,3 +440,63 @@ export async function sendPushToUser(
 
   await Promise.allSettled([webPushPromise, appPushPromise]);
 }
+
+/**
+ * Send a single web-push payload to every web subscription of a user.
+ * Returns the number of subscriptions that accepted the push (status 201).
+ * Stale subscriptions (404/410/401/403) are cleaned up automatically.
+ *
+ * Intended for self-test (POST /api/push/test) — does NOT consult notification
+ * preferences, because the whole point is to verify the channel works.
+ */
+export async function sendTestPushToUserWebSubs({
+  userId,
+  title,
+  body,
+  url,
+}: {
+  userId: string;
+  title: string;
+  body: string;
+  url: string;
+}): Promise<{ delivered: number; total: number }> {
+  const hasVapid = !!(
+    (import.meta.env.VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY) &&
+    (import.meta.env.VAPID_PRIVATE_KEY ?? process.env.VAPID_PRIVATE_KEY)
+  );
+  if (!hasVapid) return { delivered: 0, total: 0 };
+
+  const allSubs = await prisma.pushSubscription.findMany({ where: { userId } });
+  if (allSubs.length === 0) return { delivered: 0, total: 0 };
+
+  await init();
+  const webpush = await getWebPush();
+  const limit = pLimit(PUSH_CONCURRENCY);
+  const pushPayload = JSON.stringify({ title, body, url });
+
+  const results = await Promise.allSettled(
+    allSubs.map((sub) =>
+      limit(async () => {
+        try {
+          await webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            pushPayload,
+          );
+          return { id: sub.id, ok: true as const };
+        } catch (err: unknown) {
+          const pushErr = err as { statusCode?: number; message?: string };
+          if (pushErr?.statusCode === 410 || pushErr?.statusCode === 404 || pushErr?.statusCode === 401 || pushErr?.statusCode === 403) {
+            await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+          }
+          return { id: sub.id, ok: false as const };
+        }
+      }),
+    ),
+  );
+
+  const delivered = results.filter(
+    (r) => r.status === "fulfilled" && r.value.ok,
+  ).length;
+
+  return { delivered, total: allSubs.length };
+}

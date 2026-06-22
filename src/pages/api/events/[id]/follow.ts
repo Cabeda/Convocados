@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../../lib/authenticate.server";
+import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 
 const OVERRIDE_FIELDS = ["mutePlayerActivity", "muteReminders", "mutePostGame", "muteEventDetails"] as const;
 
@@ -42,6 +43,10 @@ export const POST: APIRoute = async ({ params, request }) => {
     create: { eventId, userId },
     update: {},
   });
+
+  // First-time follow nudge — in-app feed reminder to enable device push
+  // (7-day per-user cooldown, see pushSetupHint.ts).
+  enqueuePushSetupHintSafe(userId, eventId);
 
   return Response.json({ ok: true, following: true, ...pickOverrides(follow) });
 };

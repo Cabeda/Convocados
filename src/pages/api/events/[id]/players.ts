@@ -14,6 +14,7 @@ import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
 import { archiveAndLeave } from "../../../../lib/leave.server";
+import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 import {
   IDEMPOTENCY_HEADER,
   getCachedResponse,
@@ -488,6 +489,9 @@ export const POST: APIRoute = async ({ params, request }) => {
       create: { eventId, userId: linkedUserId },
       update: {},
     });
+    // First-time-follow nudge — one in-app hint per 7d per user, asking them
+    // to enable device push so they actually receive game reminders.
+    enqueuePushSetupHintSafe(linkedUserId, eventId);
   }
 
   // Auto-add player to ranking system with default ELO

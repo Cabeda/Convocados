@@ -136,6 +136,7 @@ beforeEach(async () => {
   await testPrisma.account.deleteMany();
   await testPrisma.eventLog.deleteMany();
   await testPrisma.event.deleteMany();
+  await testPrisma.inAppNotification.deleteMany();
   await testPrisma.user.deleteMany();
 });
 
@@ -289,6 +290,45 @@ describe("POST /api/events/[id]/players (linkToAccount)", () => {
       where: { eventId_userId: { eventId: id, userId: user.id } },
     });
     expect(follow).not.toBeNull();
+  });
+
+  it("enqueues push_setup_hint InAppNotification on Quick Join (#136)", async () => {
+    const user = await seedUser();
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    const res = await addPlayer(ctx({ id }, { name: user.name, linkToAccount: true }));
+    expect(res.status).toBe(200);
+    // Fire-and-forget: give the enqueue tick a moment to land.
+    await new Promise((r) => setTimeout(r, 50));
+    const hint = await testPrisma.inAppNotification.findFirst({
+      where: { userId: user.id, type: "push_setup_hint" },
+    });
+    expect(hint).not.toBeNull();
+    expect(hint?.eventId).toBe(id);
+    expect(hint?.url).toBe("/settings?focus=notifications");
+  });
+
+  it("respects the 7-day push_setup_hint cooldown", async () => {
+    const user = await seedUser();
+    mockAuth(user.id, user.name);
+    const id = await seedEvent();
+    // Pre-seed a recent hint
+    await testPrisma.inAppNotification.create({
+      data: {
+        userId: user.id,
+        type: "push_setup_hint",
+        title: "x",
+        body: "y",
+        url: "/settings?focus=notifications",
+        createdAt: new Date(Date.now() - 60_000),
+      },
+    });
+    await addPlayer(ctx({ id }, { name: user.name, linkToAccount: true }));
+    await new Promise((r) => setTimeout(r, 50));
+    const hints = await testPrisma.inAppNotification.findMany({
+      where: { userId: user.id, type: "push_setup_hint" },
+    });
+    expect(hints).toHaveLength(1);
   });
 
   it("does not create EventFollow on auto-link (linkToAccount=false)", async () => {

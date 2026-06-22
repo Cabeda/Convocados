@@ -30,52 +30,77 @@ describe("PWA install prompt i18n keys", () => {
     const en = (await import("~/lib/i18n/en")).default;
     expect(en.installApp).toBeTruthy();
     expect(en.installAppDesc).toBeTruthy();
+    expect(en.installAppDescNotifications).toBeTruthy();
+    expect(en.installAppDescIos).toBeTruthy();
     expect(en.installBtn).toBeTruthy();
     expect(en.installDismiss).toBeTruthy();
     expect(en.installIosHint).toBeTruthy();
     expect(en.versionAvailable).toBeTruthy();
+    expect(en.pushSetupHintTitle).toBeTruthy();
+    expect(en.pushSetupHintBody).toBeTruthy();
+    expect(en.pushBlockedIosHint).toBeTruthy();
+    expect(en.pushTestSent).toBeTruthy();
+    expect(en.pushTestFailed).toBeTruthy();
   });
 
   it("has all PWA install keys in pt locale", async () => {
     const pt = (await import("~/lib/i18n/pt")).default;
     expect(pt.installApp).toBeTruthy();
     expect(pt.installAppDesc).toBeTruthy();
+    expect(pt.installAppDescNotifications).toBeTruthy();
+    expect(pt.installAppDescIos).toBeTruthy();
     expect(pt.installBtn).toBeTruthy();
     expect(pt.installDismiss).toBeTruthy();
     expect(pt.installIosHint).toBeTruthy();
     expect(pt.versionAvailable).toBeTruthy();
+    expect(pt.pushSetupHintTitle).toBeTruthy();
+    expect(pt.pushBlockedIosHint).toBeTruthy();
+    expect(pt.pushTestSent).toBeTruthy();
   });
 
   it("has all PWA install keys in es locale", async () => {
     const es = (await import("~/lib/i18n/es")).default;
     expect(es.installApp).toBeTruthy();
+    expect(es.installAppDescNotifications).toBeTruthy();
+    expect(es.installAppDescIos).toBeTruthy();
     expect(es.installBtn).toBeTruthy();
     expect(es.installIosHint).toBeTruthy();
     expect(es.versionAvailable).toBeTruthy();
+    expect(es.pushSetupHintTitle).toBeTruthy();
+    expect(es.pushBlockedIosHint).toBeTruthy();
   });
 
   it("has all PWA install keys in fr locale", async () => {
     const fr = (await import("~/lib/i18n/fr")).default;
     expect(fr.installApp).toBeTruthy();
+    expect(fr.installAppDescNotifications).toBeTruthy();
+    expect(fr.installAppDescIos).toBeTruthy();
     expect(fr.installBtn).toBeTruthy();
     expect(fr.installIosHint).toBeTruthy();
     expect(fr.versionAvailable).toBeTruthy();
+    expect(fr.pushSetupHintTitle).toBeTruthy();
   });
 
   it("has all PWA install keys in de locale", async () => {
     const de = (await import("~/lib/i18n/de")).default;
     expect(de.installApp).toBeTruthy();
+    expect(de.installAppDescNotifications).toBeTruthy();
+    expect(de.installAppDescIos).toBeTruthy();
     expect(de.installBtn).toBeTruthy();
     expect(de.installIosHint).toBeTruthy();
     expect(de.versionAvailable).toBeTruthy();
+    expect(de.pushSetupHintTitle).toBeTruthy();
   });
 
   it("has all PWA install keys in it locale", async () => {
     const it = (await import("~/lib/i18n/it")).default;
     expect(it.installApp).toBeTruthy();
+    expect(it.installAppDescNotifications).toBeTruthy();
+    expect(it.installAppDescIos).toBeTruthy();
     expect(it.installBtn).toBeTruthy();
     expect(it.installIosHint).toBeTruthy();
     expect(it.versionAvailable).toBeTruthy();
+    expect(it.pushSetupHintTitle).toBeTruthy();
   });
 
   it("versionAvailable contains {version} placeholder in all locales", async () => {
