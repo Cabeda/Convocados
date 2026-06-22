@@ -1,6 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
-import PublicGamesPage from "../components/PublicGamesPage";
+import SpaRoot from "../components/SpaRoot";
 
 const host = Astro.request.headers.get("x-forwarded-host") ?? Astro.request.headers.get("host") ?? "convocados.fly.dev";
 const proto = Astro.request.headers.get("x-forwarded-proto") ?? "https";
@@ -23,5 +23,9 @@ const canonicalUrl = `${proto}://${host}/public`;
     { property: "twitter:description", content: "Browse public sports games looking for players." },
   ]}
 >
-  <PublicGamesPage client:only="react" />
+  <SpaRoot
+    client:only="react"
+    transition:persist="convocados-shell"
+    pageKey="public"
+  />
 </BaseLayout>

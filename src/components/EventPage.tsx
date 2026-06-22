@@ -5,8 +5,6 @@ import {
   Alert, Skeleton,
 } from "@mui/material";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
-import { ThemeModeProvider } from "./ThemeModeProvider";
-import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
 import { PaymentSection } from "./PaymentSection";
 import type { Imatch } from "~/lib/random";
@@ -661,66 +659,54 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── Loading / locked / not found states ─────────────────────────────────────
 
   if (isLoading) return (
-    <ThemeModeProvider>
-      <ResponsiveLayout>
-        <Container maxWidth="md" sx={{ py: 4 }}>
-          <Stack spacing={3}>
-            <Paper elevation={2} sx={{ borderRadius: 3, overflow: "hidden" }}>
-              <Skeleton variant="rectangular" height={3} />
-              <Box sx={{ p: { xs: 2, sm: 3 } }}>
-                <Stack spacing={2}>
-                  <Skeleton variant="text" width="60%" height={36} />
-                  <Skeleton variant="text" width="30%" height={20} />
-                  <Skeleton variant="rectangular" height={32} width={120} sx={{ borderRadius: 2 }} />
-                  <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 1 }} />
-                  <Stack spacing={0.75}>
-                    <Skeleton variant="text" width="45%" height={20} />
-                    <Skeleton variant="text" width="35%" height={20} />
-                  </Stack>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <Skeleton variant="rounded" width={60} height={24} />
-                    <Skeleton variant="rounded" width={80} height={24} />
-                  </Box>
-                  <Skeleton variant="rectangular" height={1} />
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <Skeleton variant="circular" width={40} height={40} />
-                    <Skeleton variant="circular" width={40} height={40} />
-                  </Box>
-                </Stack>
-              </Box>
-            </Paper>
-            <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
-              <Skeleton variant="text" width="40%" height={28} sx={{ mb: 2 }} />
-              <Stack spacing={1}>
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} variant="rectangular" height={48} sx={{ borderRadius: 1 }} />
-                ))}
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Stack spacing={3}>
+        <Paper elevation={2} sx={{ borderRadius: 3, overflow: "hidden" }}>
+          <Skeleton variant="rectangular" height={3} />
+          <Box sx={{ p: { xs: 2, sm: 3 } }}>
+            <Stack spacing={2}>
+              <Skeleton variant="text" width="60%" height={36} />
+              <Skeleton variant="text" width="30%" height={20} />
+              <Skeleton variant="rectangular" height={32} width={120} sx={{ borderRadius: 2 }} />
+              <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 1 }} />
+              <Stack spacing={0.75}>
+                <Skeleton variant="text" width="45%" height={20} />
+                <Skeleton variant="text" width="35%" height={20} />
               </Stack>
-            </Paper>
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Skeleton variant="rounded" width={60} height={24} />
+                <Skeleton variant="rounded" width={80} height={24} />
+              </Box>
+              <Skeleton variant="rectangular" height={1} />
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Skeleton variant="circular" width={40} height={40} />
+                <Skeleton variant="circular" width={40} height={40} />
+              </Box>
+            </Stack>
+          </Box>
+        </Paper>
+        <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
+          <Skeleton variant="text" width="40%" height={28} sx={{ mb: 2 }} />
+          <Stack spacing={1}>
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} variant="rectangular" height={48} sx={{ borderRadius: 1 }} />
+            ))}
           </Stack>
-        </Container>
-      </ResponsiveLayout>
-    </ThemeModeProvider>
+        </Paper>
+      </Stack>
+    </Container>
   );
 
   if (lockedEvent) return (
-    <ThemeModeProvider>
-      <ResponsiveLayout>
-        <PasswordPrompt eventId={lockedEvent.id} title={lockedEvent.title} onUnlocked={fetchEvent} />
-      </ResponsiveLayout>
-    </ThemeModeProvider>
+    <PasswordPrompt eventId={lockedEvent.id} title={lockedEvent.title} onUnlocked={fetchEvent} />
   );
 
   if (notFound || !event) return (
-    <ThemeModeProvider>
-      <ResponsiveLayout>
-        <Container maxWidth="sm" sx={{ py: 8, textAlign: "center" }}>
-          <Typography variant="h4" fontWeight={700} gutterBottom>{t("gameNotFound")}</Typography>
-          <Typography color="text.secondary" gutterBottom>{t("gameNotFoundDesc")}</Typography>
-          <Button variant="contained" href="/" sx={{ mt: 2 }}>{t("createNewGame")}</Button>
-        </Container>
-      </ResponsiveLayout>
-    </ThemeModeProvider>
+    <Container maxWidth="sm" sx={{ py: 8, textAlign: "center" }}>
+      <Typography variant="h4" fontWeight={700} gutterBottom>{t("gameNotFound")}</Typography>
+      <Typography color="text.secondary" gutterBottom>{t("gameNotFoundDesc")}</Typography>
+      <Button variant="contained" href="/" sx={{ mt: 2 }}>{t("createNewGame")}</Button>
+    </Container>
   );
 
   const wasReset = event.wasReset ?? false;
@@ -728,29 +714,28 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <ThemeModeProvider>
-      <ResponsiveLayout>
-        <Container maxWidth="md" sx={{ py: 4 }}>
-          <Stack spacing={3}>
+    <>
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Stack spacing={3}>
 
-            {wasReset && (
-              <Alert severity="info" icon={<EventRepeatIcon />}>
-                {t("recurringResetAlert", {
-                  date: formatDateInTz(gameDate, locale === "pt" ? "pt-PT" : "en-GB", event.timezone, {
-                    weekday: "long", month: "long", day: "numeric",
-                  }),
-                })}
-              </Alert>
-            )}
+        {wasReset && (
+          <Alert severity="info" icon={<EventRepeatIcon />}>
+            {t("recurringResetAlert", {
+              date: formatDateInTz(gameDate, locale === "pt" ? "pt-PT" : "en-GB", event.timezone, {
+                weekday: "long", month: "long", day: "numeric",
+              }),
+            })}
+          </Alert>
+        )}
 
-            {/* #457 Push prompt banner — event-detail trigger. #463 high-intent:
-                render as a centered modal when the user has a pending RSVP and
-                the event kicks off within 48h. */}
-            <PushPromptBanner
-              followCount={0}
-              forceOnEventDetail={isAuthenticated}
-              highIntent={isAuthenticated && event ? isHighIntentForPush(event.dateTime, myRsvpStatus) : false}
-            />
+        {/* #457 Push prompt banner — event-detail trigger. #463 high-intent:
+            render as a centered modal when the user has a pending RSVP and
+            the event kicks off within 48h. */}
+        <PushPromptBanner
+          followCount={0}
+          forceOnEventDetail={isAuthenticated}
+          highIntent={isAuthenticated && event ? isHighIntentForPush(event.dateTime, myRsvpStatus) : false}
+        />
 
             {/* #457 Organizer-only attendance summary — now rendered inside the PlayerList footer. */}
 
@@ -913,7 +898,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
           onConfirm={handleConfirmAdd}
           onClose={() => setAddIntent(null)}
         />
-      </ResponsiveLayout>
-    </ThemeModeProvider>
+      </>
   );
 }

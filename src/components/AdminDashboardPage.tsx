@@ -14,8 +14,6 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import SearchIcon from "@mui/icons-material/Search";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from "recharts";
-import { ThemeModeProvider } from "./ThemeModeProvider";
-import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 
@@ -237,178 +235,170 @@ export default function AdminDashboardPage() {
 
   if (sessionLoading) {
     return (
-      <ThemeModeProvider><ResponsiveLayout>
-        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}><CircularProgress /></Box>
-      </ResponsiveLayout></ThemeModeProvider>
+      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}><CircularProgress /></Box>
     );
   }
 
   if (!session?.user) {
     return (
-      <ThemeModeProvider><ResponsiveLayout>
-        <Container maxWidth="sm" sx={{ py: 8, textAlign: "center" }}>
-          <Typography variant="h5" fontWeight={700} gutterBottom>{t("signIn")}</Typography>
-          <Button variant="contained" href="/auth/signin">{t("signIn")}</Button>
-        </Container>
-      </ResponsiveLayout></ThemeModeProvider>
+      <Container maxWidth="sm" sx={{ py: 8, textAlign: "center" }}>
+        <Typography variant="h5" fontWeight={700} gutterBottom>{t("signIn")}</Typography>
+        <Button variant="contained" href="/auth/signin">{t("signIn")}</Button>
+      </Container>
     );
   }
 
   if (forbidden) {
     return (
-      <ThemeModeProvider><ResponsiveLayout>
-        <Container maxWidth="sm" sx={{ py: 8, textAlign: "center" }}>
-          <Alert severity="error">{t("adminForbidden")}</Alert>
-        </Container>
-      </ResponsiveLayout></ThemeModeProvider>
+      <Container maxWidth="sm" sx={{ py: 8, textAlign: "center" }}>
+        <Alert severity="error">{t("adminForbidden")}</Alert>
+      </Container>
     );
   }
 
   return (
-    <ThemeModeProvider>
-      <ResponsiveLayout>
-        <Container maxWidth="lg" sx={{ py: 4 }}>
-          <Stack spacing={4}>
-            <Box>
-              <Typography variant="h4" fontWeight={700}>{t("adminDashboard")}</Typography>
-              <Typography variant="body2" color="text.secondary">{t("adminDashboardDesc")}</Typography>
-            </Box>
+    <>
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Stack spacing={4}>
+          <Box>
+            <Typography variant="h4" fontWeight={700}>{t("adminDashboard")}</Typography>
+            <Typography variant="body2" color="text.secondary">{t("adminDashboardDesc")}</Typography>
+          </Box>
 
-            {loading || !stats ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress /></Box>
-            ) : (
-              <>
-                {/* Top-level stat cards */}
-                <Grid2 container spacing={2}>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
-                    <StatCard label={t("adminTotalUsers")} value={stats.totalUsers} icon={<PeopleIcon />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
-                    <StatCard label={t("adminTotalEvents")} value={stats.totalEvents} icon={<EventIcon />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
-                    <StatCard label={t("adminGamesPlayed")} value={stats.totalGamesPlayed} icon={<SportsScoreIcon />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
-                    <StatCard label={t("adminActiveUsers")} value={stats.activeUsers} icon={<TrendingUpIcon />} />
-                  </Grid2>
+          {loading || !stats ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress /></Box>
+          ) : (
+            <>
+              {/* Top-level stat cards */}
+              <Grid2 container spacing={2}>
+                <Grid2 size={{ xs: 6, md: 3 }}>
+                  <StatCard label={t("adminTotalUsers")} value={stats.totalUsers} icon={<PeopleIcon />} />
                 </Grid2>
-
-                {/* Secondary metrics */}
-                <Grid2 container spacing={2}>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
-                    <StatCard label={t("adminActiveEvents")} value={stats.activeEvents} icon={<EventIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
-                    <StatCard label={t("adminGamesLast7d")} value={stats.gamesLast7d} icon={<SportsScoreIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
-                    <StatCard label={t("adminGamesLast30d")} value={stats.gamesLast30d} icon={<SportsScoreIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
-                    <StatCard label={t("adminAvgPlayers")} value={stats.avgPlayersPerEvent} icon={<PeopleIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
-                    <StatCard label={t("adminRecurringEvents")} value={stats.recurringEvents} icon={<EventIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
-                    <StatCard label={t("adminOneOffEvents")} value={stats.oneOffEvents} icon={<EventIcon fontSize="small" />} />
-                  </Grid2>
+                <Grid2 size={{ xs: 6, md: 3 }}>
+                  <StatCard label={t("adminTotalEvents")} value={stats.totalEvents} icon={<EventIcon />} />
                 </Grid2>
+                <Grid2 size={{ xs: 6, md: 3 }}>
+                  <StatCard label={t("adminGamesPlayed")} value={stats.totalGamesPlayed} icon={<SportsScoreIcon />} />
+                </Grid2>
+                <Grid2 size={{ xs: 6, md: 3 }}>
+                  <StatCard label={t("adminActiveUsers")} value={stats.activeUsers} icon={<TrendingUpIcon />} />
+                </Grid2>
+              </Grid2>
 
-                {/* Sport distribution */}
-                {Object.keys(stats.sportDistribution).length > 0 && (
-                  <Paper elevation={1} sx={{ p: 3 }}>
-                    <Typography variant="h6" fontWeight={600} gutterBottom>{t("adminSportDistribution")}</Typography>
-                    <Stack direction="row" flexWrap="wrap" gap={1}>
-                      {Object.entries(stats.sportDistribution)
-                        .sort(([, a], [, b]) => b - a)
-                        .map(([sport, count]) => (
-                          <Chip key={sport} label={`${sport} (${count})`} variant="outlined" />
-                        ))}
-                    </Stack>
-                  </Paper>
-                )}
+              {/* Secondary metrics */}
+              <Grid2 container spacing={2}>
+                <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  <StatCard label={t("adminActiveEvents")} value={stats.activeEvents} icon={<EventIcon fontSize="small" />} />
+                </Grid2>
+                <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  <StatCard label={t("adminGamesLast7d")} value={stats.gamesLast7d} icon={<SportsScoreIcon fontSize="small" />} />
+                </Grid2>
+                <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  <StatCard label={t("adminGamesLast30d")} value={stats.gamesLast30d} icon={<SportsScoreIcon fontSize="small" />} />
+                </Grid2>
+                <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  <StatCard label={t("adminAvgPlayers")} value={stats.avgPlayersPerEvent} icon={<PeopleIcon fontSize="small" />} />
+                </Grid2>
+                <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  <StatCard label={t("adminRecurringEvents")} value={stats.recurringEvents} icon={<EventIcon fontSize="small" />} />
+                </Grid2>
+                <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  <StatCard label={t("adminOneOffEvents")} value={stats.oneOffEvents} icon={<EventIcon fontSize="small" />} />
+                </Grid2>
+              </Grid2>
 
-                <GrowthChart growthData={growthData} growthRange={growthRange} setGrowthRange={setGrowthRange} loadingGrowth={loadingGrowth} />
-
-                {/* User list */}
+              {/* Sport distribution */}
+              {Object.keys(stats.sportDistribution).length > 0 && (
                 <Paper elevation={1} sx={{ p: 3 }}>
-                  <Typography variant="h6" fontWeight={600} gutterBottom>{t("adminUserList")}</Typography>
-                  <TextField
-                    size="small"
-                    placeholder={t("adminSearchUsers")}
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                    slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
-                    sx={{ mb: 2, maxWidth: 360 }}
-                    fullWidth
-                  />
-                  {loadingUsers ? (
-                    <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}><CircularProgress size={24} /></Box>
-                  ) : users.length === 0 ? (
-                    <Alert severity="info">{t("adminNoUsers")}</Alert>
-                  ) : (
-                    <>
-                      <TableContainer>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell>{t("name")}</TableCell>
-                              <TableCell>{t("email")}</TableCell>
-                              <TableCell>Joined</TableCell>
-                              <TableCell />
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {users.map((u) => (
-                              <TableRow key={u.id} hover>
-                                <TableCell>
-                                  <Typography
-                                    component="a"
-                                    href={`/users/${u.id}`}
-                                    variant="body2"
-                                    sx={{ textDecoration: "none", color: "primary.main", "&:hover": { textDecoration: "underline" } }}
-                                  >
-                                    {u.name}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>{u.email}</TableCell>
-                                <TableCell>{new Date(u.createdAt).toLocaleDateString()}</TableCell>
-                                <TableCell align="right">
-                                  {u.id !== session?.user?.id && (
-                                    <IconButton
-                                      size="small"
-                                      color="error"
-                                      aria-label={t("adminDeleteUser")}
-                                      onClick={() => { setDeleteError(null); setDeleteTarget(u); }}
-                                    >
-                                      <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 2 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {users.length} / {userTotal}
-                        </Typography>
-                        <Stack direction="row" spacing={1}>
-                          <Button size="small" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</Button>
-                          <Button size="small" disabled={page * PAGE_SIZE >= userTotal} onClick={() => setPage((p) => p + 1)}>Next</Button>
-                        </Stack>
-                      </Stack>
-                    </>
-                  )}
+                  <Typography variant="h6" fontWeight={600} gutterBottom>{t("adminSportDistribution")}</Typography>
+                  <Stack direction="row" flexWrap="wrap" gap={1}>
+                    {Object.entries(stats.sportDistribution)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([sport, count]) => (
+                        <Chip key={sport} label={`${sport} (${count})`} variant="outlined" />
+                      ))}
+                  </Stack>
                 </Paper>
-              </>
-            )}
-          </Stack>
-        </Container>
-      </ResponsiveLayout>
+              )}
+
+              <GrowthChart growthData={growthData} growthRange={growthRange} setGrowthRange={setGrowthRange} loadingGrowth={loadingGrowth} />
+
+              {/* User list */}
+              <Paper elevation={1} sx={{ p: 3 }}>
+                <Typography variant="h6" fontWeight={600} gutterBottom>{t("adminUserList")}</Typography>
+                <TextField
+                  size="small"
+                  placeholder={t("adminSearchUsers")}
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                  slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
+                  sx={{ mb: 2, maxWidth: 360 }}
+                  fullWidth
+                />
+                {loadingUsers ? (
+                  <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}><CircularProgress size={24} /></Box>
+                ) : users.length === 0 ? (
+                  <Alert severity="info">{t("adminNoUsers")}</Alert>
+                ) : (
+                  <>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>{t("name")}</TableCell>
+                            <TableCell>{t("email")}</TableCell>
+                            <TableCell>Joined</TableCell>
+                            <TableCell />
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {users.map((u) => (
+                            <TableRow key={u.id} hover>
+                              <TableCell>
+                                <Typography
+                                  component="a"
+                                  href={`/users/${u.id}`}
+                                  variant="body2"
+                                  sx={{ textDecoration: "none", color: "primary.main", "&:hover": { textDecoration: "underline" } }}
+                                >
+                                  {u.name}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>{u.email}</TableCell>
+                              <TableCell>{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                              <TableCell align="right">
+                                {u.id !== session?.user?.id && (
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    aria-label={t("adminDeleteUser")}
+                                    onClick={() => { setDeleteError(null); setDeleteTarget(u); }}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 2 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {users.length} / {userTotal}
+                      </Typography>
+                      <Stack direction="row" spacing={1}>
+                        <Button size="small" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</Button>
+                        <Button size="small" disabled={page * PAGE_SIZE >= userTotal} onClick={() => setPage((p) => p + 1)}>Next</Button>
+                      </Stack>
+                    </Stack>
+                  </>
+                )}
+              </Paper>
+            </>
+          )}
+        </Stack>
+      </Container>
       <Dialog open={!!deleteTarget} onClose={() => !deleting && setDeleteTarget(null)}>
         <DialogTitle>{t("adminDeleteUser")}</DialogTitle>
         <DialogContent>
@@ -427,6 +417,6 @@ export default function AdminDashboardPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </ThemeModeProvider>
+    </>
   );
 }

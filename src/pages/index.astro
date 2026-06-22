@@ -1,7 +1,7 @@
 ---
 export const prerender = true;
 import BaseLayout from "../layouts/BaseLayout.astro";
-import { LandingPageWithProviders } from "../components/LandingPage";
+import SpaRoot from "../components/SpaRoot";
 ---
 
 <BaseLayout
@@ -9,5 +9,9 @@ import { LandingPageWithProviders } from "../components/LandingPage";
   description="Share a link, collect players, randomize balanced teams, split costs, and track ELO rankings. Free and open source."
   mainTransitionName="page-landing"
 >
-  <LandingPageWithProviders client:only="react" />
+  <SpaRoot
+    client:only="react"
+    transition:persist="convocados-shell"
+    pageKey="landing"
+  />
 </BaseLayout>

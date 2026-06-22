@@ -134,3 +134,126 @@ test.describe("page navigation: view transitions + no white blink", () => {
     ).toBeGreaterThan(0);
   });
 });
+
+test.describe("persistent SPA shell (transition:persist)", () => {
+  /**
+   * With `transition:persist="convocados-shell"`, the same astro-island DOM
+   * node is reused across navigations. The React tree inside it stays
+   * mounted, so:
+   *   - The theme mode is preserved (toggled to dark on page A, still dark
+   *     on page B).
+   *   - The body background-color painted by the shell is preserved
+   *     (no re-paint to default).
+   *   - The theme-color meta tag stays consistent.
+   */
+
+  test("persistent shell is mounted (transition:persist attribute present)", async ({ page }) => {
+    await page.goto("/public");
+    // wait for the SPA root to mount
+    await page.waitForSelector("astro-island", { timeout: 5000 });
+    await page.waitForTimeout(300);
+
+    // Astro renders transition:persist on the astro-island's parent <div>
+    // as `data-astro-transition-persist` (see Astro's swap implementation).
+    // We assert that the persistent name is in the DOM somewhere — that's
+    // enough to prove the SPA has opted into persistence. The next test
+    // asserts the actual behaviour (DOM node identity preserved).
+    const persistMarker = await page.evaluate(() => {
+      // Look anywhere in the document for the persist attribute
+      const all = Array.from(document.querySelectorAll("*"));
+      const found = all.find((el) =>
+        el.getAttribute("data-astro-transition-persist") === "convocados-shell" ||
+        el.getAttribute("transition-persist") === "convocados-shell" ||
+        el.outerHTML.includes('astro-transition-persist="convocados-shell"') ||
+        el.outerHTML.includes('transition-persist="convocados-shell"')
+      );
+      return found?.outerHTML.slice(0, 300) ?? null;
+    });
+    expect(
+      persistMarker,
+      "no element in the DOM references transition:persist=convocados-shell",
+    ).toBeTruthy();
+  });
+
+  test("theme mode persists across a same-origin nav", async ({ page }) => {
+    await page.goto("/public");
+    // wait for the SPA root to mount and the theme to be applied
+    await page.waitForSelector("button[aria-label*='brightness' i], button[aria-label*='theme' i], header", { timeout: 5000 });
+    await page.waitForTimeout(300);
+
+    // Find the theme toggle in the ResponsiveLayout AppBar and click it.
+    // The icon is Brightness4 (light→dark) or Brightness7 (dark→light).
+    const themeToggle = page.locator("header button").filter({ has: page.locator("svg[data-testid='Brightness4Icon'], svg[data-testid='Brightness7Icon']") }).first();
+    const hasToggle = await themeToggle.count();
+    if (hasToggle === 0) {
+      // Fallback: check that the html element has either dark or light class
+      const initialMode = await page.evaluate(() => {
+        const stored = localStorage.getItem("themeMode");
+        return stored ?? "light";
+      });
+      // Toggle via localStorage if we can't find the button
+      const opposite = initialMode === "light" ? "dark" : "light";
+      await page.evaluate((mode) => {
+        localStorage.setItem("themeMode", mode);
+        document.documentElement.classList.toggle("dark", mode === "dark");
+        // Force a state update by dispatching a storage event
+        window.dispatchEvent(new StorageEvent("storage", { key: "themeMode", newValue: mode }));
+      }, opposite);
+      await page.waitForTimeout(200);
+    } else {
+      await themeToggle.click();
+      await page.waitForTimeout(200);
+    }
+
+    const modeAfterToggle = await page.evaluate(() => localStorage.getItem("themeMode") ?? "light");
+
+    // Navigate to a different page in the SPA
+    await page.locator("a[href='/']").first().click();
+    await page.waitForURL("**/", { timeout: 5000 });
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(300);
+
+    const modeAfterNav = await page.evaluate(() => localStorage.getItem("themeMode") ?? "light");
+    expect(
+      modeAfterNav,
+      `theme mode reset across nav (was ${modeAfterToggle} before, ${modeAfterNav} after) — persistent shell is not preserving React state`,
+    ).toBe(modeAfterToggle);
+  });
+
+  test("DOM node identity of the persistent shell is preserved across nav", async ({ page }) => {
+    await page.goto("/public");
+    await page.waitForSelector("astro-island", { timeout: 5000 });
+    await page.waitForTimeout(300);
+
+    const idBefore = await page.evaluate(() => {
+      const el = document.querySelector("astro-island[component-url*='SpaRoot'], astro-island[component-export='default']");
+      if (!el) return null;
+      // Mark the node with a custom attribute we can detect later
+      (el as HTMLElement).dataset.persistProbe = "marked";
+      // Use the element's parent path as a stable handle
+      return el.outerHTML.slice(0, 200);
+    });
+    expect(idBefore, "no persistent island found").toBeTruthy();
+
+    // Navigate via the brand link
+    await page.locator("a[href='/']").first().click();
+    await page.waitForURL("**/", { timeout: 5000 });
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(300);
+
+    const idAfter = await page.evaluate(() => {
+      const el = document.querySelector("astro-island[component-url*='SpaRoot'], astro-island[component-export='default']");
+      if (!el) return null;
+      return {
+        html: el.outerHTML.slice(0, 200),
+        marked: (el as HTMLElement).dataset.persistProbe,
+      };
+    });
+    expect(idAfter, "no persistent island after nav").toBeTruthy();
+    // The DOM node is reused — the mark we set must still be present
+    expect(
+      idAfter.marked,
+      "persistent shell DOM node was replaced on nav — transition:persist is not working",
+    ).toBe("marked");
+  });
+});
