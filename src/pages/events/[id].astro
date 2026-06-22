@@ -1,6 +1,6 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
-import SpaRoot from "../../components/SpaRoot";
+import EventPageComponent from "../../components/EventPage";
 import { prisma } from "../../lib/db.server";
 import { generateEventJsonLd, generateEventMetaTags } from "../../lib/seo";
 
@@ -65,9 +65,5 @@ try {
   metaTags={metaTags}
   mainTransitionName={`page-event-${id}`}
 >
-  <SpaRoot
-    client:only="react"
-    transition:persist="convocados-shell"
-    pageKey="event"
-  />
+  <EventPageComponent client:only="react" eventId={id!} />
 </BaseLayout>
