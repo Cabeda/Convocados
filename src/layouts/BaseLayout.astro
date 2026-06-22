@@ -1,0 +1,131 @@
+---
+import { ClientRouter } from "astro:transitions";
+
+interface MetaTag {
+  property: string;
+  content: string;
+}
+
+interface Props {
+  title: string;
+  description?: string;
+  canonical?: string;
+  /** Additional <meta property="..."> tags (OG, Twitter, etc.) to emit. */
+  metaTags?: MetaTag[];
+  /** Optional JSON-LD payload to inject as <script type="application/ld+json">. */
+  jsonLd?: string;
+  /** Override the default theme-color (default: #1b6b4a). */
+  themeColor?: string;
+  /**
+   * Optional `view-transition-name` for this page's main content. Set to a
+   * stable, page-unique value (e.g. "page-event-detail") to enable shared-
+   * element morphs with the link source. Leave undefined for a full cross-fade.
+   */
+  mainTransitionName?: string;
+  /**
+   * Optional class added to the <main> wrapper around the slot. Use for page-
+   * specific layout overrides without duplicating global styles.
+   */
+  mainClass?: string;
+}
+
+const {
+  title,
+  description,
+  canonical,
+  metaTags = [],
+  jsonLd,
+  themeColor = "#1b6b4a",
+  mainTransitionName,
+  mainClass,
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" data-astro-transition-direction="forward">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    {canonical && <link rel="canonical" href={canonical} />}
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content={themeColor} />
+    {metaTags.map((tag) => <meta property={tag.property} content={tag.content} />)}
+    {jsonLd && <script type="application/ld+json" set:html={jsonLd} />}
+
+    {/*
+      Shell paint: paint the body background immediately, before the React
+      island hydrates, so navigation never flashes white. The colour matches
+      public/manifest.json background_color (#111412). This is the single
+      most important CSS rule in this layout — without it, every nav has a
+      visible white blink while the React island boots.
+    */}
+    <style is:inline>
+      html, body { background-color: #111412; }
+      body { color: #e6e6e6; margin: 0; }
+      ::view-transition-old(root),
+      ::view-transition-new(root) { animation-duration: 220ms; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+      html[data-astro-transition-direction="forward"] ::view-transition-old(root) { animation-name: slide-out-to-left; }
+      html[data-astro-transition-direction="forward"] ::view-transition-new(root) { animation-name: slide-in-from-right; }
+      html[data-astro-transition-direction="back"] ::view-transition-old(root) { animation-name: slide-out-to-right; }
+      html[data-astro-transition-direction="back"] ::view-transition-new(root) { animation-name: slide-in-from-left; }
+      @keyframes slide-out-to-left { to { transform: translateX(-30%); opacity: 0; } }
+      @keyframes slide-in-from-right { from { transform: translateX(100%); opacity: 0; } }
+      @keyframes slide-out-to-right { to { transform: translateX(30%); opacity: 0; } }
+      @keyframes slide-in-from-left { from { transform: translateX(-30%); opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) {
+        ::view-transition-old(root),
+        ::view-transition-new(root) { animation: none !important; }
+      }
+    </style>
+
+    <ClientRouter fallback="animate" />
+  </head>
+  <body>
+    <main
+      class={mainClass}
+      style={mainTransitionName ? `view-transition-name: ${mainTransitionName};` : undefined}
+    >
+      <slot />
+    </main>
+
+    {/*
+      Direction detection for the slide animation. Runs before every swap so
+      the CSS above can pick the right keyframe set. Navigation.currentEntry
+      gives us the new entry's type: "push" | "replace" | "reload" | "traverse".
+      Traverse is the only case where we need to know back vs forward — the
+      Navigation API exposes that via `activation` (which we cannot read at
+      this point in the lifecycle). Workaround: compare history.scrollRestoration
+      patterns are unreliable, so we approximate by listening for `popstate`:
+      if the last navigation was a popstate, the next traverse is the opposite
+      direction of the previous one. We use a module-level variable to track
+      that.
+    */}
+    <script>
+      (() => {
+        type Dir = "forward" | "back";
+        const html = document.documentElement;
+        let lastWasPop = false;
+        window.addEventListener("popstate", () => { lastWasPop = true; });
+        document.addEventListener("astro:before-preparation", (ev) => {
+          const e = ev as Event;
+          let dir: Dir = "forward";
+          if (lastWasPop) { dir = "back"; lastWasPop = false; }
+          html.setAttribute("data-astro-transition-direction", dir);
+          // Stash on the event for any listener that needs it
+          (e as CustomEvent).direction = dir;
+        });
+        // Reset on full reload — no animation needed
+        document.addEventListener("astro:before-swap", () => {
+          const nav = (window as unknown as { navigation?: { currentEntry?: { type?: string } } }).navigation;
+          if (nav?.currentEntry?.type === "reload") {
+            html.removeAttribute("data-astro-transition-direction");
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

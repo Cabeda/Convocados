@@ -78,19 +78,13 @@ test.describe("page navigation: view transitions + no white blink", () => {
     await installViewTransitionSentinel(page);
     await page.goto("/public");
 
-    let pageshowCount = 0;
-    page.on("framenavigated", (frame) => {
-      if (frame === page.mainFrame()) pageshowCount += 1;
-    });
+    // The brand link in the ResponsiveLayout is the most reliable in-app link —
+    // it is present on every page and is always a same-origin client-side nav.
+    const brandLink = page.locator("a[href='/']").first();
+    await brandLink.waitFor({ state: "visible" });
 
-    // Click a real in-app link on the public page
-    const firstGame = page.locator("a[href^='/events/']").first();
-    await firstGame.waitFor({ state: "visible" });
-    const href = await firstGame.getAttribute("href");
-    expect(href).toBeTruthy();
-
-    await firstGame.click();
-    await page.waitForURL(`**${href}`, { timeout: 5000 });
+    await brandLink.click();
+    await page.waitForURL("**/", { timeout: 5000 });
 
     // ClientRouter uses pushState (not a full nav). We assert the document is
     // *reused* by checking that window.__vt was populated (which only happens
@@ -109,12 +103,11 @@ test.describe("page navigation: view transitions + no white blink", () => {
       return bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "rgb(255, 255, 255)";
     }, { timeout: 5000 });
 
-    // Click and wait for the URL to change
-    const link = page.locator("a[href^='/events/']").first();
+    // The brand link in the ResponsiveLayout is the most reliable in-app link.
+    const link = page.locator("a[href='/']").first();
     await link.waitFor({ state: "visible" });
-    const href = await link.getAttribute("href");
     await link.click();
-    await page.waitForURL(`**${href}`, { timeout: 5000 });
+    await page.waitForURL("**/", { timeout: 5000 });
 
     // Allow the transition + hydration to complete
     await page.waitForLoadState("networkidle");
