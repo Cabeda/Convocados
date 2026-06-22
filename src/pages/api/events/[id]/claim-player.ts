@@ -3,6 +3,7 @@ import type { Player } from "@prisma/client";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 
 /** POST — claim an anonymous player: replace it with the authenticated user's identity */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -115,6 +116,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     create: { eventId, userId: session.user.id },
     update: {},
   });
+  enqueuePushSetupHintSafe(session.user.id, eventId);
 
   return Response.json({
     ok: true,

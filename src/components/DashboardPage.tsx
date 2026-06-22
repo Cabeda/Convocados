@@ -9,11 +9,13 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import UnfollowIcon from "@mui/icons-material/VisibilityOff";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
+import { PushPromptBanner } from "./PushPromptBanner";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 import { GameCard, type GameSummary } from "./GameCard";
 
 const POLL_INTERVAL = 30_000;
+const HIGH_INTENT_HOURS = 48;
 
 interface DashboardData {
   owned: GameSummary[];
@@ -134,6 +136,22 @@ export default function DashboardPage() {
     setLoadingFollowed(false);
   };
 
+  // #136: high-intent = any non-archived game the user is involved in
+  // starts within HIGH_INTENT_HOURS. Modals are harder to ignore than banners,
+  // so the moment the user has a near-term game, we escalate the push prompt.
+  // Snapshot "now" once per render via useState initializer so the lint
+  // "no Date.now in render" rule doesn't fire and the calc stays consistent.
+  // Hooks must be called before any early returns below.
+  const [now] = React.useState(() => Date.now());
+  const highIntent = React.useMemo(
+    () => [...owned, ...admin, ...followed].some((g) => {
+      const kickoff = new Date(g.dateTime).getTime();
+      const hoursUntil = (kickoff - now) / (60 * 60 * 1000);
+      return hoursUntil > 0 && hoursUntil <= HIGH_INTENT_HOURS;
+    }),
+    [owned, admin, followed, now],
+  );
+
   if (sessionLoading) {
     return (
       <ThemeModeProvider>
@@ -175,6 +193,11 @@ export default function DashboardPage() {
         <Container maxWidth="md" sx={{ py: 4 }}>
           <Stack spacing={4}>
             <Typography variant="h4" fontWeight={700}>{t("myGames")}</Typography>
+
+            <PushPromptBanner
+              followCount={hasActive ? 1 : 0}
+              highIntent={hasActive && highIntent}
+            />
 
             {isLoading ? (
               <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
