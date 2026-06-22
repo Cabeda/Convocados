@@ -7,6 +7,7 @@ import {
   getRsvpForGuest,
   getRsvpSummary,
   getRsvpRecipients,
+  getUserRsvpMap,
   markRsvpCutoffSent,
   isRsvpCutoffSent,
   getEventsNeedingRsvpPing,
@@ -86,6 +87,13 @@ describe("upsertRsvp", () => {
     const count = await prisma.rsvp.count({ where: { userId: user.id, eventId: event.id } });
     expect(count).toBe(1);
   });
+
+  it("accepts 'maybe' as a status", async () => {
+    const user = await seedUser();
+    const event = await seedEvent(null);
+    const rsvp = await upsertRsvp(event.id, user.id, "maybe");
+    expect(rsvp.status).toBe("maybe");
+  });
 });
 
 describe("getRsvpForUser", () => {
@@ -131,6 +139,39 @@ describe("getRsvpSummary", () => {
     expect(summary.no).toBe(1);
     // pending = 2 (owner + stranger)
     expect(summary.pending).toBe(2);
+  });
+});
+
+describe("getUserRsvpMap", () => {
+  it("returns status map for all linked-user RSVPs when viewer is logged", async () => {
+    const a = await seedUser({ name: "A" });
+    const b = await seedUser({ name: "B" });
+    const event = await seedEvent(null);
+    await upsertRsvp(event.id, a.id, "yes");
+    await upsertRsvp(event.id, b.id, "maybe");
+
+    const map = await getUserRsvpMap(event.id, true);
+    expect(map[a.id]).toBe("yes");
+    expect(map[b.id]).toBe("maybe");
+  });
+
+  it("returns empty map for anonymous viewers (one-way privacy)", async () => {
+    const a = await seedUser({ name: "A" });
+    const event = await seedEvent(null);
+    await upsertRsvp(event.id, a.id, "yes");
+
+    const map = await getUserRsvpMap(event.id, false);
+    expect(map).toEqual({});
+  });
+
+  it("excludes guest (userId-null) RSVPs from the user map", async () => {
+    const owner = await seedUser({ name: "O" });
+    const event = await seedEvent(owner.id);
+    const guest = await prisma.player.create({ data: { eventId: event.id, name: "G", order: 0 } });
+    await upsertGuestRsvp(event.id, guest.id, "yes", owner.id);
+
+    const map = await getUserRsvpMap(event.id, true);
+    expect(map).toEqual({});
   });
 });
 

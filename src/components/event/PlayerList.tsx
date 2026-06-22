@@ -23,8 +23,9 @@ import type { Player, PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 import { ConfirmLeaveDialog, type LeaveContext } from "./ConfirmLeaveDialog";
 import { AttendanceCta } from "./AttendanceCta";
+import type { RsvpStatus } from "~/lib/rsvp";
 
-export type RsvpStatus = "yes" | "no" | null;
+export type { RsvpStatus } from "~/lib/rsvp";
 
 /** Pure helpers — extracted out of the component body so Date.now() inside doesn't trip the
  *  eslint react-hooks/purity rule. They run in event handlers, never during render. */
@@ -78,6 +79,10 @@ interface Props {
   myRsvpStatus?: RsvpStatus;
   /** Map of guest-playerId → RSVP status. When provided, every guest row renders an inline pill. */
   guestRsvpMap?: Record<string, RsvpStatus>;
+  /** Map of linked-userId → RSVP status. Only rendered when the viewer is logged in
+   *  (one-way privacy — anonymous viewers never see logged-user RSVPs). The viewer's
+   *  own row is intentionally skipped because the AttendanceCta carries that answer. */
+  userRsvpMap?: Record<string, RsvpStatus>;
   /** True for the owner or an admin. Controls whether the guest pill is clickable. */
   canEditGuestAttendance?: boolean;
   /** Set the current user's own RSVP. */
@@ -100,6 +105,7 @@ export function PlayerList({
   currentUserId,
   myRsvpStatus,
   guestRsvpMap,
+  userRsvpMap,
   canEditGuestAttendance,
   onSetMyRsvp,
   onSetGuestRsvp,
@@ -560,6 +566,12 @@ export function PlayerList({
                             : undefined}
                         />
                       )}
+                      {/* #XXX User attendance pill — read-only status for a linked user. Visible
+                          only to logged viewers (one-way privacy); the viewer's own row is
+                          skipped so the AttendanceCta at the top carries their answer. */}
+                      {player.userId !== null && player.userId !== undefined && currentUserId && player.userId !== currentUserId && userRsvpMap && userRsvpMap[player.userId] !== undefined && (
+                        <UserRsvpPill userId={player.userId} status={userRsvpMap[player.userId] ?? null} />
+                      )}
                       {canRemovePlayer(player) ? (
                         <IconButton edge="end" size="small" data-testid={`remove-player-${player.id}`} onClick={() => openLeaveDialog(player.id, "organizer")}>
                           <CloseIcon fontSize="small" />
@@ -787,5 +799,39 @@ function GuestAttendancePill({
         )}
       </Menu>
     </>
+  );
+}
+
+/**
+ * #XXX User attendance pill — read-only status badge on a linked-user row.
+ * Visible only to logged viewers (the server-side `getUserRsvpMap` enforces this).
+ * No menu: the user can only RSVP for themselves, via the AttendanceCta at the top
+ * of the list. Their own row is skipped by the parent so we don't render two pills.
+ */
+function UserRsvpPill({ userId, status }: { userId: string; status: RsvpStatus }) {
+  const t = useT();
+  return (
+    <Chip
+      size="small"
+      data-testid={`rsvp-user-pill-${userId}`}
+      data-status={status ?? "none"}
+      icon={status === "yes"
+        ? <HowToRegIcon />
+        : status === "maybe"
+          ? <HelpOutlineIcon />
+          : status === "no"
+            ? <CancelIcon />
+            : <HelpOutlineIcon />}
+      label={status === "yes"
+        ? t("rsvpGoing")
+        : status === "maybe"
+          ? t("rsvpMaybe")
+          : status === "no"
+            ? t("rsvpDeclined")
+            : t("rsvpNoResponse")}
+      color={status === "yes" ? "success" : status === "no" ? "error" : status === "maybe" ? "warning" : "default"}
+      variant="outlined"
+      sx={{ pointerEvents: "none" }}
+    />
   );
 }

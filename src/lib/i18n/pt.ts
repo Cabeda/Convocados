@@ -628,6 +628,7 @@ const pt: TranslationKeys = {
   rsvpYouRow: "Tu",
   rsvpGoing: "Vou",
   rsvpDeclined: "Não vou",
+  rsvpMaybe: "Talvez",
   rsvpNoResponse: "Sem resposta",
   rsvpPending: "sem resposta",
   rsvpSetGoing: "Marcar como presente",
@@ -658,6 +659,10 @@ const pt: TranslationKeys = {
   pushBlockedHint: "As notificações estão bloqueadas. Ativa-as nas definições do navegador para receberes lembretes de jogos.",
   pushPromptHighIntentBody: "Tens um RSVP pendente. Ativa as notificações para te avisarmos antes do jogo se algo mudar.",
   pushPromptTitle: "Ficas a par de tudo?",
+  notifyRsvpAnswerYes: "{name} confirmou que vai a {title}",
+  notifyRsvpAnswerNo: "{name} não vai a {title}",
+  notifyRsvpAnswerMaybe: "{name} ainda não tem a certeza sobre {title}",
+  notifyRsvpAnswerAnon: "Alguém respondeu a {title}",
 
   // Priority enrollment (#136)
   priorityEnrollment: "Inscrição Prioritária",

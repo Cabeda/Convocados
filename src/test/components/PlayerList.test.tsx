@@ -339,6 +339,83 @@ describe("PlayerList — attendance UI (You row + guest pill)", () => {
     expect(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`)).toBeInTheDocument();
   });
 
+  it("renders a user pill on linked-user rows for a logged viewer, read-only", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-viewer"
+        myRsvpStatus={null}
+        guestRsvpMap={{}}
+        userRsvpMap={{ "u-1": "yes" }}
+      />,
+    );
+    const pill = screen.getByTestId("rsvp-user-pill-u-1");
+    expect(pill).toBeInTheDocument();
+    expect(pill).toHaveAttribute("data-status", "yes");
+    // Read-only — no menu trigger
+    expect(pill).not.toHaveAttribute("role", "button");
+  });
+
+  it("does NOT render a user pill for anonymous viewers (one-way privacy)", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId={null}
+        myRsvpStatus={null}
+        guestRsvpMap={{}}
+        userRsvpMap={{ "u-1": "yes" }}
+      />,
+    );
+    expect(screen.queryByTestId("rsvp-user-pill-u-1")).toBeNull();
+  });
+
+  it("does NOT render a user pill for the current user themselves (they use AttendanceCta)", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus="yes"
+        guestRsvpMap={{}}
+        userRsvpMap={{ "u-1": "yes" }}
+      />,
+    );
+    // The AttendanceCta at the top carries the user's own answer — no row pill.
+    expect(screen.queryByTestId("rsvp-user-pill-u-1")).toBeNull();
+    expect(screen.getByTestId("attendance-cta")).toBeInTheDocument();
+  });
+
+  it("renders a user pill for another linked user (not the current viewer)", () => {
+    const other: Player = { id: "p-other", name: "OtherCarol", userId: "u-other" };
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        players={[linkedPlayer, guestPlayer, other]}
+        currentUserId="u-1"
+        myRsvpStatus="yes"
+        guestRsvpMap={{}}
+        userRsvpMap={{ "u-1": "yes", "u-other": "maybe" }}
+      />,
+    );
+    const pill = screen.getByTestId("rsvp-user-pill-u-other");
+    expect(pill).toBeInTheDocument();
+    expect(pill).toHaveAttribute("data-status", "maybe");
+  });
+
+  it("does NOT render a user pill on guest (userId null) rows", () => {
+    renderWithTheme(
+      <PlayerList
+        {...attendanceBase}
+        currentUserId="u-1"
+        myRsvpStatus={null}
+        guestRsvpMap={{ [guestPlayer.id]: "yes" }}
+        userRsvpMap={{}}
+      />,
+    );
+    // Guest row gets the guest pill, not a user pill.
+    expect(screen.queryByTestId("rsvp-user-pill-null")).toBeNull();
+    expect(screen.getByTestId(`rsvp-guest-pill-${guestPlayer.id}`)).toBeInTheDocument();
+  });
+
   it("renders the guest pill as a non-interactive Chip when canEditGuestAttendance is false (anon viewer)", () => {
     renderWithTheme(
       <PlayerList

@@ -2,6 +2,7 @@
 
 import { prisma } from "./db.server";
 import { createLogger } from "./logger.server";
+import type { RsvpStatus, RsvpStatusValue } from "./rsvp";
 
 const log = createLogger("rsvp");
 
@@ -33,8 +34,8 @@ export type PushPromptState = "default" | "granted" | "dismissed" | "denied";
 
 // ─── RSVP upsert + read ────────────────────────────────────────────────────
 
-/** Idempotent RSVP upsert for a linked user. status ∈ {"yes", "no"} — null is "pending" and represented as a missing row. */
-export async function upsertRsvp(eventId: string, userId: string, status: "yes" | "no") {
+/** Idempotent RSVP upsert for a linked user. status ∈ {"yes", "no", "maybe"} — null is "pending" and represented as a missing row. */
+export async function upsertRsvp(eventId: string, userId: string, status: RsvpStatusValue) {
   return prisma.rsvp.upsert({
     where: { userId_eventId: { userId, eventId } },
     create: { eventId, userId, status, respondedAt: new Date() },
@@ -52,7 +53,7 @@ export async function getRsvpForUser(eventId: string, userId: string) {
 export async function upsertGuestRsvp(
   eventId: string,
   playerId: string,
-  status: "yes" | "no" | null,
+  status: RsvpStatus,
   actorUserId: string,
 ) {
   const player = await prisma.player.findUnique({
@@ -78,7 +79,7 @@ export async function getRsvpForGuest(eventId: string, playerId: string) {
 }
 
 /** Map of playerId → status for all active (non-archived) guest Players in the event. Public — used to render the read-only pill on the player list for everyone (incl. anonymous viewers). */
-export async function getGuestRsvpMap(eventId: string): Promise<Record<string, "yes" | "no" | null>> {
+export async function getGuestRsvpMap(eventId: string): Promise<Record<string, RsvpStatus>> {
   const guests = await prisma.player.findMany({
     where: { eventId, userId: null, archivedAt: null },
     select: { id: true },
@@ -87,10 +88,30 @@ export async function getGuestRsvpMap(eventId: string): Promise<Record<string, "
     where: { eventId, playerId: { in: guests.map((g) => g.id) } },
     select: { playerId: true, status: true },
   });
-  const map: Record<string, "yes" | "no" | null> = {};
+  const map: Record<string, RsvpStatus> = {};
   for (const g of guests) map[g.id] = null;
   for (const r of rsvps) {
-    if (r.playerId) map[r.playerId] = (r.status as "yes" | "no" | null) ?? null;
+    if (r.playerId) map[r.playerId] = (r.status as RsvpStatus) ?? null;
+  }
+  return map;
+}
+
+/**
+ * Map of userId → RSVP status for every linked User who has an RSVP row on this event
+ * (owner, followers, linked players). When `viewerIsLogged` is false (anonymous viewer)
+ * the function returns an empty map to enforce one-way privacy — anonymous viewers
+ * must not see logged users' answers. The caller is responsible for passing the
+ * viewer's auth state; the server-side guard is here, not just the UI.
+ */
+export async function getUserRsvpMap(eventId: string, viewerIsLogged: boolean): Promise<Record<string, RsvpStatus>> {
+  if (!viewerIsLogged) return {};
+  const rsvps = await prisma.rsvp.findMany({
+    where: { eventId, userId: { not: null } },
+    select: { userId: true, status: true },
+  });
+  const map: Record<string, RsvpStatus> = {};
+  for (const r of rsvps) {
+    if (r.userId) map[r.userId] = (r.status as RsvpStatus) ?? null;
   }
   return map;
 }
@@ -146,10 +167,10 @@ export async function getRsvpSummary(eventId: string): Promise<RsvpSummary> {
     select: { userId: true, playerId: true, status: true },
   });
 
-  const respondedUser = new Map<string, "yes" | "no">();
-  const respondedGuest = new Map<string, "yes" | "no">();
+  const respondedUser = new Map<string, RsvpStatusValue>();
+  const respondedGuest = new Map<string, RsvpStatusValue>();
   for (const r of rsvps) {
-    if (r.status !== "yes" && r.status !== "no") continue;
+    if (r.status !== "yes" && r.status !== "no" && r.status !== "maybe") continue;
     if (r.userId) respondedUser.set(r.userId, r.status);
     else if (r.playerId) respondedGuest.set(r.playerId, r.status);
   }

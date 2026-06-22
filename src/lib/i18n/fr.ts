@@ -579,6 +579,7 @@ const fr: TranslationKeys = {
   rsvpYouRow: "Toi",
   rsvpGoing: "Présent",
   rsvpDeclined: "Absent",
+  rsvpMaybe: "Peut-être",
   rsvpNoResponse: "Sans réponse",
   rsvpPending: "sans réponse",
   rsvpSetGoing: "Marquer présent",
@@ -609,6 +610,10 @@ const fr: TranslationKeys = {
   pushBlockedHint: "Les notifications sont bloquées. Active-les dans les paramètres du navigateur pour recevoir les rappels de match.",
   pushPromptHighIntentBody: "Tu as un RSVP en attente. Active les notifications pour qu'on te prévienne avant le coup d'envoi si quelque chose change.",
   pushPromptTitle: "Rester au courant ?",
+  notifyRsvpAnswerYes: "{name} a confirmé sa venue à {title}",
+  notifyRsvpAnswerNo: "{name} a décliné {title}",
+  notifyRsvpAnswerMaybe: "{name} n'est pas sûr pour {title}",
+  notifyRsvpAnswerAnon: "Quelqu'un a répondu à {title}",
 
   // Priority enrollment (#136)
   priorityEnrollment: "Inscription Prioritaire",

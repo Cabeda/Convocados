@@ -579,6 +579,7 @@ const de: TranslationKeys = {
   rsvpYouRow: "Du",
   rsvpGoing: "Dabei",
   rsvpDeclined: "Abgesagt",
+  rsvpMaybe: "Vielleicht",
   rsvpNoResponse: "Keine Antwort",
   rsvpPending: "ausstehend",
   rsvpSetGoing: "Als anwesend markieren",
@@ -609,6 +610,10 @@ const de: TranslationKeys = {
   pushBlockedHint: "Benachrichtigungen sind blockiert. Aktiviere sie in den Browser-Einstellungen, um Spielerinnerungen zu erhalten.",
   pushPromptHighIntentBody: "Du hast eine offene RSVP. Aktiviere Benachrichtigungen, damit wir dich vor dem Anpfiff informieren, falls sich etwas ändert.",
   pushPromptTitle: "Auf dem Laufenden bleiben?",
+  notifyRsvpAnswerYes: "{name} hat für {title} zugesagt",
+  notifyRsvpAnswerNo: "{name} hat {title} abgesagt",
+  notifyRsvpAnswerMaybe: "{name} ist sich bei {title} unsicher",
+  notifyRsvpAnswerAnon: "Jemand hat auf {title} geantwortet",
 
   // Priority enrollment (#136)
   priorityEnrollment: "Prioritätsanmeldung",

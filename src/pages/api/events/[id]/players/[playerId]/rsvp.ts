@@ -3,9 +3,11 @@ import { prisma } from "~/lib/db.server";
 import { getSession, checkOwnership } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { upsertGuestRsvp } from "~/lib/rsvp.server";
+import { isRsvpStatusValue, type RsvpStatus } from "~/lib/rsvp";
+import { enqueueRsvpAnswerNotification } from "~/lib/rsvp-notifications.server";
 import { archiveAndLeave } from "~/lib/leave.server";
 
-/** POST /api/events/[id]/players/[playerId]/rsvp — owner/admin only. Body { status: "yes" | "no" | null }.
+/** POST /api/events/[id]/players/[playerId]/rsvp — owner/admin only. Body { status: "yes" | "no" | "maybe" | null }.
  *  status="no" on a guest Player also archives the player (the "leave on behalf" flow).
  *  status="yes" or status=null is a no-op on the roster. */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -46,16 +48,32 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   let body: { status?: unknown } = {};
   try { body = await request.json(); } catch { /* fall through */ }
-  const status = body.status;
-  if (status !== "yes" && status !== "no" && status !== null) {
-    return Response.json({ error: "status must be 'yes', 'no', or null." }, { status: 400 });
+  const rawStatus = body.status;
+  if (rawStatus !== null && !isRsvpStatusValue(rawStatus)) {
+    return Response.json({ error: "status must be 'yes', 'no', 'maybe', or null." }, { status: 400 });
   }
+  const status: RsvpStatus = rawStatus === null ? null : rawStatus;
 
   try {
     // 1. Write the Rsvp row (keyed on playerId, with respondedByUserId audit).
     const rsvp = await upsertGuestRsvp(eventId, playerId, status, session.user.id);
 
-    // 2. status="no" → also archive the player (admin declines on behalf of the guest).
+    // 2. Notify all invited players of the guest's answer. Anon text — guest is anonymous
+    // from the group's perspective, so we don't expose their name. null status (clearing)
+    // is not announced.
+    if (status !== null) {
+      enqueueRsvpAnswerNotification({
+        eventId,
+        eventTitle: event.title,
+        status,
+        actorPlayerId: playerId,
+        actorName: null,
+        actorIsLogged: false,
+        senderClientId: session.user.id,
+      }).catch(() => {});
+    }
+
+    // 3. status="no" → also archive the player (admin declines on behalf of the guest).
     let warned = false;
     if (status === "no") {
       const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";

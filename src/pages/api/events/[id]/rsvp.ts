@@ -4,10 +4,12 @@ import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { upsertRsvp, getRsvpForUser } from "~/lib/rsvp.server";
+import { isRsvpStatusValue } from "~/lib/rsvp";
+import { enqueueRsvpAnswerNotification } from "~/lib/rsvp-notifications.server";
 import { logEvent } from "~/lib/eventLog.server";
 import { IDEMPOTENCY_HEADER, getCachedResponse, makeCacheKey, hasConflictingEntry, storeCachedResponse } from "~/lib/idempotency";
 
-/** POST /api/events/[id]/rsvp — body { status: "yes" | "no" }. Idempotent. */
+/** POST /api/events/[id]/rsvp — body { status: "yes" | "no" | "maybe" }. Idempotent. */
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
@@ -32,12 +34,12 @@ export const POST: APIRoute = async ({ params, request }) => {
   const idemCacheKey = idemKey ? makeCacheKey(idemKey, idemPath, session.user.id) : null;
   let body: { status?: string } = {};
   try { body = await request.json(); } catch { /* fall through */ }
-  if (body.status !== "yes" && body.status !== "no") {
-    return Response.json({ error: "status must be 'yes' or 'no'." }, { status: 400 });
+  if (!isRsvpStatusValue(body.status)) {
+    return Response.json({ error: "status must be 'yes', 'no', or 'maybe'." }, { status: 400 });
   }
 
   if (idemKey && idemCacheKey) {
-    // RSVP body is { status: "yes"|"no" } — hash raw body, not the add-player canonicalizer.
+    // RSVP body is { status: "yes"|"no"|"maybe" } — hash raw body, not the add-player canonicalizer.
     const bodyHash = createHash("sha256").update(JSON.stringify({ status: body.status })).digest("hex");
     const cached = getCachedResponse(idemCacheKey, bodyHash);
     if (cached) {
@@ -53,9 +55,18 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const rsvp = await upsertRsvp(eventId, session.user.id, body.status);
 
+  enqueueRsvpAnswerNotification({
+    eventId,
+    eventTitle: event.title,
+    status: body.status,
+    actorUserId: session.user.id,
+    actorName: session.user.name,
+    actorIsLogged: true,
+  }).catch(() => {});
+
   logEvent(
     eventId,
-    body.status === "yes" ? "rsvp_yes" : "rsvp_no",
+    body.status === "yes" ? "rsvp_yes" : body.status === "no" ? "rsvp_no" : "rsvp_maybe",
     session.user.name,
     session.user.id,
     { eventTitle: event.title, status: body.status },
