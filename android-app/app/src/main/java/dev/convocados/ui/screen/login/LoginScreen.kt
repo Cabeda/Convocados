@@ -31,7 +31,6 @@ class LoginViewModel @Inject constructor(
 
 @Composable
 fun LoginScreen(
-    onLoginSuccess: () -> Unit,
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current

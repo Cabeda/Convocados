@@ -14,6 +14,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import dev.convocados.data.auth.OAuthTokens
 import dev.convocados.data.auth.TokenStore
 import dev.convocados.ui.ConvocadosRoot
+import dev.convocados.ui.navigation.DeepLink
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -34,21 +35,15 @@ class MainActivity : AppCompatActivity() {
             tokenStore.setTokens(OAuthTokens(accessToken = token, refreshToken = "", expiresAt = System.currentTimeMillis() + 3600_000))
         }
 
-        deepLink = extractDeepLink(intent)
+        deepLink = DeepLink.extract(intent)
         setContent { ConvocadosRoot(deepLink = deepLink, intentVersion = intentVersion) }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        deepLink = extractDeepLink(intent)
+        deepLink = DeepLink.extract(intent)
         // Increment version to trigger re-processing of the intent in ConvocadosRoot
         intentVersion++
-    }
-
-    private fun extractDeepLink(intent: Intent): String? {
-        intent.getStringExtra("deep_link")?.let { return it }
-        intent.getStringExtra("navigate_to")?.let { return it }
-        return null
     }
 }
