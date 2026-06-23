@@ -8,6 +8,7 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { signIn, useSession } from "~/lib/auth.client";
+import { isIosPwa } from "~/lib/pwaDetect";
 
 function TabPanel({ children, value, index }: { children: React.ReactNode; value: number; index: number }) {
   return value === index ? <Box>{children}</Box> : null;
@@ -31,12 +32,26 @@ export default function SignInPage() {
   // Sanitize callbackURL: only allow relative paths to prevent open redirects
   const callbackURL = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/";
 
-  if (typeof window !== "undefined" && !new URLSearchParams(window.location.search).get("callbackURL")) {
+  const hasCallbackURL = typeof window !== "undefined" && !!new URLSearchParams(window.location.search).get("callbackURL");
+
+  if (typeof window !== "undefined" && !hasCallbackURL) {
     // ADR-0012: missing callbackURL means the user landed on /auth/signin without
     // a deep-link entry point — they'll be redirected to /dashboard after signin.
     // Log so the upstream link rot (push notification, share link, email link) is visible.
     console.warn("[SignInPage] no callbackURL on /auth/signin — post-login destination will fall back to /dashboard");
   }
+
+  // iOS PWA detection: in a PWA installed on iOS, `window.location.href` to
+  // accounts.google.com triggers iOS's "Open in Safari?" sheet because
+  // cross-origin navigations from a PWA are treated as external links. The
+  // OAuth callback then lands in Safari, not the PWA, and the session cookie
+  // is set in Safari's cookie jar — the PWA stays logged out.
+  //
+  // We can't fix better-auth's state-cookie flow from the client side, so
+  // the practical mitigation is to hide the Google sign-in button on iOS
+  // PWAs and surface an explanation. Email/password sign-in stays in the
+  // PWA and works correctly.
+  const iosPwa = typeof window !== "undefined" && isIosPwa();
 
   // Compute the safe post-login destination
   const postLoginURL = callbackURL === "/" ? "/dashboard" : callbackURL;
@@ -127,16 +142,24 @@ export default function SignInPage() {
                 </Alert>
               )}
 
-              <Button
-                variant="outlined"
-                size="large"
-                fullWidth
-                startIcon={<GoogleIcon />}
-                onClick={handleGoogleSignIn}
-                type="button"
-              >
-                {t("signInWithGoogle")}
-              </Button>
+              {iosPwa && (
+                <Alert severity="info" data-testid="ios-pwa-notice">
+                  {t("signInIosPwaNotice")}
+                </Alert>
+              )}
+
+              {!iosPwa && (
+                <Button
+                  variant="outlined"
+                  size="large"
+                  fullWidth
+                  startIcon={<GoogleIcon />}
+                  onClick={handleGoogleSignIn}
+                  type="button"
+                >
+                  {t("signInWithGoogle")}
+                </Button>
+              )}
 
               <Divider>{t("or")}</Divider>
 
@@ -226,6 +249,36 @@ export default function SignInPage() {
                   {t("signUp")}
                 </Link>
               </Typography>
+
+              {/* ADR-0012 + #506: when the user lands on /auth/signin without a
+                  callbackURL (no deep-link entry point, stale bookmark, etc.)
+                  we silently redirect to /dashboard after signin. Many users
+                  are landing here from the "main page" signin link and
+                  expecting to go back to a specific event. Surface the
+                  common destinations explicitly so they can pick. */}
+              {!hasCallbackURL && (
+                <Box
+                  data-testid="post-login-fallback"
+                  sx={{
+                    border: 1,
+                    borderColor: "divider",
+                    borderRadius: 2,
+                    p: 2,
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    {t("signInNoDestination")}
+                  </Typography>
+                  <Stack direction="row" spacing={1}>
+                    <Button size="small" variant="text" href="/dashboard">
+                      {t("dashboard")}
+                    </Button>
+                    <Button size="small" variant="text" href="/public">
+                      {t("publicGames")}
+                    </Button>
+                  </Stack>
+                </Box>
+              )}
             </Stack>
           </Paper>
         </Container>

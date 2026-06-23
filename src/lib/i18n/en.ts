@@ -331,7 +331,6 @@ const en = {
   passwordMismatch: "Passwords do not match.",
   passwordTooShort: "Password must be at least 8 characters.",
   myGames: "My Games",
-  dashboard: "Dashboard",
   claimOwnership: "Claim ownership",
   claimOwnershipDesc: "Become the owner of this event to manage settings.",
   transferOwnership: "Transfer ownership",
@@ -381,6 +380,9 @@ const en = {
 
   // Social auth
   signInWithGoogle: "Sign in with Google",
+  signInIosPwaNotice: "You're using the Convocados app installed on your iPhone. Use the email & password form below — Google sign-in would open Safari and you'd stay logged out here.",
+  signInNoDestination: "After signing in, where do you want to go?",
+  dashboard: "Dashboard",
   signUpWithGoogle: "Sign up with Google",
   or: "or",
 
