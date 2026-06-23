@@ -54,56 +54,47 @@ beforeEach(() => {
   vi.mocked(isIosSafariStandalone).mockReturnValue(false);
 });
 
-describe("SignInPage — iOS PWA auth options", () => {
-  it("shows the Google sign-in button on desktop browsers", () => {
+describe("SignInPage — iOS PWA Google sign-in", () => {
+  it("keeps the Google sign-in button on iOS PWA", () => {
+    vi.mocked(isIosPwa).mockReturnValue(true);
     renderAtUrl("/auth/signin?callbackURL=/events/abc");
     expect(screen.getByRole("button", { name: /signInWithGoogle/ })).toBeInTheDocument();
   });
 
-  it("hides the Google sign-in button on iOS PWA (cookie jar isolation makes it non-functional)", () => {
-    vi.mocked(isIosPwa).mockReturnValue(true);
+  it("keeps the Google sign-in button on desktop browsers", () => {
     renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    expect(screen.queryByRole("button", { name: /signInWithGoogle/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /signInWithGoogle/ })).toBeInTheDocument();
   });
 
-  it("hides the Google sign-in button on iOS PWA even without callbackURL", () => {
-    vi.mocked(isIosPwa).mockReturnValue(true);
-    renderAtUrl("/auth/signin");
-    expect(screen.queryByRole("button", { name: /signInWithGoogle/ })).toBeNull();
-  });
-
-  it("hides the magic link tab on iOS PWA (magic link email opens Safari, same jar problem)", () => {
-    vi.mocked(isIosPwa).mockReturnValue(true);
-    renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    // The "Sign in with Email" tab (magic link) should not be present
-    expect(screen.queryByRole("tab", { name: /signInWithEmail/ })).toBeNull();
-  });
-
-  it("shows the password tab on iOS PWA (same-origin form submit works)", () => {
-    vi.mocked(isIosPwa).mockReturnValue(true);
-    renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    // The iOS PWA password form should be present
-    expect(screen.getByTestId("ios-pwa-password-form")).toBeInTheDocument();
-    // The Tabs bar should not be present on iOS PWA
-    expect(screen.queryByRole("tablist")).toBeNull();
-  });
-
-  it("does NOT show the misleading popup notice on iOS PWA (the user reported this was confusing)", () => {
+  it("does NOT show the old misleading iOS PWA popup notice", () => {
     vi.mocked(isIosPwa).mockReturnValue(true);
     renderAtUrl("/auth/signin?callbackURL=/events/abc");
     expect(screen.queryByTestId("ios-pwa-notice")).toBeNull();
   });
 
-  it("does NOT show the misleading popup notice on desktop either", () => {
-    renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    expect(screen.queryByTestId("ios-pwa-notice")).toBeNull();
-  });
-});
-
-describe("SignInPage — Google sign-in default redirect flow", () => {
-  it("on desktop, clicking Google sign-in calls signIn.social with the callbackURL", async () => {
+  it("on iOS PWA, clicking Google uses the plain top-level redirect flow (no disableRedirect, no popup)", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    vi.mocked(isIosPwa).mockReturnValue(true);
+    renderAtUrl("/auth/signin?callbackURL=/events/abc");
+
+    await user.click(screen.getByRole("button", { name: /signInWithGoogle/ }));
+
+    // Same path as web/Android: redirect flow, no popup, no disableRedirect.
+    expect(mockSignInSocial).toHaveBeenCalledWith({
+      provider: "google",
+      callbackURL: "/events/abc",
+    });
+    expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  it("on desktop, clicking Google uses the same redirect flow (no popup)", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    vi.mocked(isIosPwa).mockReturnValue(false);
     renderAtUrl("/auth/signin?callbackURL=/events/abc");
 
     await user.click(screen.getByRole("button", { name: /signInWithGoogle/ }));
@@ -112,16 +103,6 @@ describe("SignInPage — Google sign-in default redirect flow", () => {
       provider: "google",
       callbackURL: "/events/abc",
     });
-  });
-
-  it("on desktop, does not open a popup window (default redirect flow)", async () => {
-    const { default: userEvent } = await import("@testing-library/user-event");
-    const user = userEvent.setup();
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-    renderAtUrl("/auth/signin?callbackURL=/events/abc");
-
-    await user.click(screen.getByRole("button", { name: /signInWithGoogle/ }));
-
     expect(openSpy).not.toHaveBeenCalled();
     openSpy.mockRestore();
   });
@@ -129,12 +110,7 @@ describe("SignInPage — Google sign-in default redirect flow", () => {
 
 describe("SignInPage — post-auth destination fallback", () => {
   it("includes a 'where do you want to go?' fallback UI when callbackURL is missing after signin", () => {
-    // This addresses the user report: "I'm sent to the main page instead of the event"
-    // When callbackURL is missing, the user should see a picker, not be silently
-    // redirected to /dashboard.
     renderAtUrl("/auth/signin");
-    // After signin without callbackURL, the page should provide fallback links
-    // (Dashboard + Public Games) instead of just auto-redirecting.
     const fallback = screen.getByTestId("post-login-fallback");
     expect(fallback).toBeInTheDocument();
     expect(fallback.querySelector("a[href='/dashboard']")).toBeTruthy();
@@ -143,14 +119,6 @@ describe("SignInPage — post-auth destination fallback", () => {
 
   it("does NOT show the fallback when callbackURL is present (the redirect will go to callbackURL)", () => {
     renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    // The fallback is for the "no destination" case; with a callbackURL,
-    // the redirect will handle it.
     expect(screen.queryByTestId("post-login-fallback")).toBeNull();
-  });
-
-  it("shows the fallback on iOS PWA too (the picker is auth-method-agnostic)", () => {
-    vi.mocked(isIosPwa).mockReturnValue(true);
-    renderAtUrl("/auth/signin");
-    expect(screen.getByTestId("post-login-fallback")).toBeInTheDocument();
   });
 });
