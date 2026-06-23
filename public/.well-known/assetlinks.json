@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.cabeda.Convocados",
+    "sha256_cert_fingerprints": [
+      "E0:96:0B:6E:DC:E1:02:F0:BB:A5:A5:3B:F9:51:C1:D1:1D:8B:AF:D1:6F:90:55:4F:FE:74:A4:E7:C0:C7:96:A4"
+    ]
+  }
+}]
