@@ -338,7 +338,6 @@ const de: TranslationKeys = {
   docs: "Docs",
   signInWithGoogle: "Mit Google anmelden",
   signInNoDestination: "Wohin möchtest du nach der Anmeldung?",
-  signInIosPwaNotice: "Du verwendest die auf deinem iPhone installierte Convocados-App. Die Google-Anmeldung öffnet ein Fenster — schließe sie dort ab, und du wirst automatisch hierher zurückgebracht.",
   signUpWithGoogle: "Mit Google registrieren",
   or: "oder",
   checkYourEmail: "Prüfe deine E-Mail",
