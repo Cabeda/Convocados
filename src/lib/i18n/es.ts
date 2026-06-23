@@ -338,7 +338,7 @@ const es: TranslationKeys = {
   docs: "Docs",
   signInWithGoogle: "Iniciar sesión con Google",
   signInNoDestination: "Después de iniciar sesión, ¿a dónde quieres ir?",
-  signInIosPwaNotice: "Estás usando la app Convocados instalada en tu iPhone. Usa el formulario de email y contraseña de abajo — el login con Google abriría Safari y te quedarías sin sesión aquí.",
+  signInIosPwaNotice: "Estás usando la app Convocados instalada en tu iPhone. El login con Google abrirá una ventana — complétalo allí y volverás automáticamente aquí.",
   signUpWithGoogle: "Registrarse con Google",
   or: "o",
   checkYourEmail: "Revisa tu email",

@@ -13,6 +13,23 @@ export default defineConfig({
     poolOptions: { forks: { singleFork: true } },
     exclude: ["node_modules", "dist", "e2e", "mobile"],
     environment: "node",
+    env: {
+      // Ensure CI is always set in test workers, regardless of how vitest
+      // is invoked. The pre-push hook sets CI=1 before `npx vitest`, but
+      // vitest's fork pool does not always propagate it to workers —
+      // `describe.skipIf(!!process.env.CI)` then fails to skip the
+      // oauth-trusted-client tests, which fail because the trusted client
+      // is only initialized lazily on first request and the test DB
+      // state isn't shared across forks in the way the local dev path
+      // expects. Forcing CI here keeps the skip behavior consistent.
+      CI: "1",
+      ...(process.env.TRUSTED_OAUTH_CLIENT_ID
+        ? { TRUSTED_OAUTH_CLIENT_ID: process.env.TRUSTED_OAUTH_CLIENT_ID }
+        : {}),
+      ...(process.env.TRUSTED_OAUTH_CLIENT_SECRET
+        ? { TRUSTED_OAUTH_CLIENT_SECRET: process.env.TRUSTED_OAUTH_CLIENT_SECRET }
+        : {}),
+    },
     globalSetup: ["./src/test/globalSetup.ts"],
     setupFiles: ["./src/test/setup.ts"],
     projects: [
@@ -26,6 +43,15 @@ export default defineConfig({
           name: "node",
           include: ["src/test/**/*.test.ts"],
           exclude: ["src/test/components/**"],
+          env: {
+            CI: "1",
+            ...(process.env.TRUSTED_OAUTH_CLIENT_ID
+              ? { TRUSTED_OAUTH_CLIENT_ID: process.env.TRUSTED_OAUTH_CLIENT_ID }
+              : {}),
+            ...(process.env.TRUSTED_OAUTH_CLIENT_SECRET
+              ? { TRUSTED_OAUTH_CLIENT_SECRET: process.env.TRUSTED_OAUTH_CLIENT_SECRET }
+              : {}),
+          },
         },
       },
       {

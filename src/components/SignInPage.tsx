@@ -41,16 +41,10 @@ export default function SignInPage() {
     console.warn("[SignInPage] no callbackURL on /auth/signin — post-login destination will fall back to /dashboard");
   }
 
-  // iOS PWA detection: in a PWA installed on iOS, `window.location.href` to
-  // accounts.google.com triggers iOS's "Open in Safari?" sheet because
-  // cross-origin navigations from a PWA are treated as external links. The
-  // OAuth callback then lands in Safari, not the PWA, and the session cookie
-  // is set in Safari's cookie jar — the PWA stays logged out.
-  //
-  // We can't fix better-auth's state-cookie flow from the client side, so
-  // the practical mitigation is to hide the Google sign-in button on iOS
-  // PWAs and surface an explanation. Email/password sign-in stays in the
-  // PWA and works correctly.
+  // iOS PWA detection: needed to switch the Google sign-in flow to a popup
+  // (`window.open`) so the session cookie is set in the PWA's cookie jar
+  // instead of being lost when iOS routes `accounts.google.com` to Safari.
+  // On desktop and regular Safari the default redirect flow is fine.
   const iosPwa = typeof window !== "undefined" && isIosPwa();
 
   // Compute the safe post-login destination
@@ -108,6 +102,40 @@ export default function SignInPage() {
   };
 
   const handleGoogleSignIn = async () => {
+    if (iosPwa) {
+      // iOS PWA: window.location.href to accounts.google.com triggers
+      // "Open in Safari?" sheet, and even if the user accepts, the
+      // better-auth `state` cookie is stuck in the PWA's jar — Safari
+      // can't find it, so callbackURL is lost and the user lands on `/`.
+      //
+      // Popup-based flow: disable better-auth's auto-redirect, open the
+      // OAuth URL in a popup, wait for the popup to close (which signals
+      // the OAuth round-trip is done), then reload the main window so it
+      // picks up the session cookie. On iOS the popup still opens Safari,
+      // but at least the round-trip is explicit and the user can act on it.
+      const result = await signIn.social({
+        provider: "google",
+        callbackURL,
+        disableRedirect: true,
+      });
+      const url = result && typeof result === "object" ? (result as { url?: string }).url : undefined;
+      if (url) {
+        const popup = window.open(url, "google-oauth", "width=500,height=600,scrollbars=yes");
+        if (popup) {
+          const poll = setInterval(() => {
+            if (popup.closed) {
+              clearInterval(poll);
+              window.location.reload();
+            }
+          }, 300);
+        } else {
+          // Popup blocked — fall back to the redirect flow so the user
+          // can complete signin in the same tab.
+          window.location.href = url;
+        }
+      }
+      return;
+    }
     await signIn.social({ provider: "google", callbackURL });
   };
 
@@ -148,18 +176,17 @@ export default function SignInPage() {
                 </Alert>
               )}
 
-              {!iosPwa && (
-                <Button
-                  variant="outlined"
-                  size="large"
-                  fullWidth
-                  startIcon={<GoogleIcon />}
-                  onClick={handleGoogleSignIn}
-                  type="button"
-                >
-                  {t("signInWithGoogle")}
-                </Button>
-              )}
+              <Button
+                variant="outlined"
+                size="large"
+                fullWidth
+                startIcon={<GoogleIcon />}
+                onClick={handleGoogleSignIn}
+                type="button"
+                data-testid="google-signin"
+              >
+                {t("signInWithGoogle")}
+              </Button>
 
               <Divider>{t("or")}</Divider>
 
