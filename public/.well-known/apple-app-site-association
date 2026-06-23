@@ -1,0 +1,19 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["TEAMID.dev.convocados.ios"],
+        "components": [
+          { "/": "/api/auth/callback/google", "comment": "OAuth callback — Google" },
+          { "/": "/api/auth/callback/*", "comment": "OAuth callback — any provider" },
+          { "/": "/events/*", "comment": "Event deep links" },
+          { "/": "/auth/*", "comment": "Auth pages" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["TEAMID.dev.convocados.ios"]
+  }
+}
