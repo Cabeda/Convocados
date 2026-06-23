@@ -380,7 +380,6 @@ const en = {
 
   // Social auth
   signInWithGoogle: "Sign in with Google",
-  signInIosPwaNotice: "You're using the Convocados app installed on your iPhone. Google sign-in will open a window — complete it there, and you'll be brought back here to the app.",
   signInNoDestination: "After signing in, where do you want to go?",
   dashboard: "Dashboard",
   signUpWithGoogle: "Sign up with Google",
