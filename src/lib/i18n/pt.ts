@@ -382,6 +382,8 @@ const pt: TranslationKeys = {
 
   // Social auth
   signInWithGoogle: "Entrar com Google",
+  signInNoDestination: "Depois de iniciar sessão, para onde queres ir?",
+  signInIosPwaNotice: "Estás a usar a app Convocados instalada no teu iPhone. Usa o formulário de email e password abaixo — o login com Google abriria o Safari e ficarias sem sessão aqui.",
   signUpWithGoogle: "Registar com Google",
   or: "ou",
 
