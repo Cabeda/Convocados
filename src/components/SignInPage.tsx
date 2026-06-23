@@ -17,13 +17,27 @@ function TabPanel({ children, value, index }: { children: React.ReactNode; value
 export default function SignInPage() {
   const t = useT();
   const { data: session, isPending } = useSession();
-  const [tab, setTab] = useState(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [unverified, setUnverified] = useState(false);
   const [loading, setLoading] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
+
+  // iOS PWA detection: on iOS the PWA and Safari have separate cookie jars,
+  // so any auth flow that opens a different browser context (Google OAuth
+  // redirect, magic link email, Apple popup) sets the session cookie in
+  // Safari's jar — the PWA stays logged out. The ONLY sign-in method that
+  // works on iOS PWA is the email/password form (same-origin POST).
+  //
+  // On iOS PWA we:
+  // - hide Google sign-in and the magic-link tab (they don't work)
+  // - default to the password tab so the user lands on the working option
+  // - skip the misleading "popup will open" notice from the previous attempt
+  const iosPwa = typeof window !== "undefined" && isIosPwa();
+  // Tab state is only used on non-iOS-PWA (where the tabbed UI is shown).
+  // iOS PWA renders the password form directly without tabs.
+  const [tab, setTab] = useState(0);
 
   const rawCallback = typeof window !== "undefined"
     ? new URLSearchParams(window.location.search).get("callbackURL") || "/"
@@ -41,11 +55,7 @@ export default function SignInPage() {
     console.warn("[SignInPage] no callbackURL on /auth/signin — post-login destination will fall back to /dashboard");
   }
 
-  // iOS PWA detection: needed to switch the Google sign-in flow to a popup
-  // (`window.open`) so the session cookie is set in the PWA's cookie jar
-  // instead of being lost when iOS routes `accounts.google.com` to Safari.
-  // On desktop and regular Safari the default redirect flow is fine.
-  const iosPwa = typeof window !== "undefined" && isIosPwa();
+  // iOS PWA detection moved above (needed before useState for the default tab).
 
   // Compute the safe post-login destination
   const postLoginURL = callbackURL === "/" ? "/dashboard" : callbackURL;
@@ -102,40 +112,10 @@ export default function SignInPage() {
   };
 
   const handleGoogleSignIn = async () => {
-    if (iosPwa) {
-      // iOS PWA: window.location.href to accounts.google.com triggers
-      // "Open in Safari?" sheet, and even if the user accepts, the
-      // better-auth `state` cookie is stuck in the PWA's jar — Safari
-      // can't find it, so callbackURL is lost and the user lands on `/`.
-      //
-      // Popup-based flow: disable better-auth's auto-redirect, open the
-      // OAuth URL in a popup, wait for the popup to close (which signals
-      // the OAuth round-trip is done), then reload the main window so it
-      // picks up the session cookie. On iOS the popup still opens Safari,
-      // but at least the round-trip is explicit and the user can act on it.
-      const result = await signIn.social({
-        provider: "google",
-        callbackURL,
-        disableRedirect: true,
-      });
-      const url = result && typeof result === "object" ? (result as { url?: string }).url : undefined;
-      if (url) {
-        const popup = window.open(url, "google-oauth", "width=500,height=600,scrollbars=yes");
-        if (popup) {
-          const poll = setInterval(() => {
-            if (popup.closed) {
-              clearInterval(poll);
-              window.location.reload();
-            }
-          }, 300);
-        } else {
-          // Popup blocked — fall back to the redirect flow so the user
-          // can complete signin in the same tab.
-          window.location.href = url;
-        }
-      }
-      return;
-    }
+    // Google sign-in is not available on iOS PWA (the button is hidden in
+    // the render below). On desktop and regular mobile Safari the standard
+    // redirect flow works — the callback lands in the same browser context,
+    // so the session cookie is set in the right jar.
     await signIn.social({ provider: "google", callbackURL });
   };
 
@@ -170,75 +150,60 @@ export default function SignInPage() {
                 </Alert>
               )}
 
-              {iosPwa && (
-                <Alert severity="info" data-testid="ios-pwa-notice">
-                  {t("signInIosPwaNotice")}
-                </Alert>
+              {!iosPwa && (
+                <>
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    fullWidth
+                    startIcon={<GoogleIcon />}
+                    onClick={handleGoogleSignIn}
+                    type="button"
+                    data-testid="google-signin"
+                  >
+                    {t("signInWithGoogle")}
+                  </Button>
+                  <Divider>{t("or")}</Divider>
+                </>
               )}
 
-              <Button
-                variant="outlined"
-                size="large"
-                fullWidth
-                startIcon={<GoogleIcon />}
-                onClick={handleGoogleSignIn}
-                type="button"
-                data-testid="google-signin"
-              >
-                {t("signInWithGoogle")}
-              </Button>
-
-              <Divider>{t("or")}</Divider>
-
-              <Tabs
-                value={tab}
-                onChange={handleTabChange}
-                variant="fullWidth"
-                sx={{ minHeight: 40 }}
-              >
-                <Tab
-                  icon={<EmailIcon sx={{ fontSize: 18 }} />}
-                  iconPosition="start"
-                  label={t("signInWithEmail")}
-                  sx={{ minHeight: 40, textTransform: "none" }}
-                />
-                <Tab
-                  label={t("signInWithPassword")}
-                  sx={{ minHeight: 40, textTransform: "none" }}
-                />
-              </Tabs>
-
-              {/* Magic link tab */}
-              <TabPanel value={tab} index={0}>
-                <Stack spacing={3} component="form" action="#" method="post" onSubmit={handleMagicLinkSubmit}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t("magicLinkDesc")}
-                  </Typography>
-                  <TextField
-                    label={t("email")}
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    fullWidth
-                    autoComplete="email"
-                    autoFocus
+              {/* iOS PWA only shows the password tab — Google and magic link
+                  open Safari for auth, and Safari's cookie jar is separate
+                  from the PWA's, so the session would never reach the PWA.
+                  The Tabs bar is skipped entirely on iOS PWA since there's
+                  only one option. */}
+              {!iosPwa && (
+                <Tabs
+                  value={tab}
+                  onChange={handleTabChange}
+                  variant="fullWidth"
+                  sx={{ minHeight: 40 }}
+                >
+                  <Tab
+                    icon={<EmailIcon sx={{ fontSize: 18 }} />}
+                    iconPosition="start"
+                    label={t("signInWithEmail")}
+                    sx={{ minHeight: 40, textTransform: "none" }}
                   />
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    size="large"
-                    disabled={loading || magicLinkSent}
-                    fullWidth
-                  >
-                    {loading ? t("sendingMagicLink") : t("magicLinkBtn")}
-                  </Button>
-                </Stack>
-              </TabPanel>
+                  <Tab
+                    label={t("signInWithPassword")}
+                    sx={{ minHeight: 40, textTransform: "none" }}
+                  />
+                </Tabs>
+              )}
 
-              {/* Password tab */}
-              <TabPanel value={tab} index={1}>
-                <Stack spacing={3} component="form" action="#" method="post" onSubmit={handlePasswordSubmit}>
+              {/* iOS PWA: render only the password form (the only auth method
+                  that works due to cookie-jar isolation). On all other
+                  platforms, use the tabbed interface with both options. */}
+              {iosPwa ? (
+                <Stack
+                  spacing={3}
+                  component="form"
+                  action="#"
+                  method="post"
+                  onSubmit={handlePasswordSubmit}
+                  data-testid="ios-pwa-password-form"
+                >
                   <TextField
                     label={t("email")}
                     type="email"
@@ -268,7 +233,71 @@ export default function SignInPage() {
                     {loading ? t("signingIn") : t("signIn")}
                   </Button>
                 </Stack>
-              </TabPanel>
+              ) : (
+                <>
+                  {/* Magic link tab */}
+                  <TabPanel value={tab} index={0}>
+                    <Stack spacing={3} component="form" action="#" method="post" onSubmit={handleMagicLinkSubmit}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t("magicLinkDesc")}
+                      </Typography>
+                      <TextField
+                        label={t("email")}
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        fullWidth
+                        autoComplete="email"
+                        autoFocus
+                      />
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        size="large"
+                        disabled={loading || magicLinkSent}
+                        fullWidth
+                      >
+                        {loading ? t("sendingMagicLink") : t("magicLinkBtn")}
+                      </Button>
+                    </Stack>
+                  </TabPanel>
+
+                  {/* Password tab */}
+                  <TabPanel value={tab} index={1}>
+                    <Stack spacing={3} component="form" action="#" method="post" onSubmit={handlePasswordSubmit}>
+                      <TextField
+                        label={t("email")}
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        fullWidth
+                        autoComplete="email"
+                        autoFocus
+                      />
+                      <TextField
+                        label={t("password")}
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        fullWidth
+                        autoComplete="current-password"
+                      />
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        size="large"
+                        disabled={loading}
+                        fullWidth
+                      >
+                        {loading ? t("signingIn") : t("signIn")}
+                      </Button>
+                    </Stack>
+                  </TabPanel>
+                </>
+              )}
 
               <Typography variant="body2" textAlign="center" color="text.secondary">
                 {t("noAccount")}{" "}

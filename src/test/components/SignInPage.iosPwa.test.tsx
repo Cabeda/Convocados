@@ -54,43 +54,56 @@ beforeEach(() => {
   vi.mocked(isIosSafariStandalone).mockReturnValue(false);
 });
 
-describe("SignInPage — iOS PWA detection", () => {
-  it("does not show the iOS PWA banner on a regular desktop browser", () => {
+describe("SignInPage — iOS PWA auth options", () => {
+  it("shows the Google sign-in button on desktop browsers", () => {
+    renderAtUrl("/auth/signin?callbackURL=/events/abc");
+    expect(screen.getByRole("button", { name: /signInWithGoogle/ })).toBeInTheDocument();
+  });
+
+  it("hides the Google sign-in button on iOS PWA (cookie jar isolation makes it non-functional)", () => {
+    vi.mocked(isIosPwa).mockReturnValue(true);
+    renderAtUrl("/auth/signin?callbackURL=/events/abc");
+    expect(screen.queryByRole("button", { name: /signInWithGoogle/ })).toBeNull();
+  });
+
+  it("hides the Google sign-in button on iOS PWA even without callbackURL", () => {
+    vi.mocked(isIosPwa).mockReturnValue(true);
+    renderAtUrl("/auth/signin");
+    expect(screen.queryByRole("button", { name: /signInWithGoogle/ })).toBeNull();
+  });
+
+  it("hides the magic link tab on iOS PWA (magic link email opens Safari, same jar problem)", () => {
+    vi.mocked(isIosPwa).mockReturnValue(true);
+    renderAtUrl("/auth/signin?callbackURL=/events/abc");
+    // The "Sign in with Email" tab (magic link) should not be present
+    expect(screen.queryByRole("tab", { name: /signInWithEmail/ })).toBeNull();
+  });
+
+  it("shows the password tab on iOS PWA (same-origin form submit works)", () => {
+    vi.mocked(isIosPwa).mockReturnValue(true);
+    renderAtUrl("/auth/signin?callbackURL=/events/abc");
+    // The iOS PWA password form should be present
+    expect(screen.getByTestId("ios-pwa-password-form")).toBeInTheDocument();
+    // The Tabs bar should not be present on iOS PWA
+    expect(screen.queryByRole("tablist")).toBeNull();
+  });
+
+  it("does NOT show the misleading popup notice on iOS PWA (the user reported this was confusing)", () => {
+    vi.mocked(isIosPwa).mockReturnValue(true);
     renderAtUrl("/auth/signin?callbackURL=/events/abc");
     expect(screen.queryByTestId("ios-pwa-notice")).toBeNull();
   });
 
-  it("shows an iOS PWA notice when running in an installed PWA on iOS", () => {
-    vi.mocked(isIosPwa).mockReturnValue(true);
+  it("does NOT show the misleading popup notice on desktop either", () => {
     renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    expect(screen.getByTestId("ios-pwa-notice")).toBeInTheDocument();
-  });
-
-  it("the iOS PWA notice warns that Google sign-in opens Safari", () => {
-    vi.mocked(isIosPwa).mockReturnValue(true);
-    renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    const notice = screen.getByTestId("ios-pwa-notice");
-    // The notice text should mention the iOS PWA / external browser limitation
-    expect(notice.textContent).toMatch(/safari|browser|pwa/i);
-  });
-
-  it("keeps the Google sign-in button on iOS PWA (popup-based flow handles cross-origin nav)", () => {
-    vi.mocked(isIosPwa).mockReturnValue(true);
-    renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    expect(screen.getByRole("button", { name: /signInWithGoogle/ })).toBeInTheDocument();
-  });
-
-  it("keeps the Google sign-in button on desktop browsers", () => {
-    renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    expect(screen.getByRole("button", { name: /signInWithGoogle/ })).toBeInTheDocument();
+    expect(screen.queryByTestId("ios-pwa-notice")).toBeNull();
   });
 });
 
-describe("SignInPage — Google sign-in popup flow on iOS PWA", () => {
-  it("on iOS PWA, clicking Google sign-in calls signIn.social with disableRedirect", async () => {
+describe("SignInPage — Google sign-in default redirect flow", () => {
+  it("on desktop, clicking Google sign-in calls signIn.social with the callbackURL", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
-    vi.mocked(isIosPwa).mockReturnValue(true);
     renderAtUrl("/auth/signin?callbackURL=/events/abc");
 
     await user.click(screen.getByRole("button", { name: /signInWithGoogle/ }));
@@ -98,64 +111,13 @@ describe("SignInPage — Google sign-in popup flow on iOS PWA", () => {
     expect(mockSignInSocial).toHaveBeenCalledWith({
       provider: "google",
       callbackURL: "/events/abc",
-      disableRedirect: true,
     });
   });
 
-  it("on iOS PWA, opens a popup window with the returned OAuth URL", async () => {
+  it("on desktop, does not open a popup window (default redirect flow)", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
     const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-    vi.mocked(isIosPwa).mockReturnValue(true);
-    renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    mockSignInSocial.mockResolvedValue({ redirect: false, url: "https://accounts.google.com/o/oauth2/v2/auth?state=abc" });
-
-    await user.click(screen.getByRole("button", { name: /signInWithGoogle/ }));
-
-    expect(openSpy).toHaveBeenCalledWith(
-      "https://accounts.google.com/o/oauth2/v2/auth?state=abc",
-      "google-oauth",
-      expect.stringMatching(/width|height/),
-    );
-    openSpy.mockRestore();
-  });
-
-  it("on iOS PWA, reloads the page when the popup closes (so the session cookie is picked up)", async () => {
-    const { default: userEvent } = await import("@testing-library/user-event");
-    const user = userEvent.setup();
-    const reloadSpy = vi.fn();
-    // Stub window.location.reload by replacing the Location object (jsdom's
-    // Location is non-writable, so we replace the whole property).
-    const realLocation = window.location;
-    const fakeLocation = { ...realLocation, reload: reloadSpy } as unknown as Location;
-    Object.defineProperty(window, "location", { value: fakeLocation, writable: true, configurable: true });
-    // Popup that reports as closed on the next .closed check
-    const fakePopup = { closed: false, close: vi.fn() } as unknown as Window;
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(fakePopup);
-    try {
-      vi.mocked(isIosPwa).mockReturnValue(true);
-      renderAtUrl("/auth/signin?callbackURL=/events/abc");
-      mockSignInSocial.mockResolvedValue({ redirect: false, url: "https://google.test" });
-
-      await user.click(screen.getByRole("button", { name: /signInWithGoogle/ }));
-
-      // Simulate the popup closing after the OAuth round-trip
-      await new Promise((r) => setTimeout(r, 10));
-      (fakePopup as { closed: boolean }).closed = true;
-      await new Promise((r) => setTimeout(r, 400)); // poll interval is ~300ms
-
-      expect(reloadSpy).toHaveBeenCalled();
-    } finally {
-      openSpy.mockRestore();
-      Object.defineProperty(window, "location", { value: realLocation, writable: true, configurable: true });
-    }
-  });
-
-  it("on desktop, clicking Google sign-in does NOT open a popup (default redirect flow)", async () => {
-    const { default: userEvent } = await import("@testing-library/user-event");
-    const user = userEvent.setup();
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-    vi.mocked(isIosPwa).mockReturnValue(false);
     renderAtUrl("/auth/signin?callbackURL=/events/abc");
 
     await user.click(screen.getByRole("button", { name: /signInWithGoogle/ }));
@@ -184,5 +146,11 @@ describe("SignInPage — post-auth destination fallback", () => {
     // The fallback is for the "no destination" case; with a callbackURL,
     // the redirect will handle it.
     expect(screen.queryByTestId("post-login-fallback")).toBeNull();
+  });
+
+  it("shows the fallback on iOS PWA too (the picker is auth-method-agnostic)", () => {
+    vi.mocked(isIosPwa).mockReturnValue(true);
+    renderAtUrl("/auth/signin");
+    expect(screen.getByTestId("post-login-fallback")).toBeInTheDocument();
   });
 });
