@@ -76,4 +76,12 @@ describe("canonical host redirect", () => {
     );
     expect(res.status).toBe(200);
   });
+
+  it("never redirects /api/health (Fly health check hits it with a non-public host)", async () => {
+    const res = await run(
+      ctx("GET", "https://convocados.fly.dev/api/health"),
+      async () => new Response('{"status":"ok"}', { status: 200 }),
+    );
+    expect(res.status).toBe(200);
+  });
 });

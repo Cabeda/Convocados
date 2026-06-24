@@ -63,6 +63,11 @@ function canonicalHostRedirect(request: Request, url: URL): Response | null {
   const canonicalUrl = process.env.BETTER_AUTH_URL;
   if (!canonicalUrl) return null;
 
+  // Never redirect the health-check endpoint: Fly's internal HTTP check hits
+  // /api/health with a non-public Host (machine IP / *.internal), which would
+  // otherwise be redirected and fail the check, aborting deploys.
+  if (url.pathname === "/api/health") return null;
+
   let canonicalHost: string;
   try {
     canonicalHost = new URL(canonicalUrl).host;
