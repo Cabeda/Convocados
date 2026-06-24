@@ -47,6 +47,49 @@ const SECURITY_HEADERS: Record<string, string> = {
   ].join("; "),
 };
 
+/**
+ * If the request arrived on a non-canonical host, return a redirect Response
+ * to the canonical host (preserving path + query); otherwise null.
+ *
+ * Canonical host comes from BETTER_AUTH_URL. The public host is derived from
+ * proxy headers (Fly terminates TLS and proxies to localhost:3000, so url.host
+ * is the internal address, not what the user typed).
+ *
+ * - GET/HEAD → 301 (permanent, cacheable)
+ * - other methods → 308 (permanent, preserves method + body)
+ * Localhost / hostless requests are never redirected (dev + non-browser).
+ */
+function canonicalHostRedirect(request: Request, url: URL): Response | null {
+  const canonicalUrl = process.env.BETTER_AUTH_URL;
+  if (!canonicalUrl) return null;
+
+  let canonicalHost: string;
+  try {
+    canonicalHost = new URL(canonicalUrl).host;
+  } catch {
+    return null;
+  }
+
+  // If the canonical host is localhost (dev/test), don't redirect anything —
+  // we'd otherwise bounce real traffic to localhost.
+  const canonicalLower = canonicalHost.toLowerCase();
+  if (canonicalLower.startsWith("localhost") || canonicalLower.startsWith("127.0.0.1")) return null;
+
+  const publicHost = (request.headers.get("x-forwarded-host")
+    ?? request.headers.get("host")
+    ?? url.host).toLowerCase();
+
+  if (!publicHost) return null;
+  // Never redirect local dev or the internal proxy address.
+  if (publicHost.startsWith("localhost") || publicHost.startsWith("127.0.0.1")) return null;
+  if (publicHost === canonicalLower) return null;
+
+  const proto = (request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "")) || "https";
+  const location = `${proto === "http" ? "https" : proto}://${canonicalHost}${url.pathname}${url.search}`;
+  const status = request.method === "GET" || request.method === "HEAD" ? 301 : 308;
+  return new Response(null, { status, headers: { Location: location } });
+}
+
 function addSecurityHeaders(response: Response): Response {
   try {
     for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
@@ -74,6 +117,15 @@ function addSecurityHeaders(response: Response): Response {
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
+
+  // ── Canonical host redirect (Option B) ────────────────────────────────────
+  // Force a single canonical origin so the session cookie is never split
+  // across domains (e.g. convocados.fly.dev vs convocados.cabeda.dev). Without
+  // this, an OAuth round-trip started on the non-canonical host returns to the
+  // canonical host (BETTER_AUTH_URL) and the cookie lands on the wrong domain,
+  // leaving the user on the main page logged out.
+  const canonicalRedirect = canonicalHostRedirect(request, url);
+  if (canonicalRedirect) return canonicalRedirect;
 
   // Safe methods don't need CSRF protection
   if (SAFE_METHODS.has(request.method)) {
