@@ -181,6 +181,8 @@
 
     <string name="paid">Pagado</string>
     <string name="pending">Pendiente</string>
+    <string name="sent">Enviado</string>
+    <string name="payment_update_failed">No se pudo actualizar el pago. Puede que no tengas permiso.</string>
     <string name="total">Total</string>
     <string name="mark_all_paid">Marcar todo como pagado</string>
     <string name="no_payments">Sin pagos configurados</string>

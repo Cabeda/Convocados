@@ -207,4 +207,42 @@ describe("PUT /api/events/[id]/payments", () => {
     const body = await res.json();
     expect(body.method).toBe("MBWay");
   });
+
+  it("does not write the literal string 'undefined' when method is absent", async () => {
+    const owner = await seedUser("owner-7b");
+    const event = await seedEvent(owner.id);
+    const eventCost = await prisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 100, currency: "EUR" },
+    });
+    await prisma.playerPayment.create({
+      data: { eventCostId: eventCost.id, playerName: "Dora", amount: 10, status: "pending", method: "Cash" },
+    });
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+
+    // No `method` field in the body — should leave the existing method untouched.
+    const res = await PUT(putCtx(event.id, { playerName: "Dora", status: "paid" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.method).toBe("Cash");
+    expect(body.method).not.toBe("undefined");
+  });
+
+  it("clears the method when explicitly set to null", async () => {
+    const owner = await seedUser("owner-7c");
+    const event = await seedEvent(owner.id);
+    const eventCost = await prisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 100, currency: "EUR" },
+    });
+    await prisma.playerPayment.create({
+      data: { eventCostId: eventCost.id, playerName: "Eli", amount: 10, status: "pending", method: "Cash" },
+    });
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+
+    const res = await PUT(putCtx(event.id, { playerName: "Eli", status: "paid", method: null }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.method).toBeNull();
+  });
 });
