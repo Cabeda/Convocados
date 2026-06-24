@@ -82,7 +82,14 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const eventCost = await prisma.eventCost.findUnique({ where: { eventId } });
   if (!eventCost) return Response.json({ error: "No cost set for this event." }, { status: 404 });
 
-  const method = body.method !== null ? String(body.method).trim().slice(0, 50) || null : undefined;
+  // method semantics: absent (undefined) → leave unchanged; explicit null → clear;
+  // a string → set (trimmed, capped). Previously `String(body.method)` on an
+  // absent field produced the literal string "undefined".
+  const method = body.method === undefined
+    ? undefined
+    : body.method === null
+      ? null
+      : String(body.method).trim().slice(0, 50) || null;
 
   if (!VALID_STATUSES.includes(status)) {
     return Response.json({ error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` }, { status: 400 });

@@ -181,6 +181,8 @@
 
     <string name="paid">Bezahlt</string>
     <string name="pending">Ausstehend</string>
+    <string name="sent">Gesendet</string>
+    <string name="payment_update_failed">Zahlung konnte nicht aktualisiert werden. Möglicherweise fehlt dir die Berechtigung.</string>
     <string name="total">Gesamt</string>
     <string name="mark_all_paid">Alle als bezahlt markieren</string>
     <string name="no_payments">Keine Zahlungen eingerichtet</string>
