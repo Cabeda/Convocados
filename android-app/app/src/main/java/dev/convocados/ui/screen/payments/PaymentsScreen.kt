@@ -34,31 +34,77 @@ class PaymentsViewModel @Inject constructor(private val api: ConvocadosApi) : Vi
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading
 
+    // One-shot error signal for the UI to show a snackbar. Null when no error
+    // is pending; the screen clears it after showing.
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error
+
+    fun clearError() { _error.value = null }
+
     fun load(id: String) {
         viewModelScope.launch {
             _loading.value = true
-            runCatching { api.fetchPayments(id) }.onSuccess { _data.value = it }
+            runCatching { api.fetchPayments(id) }
+                .onSuccess { _data.value = it }
+                .onFailure { _error.value = it.message }
             _loading.value = false
         }
     }
 
+    /**
+     * Toggle a player's payment status between paid and pending.
+     *
+     * Updates the single row in place on success (no full re-fetch, no global
+     * loading spinner) so the rest of the list doesn't blank out. On failure
+     * (e.g. 403 when the user isn't the event owner/admin) the row is left
+     * unchanged and an error is surfaced — previously this failed silently and
+     * looked like the screen was stuck on "pending".
+     */
     fun toggle(eventId: String, playerName: String, currentStatus: String) {
+        val newStatus = if (currentStatus == "paid") "pending" else "paid"
         viewModelScope.launch {
-            val newStatus = if (currentStatus == "paid") "pending" else "paid"
-            runCatching { api.updatePaymentStatus(eventId, playerName, newStatus) }.onSuccess { load(eventId) }
+            runCatching { api.updatePaymentStatus(eventId, playerName, newStatus) }
+                .onSuccess { patchStatus(playerName, newStatus) }
+                .onFailure { _error.value = it.message }
         }
     }
 
     fun setCostOverride(eventId: String, playerName: String, amount: Double) {
         viewModelScope.launch {
-            runCatching { api.setCostOverride(eventId, playerName, amount) }.onSuccess { load(eventId) }
+            runCatching { api.setCostOverride(eventId, playerName, amount) }
+                .onSuccess { load(eventId) }
+                .onFailure { _error.value = it.message }
         }
     }
 
     fun bulkMarkAllPaid(eventId: String) {
         viewModelScope.launch {
-            runCatching { api.bulkMarkAllPaid(eventId) }.onSuccess { load(eventId) }
+            runCatching { api.bulkMarkAllPaid(eventId) }
+                .onSuccess { load(eventId) }
+                .onFailure { _error.value = it.message }
         }
+    }
+
+    /** Patch a single payment's status in the cached list and recompute the summary. */
+    private fun patchStatus(playerName: String, newStatus: String) {
+        val current = _data.value ?: return
+        val updatedPayments = current.payments.map { p ->
+            if (p.playerName == playerName) {
+                p.copy(status = newStatus, paidAt = if (newStatus == "paid") p.paidAt else null)
+            } else p
+        }
+        val paidCount = updatedPayments.count { it.status == "paid" }
+        val pendingCount = updatedPayments.count { it.status == "pending" }
+        val paidAmount = updatedPayments.filter { it.status == "paid" }.sumOf { it.amount }
+        _data.value = current.copy(
+            payments = updatedPayments,
+            summary = current.summary.copy(
+                paidCount = paidCount,
+                pendingCount = pendingCount,
+                totalCount = updatedPayments.size,
+                paidAmount = paidAmount,
+            ),
+        )
     }
 }
 
@@ -67,13 +113,25 @@ class PaymentsViewModel @Inject constructor(private val api: ConvocadosApi) : Vi
 fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewModel = hiltViewModel()) {
     val data by viewModel.data.collectAsState()
     val loading by viewModel.loading.collectAsState()
+    val error by viewModel.error.collectAsState()
     var overrideTarget by remember { mutableStateOf<String?>(null) }
     var overrideAmount by remember { mutableStateOf("") }
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    // Surface mutation/load errors (e.g. a 403 when the user isn't the owner)
+    // instead of failing silently.
+    LaunchedEffect(error) {
+        error?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearError()
+        }
+    }
+
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = { TopAppBar(scrollBehavior = scrollBehavior, title = { Text(stringResource(R.string.payments)) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
@@ -112,8 +170,22 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
                             p.method?.let { Text(it, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall) }
                         }
                         d.totalAmount?.let { Text("${d.currency ?: "€"}${p.amount}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = 10.dp)) }
-                        Card(colors = CardDefaults.cardColors(containerColor = if (p.status == "paid") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
-                            Text(if (p.status == "paid") "✓ ${stringResource(R.string.paid)}" else stringResource(R.string.pending), color = if (p.status == "paid") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                        Card(colors = CardDefaults.cardColors(containerColor = when (p.status) {
+                            "paid" -> MaterialTheme.colorScheme.primaryContainer
+                            "sent" -> MaterialTheme.colorScheme.tertiaryContainer
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        })) {
+                            val pillText = when (p.status) {
+                                "paid" -> "✓ ${stringResource(R.string.paid)}"
+                                "sent" -> "→ ${stringResource(R.string.sent)}"
+                                else -> stringResource(R.string.pending)
+                            }
+                            val pillColor = when (p.status) {
+                                "paid" -> MaterialTheme.colorScheme.onPrimaryContainer
+                                "sent" -> MaterialTheme.colorScheme.onTertiaryContainer
+                                else -> MaterialTheme.colorScheme.outline
+                            }
+                            Text(pillText, color = pillColor, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                         }
                         Spacer(Modifier.width(4.dp))
                         IconButton(onClick = { overrideTarget = p.playerName; overrideAmount = p.amount.toString() }, modifier = Modifier.size(32.dp)) {

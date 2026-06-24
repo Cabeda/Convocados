@@ -194,6 +194,8 @@
     <!-- Payments -->
     <string name="paid">Paid</string>
     <string name="pending">Pending</string>
+    <string name="sent">Sent</string>
+    <string name="payment_update_failed">Couldn\'t update payment. You may not have permission.</string>
     <string name="total">Total</string>
     <string name="mark_all_paid">Mark all as paid</string>
     <string name="no_payments">No payments set up</string>

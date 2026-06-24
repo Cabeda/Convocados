@@ -181,6 +181,8 @@
 
     <string name="paid">Pagato</string>
     <string name="pending">In sospeso</string>
+    <string name="sent">Inviato</string>
+    <string name="payment_update_failed">Impossibile aggiornare il pagamento. Potresti non avere il permesso.</string>
     <string name="total">Totale</string>
     <string name="mark_all_paid">Segna tutto come pagato</string>
     <string name="no_payments">Nessun pagamento configurato</string>
