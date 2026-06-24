@@ -111,6 +111,15 @@ function UpdateBanner() {
       };
       add(reg, "updatefound", onUpdateFound);
     });
+    // Reload once the new service worker takes control — the reliable signal
+    // that the update has activated (covers browsers where the per-worker
+    // statechange handler in handleUpdate doesn't fire as expected).
+    let reloaded = false;
+    add(navigator.serviceWorker, "controllerchange", () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
     return () => {
       cancelled = true;
       for (const { target, type, listener } of registrations) {
@@ -119,40 +128,62 @@ function UpdateBanner() {
     };
   }, []);
 
-  if (!waiting) return null;
+  const [dismissed, setDismissed] = useState(false);
+
+  if (!waiting || dismissed) return null;
 
   const handleUpdate = () => {
     waiting.postMessage("SKIP_WAITING");
-    waiting.addEventListener("statechange", () => {
-      if (waiting.state === "activated") window.location.reload();
-    });
+    // The controllerchange listener (registered in the effect) reloads as soon
+    // as the new worker takes control. This timeout is a last-resort fallback.
+    // ponytail: 3s heuristic — if the SW never activates we reload anyway so
+    // the user is never stuck on a stale build.
+    setTimeout(() => window.location.reload(), 3000);
   };
 
   const versionText = typeof __APP_VERSION__ !== "undefined"
     ? t("versionAvailable").replace("{version}", __APP_VERSION__)
     : t("updateAvailable");
 
+  // Bottom-anchored slim bar (shares the bottom slot with the install banner
+  // and never overlaps the app bar). Sits just above the install banner if
+  // both happen to show.
   return (
-    <Slide in direction="down">
-      <Paper elevation={4} sx={{
-        position: "fixed", top: 64, left: "50%", transform: "translateX(-50%)",
-        zIndex: theme.zIndex.snackbar,
-        display: "flex", alignItems: "center", gap: 2,
-        px: 3, py: 1.5, borderRadius: 3,
+    <Slide in direction="up">
+      <Paper elevation={6} sx={{
+        position: "fixed",
+        bottom: { xs: 0, sm: 16 },
+        left: { xs: 0, sm: "50%" },
+        right: { xs: 0, sm: "auto" },
+        transform: { sm: "translateX(-50%)" },
+        zIndex: theme.zIndex.snackbar + 1,
+        display: "flex", alignItems: "center", gap: 1.5,
+        px: 2, py: 1.25,
+        borderRadius: { xs: "16px 16px 0 0", sm: 3 },
+        maxWidth: "100%",
         backgroundColor: theme.palette.primary.main,
         color: theme.palette.primary.contrastText,
-        whiteSpace: "nowrap",
       }}>
-        <SystemUpdateAltIcon fontSize="small" />
-        <Typography variant="body2" fontWeight={600}>{versionText}</Typography>
+        <SystemUpdateAltIcon fontSize="small" sx={{ flexShrink: 0 }} />
+        <Typography variant="body2" fontWeight={600} sx={{ flex: 1, minWidth: 0 }} noWrap>
+          {versionText}
+        </Typography>
         <Button size="small" variant="contained" onClick={handleUpdate} sx={{
           backgroundColor: theme.palette.primary.contrastText,
           color: theme.palette.primary.main,
           "&:hover": { backgroundColor: theme.palette.primary.contrastText, opacity: 0.9 },
-          fontWeight: 700, ml: 1,
+          fontWeight: 700, flexShrink: 0,
         }}>
           {t("updateNow")}
         </Button>
+        <IconButton
+          size="small"
+          onClick={() => setDismissed(true)}
+          aria-label={t("installDismiss")}
+          sx={{ color: theme.palette.primary.contrastText, flexShrink: 0 }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
       </Paper>
     </Slide>
   );
@@ -171,6 +202,14 @@ function InstallBanner() {
   useEffect(() => {
     // Don't show if already installed or recently dismissed
     if (isStandalone() || isDismissed()) return;
+
+    // Yield the bottom slot to the update banner when an app update is pending
+    // — they share the same anchor and we never want both at once.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg?.waiting) setShowBanner(false);
+      }).catch(() => {});
+    }
 
     if (typeof Notification !== "undefined") {
       setPermission(Notification.permission);
