@@ -74,6 +74,12 @@ data class EventScreenState(
     val historyCursor: String? = null,
     val knownPlayers: List<KnownPlayer> = emptyList(),
     val postGame: PostGameStatus? = null,
+    // Local, editable copy of the PAST game's payment snapshot for the
+    // post-game banner. Initialized from postGame.paymentsSnapshot; toggled
+    // locally, then saved to the GameHistory entry. Null until status loads.
+    val postGamePayments: List<PaymentSnapshotEntry>? = null,
+    val postGamePaymentsDirty: Boolean = false,
+    val postGameSaving: Boolean = false,
     val error: String? = null,
     val locked: Boolean = false,
     val undoData: UndoData? = null,
@@ -154,8 +160,14 @@ class EventDetailViewModel @Inject constructor(
             val known = runCatching { api.fetchKnownPlayers(eventId) }.getOrNull()?.players ?: emptyList()
             val following = runCatching { api.getFollowState(eventId) }.getOrNull()
             val balance = runCatching { api.fetchBalance(eventId) }.getOrNull()
+            // Seed the editable past-game payment snapshot from the server, but
+            // don't clobber unsaved local edits.
+            val seededPayments = if (_state.value.postGamePaymentsDirty)
+                _state.value.postGamePayments
+            else postGame?.paymentsSnapshot
             _state.value = _state.value.copy(
                 loading = false, refreshing = false, postGame = postGame, knownPlayers = known,
+                postGamePayments = seededPayments,
                 isFollowing = following?.following ?: false,
                 mutePlayerActivity = following?.mutePlayerActivity,
                 muteReminders = following?.muteReminders,
@@ -383,6 +395,44 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
+    /** Cycle a past-game player's payment status (pending <-> paid) locally. */
+    fun togglePostGamePayment(playerName: String) {
+        val current = _state.value.postGamePayments ?: return
+        val updated = current.map {
+            if (it.playerName == playerName)
+                it.copy(status = if (it.status == "paid") "pending" else "paid")
+            else it
+        }
+        _state.value = _state.value.copy(postGamePayments = updated, postGamePaymentsDirty = true)
+    }
+
+    /**
+     * Persist the edited past-game payment snapshot to the GameHistory entry.
+     * Mirrors the web PostGameBanner save (PATCH .../history/{id} with
+     * paymentsSnapshot). Owner/admin only — surfaces a clear error otherwise.
+     */
+    fun savePostGamePayments(eventId: String) {
+        val historyId = _state.value.postGame?.latestHistoryId ?: return
+        val payments = _state.value.postGamePayments ?: return
+        _state.value = _state.value.copy(postGameSaving = true)
+        viewModelScope.launch {
+            runCatching { api.updateHistoryPayments(eventId, historyId, payments) }
+                .onSuccess {
+                    _state.value = _state.value.copy(postGamePaymentsDirty = false, postGameSaving = false)
+                    // Refresh status so allComplete / hide logic re-evaluates.
+                    val pg = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
+                    _state.value = _state.value.copy(
+                        postGame = pg,
+                        postGamePayments = pg?.paymentsSnapshot ?: payments,
+                    )
+                }
+                .onFailure { e ->
+                    val msg = parseApiErrorMessage(e) ?: "Failed to save payments"
+                    _state.value = _state.value.copy(postGameSaving = false, error = msg)
+                }
+        }
+    }
+
     fun verifyPassword(eventId: String, password: String) {
         viewModelScope.launch {
             repository.verifyPassword(eventId, password)
@@ -596,19 +646,45 @@ fun EventDetailScreen(
                         }
 
                         // Post-game banner — prominent, right after action bar
+                        // Post-game wrap-up banner — settles the LAST game
+                        // (score, payments, MVP), kept clearly separate from the
+                        // upcoming game's UI below. Hidden once everything is
+                        // settled (allComplete) so it disappears when fulfilled.
                         state.postGame?.let { pg ->
-                            if (pg.gameEnded || pg.hasPendingPastPayments) {
+                            val showBanner = !pg.allComplete &&
+                                (pg.gameEnded || pg.hasPendingPastPayments || (pg.mvpEnabled && !pg.mvpComplete))
+                            if (showBanner) {
+                                val scoreDone = pg.hasScore
+                                val paysDone = pg.allPaid || !pg.hasCost
+                                val doneCount = (if (scoreDone) 1 else 0) + (if (paysDone) 1 else 0)
                                 Card(
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                                 ) {
                                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        Text(stringResource(R.string.game_ended), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Icon(Icons.Default.Celebration, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            Text(stringResource(R.string.post_game_title), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+                                        }
+                                        Text(stringResource(R.string.post_game_subtitle), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
 
-                                        if (!pg.hasScore && pg.latestHistoryId != null) {
+                                        // ── Task 1: Score ──────────────────────────
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Icon(
+                                                if (scoreDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                null, modifier = Modifier.size(20.dp),
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
+                                            Text(
+                                                if (scoreDone) stringResource(R.string.post_game_score_done) else stringResource(R.string.record_final_score),
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                        if (!scoreDone && pg.latestHistoryId != null) {
                                             if (editingScoreId == pg.latestHistoryId) {
-                                                // Inline score entry
-                                                Text(stringResource(R.string.record_final_score), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     OutlinedTextField(
                                                         value = scoreOne, onValueChange = { scoreOne = it.filter { c -> c.isDigit() } },
@@ -640,13 +716,57 @@ fun EventDetailScreen(
                                             }
                                         }
 
-                                        if (pg.hasCost && !pg.allPaid) {
-                                            Button(
-                                                onClick = onPayments,
-                                                modifier = Modifier.fillMaxWidth(),
-                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                                            ) { Text(stringResource(R.string.mark_payments), color = MaterialTheme.colorScheme.background, style = MaterialTheme.typography.titleSmall) }
+                                        // ── Task 2: Payments (for the LAST game) ────
+                                        val snapshot = state.postGamePayments
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Icon(
+                                                if (paysDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                null, modifier = Modifier.size(20.dp),
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
+                                            val payLabel = when {
+                                                !pg.hasCost -> stringResource(R.string.post_game_no_cost)
+                                                paysDone -> stringResource(R.string.post_game_payments_done)
+                                                snapshot != null -> stringResource(
+                                                    R.string.post_game_payments_summary,
+                                                    snapshot.count { it.status == "paid" }, snapshot.size,
+                                                )
+                                                else -> stringResource(R.string.post_game_payments_label)
+                                            }
+                                            Text(payLabel, color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                         }
+                                        // Inline per-player payment chips, editing the
+                                        // history snapshot (owner/admin only — server enforces).
+                                        if (pg.hasCost && !paysDone && snapshot != null && snapshot.isNotEmpty()) {
+                                            Text(stringResource(R.string.post_game_payments_hint), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
+                                            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                snapshot.forEach { p ->
+                                                    val isPaid = p.status == "paid"
+                                                    FilterChip(
+                                                        selected = isPaid,
+                                                        onClick = { viewModel.togglePostGamePayment(p.playerName) },
+                                                        label = { Text("${p.playerName} ${"%.2f".format(p.amount)}") },
+                                                        leadingIcon = if (isPaid) { { Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(16.dp)) } } else null,
+                                                    )
+                                                }
+                                            }
+                                            if (state.postGamePaymentsDirty) {
+                                                Button(
+                                                    onClick = { viewModel.savePostGamePayments(eventId) },
+                                                    enabled = !state.postGameSaving,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                                ) { Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
+                                            }
+                                        }
+
+                                        // Progress summary
+                                        Text(
+                                            stringResource(R.string.post_game_progress, doneCount, 2),
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                                        )
                                     }
                                 }
                             }

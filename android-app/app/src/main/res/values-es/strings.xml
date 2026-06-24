@@ -126,6 +126,18 @@
     <string name="record_final_score">Registrar el resultado final</string>
     <string name="record_score">Registrar resultado</string>
     <string name="mark_payments">Marcar pagos</string>
+    <!-- Post-game wrap-up banner -->
+    <string name="post_game_title">Último partido — ciérralo</string>
+    <string name="post_game_subtitle">Completa estas tareas para cerrar el último partido y preparar el siguiente.</string>
+    <string name="post_game_score_done">Resultado registrado</string>
+    <string name="post_game_payments_done">Todos los pagos saldados</string>
+    <string name="post_game_payments_summary">%1$d/%2$d pagados</string>
+    <string name="post_game_no_cost">No se ha fijado coste para este partido</string>
+    <string name="post_game_progress">%1$d de %2$d hechas</string>
+    <string name="post_game_payments_label">Pagos del último partido</string>
+    <string name="post_game_payments_hint">Toca un jugador para alternar pagado y luego guarda.</string>
+    <string name="post_game_payments_locked">Los pagos están bloqueados. Desbloquea el partido en el Historial para editarlos.</string>
+    <string name="upcoming_game_payments_label">Pagos del próximo partido</string>
     <string name="paid_for_last_game">%1$d de %2$d pagaron el último partido</string>
     <string name="paid_streak">racha de %1$d partidos pagados</string>
     <string name="on_bench">Estás en el banquillo</string>
