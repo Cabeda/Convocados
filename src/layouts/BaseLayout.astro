@@ -82,17 +82,20 @@ const {
     </style>
 
     <!--
-      ClientRouter is intentionally disabled. With Astro 6 and React 19
-      islands using `client:only="react"`, the ClientRouter's hidden-iframe
-      mechanism (used to render the next page's client:only islands before
-      swapping the body) does not work — the new page's React component
-      never mounts after the swap, leaving the page blank. The white-blink
-      fix (inline shell paint above) and the per-page `view-transition-name`
-      still apply, but until Astro upstream fixes the iframe approach, every
-      navigation is a full document load. See ADR 0015 and 0016 for the
-      design history.
+      View transition: custom router in `public/nav.js` (registered below
+      with `is:inline`). It uses the browser's `Document.startViewTransition`
+      API to animate the body swap. Replaces Astro's `<ClientRouter />` which
+      has two issues with this stack:
+        1. With `client:only="react"`, the iframe-based "render next page
+           in a hidden iframe" step leaves the new page's React component
+           unmounted after the body swap.
+        2. With `client:load`, the SSR transform of MUI 6 + Vite 7 + Node 22
+           throws on MUI's directory-style ESM imports.
+      The custom router sidesteps both: it fetches the new page as HTML,
+      swaps the body, and re-mounts the `astro-island` custom element.
+      See ADR 0015 and 0016 for the full design.
     -->
-    <!-- <ClientRouter fallback="swap" /> -->
+    <script is:inline src="/nav.js" />
   </head>
   <body>
     <main
