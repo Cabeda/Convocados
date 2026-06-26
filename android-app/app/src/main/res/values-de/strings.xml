@@ -126,6 +126,18 @@
     <string name="record_final_score">Endergebnis eintragen</string>
     <string name="record_score">Ergebnis eintragen</string>
     <string name="mark_payments">Zahlungen markieren</string>
+    <!-- Post-game wrap-up banner -->
+    <string name="post_game_title">Letztes Spiel — abschließen</string>
+    <string name="post_game_subtitle">Erledige diese Punkte, um das letzte Spiel abzuschließen und dich auf das nächste vorzubereiten.</string>
+    <string name="post_game_score_done">Ergebnis erfasst</string>
+    <string name="post_game_payments_done">Alle Zahlungen beglichen</string>
+    <string name="post_game_payments_summary">%1$d/%2$d bezahlt</string>
+    <string name="post_game_no_cost">Keine Kosten für dieses Spiel festgelegt</string>
+    <string name="post_game_progress">%1$d von %2$d erledigt</string>
+    <string name="post_game_payments_label">Zahlungen für das letzte Spiel</string>
+    <string name="post_game_payments_hint">Tippe auf einen Spieler, um „bezahlt“ umzuschalten, dann speichern.</string>
+    <string name="post_game_payments_locked">Zahlungen sind gesperrt. Entsperre das Spiel im Verlauf, um sie zu bearbeiten.</string>
+    <string name="upcoming_game_payments_label">Zahlungen für das kommende Spiel</string>
     <string name="paid_for_last_game">%1$d von %2$d haben für das letzte Spiel bezahlt</string>
     <string name="paid_streak">%1$d Spiele bezahlt in Folge</string>
     <string name="on_bench">Du bist auf der Bank</string>

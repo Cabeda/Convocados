@@ -110,6 +110,22 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updateScore(eventId: String, historyId: String, scoreOne: Int, scoreTwo: Int): GameHistory =
         client.patch("/api/events/$eventId/history/$historyId", ScoreRequest(scoreOne, scoreTwo))
 
+    /**
+     * Save the PAST game's payment snapshot (owner/admin only, within the
+     * 7-day editable window). Mirrors the web PostGameBanner save: the banner
+     * settles the LAST game, whose payments live on the GameHistory entry —
+     * not the live next-game EventCost.
+     */
+    suspend fun updateHistoryPayments(
+        eventId: String,
+        historyId: String,
+        paymentsSnapshot: List<PaymentSnapshotEntry>,
+    ): GameHistory =
+        client.patch(
+            "/api/events/$eventId/history/$historyId",
+            HistoryPaymentsRequest(paymentsSnapshot),
+        )
+
     // ── Public events ─────────────────────────────────────────────────────
     suspend fun fetchPublicEvents(cursor: String? = null): PaginatedPublicEvents {
         val qs = if (cursor != null) "?cursor=$cursor" else ""
@@ -270,6 +286,7 @@ data class CreateEventRequest(
 @Serializable data class PasswordRequest(val password: String?)
 @Serializable data class PasswordVerifyRequest(val password: String)
 @Serializable data class ScoreRequest(val scoreOne: Int, val scoreTwo: Int)
+@Serializable data class HistoryPaymentsRequest(val paymentsSnapshot: List<PaymentSnapshotEntry>)
 @Serializable data class PaymentUpdateRequest(val playerName: String, val status: String)
 @Serializable data class UpdateTeamsRequest(val teamOnePlayerIds: List<String>, val teamTwoPlayerIds: List<String>)
 @Serializable data class TransferRequest(val targetUserId: String)

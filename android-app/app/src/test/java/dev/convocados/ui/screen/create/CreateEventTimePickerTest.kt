@@ -63,26 +63,23 @@ class CreateEventTimePickerTest {
 
     @Test
     fun quickOffsets_compose_to_any_quarter_hour() {
-        // 18:00 + 2*15m = 18:30. 18:30 + 1*15m = 18:45. 18:45 + 1*15m = 19:00.
+        // 18:00 + 4*15m = 19:00.
         val base = Instant.parse("2026-06-17T18:00:00Z")
         val plus15 = TIME_QUICK_OFFSETS.first { it.second == "+15m" }.first
-        val result = base.plusSeconds(plus15 * 3)
+        val result = base.plusSeconds(plus15 * 4)
         val wall = ZonedDateTime.ofInstant(result, ZoneId.of("UTC"))
         assertEquals(19, wall.hour)
-        assertEquals(45, wall.minute)
+        assertEquals(0, wall.minute)
     }
 
     @Test
     fun quickOffsets_have_paired_polarities() {
-        val byLabel = TIME_QUICK_OFFSETS.toMap()
+        val byOffset = TIME_QUICK_OFFSETS.toMap()
         // +X must always have a matching -X with the same magnitude.
         for ((secs, label) in TIME_QUICK_OFFSETS) {
-            val negated = secs.let { if (it > 0) "-$label".replace("+", "-") else label.replace("-", "+") }
-            val counterpart = byLabel[negated] ?: -secs
-            assertEquals(
-                "Offset $label has no symmetric counterpart",
-                -secs,
-                counterpart,
+            assertTrue(
+                "Offset $label ($secs) has no symmetric counterpart",
+                byOffset.containsKey(-secs),
             )
         }
     }

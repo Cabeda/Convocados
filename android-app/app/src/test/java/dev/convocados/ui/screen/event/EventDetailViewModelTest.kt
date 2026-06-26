@@ -230,4 +230,126 @@ class EventDetailViewModelTest {
         }
         coVerify(exactly = 2) { api.fetchPostGameStatus(eventId) }
     }
+
+    @Test
+    fun `load seeds editable past-game payment snapshot from status`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+
+        val postGame = PostGameStatus(
+            gameEnded = false, // post-reset: next game upcoming
+            hasScore = true,
+            hasCost = true,
+            allPaid = false,
+            hasPendingPastPayments = true,
+            latestHistoryId = "hist-1",
+            paymentsSnapshot = listOf(
+                PaymentSnapshotEntry("coutinho", 5.0, "pending"),
+                PaymentSnapshotEntry("José Cabeda", 5.0, "paid"),
+            ),
+        )
+        coEvery { api.fetchPostGameStatus(eventId) } returns postGame
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            val state = expectMostRecentItem()
+            // The banner edits the PAST game snapshot, not the live next-game payments.
+            assertEquals(2, state.postGamePayments?.size)
+            assertEquals("pending", state.postGamePayments?.first { it.playerName == "coutinho" }?.status)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `togglePostGamePayment flips status locally and marks dirty`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.fetchPostGameStatus(eventId) } returns PostGameStatus(
+            gameEnded = true, hasScore = true, hasCost = true, allPaid = false,
+            latestHistoryId = "hist-1",
+            paymentsSnapshot = listOf(PaymentSnapshotEntry("coutinho", 5.0, "pending")),
+        )
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+
+            viewModel.togglePostGamePayment("coutinho")
+            advanceUntilIdle()
+            val state = expectMostRecentItem()
+            assertEquals("paid", state.postGamePayments?.first()?.status)
+            assertTrue(state.postGamePaymentsDirty)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `savePostGamePayments PATCHes history snapshot and clears dirty`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        val pending = PostGameStatus(
+            gameEnded = true, hasScore = true, hasCost = true, allPaid = false,
+            latestHistoryId = "hist-1",
+            paymentsSnapshot = listOf(PaymentSnapshotEntry("coutinho", 5.0, "pending")),
+        )
+        val settled = pending.copy(
+            allPaid = true, allComplete = true,
+            paymentsSnapshot = listOf(PaymentSnapshotEntry("coutinho", 5.0, "paid")),
+        )
+        coEvery { api.fetchPostGameStatus(eventId) } returnsMany listOf(pending, settled)
+        coEvery { api.updateHistoryPayments(eventId, "hist-1", any()) } returns
+            GameHistory(id = "hist-1", dateTime = "2026-06-22T18:00:00Z")
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            viewModel.togglePostGamePayment("coutinho")
+            viewModel.savePostGamePayments(eventId)
+            advanceUntilIdle()
+
+            val state = expectMostRecentItem()
+            assertEquals(false, state.postGamePaymentsDirty)
+            assertEquals(true, state.postGame?.allComplete)
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify { api.updateHistoryPayments(eventId, "hist-1", match { it.first().status == "paid" }) }
+    }
+
+    @Test
+    fun `savePostGamePayments surfaces error on 403 and keeps dirty`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.fetchPostGameStatus(eventId) } returns PostGameStatus(
+            gameEnded = true, hasScore = true, hasCost = true, allPaid = false,
+            latestHistoryId = "hist-1",
+            paymentsSnapshot = listOf(PaymentSnapshotEntry("coutinho", 5.0, "pending")),
+        )
+        coEvery { api.updateHistoryPayments(eventId, "hist-1", any()) } throws
+            ApiException(403, "{\"error\":\"Only the event owner can do this.\"}")
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            viewModel.togglePostGamePayment("coutinho")
+            viewModel.savePostGamePayments(eventId)
+            advanceUntilIdle()
+
+            val state = expectMostRecentItem()
+            assertTrue(state.postGamePaymentsDirty)
+            assertNotNull(state.error)
+            assertEquals(false, state.postGameSaving)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
 }
