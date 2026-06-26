@@ -132,6 +132,18 @@
     <string name="record_final_score">Record the final score</string>
     <string name="record_score">Record score</string>
     <string name="mark_payments">Mark payments</string>
+    <!-- Post-game wrap-up banner -->
+    <string name="post_game_title">Last game — wrap it up</string>
+    <string name="post_game_subtitle">Settle these to close out the last game and get ready for the next one.</string>
+    <string name="post_game_score_done">Score recorded</string>
+    <string name="post_game_payments_done">All payments settled</string>
+    <string name="post_game_payments_summary">%1$d/%2$d paid</string>
+    <string name="post_game_no_cost">No cost set for this game</string>
+    <string name="post_game_progress">%1$d of %2$d done</string>
+    <string name="post_game_payments_label">Payments for the last game</string>
+    <string name="post_game_payments_hint">Tap a player to toggle paid, then save.</string>
+    <string name="post_game_payments_locked">Payments are locked. Unlock the game from History to edit.</string>
+    <string name="upcoming_game_payments_label">Payments for the upcoming game</string>
     <string name="paid_for_last_game">%1$d of %2$d paid for the last game</string>
     <string name="paid_streak">%1$d game paid streak</string>
     <string name="on_bench">You\'re on the bench</string>
