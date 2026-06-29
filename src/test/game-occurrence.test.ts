@@ -274,3 +274,50 @@ describe("Recurrence advancement creates new Game (old stays intact)", () => {
     expect(oldParticipants[0].eventPlayerId).toBe(ep.id);
   });
 });
+
+// ─── Slice 6: CAS prevents double-advancement ───────────────────────────────
+
+describe("CAS prevents double-advancement", () => {
+  it("concurrent GETs only create one new Game", async () => {
+    const pastDate = new Date(Date.now() - 2 * 86400_000);
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly",
+        location: "Pitch",
+        dateTime: pastDate,
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }),
+        nextResetAt: new Date(pastDate.getTime() + 60 * 60 * 1000),
+        durationMinutes: 60,
+        teamOneName: "A", teamTwoName: "B",
+      },
+    });
+    const game1 = await prisma.game.create({
+      data: { eventId: event.id, dateTime: pastDate },
+    });
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { currentGameId: game1.id },
+    });
+    // Also need a Player for the old reset path
+    await prisma.player.create({
+      data: { eventId: event.id, name: "X", order: 0 },
+    });
+
+    // Fire two concurrent GETs
+    const [res1, res2] = await Promise.all([
+      getEvent(ctx({ id: event.id })),
+      getEvent(ctx({ id: event.id })),
+    ]);
+    const body1 = await res1.json();
+    const body2 = await res2.json();
+
+    // Exactly one should have triggered the reset
+    const resets = [body1.wasReset, body2.wasReset].filter(Boolean);
+    expect(resets).toHaveLength(1);
+
+    // Only 2 Games total: the original + one new
+    const games = await prisma.game.findMany({ where: { eventId: event.id } });
+    expect(games).toHaveLength(2);
+  });
+});
