@@ -122,3 +122,46 @@ describe("Adding a player creates EventPlayer + GameParticipant", () => {
     expect(count).toBe(1);
   });
 });
+
+// ─── Slice 3: Authenticated user joining links EventPlayer by userId ─────────
+
+describe("Authenticated user joining gets EventPlayer linked by userId", () => {
+  const future = new Date(Date.now() + 86400_000).toISOString();
+
+  async function createTestEvent() {
+    const res = await createEvent(ctx({}, {
+      title: "Test Event", location: "Pitch", dateTime: future,
+    }));
+    const { id } = await res.json();
+    return id as string;
+  }
+
+  it("sets userId on EventPlayer when linkToAccount is true", async () => {
+    const user = await prisma.user.create({
+      data: { id: "user-1", name: "José Cabeda", email: "jose@test.com", emailVerified: true },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name, email: user.email } });
+
+    const eventId = await createTestEvent();
+    await addPlayer(ctx({ id: eventId }, { name: "José Cabeda", linkToAccount: true }));
+
+    const eventPlayer = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId, name: "José Cabeda" } },
+    });
+    expect(eventPlayer).not.toBeNull();
+    expect(eventPlayer!.userId).toBe("user-1");
+  });
+
+  it("does not set userId on EventPlayer when adding anonymously", async () => {
+    const eventId = await createTestEvent();
+    mockGetSession.mockResolvedValue(null);
+
+    await addPlayer(ctx({ id: eventId }, { name: "Anonymous Player" }));
+
+    const eventPlayer = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId, name: "Anonymous Player" } },
+    });
+    expect(eventPlayer).not.toBeNull();
+    expect(eventPlayer!.userId).toBeNull();
+  });
+});
