@@ -346,7 +346,7 @@ describe("Event GET returns gameId and current Game data", () => {
 // ─── Slice 8: RSVP is per-Game (old RSVP doesn't affect new Game) ───────────
 
 describe("RSVP does not carry over after recurrence advancement", () => {
-  it("user RSVP is cleared after game advancement", async () => {
+  it("old RSVP persists but new Game has no participants (user can re-join)", async () => {
     const user = await prisma.user.create({
       data: { id: "rsvp-user", name: "José", email: "jose@rsvp.test", emailVerified: true },
     });
@@ -377,9 +377,14 @@ describe("RSVP does not carry over after recurrence advancement", () => {
     await prisma.rsvp.create({
       data: { eventId: event.id, userId: user.id, status: "yes", respondedAt: new Date() },
     });
-    // Need a Player for the old reset path
     await prisma.player.create({
       data: { eventId: event.id, name: "José", order: 0, userId: user.id },
+    });
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "José", userId: user.id },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: game1.id, eventPlayerId: ep.id, order: 0 },
     });
 
     // Trigger advancement via GET
@@ -387,11 +392,15 @@ describe("RSVP does not carry over after recurrence advancement", () => {
     const body = await res.json();
     expect(body.wasReset).toBe(true);
 
-    // After advancement, user's RSVP should be gone (cleared by reset)
-    const rsvp = await prisma.rsvp.findUnique({
-      where: { userId_eventId: { userId: user.id, eventId: event.id } },
+    // New Game should have NO participants (empty roster)
+    const updatedEvent = await prisma.event.findUnique({ where: { id: event.id } });
+    const newGameParticipants = await prisma.gameParticipant.findMany({
+      where: { gameId: updatedEvent!.currentGameId! },
     });
-    expect(rsvp).toBeNull();
+    expect(newGameParticipants).toHaveLength(0);
+
+    // Response players list is empty (new game, no one joined yet)
+    expect(body.players).toHaveLength(0);
   });
 });
 
@@ -563,5 +572,76 @@ describe("known-players reads from EventPlayer table", () => {
     const idx1 = names.indexOf("PastPlayer1");
     const idx2 = names.indexOf("PastPlayer2");
     expect(idx1).toBeLessThan(idx2);
+  });
+});
+
+
+// ─── Phase 2 Slice 3: Recurrence advancement stops deleting legacy data ──────
+
+describe("Recurrence advancement preserves legacy data (no destructive reset)", () => {
+  it("Players, RSVPs, and TeamResults are NOT deleted after advancement", async () => {
+    const pastDate = new Date(Date.now() - 2 * 86400_000);
+    const user = await prisma.user.create({
+      data: { id: "keep-user", name: "Keep Me", email: "keep@test.com", emailVerified: true },
+    });
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly",
+        location: "Pitch",
+        dateTime: pastDate,
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }),
+        nextResetAt: new Date(pastDate.getTime() + 60 * 60 * 1000),
+        durationMinutes: 60,
+        teamOneName: "A", teamTwoName: "B",
+      },
+    });
+    const game1 = await prisma.game.create({
+      data: { eventId: event.id, dateTime: pastDate },
+    });
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { currentGameId: game1.id },
+    });
+
+    // Seed legacy data that the OLD reset would have destroyed
+    await prisma.player.create({
+      data: { eventId: event.id, name: "Keep Me", order: 0, userId: user.id },
+    });
+    await prisma.teamResult.create({
+      data: {
+        eventId: event.id, name: "TeamA",
+        members: { create: [{ name: "Keep Me", order: 0 }] },
+      },
+    });
+    await prisma.rsvp.create({
+      data: { eventId: event.id, userId: user.id, status: "yes", respondedAt: new Date() },
+    });
+
+    // Also seed new-model data
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Keep Me", userId: user.id },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: game1.id, eventPlayerId: ep.id, order: 0 },
+    });
+
+    // Trigger advancement
+    const res = await getEvent(ctx({ id: event.id }));
+    const body = await res.json();
+    expect(body.wasReset).toBe(true);
+
+    // Legacy Player should still exist (NOT deleted)
+    const players = await prisma.player.findMany({ where: { eventId: event.id } });
+    expect(players).toHaveLength(1);
+    expect(players[0].name).toBe("Keep Me");
+
+    // TeamResult should still exist
+    const teams = await prisma.teamResult.findMany({ where: { eventId: event.id } });
+    expect(teams).toHaveLength(1);
+
+    // RSVP should still exist (scoped to old game conceptually)
+    const rsvps = await prisma.rsvp.findMany({ where: { eventId: event.id } });
+    expect(rsvps).toHaveLength(1);
   });
 });

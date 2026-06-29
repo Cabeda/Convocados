@@ -105,6 +105,8 @@ export const GET: APIRoute = async ({ params, request }) => {
           data: { currentGameId: newGame.id },
         });
 
+        // ADR 0016: keep GameHistory for backward compat (read-only fallback),
+        // but NO destructive deletes. Players/Teams/RSVPs stay intact on the old Game.
         await prisma.$transaction([
           prisma.gameHistory.create({
             data: {
@@ -117,14 +119,9 @@ export const GET: APIRoute = async ({ params, request }) => {
               editableUntil,
             },
           }),
-          prisma.player.deleteMany({ where: { eventId: event.id } }),
-          prisma.teamResult.deleteMany({ where: { eventId: event.id } }),
-          // Reset RSVPs so users can re-join the new occurrence
-          prisma.rsvp.deleteMany({ where: { eventId: event.id } }),
-          // Clear payments for the new occurrence (keep EventCost settings)
+          // Clear per-occurrence payments (PlayerPayment is still current-game-scoped until GamePayment migration)
           ...(eventCost ? [
             prisma.playerPayment.deleteMany({ where: { eventCostId: eventCost.id } }),
-            // Clear temporary payment method override for the new week
             prisma.eventCost.update({ where: { id: eventCost.id }, data: { tempPaymentMethods: null, tempPaymentDetails: null } }),
           ] : []),
           prisma.event.update({
