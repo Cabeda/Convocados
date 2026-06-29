@@ -517,3 +517,51 @@ describe("Event GET players from GameParticipant+EventPlayer", () => {
     expect(body.players[0].name).toBe("NewModelOnly");
   });
 });
+
+
+// ─── Phase 2 Slice 2: known-players from EventPlayer table ───────────────────
+
+import { GET as getKnownPlayers } from "~/pages/api/events/[id]/known-players";
+
+describe("known-players reads from EventPlayer table", () => {
+  it("returns EventPlayers not in current game as suggestions", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Test", location: "P", dateTime: new Date(Date.now() + 86400_000), teamOneName: "A", teamTwoName: "B" },
+    });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+
+    // Create EventPlayers: one in the current game, two not
+    const epActive = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "ActivePlayer", gamesPlayed: 5 },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: epActive.id, order: 0 },
+    });
+    // Also need legacy Player for the current filter
+    await prisma.player.create({ data: { eventId: event.id, name: "ActivePlayer", order: 0 } });
+
+    await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "PastPlayer1", gamesPlayed: 10 },
+    });
+    await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "PastPlayer2", gamesPlayed: 3 },
+    });
+
+    const res = await getKnownPlayers(ctx({ id: event.id }));
+    const body = await res.json();
+
+    // Should return the two NOT in the current game, sorted by gamesPlayed desc
+    const names = body.players.map((p: any) => p.name);
+    expect(names).toContain("PastPlayer1");
+    expect(names).toContain("PastPlayer2");
+    expect(names).not.toContain("ActivePlayer");
+
+    // PastPlayer1 (10 games) should come before PastPlayer2 (3 games)
+    const idx1 = names.indexOf("PastPlayer1");
+    const idx2 = names.indexOf("PastPlayer2");
+    expect(idx1).toBeLessThan(idx2);
+  });
+});
