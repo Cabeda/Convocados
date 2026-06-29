@@ -171,6 +171,26 @@ export const GET: APIRoute = async ({ params, request }) => {
     } catch { /* ignore — request may not have valid headers in tests */ }
   }
 
+  // ADR 0016: read players from GameParticipant+EventPlayer when currentGameId is set
+  let playersPayload: any[];
+  if (event.currentGameId) {
+    const participants = await prisma.gameParticipant.findMany({
+      where: { gameId: event.currentGameId, archivedAt: null },
+      include: { eventPlayer: true },
+      orderBy: { order: "asc" },
+    });
+    playersPayload = participants.map((gp) => ({
+      id: gp.eventPlayer.id,
+      name: gp.eventPlayer.name,
+      order: gp.order,
+      eventId: gp.eventPlayer.eventId,
+      userId: gp.eventPlayer.userId ?? null,
+      createdAt: gp.createdAt.toISOString(),
+    }));
+  } else {
+    playersPayload = event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() }));
+  }
+
   return Response.json({
     wasReset,
     ...event,
@@ -185,6 +205,6 @@ export const GET: APIRoute = async ({ params, request }) => {
     updatedAt: event.updatedAt.toISOString(),
     nextResetAt: event.nextResetAt?.toISOString() ?? null,
     archivedAt: event.archivedAt?.toISOString() ?? null,
-    players: event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() })),
+    players: playersPayload,
   });
 };

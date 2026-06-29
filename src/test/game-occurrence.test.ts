@@ -428,3 +428,92 @@ describe("isFriendly excludes Game from ELO processing", () => {
     expect(await shouldProcessGameElo(upcoming.id)).toBe(false);
   });
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 2: Read from new model
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Phase 2 Slice 1: Event GET players sourced from GameParticipant ─────────
+
+describe("Event GET players from GameParticipant+EventPlayer", () => {
+  const future = new Date(Date.now() + 86400_000).toISOString();
+
+  it("returns players from GameParticipant joined with EventPlayer", async () => {
+    const res = await createEvent(ctx({}, {
+      title: "Test", location: "Pitch", dateTime: future,
+    }));
+    const { id: eventId } = await res.json();
+
+    // Add two players via the API (creates both old Player + new EventPlayer/GameParticipant)
+    await addPlayer(ctx({ id: eventId }, { name: "Alice" }));
+    await addPlayer(ctx({ id: eventId }, { name: "Bob" }));
+
+    const getRes = await getEvent(ctx({ id: eventId }));
+    const body = await getRes.json();
+
+    // Response should have 2 players with correct names and order
+    expect(body.players).toHaveLength(2);
+    expect(body.players[0].name).toBe("Alice");
+    expect(body.players[1].name).toBe("Bob");
+    expect(body.players[0].order).toBe(0);
+    expect(body.players[1].order).toBe(1);
+    // Each player should have userId field (nullable)
+    expect(body.players[0]).toHaveProperty("userId");
+  });
+
+  it("excludes archived GameParticipants from the player list", async () => {
+    const res = await createEvent(ctx({}, {
+      title: "Test", location: "Pitch", dateTime: future,
+    }));
+    const { id: eventId } = await res.json();
+
+    await addPlayer(ctx({ id: eventId }, { name: "Active" }));
+    await addPlayer(ctx({ id: eventId }, { name: "Archived" }));
+
+    // Archive the second participant directly in the new model
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    const ep = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId, name: "Archived" } },
+    });
+    await prisma.gameParticipant.update({
+      where: { gameId_eventPlayerId: { gameId: event!.currentGameId!, eventPlayerId: ep!.id } },
+      data: { archivedAt: new Date() },
+    });
+    // Also archive legacy Player for consistency
+    await prisma.player.updateMany({
+      where: { eventId, name: "Archived" },
+      data: { archivedAt: new Date() },
+    });
+
+    const getRes = await getEvent(ctx({ id: eventId }));
+    const body = await getRes.json();
+
+    expect(body.players).toHaveLength(1);
+    expect(body.players[0].name).toBe("Active");
+  });
+
+  it("reads from GameParticipant even when no legacy Player exists", async () => {
+    // Create event with Game directly (no legacy Player row)
+    const event = await prisma.event.create({
+      data: { title: "Test", location: "P", dateTime: new Date(Date.now() + 86400_000), teamOneName: "A", teamTwoName: "B" },
+    });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "NewModelOnly", userId: null },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, order: 0 },
+    });
+
+    const getRes = await getEvent(ctx({ id: event.id }));
+    const body = await getRes.json();
+
+    expect(body.players).toHaveLength(1);
+    expect(body.players[0].name).toBe("NewModelOnly");
+  });
+});
