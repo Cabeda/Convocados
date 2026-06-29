@@ -342,3 +342,55 @@ describe("Event GET returns gameId and current Game data", () => {
     expect(body.gameId).toBe(event!.currentGameId);
   });
 });
+
+// ─── Slice 8: RSVP is per-Game (old RSVP doesn't affect new Game) ───────────
+
+describe("RSVP does not carry over after recurrence advancement", () => {
+  it("user RSVP is cleared after game advancement", async () => {
+    const user = await prisma.user.create({
+      data: { id: "rsvp-user", name: "José", email: "jose@rsvp.test", emailVerified: true },
+    });
+
+    // Create a recurring event in the past (ready to reset)
+    const pastDate = new Date(Date.now() - 2 * 86400_000);
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly",
+        location: "Pitch",
+        dateTime: pastDate,
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }),
+        nextResetAt: new Date(pastDate.getTime() + 60 * 60 * 1000),
+        durationMinutes: 60,
+        teamOneName: "A", teamTwoName: "B",
+      },
+    });
+    const game1 = await prisma.game.create({
+      data: { eventId: event.id, dateTime: pastDate },
+    });
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { currentGameId: game1.id },
+    });
+
+    // User has RSVP "yes" for the old game
+    await prisma.rsvp.create({
+      data: { eventId: event.id, userId: user.id, status: "yes", respondedAt: new Date() },
+    });
+    // Need a Player for the old reset path
+    await prisma.player.create({
+      data: { eventId: event.id, name: "José", order: 0, userId: user.id },
+    });
+
+    // Trigger advancement via GET
+    const res = await getEvent(ctx({ id: event.id }));
+    const body = await res.json();
+    expect(body.wasReset).toBe(true);
+
+    // After advancement, user's RSVP should be gone (cleared by reset)
+    const rsvp = await prisma.rsvp.findUnique({
+      where: { userId_eventId: { userId: user.id, eventId: event.id } },
+    });
+    expect(rsvp).toBeNull();
+  });
+});
