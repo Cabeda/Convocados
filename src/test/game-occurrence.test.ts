@@ -165,3 +165,46 @@ describe("Authenticated user joining gets EventPlayer linked by userId", () => {
     expect(eventPlayer!.userId).toBeNull();
   });
 });
+
+// ─── Slice 4: Same EventPlayer can participate in multiple Games ─────────────
+
+describe("Same EventPlayer can participate in multiple Games", () => {
+  const future = new Date(Date.now() + 86400_000).toISOString();
+
+  it("same EventPlayer has GameParticipant in two different Games", async () => {
+    // Create event + first game (via createEvent)
+    const res = await createEvent(ctx({}, {
+      title: "Weekly", location: "Pitch", dateTime: future,
+    }));
+    const { id: eventId } = await res.json();
+
+    // Add player to first game
+    await addPlayer(ctx({ id: eventId }, { name: "Miguel" }));
+
+    const eventPlayer = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId, name: "Miguel" } },
+    });
+
+    // Create a second Game for the same Event
+    const game2 = await prisma.game.create({
+      data: { eventId, dateTime: new Date(Date.now() + 7 * 86400_000) },
+    });
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { currentGameId: game2.id },
+    });
+
+    // Add same player to second game
+    // Need to use the old Player model too (since addPlayer creates Player rows)
+    // First delete the old Player to avoid unique constraint (eventId, name)
+    await prisma.player.deleteMany({ where: { eventId } });
+    await addPlayer(ctx({ id: eventId }, { name: "Miguel" }));
+
+    // Same EventPlayer, two GameParticipants
+    const participations = await prisma.gameParticipant.findMany({
+      where: { eventPlayerId: eventPlayer!.id },
+    });
+    expect(participations).toHaveLength(2);
+    expect(new Set(participations.map(p => p.gameId)).size).toBe(2);
+  });
+});
