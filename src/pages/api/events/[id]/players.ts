@@ -501,6 +501,20 @@ export const POST: APIRoute = async ({ params, request }) => {
     update: {},
   });
 
+  // ADR 0016: upsert EventPlayer + create GameParticipant in current Game
+  if (event.currentGameId) {
+    const eventPlayer = await prisma.eventPlayer.upsert({
+      where: { eventId_name: { eventId, name: trimmed } },
+      create: { eventId, name: trimmed, userId: linkedUserId },
+      update: {},
+    });
+    await prisma.gameParticipant.upsert({
+      where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
+      create: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: event.players.length },
+      update: {},
+    });
+  }
+
   // spotsLeft after adding
   const activeBefore = Math.min(event.players.length, event.maxPlayers);
   const isOnBench = event.players.length >= event.maxPlayers;

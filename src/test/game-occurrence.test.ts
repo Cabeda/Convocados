@@ -79,3 +79,46 @@ describe("Event creation creates a Game", () => {
     expect(game!.isFriendly).toBe(false);
   });
 });
+
+// ─── Slice 2: Adding a player creates EventPlayer + GameParticipant ──────────
+
+describe("Adding a player creates EventPlayer + GameParticipant", () => {
+  const future = new Date(Date.now() + 86400_000).toISOString();
+
+  async function createTestEvent() {
+    const res = await createEvent(ctx({}, {
+      title: "Test Event", location: "Pitch", dateTime: future,
+    }));
+    const { id } = await res.json();
+    return id as string;
+  }
+
+  it("creates an EventPlayer and GameParticipant when adding a player", async () => {
+    const eventId = await createTestEvent();
+
+    await addPlayer(ctx({ id: eventId }, { name: "José Cabeda" }));
+
+    const eventPlayer = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId, name: "José Cabeda" } },
+    });
+    expect(eventPlayer).not.toBeNull();
+    expect(eventPlayer!.eventId).toBe(eventId);
+
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    const participant = await prisma.gameParticipant.findUnique({
+      where: { gameId_eventPlayerId: { gameId: event!.currentGameId!, eventPlayerId: eventPlayer!.id } },
+    });
+    expect(participant).not.toBeNull();
+    expect(participant!.order).toBe(0);
+  });
+
+  it("reuses existing EventPlayer for a second add to a different game", async () => {
+    const eventId = await createTestEvent();
+
+    await addPlayer(ctx({ id: eventId }, { name: "Miguel" }));
+
+    // Count EventPlayers — should be exactly 1
+    const count = await prisma.eventPlayer.count({ where: { eventId } });
+    expect(count).toBe(1);
+  });
+});
