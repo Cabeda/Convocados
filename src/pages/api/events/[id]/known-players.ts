@@ -1,8 +1,9 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
+import { getSession } from "../../../../lib/auth.helpers.server";
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
 
   const event = await prisma.event.findUnique({
@@ -54,6 +55,16 @@ export const GET: APIRoute = async ({ params }) => {
   });
   for (const f of followers) {
     const name = f.user.name.trim();
+    if (name && !nameCounts.has(name)) {
+      nameCounts.set(name, 0);
+    }
+  }
+
+  // Include the logged-in user's own name so they always appear in suggestions
+  // ponytail: ensures self-join autocomplete works even if user has no history/follow
+  const session = await getSession(request).catch(() => null);
+  if (session?.user?.name) {
+    const name = session.user.name.trim();
     if (name && !nameCounts.has(name)) {
       nameCounts.set(name, 0);
     }
