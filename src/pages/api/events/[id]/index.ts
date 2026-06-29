@@ -89,6 +89,22 @@ export const GET: APIRoute = async ({ params, request }) => {
             })))
           : null;
 
+        // ADR 0016: mark old Game as played + create new Game + swap pointer
+        const oldGameId = event.currentGameId;
+        const newGame = await prisma.game.create({
+          data: { eventId: event.id, dateTime: newDateTime, status: "upcoming" },
+        });
+        if (oldGameId) {
+          await prisma.game.update({
+            where: { id: oldGameId },
+            data: { status: "played" },
+          });
+        }
+        await prisma.event.update({
+          where: { id: event.id },
+          data: { currentGameId: newGame.id },
+        });
+
         await prisma.$transaction([
           prisma.gameHistory.create({
             data: {
@@ -103,6 +119,8 @@ export const GET: APIRoute = async ({ params, request }) => {
           }),
           prisma.player.deleteMany({ where: { eventId: event.id } }),
           prisma.teamResult.deleteMany({ where: { eventId: event.id } }),
+          // Reset RSVPs so users can re-join the new occurrence
+          prisma.rsvp.deleteMany({ where: { eventId: event.id } }),
           // Clear payments for the new occurrence (keep EventCost settings)
           ...(eventCost ? [
             prisma.playerPayment.deleteMany({ where: { eventCostId: eventCost.id } }),
@@ -111,7 +129,7 @@ export const GET: APIRoute = async ({ params, request }) => {
           ] : []),
           prisma.event.update({
             where: { id: event.id },
-            data: { dateTime: newDateTime },
+            data: { dateTime: newDateTime, rsvpCutoffSent: false },
           }),
         ]);
 
