@@ -394,3 +394,37 @@ describe("RSVP does not carry over after recurrence advancement", () => {
     expect(rsvp).toBeNull();
   });
 });
+
+// ─── Slice 9: isFriendly excludes Game from ELO processing ──────────────────
+
+describe("isFriendly excludes Game from ELO processing", () => {
+  it("friendly Games are skipped by shouldProcessGameElo", async () => {
+    const { shouldProcessGameElo } = await import("~/lib/game.server");
+
+    const event = await prisma.event.create({
+      data: { title: "Test", location: "P", dateTime: new Date(Date.now() + 86400_000), teamOneName: "A", teamTwoName: "B" },
+    });
+    const friendly = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(), isFriendly: true, status: "played" },
+    });
+    const competitive = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(), isFriendly: false, status: "played" },
+    });
+
+    expect(await shouldProcessGameElo(friendly.id)).toBe(false);
+    expect(await shouldProcessGameElo(competitive.id)).toBe(true);
+  });
+
+  it("upcoming Games are not eligible for ELO processing", async () => {
+    const { shouldProcessGameElo } = await import("~/lib/game.server");
+
+    const event = await prisma.event.create({
+      data: { title: "Test", location: "P", dateTime: new Date(Date.now() + 86400_000), teamOneName: "A", teamTwoName: "B" },
+    });
+    const upcoming = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(), status: "upcoming" },
+    });
+
+    expect(await shouldProcessGameElo(upcoming.id)).toBe(false);
+  });
+});
