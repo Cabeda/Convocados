@@ -133,6 +133,11 @@ model Event {
   walletTransactions    WalletTransaction[]
   extrasDeclarations    ExtrasDeclaration[]
 
+  // Occurrence-based recurrence (ADR 0016)
+  currentGameId   String?
+  games           Game[]
+  eventPlayers    EventPlayer[]
+
   // Priority enrollment settings
   priorityEnabled       Boolean @default(false)
   priorityThreshold     Int     @default(3)   // min games attended in window
@@ -249,6 +254,84 @@ model PlayerRating {
 
   @@unique([eventId, name])
   @@index([userId])
+}
+
+// ── ADR 0016: Occurrence-based recurrence ─────────────────────────────────────
+
+model Game {
+  id              String    @id @default(cuid())
+  eventId         String
+  event           Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  dateTime        DateTime
+  status          String    @default("upcoming") // "upcoming" | "in_progress" | "played" | "cancelled"
+  isFriendly      Boolean   @default(false)
+  scoreOne        Int?
+  scoreTwo        Int?
+  teamOneName     String?
+  teamTwoName     String?
+  eloProcessed    Boolean   @default(false)
+  rsvpCutoffSent  Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  participants    GameParticipant[]
+  payments        GamePayment[]
+
+  @@index([eventId, dateTime])
+  @@index([eventId, status])
+}
+
+model EventPlayer {
+  id            String   @id @default(cuid())
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name          String
+  userId        String?
+  rating        Float    @default(1000)
+  gamesPlayed   Int      @default(0)
+  wins          Int      @default(0)
+  draws         Int      @default(0)
+  losses        Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  participations GameParticipant[]
+  payments       GamePayment[]
+
+  @@unique([eventId, name])
+  @@index([userId])
+}
+
+model GameParticipant {
+  id            String      @id @default(cuid())
+  gameId        String
+  game          Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  eventPlayerId String
+  eventPlayer   EventPlayer @relation(fields: [eventPlayerId], references: [id], onDelete: Cascade)
+  order         Int         @default(0)
+  archivedAt    DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@unique([gameId, eventPlayerId])
+  @@index([eventPlayerId])
+}
+
+model GamePayment {
+  id            String      @id @default(cuid())
+  gameId        String
+  game          Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  eventPlayerId String
+  eventPlayer   EventPlayer @relation(fields: [eventPlayerId], references: [id], onDelete: Cascade)
+  playerName    String
+  amount        Float
+  status        String      @default("pending") // "pending" | "sent" | "paid"
+  method        String?
+  paidAt        DateTime?
+  markedBy      String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([gameId, eventPlayerId])
 }
 
 model TeamResult {
