@@ -174,6 +174,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   return Response.json({
     wasReset,
     ...event,
+    gameId: event.currentGameId ?? null,
     accessPassword: undefined, // never expose the hash
     hasPassword: !!event.accessPassword,
     ownerId: event.ownerId ?? null,

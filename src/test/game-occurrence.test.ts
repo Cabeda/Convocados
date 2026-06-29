@@ -321,3 +321,24 @@ describe("CAS prevents double-advancement", () => {
     expect(games).toHaveLength(2);
   });
 });
+
+// ─── Slice 7: Event GET returns gameId and players from current Game ─────────
+
+describe("Event GET returns gameId and current Game data", () => {
+  const future = new Date(Date.now() + 86400_000).toISOString();
+
+  it("response includes gameId field", async () => {
+    const res = await createEvent(ctx({}, {
+      title: "Test", location: "Pitch", dateTime: future,
+    }));
+    const { id } = await res.json();
+
+    const getRes = await getEvent(ctx({ id }));
+    const body = await getRes.json();
+
+    expect(body.gameId).toBeTruthy();
+    // gameId should match the event's currentGameId
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(body.gameId).toBe(event!.currentGameId);
+  });
+});
