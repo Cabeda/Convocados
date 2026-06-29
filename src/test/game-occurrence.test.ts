@@ -208,3 +208,69 @@ describe("Same EventPlayer can participate in multiple Games", () => {
     expect(new Set(participations.map(p => p.gameId)).size).toBe(2);
   });
 });
+
+// ─── Slice 5: Recurrence advancement creates new Game ────────────────────────
+
+describe("Recurrence advancement creates new Game (old stays intact)", () => {
+  it("advances to new Game, marks old as played, old players remain", async () => {
+    // Create a recurring event with nextResetAt in the past
+    const pastDate = new Date(Date.now() - 2 * 86400_000);
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly Footy",
+        location: "Pitch",
+        dateTime: pastDate,
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }),
+        nextResetAt: new Date(pastDate.getTime() + 60 * 60 * 1000), // in the past
+        durationMinutes: 60,
+        teamOneName: "A", teamTwoName: "B",
+      },
+    });
+
+    // Create the initial Game + set currentGameId
+    const game1 = await prisma.game.create({
+      data: { eventId: event.id, dateTime: pastDate },
+    });
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { currentGameId: game1.id },
+    });
+
+    // Add a player to the first game (via EventPlayer + GameParticipant)
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "José" },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: game1.id, eventPlayerId: ep.id, order: 0 },
+    });
+    // Also add old-model Player (needed for current GET logic)
+    await prisma.player.create({
+      data: { eventId: event.id, name: "José", order: 0 },
+    });
+
+    // Trigger the GET which performs lazy advancement
+    const res = await getEvent(ctx({ id: event.id }));
+    const body = await res.json();
+    expect(body.wasReset).toBe(true);
+
+    // Old Game should be marked as "played"
+    const oldGame = await prisma.game.findUnique({ where: { id: game1.id } });
+    expect(oldGame!.status).toBe("played");
+
+    // New Game should exist and be "upcoming"
+    const updatedEvent = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(updatedEvent!.currentGameId).not.toBe(game1.id);
+    const newGame = await prisma.game.findUnique({ where: { id: updatedEvent!.currentGameId! } });
+    expect(newGame).not.toBeNull();
+    expect(newGame!.status).toBe("upcoming");
+    expect(newGame!.dateTime.getTime()).toBeGreaterThan(pastDate.getTime());
+
+    // Old GameParticipant still intact (no deletion)
+    const oldParticipants = await prisma.gameParticipant.findMany({
+      where: { gameId: game1.id },
+    });
+    expect(oldParticipants).toHaveLength(1);
+    expect(oldParticipants[0].eventPlayerId).toBe(ep.id);
+  });
+});
