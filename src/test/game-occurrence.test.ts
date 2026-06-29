@@ -645,3 +645,58 @@ describe("Recurrence advancement preserves legacy data (no destructive reset)", 
     expect(rsvps).toHaveLength(1);
   });
 });
+
+
+// ─── Phase 2 Slice 4: History endpoint reads from Game rows ──────────────────
+
+import { GET as getHistory } from "~/pages/api/events/[id]/history/index";
+
+describe("History endpoint includes Game rows with status=played", () => {
+  it("returns played Games in history alongside legacy GameHistory entries", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Test", location: "P", dateTime: new Date(Date.now() + 86400_000), teamOneName: "A", teamTwoName: "B" },
+    });
+
+    // Legacy GameHistory entry
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date("2025-01-10T18:00:00Z"),
+        status: "played",
+        teamOneName: "A", teamTwoName: "B",
+        teamsSnapshot: JSON.stringify([
+          { team: "A", players: [{ name: "Alice", order: 0 }] },
+          { team: "B", players: [{ name: "Bob", order: 0 }] },
+        ]),
+        editableUntil: new Date(Date.now() + 86400_000),
+      },
+    });
+
+    // New-model Game with status "played"
+    const playedGame = await prisma.game.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date("2025-01-17T18:00:00Z"),
+        status: "played",
+        scoreOne: 3,
+        scoreTwo: 1,
+        teamOneName: "Ninjas",
+        teamTwoName: "Gunas",
+      },
+    });
+    // Add participants to the played game
+    const ep1 = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice" } });
+    const ep2 = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob" } });
+    await prisma.gameParticipant.create({ data: { gameId: playedGame.id, eventPlayerId: ep1.id, order: 0 } });
+    await prisma.gameParticipant.create({ data: { gameId: playedGame.id, eventPlayerId: ep2.id, order: 1 } });
+
+    const res = await getHistory(ctx({ id: event.id }));
+    const body = await res.json();
+
+    // Should have 2 entries total (1 legacy + 1 Game)
+    expect(body.data.length).toBeGreaterThanOrEqual(2);
+    // Most recent first (Jan 17 before Jan 10)
+    const dates = body.data.map((e: any) => e.dateTime);
+    expect(new Date(dates[0]).getTime()).toBeGreaterThan(new Date(dates[1]).getTime());
+  });
+});
