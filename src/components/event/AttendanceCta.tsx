@@ -62,7 +62,7 @@ export function AttendanceCta({
             color={myRsvpStatus === "yes" ? "success" : "inherit"}
             startIcon={<HowToRegIcon />}
             onClick={onGoing}
-            disabled={busy || myRsvpStatus === "yes"}
+            disabled={busy || (myRsvpStatus === "yes" && isOnList)}
             data-testid="attendance-cta-going"
           >
             {goingLabel}
