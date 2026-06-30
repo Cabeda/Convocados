@@ -140,6 +140,11 @@ export const GET: APIRoute = async ({ params, request }) => {
         // Auto-enroll priority players for the new occurrence (non-blocking)
         autoPriorityEnroll(event.id).catch(() => {});
 
+        // ADR 0018: Auto-confirm regulars for the new occurrence (non-blocking)
+        import("../../../../lib/autoConfirm.server")
+          .then(({ applyAutoConfirm }) => applyAutoConfirm(event.id))
+          .catch(() => {});
+
         // Schedule reminder jobs for the new occurrence (non-blocking)
         cancelEventJobs(event.id)
           .then(() => scheduleEventReminders(event.id, newDateTime, event.durationMinutes))

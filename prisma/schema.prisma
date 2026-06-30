@@ -149,6 +149,9 @@ model Event {
   // #457 RSVP — 48h-before ping idempotency
   rsvpCutoffSent Boolean @default(false)
 
+  // ADR 0017: Dedup flag for few_spots_left notification (reset when player leaves)
+  fewSpotsLeftNotified Boolean @default(false)
+
   // Access control
   accessPassword        String?               // bcrypt-hashed password (null = no password)
 
@@ -172,6 +175,13 @@ model Event {
 
   // Notification defaults (admin-set, JSON: {mutePlayerActivity?, muteReminders?, mutePostGame?, muteEventDetails?})
   notificationDefaults String? // null = all enabled
+
+  // Recruitment threshold — how many spots remaining triggers recruitment/few-spots-left notifications (ADR 0017)
+  recruitmentThreshold Int @default(3)
+
+  // ADR 0018: Auto-confirm attendance for recurring events
+  autoConfirmEnabled   Boolean @default(false)
+  autoConfirmThreshold Int     @default(3) // consecutive games attended to earn auto-confirm
 
   // Court Watch (JSON: {radius: number, indoor: boolean|null, surface: string|null}; null = disabled)
   courtWatchConfig String?
@@ -311,6 +321,7 @@ model GameParticipant {
   eventPlayer   EventPlayer @relation(fields: [eventPlayerId], references: [id], onDelete: Cascade)
   order         Int         @default(0)
   archivedAt    DateTime?
+  noShow        Boolean     @default(false) // ADR 0018: marked by organizer post-game
   createdAt     DateTime    @default(now())
 
   @@unique([gameId, eventPlayerId])
@@ -583,6 +594,10 @@ model NotificationPreferences {
   reminder2h           Boolean  @default(true)
   reminder1h           Boolean  @default(false)
 
+  // ADR 0018: Organizer daily digest mode
+  digestMode           Boolean  @default(false)
+  digestTime           String   @default("09:00") // HH:MM in user's timezone
+
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -714,6 +729,21 @@ model PaymentReminderLog {
 
   @@unique([eventId, userId, sentAt])
   @@index([eventId, userId])
+}
+
+// ADR 0018: Payment nudge escalation stage tracker (per player-event)
+model PaymentNudgeStage {
+  id            String   @id @default(cuid())
+  eventId       String
+  userId        String
+  stage         Int      @default(0) // 0=not started, 1=soft nudge, 2=follow-up, 3=social proof
+  lastSentAt    DateTime?
+  organiserAlert Boolean @default(false) // true after stage 3 fires + organizer is notified
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([eventId, userId])
+  @@index([eventId])
 }
 
 // ── Notification job queue ────────────────────────────────────────────────────

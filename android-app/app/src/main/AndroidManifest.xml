@@ -58,6 +58,10 @@
             </intent-filter>
         </service>
 
+        <receiver
+            android:name=".data.push.NotificationActionReceiver"
+            android:exported="false" />
+
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="player_activity" />

@@ -208,9 +208,9 @@ async function _processPostGameJob(job: { id: string; eventId: string | null }) 
 
   await enqueueNotification(event.id, "post_game", {
     title: event.title,
-    key: "postGameNotification",
+    key: event.isRecurring ? "postGameNotificationRecurring" : "postGameNotification",
     params: { title: event.title },
-    url: `/events/${event.id}`,
+    url: `/events/${event.id}?action=add-score`,
     spotsLeft,
   });
   await drainNotificationQueue();

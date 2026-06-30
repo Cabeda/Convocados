@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Button, Tooltip, Popover, Stack, Typography, Switch,
-  FormControlLabel, Divider,
+  FormControlLabel, Divider, ButtonGroup,
 } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
@@ -93,6 +93,21 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
     } catch { /* revert on error handled by next fetch */ }
   };
 
+  // ADR 0017: Preset shortcuts
+  const applyPreset = async (preset: "all" | "event_only") => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/follow`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preset }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setState(prev => ({ ...prev, ...data }));
+      }
+    } catch { /* ignore */ }
+  };
+
   const handleClick = (e: React.MouseEvent<HTMLElement>) => {
     if (state.following) {
       setAnchorEl(e.currentTarget);
@@ -157,6 +172,14 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
           />
         </Stack>
         <Divider sx={{ my: 1.5 }} />
+        <ButtonGroup size="small" fullWidth sx={{ mb: 1 }}>
+          <Button onClick={() => applyPreset("all")} variant={state.mutePlayerActivity === false ? "contained" : "outlined"}>
+            {t("notifyPresetAll")}
+          </Button>
+          <Button onClick={() => applyPreset("event_only")} variant={state.mutePlayerActivity === null && state.muteReminders === null ? "contained" : "outlined"}>
+            {t("notifyPresetEventOnly")}
+          </Button>
+        </ButtonGroup>
         <Button size="small" color="error" onClick={handleUnfollow} disabled={loading} fullWidth>
           {t("notifyUnsubscribe")}
         </Button>

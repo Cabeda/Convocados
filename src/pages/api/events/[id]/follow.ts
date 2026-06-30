@@ -65,6 +65,23 @@ export const PUT: APIRoute = async ({ params, request }) => {
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
 
+  // ADR 0017: "Get all updates" shortcut — set all mute flags to false in one call
+  if (body.preset === "all") {
+    const follow = await prisma.eventFollow.update({
+      where: { eventId_userId: { eventId, userId } },
+      data: { mutePlayerActivity: false, muteReminders: false, mutePostGame: false, muteEventDetails: false },
+    });
+    return Response.json({ ok: true, following: true, ...pickOverrides(follow) });
+  }
+  // "event_only" preset — reset all to null (use role-based defaults)
+  if (body.preset === "event_only") {
+    const follow = await prisma.eventFollow.update({
+      where: { eventId_userId: { eventId, userId } },
+      data: { mutePlayerActivity: null, muteReminders: null, mutePostGame: null, muteEventDetails: null },
+    });
+    return Response.json({ ok: true, following: true, ...pickOverrides(follow) });
+  }
+
   const data: Record<string, boolean | null> = {};
   for (const field of OVERRIDE_FIELDS) {
     if (field in body) {
