@@ -529,7 +529,9 @@ export const POST: APIRoute = async ({ params, request }) => {
   await validateTeams(eventId, event.maxPlayers);
 
   if (isOnBench) {
-    await enqueueNotification(eventId, "player_joined_bench", { title: event.title, key: "notifyPlayerJoinedBench", params: { name: trimmed }, url, spotsLeft }, senderClientId);
+    // ADR 0018: Include bench position in notification body
+    const benchPosition = event.players.length - event.maxPlayers + 1;
+    await enqueueNotification(eventId, "player_joined_bench", { title: event.title, key: "notifyPlayerJoinedBench", params: { name: trimmed, position: String(benchPosition) }, url, spotsLeft }, senderClientId);
   } else {
     await enqueueNotification(eventId, "player_joined", { title: event.title, key: "notifyPlayerJoined", params: { name: trimmed }, url, spotsLeft }, senderClientId);
   }
@@ -556,6 +558,16 @@ export const POST: APIRoute = async ({ params, request }) => {
             location: event.location,
             eventUrl: url,
           });
+        }
+        // ADR 0017: Send game_invite push when player is added by Owner/Admin (Tier 1, via queue)
+        if (prefs.pushEnabled && prefs.gameInvitePush && linkedUserId !== session?.user?.id) {
+          await enqueueNotification(eventId, "game_invite", {
+            title: event.title,
+            key: "notifyGameInvite",
+            params: { title: event.title },
+            url,
+            spotsLeft,
+          }, linkedUserId);
         }
       } catch (_err) {
         // Non-blocking
@@ -589,6 +601,18 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (spotsLeft === 0) {
     fireWebhooks(eventId, "game_full", webhookData).catch(() => {});
     await enqueueNotification(eventId, "game_full", { title: event.title, key: "notifyGameFullAlert", params: { name: trimmed }, url, spotsLeft: 0 }, senderClientId);
+  } else if (spotsLeft > 0 && spotsLeft <= (event.recruitmentThreshold ?? 3) && !isOnBench) {
+    // ADR 0017: "Few spots left" — Tier 1, deduped per fill-cycle (reset when player leaves)
+    if (!event.fewSpotsLeftNotified) {
+      await enqueueNotification(eventId, "few_spots_left", {
+        title: event.title,
+        key: "notifyFewSpotsLeft",
+        params: { title: event.title, n: String(spotsLeft) },
+        url: `${url}?action=join`,
+        spotsLeft,
+      }, senderClientId);
+      await prisma.event.update({ where: { id: eventId }, data: { fewSpotsLeftNotified: true } });
+    }
   }
 
   await syncPaymentsForEvent(eventId);

@@ -193,6 +193,16 @@
     <string name="event_updates">Event updates</string>
     <string name="event_updates_desc">When event details change</string>
     <string name="payment_reminders">Payment reminders</string>
+    <string name="post_game_results_desc">Scores and wrap-up after the game ends</string>
+    <string name="notification_tiers_title">How notifications work</string>
+    <string name="notification_tiers_desc">You get event updates (cancellations, invites, open spots) for all games you follow. Game details (player activity, reminders, scores) are only sent when you\'re playing — or you can enable \"All updates\" per event.</string>
+
+    <!-- Notification quick actions -->
+    <string name="action_im_in">I\'m in</string>
+    <string name="action_cant_make_it">Can\'t make it</string>
+    <string name="action_join">Join</string>
+    <string name="action_add_score">Add score</string>
+    <string name="action_confirm_payment">Confirm</string>
     <string name="email_notifications">Email notifications</string>
     <string name="enable_email">Enable email</string>
     <string name="enable_email_desc">Master toggle for all emails</string>

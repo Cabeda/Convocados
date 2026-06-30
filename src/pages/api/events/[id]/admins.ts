@@ -87,6 +87,21 @@ export const POST: APIRoute = async ({ params, request }) => {
     include: { user: { select: { id: true, name: true, email: true } } },
   });
 
+  // ADR 0017: Auto-follow with full notifications when granting admin rights
+  // Only sets overrides on create — preserves existing preferences on re-grant
+  await prisma.eventFollow.upsert({
+    where: { eventId_userId: { eventId, userId: user.id } },
+    create: {
+      eventId,
+      userId: user.id,
+      mutePlayerActivity: false,
+      muteReminders: false,
+      mutePostGame: false,
+      muteEventDetails: false,
+    },
+    update: {},
+  });
+
   // Send notifications (fire-and-forget, respects user prefs)
   const appUrl = getAppUrl();
   const eventUrl = `${appUrl}/events/${eventId}`;

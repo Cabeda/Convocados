@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../lib/eventLog.server";
+import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -21,6 +22,18 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const archive = Boolean(body.archive);
 
   const archivedAt = archive ? new Date() : null;
+
+  // ADR 0017: Send game_cancelled notification BEFORE deleting follows (Tier 1 — all followers)
+  if (archive) {
+    await enqueueNotification(event.id, "game_cancelled", {
+      title: event.title,
+      key: "notifyGameCancelled",
+      params: { title: event.title },
+      url: `/events/${event.id}`,
+      spotsLeft: 0,
+    });
+    await drainNotificationQueue();
+  }
 
   await prisma.event.update({
     where: { id: params.id },

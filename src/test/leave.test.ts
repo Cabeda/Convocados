@@ -280,7 +280,7 @@ describe("archiveAndLeave — push notification gating", () => {
     );
   });
 
-  it("does NOT fire player_left when outside 48h (even with empty bench)", async () => {
+  it("fires spot_available when outside 48h (ADR 0017 removed the 48h gate)", async () => {
     const user = await seedUser("Alice", "u-alice");
     const event = await seedEvent(null, 7 * 86400_000); // 7 days — outside 48h
     const alice = await prisma.player.create({
@@ -296,7 +296,12 @@ describe("archiveAndLeave — push notification gating", () => {
       playerId: alice.id,
     });
 
-    expect(enqueueNotification).not.toHaveBeenCalled();
+    expect(enqueueNotification).toHaveBeenCalledWith(
+      event.id,
+      "spot_available",
+      expect.objectContaining({ key: "notifySpotAvailable" }),
+      "u-alice",
+    );
   });
 
   it("does NOT fire player_left for bench player removal (even within 48h + empty bench)", async () => {

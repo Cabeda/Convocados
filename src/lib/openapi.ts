@@ -208,6 +208,24 @@ export const openApiSpec = {
         responses: { "200": { description: "Unfollowed" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/rsvp": {
+      post: {
+        summary: "Submit RSVP (yes/no/maybe) for an event",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { status: { type: "string", enum: ["yes", "no", "maybe"] } } } } } },
+        responses: { "200": { description: "RSVP submitted" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/no-show": {
+      post: {
+        summary: "Mark a player as no-show for a game (owner/admin)",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, eventPlayerId: { type: "string" }, noShow: { type: "boolean" } } } } } },
+        responses: { "200": { description: "No-show updated" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/access": {
       put: {
         summary: "Set or remove event password",
