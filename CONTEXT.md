@@ -1,10 +1,32 @@
 # Convocados — Domain Glossary
 
-## Game / Event
-A sports match or recurring session. The core entity. Used interchangeably.
+## Event
+A recurring series or one-off template. Holds configuration (title, location, sport, maxPlayers, recurrence rule, payment settings, priority settings). The container for one or more Games. URL: `/events/:id`.
+_Avoid_: game (when referring to the series)
+
+## Game
+A single occurrence of an Event — one date, one player list, one score. The unit of participation: Players join a Game, RSVPs answer a Game, payments settle a Game. A non-recurring Event has exactly one Game. A recurring Event spawns a new Game on each recurrence cycle.
+
+A Game has a lifecycle: `upcoming → in_progress → played | cancelled`. Transitions are lazy (triggered on first GET after the time condition is met).
+_Avoid_: event (when referring to a single occurrence), instance, occurrence (code uses `Game` exclusively)
+
+## Friendly Game
+A Game marked with `isFriendly: true` by the Owner/Admin. Friendly Games are excluded from ELO calculations. All other mechanics (attendance, payments, MVP voting, stats counting) remain unchanged. Settable at any time — before, during, or after the Game. Toggling retroactively triggers ELO reprocessing for the Event.
+
+Use cases: casual sessions with guests, holiday matches, unbalanced rosters, first-timer introductions.
+_Avoid_: exhibition, practice, scrimmage
 
 ## Player
-A person registered to participate in a specific Game. Has a `name`, optionally linked to a `User` via `userId`. One user can be a Player in many games. "Joined" now refers strictly to participation (has a linked Player record) — distinct from "followed" which controls dashboard visibility.
+A participation record in a specific **Game** (via `GameParticipant`). The per-game row that tracks order/position. Linked to an **EventPlayer** (the persistent series identity). "Joined" means having a GameParticipant record in the current Game.
+
+## EventPlayer
+The persistent identity of a participant within an **Event** series. One per person per Event. Holds the name, optional `userId` link, cached ELO rating, and win/loss/attendance counters. Either anonymous (name-keyed, no userId) or authenticated (userId-linked).
+
+Anonymous EventPlayers can be **claimed** by an authenticated User, inheriting all history. Claim is blocked if any Game overlap exists between the two identities.
+
+EventPlayer.name is mutable (owner/admin can rename for typo fixes or disambiguation). Name changes do not propagate to historical denormalized fields (GamePayment.playerName, MvpVote names capture the name at time of write).
+
+_Avoid_: PlayerRating (absorbed into EventPlayer), series player
 
 ## Owner
 The User who created the Game or to whom ownership was transferred. Has full management control. A Game has exactly zero or one Owner.
@@ -99,9 +121,9 @@ A Playtomic court slot that matches an existing Game's dateTime (±30 min), spor
 An opt-in background process that checks Playtomic hourly for Court Alternatives matching a Game's criteria. Enabled per-game by an Admin via a JSON config (`courtWatchConfig`) on the Event. Requires the Event to have latitude/longitude. Alerts are deduplicated — the same slot is never re-notified. Watching stops only when the Admin disables it.
 
 ## Outstanding Balance ("tab")
-The total amount a Player still owes within a single Game, computed (not stored) by summing unpaid amounts across that Game's played history (`GameHistory.paymentsSnapshot`) plus the current unpaid `PlayerPayment` rows. Scoped **per-Game, keyed by `playerName`** — it does not span events, and a name in one Game is unrelated to the same name in another. "Tab" is the informal synonym.
+The total amount an **EventPlayer** still owes within an Event series, computed by summing unpaid `GamePayment` rows across all Games for that EventPlayer. Scoped **per-Event, per-EventPlayer** — it does not span Events.
 
-A balance is only attributable to a person (and therefore eligible to drive a personal payment nudge) when the Player is linked to a `User` who is acting on their own behalf (Quick Join / Claim). For owner-added guests with no account, the balance is informational only — surfaced to the Owner/Admin, never as a personal nudge.
+A balance is only attributable to a person (and therefore eligible to drive a personal payment nudge) when the EventPlayer is linked to a `User` (authenticated). For anonymous EventPlayers, the balance is informational only — surfaced to the Owner/Admin, never as a personal nudge.
 
 ## Payment status lifecycle
 A `PlayerPayment` (and each entry in a `GameHistory.paymentsSnapshot`) moves through:
@@ -179,23 +201,31 @@ An entry in the per-**Game** access-bypass list. Grants the linked **User** acce
 _Avoid_: guest pass, share code
 
 ## Attendance
-A User's response to an upcoming **Game** — yes / no / pending — captured before kickoff so the organizer can plan teams, refs, and benches. Distinct from **attendance rate** (a historical statistic computed from `GameHistory`).
+A participant's response to an upcoming **Game** — yes / no / pending — captured before kickoff so the organizer can plan teams and benches. Scoped to a specific Game (not the Event series).
 
-The user-facing term is **Attendance**; the data model is the `Rsvp` table. Each row is keyed on exactly one subject:
-- **`userId`** — the signed-in User's own response (self-RSVP via `POST /api/events/[id]/rsvp`).
-- **`playerId`** — an admin/owner setting attendance on behalf of a **Player** with no linked account (a guest), via `POST /api/events/[id]/players/[playerId]/rsvp`. The admin's `userId` is recorded in `respondedByUserId` for audit.
+The user-facing term is **Attendance**; the data model is the `Rsvp` table keyed on `gameId`. Each row is keyed on exactly one subject:
+- **`userId`** — the signed-in User's own response.
+- **`eventPlayerId`** — an admin/owner setting attendance on behalf of an anonymous EventPlayer.
 
-Application invariant (not enforced by the schema because SQLite unique constraints treat NULL as distinct): exactly one of `{userId, playerId}` is set per row. `upsertGuestRsvp` rejects linked players (where `Player.userId` is set) — those users self-RSVP.
+### RSVP recipients
+Only **GameParticipants** with a linked authenticated User receive the attendance prompt. Followers who aren't playing do not.
 
-The recipient set for a Game is the union of: **EventFollow** (followers), `Player.userId` (linked players), and the **Owner**. The summary counts `yes`/`no`/`pending` across both the user recipient set and active guest players (`Player.userId IS NULL AND archivedAt IS NULL`).
+### Timing
+- **T-48h**: RSVP request sent to authenticated GameParticipants
+- **T-24h**: summary sent to Owner + Admins if any responses are missing
+- **Joining a Game = implicit "yes"**: no RSVP ping to someone who just added themselves
 
-Distinguished from the historical-stats API at `/api/events/[id]/attendance` (which computes per-player attendance rate from `GameHistory`); that endpoint shares the user-facing word but is a different concept.
+### What does NOT trigger notifications
+- RSVP answers from players do NOT broadcast to followers or other players (that is spam)
+- Player join/leave does NOT notify followers (only Owner + Admins)
+
+Distinguished from the historical-stats API at `/api/events/[id]/attendance` (which computes per-player attendance rate from Game records).
 _Avoid_: RSVP (table name only), response
 
 ### Leave / Re-join round-trip
-A **Player** can leave a Game via the X button (admin) or the "Not coming" CTA (self). The leave is a **soft-archive**: `Player.archivedAt` is set, the row is hidden from the active list, and an `Rsvp` audit row with `status="no"` is written. The `Rsvp` recipient set filters out archived players.
+An **EventPlayer** can leave a Game via the X button (admin) or the "Not coming" CTA (self). The leave is a **soft-archive**: `GameParticipant.archivedAt` is set, the row is hidden from the active list, and an `Rsvp` with `status="no"` is recorded for that Game.
 
-Re-adding the same name (self or by an organizer) is a **silent un-archive** handled in the `POST /api/events/[id]/players` P2002 branch. The player is placed at the **end of the list** (queue/join semantics — joining is enqueuing, regardless of past membership), `archivedAt` is cleared, and the `Rsvp` is reset to `status="yes"`. The response carries `reactivated: true` so the client can show an "Undo" snackbar.
+Re-adding the same person (self or by an organizer) is a **silent un-archive**: the GameParticipant is placed at the **end of the list** (queue/join semantics), `archivedAt` is cleared, and the RSVP is reset to `status="yes"`.
 
 ## App Deep Link
 A `convocados://` URL handled by the Android app's manifest intent-filter. Paths under the scheme (e.g. `convocados://events/<id>`, `convocados://auth?code=...`) launch the app and arrive as `Intent.data` on `MainActivity`. The intent can be inspected at cold start (`onCreate`) or on resume (`onNewIntent`). Two distinct consumers:

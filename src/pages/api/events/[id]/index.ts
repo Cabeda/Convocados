@@ -89,6 +89,24 @@ export const GET: APIRoute = async ({ params, request }) => {
             })))
           : null;
 
+        // ADR 0016: mark old Game as played + create new Game + swap pointer
+        const oldGameId = event.currentGameId;
+        const newGame = await prisma.game.create({
+          data: { eventId: event.id, dateTime: newDateTime, status: "upcoming" },
+        });
+        if (oldGameId) {
+          await prisma.game.update({
+            where: { id: oldGameId },
+            data: { status: "played" },
+          });
+        }
+        await prisma.event.update({
+          where: { id: event.id },
+          data: { currentGameId: newGame.id },
+        });
+
+        // ADR 0016: keep GameHistory for backward compat (read-only fallback),
+        // but NO destructive deletes. Players/Teams/RSVPs stay intact on the old Game.
         await prisma.$transaction([
           prisma.gameHistory.create({
             data: {
@@ -101,17 +119,14 @@ export const GET: APIRoute = async ({ params, request }) => {
               editableUntil,
             },
           }),
-          prisma.player.deleteMany({ where: { eventId: event.id } }),
-          prisma.teamResult.deleteMany({ where: { eventId: event.id } }),
-          // Clear payments for the new occurrence (keep EventCost settings)
+          // Clear per-occurrence payments (PlayerPayment is still current-game-scoped until GamePayment migration)
           ...(eventCost ? [
             prisma.playerPayment.deleteMany({ where: { eventCostId: eventCost.id } }),
-            // Clear temporary payment method override for the new week
             prisma.eventCost.update({ where: { id: eventCost.id }, data: { tempPaymentMethods: null, tempPaymentDetails: null } }),
           ] : []),
           prisma.event.update({
             where: { id: event.id },
-            data: { dateTime: newDateTime },
+            data: { dateTime: newDateTime, rsvpCutoffSent: false },
           }),
         ]);
 
@@ -153,9 +168,30 @@ export const GET: APIRoute = async ({ params, request }) => {
     } catch { /* ignore — request may not have valid headers in tests */ }
   }
 
+  // ADR 0016: read players from GameParticipant+EventPlayer when currentGameId is set
+  let playersPayload: any[];
+  if (event.currentGameId) {
+    const participants = await prisma.gameParticipant.findMany({
+      where: { gameId: event.currentGameId, archivedAt: null },
+      include: { eventPlayer: true },
+      orderBy: { order: "asc" },
+    });
+    playersPayload = participants.map((gp) => ({
+      id: gp.eventPlayer.id,
+      name: gp.eventPlayer.name,
+      order: gp.order,
+      eventId: gp.eventPlayer.eventId,
+      userId: gp.eventPlayer.userId ?? null,
+      createdAt: gp.createdAt.toISOString(),
+    }));
+  } else {
+    playersPayload = event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() }));
+  }
+
   return Response.json({
     wasReset,
     ...event,
+    gameId: event.currentGameId ?? null,
     accessPassword: undefined, // never expose the hash
     hasPassword: !!event.accessPassword,
     ownerId: event.ownerId ?? null,
@@ -166,6 +202,6 @@ export const GET: APIRoute = async ({ params, request }) => {
     updatedAt: event.updatedAt.toISOString(),
     nextResetAt: event.nextResetAt?.toISOString() ?? null,
     archivedAt: event.archivedAt?.toISOString() ?? null,
-    players: event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() })),
+    players: playersPayload,
   });
 };

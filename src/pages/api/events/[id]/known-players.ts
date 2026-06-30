@@ -1,53 +1,45 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { normalizeForMatch } from "../../../../lib/stringMatch";
+import { getSession } from "../../../../lib/auth.helpers.server";
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    include: { players: true },
+    select: { id: true, currentGameId: true },
   });
+  if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  if (!event) {
-    return Response.json({ error: "Not found." }, { status: 404 });
+  // Current players in the active game (to exclude from suggestions)
+  let currentNames = new Set<string>();
+  if (event.currentGameId) {
+    const participants = await prisma.gameParticipant.findMany({
+      where: { gameId: event.currentGameId, archivedAt: null },
+      include: { eventPlayer: { select: { name: true } } },
+    });
+    currentNames = new Set(participants.map((p) => p.eventPlayer.name.toLowerCase()));
+  } else {
+    // Fallback: legacy Player table
+    const players = await prisma.player.findMany({
+      where: { eventId, archivedAt: null },
+      select: { name: true },
+    });
+    currentNames = new Set(players.map((p) => p.name.toLowerCase()));
   }
 
-  const currentPlayerNames = new Set(
-    event.players.map((p) => p.name.toLowerCase())
-  );
-
-  const history = await prisma.gameHistory.findMany({
-    where: { eventId, status: "played" },
-    select: { teamsSnapshot: true },
+  // ADR 0016: read all EventPlayers for this event (replaces GameHistory JSON parsing)
+  const eventPlayers = await prisma.eventPlayer.findMany({
+    where: { eventId },
+    select: { name: true, userId: true, gamesPlayed: true },
   });
 
-  const nameCounts: Map<string, number> = new Map();
-
-  for (const entry of history) {
-    if (!entry.teamsSnapshot) continue;
-
-    try {
-      const teams = JSON.parse(entry.teamsSnapshot) as Array<{
-        team: string;
-        players: Array<{ name: string; order: number }>;
-      }>;
-
-      for (const team of teams) {
-        for (const player of team.players) {
-          const name = player.name.trim();
-          if (name) {
-            nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
-          }
-        }
-      }
-    } catch {
-      continue;
-    }
+  const nameCounts = new Map<string, { gamesPlayed: number; userId: string | null }>();
+  for (const ep of eventPlayers) {
+    nameCounts.set(ep.name, { gamesPlayed: ep.gamesPlayed, userId: ep.userId });
   }
 
-  // Also include followers of this event who aren't current players
+  // Also include followers not already in the map
   const followers = await prisma.eventFollow.findMany({
     where: { eventId },
     include: { user: { select: { id: true, name: true } } },
@@ -55,34 +47,27 @@ export const GET: APIRoute = async ({ params }) => {
   for (const f of followers) {
     const name = f.user.name.trim();
     if (name && !nameCounts.has(name)) {
-      nameCounts.set(name, 0);
+      nameCounts.set(name, { gamesPlayed: 0, userId: f.user.id });
     }
   }
 
-  // Annotate each suggestion with the userId of the matching registered user
-  // (if any). Ambiguous matches (multiple users sharing the name) stay null.
-  const allUsers = await prisma.user.findMany({
-    select: { id: true, name: true },
-  });
-  const userByNormalized = new Map<string, string[]>();
-  for (const u of allUsers) {
-    const key = normalizeForMatch(u.name);
-    if (!key) continue;
-    const list = userByNormalized.get(key) ?? [];
-    list.push(u.id);
-    userByNormalized.set(key, list);
+  // Include logged-in user's own name
+  // ponytail: ensures self-join autocomplete works even if user has no history/follow
+  const session = await getSession(request).catch(() => null);
+  if (session?.user?.name) {
+    const name = session.user.name.trim();
+    if (name && !nameCounts.has(name)) {
+      nameCounts.set(name, { gamesPlayed: 0, userId: session.user.id });
+    }
   }
 
   const players = Array.from(nameCounts.entries())
-    .filter(([name]) => !currentPlayerNames.has(name.toLowerCase()))
-    .map(([name, gamesPlayed]) => {
-      const matches = userByNormalized.get(normalizeForMatch(name)) ?? [];
-      return {
-        name,
-        gamesPlayed,
-        userId: matches.length === 1 ? matches[0] : null,
-      };
-    })
+    .filter(([name]) => !currentNames.has(name.toLowerCase()))
+    .map(([name, data]) => ({
+      name,
+      gamesPlayed: data.gamesPlayed,
+      userId: data.userId,
+    }))
     .sort((a, b) => b.gamesPlayed - a.gamesPlayed)
     .slice(0, 30);
 

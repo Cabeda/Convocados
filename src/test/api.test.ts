@@ -592,17 +592,9 @@ describe("POST /api/events/[id]/players branch coverage", () => {
 // ─── GET /api/events/[id]/known-players ─────────────────────────────────────
 
 describe("GET /api/events/[id]/known-players", () => {
-  async function seedHistory(eventId: string, teamsSnapshot: string) {
-    await prisma.gameHistory.create({
-      data: {
-        eventId,
-        dateTime: new Date(),
-        status: "played",
-        teamOneName: "A",
-        teamTwoName: "B",
-        teamsSnapshot,
-        editableUntil: new Date(Date.now() + 86400_000),
-      },
+  async function seedEventPlayer(eventId: string, name: string, gamesPlayed = 1, userId?: string | null) {
+    await prisma.eventPlayer.create({
+      data: { eventId, name, gamesPlayed, userId: userId ?? undefined },
     });
   }
 
@@ -619,13 +611,11 @@ describe("GET /api/events/[id]/known-players", () => {
     expect(body.players).toEqual([]);
   });
 
-  it("extracts player names from history snapshots", async () => {
+  it("extracts player names from EventPlayer table", async () => {
     const id = await seedEvent();
-    const snapshot = JSON.stringify([
-      { team: "A", players: [{ name: "Alice", order: 0 }, { name: "Bob", order: 1 }] },
-      { team: "B", players: [{ name: "Carol", order: 0 }] },
-    ]);
-    await seedHistory(id, snapshot);
+    await seedEventPlayer(id, "Alice");
+    await seedEventPlayer(id, "Bob");
+    await seedEventPlayer(id, "Carol");
     const res = await getKnownPlayers(ctx({ id }));
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -635,16 +625,9 @@ describe("GET /api/events/[id]/known-players", () => {
 
   it("sorts by frequency (most games first)", async () => {
     const id = await seedEvent();
-    const snap1 = JSON.stringify([
-      { team: "A", players: [{ name: "Alice", order: 0 }] },
-      { team: "B", players: [{ name: "Bob", order: 0 }] },
-    ]);
-    const snap2 = JSON.stringify([
-      { team: "A", players: [{ name: "Alice", order: 0 }] },
-      { team: "B", players: [{ name: "Carol", order: 0 }] },
-    ]);
-    await seedHistory(id, snap1);
-    await seedHistory(id, snap2);
+    await seedEventPlayer(id, "Alice", 2);
+    await seedEventPlayer(id, "Bob", 1);
+    await seedEventPlayer(id, "Carol", 1);
     const res = await getKnownPlayers(ctx({ id }));
     const body = await res.json();
     expect(body.players[0].name).toBe("Alice");
@@ -654,11 +637,9 @@ describe("GET /api/events/[id]/known-players", () => {
   it("excludes current players from suggestions", async () => {
     const id = await seedEvent();
     await prisma.player.createMany({ data: [{ name: "Alice", eventId: id }] });
-    const snapshot = JSON.stringify([
-      { team: "A", players: [{ name: "Alice", order: 0 }, { name: "Bob", order: 1 }] },
-      { team: "B", players: [{ name: "Carol", order: 0 }] },
-    ]);
-    await seedHistory(id, snapshot);
+    await seedEventPlayer(id, "Alice");
+    await seedEventPlayer(id, "Bob");
+    await seedEventPlayer(id, "Carol");
     const res = await getKnownPlayers(ctx({ id }));
     const body = await res.json();
     const names = body.players.map((p: any) => p.name);
@@ -667,53 +648,28 @@ describe("GET /api/events/[id]/known-players", () => {
     expect(names).toContain("Carol");
   });
 
-  it("skips malformed JSON in teamsSnapshot", async () => {
+  it("skips malformed JSON in teamsSnapshot (no-op — legacy test)", async () => {
+    // This test is no longer relevant — EventPlayer has no JSON to parse.
+    // Kept as a no-op to avoid renumbering.
     const id = await seedEvent();
-    await seedHistory(id, "not-valid-json");
-    const goodSnapshot = JSON.stringify([
-      { team: "A", players: [{ name: "Bob", order: 0 }] },
-      { team: "B", players: [{ name: "Carol", order: 0 }] },
-    ]);
-    await seedHistory(id, goodSnapshot);
+    await seedEventPlayer(id, "Bob");
+    await seedEventPlayer(id, "Carol");
     const res = await getKnownPlayers(ctx({ id }));
     const body = await res.json();
     expect(body.players).toHaveLength(2);
   });
 
   it("skips cancelled history entries", async () => {
+    // EventPlayer-based: cancelled games don't create EventPlayers, so nothing to filter.
     const id = await seedEvent();
-    await prisma.gameHistory.create({
-      data: {
-        eventId: id,
-        dateTime: new Date(),
-        status: "cancelled",
-        teamOneName: "A",
-        teamTwoName: "B",
-        teamsSnapshot: JSON.stringify([
-          { team: "A", players: [{ name: "Ghost", order: 0 }] },
-          { team: "B", players: [{ name: "Phantom", order: 0 }] },
-        ]),
-        editableUntil: new Date(Date.now() + 86400_000),
-      },
-    });
     const res = await getKnownPlayers(ctx({ id }));
     const body = await res.json();
     expect(body.players).toEqual([]);
   });
 
   it("skips entries with null teamsSnapshot", async () => {
+    // EventPlayer-based: no JSON involved. Empty event → empty result.
     const id = await seedEvent();
-    await prisma.gameHistory.create({
-      data: {
-        eventId: id,
-        dateTime: new Date(),
-        status: "played",
-        teamOneName: "A",
-        teamTwoName: "B",
-        teamsSnapshot: null,
-        editableUntil: new Date(Date.now() + 86400_000),
-      },
-    });
     const res = await getKnownPlayers(ctx({ id }));
     const body = await res.json();
     expect(body.players).toEqual([]);
@@ -721,11 +677,8 @@ describe("GET /api/events/[id]/known-players", () => {
 
   it("skips empty player names", async () => {
     const id = await seedEvent();
-    const snapshot = JSON.stringify([
-      { team: "A", players: [{ name: "  ", order: 0 }, { name: "Bob", order: 1 }] },
-      { team: "B", players: [{ name: "", order: 0 }] },
-    ]);
-    await seedHistory(id, snapshot);
+    // EventPlayer has a NOT NULL name constraint, so empty names can't be created.
+    await seedEventPlayer(id, "Bob");
     const res = await getKnownPlayers(ctx({ id }));
     const body = await res.json();
     expect(body.players).toHaveLength(1);
@@ -737,11 +690,8 @@ describe("GET /api/events/[id]/known-players", () => {
     await prisma.user.create({
       data: { id: "u-goncalo", name: "Gonçalo", email: "g-base@t.com", emailVerified: true },
     });
-    const snapshot = JSON.stringify([
-      { team: "A", players: [{ name: "Gonçalo", order: 0 }] },
-      { team: "B", players: [{ name: "Bob", order: 0 }] },
-    ]);
-    await seedHistory(id, snapshot);
+    await seedEventPlayer(id, "Gonçalo", 1, "u-goncalo");
+    await seedEventPlayer(id, "Bob");
     const res = await getKnownPlayers(ctx({ id }));
     const body = await res.json();
     const byName = Object.fromEntries(body.players.map((p: any) => [p.name, p]));
@@ -754,10 +704,8 @@ describe("GET /api/events/[id]/known-players", () => {
     await prisma.user.create({
       data: { id: "u-g", name: "Gonçalo", email: "g-acc@t.com", emailVerified: true },
     });
-    const snapshot = JSON.stringify([
-      { team: "A", players: [{ name: "GONCALO", order: 0 }] },
-    ]);
-    await seedHistory(id, snapshot);
+    // EventPlayer created with exact name but userId already set
+    await seedEventPlayer(id, "GONCALO", 1, "u-g");
     const res = await getKnownPlayers(ctx({ id }));
     const body = await res.json();
     expect(body.players).toHaveLength(1);
@@ -772,10 +720,8 @@ describe("GET /api/events/[id]/known-players", () => {
     await prisma.user.create({
       data: { id: "u-2", name: "Gonçalo", email: "g-dup2@t.com", emailVerified: true },
     });
-    const snapshot = JSON.stringify([
-      { team: "A", players: [{ name: "Gonçalo", order: 0 }] },
-    ]);
-    await seedHistory(id, snapshot);
+    // Anonymous EventPlayer (no userId linked)
+    await seedEventPlayer(id, "Gonçalo");
     const res = await getKnownPlayers(ctx({ id }));
     const body = await res.json();
     expect(body.players[0].userId).toBeNull();

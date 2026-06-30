@@ -66,6 +66,20 @@ export const POST: APIRoute = async ({ params, request }) => {
     await addPlayerToTeams(eventId, name);
   }
 
+  // ADR 0016: restore GameParticipant for the current Game
+  if (event.currentGameId) {
+    const ep = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId, name } },
+    });
+    if (ep) {
+      await prisma.gameParticipant.upsert({
+        where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: ep.id } },
+        create: { gameId: event.currentGameId, eventPlayerId: ep.id, order },
+        update: { archivedAt: null, order },
+      });
+    }
+  }
+
   // Validate teams: ensure no bench players are in teams after undo
   await validateTeams(eventId, event.maxPlayers);
 
