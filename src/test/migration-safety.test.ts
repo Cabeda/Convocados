@@ -345,3 +345,53 @@ describe("Edge cases", () => {
     expect(body.gameId).toBe(game.id);
   });
 });
+
+
+// ─── E2E parity: player removal reflected in Event GET ───────────────────────
+
+import { DELETE as deletePlayer } from "~/pages/api/events/[id]/players";
+
+function deleteCtx(params: Record<string, string>, body: unknown) {
+  const request = new Request("http://localhost/api/test", {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { request, params, url: new URL("http://localhost/api/test") } as any;
+}
+
+describe("Player removal reflected in Event GET (E2E parity)", () => {
+  it("after DELETE, removed player no longer appears in Event GET response", async () => {
+    // Simulate the E2E flow exactly
+    const { POST: createEventFn } = await import("~/pages/api/events/index");
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const createRes = await createEventFn(ctx({}, {
+      title: "Remove Test", location: "P", dateTime: future,
+    }));
+    const { id: eventId } = await createRes.json();
+
+    // Add two players
+    await addPlayer(ctx({ id: eventId }, { name: "KeepBeta" }));
+    await addPlayer(ctx({ id: eventId }, { name: "RemoveBeta" }));
+
+    // Verify both appear
+    let getRes = await getEvent(ctx({ id: eventId }));
+    let body = await getRes.json();
+    expect(body.players.map((p: any) => p.name).sort()).toEqual(["KeepBeta", "RemoveBeta"]);
+
+    // Get the player ID from the response (this is what the frontend uses)
+    const removePlayer = body.players.find((p: any) => p.name === "RemoveBeta");
+    expect(removePlayer).toBeTruthy();
+
+    // DELETE using the ID from the response
+    const delRes = await deletePlayer(deleteCtx({ id: eventId }, { playerId: removePlayer.id }));
+    expect(delRes.status).toBe(200);
+
+    // Refetch — removed player should be gone
+    getRes = await getEvent(ctx({ id: eventId }));
+    body = await getRes.json();
+    const names = body.players.map((p: any) => p.name);
+    expect(names).toContain("KeepBeta");
+    expect(names).not.toContain("RemoveBeta");
+  });
+});
