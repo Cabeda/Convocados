@@ -789,6 +789,8 @@ const de: TranslationKeys = {
   logHistoryLocked: "{actor} hat das Spiel vom {date} gesperrt",
   unlockHistory: "Zum Bearbeiten entsperren",
   lockHistory: "Bearbeitung sperren",
+  markFriendly: "Als Freundschaftsspiel markieren (kein ELO)",
+  markCompetitive: "Als Wettbewerb markieren",
   loginRequiredToEdit: "Du musst angemeldet sein, um Ergebnisse zu bearbeiten",
   duplicatePlayerWarning: "Ein Spieler kann nicht in beiden Teams sein: {names}",
 
