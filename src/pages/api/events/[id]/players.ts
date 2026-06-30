@@ -501,6 +501,20 @@ export const POST: APIRoute = async ({ params, request }) => {
     update: {},
   });
 
+  // ADR 0016: upsert EventPlayer + create GameParticipant in current Game
+  if (event.currentGameId) {
+    const eventPlayer = await prisma.eventPlayer.upsert({
+      where: { eventId_name: { eventId, name: trimmed } },
+      create: { eventId, name: trimmed, userId: linkedUserId },
+      update: {},
+    });
+    await prisma.gameParticipant.upsert({
+      where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
+      create: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: event.players.length },
+      update: {},
+    });
+  }
+
   // spotsLeft after adding
   const activeBefore = Math.min(event.players.length, event.maxPlayers);
   const isOnBench = event.players.length >= event.maxPlayers;
@@ -643,10 +657,20 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const { playerId } = await request.json();
   const session = await getSession(request);
 
-  const player = await prisma.player.findFirst({
+  let player = await prisma.player.findFirst({
     where: { id: playerId, eventId, archivedAt: null },
     include: { event: { select: { ownerId: true } } },
   });
+  // ADR 0016: Event GET now returns EventPlayer IDs. Fall back to name-based lookup.
+  if (!player) {
+    const ep = await prisma.eventPlayer.findFirst({ where: { id: playerId, eventId } });
+    if (ep) {
+      player = await prisma.player.findFirst({
+        where: { eventId, name: ep.name, archivedAt: null },
+        include: { event: { select: { ownerId: true } } },
+      });
+    }
+  }
   if (!player) return Response.json({ error: "Not found." }, { status: 404 });
 
   // Protected player check: players with userId can only be removed by themselves or the event owner.
@@ -666,7 +690,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const actorUserId = session?.user?.id ?? player.event.ownerId ?? null;
   const result = await archiveAndLeave({
     eventId,
-    playerId,
+    playerId: player.id,
     actor: isSelf
       ? { kind: "self", userId: actorUserId }
       : { kind: "organizer", userId: actorUserId },
