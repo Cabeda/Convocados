@@ -95,14 +95,19 @@ export const POST: APIRoute = async ({ params, request }) => {
     const targetPlayer = await prisma.player.findFirst({
       where: { id: votedForPlayerId, eventId: params.id },
     });
-    if (!targetPlayer) {
+    // ADR 0016: also check EventPlayer (Event GET now returns EventPlayer IDs)
+    const targetEventPlayer = !targetPlayer
+      ? await prisma.eventPlayer.findFirst({ where: { id: votedForPlayerId, eventId: params.id } })
+      : null;
+    if (!targetPlayer && !targetEventPlayer) {
       return Response.json({ error: "Target player not found in this event." }, { status: 400 });
     }
-    targetPlayerId = targetPlayer.id;
-    targetPlayerName = targetPlayer.name;
+    targetPlayerId = targetPlayer?.id ?? votedForPlayerId;
+    targetPlayerName = targetPlayer?.name ?? targetEventPlayer!.name;
 
     // Prevent self-vote: check by userId or by playerId
-    if (targetPlayer.userId === userId || targetPlayer.id === voterPlayerId) {
+    const targetUserId = targetPlayer?.userId ?? targetEventPlayer?.userId;
+    if (targetUserId === userId || targetPlayerId === voterPlayerId) {
       return Response.json({ error: "You cannot vote for yourself." }, { status: 400 });
     }
   } else {
