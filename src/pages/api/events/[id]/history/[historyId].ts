@@ -85,6 +85,37 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     });
   }
 
+  // Handle isFriendly toggle — owner/admin only
+  if (typeof body.isFriendly === "boolean") {
+    if (!isOwner && !isAdmin) {
+      return Response.json({ error: "Only the event owner or admin can toggle friendly." }, { status: 403 });
+    }
+    const updated = await prisma.gameHistory.update({
+      where: { id: params.historyId },
+      data: { isFriendly: body.isFriendly },
+    });
+
+    // If toggling off friendly on a processed game, or on for an unprocessed one, recalculate ELO
+    if (entry.eloProcessed && body.isFriendly) {
+      // Was competitive + processed → now friendly: recalculate to exclude this game
+      await recalculateAllRatings(params.id!);
+    } else if (!body.isFriendly && !entry.eloProcessed && entry.scoreOne !== null && entry.scoreTwo !== null && entry.teamsSnapshot) {
+      // Was friendly → now competitive with score: process ELO
+      const teams = JSON.parse(entry.teamsSnapshot);
+      await processGame(params.id!, entry.id, teams, entry.scoreOne, entry.scoreTwo);
+    }
+
+    return Response.json({
+      ...updated,
+      dateTime: updated.dateTime.toISOString(),
+      editableUntil: updated.editableUntil.toISOString(),
+      createdAt: updated.createdAt.toISOString(),
+      editable: updated.editableUntil > new Date(),
+      isFriendly: updated.isFriendly,
+      eloUpdates: null,
+    });
+  }
+
   if (entry.editableUntil <= new Date()) {
     return Response.json({ error: "This result can no longer be edited." }, { status: 403 });
   }

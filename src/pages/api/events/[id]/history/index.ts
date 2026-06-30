@@ -63,6 +63,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     editable: h.editableUntil > new Date(),
     source: h.source,
     eloUpdates: hideCompetitive ? null : (eloMap.get(h.id) ?? null),
+    isFriendly: h.isFriendly,
   }));
 
   const gameMapped = playedGames.map((g) => ({

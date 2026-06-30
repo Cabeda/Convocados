@@ -838,6 +838,8 @@ const pt: TranslationKeys = {
   logHistoryLocked: "{actor} bloqueou o jogo de {date}",
   unlockHistory: "Desbloquear para edição",
   lockHistory: "Bloquear edição",
+  markFriendly: "Marcar como amigável (sem ELO)",
+  markCompetitive: "Marcar como competitivo",
   loginRequiredToEdit: "Tens de iniciar sessão para editar resultados",
   duplicatePlayerWarning: "Um jogador não pode estar nas duas equipas: {names}",
 

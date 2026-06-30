@@ -789,6 +789,8 @@ const fr: TranslationKeys = {
   logHistoryLocked: "{actor} a verrouillé le match du {date}",
   unlockHistory: "Déverrouiller pour modifier",
   lockHistory: "Verrouiller la modification",
+  markFriendly: "Marquer comme amical (sans ELO)",
+  markCompetitive: "Marquer comme compétitif",
   loginRequiredToEdit: "Vous devez être connecté pour modifier les résultats",
   duplicatePlayerWarning: "Un joueur ne peut pas être dans les deux équipes : {names}",
 
