@@ -161,6 +161,16 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun fetchAttendance(eventId: String): AttendanceResult =
         client.get("/api/events/$eventId/attendance")
 
+    /** Submit RSVP (yes/no/maybe) from a notification quick action */
+    suspend fun submitRsvp(eventId: String, status: String): OkResponse =
+        client.post("/api/events/$eventId/rsvp", RsvpSubmitRequest(status))
+
+    /** Quick join from a notification action — equivalent to addPlayer with linkToAccount=true and user's own name */
+    suspend fun quickJoin(eventId: String): AddPlayerResponse {
+        val profile = fetchUserInfo()
+        return addPlayer(eventId, profile.name, linkToAccount = true)
+    }
+
     // ── Event log ─────────────────────────────────────────────────────────
     suspend fun fetchEventLog(eventId: String, cursor: String? = null): PaginatedLog {
         val qs = if (cursor != null) "?cursor=$cursor" else ""
@@ -302,3 +312,5 @@ data class FollowOverridesRequest(
     val mutePostGame: Boolean? = null,
     val muteEventDetails: Boolean? = null,
 )
+
+@Serializable data class RsvpSubmitRequest(val status: String)

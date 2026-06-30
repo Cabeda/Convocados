@@ -181,6 +181,16 @@
     <string name="event_updates">Ereignis-Updates</string>
     <string name="event_updates_desc">Wenn sich Ereignisdetails ändern</string>
     <string name="payment_reminders">Zahlungserinnerungen</string>
+    <string name="post_game_results_desc">Ergebnisse und Zusammenfassung nach dem Spiel</string>
+    <string name="notification_tiers_title">So funktionieren Benachrichtigungen</string>
+    <string name="notification_tiers_desc">Du erhältst Ereignis-Updates (Absagen, Einladungen, freie Plätze) für alle Spiele, denen du folgst. Spieldetails (Spieleraktivität, Erinnerungen, Ergebnisse) werden nur gesendet, wenn du spielst — oder du aktivierst \"Alle Updates\" pro Ereignis.</string>
+
+    <!-- Notification quick actions -->
+    <string name="action_im_in">Bin dabei!</string>
+    <string name="action_cant_make_it">Kann nicht</string>
+    <string name="action_join">Mitmachen</string>
+    <string name="action_add_score">Ergebnis</string>
+    <string name="action_confirm_payment">Confirmar</string>
     <string name="email_notifications">E-Mail-Benachrichtigungen</string>
     <string name="enable_email">E-Mail aktivieren</string>
     <string name="enable_email_desc">Hauptschalter für alle E-Mails</string>

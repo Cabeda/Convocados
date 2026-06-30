@@ -41,6 +41,7 @@ val SECTIONS = listOf(
         PrefItem("pushEnabled", R.string.enable_push, R.string.enable_push_desc),
         PrefItem("playerActivityPush", R.string.player_activity, R.string.player_activity_desc),
         PrefItem("gameReminderPush", R.string.game_reminders, R.string.game_reminders_desc),
+        PrefItem("postGamePush", R.string.post_game_results, R.string.post_game_results_desc),
         PrefItem("eventDetailsPush", R.string.event_updates, R.string.event_updates_desc),
         PrefItem("paymentReminderPush", R.string.payment_reminders),
     )),
@@ -94,6 +95,7 @@ class NotificationPrefsViewModel @Inject constructor(private val api: Convocados
         "gameReminderPush" -> p.copy(gameReminderPush = v)
         "playerActivityPush" -> p.copy(playerActivityPush = v)
         "eventDetailsPush" -> p.copy(eventDetailsPush = v)
+        "postGamePush" -> p.copy(postGamePush = v)
         "weeklySummaryEmail" -> p.copy(weeklySummaryEmail = v)
         "paymentReminderEmail" -> p.copy(paymentReminderEmail = v)
         "paymentReminderPush" -> p.copy(paymentReminderPush = v)
@@ -108,9 +110,10 @@ class NotificationPrefsViewModel @Inject constructor(private val api: Convocados
         "gameInviteEmail" -> p.gameInviteEmail; "gameInvitePush" -> p.gameInvitePush
         "gameReminderEmail" -> p.gameReminderEmail; "gameReminderPush" -> p.gameReminderPush
         "playerActivityPush" -> p.playerActivityPush; "eventDetailsPush" -> p.eventDetailsPush
-        "weeklySummaryEmail" -> p.weeklySummaryEmail; "paymentReminderEmail" -> p.paymentReminderEmail
-        "paymentReminderPush" -> p.paymentReminderPush; "reminder24h" -> p.reminder24h
-        "reminder2h" -> p.reminder2h; "reminder1h" -> p.reminder1h; else -> false
+        "postGamePush" -> p.postGamePush; "weeklySummaryEmail" -> p.weeklySummaryEmail
+        "paymentReminderEmail" -> p.paymentReminderEmail; "paymentReminderPush" -> p.paymentReminderPush
+        "reminder24h" -> p.reminder24h; "reminder2h" -> p.reminder2h
+        "reminder1h" -> p.reminder1h; else -> false
     }
 }
 
@@ -139,6 +142,15 @@ fun NotificationPrefsScreen(onBack: () -> Unit, viewModel: NotificationPrefsView
         val p = prefs ?: return@Scaffold
 
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
+            // ADR 0017: Tier explanation
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(stringResource(R.string.notification_tiers_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(stringResource(R.string.notification_tiers_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+            }
+
             SECTIONS.forEach { section ->
                 Text(stringResource(section.titleRes).uppercase(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.sp, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
                 section.items.forEach { item ->

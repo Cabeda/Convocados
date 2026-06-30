@@ -181,6 +181,16 @@
     <string name="event_updates">Aggiornamenti dell\'evento</string>
     <string name="event_updates_desc">Quando cambiano i dettagli dell\'evento</string>
     <string name="payment_reminders">Promemoria pagamenti</string>
+    <string name="post_game_results_desc">Risultati e riepilogo dopo la partita</string>
+    <string name="notification_tiers_title">Come funzionano le notifiche</string>
+    <string name="notification_tiers_desc">Ricevi aggiornamenti dell\'evento (cancellazioni, inviti, posti liberi) per tutte le partite che segui. I dettagli del gioco (attività giocatori, promemoria, risultati) vengono inviati solo quando giochi — oppure attiva \"Tutti gli aggiornamenti\" per evento.</string>
+
+    <!-- Notification quick actions -->
+    <string name="action_im_in">Ci sono!</string>
+    <string name="action_cant_make_it">Non posso</string>
+    <string name="action_join">Partecipa</string>
+    <string name="action_add_score">Risultato</string>
+    <string name="action_confirm_payment">Confirmar</string>
     <string name="email_notifications">Notifiche email</string>
     <string name="enable_email">Attiva email</string>
     <string name="enable_email_desc">Interruttore generale per tutte le email</string>
