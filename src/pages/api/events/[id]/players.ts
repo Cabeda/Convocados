@@ -657,10 +657,20 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const { playerId } = await request.json();
   const session = await getSession(request);
 
-  const player = await prisma.player.findFirst({
+  let player = await prisma.player.findFirst({
     where: { id: playerId, eventId, archivedAt: null },
     include: { event: { select: { ownerId: true } } },
   });
+  // ADR 0016: Event GET now returns EventPlayer IDs. Fall back to name-based lookup.
+  if (!player) {
+    const ep = await prisma.eventPlayer.findFirst({ where: { id: playerId, eventId } });
+    if (ep) {
+      player = await prisma.player.findFirst({
+        where: { eventId, name: ep.name, archivedAt: null },
+        include: { event: { select: { ownerId: true } } },
+      });
+    }
+  }
   if (!player) return Response.json({ error: "Not found." }, { status: 404 });
 
   // Protected player check: players with userId can only be removed by themselves or the event owner.
