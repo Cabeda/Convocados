@@ -24,7 +24,6 @@ export interface DigestResult {
  */
 export async function processOrganizerDigests(): Promise<DigestResult> {
   const now = new Date();
-  const currentHH = String(now.getHours()).padStart(2, "0");
   const currentMM = now.getMinutes();
   // Match if current time is within 30min of configured digestTime
   const result: DigestResult = { sent: [] };

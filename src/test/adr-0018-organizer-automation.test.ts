@@ -2,7 +2,7 @@
  * ADR 0018 — Organizer automation tests.
  * Covers: payment escalation stages, auto-confirm logic, no-show, deep link URLs.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "~/lib/db.server";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -188,7 +188,7 @@ describe("Auto-confirm attendance", () => {
   });
 
   it("applyAutoConfirm creates RSVP records", async () => {
-    const { getAutoConfirmedUserIds, applyAutoConfirm } = await import("~/lib/autoConfirm.server");
+    const { applyAutoConfirm } = await import("~/lib/autoConfirm.server");
     const user = await seedUser("Committed");
     const event = await seedEvent(null, { autoConfirmEnabled: true, autoConfirmThreshold: 2 });
     const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Committed", userId: user.id } });
