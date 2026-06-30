@@ -2,7 +2,7 @@
  * ADR 0017 — Notification tiers: role-aware defaults and new notification types.
  * Tests the core tier classification, role-aware resolution, and new notification types.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   wantsPushWithOverrides,
   wantsPushForJobType,

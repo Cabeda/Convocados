@@ -122,7 +122,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
     // Send organizer alert as a batch (one notification for all stage-3-expired debtors per event)
     if (ec.event.ownerId && result.organizerAlerts.length > 0) {
       const debtorNames = ec.payments
-        .filter((p) => {
+        .filter((_p) => {
           const key = `${ec.eventId}`;
           return result.organizerAlerts.some((a) => a.endsWith(`:${key}`));
         })
