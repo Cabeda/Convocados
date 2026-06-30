@@ -65,6 +65,12 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   });
   if (!event) throw new Error("Event not found.");
 
+  // ADR 0016: fetch currentGameId separately to ensure it's available
+  const { currentGameId } = await prisma.event.findUniqueOrThrow({
+    where: { id: eventId },
+    select: { currentGameId: true },
+  });
+
   const playerIndex = event.players.findIndex((p) => p.id === playerId);
   const player = event.players[playerIndex];
   if (!player) throw new Error("Player not found.");
@@ -86,13 +92,13 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   });
 
   // ADR 0016: also archive the GameParticipant for the current Game
-  if (event.currentGameId) {
+  if (currentGameId) {
     const ep = await prisma.eventPlayer.findUnique({
       where: { eventId_name: { eventId, name: player.name } },
     });
     if (ep) {
       await prisma.gameParticipant.updateMany({
-        where: { gameId: event.currentGameId, eventPlayerId: ep.id },
+        where: { gameId: currentGameId, eventPlayerId: ep.id },
         data: { archivedAt: new Date() },
       });
     }

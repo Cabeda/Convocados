@@ -690,7 +690,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const actorUserId = session?.user?.id ?? player.event.ownerId ?? null;
   const result = await archiveAndLeave({
     eventId,
-    playerId,
+    playerId: player.id,
     actor: isSelf
       ? { kind: "self", userId: actorUserId }
       : { kind: "organizer", userId: actorUserId },
