@@ -85,6 +85,19 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     data: { archivedAt: new Date() },
   });
 
+  // ADR 0016: also archive the GameParticipant for the current Game
+  if (event.currentGameId) {
+    const ep = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId, name: player.name } },
+    });
+    if (ep) {
+      await prisma.gameParticipant.updateMany({
+        where: { gameId: event.currentGameId, eventPlayerId: ep.id },
+        data: { archivedAt: new Date() },
+      });
+    }
+  }
+
   // Write Rsvp. Two cases:
   //   - Self-leave (linked user): status="no" + respondedAt
   //   - Admin declining a guest (organizer + no userId): status="no" + respondedByUserId audit.
