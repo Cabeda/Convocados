@@ -156,3 +156,68 @@ describe("wantsPaymentReminderPush", () => {
     expect(wantsPaymentReminderPush(prefs)).toBe(true);
   });
 });
+
+
+import { wantsPushWithOverrides, isGameLevelNotification } from "~/lib/notificationPrefs.server";
+import type { EventFollowOverrides } from "~/lib/notificationPrefs.server";
+
+describe("isGameLevelNotification", () => {
+  it("classifies player activity as Tier 2", () => {
+    expect(isGameLevelNotification("player_joined")).toBe(true);
+    expect(isGameLevelNotification("player_left")).toBe(true);
+    expect(isGameLevelNotification("game_full")).toBe(true);
+    expect(isGameLevelNotification("spot_available")).toBe(true);
+    expect(isGameLevelNotification("reminder")).toBe(true);
+    expect(isGameLevelNotification("post_game")).toBe(true);
+  });
+
+  it("classifies event_details as Tier 1", () => {
+    expect(isGameLevelNotification("event_details")).toBe(false);
+  });
+});
+
+describe("wantsPushWithOverrides — role-aware (ADR 0017)", () => {
+  const allNull: EventFollowOverrides = {
+    mutePlayerActivity: null,
+    muteReminders: null,
+    mutePostGame: null,
+    muteEventDetails: null,
+  };
+
+  it("non-Player is muted for Tier 2 when overrides are null", () => {
+    const prefs: NotificationPrefs = { ...DEFAULTS, pushEnabled: true, playerActivityPush: true };
+    expect(wantsPushWithOverrides(prefs, "player_joined", allNull, null, false)).toBe(false);
+    expect(wantsPushWithOverrides(prefs, "reminder", allNull, null, false)).toBe(false);
+    expect(wantsPushWithOverrides(prefs, "post_game", allNull, null, false)).toBe(false);
+  });
+
+  it("Player receives Tier 2 when overrides are null", () => {
+    const prefs: NotificationPrefs = { ...DEFAULTS, pushEnabled: true, playerActivityPush: true };
+    expect(wantsPushWithOverrides(prefs, "player_joined", allNull, null, true)).toBe(true);
+    expect(wantsPushWithOverrides(prefs, "reminder", allNull, null, true)).toBe(true);
+    expect(wantsPushWithOverrides(prefs, "post_game", allNull, null, true)).toBe(true);
+  });
+
+  it("non-Player still receives Tier 1 (event_details)", () => {
+    const prefs: NotificationPrefs = { ...DEFAULTS, pushEnabled: true, eventDetailsPush: true };
+    expect(wantsPushWithOverrides(prefs, "event_details", allNull, null, false)).toBe(true);
+  });
+
+  it("non-Player with force-enable override receives Tier 2", () => {
+    const prefs: NotificationPrefs = { ...DEFAULTS, pushEnabled: true };
+    const overrides: EventFollowOverrides = { ...allNull, mutePlayerActivity: false };
+    expect(wantsPushWithOverrides(prefs, "player_joined", overrides, null, false)).toBe(true);
+  });
+
+  it("Player with mute override is muted for Tier 2", () => {
+    const prefs: NotificationPrefs = { ...DEFAULTS, pushEnabled: true, playerActivityPush: true };
+    const overrides: EventFollowOverrides = { ...allNull, mutePlayerActivity: true };
+    expect(wantsPushWithOverrides(prefs, "player_joined", overrides, null, true)).toBe(false);
+  });
+
+  it("backwards-compatible: omitting isPlayerInCurrentGame falls through to global prefs", () => {
+    const prefs: NotificationPrefs = { ...DEFAULTS, pushEnabled: true, playerActivityPush: true };
+    // No 5th argument — old call sites remain unaffected
+    expect(wantsPushWithOverrides(prefs, "player_joined", allNull, null)).toBe(true);
+  });
+});

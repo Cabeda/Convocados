@@ -23,7 +23,14 @@ export type NotificationJobType =
   | "post_game"
   | "game_full"
   | "spot_available"
-  | "rsvp_request";
+  | "rsvp_request"
+  | "game_cancelled"
+  | "game_invite"
+  | "bench_promoted_capacity"
+  | "payment_confirmed"
+  | "payment_self_reported"
+  | "recruitment"
+  | "few_spots_left";
 
 export interface NotificationJobPayload {
   title: string;

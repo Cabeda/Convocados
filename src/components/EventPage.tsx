@@ -53,12 +53,19 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const locale = detectLocale();
   const { data: session } = useSession();
 
-  // Detect ?action=pay from payment reminder deep link
-  const [autoOpenPay] = useState(() => {
-    if (typeof window === "undefined") return false;
+  // ADR 0018: Detect ?action= from notification deep links
+  const [deepLinkAction] = useState(() => {
+    if (typeof window === "undefined") return null;
     const params = new URLSearchParams(window.location.search);
-    return params.get("action") === "pay";
+    return params.get("action");
   });
+  const [deepLinkPlayer] = useState(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("player");
+  });
+  // ponytail: backward compat — autoOpenPay still works for existing links
+  const autoOpenPay = deepLinkAction === "pay";
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [playerError, setPlayerError] = useState<string | null>(null);
@@ -178,7 +185,22 @@ export default function EventPage({ eventId }: { eventId: string }) {
       refreshBalance();
       setPaymentNudgeOpen(true);
     }
-  }, [autoOpenPay, refreshBalance]);
+    // ADR 0018: Handle other deep link actions (runs after first render when event data is ready)
+    if (deepLinkAction === "add-score") {
+      window.location.href = `/events/${eventId}/history`;
+    }
+    if (deepLinkAction === "rsvp") {
+      setTimeout(() => {
+        document.querySelector("[data-player-list]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    }
+    if (deepLinkAction === "confirm-payment" && deepLinkPlayer) {
+      setPaymentExpanded(true);
+      setTimeout(() => {
+        document.getElementById("payment-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 300);
+    }
+  }, [autoOpenPay, deepLinkAction, deepLinkPlayer, refreshBalance, eventId]);
 
   const mergedSuggestions = useMemo(() => {
     const qjName = getQjName().trim();
@@ -364,6 +386,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
       })
       .catch(() => { /* swallow — player can retry */ });
   };
+
+  // ADR 0018: Auto-join deep link (needs handleQuickJoinPillClick to be defined)
+  useEffect(() => {
+    if (deepLinkAction === "join" && session?.user?.name) {
+      setTimeout(() => handleQuickJoinPillClick(session.user!.name), 500);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkAction, session?.user?.name]);
 
   const removePlayer = async (playerId: string) => {
     // Optimistic update
@@ -817,6 +847,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
             {/* Players — single merged component (name+email+contacts+pills).
                 The Quick Join pill is the first pill in the row when authenticated. */}
+            <div data-player-list>
             <PlayerList
               players={event.players}
               maxPlayers={event.maxPlayers}
@@ -845,6 +876,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 : undefined}
               eventDateTime={event.dateTime}
               />
+            </div>
 
             {/* Payment nudge dialog — opened by the Quick Join pill on tap when the user
                 has an outstanding balance. Also auto-opens from ?action=pay deep link. */}

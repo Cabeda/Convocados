@@ -285,6 +285,7 @@ data class NotificationPrefs(
     val gameReminderPush: Boolean = true,
     val playerActivityPush: Boolean = true,
     val eventDetailsPush: Boolean = true,
+    val postGamePush: Boolean = true,
     val weeklySummaryEmail: Boolean = true,
     val paymentReminderEmail: Boolean = true,
     val paymentReminderPush: Boolean = true,

@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
 
 const VALID_STATUSES = ["pending", "sent", "paid"];
 
@@ -113,6 +114,40 @@ export const PUT: APIRoute = async ({ params, request }) => {
       ...(method !== undefined && { method }),
     },
   });
+
+  // ADR 0017: Notify the player when their payment is confirmed (via queue, respects tier + overrides)
+  if (status === "paid" && !isSelfReport) {
+    const player = await prisma.player.findFirst({
+      where: { eventId, name: playerName, userId: { not: null } },
+      select: { userId: true },
+    });
+    if (player?.userId) {
+      await enqueueNotification(eventId, "payment_confirmed", {
+        title: event.title,
+        key: "notifyPaymentConfirmed",
+        params: { title: event.title },
+        url: `/events/${eventId}?action=pay`,
+        spotsLeft: 0,
+      }, player.userId);
+      if (!process.env.VITEST) {
+        await drainNotificationQueue().catch(() => {});
+      }
+    }
+  }
+
+  // ADR 0018: Notify organizer when a player self-reports payment (critical break-through)
+  if (isSelfReport && event.ownerId) {
+    await enqueueNotification(eventId, "payment_self_reported", {
+      title: event.title,
+      key: "notifyPaymentSelfReported",
+      params: { player: playerName, title: event.title },
+      url: `/events/${eventId}?action=confirm-payment&player=${encodeURIComponent(playerName)}`,
+      spotsLeft: 0,
+    });
+    if (!process.env.VITEST) {
+      await drainNotificationQueue().catch(() => {});
+    }
+  }
 
 
   return Response.json({

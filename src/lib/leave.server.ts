@@ -219,9 +219,10 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     );
   }
 
-  // Spot-available push: was full before AND now has an opening AND no bench. Gate on 48h too.
+  // ADR 0017: Spot-available push — fire whenever a spot opens and game is in the future (Tier 2).
+  // Previously gated on 48h; now always fires so interested players/followers learn immediately.
   const wasFull = event.players.length >= event.maxPlayers;
-  if (wasActive && wasFull && !firstBench && spotsLeft > 0 && isWithin48hBeforeKickoff(event.dateTime)) {
+  if (wasActive && wasFull && !firstBench && spotsLeft > 0 && event.dateTime > new Date()) {
     await enqueueNotification(
       eventId,
       "spot_available",
@@ -229,11 +230,13 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
         title: event.title,
         key: "notifySpotAvailable",
         params: { name: player.name },
-        url,
+        url: `${url}?action=join`,
         spotsLeft,
       },
       actor.userId ?? undefined,
     );
+    // ADR 0017: Reset few_spots_left dedup so it can fire again next fill cycle
+    await prisma.event.update({ where: { id: eventId }, data: { fewSpotsLeftNotified: false } }).catch(() => {});
   }
 
   // Drain notification queue before responding
