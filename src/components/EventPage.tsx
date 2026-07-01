@@ -836,6 +836,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
             )}
 
             {/* Location card — prominent when game is <24h away (the "where do I go?" moment) */}
+            {/* eslint-disable-next-line react-hooks/purity -- Date.now() is fine here; re-render is triggered by state changes */}
             {event.location && gameDate.getTime() - Date.now() > 0 && gameDate.getTime() - Date.now() < 24 * 60 * 60 * 1000 && (
               <Paper
                 elevation={1}
@@ -892,7 +893,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   variant="contained"
                   color="primary"
                   size="large"
-                  href="/api/auth/signin"
+                  href={`/auth/signin?callbackURL=/events/${eventId}`}
                   sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700 }}
                 >
                   {t("signInToJoin")}
