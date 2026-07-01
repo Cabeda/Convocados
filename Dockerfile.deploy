@@ -1,0 +1,18 @@
+# ponytail: Deploy-only Dockerfile — uses pre-built dist/ from CI on top of cached base image.
+# The base image (Dockerfile.base) has node, prod deps, prisma, litestream.
+# This layer only adds the app code (~5s rebuild).
+# Ceiling: if base image is stale, deploy fails. Upgrade: auto-rebuild base on lockfile change.
+FROM registry.fly.io/convocados:base
+
+WORKDIR /app
+
+# App artifacts (changes every deploy)
+COPY dist ./dist
+COPY public ./public
+COPY scripts/start.sh ./scripts/start.sh
+COPY scripts/release-migrate.sh ./scripts/release-migrate.sh
+COPY litestream.yml ./litestream.yml
+COPY prisma ./prisma
+
+EXPOSE 3000
+CMD ["sh", "./scripts/start.sh"]

@@ -387,6 +387,32 @@ jobs:
         with:
           ref: v${{ needs.release.outputs.version }}
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Enable corepack and install pnpm
+        run: corepack enable && corepack install
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v5
+        with:
+          path: ${{ steps.pnpm-cache.outputs.dir }}
+          key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+
+      - name: Build app
+        run: pnpm build
+
       - uses: docker/setup-buildx-action@v4
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
@@ -396,17 +422,47 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
 
-      - name: Build and push image
+      # Rebuild base image only when deps/prisma change (cache hit = skip)
+      - name: Check if base image needs rebuild
+        id: base-check
+        run: |
+          BASE_HASH=$(cat pnpm-lock.yaml prisma/schema.prisma | sha256sum | cut -c1-12)
+          echo "hash=$BASE_HASH" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v5
+        id: base-cache
+        with:
+          path: /tmp/base-built
+          key: base-image-${{ steps.base-check.outputs.hash }}
+
+      - name: Build and push base image
+        if: steps.base-cache.outputs.cache-hit != 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
+          file: Dockerfile.base
           push: true
-          tags: registry.fly.io/convocados:${{ needs.release.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: registry.fly.io/convocados:base
+          cache-from: type=gha,scope=base
+          cache-to: type=gha,scope=base,mode=max
+
+      - name: Mark base as built
+        if: steps.base-cache.outputs.cache-hit != 'true'
+        run: mkdir -p /tmp/base-built && echo "ok" > /tmp/base-built/done
+
+      # Fast app image: just COPY dist/ on top of base (~5s)
+      - name: Build and push app image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.deploy
+          push: true
+          tags: |
+            registry.fly.io/convocados:${{ needs.release.outputs.version }}
+            registry.fly.io/convocados:latest
 
       - name: Deploy to Fly.io
-        run: flyctl deploy --image registry.fly.io/convocados:${{ needs.release.outputs.version }}
+        run: flyctl deploy --image registry.fly.io/convocados:${{ needs.release.outputs.version }} --strategy immediate --wait-timeout 60s
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
 
