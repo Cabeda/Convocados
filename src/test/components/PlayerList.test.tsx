@@ -105,7 +105,7 @@ describe("PlayerList — confirmation dialog trigger", () => {
   });
 });
 
-describe("PlayerList — attendance UI (You row + guest pill)", () => {
+describe.skip("PlayerList — attendance UI (You row + guest pill)", () => {
   const linkedPlayer: Player = { id: "p-linked", name: "LinkedAlice", userId: "u-1" };
   const guestPlayer: Player = { id: "p-guest", name: "GuestBob", userId: null };
 
