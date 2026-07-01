@@ -27,7 +27,7 @@ FROM base AS production
 ENV NODE_ENV=production
 
 # Install Litestream for continuous SQLite replication to S3/R2
-ADD https://github.com/benbjohnson/litestream/releases/download/v0.5.11/litestream-0.5.11-linux-x86_64.tar.gz /tmp/litestream.tar.gz
+ADD https://github.com/benbjohnson/litestream/releases/download/v0.5.13/litestream-0.5.13-linux-x86_64.tar.gz /tmp/litestream.tar.gz
 RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.gz
 
 COPY --from=build /app/node_modules ./node_modules
