@@ -15,6 +15,7 @@ const pt: TranslationKeys = {
   location: "Local",
   locationPlaceholder: "ex: Riverside Astro, Campo 2",
   locationOptional: "Local (opcional)",
+  getDirections: "Ver como chegar",
   editLocation: "Editar local",
   saveLocation: "Guardar",
   cancelEdit: "Cancelar",
@@ -299,6 +300,7 @@ const pt: TranslationKeys = {
   makePublic: "Público",
   makePublicTooltip: "Tornar este jogo visível na página de jogos públicos",
   joinGame: "Entrar",
+  signInToJoin: "Inicia sessão para te juntares",
 
   // Sports
   sport: "Desporto",
@@ -333,6 +335,9 @@ const pt: TranslationKeys = {
   tableType: "Tipo",
   full: "Completo",
   spotsLeft: "{n} vaga(s)",
+  momentumFull: "Completo — entra no banco!",
+  momentumFillingFast: "A encher — {n} vaga(s) restante(s)",
+  momentumAlmostHalf: "Ainda há {n} vaga(s)",
   mapLoading: "A carregar mapa…",
   mapNoLocation: "Sem local definido",
   mapPermissionDenied: "Acesso à localização negado — a mostrar todos os eventos",
