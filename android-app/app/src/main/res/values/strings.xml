@@ -140,6 +140,8 @@
     <string name="post_game_payments_summary">%1$d/%2$d paid</string>
     <string name="post_game_no_cost">No cost set for this game</string>
     <string name="post_game_progress">%1$d of %2$d done</string>
+    <string name="post_game_mvp_done">MVP voted</string>
+    <string name="post_game_mvp_pending">Vote for the MVP</string>
     <string name="post_game_payments_label">Payments for the last game</string>
     <string name="post_game_payments_hint">Tap a player to toggle paid, then save.</string>
     <string name="post_game_payments_locked">Payments are locked. Unlock the game from History to edit.</string>
