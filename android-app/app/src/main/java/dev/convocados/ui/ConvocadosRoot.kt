@@ -41,6 +41,10 @@ class RootViewModel @Inject constructor(
     val themeMode = settingsStore.themeMode
     val dynamicColor = settingsStore.dynamicColor
 
+    // ADR 0018: Prevents navigation to Login during OAuth callback processing
+    private val _processingAuth = MutableStateFlow(false)
+    val processingAuth: StateFlow<Boolean> = _processingAuth
+
     private val _user = MutableStateFlow<UserProfile?>(null)
     val user: StateFlow<UserProfile?> = _user
 
@@ -61,11 +65,16 @@ class RootViewModel @Inject constructor(
 
     fun handleIntent(intent: Intent) {
         val uri = intent.data ?: return
-        if (uri.scheme == "convocados") {
+        if (uri.scheme == "convocados" && uri.host == "auth") {
+            _processingAuth.value = true
             viewModelScope.launch {
-                authManager.handleCallback(uri)
-                runCatching { _user.value = api.fetchUserInfo() }
-                pushTokenManager.registerCurrentToken()
+                try {
+                    authManager.handleCallback(uri)
+                    runCatching { _user.value = api.fetchUserInfo() }
+                    pushTokenManager.registerCurrentToken()
+                } finally {
+                    _processingAuth.value = false
+                }
             }
         }
     }
@@ -104,6 +113,7 @@ fun ConvocadosRoot(deepLink: String? = null, intentVersion: Int = 0, viewModel: 
         themeMode = viewModel.themeMode.collectAsState(initial = ThemeMode.System).value,
         dynamicColor = viewModel.dynamicColor.collectAsState(initial = false).value,
     ) {
-        AppNavigation(isAuthenticated = isAuthenticated, deepLink = deepLink)
+        val processingAuth by viewModel.processingAuth.collectAsState()
+        AppNavigation(isAuthenticated = isAuthenticated, deepLink = deepLink, processingAuth = processingAuth)
     }
 }
