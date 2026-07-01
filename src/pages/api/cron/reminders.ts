@@ -45,7 +45,7 @@ export const POST: APIRoute = async ({ request }) => {
     for (const r of reminders) {
       try {
         // Enqueue push notification — drained at end of cron after emails are sent
-        enqueueNotification(r.eventId, "reminder", {
+        await enqueueNotification(r.eventId, "reminder", {
           title: r.eventTitle,
           key: type === "24h" ? "notifyGameReminder24h" : type === "2h" ? "notifyGameReminder2h" : "notifyGameReminder1h",
           params: { title: r.eventTitle },
@@ -156,7 +156,7 @@ export const POST: APIRoute = async ({ request }) => {
           select: { isRecurring: true },
         });
         const pgKey = pgEvent?.isRecurring ? "postGameNotificationRecurring" as const : "postGameNotification" as const;
-        enqueueNotification(r.eventId, "post_game", {
+        await enqueueNotification(r.eventId, "post_game", {
           title: r.eventTitle,
           key: pgKey,
           params: { title: r.eventTitle },
