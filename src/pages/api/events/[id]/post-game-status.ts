@@ -18,7 +18,7 @@ import { MVP_VOTING_WINDOW_DAYS } from "../../../../lib/mvp.constants";
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
     where: { id: params.id },
-    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true },
+    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true, teamOneName: true, teamTwoName: true },
   });
 
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
@@ -228,5 +228,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
     hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete, bannerMvpComplete,
     paidAggregate,
+    scoreOne: latestHistory?.scoreOne ?? null,
+    scoreTwo: latestHistory?.scoreTwo ?? null,
+    teamOneName: event.teamOneName,
+    teamTwoName: event.teamTwoName,
   });
 };

@@ -1,10 +1,14 @@
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, user interactions mutate it, server data resyncs on refetch. Setting from async fetch callbacks is also fine. */
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
-  Container, Paper, Typography, Box, Stack, Button,
+  Container, Paper, Typography, Box, Stack, Button, IconButton, Tooltip,
   Alert, Skeleton,
 } from "@mui/material";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
+import ShuffleIcon from "@mui/icons-material/Shuffle";
+import ShareIcon from "@mui/icons-material/Share";
+import PaymentsIcon from "@mui/icons-material/Payments";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -31,6 +35,7 @@ import type { EventData, Player, KnownPlayer } from "./event";
 import { PostGameBanner } from "./PostGameBanner";
 import type { PostGameStatus } from "./PostGameBanner";
 import { PushPromptBanner } from "./PushPromptBanner";
+import { AttendanceCta } from "./event/AttendanceCta";
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -804,7 +809,99 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onSnackbar={setSnackbar}
             />
 
-            {/* Post-game banner — shown after game ends until tasks are complete */}
+            {/* Organizer toolbar — quick actions for owner/admin */}
+            {canEditSettings && (
+              <Paper elevation={0} sx={{ borderRadius: 3, px: 2, py: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 1, bgcolor: (theme) => `${theme.palette.action.hover}` }}>
+                <Tooltip title={t("randomize")}>
+                  <IconButton size="small" onClick={() => localMatches ? setConfirmOpen(true) : doRandomize()}>
+                    <ShuffleIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={t("shareGameMobile")}>
+                  <IconButton size="small" onClick={() => { if (navigator.share) navigator.share({ title: event.title, url: window.location.href }).catch(() => {}); else { navigator.clipboard.writeText(window.location.href); setSnackbar(t("linkCopied")); } }}>
+                    <ShareIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={t("splitTheCost")}>
+                  <IconButton size="small" onClick={() => { setPaymentExpanded(true); setTimeout(() => document.getElementById("payment-section")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100); }}>
+                    <PaymentsIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={t("eventSettings")}>
+                  <IconButton size="small" component="a" href={`/events/${eventId}/settings`}>
+                    <SettingsIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Paper>
+            )}
+
+            {/* Location card — prominent when game is <24h away (the "where do I go?" moment) */}
+            {event.location && gameDate.getTime() - Date.now() > 0 && gameDate.getTime() - Date.now() < 24 * 60 * 60 * 1000 && (
+              <Paper
+                elevation={1}
+                component="a"
+                href={/^https?:\/\//i.test(event.location)
+                  ? event.location
+                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  borderRadius: 3, p: 2,
+                  display: "flex", alignItems: "center", gap: 1.5,
+                  textDecoration: "none", color: "inherit",
+                  bgcolor: (theme) => `${theme.palette.primary.main}08`,
+                  border: (theme) => `1px solid ${theme.palette.primary.main}30`,
+                  "&:hover": { bgcolor: (theme) => `${theme.palette.primary.main}12` },
+                  transition: "background-color 0.15s",
+                }}
+              >
+                <Box sx={{ width: 40, height: 40, borderRadius: 2, bgcolor: "primary.main", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Typography sx={{ color: "white", fontSize: 20 }}>📍</Typography>
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" fontWeight={700} noWrap>
+                    {t("getDirections")}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap>
+                    {event.location}
+                  </Typography>
+                </Box>
+              </Paper>
+            )}
+
+            {/* RSVP CTA — above the fold, the primary action for every visitor */}
+            {isAuthenticated ? (
+              <AttendanceCta
+                myRsvpStatus={myRsvpStatus ?? null}
+                isOnList={!!(session?.user?.id && event.players.some((p) => p.userId === session.user!.id))}
+                onGoing={() => {
+                  const isOnList = session?.user?.id && event.players.some((p) => p.userId === session.user!.id);
+                  if (isOnList) {
+                    handleSetMyRsvp("yes");
+                  } else if (session?.user?.name) {
+                    handleQuickJoinPillClick(session.user.name);
+                  }
+                }}
+                onNotComing={() => {
+                  handleSetMyRsvp("no");
+                }}
+              />
+            ) : (
+              <Paper elevation={1} sx={{ borderRadius: 3, p: 2, textAlign: "center" }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  href="/api/auth/signin"
+                  sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700 }}
+                >
+                  {t("signInToJoin")}
+                </Button>
+              </Paper>
+            )}
+
+            {/* Post-game banner — only for authenticated users who can act on it */}
+            {isAuthenticated && (
             <PostGameBanner
               eventId={eventId}
               canEdit={canEditSettings}
@@ -824,9 +921,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 }, 100);
               }}
             />
+            )}
 
-            {/* Payment tracking — phase-aware: hidden when no cost + non-editor, prominent when user owes */}
-            {(event.splitCostsEnabled !== false) && (
+            {/* Payment tracking — hidden for unauthenticated users */}
+            {isAuthenticated && (event.splitCostsEnabled !== false) && (
               <PaymentSection
                 eventId={eventId}
                 canEdit={canEditSettings}
