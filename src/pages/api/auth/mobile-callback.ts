@@ -5,6 +5,9 @@ import crypto from "node:crypto";
 
 const MOBILE_CLIENT_ID = "convocados-mobile-app";
 const APP_BASE_URL = process.env.BETTER_AUTH_URL ?? "http://localhost:4321";
+// ponytail: allowlist of valid redirect URI schemes for mobile callback.
+// Only the registered app deep link is allowed — prevents open redirect + code leak.
+const ALLOWED_REDIRECT_PREFIXES = ["convocados://"];
 
 /** Ensure the mobile OAuth application exists in the DB */
 let _mobileClientInitialized = false;
@@ -40,6 +43,11 @@ async function ensureMobileClient() {
 export const GET: APIRoute = async ({ request }) => {
   const url = new URL(request.url);
   const redirectUri = url.searchParams.get("redirect_uri") ?? "convocados://auth";
+
+  // Security: validate redirect_uri against allowlist to prevent open redirect + code leak
+  if (!ALLOWED_REDIRECT_PREFIXES.some((prefix) => redirectUri.startsWith(prefix))) {
+    return Response.json({ error: "Invalid redirect_uri" }, { status: 400 });
+  }
 
   try {
     const session = await auth.api.getSession({ headers: request.headers });

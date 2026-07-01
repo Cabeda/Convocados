@@ -1,18 +1,28 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 /**
  * POST /api/push/subscribe — register a web push endpoint for the authenticated user.
  * This is per-user (not per-event). Which events notify this user is determined by EventFollow.
  */
 export const POST: APIRoute = async ({ request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
+
   const session = await getSession(request);
   if (!session?.user?.id) return Response.json({ error: "Unauthorized." }, { status: 401 });
 
   const { endpoint, keys, locale } = await request.json();
   if (!endpoint || !keys?.p256dh || !keys?.auth) {
     return Response.json({ error: "Invalid subscription." }, { status: 400 });
+  }
+
+  // ponytail: cap subscriptions per user to prevent abuse (e.g. registering thousands of endpoints)
+  const count = await prisma.pushSubscription.count({ where: { userId: session.user.id } });
+  if (count >= 10) {
+    return Response.json({ error: "Too many push subscriptions. Remove old devices first." }, { status: 429 });
   }
 
   const lang = typeof locale === "string" && locale.toLowerCase().startsWith("pt") ? "pt" : "en";
