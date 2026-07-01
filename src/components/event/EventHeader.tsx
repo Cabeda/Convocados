@@ -3,34 +3,34 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Paper, Typography, Box, Stack, Chip, Button, IconButton,
   TextField, Tooltip, alpha, useTheme, useMediaQuery, Menu, MenuItem,
-  ListItemIcon, ListItemText, Select, FormControl, Divider, LinearProgress,
+  ListItemIcon, ListItemText, Select, FormControl, Divider,
 } from "@mui/material";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
-import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import HistoryIcon from "@mui/icons-material/History";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
-import StarIcon from "@mui/icons-material/Star";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import NotificationsIcon from "@mui/icons-material/Notifications";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
-import { describeRecurrenceRule, parseRecurrenceRule } from "~/lib/recurrence";
-import { getSportPreset, SPORT_PRESETS } from "~/lib/sports";
+import { describeRecurrenceRule, parseRecurrenceRule, nextOccurrence } from "~/lib/recurrence";
+import { SPORT_PRESETS } from "~/lib/sports";
 import { googleCalendarUrl } from "~/lib/calendar";
 import { COMMON_TIMEZONES, formatDateInTz, toDateTimeLocalValue } from "~/lib/timezones";
 import type { EventData } from "./types";
 import type { Imatch } from "~/lib/random";
 import { ShareBar } from "./ShareBar";
 import { NotifyButton } from "./NotifyButton";
+import { MyNotificationsDialog } from "./MyNotificationsDialog";
 import LocationAutocomplete from "../LocationAutocomplete";
 import CourtAlternatives from "../CourtAlternatives";
 import { isPlaytomicSport } from "~/lib/playtomic";
@@ -54,24 +54,26 @@ interface Props {
   onSnackbar: (msg: string) => void;
 }
 
-function countdownUrgency(gameDate: Date): "past" | "urgent" | "soon" | "normal" {
-  const ms = gameDate.getTime() - Date.now();
-  if (ms < 0) return "past";
-  if (ms < 2 * 60 * 60 * 1000) return "urgent";
-  if (ms < 24 * 60 * 60 * 1000) return "soon";
+function countdownUrgency(gameDate: Date, durationMinutes?: number): "past" | "live" | "urgent" | "soon" | "normal" {
+  const now = Date.now();
+  const start = gameDate.getTime();
+  const end = start + (durationMinutes ?? 60) * 60_000;
+  if (now >= start && now < end) return "live";
+  if (now >= end) return "past";
+  if (start - now < 2 * 60 * 60 * 1000) return "urgent";
+  if (start - now < 24 * 60 * 60 * 1000) return "soon";
   return "normal";
 }
 
 export function EventHeader({
   eventId, event, sport, gameDate, countdown, canEditSettings,
-  isOwner, isAuthenticated, isOwnerless, localMatches,
+  isOwner: _isOwner, isAuthenticated, isOwnerless, localMatches,
   onSaveTitle, onSaveLocation, onSaveDateTime, onSaveSport, onClaimOwnership,
 }: Props) {
   const t = useT();
   const locale = detectLocale();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const rule = parseRecurrenceRule(event.recurrenceRule);
   const isPast = gameDate < new Date();
 
   // ── Edit mode ────────────────────────────────────────────────────────────────
@@ -84,6 +86,7 @@ export function EventHeader({
   const [timezoneDraft, setTimezoneDraft] = useState("UTC");
   const [sportDraft, setSportDraft] = useState("");
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [notifDialogOpen, setNotifDialogOpen] = useState(false);
 
   // ── Ref for the main card ────────────────────────────────────────────────────
   const cardRef = useRef<HTMLDivElement>(null);
@@ -112,16 +115,24 @@ export function EventHeader({
     return () => window.removeEventListener("keydown", handler);
   }, [canEditSettings, event, sport]);
 
-  const urgency = countdownUrgency(gameDate);
-  const urgencyColor = urgency === "past" ? theme.palette.text.disabled
+  const rule = parseRecurrenceRule(event.recurrenceRule);
+  const urgency = countdownUrgency(gameDate, event.durationMinutes);
+  // ponytail: recurring events in past phase get primary color (next game exists),
+  // non-recurring past events get the muted grey.
+  const isRecurringPast = urgency === "past" && !!rule;
+  const urgencyColor = urgency === "past" && !isRecurringPast ? theme.palette.text.disabled
+    : urgency === "past" && isRecurringPast ? theme.palette.primary.main
+    : urgency === "live" ? theme.palette.success.main
     : urgency === "urgent" ? theme.palette.error.main
     : urgency === "soon" ? theme.palette.warning.main
     : theme.palette.primary.main;
-  const urgencyBg = urgency === "past" ? alpha(theme.palette.text.disabled, 0.06)
+  const urgencyBg = urgency === "past" && !isRecurringPast ? alpha(theme.palette.text.disabled, 0.06)
+    : urgency === "past" && isRecurringPast ? alpha(theme.palette.primary.main, 0.08)
+    : urgency === "live" ? alpha(theme.palette.success.main, 0.1)
     : urgency === "urgent" ? alpha(theme.palette.error.main, 0.1)
     : urgency === "soon" ? alpha(theme.palette.warning.main, 0.1)
     : alpha(theme.palette.primary.main, 0.08);
-  const accentOpacity = urgency === "normal" ? 0.25 : urgency === "past" ? 0.15 : 0.8;
+  const accentOpacity = urgency === "normal" ? 0.25 : (urgency === "past" && !isRecurringPast) ? 0.15 : 0.8;
 
   const openEdit = () => {
     setTitleDraft(event.title);
@@ -158,16 +169,46 @@ export function EventHeader({
   };
 
   // ── Derived ──────────────────────────────────────────────────────────────────
-  const activePlayers = Math.min(event.players.length, event.maxPlayers);
-  const benchPlayers = Math.max(0, event.players.length - event.maxPlayers);
-  const progressPct = event.maxPlayers > 0 ? (activePlayers / event.maxPlayers) * 100 : 0;
-  const isFull = activePlayers >= event.maxPlayers;
 
   const formattedDate = formatDateInTz(gameDate, locale === "pt" ? "pt-PT" : "en-GB", event.timezone, {
     weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
 
-  const tzLabel = event.timezone && event.timezone !== "UTC"
+  // ponytail: adaptive time line — one line that changes based on urgency phase.
+  // Upgrade path: add "live" score indicator inline when live scoring is implemented.
+  const recurrenceDesc = rule ? describeRecurrenceRule(rule, locale) : null;
+  const timeLine = (() => {
+    switch (urgency) {
+      case "normal": // >24h — show full date, append recurrence
+        return recurrenceDesc ? `${formattedDate} · ${recurrenceDesc}` : formattedDate;
+      case "soon": // <24h — countdown primary, short time secondary
+        return countdown;
+      case "urgent": // <2h — countdown only
+        return countdown;
+      case "live":
+        return t("liveNow");
+      case "past":
+        // For recurring events, show the actual next game date so new players know when to come
+        if (rule) {
+          const nextDate = nextOccurrence(gameDate, rule, new Date());
+          const nextFormatted = formatDateInTz(nextDate, locale === "pt" ? "pt-PT" : "en-GB", event.timezone, {
+            weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+          });
+          return `${t("nextGame")}: ${nextFormatted}`;
+        }
+        return t("eventEnded");
+    }
+  })();
+  // Secondary hint: show date context when countdown is primary, or recurrence pattern when past+recurring
+  const timeLineSecondary = (urgency === "soon" || urgency === "urgent")
+    ? formattedDate
+    : (urgency === "past" && recurrenceDesc)
+      ? recurrenceDesc
+      : null;
+
+  // Viewer's timezone differs from event's timezone?
+  const viewerTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const tzLabel = event.timezone && event.timezone !== "UTC" && event.timezone !== viewerTz
     ? COMMON_TIMEZONES.find((tz) => tz.value === event.timezone)?.label ?? event.timezone
     : null;
 
@@ -266,50 +307,32 @@ export function EventHeader({
               )}
             </Box>
 
-            {/* ── Row 2: Countdown or "Ended" ── */}
+            {/* ── Row 2: Adaptive time line ── */}
             {!editMode && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                 <Box sx={{
                   display: "inline-flex", alignItems: "center", gap: 0.75,
                   px: 1.5, py: 0.5, borderRadius: 2, backgroundColor: urgencyBg,
                 }}>
-                  <AccessTimeIcon sx={{ color: urgencyColor, fontSize: 16 }} />
-                  <Typography variant="body2" fontWeight={700} sx={{ color: urgencyColor }}>
-                    {isPast ? t("eventEnded") : countdown}
-                  </Typography>
-                </Box>
-                <Button
-                  size="small" variant="outlined" color="inherit"
-                  href={`/events/${eventId}/history`}
-                  sx={{ fontSize: "0.75rem", py: 0.25, color: "text.secondary", borderColor: "divider" }}
-                >
-                  {t("viewResults")}
-                </Button>
-              </Box>
-            )}
-
-            {/* ── Row 3: Player progress bar ── */}
-            {!editMode && (
-              <Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                    {t("playersProgress", { n: String(activePlayers), max: String(event.maxPlayers) })}
-                    {benchPlayers > 0 && (
-                      <Typography component="span" variant="caption" color="text.disabled" sx={{ ml: 0.5 }}>
-                        +{benchPlayers} {t("benchPlayers", { n: String(benchPlayers) }).split(" ")[0].toLowerCase()}
-                      </Typography>
-                    )}
-                  </Typography>
-                  {isFull && (
-                    <Chip label={t("full")} size="small" color="error" sx={{ height: 18, fontSize: "0.65rem" }} />
+                  {urgency === "live" && (
+                    <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: urgencyColor, animation: "pulse 1.5s infinite", "@keyframes pulse": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.4 } } }} />
                   )}
+                  {urgency !== "live" && <AccessTimeIcon sx={{ color: urgencyColor, fontSize: 16 }} />}
+                  <Typography variant="body2" fontWeight={700} sx={{ color: urgencyColor }}>
+                    {timeLine}
+                  </Typography>
                 </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={progressPct}
-                  color={isFull ? "error" : progressPct >= 75 ? "warning" : "primary"}
-                  sx={{ borderRadius: 1, height: 6 }}
-                />
+                {timeLineSecondary && (
+                  <Typography variant="caption" color="text.secondary">
+                    {timeLineSecondary}
+                    {tzLabel && ` (${tzLabel})`}
+                  </Typography>
+                )}
+                {!timeLineSecondary && tzLabel && (
+                  <Typography variant="caption" color="text.disabled">
+                    ({tzLabel})
+                  </Typography>
+                )}
               </Box>
             )}
 
@@ -369,71 +392,39 @@ export function EventHeader({
               </Stack>
             ) : (
               <Stack spacing={0.75}>
-                {/* Date row with inline calendar shortcut */}
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-                  <AccessTimeIcon fontSize="small" color="action" />
-                  <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
-                    {formattedDate}
-                    {tzLabel && (
-                      <Typography component="span" variant="caption" color="text.disabled" sx={{ ml: 0.5 }}>
-                        ({tzLabel})
-                      </Typography>
-                    )}
-                  </Typography>
-                  <Tooltip title={t("addToGoogleCalendar")}>
-                    <IconButton
-                      size="small" component="a" href={calendarHref}
-                      target="_blank" rel="noopener noreferrer"
-                      sx={{ opacity: 0.5, "&:hover": { opacity: 1 }, flexShrink: 0 }}
-                    >
-                      <CalendarMonthIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-
-                {/* Location row — full row tappable */}
-                <Box
-                  component={locationHref ? "a" : "div"}
-                  href={locationHref ?? undefined}
-                  target={locationHref ? "_blank" : undefined}
-                  rel={locationHref ? "noopener noreferrer" : undefined}
-                  sx={{
-                    display: "flex", alignItems: "center", gap: 0.75,
-                    textDecoration: "none", color: "inherit", borderRadius: 1,
-                    ...(locationHref ? {
-                      cursor: "pointer",
-                      "&:hover .loc-text": { color: "primary.main", textDecoration: "underline" },
-                    } : {}),
-                  }}
-                >
-                  <LocationOnIcon fontSize="small" color={locationHref ? "primary" : "disabled"} />
-                  <Typography
-                    className="loc-text"
-                    variant="body2"
-                    color={event.location ? "text.secondary" : "text.disabled"}
-                    sx={{ transition: "color 0.15s" }}
+                {/* Location row — hidden for non-editors when empty */}
+                {(event.location || canEditSettings) && (
+                  <Box
+                    component={locationHref ? "a" : "div"}
+                    href={locationHref ?? undefined}
+                    target={locationHref ? "_blank" : undefined}
+                    rel={locationHref ? "noopener noreferrer" : undefined}
+                    sx={{
+                      display: "flex", alignItems: "center", gap: 0.75,
+                      textDecoration: "none", color: "inherit", borderRadius: 1,
+                      ...(locationHref ? {
+                        cursor: "pointer",
+                        "&:hover .loc-text": { color: "primary.main", textDecoration: "underline" },
+                      } : {}),
+                    }}
                   >
-                    {event.location || t("locationOptional")}
-                  </Typography>
-                </Box>
+                    <LocationOnIcon fontSize="small" color={locationHref ? "primary" : "disabled"} />
+                    <Typography
+                      className="loc-text"
+                      variant="body2"
+                      color={event.location ? "text.secondary" : "text.disabled"}
+                      sx={{ transition: "color 0.15s" }}
+                    >
+                      {event.location || t("locationOptional")}
+                    </Typography>
+                  </Box>
+                )}
               </Stack>
             )}
 
-            {/* ── Row 5: Chips ── */}
-            {!editMode && (
+            {/* ── Row 5: Contextual chips (minimal — only show what's actionable/critical) ── */}
+            {!editMode && (event.archivedAt || (isAuthenticated && isOwnerless)) && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
-                <Chip
-                  icon={<SportsSoccerIcon />}
-                  label={t(getSportPreset(sport).labelKey)}
-                  size="small" color="primary" variant="outlined"
-                />
-                {rule && (
-                  <Chip icon={<EventRepeatIcon />} label={describeRecurrenceRule(rule, locale)}
-                    size="small" color="secondary" />
-                )}
-                {isOwner && (
-                  <Chip icon={<StarIcon />} label={t("ownerBadge")} size="small" color="success" variant="outlined" />
-                )}
                 {event.archivedAt && (
                   <Chip label={t("archivedBadge")} size="small" color="warning" variant="outlined" />
                 )}
@@ -448,12 +439,14 @@ export function EventHeader({
 
             <Divider />
 
-            {/* ── Row 6: Actions ── */}
+            {/* ── Row 6: Actions — hide share/notify/calendar in past phase ── */}
             <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
-              <ShareBar
-                title={event.title} dateTime={gameDate} timezone={event.timezone} location={event.location}
-                maxPlayers={event.maxPlayers} playerCount={event.players.length}
-              />
+              {urgency !== "past" && (
+                <ShareBar
+                  title={event.title} dateTime={gameDate} timezone={event.timezone} location={event.location}
+                  maxPlayers={event.maxPlayers} playerCount={event.players.length}
+                />
+              )}
 
               {isMobile ? (
                 <>
@@ -506,15 +499,28 @@ export function EventHeader({
                   <ListItemIcon><AssignmentIcon fontSize="small" /></ListItemIcon>
                   <ListItemText>{t("activityLog")}</ListItemText>
                 </MenuItem>
-                <MenuItem component="a" href={`/api/events/${eventId}/calendar`} onClick={() => setAnchorEl(null)}>
-                  <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
-                  <ListItemText>{t("downloadIcs")}</ListItemText>
-                </MenuItem>
-                <MenuItem component="a" href={calendarHref} target="_blank" rel="noopener noreferrer"
-                  onClick={() => setAnchorEl(null)}>
-                  <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
-                  <ListItemText>{t("addToGoogleCalendar")}</ListItemText>
-                </MenuItem>
+                {urgency !== "past" && (
+                  <MenuItem component="a" href={`/api/events/${eventId}/calendar`} onClick={() => setAnchorEl(null)}>
+                    <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("downloadIcs")}</ListItemText>
+                  </MenuItem>
+                )}
+                {urgency !== "past" && (
+                  <MenuItem component="a" href={calendarHref} target="_blank" rel="noopener noreferrer"
+                    onClick={() => setAnchorEl(null)}>
+                    <ListItemIcon><CalendarMonthIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>{t("addToGoogleCalendar")}</ListItemText>
+                  </MenuItem>
+                )}
+                {isAuthenticated && (
+                  <>
+                    <Divider sx={{ my: 0.5 }} />
+                    <MenuItem onClick={() => { setAnchorEl(null); setNotifDialogOpen(true); }}>
+                      <ListItemIcon><NotificationsIcon fontSize="small" /></ListItemIcon>
+                      <ListItemText>{t("myNotificationsMenu")}</ListItemText>
+                    </MenuItem>
+                  </>
+                )}
                 {canEditSettings && <Divider sx={{ my: 0.5 }} />}
                 {canEditSettings && (
                   <MenuItem component="a" href={`/events/${eventId}/settings`} onClick={() => setAnchorEl(null)}>
@@ -524,6 +530,9 @@ export function EventHeader({
                 )}
               </Menu>
             </Box>
+
+            {/* Per-user notification settings dialog */}
+            <MyNotificationsDialog eventId={eventId} open={notifDialogOpen} onClose={() => setNotifDialogOpen(false)} />
 
           </Stack>
         </Box>

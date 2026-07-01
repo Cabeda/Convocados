@@ -3,7 +3,7 @@ import {
   Paper, Typography, Box, Stack, Chip, Button, Alert,
   IconButton, Tooltip, InputAdornment, TextField, Autocomplete,
   List, ListItem, ListItemText, Menu, MenuItem, ListItemIcon, Divider,
-  alpha, useTheme,
+  alpha, useTheme, LinearProgress,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
@@ -317,6 +317,16 @@ export function PlayerList({
             </Tooltip>
           )}
         </Box>
+
+        {/* Player progress bar — moved from EventHeader for proximity to the list it describes */}
+        {maxPlayers > 0 && (
+          <LinearProgress
+            variant="determinate"
+            value={Math.min((active.length / maxPlayers) * 100, 100)}
+            color={active.length >= maxPlayers ? "error" : (active.length / maxPlayers) >= 0.75 ? "warning" : "primary"}
+            sx={{ borderRadius: 1, height: 6 }}
+          />
+        )}
 
         {playerError && <Alert severity="error" onClose={() => onPlayerErrorChange(null)}>{playerError}</Alert>}
 

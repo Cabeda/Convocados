@@ -304,6 +304,61 @@ bru run oauth2 --env local --verbose
 The local callback endpoint (`/api/oauth-callback`) returns the auth code as
 JSON so Bruno CLI can capture it without needing a browser redirect.
 
+## Event Lifecycle & Game Phases
+
+### Game Phases (progressive disclosure)
+
+The event page adapts its UI based on the current phase:
+
+| Phase | Condition | Header shows | Payment section |
+|-------|-----------|-------------|-----------------|
+| **Upcoming (normal)** | >24h before | Full date + recurrence | Hidden (no cost) or collapsed summary |
+| **Upcoming (soon)** | <24h before | Countdown + date | Prominent CTA if user owes |
+| **Upcoming (urgent)** | <2h before | Countdown only | Prominent CTA |
+| **Live** | During game | Pulsing "Live now" | Hidden |
+| **Past (one-off)** | After game | "Ended" (grey) | Hidden |
+| **Past (recurring)** | After game, has recurrence | "Next game: [date]" (blue) + recurrence pattern | Hidden |
+
+### Recurring Event Reset
+
+When `nextResetAt` passes (game end time), the lazy reset:
+- Creates a `GameHistory` snapshot (teams, payments)
+- Clears payments and team assignments
+- Advances `dateTime` to next occurrence
+- Marks old `Game` as "played", creates new `Game`
+- **Players persist** — they stay on the list for the next game
+- **Follows persist** — EventFollow records are event-scoped, not game-scoped
+
+### Follow & Notification Model
+
+**Philosophy:** Notifications go to the right people at the right time. Being on the player list = following = getting notified. No unnecessary noise for spectators.
+
+#### Follow rules:
+- **On player list** → automatically following (can't unfollow while playing)
+- **Not on player list** → can manually follow/unfollow via the Follow button
+- **Auto-follow triggers:** Quick Join, claim player, admin grant, push subscription
+- **Auto-unfollow:** only on self-removal from player list
+
+#### Notification tiers (ADR 0017):
+
+| Notification type | Players | Followers (not playing) |
+|---|---|---|
+| Game reminders (24h, 2h) | ✅ | ❌ |
+| Player activity (joins/leaves) | ✅ | ❌ |
+| Post-game (score, MVP, payments) | ✅ | ❌ |
+| Event changes (date/location/title) | ✅ | ✅ |
+| Recruitment (spots available) | ✅ | ✅ |
+
+#### Resolution order for notification delivery:
+1. Per-user per-event override (`EventFollow.muteX` fields)
+2. Role-based default (non-players blocked from Tier 2)
+3. Global user preferences (`NotificationPreferences`)
+
+#### User-facing controls:
+- **Follow button** (EventHeader): shown only to non-players. Simple toggle.
+- **"My notifications" dialog** (More menu): shown to all authenticated users. Per-game toggle with clear descriptions. Shows effective state (push disabled warning, player-only gating).
+- **User account settings**: global push/email on/off, reminder timing.
+
 ## Common Patterns
 
 ### API Route Handler

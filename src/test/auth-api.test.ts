@@ -331,7 +331,7 @@ describe("POST /api/events/[id]/players (linkToAccount)", () => {
     expect(hints).toHaveLength(1);
   });
 
-  it("does not create EventFollow on auto-link (linkToAccount=false)", async () => {
+  it("creates EventFollow on auto-link (linkToAccount=false) when name matches a user", async () => {
     const user = await seedUser();
     mockAuth(user.id, user.name);
     const id = await seedEvent();
@@ -340,10 +340,10 @@ describe("POST /api/events/[id]/players (linkToAccount)", () => {
     const follow = await testPrisma.eventFollow.findUnique({
       where: { eventId_userId: { eventId: id, userId: user.id } },
     });
-    expect(follow).toBeNull();
+    expect(follow).not.toBeNull();
   });
 
-  it("does not create EventFollow when owner adds a different user", async () => {
+  it("creates EventFollow when owner adds a different user whose name resolves", async () => {
     const owner = await seedUser();
     const playerUser = await seedUser({ name: "Player", email: "player@test.com" });
     mockAuth(owner.id);
@@ -353,7 +353,7 @@ describe("POST /api/events/[id]/players (linkToAccount)", () => {
     const follow = await testPrisma.eventFollow.findUnique({
       where: { eventId_userId: { eventId: id, userId: playerUser.id } },
     });
-    expect(follow).toBeNull();
+    expect(follow).not.toBeNull();
   });
 });
 

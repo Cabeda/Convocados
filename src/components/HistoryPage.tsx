@@ -1282,12 +1282,6 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
             </Box>
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
-              <Button variant="outlined" startIcon={<EmojiEventsIcon />}
-                href={`/events/${eventId}/rankings`} size="small"
-                sx={{ borderRadius: 2, textTransform: "none" }}>
-                {t("ratings")}
-              </Button>
-
               {(isOwner || isAdmin) && (
                 <Button variant="contained" startIcon={<AddCircleIcon />}
                   onClick={() => setShowAddHistorical(true)} size="small"

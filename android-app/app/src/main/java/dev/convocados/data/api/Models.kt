@@ -436,6 +436,9 @@ data class UndoData(
 @Serializable
 data class FollowStateResponse(
     val following: Boolean = false,
+    val isPlayer: Boolean = false,
+    val isAdmin: Boolean = false,
+    val pushEnabled: Boolean = true,
     val mutePlayerActivity: Boolean? = null,
     val muteReminders: Boolean? = null,
     val mutePostGame: Boolean? = null,

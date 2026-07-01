@@ -28,6 +28,7 @@ export const GET: APIRoute = async ({ request }) => {
     maxPlayers: e.maxPlayers,
     playerCount: e.players.length,
     spotsLeft: Math.max(0, e.maxPlayers - e.players.length),
+    isRecurring: e.isRecurring,
   }));
 
   return Response.json(buildPaginatedResponse(mapped, limit));

@@ -482,8 +482,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     throw e;
   }
 
-  // Auto-follow: only for user-initiated actions (Quick Join)
-  if (linkToAccount === true && linkedUserId) {
+  // Auto-follow: when a player is linked to a user account (self-join or organizer adding a known user)
+  if (linkedUserId) {
     await prisma.eventFollow.upsert({
       where: { eventId_userId: { eventId, userId: linkedUserId } },
       create: { eventId, userId: linkedUserId },
