@@ -50,9 +50,15 @@ data class BottomNavItem(val route: String, val label: String, val icon: @Compos
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
+fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processingAuth: Boolean = false) {
     val navController = rememberNavController()
-    val startDestination = if (isAuthenticated) Route.Games.route else Route.Login.route
+
+    // While processing OAuth callback, don't navigate — show current screen
+    val startDestination = when {
+        processingAuth -> Route.Login.route // stay on login but don't re-navigate
+        isAuthenticated -> Route.Games.route
+        else -> Route.Login.route
+    }
 
     // Handle deep link navigation
     LaunchedEffect(deepLink, isAuthenticated) {
@@ -60,6 +66,18 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
         val route = DeepLink.deepLinkToRoute(deepLink)
         if (route != null) {
             navController.navigate(route) { launchSingleTop = true }
+        }
+    }
+
+    // Navigate to games when auth completes (after processingAuth flips to false)
+    LaunchedEffect(isAuthenticated, processingAuth) {
+        if (isAuthenticated && !processingAuth) {
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (currentRoute == Route.Login.route) {
+                navController.navigate(Route.Games.route) {
+                    popUpTo(Route.Login.route) { inclusive = true }
+                }
+            }
         }
     }
 
