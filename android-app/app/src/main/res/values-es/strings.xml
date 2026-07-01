@@ -134,6 +134,8 @@
     <string name="post_game_payments_summary">%1$d/%2$d pagados</string>
     <string name="post_game_no_cost">No se ha fijado coste para este partido</string>
     <string name="post_game_progress">%1$d de %2$d hechas</string>
+    <string name="post_game_mvp_done">MVP votado</string>
+    <string name="post_game_mvp_pending">Votar al MVP</string>
     <string name="post_game_payments_label">Pagos del último partido</string>
     <string name="post_game_payments_hint">Toca un jugador para alternar pagado y luego guarda.</string>
     <string name="post_game_payments_locked">Los pagos están bloqueados. Desbloquea el partido en el Historial para editarlos.</string>

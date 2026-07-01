@@ -387,7 +387,12 @@ class EventDetailViewModel @Inject constructor(
     fun saveScore(eventId: String, historyId: String, s1: Int, s2: Int) {
         viewModelScope.launch {
             runCatching { api.updateScore(eventId, historyId, s1, s2) }
-                .onSuccess { repository.refreshEventDetail(eventId) }
+                .onSuccess {
+                    repository.refreshEventDetail(eventId)
+                    // Refresh post-game status so banner hides when allComplete
+                    val pg = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
+                    _state.value = _state.value.copy(postGame = pg)
+                }
                 .onFailure { e ->
                     val msg = parseApiErrorMessage(e) ?: "Failed to update score"
                     _state.value = _state.value.copy(error = msg)
@@ -761,8 +766,30 @@ fun EventDetailScreen(
                                         }
 
                                         // Progress summary
+                                        val totalTasks = 2 + (if (pg.mvpEnabled) 1 else 0)
+                                        val mvpDone = !pg.mvpEnabled || pg.mvpComplete
+                                        val finalDoneCount = doneCount + (if (mvpDone) 1 else 0)
+
+                                        // ── Task 3: MVP vote (if enabled) ────
+                                        if (pg.mvpEnabled) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Icon(
+                                                    if (pg.mvpComplete) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                    null, modifier = Modifier.size(20.dp),
+                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                )
+                                                Text(
+                                                    if (pg.mvpComplete) stringResource(R.string.post_game_mvp_done) else stringResource(R.string.post_game_mvp_pending),
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                            }
+                                        }
+
                                         Text(
-                                            stringResource(R.string.post_game_progress, doneCount, 2),
+                                            stringResource(R.string.post_game_progress, finalDoneCount, totalTasks),
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                                             style = MaterialTheme.typography.labelSmall,
                                             modifier = Modifier.align(Alignment.CenterHorizontally),
