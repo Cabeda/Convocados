@@ -398,7 +398,7 @@ jobs:
         id: pnpm-cache
         run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-cache.outputs.dir }}
           key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
@@ -429,7 +429,7 @@ jobs:
           BASE_HASH=$(cat pnpm-lock.yaml prisma/schema.prisma | sha256sum | cut -c1-12)
           echo "hash=$BASE_HASH" >> $GITHUB_OUTPUT
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         id: base-cache
         with:
           path: /tmp/base-built
