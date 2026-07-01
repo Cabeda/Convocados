@@ -14,7 +14,7 @@ RUN pnpm install --frozen-lockfile --prod
 
 # Prisma client (runtime query engine)
 COPY prisma ./prisma
-RUN pnpx prisma generate
+RUN pnpx prisma@6 generate
 
 # Litestream for SQLite replication
 ADD https://github.com/benbjohnson/litestream/releases/download/v0.5.13/litestream-0.5.13-linux-x86_64.tar.gz /tmp/litestream.tar.gz
