@@ -142,6 +142,7 @@
     <string name="post_game_progress">%1$d of %2$d done</string>
     <string name="post_game_mvp_done">MVP voted</string>
     <string name="post_game_mvp_pending">Vote for the MVP</string>
+    <string name="post_game_vote_mvp_button">Vote now</string>
     <string name="post_game_payments_label">Payments for the last game</string>
     <string name="post_game_payments_hint">Tap a player to toggle paid, then save.</string>
     <string name="post_game_payments_locked">Payments are locked. Unlock the game from History to edit.</string>

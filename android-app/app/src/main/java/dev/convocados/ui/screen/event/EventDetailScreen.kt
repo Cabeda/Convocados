@@ -786,6 +786,13 @@ fun EventDetailScreen(
                                                     modifier = Modifier.weight(1f),
                                                 )
                                             }
+                                            if (!pg.mvpComplete && pg.latestHistoryId != null) {
+                                                Button(
+                                                    onClick = { onHistoryClick(pg.latestHistoryId) },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                                ) { Text(stringResource(R.string.post_game_vote_mvp_button), color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleSmall) }
+                                            }
                                         }
 
                                         Text(
