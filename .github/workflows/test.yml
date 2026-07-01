@@ -27,7 +27,7 @@ jobs:
       - name: Get pnpm store directory
         id: pnpm-cache
         run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-cache.outputs.dir }}
           key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
@@ -76,7 +76,7 @@ jobs:
       - name: Get pnpm store directory
         id: pnpm-cache
         run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-cache.outputs.dir }}
           key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
@@ -95,7 +95,7 @@ jobs:
         run: echo "version=$(pnpm playwright --version)" >> $GITHUB_OUTPUT
       - name: Cache Playwright browsers
         id: pw-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ steps.pw-version.outputs.version }}-chromium
