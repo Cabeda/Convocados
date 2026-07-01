@@ -93,6 +93,25 @@ docs: update AGENTS.md
 7. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
 8. **Before merging**, always run the full test suite (`npm run test`) and type checking (`npm run typecheck`) to ensure the build will succeed in CI/CD
 
+**CRITICAL: ALL changes MUST go through PRs.** Never push directly to `main`. This includes:
+- Bug fixes (even one-liners)
+- Config changes
+- Documentation updates
+- Hotfixes
+
+The only exception is the automated version bump commit from the release workflow (`[skip ci]`).
+
+**Workflow:**
+```
+main (protected) ← PR ← feat/branch
+```
+Never `git push origin main` directly. Always:
+1. Create a branch
+2. Push the branch
+3. Open a PR
+4. Wait for CI
+5. Merge only when user confirms
+
 ## Testing Guidelines
 
 ### Test File Location
@@ -350,26 +369,32 @@ dex sync               # Push tasks to GitHub Issues
 
 ## Session Completion
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until the PR is created and pushed.
 
 **MANDATORY WORKFLOW:**
 
 1. **File issues for remaining work** - `dex create "..."` for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - `dex complete` finished work, `dex start` in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+4. **Create PR and push branch** - This is MANDATORY:
    ```bash
-   git pull --rebase
-   dex sync                  # auto-sync is on, but be explicit
-   git push
-   git status  # MUST show "up to date with origin"
+   # Create branch if on main
+   git checkout -b feat/description-of-work  # or fix/ refactor/ etc.
+   git add <files>
+   git commit -m "feat: description"
+   git push -u origin feat/description-of-work
+   gh pr create --title "feat: description" --body "Summary of changes"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+5. **Wait for CI** - Check `gh pr checks <number>` passes
+6. **Clean up** - Clear stashes, prune remote branches
+7. **Verify** - Branch pushed, PR created, CI green
+8. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
+- NEVER push directly to `main` — always use a PR
+- Work is NOT complete until the PR is created and pushed to the remote
+- NEVER stop before pushing the branch — that leaves work stranded locally
+- NEVER say "ready to push when you are" — YOU must push the branch and create the PR
 - If push fails, resolve and retry until it succeeds
+- Only merge when the user explicitly asks to merge
+- If CI fails on the PR, fix the issue on the same branch and push again
