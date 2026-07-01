@@ -136,6 +136,7 @@
     <string name="post_game_progress">%1$d sur %2$d faites</string>
     <string name="post_game_mvp_done">MVP voté</string>
     <string name="post_game_mvp_pending">Voter pour le MVP</string>
+    <string name="post_game_vote_mvp_button">Voter maintenant</string>
     <string name="post_game_payments_label">Paiements du dernier match</string>
     <string name="post_game_payments_hint">Touchez un joueur pour basculer payé, puis enregistrez.</string>
     <string name="post_game_payments_locked">Les paiements sont verrouillés. Déverrouillez le match dans l\'Historique pour les modifier.</string>

@@ -136,6 +136,7 @@
     <string name="post_game_progress">%1$d von %2$d erledigt</string>
     <string name="post_game_mvp_done">MVP gewählt</string>
     <string name="post_game_mvp_pending">MVP wählen</string>
+    <string name="post_game_vote_mvp_button">Jetzt wählen</string>
     <string name="post_game_payments_label">Zahlungen für das letzte Spiel</string>
     <string name="post_game_payments_hint">Tippe auf einen Spieler, um „bezahlt“ umzuschalten, dann speichern.</string>
     <string name="post_game_payments_locked">Zahlungen sind gesperrt. Entsperre das Spiel im Verlauf, um sie zu bearbeiten.</string>
