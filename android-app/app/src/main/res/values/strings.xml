@@ -117,6 +117,8 @@
     <string name="post_game_results">Post-game results</string>
     <string name="event_changes">Event changes</string>
     <string name="unfollow">Unfollow</string>
+    <string name="notify_admin_section_title">As organizer, you also receive:</string>
+    <string name="notify_admin_section_desc">Payment confirmations from players, self-reported payments needing approval, and alerts when your game needs more players.</string>
     <string name="leave">Leave</string>
     <string name="password_protected">This game is password-protected</string>
     <string name="password">Password</string>

@@ -1,189 +1,102 @@
 import React, { useState, useEffect } from "react";
-import {
-  Button, Tooltip, Popover, Stack, Typography, Switch,
-  FormControlLabel, Divider, ButtonGroup,
-} from "@mui/material";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
-import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
+import { Button, Snackbar } from "@mui/material";
+import BookmarkIcon from "@mui/icons-material/Bookmark";
+import BookmarkBorderIcon from "@mui/icons-material/BookmarkBorder";
 import { useT } from "~/lib/useT";
-
-interface FollowState {
-  following: boolean;
-  mutePlayerActivity: boolean | null;
-  muteReminders: boolean | null;
-  mutePostGame: boolean | null;
-  muteEventDetails: boolean | null;
-}
 
 interface Props {
   eventId: string;
   isAuthenticated: boolean;
 }
 
+/**
+ * ponytail: Follow button — simple binary toggle for non-players.
+ * Players are auto-followed (button hidden for them).
+ * Follow = game appears in My Games + get event-change notifications.
+ */
 export function NotifyButton({ eventId, isAuthenticated }: Props) {
   const t = useT();
-  const [state, setState] = useState<FollowState>({ following: false, mutePlayerActivity: null, muteReminders: null, mutePostGame: null, muteEventDetails: null });
-  const [pushDenied, setPushDenied] = useState(false);
+  const [following, setFollowing] = useState(false);
+  const [isPlayer, setIsPlayer] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetch(`/api/events/${eventId}/follow`).then(r => r.json()).then(d => setState(d)).catch(() => {});
-    if ("Notification" in window && Notification.permission === "denied") setPushDenied(true);
+    fetch(`/api/events/${eventId}/follow`)
+      .then((r) => r.json())
+      .then((d) => {
+        setFollowing(!!d.following);
+        setIsPlayer(!!d.isPlayer);
+      })
+      .catch(() => {});
   }, [eventId, isAuthenticated]);
 
-  const handleFollow = async () => {
+  const handleToggle = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/events/${eventId}/follow`, { method: "POST" });
-      const data = await res.json();
-      setState(data);
+      if (following) {
+        const res = await fetch(`/api/events/${eventId}/follow`, { method: "DELETE" });
+        if (res.ok) {
+          setFollowing(false);
+          setToast(t("unfollowedToast"));
+        }
+      } else {
+        const res = await fetch(`/api/events/${eventId}/follow`, { method: "POST" });
+        if (res.ok) {
+          setFollowing(true);
+          setToast(t("followedToast"));
 
-      if ("serviceWorker" in navigator && "PushManager" in window && Notification.permission !== "denied") {
-        try {
-          const reg = await navigator.serviceWorker.register("/sw.js");
-          await navigator.serviceWorker.ready;
-          const keyRes = await fetch("/api/push/vapid-public-key");
-          const { publicKey } = await keyRes.json();
-          const padding = "=".repeat((4 - (publicKey.length % 4)) % 4);
-          const base64 = (publicKey + padding).replace(/-/g, "+").replace(/_/g, "/");
-          const raw = window.atob(base64);
-          const key = new Uint8Array(raw.length);
-          for (let i = 0; i < raw.length; i++) key[i] = raw.charCodeAt(i);
-          const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-          await fetch("/api/push/subscribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...sub.toJSON(), locale: navigator.language }),
-          });
-        } catch { /* push permission denied or unavailable */ }
+          // Register push subscription silently on first follow
+          if ("serviceWorker" in navigator && "PushManager" in window && Notification.permission !== "denied") {
+            try {
+              const reg = await navigator.serviceWorker.register("/sw.js");
+              await navigator.serviceWorker.ready;
+              const keyRes = await fetch("/api/push/vapid-public-key");
+              const { publicKey } = await keyRes.json();
+              const padding = "=".repeat((4 - (publicKey.length % 4)) % 4);
+              const base64 = (publicKey + padding).replace(/-/g, "+").replace(/_/g, "/");
+              const raw = window.atob(base64);
+              const key = new Uint8Array(raw.length);
+              for (let i = 0; i < raw.length; i++) key[i] = raw.charCodeAt(i);
+              const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+              await fetch("/api/push/subscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ...sub.toJSON(), locale: navigator.language }),
+              });
+            } catch { /* push permission denied or unavailable — silent */ }
+          }
+        }
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUnfollow = async () => {
-    setLoading(true);
-    try {
-      await fetch(`/api/events/${eventId}/follow`, { method: "DELETE" });
-      setState({ following: false, mutePlayerActivity: null, muteReminders: null, mutePostGame: null, muteEventDetails: null });
-      setAnchorEl(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleOverride = async (field: keyof FollowState) => {
-    const current = state[field] as boolean | null;
-    const newValue = current === true ? null : true; // toggle: muted → enabled (null), enabled → muted (true)
-    setState(prev => ({ ...prev, [field]: newValue }));
-    try {
-      const res = await fetch(`/api/events/${eventId}/follow`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: newValue }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setState(prev => ({ ...prev, ...data }));
-      }
-    } catch { /* revert on error handled by next fetch */ }
-  };
-
-  // ADR 0017: Preset shortcuts
-  const applyPreset = async (preset: "all" | "event_only") => {
-    try {
-      const res = await fetch(`/api/events/${eventId}/follow`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ preset }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setState(prev => ({ ...prev, ...data }));
-      }
-    } catch { /* ignore */ }
-  };
-
-  const handleClick = (e: React.MouseEvent<HTMLElement>) => {
-    if (state.following) {
-      setAnchorEl(e.currentTarget);
-    } else {
-      handleFollow();
-    }
-  };
-
-  if (!isAuthenticated) return null;
-
-  if (pushDenied && !state.following) return (
-    <Tooltip title={t("notifyDenied")}>
-      <span>
-        <Button variant="outlined" size="small" disabled startIcon={<NotificationsOffIcon />} sx={{ flexShrink: 0 }}>
-          {t("notifyDenied")}
-        </Button>
-      </span>
-    </Tooltip>
-  );
+  // Hidden for unauthenticated users and players (players are auto-followed)
+  if (!isAuthenticated || isPlayer) return null;
 
   return (
     <>
       <Button
-        variant="outlined"
+        variant={following ? "contained" : "outlined"}
         size="small"
-        color={state.following ? "success" : "inherit"}
-        startIcon={state.following ? <NotificationsIcon /> : <NotificationsNoneIcon />}
-        onClick={handleClick}
+        color={following ? "success" : "inherit"}
+        startIcon={following ? <BookmarkIcon /> : <BookmarkBorderIcon />}
+        onClick={handleToggle}
         disabled={loading}
-        sx={{ flexShrink: 0 }}
+        disableElevation
+        sx={{ flexShrink: 0, borderRadius: 2, textTransform: "none", fontWeight: 600 }}
       >
-        {state.following ? t("notifyEnabled") : t("notifySubscribe")}
+        {following ? t("followingGame") : t("followGame")}
       </Button>
-
-      <Popover
-        open={!!anchorEl}
-        anchorEl={anchorEl}
-        onClose={() => setAnchorEl(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-        slotProps={{ paper: { sx: { p: 2, minWidth: 260 } } }}
-      >
-        <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-          {t("notificationSettingsForGame")}
-        </Typography>
-        <Stack spacing={0.5}>
-          <FormControlLabel
-            control={<Switch size="small" checked={state.mutePlayerActivity !== true} onChange={() => toggleOverride("mutePlayerActivity")} />}
-            label={<Typography variant="body2">{t("playerActivity")}</Typography>}
-          />
-          <FormControlLabel
-            control={<Switch size="small" checked={state.muteReminders !== true} onChange={() => toggleOverride("muteReminders")} />}
-            label={<Typography variant="body2">{t("gameReminders")}</Typography>}
-          />
-          <FormControlLabel
-            control={<Switch size="small" checked={state.mutePostGame !== true} onChange={() => toggleOverride("mutePostGame")} />}
-            label={<Typography variant="body2">{t("postGameResults")}</Typography>}
-          />
-          <FormControlLabel
-            control={<Switch size="small" checked={state.muteEventDetails !== true} onChange={() => toggleOverride("muteEventDetails")} />}
-            label={<Typography variant="body2">{t("eventDetails")}</Typography>}
-          />
-        </Stack>
-        <Divider sx={{ my: 1.5 }} />
-        <ButtonGroup size="small" fullWidth sx={{ mb: 1 }}>
-          <Button onClick={() => applyPreset("all")} variant={state.mutePlayerActivity === false ? "contained" : "outlined"}>
-            {t("notifyPresetAll")}
-          </Button>
-          <Button onClick={() => applyPreset("event_only")} variant={state.mutePlayerActivity === null && state.muteReminders === null ? "contained" : "outlined"}>
-            {t("notifyPresetEventOnly")}
-          </Button>
-        </ButtonGroup>
-        <Button size="small" color="error" onClick={handleUnfollow} disabled={loading} fullWidth>
-          {t("notifyUnsubscribe")}
-        </Button>
-      </Popover>
+      <Snackbar
+        open={!!toast}
+        autoHideDuration={3000}
+        onClose={() => setToast(null)}
+        message={toast}
+      />
     </>
   );
 }

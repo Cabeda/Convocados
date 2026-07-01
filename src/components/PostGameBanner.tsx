@@ -35,6 +35,7 @@ export interface PostGameStatus {
   hasPendingPastPayments: boolean;
   mvpEnabled: boolean;
   mvpComplete: boolean;
+  bannerMvpComplete: boolean;
 }
 
 interface Props {
