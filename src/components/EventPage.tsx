@@ -825,24 +825,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
               }}
             />
 
-            {/* Payment tracking — always for the upcoming/current game */}
+            {/* Payment tracking — phase-aware: hidden when no cost + non-editor, prominent when user owes */}
             {(event.splitCostsEnabled !== false) && (
-              <Paper id="payment-section" elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
-                <Typography variant="subtitle2" fontWeight={700}
-                  color="text.secondary"
-                  sx={{ mb: 1 }}
-                >
-                  {t("upcomingGamePaymentsLabel")}
-                </Typography>
-                <PaymentSection
-                  eventId={eventId}
-                  canEdit={canEditSettings}
-                  activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
-                  expanded={paymentExpanded}
-                  onExpandedChange={(exp) => setPaymentExpanded(exp ? true : undefined)}
-                  onPaymentChange={() => setBannerRefreshKey((k) => k + 1)}
-                />
-              </Paper>
+              <PaymentSection
+                eventId={eventId}
+                canEdit={canEditSettings}
+                activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
+                expanded={paymentExpanded}
+                onExpandedChange={(exp) => setPaymentExpanded(exp ? true : undefined)}
+                onPaymentChange={() => setBannerRefreshKey((k) => k + 1)}
+                gamePhase={new Date(event.dateTime) > new Date() ? "upcoming" : "past"}
+                currentUserName={session?.user?.name ?? null}
+              />
             )}
 
             {/* Players — single merged component (name+email+contacts+pills).

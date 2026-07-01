@@ -342,8 +342,8 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
         <Container maxWidth="md" sx={{ py: 4 }}>
           <Stack spacing={3}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-              <Button variant="outlined" startIcon={<ArrowBackIcon />} href={`/events/${eventId}/history`} size="small">
-                {t("history")}
+              <Button variant="outlined" startIcon={<ArrowBackIcon />} href={`/events/${eventId}`} size="small">
+                {t("backToGame")}
               </Button>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
                 <EmojiEventsIcon color="primary" />

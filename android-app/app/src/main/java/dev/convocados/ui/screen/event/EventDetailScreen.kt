@@ -85,6 +85,8 @@ data class EventScreenState(
     val undoData: UndoData? = null,
     val teamMoveUndo: TeamMoveUndo? = null,
     val isFollowing: Boolean = false,
+    val isPlayer: Boolean = false,
+    val isAdmin: Boolean = false,
     val mutePlayerActivity: Boolean? = null,
     val muteReminders: Boolean? = null,
     val mutePostGame: Boolean? = null,
@@ -169,6 +171,8 @@ class EventDetailViewModel @Inject constructor(
                 loading = false, refreshing = false, postGame = postGame, knownPlayers = known,
                 postGamePayments = seededPayments,
                 isFollowing = following?.following ?: false,
+                isPlayer = following?.isPlayer ?: false,
+                isAdmin = following?.isAdmin ?: false,
                 mutePlayerActivity = following?.mutePlayerActivity,
                 muteReminders = following?.muteReminders,
                 mutePostGame = following?.mutePostGame,
@@ -180,8 +184,12 @@ class EventDetailViewModel @Inject constructor(
 
     fun toggleFollow(eventId: String) {
         if (_state.value.isFollowing) {
-            // Already following — show notification preferences sheet
-            _state.value = _state.value.copy(showNotificationSheet = true)
+            // Unfollow — API will block if user is a player (409)
+            viewModelScope.launch {
+                _state.value = _state.value.copy(isFollowing = false)
+                runCatching { api.unfollowEvent(eventId) }
+                    .onFailure { _state.value = _state.value.copy(isFollowing = true) }
+            }
             return
         }
         viewModelScope.launch {
@@ -193,6 +201,10 @@ class EventDetailViewModel @Inject constructor(
 
     fun dismissNotificationSheet() {
         _state.value = _state.value.copy(showNotificationSheet = false)
+    }
+
+    fun showNotifications() {
+        _state.value = _state.value.copy(showNotificationSheet = true)
     }
 
     fun updateNotificationOverride(eventId: String, field: String, value: Boolean?) {
@@ -549,12 +561,31 @@ fun EventDetailScreen(
                 NotificationToggleRow(stringResource(R.string.event_changes), state.muteEventDetails) { value ->
                     viewModel.updateNotificationOverride(eventId, "muteEventDetails", value)
                 }
+                // Admin-specific section
+                if (state.isAdmin) {
+                    Spacer(Modifier.height(16.dp))
+                    HorizontalDivider()
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.notify_admin_section_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.notify_admin_section_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(Modifier.height(24.dp))
-                TextButton(
-                    onClick = { viewModel.unfollow(eventId) },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(stringResource(R.string.unfollow)) }
+                if (!state.isPlayer) {
+                    TextButton(
+                        onClick = { viewModel.unfollow(eventId) },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.unfollow)) }
+                }
                 Spacer(Modifier.height(16.dp))
             }
         }
@@ -568,12 +599,25 @@ fun EventDetailScreen(
                 title = { Text(event?.title ?: stringResource(R.string.event_fallback), maxLines = 1) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
-                    IconButton(onClick = { viewModel.toggleFollow(eventId) }) {
-                        Icon(
-                            if (state.isFollowing) Icons.Default.Notifications else Icons.Default.NotificationsNone,
-                            contentDescription = if (state.isFollowing) stringResource(R.string.following) else stringResource(R.string.follow),
-                            tint = if (state.isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    // Follow button: hidden for players (auto-followed), shown for non-players
+                    if (!state.isPlayer) {
+                        IconButton(onClick = { viewModel.toggleFollow(eventId) }) {
+                            Icon(
+                                if (state.isFollowing) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = if (state.isFollowing) stringResource(R.string.following) else stringResource(R.string.follow),
+                                tint = if (state.isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    // Notification settings: shown when following (players or manual followers)
+                    if (state.isFollowing) {
+                        IconButton(onClick = { viewModel.showNotifications() }) {
+                            Icon(
+                                Icons.Default.Notifications,
+                                contentDescription = stringResource(R.string.notification_settings),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),

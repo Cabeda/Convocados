@@ -86,6 +86,8 @@ export function PaymentSection({
   expanded: controlledExpanded,
   onExpandedChange,
   onPaymentChange,
+  gamePhase = "upcoming",
+  currentUserName = null,
 }: {
   eventId: string;
   canEdit: boolean;
@@ -93,6 +95,8 @@ export function PaymentSection({
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
   onPaymentChange?: () => void;
+  gamePhase?: "upcoming" | "past";
+  currentUserName?: string | null;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -148,6 +152,19 @@ export function PaymentSection({
     ? costData.totalAmount / activePlayerCount
     : 0;
   const methods = hasCost ? parsePaymentMethods(costData.effectivePaymentMethods) : [];
+
+  // ponytail: derive current user's payment status for the player-facing CTA.
+  // Upgrade path: use userId match instead of name match for multi-name disambiguation.
+  const myPayment = hasCost && currentUserName && costData.payments.length > 0
+    ? costData.payments.find((p) => p.playerName.toLowerCase() === currentUserName.toLowerCase())
+    : null;
+  const myOwes = myPayment && myPayment.status !== "paid";
+  const myPaid = myPayment && myPayment.status === "paid";
+  const paidCount = hasCost ? costData.payments.filter((p) => p.status === "paid").length : 0;
+  const totalPayments = hasCost ? costData.payments.length : 0;
+
+  // Phase-aware visibility: hide entirely when no cost set and user can't edit
+  const shouldHide = !hasCost && !canEdit && gamePhase === "upcoming";
 
   const handleSaveCost = async () => {
     const amount = parseFloat(costDraft);
@@ -280,8 +297,70 @@ export function PaymentSection({
     return "default";
   };
 
+  if (shouldHide) return null;
+
   return (
-    <>
+    <Paper id="payment-section" elevation={2} sx={{ borderRadius: 3, overflow: "hidden" }}>
+      {/* ── Player-facing CTA: prominent when user owes, collapsed when paid ── */}
+      {hasCost && gamePhase === "upcoming" && !canEdit && myPaid && (
+        <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2, pb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+          <CheckIcon sx={{ color: theme.palette.success.main, fontSize: 18 }} />
+          <Typography variant="body2" color="success.main" fontWeight={600}>
+            {t("paymentYouPaid")}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
+            {t("paymentSocialProof", { paid: String(paidCount), total: String(totalPayments) })}
+          </Typography>
+        </Box>
+      )}
+
+      {hasCost && gamePhase === "upcoming" && myOwes && (
+        <Box sx={{
+          px: { xs: 2, sm: 3 }, pt: 2, pb: 2,
+          background: `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.08)} 0%, ${alpha(theme.palette.primary.main, 0.04)} 100%)`,
+          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+        }}>
+          <Stack spacing={1.5}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <PaymentsIcon sx={{ color: theme.palette.warning.main, fontSize: 20 }} />
+              <Typography variant="body1" fontWeight={700}>
+                {myPayment!.amount.toFixed(2)} {costData!.currency}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
+                {t("paymentSocialProof", { paid: String(paidCount), total: String(totalPayments) })}
+              </Typography>
+            </Box>
+
+            {/* One-tap payment methods */}
+            {methods.length > 0 && (
+              <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
+                {methods.map((m, idx) => {
+                  const deepLink = getDeepLink(m, myPayment!.amount, costData!.currency);
+                  const display = getDisplayValue(m);
+                  return (
+                    <Chip
+                      key={`cta-${m.type}-${idx}`}
+                      label={`${t(LABEL_KEYS[m.type])}${display ? ` · ${display}` : ""}`}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                      component={deepLink ? "a" : "span"}
+                      href={deepLink || undefined}
+                      target={deepLink ? "_blank" : undefined}
+                      rel={deepLink ? "noopener noreferrer" : undefined}
+                      clickable={!!deepLink}
+                      sx={{ fontWeight: 600, borderRadius: 2 }}
+                    />
+                  );
+                })}
+              </Box>
+            )}
+          </Stack>
+        </Box>
+      )}
+
+      {/* ── Admin/organizer accordion (full controls) ── */}
+      <Box sx={{ px: { xs: 2, sm: 3 }, py: hasCost && gamePhase === "upcoming" && (myOwes || myPaid) && !canEdit ? 1 : 2 }}>
       <Accordion
         disableGutters
         elevation={0}
@@ -746,6 +825,7 @@ export function PaymentSection({
           </Stack>
         </AccordionDetails>
       </Accordion>
+      </Box>
 
       {/* Remove cost confirmation */}
       <Dialog open={confirmRemoveOpen} onClose={() => setConfirmRemoveOpen(false)}>
@@ -770,7 +850,7 @@ export function PaymentSection({
           <Button onClick={handleClearOverride} color="warning" variant="contained">{t("clearOverride")}</Button>
         </DialogActions>
       </Dialog>
-    </>
+    </Paper>
   );
 }
 
