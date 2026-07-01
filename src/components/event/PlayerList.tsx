@@ -22,7 +22,6 @@ import { matchesWithName } from "~/lib/stringMatch";
 import type { Player, PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 import { ConfirmLeaveDialog, type LeaveContext } from "./ConfirmLeaveDialog";
-import { AttendanceCta } from "./AttendanceCta";
 import type { RsvpStatus } from "~/lib/rsvp";
 
 export type { RsvpStatus } from "~/lib/rsvp";
@@ -269,42 +268,6 @@ export function PlayerList({
   return (
     <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
       <Stack spacing={2}>
-        {/* #XXX AttendanceCta — "Your response" widget for the signed-in user. Two buttons,
-            always rendered for users on the list or following the event. Anonymous = nothing. */}
-        {currentUserId && (myPlayer || players.length >= 0) && (
-          <AttendanceCta
-            myRsvpStatus={myRsvpStatus ?? null}
-            isOnList={!!myPlayer}
-            onGoing={() => {
-              if (myPlayer) {
-                onSetMyRsvp?.("yes");
-              } else {
-                onJoinAsSelf?.();
-              }
-            }}
-            onNotComing={() => {
-              if (!myPlayer) {
-                // Follower-only: no removal needed, just record Rsvp=no. One-click.
-                onSetMyRsvp?.("no");
-                return;
-              }
-              // On-list user: only show the confirm dialog when the "no replacement" warning
-              // is warranted (within 48h + bench empty). For the simple case, archive + Rsvp=no
-              // happen in one click — the slot is freed up immediately. The 60s undo snackbar
-              // (wired in EventPage) gives the user a way back if they fat-fingered.
-              const snapshot = leaveSnapshotRef.current;
-              const benchEmptyAfter = computeBenchEmptyAfter(
-                myPlayer.id, snapshot.players, snapshot.active, snapshot.maxPlayers,
-              );
-              const within48h = computeWithin48h(snapshot.eventDateTime);
-              if (within48h && benchEmptyAfter) {
-                openLeaveDialog(myPlayer.id, "self");
-              } else {
-                onSetMyRsvp?.("no");
-              }
-            }}
-          />
-        )}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Typography variant="h6" fontWeight={600}>{t("players")}</Typography>
           <Chip label={t("activePlayers", { n: active.length, max: maxPlayers })} size="small" color="primary" />
@@ -318,15 +281,33 @@ export function PlayerList({
           )}
         </Box>
 
-        {/* Player progress bar — moved from EventHeader for proximity to the list it describes */}
-        {maxPlayers > 0 && (
-          <LinearProgress
-            variant="determinate"
-            value={Math.min((active.length / maxPlayers) * 100, 100)}
-            color={active.length >= maxPlayers ? "error" : (active.length / maxPlayers) >= 0.75 ? "warning" : "primary"}
-            sx={{ borderRadius: 1, height: 6 }}
-          />
-        )}
+        {/* Player progress bar + social momentum nudge */}
+        {maxPlayers > 0 && (() => {
+          const fillPct = active.length / maxPlayers;
+          const spotsLeft = maxPlayers - active.length;
+          const isFull = spotsLeft <= 0;
+          // ponytail: momentum messages at different fill levels.
+          // Ceiling: static thresholds. Upgrade path: A/B test copy.
+          const nudge = isFull ? t("momentumFull")
+            : fillPct >= 0.8 ? t("momentumFillingFast", { n: String(spotsLeft) })
+            : fillPct >= 0.5 ? t("momentumAlmostHalf", { n: String(spotsLeft) })
+            : null;
+          return (
+            <Box>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(fillPct * 100, 100)}
+                color={isFull ? "error" : fillPct >= 0.75 ? "warning" : "primary"}
+                sx={{ borderRadius: 1, height: 6 }}
+              />
+              {nudge && (
+                <Typography variant="caption" fontWeight={600} sx={{ mt: 0.5, display: "block", color: isFull ? "error.main" : fillPct >= 0.8 ? "warning.main" : "text.secondary" }}>
+                  {nudge}
+                </Typography>
+              )}
+            </Box>
+          );
+        })()}
 
         {playerError && <Alert severity="error" onClose={() => onPlayerErrorChange(null)}>{playerError}</Alert>}
 

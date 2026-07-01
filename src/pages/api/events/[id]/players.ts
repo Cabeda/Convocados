@@ -14,6 +14,7 @@ import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
 import { archiveAndLeave } from "../../../../lib/leave.server";
+import { balanceTeams } from "../../../../lib/elo.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 import {
   IDEMPOTENCY_HEADER,
@@ -66,7 +67,9 @@ export async function validateTeams(eventId: string, maxPlayers: number): Promis
 }
 
 /**
- * If teams have been generated, add a player to the team with fewer members.
+ * If teams have been generated, add a player to the appropriate team.
+ * When the event has balanced=true, triggers a full rebalance (minimum swaps).
+ * Otherwise, adds to the team with fewer players.
  */
 export async function addPlayerToTeams(eventId: string, playerName: string) {
   const teams = await prisma.teamResult.findMany({
@@ -75,7 +78,41 @@ export async function addPlayerToTeams(eventId: string, playerName: string) {
   });
   if (teams.length === 0) return; // no teams generated yet
 
-  // Pick the team with fewer players
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true } });
+
+  if (event?.balanced && teams.length === 2) {
+    // Full rebalance: include all current members + new player
+    const allPlayers = await prisma.player.findMany({
+      where: { eventId, archivedAt: null },
+      orderBy: { order: "asc" },
+      take: event.maxPlayers,
+    });
+    const activeNames = new Set(allPlayers.map(p => p.name));
+    // Only rebalance if new player is in active range
+    if (activeNames.has(playerName)) {
+      const ratings = await prisma.playerRating.findMany({ where: { eventId } });
+      const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
+      const playersWithRatings = [...activeNames].map((name) => ({
+        name,
+        rating: ratingMap.get(name) ?? 1000,
+      }));
+      const newMatches = balanceTeams(playersWithRatings, [event.teamOneName, event.teamTwoName]);
+
+      await prisma.$transaction([
+        prisma.teamMember.deleteMany({ where: { teamResultId: { in: teams.map(t => t.id) } } }),
+        ...newMatches.flatMap((match) => {
+          const teamId = teams.find(t => t.name === match.team)?.id;
+          if (!teamId) return [];
+          return match.players.map((p) =>
+            prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: teamId } })
+          );
+        }),
+      ]);
+      return;
+    }
+  }
+
+  // Non-balanced: just add to smaller team
   const sorted = [...teams].sort((a, b) => a.members.length - b.members.length);
   const target = sorted[0];
 
@@ -91,8 +128,7 @@ export async function addPlayerToTeams(eventId: string, playerName: string) {
 /**
  * If teams have been generated, remove a player from their team.
  * If a promoted bench player name is given, slot them into the same team.
- * If the event has balanced=true, check if swapping the promoted player
- * to the other team (with one player swapping back) improves ELO balance.
+ * When the event has balanced=true, triggers a full rebalance instead of a single swap.
  */
 export async function removePlayerFromTeams(eventId: string, playerName: string, promotedName?: string) {
   const teams = await prisma.teamResult.findMany({
@@ -101,16 +137,52 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
   });
   if (teams.length === 0) return;
 
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true } });
+
+  // Balanced mode: full rebalance with current active players (excluding the leaving one, including promoted)
+  if (event?.balanced && teams.length === 2) {
+    const allPlayers = await prisma.player.findMany({
+      where: { eventId, archivedAt: null },
+      orderBy: { order: "asc" },
+      take: event.maxPlayers,
+    });
+    const activeNames = allPlayers.map(p => p.name).filter(n => n !== playerName);
+    if (promotedName && !activeNames.includes(promotedName)) {
+      activeNames.push(promotedName);
+    }
+
+    if (activeNames.length >= 2) {
+      const ratings = await prisma.playerRating.findMany({ where: { eventId } });
+      const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
+      const playersWithRatings = activeNames.map((name) => ({
+        name,
+        rating: ratingMap.get(name) ?? 1000,
+      }));
+      const newMatches = balanceTeams(playersWithRatings, [event.teamOneName, event.teamTwoName]);
+
+      await prisma.$transaction([
+        prisma.teamMember.deleteMany({ where: { teamResultId: { in: teams.map(t => t.id) } } }),
+        ...newMatches.flatMap((match) => {
+          const teamId = teams.find(t => t.name === match.team)?.id;
+          if (!teamId) return [];
+          return match.players.map((p) =>
+            prisma.teamMember.create({ data: { name: p.name, order: p.order, teamResultId: teamId } })
+          );
+        }),
+      ]);
+      return;
+    }
+  }
+
+  // Non-balanced: manual remove + optional promote
   let promotedTeamId: string | null = null;
 
   for (const team of teams) {
     const member = team.members.find((m) => m.name === playerName);
     if (!member) continue;
 
-    // Remove the player
     await prisma.teamMember.delete({ where: { id: member.id } });
 
-    // Re-index remaining members
     const remaining = team.members
       .filter((m) => m.id !== member.id)
       .sort((a, b) => a.order - b.order);
@@ -120,7 +192,6 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
       }
     }
 
-    // If a bench player was promoted, add them to this same team
     if (promotedName) {
       await prisma.teamMember.create({
         data: {
@@ -135,12 +206,10 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
     break;
   }
 
-  // ELO-balanced swap: if the event is balanced and a player was promoted,
-  // check if swapping the promoted player with someone on the other team
-  // would reduce the ELO gap between teams.
+  // Non-balanced: try single swap for minor improvement
   if (promotedName && promotedTeamId) {
-    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true } });
-    if (event?.balanced) {
+    const eventCheck = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true } });
+    if (eventCheck?.balanced) {
       await tryBalancedSwap(eventId, promotedName, promotedTeamId);
     }
   }
