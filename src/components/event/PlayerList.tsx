@@ -102,13 +102,13 @@ export function PlayerList({
   onAddPlayer, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
   onRandomize, onConfirmReRandomize, canRemovePlayer,
   currentUserId,
-  myRsvpStatus,
+  myRsvpStatus: _myRsvpStatus,
   guestRsvpMap,
   userRsvpMap,
   canEditGuestAttendance,
   onSetMyRsvp,
   onSetGuestRsvp,
-  onJoinAsSelf,
+  onJoinAsSelf: _onJoinAsSelf,
   eventDateTime,
 }: Props) {
   const t = useT();
@@ -191,7 +191,7 @@ export function PlayerList({
 
   // #XXX Attendance — the user's own player record (null if not on the list).
   // Drives the "Join this game" vs "Going" copy on the AttendanceCta.
-  const myPlayer: Player | undefined = currentUserId
+  const _myPlayer: Player | undefined = currentUserId
     ? players.find((p) => p.userId === currentUserId)
     : undefined;
 
