@@ -39,7 +39,8 @@ export type EventAction =
   | "override_cleared"
   | "rsvp_yes"
   | "rsvp_no"
-  | "rsvp_maybe";
+  | "rsvp_maybe"
+  | "game_cancelled";
 
 /**
  * Append an entry to the event activity log.

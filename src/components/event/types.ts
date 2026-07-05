@@ -48,6 +48,7 @@ export interface EventData {
   latitude?: number | null;
   longitude?: number | null;
   courtWatchConfig?: string | null;
+  gameStatus?: string | null;
 }
 
 export interface KnownPlayer {

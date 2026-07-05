@@ -1,7 +1,7 @@
 import React from "react";
 import {
   Button, Dialog, DialogTitle, DialogContent,
-  DialogContentText, DialogActions, Snackbar,
+  DialogContentText, DialogActions, Snackbar, Alert,
 } from "@mui/material";
 import { useT } from "~/lib/useT";
 
@@ -14,6 +14,12 @@ interface Props {
   relinquishConfirmOpen: boolean;
   onRelinquishClose: () => void;
   onRelinquishConfirm: () => void;
+  // Cancel game confirmation
+  cancelConfirmOpen: boolean;
+  onCancelConfirmClose: () => void;
+  onCancelConfirm: () => void;
+  cancelConfirmBusy: boolean;
+  isRecurring: boolean;
   // Snackbar
   snackbar: string | null;
   onSnackbarClose: () => void;
@@ -26,6 +32,7 @@ interface Props {
 export function EventDialogs({
   confirmOpen, onConfirmClose, onConfirmRandomize,
   relinquishConfirmOpen, onRelinquishClose, onRelinquishConfirm,
+  cancelConfirmOpen, onCancelConfirmClose, onCancelConfirm, cancelConfirmBusy, isRecurring,
   snackbar, onSnackbarClose,
   undoData, onUndoDismiss, onUndo,
 }: Props) {
@@ -54,6 +61,25 @@ export function EventDialogs({
           <Button onClick={onRelinquishClose}>{t("cancelEdit")}</Button>
           <Button onClick={onRelinquishConfirm} color="warning" variant="contained">
             {t("relinquishOwnership")}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Cancel game confirmation */}
+      <Dialog open={cancelConfirmOpen} onClose={cancelConfirmBusy ? undefined : onCancelConfirmClose}>
+        <DialogTitle>{t("cancelGameConfirmTitle")}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>{t("cancelGameConfirmDesc")}</DialogContentText>
+          {isRecurring && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              {t("cancelGameRecurringNote")}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onCancelConfirmClose} disabled={cancelConfirmBusy}>{t("cancelEdit")}</Button>
+          <Button onClick={onCancelConfirm} color="error" variant="contained" disabled={cancelConfirmBusy}>
+            {t("cancelGame")}
           </Button>
         </DialogActions>
       </Dialog>

@@ -1083,6 +1083,15 @@ const de: TranslationKeys = {
   costMonthlyGamesCovered: "Games covered per month",
   costDropInSurcharge: "Drop-in surcharge",
   costDropInSurchargeTooltip: "Extra amount added to per-game payers who are not monthly subscribers.",
+
+  // Cancel game
+  cancelGame: "Spiel absagen",
+  cancelGameConfirmTitle: "Dieses Spiel absagen?",
+  cancelGameConfirmDesc: "Bist du sicher, dass du dieses Spiel absagen möchtest? Alle Follower werden benachrichtigt.",
+  cancelGameRecurringNote: "Ein neues Spiel wird zum nächsten geplanten Termin geöffnet.",
+  gameCancelled: "Abgesagt",
+  gameCancelledSnackbar: "Spiel wurde abgesagt.",
+  logGameCancelled: "{actor} sagte das Spiel ab",
 };
 
 export default de;
