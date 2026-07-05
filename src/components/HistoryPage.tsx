@@ -22,6 +22,7 @@ import PaymentIcon from "@mui/icons-material/Payment";
 import LoginIcon from "@mui/icons-material/Login";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
 import DeleteIcon from "@mui/icons-material/Delete";
+import SentimentSatisfiedAltIcon from "@mui/icons-material/SentimentSatisfiedAlt";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -64,6 +65,7 @@ interface HistoryEntry {
   editable: boolean;
   source: string;
   eloProcessed: boolean;
+  isFriendly: boolean;
   eloUpdates?: { name: string; delta: number }[] | null;
 }
 
@@ -456,6 +458,21 @@ function HistoryCardFull({
     onUpdate(json);
   };
 
+  const [togglingFriendly, setTogglingFriendly] = useState(false);
+  const handleToggleFriendly = async () => {
+    setTogglingFriendly(true);
+    setError(null);
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isFriendly: !entry.isFriendly }),
+    });
+    const json = await res.json();
+    setTogglingFriendly(false);
+    if (!res.ok) { setError(json.error); return; }
+    onUpdate(json);
+  };
+
   const [approvingElo, setApprovingElo] = useState(false);
   const handleApproveElo = async () => {
     setApprovingElo(true);
@@ -672,6 +689,13 @@ function HistoryCardFull({
           />
           {isOwner ? (
             <>
+              <Tooltip title={entry.isFriendly ? t("markCompetitive") : t("markFriendly")}>
+                <span>
+                  <IconButton size="small" color={entry.isFriendly ? "success" : "default"} onClick={handleToggleFriendly} disabled={togglingFriendly}>
+                    <SentimentSatisfiedAltIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
               <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
                 <span>
                   <IconButton size="small" color={entry.editable ? "default" : "warning"} onClick={handleToggleLock} disabled={unlocking}>
@@ -1258,12 +1282,6 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
             </Box>
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
-              <Button variant="outlined" startIcon={<EmojiEventsIcon />}
-                href={`/events/${eventId}/rankings`} size="small"
-                sx={{ borderRadius: 2, textTransform: "none" }}>
-                {t("ratings")}
-              </Button>
-
               {(isOwner || isAdmin) && (
                 <Button variant="contained" startIcon={<AddCircleIcon />}
                   onClick={() => setShowAddHistorical(true)} size="small"

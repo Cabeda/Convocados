@@ -256,7 +256,6 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
   const playerByName = new Map(players.map((p) => [p.name, p]));
 
   const tableRows: TableRowData[] = (() => {
-    const _ratingByName = new Map(ratings.map((r) => [r.name, r]));
     const rows: TableRowData[] = [];
     const seen = new Set<string>();
 
@@ -277,20 +276,24 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
       seen.add(r.name.toLowerCase());
     }
 
-    for (const p of players) {
-      if (!seen.has(p.name.toLowerCase())) {
-        rows.push({
-          name: p.name,
-          rating: null,
-          initialRating: null,
-          gamesPlayed: 0,
-          wins: 0,
-          draws: 0,
-          losses: 0,
-          mvpAwards: 0,
-          playerId: p.id,
-          userId: p.userId,
-        });
+    // ponytail: Only append unrated players once all rating pages are loaded,
+    // otherwise players whose ratings are on a later page appear as 0.
+    if (!hasMore) {
+      for (const p of players) {
+        if (!seen.has(p.name.toLowerCase())) {
+          rows.push({
+            name: p.name,
+            rating: null,
+            initialRating: null,
+            gamesPlayed: 0,
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            mvpAwards: 0,
+            playerId: p.id,
+            userId: p.userId,
+          });
+        }
       }
     }
 
@@ -339,8 +342,8 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
         <Container maxWidth="md" sx={{ py: 4 }}>
           <Stack spacing={3}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-              <Button variant="outlined" startIcon={<ArrowBackIcon />} href={`/events/${eventId}/history`} size="small">
-                {t("history")}
+              <Button variant="outlined" startIcon={<ArrowBackIcon />} href={`/events/${eventId}`} size="small">
+                {t("backToGame")}
               </Button>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
                 <EmojiEventsIcon color="primary" />

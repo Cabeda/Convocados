@@ -100,6 +100,15 @@ export const POST: APIRoute = async ({ request }) => {
     },
   });
 
+  // ADR 0016: create the first Game for this Event
+  const game = await prisma.game.create({
+    data: { eventId: event.id, dateTime },
+  });
+  await prisma.event.update({
+    where: { id: event.id },
+    data: { currentGameId: game.id },
+  });
+
   // Schedule reminder jobs — wrapped in try/catch so event creation never fails because of scheduling
   try {
     await scheduleEventReminders(event.id, event.dateTime, event.durationMinutes);

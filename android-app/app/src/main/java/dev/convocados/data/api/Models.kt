@@ -285,6 +285,7 @@ data class NotificationPrefs(
     val gameReminderPush: Boolean = true,
     val playerActivityPush: Boolean = true,
     val eventDetailsPush: Boolean = true,
+    val postGamePush: Boolean = true,
     val weeklySummaryEmail: Boolean = true,
     val paymentReminderEmail: Boolean = true,
     val paymentReminderPush: Boolean = true,
@@ -435,6 +436,9 @@ data class UndoData(
 @Serializable
 data class FollowStateResponse(
     val following: Boolean = false,
+    val isPlayer: Boolean = false,
+    val isAdmin: Boolean = false,
+    val pushEnabled: Boolean = true,
     val mutePlayerActivity: Boolean? = null,
     val muteReminders: Boolean? = null,
     val mutePostGame: Boolean? = null,

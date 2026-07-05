@@ -117,6 +117,8 @@
     <string name="post_game_results">Post-game results</string>
     <string name="event_changes">Event changes</string>
     <string name="unfollow">Unfollow</string>
+    <string name="notify_admin_section_title">As organizer, you also receive:</string>
+    <string name="notify_admin_section_desc">Payment confirmations from players, self-reported payments needing approval, and alerts when your game needs more players.</string>
     <string name="leave">Leave</string>
     <string name="password_protected">This game is password-protected</string>
     <string name="password">Password</string>
@@ -140,6 +142,9 @@
     <string name="post_game_payments_summary">%1$d/%2$d paid</string>
     <string name="post_game_no_cost">No cost set for this game</string>
     <string name="post_game_progress">%1$d of %2$d done</string>
+    <string name="post_game_mvp_done">MVP voted</string>
+    <string name="post_game_mvp_pending">Vote for the MVP</string>
+    <string name="post_game_vote_mvp_button">Vote now</string>
     <string name="post_game_payments_label">Payments for the last game</string>
     <string name="post_game_payments_hint">Tap a player to toggle paid, then save.</string>
     <string name="post_game_payments_locked">Payments are locked. Unlock the game from History to edit.</string>
@@ -193,6 +198,16 @@
     <string name="event_updates">Event updates</string>
     <string name="event_updates_desc">When event details change</string>
     <string name="payment_reminders">Payment reminders</string>
+    <string name="post_game_results_desc">Scores and wrap-up after the game ends</string>
+    <string name="notification_tiers_title">How notifications work</string>
+    <string name="notification_tiers_desc">You get event updates (cancellations, invites, open spots) for all games you follow. Game details (player activity, reminders, scores) are only sent when you\'re playing — or you can enable \"All updates\" per event.</string>
+
+    <!-- Notification quick actions -->
+    <string name="action_im_in">I\'m in</string>
+    <string name="action_cant_make_it">Can\'t make it</string>
+    <string name="action_join">Join</string>
+    <string name="action_add_score">Add score</string>
+    <string name="action_confirm_payment">Confirm</string>
     <string name="email_notifications">Email notifications</string>
     <string name="enable_email">Enable email</string>
     <string name="enable_email_desc">Master toggle for all emails</string>

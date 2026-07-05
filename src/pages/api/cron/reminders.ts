@@ -3,7 +3,7 @@ import { getUpcomingReminders, getPostGameReminders, markReminderSent } from "~/
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 import { cleanupStalePushTokens, sendPushToUser } from "~/lib/push.server";
 import { sendReminder, sendPaymentReminder } from "~/lib/email.server";
-import { getNotificationPrefs, wantsEmailReminder, wantsPaymentReminderEmail, wantsPaymentReminderPush } from "~/lib/notificationPrefs.server";
+import { getNotificationPrefs, wantsEmailReminder, wantsPaymentReminderEmail } from "~/lib/notificationPrefs.server";
 import { getPlayersWithPendingPayments, shouldSendPaymentReminder, markPaymentReminderSent } from "~/lib/paymentReminders.server";
 import { cleanupExpiredRateLimits } from "~/lib/apiRateLimit.server";
 import { expireUnconfirmed } from "~/lib/priority.server";
@@ -45,11 +45,11 @@ export const POST: APIRoute = async ({ request }) => {
     for (const r of reminders) {
       try {
         // Enqueue push notification — drained at end of cron after emails are sent
-        enqueueNotification(r.eventId, "reminder", {
+        await enqueueNotification(r.eventId, "reminder", {
           title: r.eventTitle,
           key: type === "24h" ? "notifyGameReminder24h" : type === "2h" ? "notifyGameReminder2h" : "notifyGameReminder1h",
           params: { title: r.eventTitle },
-          url: `/events/${r.eventId}`,
+          url: `/events/${r.eventId}?action=rsvp`,
           spotsLeft: 0,
           reminderType: type,
         });
@@ -97,17 +97,20 @@ export const POST: APIRoute = async ({ request }) => {
     }
   }
 
-  // ── Payment reminders ─────────────────────────────────────────────────────
+  // ── Payment nudge escalation (ADR 0018) ────────────────────────────────────
+  // Replaces flat daily reminders with 3-stage escalation + organizer alert.
+  let paymentEscalation = { stage1Sent: [] as string[], stage2Sent: [] as string[], stage3Sent: [] as string[], organizerAlerts: [] as string[] };
+  try {
+    const { processPaymentEscalation } = await import("~/lib/paymentNudgeEscalation.server");
+    paymentEscalation = await processPaymentEscalation();
+  } catch (err) {
+    log.error({ err }, "Failed to process payment escalation");
+  }
+
+  // Legacy email reminders — still send email for users who want it (stage-agnostic)
   const paymentRemindersSent: string[] = [];
   try {
     const pendingPayments = await getPlayersWithPendingPayments();
-
-    // Batch-load prefs for all users with pending payments
-    const ppUserIds = [...new Set(pendingPayments.map((p) => p.userId))];
-    const ppPrefsRows = ppUserIds.length > 0
-      ? await prisma.notificationPreferences.findMany({ where: { userId: { in: ppUserIds } } })
-      : [];
-    const ppPrefsMap = new Map(ppPrefsRows.map((p: { userId: string }) => [p.userId, p]));
 
     await Promise.allSettled(
       pendingPayments.map((pp) =>
@@ -117,39 +120,26 @@ export const POST: APIRoute = async ({ request }) => {
             if (!shouldSend) return;
 
             const prefs = await getNotificationPrefs(pp.userId);
-            const raw = ppPrefsMap.get(pp.userId);
-            const effective = raw ? { ...prefs, ...raw } : prefs;
-
-            const wantsEmail = wantsPaymentReminderEmail(effective);
-            const wantsPush = wantsPaymentReminderPush(effective);
-            if (!wantsEmail && !wantsPush) return;
+            const wantsEmail = wantsPaymentReminderEmail(prefs);
+            if (!wantsEmail) return;
 
             const eventUrl = `${APP_URL}/events/${pp.eventId}?action=pay`;
-            const pushBody = `💸 You owe ${pp.amount.toFixed(2)} ${pp.currency} for ${pp.eventTitle}`;
-
-            if (wantsEmail) {
-              await sendPaymentReminder(pp.email, {
-                eventTitle: pp.eventTitle,
-                amount: pp.amount.toFixed(2),
-                currency: pp.currency,
-                eventUrl,
-              });
-            }
-
-            if (wantsPush) {
-              await sendPushToUser(pp.userId, pp.eventTitle, pushBody, eventUrl);
-            }
-
+            await sendPaymentReminder(pp.email, {
+              eventTitle: pp.eventTitle,
+              amount: pp.amount.toFixed(2),
+              currency: pp.currency,
+              eventUrl,
+            });
             await markPaymentReminderSent(pp.eventId, pp.userId);
             paymentRemindersSent.push(`${pp.email}:${pp.eventId}`);
           } catch (err) {
-            log.error({ email: pp.email, eventId: pp.eventId, err }, "Failed to send payment reminder");
+            log.error({ email: pp.email, eventId: pp.eventId, err }, "Failed to send payment reminder email");
           }
         }),
       ),
     );
   } catch (err) {
-    log.error({ err }, "Failed to process payment reminders");
+    log.error({ err }, "Failed to process payment reminder emails");
   }
 
   // ── Post-game reminders ───────────────────────────────────────────────────
@@ -160,11 +150,17 @@ export const POST: APIRoute = async ({ request }) => {
     const postGameReminders = await getPostGameReminders();
     for (const r of postGameReminders) {
       try {
-        enqueueNotification(r.eventId, "post_game", {
+        // ADR 0017: Use recurring-aware message key for post-game notification
+        const pgEvent = await prisma.event.findUnique({
+          where: { id: r.eventId },
+          select: { isRecurring: true },
+        });
+        const pgKey = pgEvent?.isRecurring ? "postGameNotificationRecurring" as const : "postGameNotification" as const;
+        await enqueueNotification(r.eventId, "post_game", {
           title: r.eventTitle,
-          key: "postGameNotification",
+          key: pgKey,
           params: { title: r.eventTitle },
-          url: `/events/${r.eventId}`,
+          url: `/events/${r.eventId}?action=add-score`,
           spotsLeft: 0,
         });
         postGameRemindersSent.push(r.eventId);
@@ -205,22 +201,33 @@ export const POST: APIRoute = async ({ request }) => {
   // ── #457 RSVP 48h fanout + 24h organizer summary ──────────────────────────
   const rsvpPingsSent: string[] = [];
   const rsvpSummariesSent: string[] = [];
+  // ADR 0017: Capture T-48h events BEFORE marking rsvpCutoffSent (shared with recruitment)
+  const t48hEvents = await getEventsNeedingRsvpPing();
   try {
-    const rsvpEvents = await getEventsNeedingRsvpPing();
-    for (const e of rsvpEvents) {
+    for (const e of t48hEvents) {
       const recipientIds = await getRsvpRecipients(e.id);
       if (recipientIds.length === 0) {
         // nothing to ping — still mark sent so we don't re-check this event
         await markRsvpCutoffSent(e.id);
         continue;
       }
+
+      // ADR 0018: Auto-confirm regulars and suppress their RSVP ping
+      const { getAutoConfirmedUserIds, applyAutoConfirm } = await import("~/lib/autoConfirm.server");
+      const autoConfirmed = await getAutoConfirmedUserIds(e.id);
+      if (autoConfirmed.size > 0) {
+        await applyAutoConfirm(e.id);
+      }
+
       for (const userId of recipientIds) {
+        // Skip RSVP ping for auto-confirmed users
+        if (autoConfirmed.has(userId)) continue;
         try {
           await sendPushToUser(
             userId,
             e.title,
             `Are you coming to ${e.title}?`,
-            `/events/${e.id}`,
+            `/events/${e.id}?action=rsvp`,
           );
           rsvpPingsSent.push(`${userId}:${e.id}`);
         } catch (err) {
@@ -250,6 +257,94 @@ export const POST: APIRoute = async ({ request }) => {
     log.error({ err }, "Failed to process RSVP 48h/24h ticks");
   }
 
+  // ── ADR 0017: Recruitment ping at T-48h for non-full games ─────────────────
+  const recruitmentPingsSent: string[] = [];
+  try {
+    for (const e of t48hEvents) {
+      const event = await prisma.event.findUnique({
+        where: { id: e.id },
+        select: { id: true, title: true, maxPlayers: true, recruitmentThreshold: true },
+      });
+      if (!event) continue;
+
+      const activePlayers = await prisma.player.count({
+        where: { eventId: event.id, archivedAt: null },
+      });
+      const spotsLeft = Math.max(0, event.maxPlayers - activePlayers);
+
+      // Only send if game is NOT full (has spots remaining)
+      if (spotsLeft === 0) continue;
+
+      // Get active player userIds to exclude from recruitment
+      const playerUsers = await prisma.player.findMany({
+        where: { eventId: event.id, archivedAt: null, userId: { not: null } },
+        select: { userId: true },
+      });
+      const playerUserIds = new Set(playerUsers.map((p) => p.userId as string));
+
+      // Get followers who are NOT playing
+      const follows = await prisma.eventFollow.findMany({
+        where: { eventId: event.id, muteReminders: { not: true } },
+        select: { userId: true },
+      });
+      const nonPlayingFollowers = follows.filter((f) => !playerUserIds.has(f.userId));
+
+      if (nonPlayingFollowers.length > 0) {
+        // Route through notification queue for locale-aware delivery + tier resolution
+        await enqueueNotification(event.id, "recruitment", {
+          title: event.title,
+          key: "notifyRecruitment",
+          params: { title: event.title },
+          url: `/events/${event.id}?action=join`,
+          spotsLeft,
+        });
+        recruitmentPingsSent.push(`${event.id}:${nonPlayingFollowers.length}`);
+      }
+    }
+  } catch (err) {
+    log.error({ err }, "Failed to process recruitment pings");
+  }
+
+  // ── ADR 0018: T-24h urgent recruitment + organizer share-sheet notification ─
+  try {
+    const summaryEventsForRecruitment = await getEventsNeedingRsvpSummary();
+    for (const e of summaryEventsForRecruitment) {
+      const event = await prisma.event.findUnique({
+        where: { id: e.id },
+        select: { id: true, title: true, maxPlayers: true, recruitmentThreshold: true, ownerId: true },
+      });
+      if (!event) continue;
+
+      const activePlayers = await prisma.player.count({
+        where: { eventId: event.id, archivedAt: null },
+      });
+      const spotsLeft = Math.max(0, event.maxPlayers - activePlayers);
+      if (spotsLeft === 0) continue;
+
+      // Urgent recruitment to non-playing followers
+      await enqueueNotification(event.id, "recruitment", {
+        title: event.title,
+        key: "notifyRecruitmentUrgent",
+        params: { title: event.title, n: String(spotsLeft) },
+        url: `/events/${event.id}?action=join`,
+        spotsLeft,
+      });
+      recruitmentPingsSent.push(`${event.id}:24h`);
+
+      // Organizer share-sheet prompt
+      if (event.ownerId) {
+        await sendPushToUser(
+          event.ownerId,
+          event.title,
+          `🔗 ${event.title} needs ${spotsLeft} more — share the invite link?`,
+          `/events/${event.id}?action=share`,
+        ).catch((err) => log.error({ err, eventId: event.id }, "Failed to send organizer share prompt"));
+      }
+    }
+  } catch (err) {
+    log.error({ err }, "Failed to process T-24h recruitment pings");
+  }
+
   // Drain the notification job queue — must happen before marking reminders sent
   // so that if the cron is killed mid-run, reminders are not marked sent without push delivery
   let notificationJobsDrained = 0;
@@ -267,6 +362,16 @@ export const POST: APIRoute = async ({ request }) => {
     log.error({ err }, "Failed to clean up stale push tokens");
   }
 
+  // ── ADR 0018: Organizer daily digest ────────────────────────────────────────
+  let digestsSent: string[] = [];
+  try {
+    const { processOrganizerDigests } = await import("~/lib/organizerDigest.server");
+    const digestResult = await processOrganizerDigests();
+    digestsSent = digestResult.sent;
+  } catch (err) {
+    log.error({ err }, "Failed to process organizer digests");
+  }
+
   // Mark reminders as sent only after push delivery is complete
   await Promise.allSettled([
     ...remindersToMark.map(({ eventId, type }) =>
@@ -282,7 +387,7 @@ export const POST: APIRoute = async ({ request }) => {
   ]);
 
   return new Response(
-    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent }),
+    JSON.stringify({ ok: true, sent, emailsSent, paymentRemindersSent, paymentEscalation, postGameRemindersSent, rateLimitsCleaned, priorityExpired, walletCreditsExpired, notificationJobsDrained, stalePushTokensCleaned, rsvpPingsSent, rsvpSummariesSent, recruitmentPingsSent, digestsSent }),
     { headers: { "Content-Type": "application/json" } },
   );
 };

@@ -1,10 +1,32 @@
 # Convocados — Domain Glossary
 
-## Game / Event
-A sports match or recurring session. The core entity. Used interchangeably.
+## Event
+A recurring series or one-off template. Holds configuration (title, location, sport, maxPlayers, recurrence rule, payment settings, priority settings). The container for one or more Games. URL: `/events/:id`.
+_Avoid_: game (when referring to the series)
+
+## Game
+A single occurrence of an Event — one date, one player list, one score. The unit of participation: Players join a Game, RSVPs answer a Game, payments settle a Game. A non-recurring Event has exactly one Game. A recurring Event spawns a new Game on each recurrence cycle.
+
+A Game has a lifecycle: `upcoming → in_progress → played | cancelled`. Transitions are lazy (triggered on first GET after the time condition is met).
+_Avoid_: event (when referring to a single occurrence), instance, occurrence (code uses `Game` exclusively)
+
+## Friendly Game
+A Game marked with `isFriendly: true` by the Owner/Admin. Friendly Games are excluded from ELO calculations. All other mechanics (attendance, payments, MVP voting, stats counting) remain unchanged. Settable at any time — before, during, or after the Game. Toggling retroactively triggers ELO reprocessing for the Event.
+
+Use cases: casual sessions with guests, holiday matches, unbalanced rosters, first-timer introductions.
+_Avoid_: exhibition, practice, scrimmage
 
 ## Player
-A person registered to participate in a specific Game. Has a `name`, optionally linked to a `User` via `userId`. One user can be a Player in many games. "Joined" now refers strictly to participation (has a linked Player record) — distinct from "followed" which controls dashboard visibility.
+A participation record in a specific **Game** (via `GameParticipant`). The per-game row that tracks order/position. Linked to an **EventPlayer** (the persistent series identity). "Joined" means having a GameParticipant record in the current Game.
+
+## EventPlayer
+The persistent identity of a participant within an **Event** series. One per person per Event. Holds the name, optional `userId` link, cached ELO rating, and win/loss/attendance counters. Either anonymous (name-keyed, no userId) or authenticated (userId-linked).
+
+Anonymous EventPlayers can be **claimed** by an authenticated User, inheriting all history. Claim is blocked if any Game overlap exists between the two identities.
+
+EventPlayer.name is mutable (owner/admin can rename for typo fixes or disambiguation). Name changes do not propagate to historical denormalized fields (GamePayment.playerName, MvpVote names capture the name at time of write).
+
+_Avoid_: PlayerRating (absorbed into EventPlayer), series player
 
 ## Owner
 The User who created the Game or to whom ownership was transferred. Has full management control. A Game has exactly zero or one Owner.
@@ -15,12 +37,12 @@ A User granted management privileges for a Game by the Owner (via `EventAdmin`).
 ## Follow
 An explicit relationship between a User and a Game (stored in `EventFollow`). Following a Game means:
 1. It appears on the User's "My games" dashboard.
-2. It is the **gating condition** for receiving notifications from that Game — only followers receive push notifications (web + mobile), subject to per-event overrides.
+2. It is the **gating condition** for receiving notifications from that Game — only followers receive push notifications (web + mobile), subject to per-event overrides and notification tiers.
 
-Each `EventFollow` carries nullable per-type override columns (`mutePlayerActivity`, `muteReminders`, `mutePostGame`, `muteEventDetails`). Tri-state semantics:
-- `null` — use the user's global preference from `NotificationPreferences`
-- `true` — suppress this notification type for this game regardless of global setting
-- `false` — force-enable this type for this game regardless of global setting
+Each `EventFollow` carries nullable per-type override columns (`mutePlayerActivity`, `muteReminders`, `mutePostGame`, `muteEventDetails`). Tri-state semantics with **role-aware defaults**:
+- `null` — use role-based default: **Players** (active GameParticipant in the current Game) receive game-level notifications; **non-Players** do not. Falls through to global preference only for event-level types.
+- `true` — suppress this notification type for this game regardless of role or global setting
+- `false` — force-enable this type for this game regardless of role (this is how a non-Player opts into game-level notifications)
 
 Distinct from "joined" (participation via Player record). A user can follow without playing, and play without following (though joining prompts a follow).
 
@@ -59,12 +81,33 @@ Push notification delivery channels are registered **per user**, not per event:
 - Owner/admin removes you → no unfollow
 
 ### Notification dispatch gating
-Recipients for event notifications = users who follow the event (`EventFollow`) + the Owner (always, implicit permanent follow). Admins must explicitly follow to receive notifications.
+Recipients for event notifications = users who follow the event (`EventFollow`) + the Owner (always, implicit permanent follow). Admins auto-follow when granted admin rights (with full notifications enabled by default).
+
+Notifications are split into two tiers:
+
+**Tier 1 — Event-level (all Followers):**
+- New game created / list opens
+- Event cancelled
+- Event details changed (date/location/title)
+- Recruitment ping (T-48h to non-playing Followers when game not full)
+- "Few spots left" (spots remaining ≤ `recruitmentThreshold`)
+- Game invite (player added by Owner/Admin)
+
+**Tier 2 — Game-level (Players + opted-in Followers):**
+- Player joined / left / bench promoted
+- Game full / spot available
+- Game reminders (24h, 2h)
+- Post-game (merged with "new list open" for recurring events)
+- Payment reminders / payment confirmed
 
 Resolution order for each notification type:
 1. Per-event override on `EventFollow` (if not null, wins)
-2. Global user preference from `NotificationPreferences`
-3. System default (all push enabled)
+2. Event admin default (if set)
+3. Role-based default: Player in current Game → unmuted for Tier 2; non-Player → muted for Tier 2
+4. Global user preference from `NotificationPreferences`
+5. System default (all push enabled)
+
+A non-Player Follower who wants game-level notifications sets their mute overrides to `false` (force-enable). The UI provides a "Get all updates" shortcut for this.
 
 A player who joined but explicitly unfollowed will NOT receive notifications (they opted out of updates while retaining their spot).
 
@@ -92,6 +135,60 @@ Tapping the bell when not following → follows the event. Tapping when already 
 
 Each toggle shows the effective state (resolved from per-event override or global default). Changing a toggle writes the per-event override. An "Unfollow" action at the bottom of the sheet removes the follow entirely.
 
+## Notification Tier
+The classification of a notification type by intended audience scope. Two tiers exist:
+
+**Tier 1 (Event-level)** — delivered to all Followers of the Event. Concerns the series/event as a whole: new game created, event cancelled, event details changed, recruitment pings, few-spots-left alerts, game invites.
+
+**Tier 2 (Game-level)** — delivered only to Players in the current Game and Followers who have explicitly opted in (by setting mute overrides to `false`). Concerns a specific Game occurrence: player activity, game full, spot available, reminders, post-game, payment notifications.
+
+The tier is a property of the notification type, not a user setting. Users control what they receive via mute overrides on EventFollow.
+_Avoid_: notification level, notification category (overloaded)
+
+## Recruitment Threshold
+A per-Event integer (`recruitmentThreshold`, default 3) controlling two event-level notifications:
+1. **Recruitment ping** (T-48h): sent to non-playing Followers when the game has more than `recruitmentThreshold` spots remaining.
+2. **Few-spots-left alert**: sent to non-playing Followers when remaining spots drop to ≤ `recruitmentThreshold`.
+
+Configurable by the Owner. Set to 0 to disable recruitment notifications entirely.
+_Avoid_: fill threshold, capacity warning
+
+## Auto-Confirm Attendance
+An opt-in per-Event setting (`autoConfirmEnabled`, default off) that automatically confirms regulars for the next Game occurrence without requiring explicit RSVP.
+
+A player earns auto-confirm status by attending N consecutive games (N = `autoConfirmThreshold`, default 3). Auto-confirmed players are shown as "confirmed (auto)" and do not receive the T-48h RSVP ping. A no-show breaks the streak, forcing explicit RSVP for the next game.
+
+Only applies to recurring Events. The Owner enables it in event settings.
+_Avoid_: auto-RSVP, assumed attendance
+
+## Payment Nudge Escalation
+A 3-stage automatic reminder sequence for unpaid debts, replacing the flat daily reminder:
+
+1. **Soft nudge** (game ends): "You owe €X — tap to pay"
+2. **Follow-up** (+48h): "Still pending — €X for [Game]"
+3. **Social proof** (+5 days): "8/10 have paid. You're one of 2 who haven't."
+
+After stage 3, the system stops nudging the debtor and alerts the Organizer: "2 players haven't paid after a week." The Organizer intervenes manually from there.
+
+Tracked per (Event, Player) pair. Distinct from `paymentEnforcementLevel` (join-time gate).
+_Avoid_: payment escalation ladder, dunning
+
+## Organizer Digest
+A daily summary notification replacing real-time Tier 2 pushes for event Owners/Admins who opt in (`digestMode`, default off). Fires at a configurable time (`digestTime`, default "09:00") the day before the game.
+
+Contents: attendance count, open spots, pending payments, actions needed (e.g., confirm self-reported payments).
+
+**Critical break-through events** still fire in real-time regardless of digest mode: game full, last spot opened, payment self-reported (needs confirmation), game cancelled.
+_Avoid_: batch notification, summary mode
+
+## No-Show
+A Game participation record where the player was confirmed but did not attend. Marked manually by the Organizer in the game history UI (hidden behind expandable section, not shown by default).
+
+Consequences: notification to the player with streak count, priority enrollment penalty (`noShowStreak` on PriorityEnrollment), and broken auto-confirm streak (forces explicit RSVP next week).
+
+No automatic detection — manual marking only to avoid false positives.
+_Avoid_: absence, missed game (overloaded with Wallet credit context)
+
 ## Court Alternative
 A Playtomic court slot that matches an existing Game's dateTime (±30 min), sport, and minimum duration, offered as a replacement option. Surfaced to Owner/Admins only — either via manual search or an automated hourly background sweep ("Court Watch"). Filtered by distance from the Game's coordinates, and optionally by indoor/outdoor and surface type (best-effort, dependent on Playtomic data availability). When accepted ("Switch"), the Game's location and coordinates are updated and all Followers are notified via the standard event-details-changed flow.
 
@@ -99,9 +196,9 @@ A Playtomic court slot that matches an existing Game's dateTime (±30 min), spor
 An opt-in background process that checks Playtomic hourly for Court Alternatives matching a Game's criteria. Enabled per-game by an Admin via a JSON config (`courtWatchConfig`) on the Event. Requires the Event to have latitude/longitude. Alerts are deduplicated — the same slot is never re-notified. Watching stops only when the Admin disables it.
 
 ## Outstanding Balance ("tab")
-The total amount a Player still owes within a single Game, computed (not stored) by summing unpaid amounts across that Game's played history (`GameHistory.paymentsSnapshot`) plus the current unpaid `PlayerPayment` rows. Scoped **per-Game, keyed by `playerName`** — it does not span events, and a name in one Game is unrelated to the same name in another. "Tab" is the informal synonym.
+The total amount an **EventPlayer** still owes within an Event series, computed by summing unpaid `GamePayment` rows across all Games for that EventPlayer. Scoped **per-Event, per-EventPlayer** — it does not span Events.
 
-A balance is only attributable to a person (and therefore eligible to drive a personal payment nudge) when the Player is linked to a `User` who is acting on their own behalf (Quick Join / Claim). For owner-added guests with no account, the balance is informational only — surfaced to the Owner/Admin, never as a personal nudge.
+A balance is only attributable to a person (and therefore eligible to drive a personal payment nudge) when the EventPlayer is linked to a `User` (authenticated). For anonymous EventPlayers, the balance is informational only — surfaced to the Owner/Admin, never as a personal nudge.
 
 ## Payment status lifecycle
 A `PlayerPayment` (and each entry in a `GameHistory.paymentsSnapshot`) moves through:
@@ -179,23 +276,32 @@ An entry in the per-**Game** access-bypass list. Grants the linked **User** acce
 _Avoid_: guest pass, share code
 
 ## Attendance
-A User's response to an upcoming **Game** — yes / no / pending — captured before kickoff so the organizer can plan teams, refs, and benches. Distinct from **attendance rate** (a historical statistic computed from `GameHistory`).
+A participant's response to an upcoming **Game** — yes / no / pending — captured before kickoff so the organizer can plan teams and benches. Scoped to a specific Game (not the Event series).
 
-The user-facing term is **Attendance**; the data model is the `Rsvp` table. Each row is keyed on exactly one subject:
-- **`userId`** — the signed-in User's own response (self-RSVP via `POST /api/events/[id]/rsvp`).
-- **`playerId`** — an admin/owner setting attendance on behalf of a **Player** with no linked account (a guest), via `POST /api/events/[id]/players/[playerId]/rsvp`. The admin's `userId` is recorded in `respondedByUserId` for audit.
+The user-facing term is **Attendance**; the data model is the `Rsvp` table keyed on `gameId`. Each row is keyed on exactly one subject:
+- **`userId`** — the signed-in User's own response.
+- **`eventPlayerId`** — an admin/owner setting attendance on behalf of an anonymous EventPlayer.
 
-Application invariant (not enforced by the schema because SQLite unique constraints treat NULL as distinct): exactly one of `{userId, playerId}` is set per row. `upsertGuestRsvp` rejects linked players (where `Player.userId` is set) — those users self-RSVP.
+### RSVP recipients
+Only **GameParticipants** with a linked authenticated User receive the attendance prompt. Followers who aren't playing do not.
 
-The recipient set for a Game is the union of: **EventFollow** (followers), `Player.userId` (linked players), and the **Owner**. The summary counts `yes`/`no`/`pending` across both the user recipient set and active guest players (`Player.userId IS NULL AND archivedAt IS NULL`).
+### Timing
+- **T-48h (Players)**: RSVP request sent to authenticated GameParticipants
+- **T-48h (non-playing Followers)**: Recruitment ping when game not full ("Game still needs N players — join now!")
+- **T-24h**: summary sent to Owner + Admins if any responses are missing
+- **Joining a Game = implicit "yes"**: no RSVP ping to someone who just added themselves
 
-Distinguished from the historical-stats API at `/api/events/[id]/attendance` (which computes per-player attendance rate from `GameHistory`); that endpoint shares the user-facing word but is a different concept.
+### What does NOT trigger notifications
+- RSVP answers from players do NOT broadcast to followers or other players (that is spam)
+- Player join/leave does NOT notify non-playing Followers (only Players + opted-in Followers)
+
+Distinguished from the historical-stats API at `/api/events/[id]/attendance` (which computes per-player attendance rate from Game records).
 _Avoid_: RSVP (table name only), response
 
 ### Leave / Re-join round-trip
-A **Player** can leave a Game via the X button (admin) or the "Not coming" CTA (self). The leave is a **soft-archive**: `Player.archivedAt` is set, the row is hidden from the active list, and an `Rsvp` audit row with `status="no"` is written. The `Rsvp` recipient set filters out archived players.
+An **EventPlayer** can leave a Game via the X button (admin) or the "Not coming" CTA (self). The leave is a **soft-archive**: `GameParticipant.archivedAt` is set, the row is hidden from the active list, and an `Rsvp` with `status="no"` is recorded for that Game.
 
-Re-adding the same name (self or by an organizer) is a **silent un-archive** handled in the `POST /api/events/[id]/players` P2002 branch. The player is placed at the **end of the list** (queue/join semantics — joining is enqueuing, regardless of past membership), `archivedAt` is cleared, and the `Rsvp` is reset to `status="yes"`. The response carries `reactivated: true` so the client can show an "Undo" snackbar.
+Re-adding the same person (self or by an organizer) is a **silent un-archive**: the GameParticipant is placed at the **end of the list** (queue/join semantics), `archivedAt` is cleared, and the RSVP is reset to `status="yes"`.
 
 ## App Deep Link
 A `convocados://` URL handled by the Android app's manifest intent-filter. Paths under the scheme (e.g. `convocados://events/<id>`, `convocados://auth?code=...`) launch the app and arrive as `Intent.data` on `MainActivity`. The intent can be inspected at cold start (`onCreate`) or on resume (`onNewIntent`). Two distinct consumers:

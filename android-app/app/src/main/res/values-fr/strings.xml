@@ -134,6 +134,9 @@
     <string name="post_game_payments_summary">%1$d/%2$d payés</string>
     <string name="post_game_no_cost">Aucun coût défini pour ce match</string>
     <string name="post_game_progress">%1$d sur %2$d faites</string>
+    <string name="post_game_mvp_done">MVP voté</string>
+    <string name="post_game_mvp_pending">Voter pour le MVP</string>
+    <string name="post_game_vote_mvp_button">Voter maintenant</string>
     <string name="post_game_payments_label">Paiements du dernier match</string>
     <string name="post_game_payments_hint">Touchez un joueur pour basculer payé, puis enregistrez.</string>
     <string name="post_game_payments_locked">Les paiements sont verrouillés. Déverrouillez le match dans l\'Historique pour les modifier.</string>
@@ -181,6 +184,16 @@
     <string name="event_updates">Mises à jour de l\'événement</string>
     <string name="event_updates_desc">Quand les détails de l\'événement changent</string>
     <string name="payment_reminders">Rappels de paiement</string>
+    <string name="post_game_results_desc">Scores et résumé après le match</string>
+    <string name="notification_tiers_title">Comment fonctionnent les notifications</string>
+    <string name="notification_tiers_desc">Vous recevez les mises à jour de l\'événement (annulations, invitations, places) pour tous les matchs suivis. Les détails du jeu (activité des joueurs, rappels, scores) ne sont envoyés que lorsque vous jouez — ou activez « Toutes les mises à jour » par événement.</string>
+
+    <!-- Notification quick actions -->
+    <string name="action_im_in">J\'y vais !</string>
+    <string name="action_cant_make_it">Pas dispo</string>
+    <string name="action_join">Rejoindre</string>
+    <string name="action_add_score">Score</string>
+    <string name="action_confirm_payment">Confirmar</string>
     <string name="email_notifications">Notifications par e-mail</string>
     <string name="enable_email">Activer l\'e-mail</string>
     <string name="enable_email_desc">Interrupteur général de tous les e-mails</string>

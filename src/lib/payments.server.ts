@@ -348,11 +348,29 @@ export async function syncPaymentsForEvent(eventId: string): Promise<void> {
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    include: { players: { where: { archivedAt: null }, orderBy: { order: "asc" } } },
+    select: { id: true, maxPlayers: true, ownerId: true, currentGameId: true },
   });
   if (!event) return;
 
-  const activePlayers = event.players.slice(0, event.maxPlayers);
+  // ADR 0016: prefer GameParticipant for active player list
+  let activePlayers: { name: string; userId: string | null }[];
+  if (event.currentGameId) {
+    const participants = await prisma.gameParticipant.findMany({
+      where: { gameId: event.currentGameId, archivedAt: null },
+      include: { eventPlayer: { select: { name: true, userId: true } } },
+      orderBy: { order: "asc" },
+      take: event.maxPlayers,
+    });
+    activePlayers = participants.map((p) => ({ name: p.eventPlayer.name, userId: p.eventPlayer.userId }));
+  } else {
+    const players = await prisma.player.findMany({
+      where: { eventId, archivedAt: null },
+      orderBy: { order: "asc" },
+      take: event.maxPlayers,
+      select: { name: true, userId: true },
+    });
+    activePlayers = players;
+  }
   const share = activePlayers.length > 0 ? eventCost.totalAmount / activePlayers.length : 0;
 
   for (const player of activePlayers) {
