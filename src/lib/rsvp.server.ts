@@ -241,6 +241,70 @@ export async function markRsvpCutoffSent(eventId: string) {
   log.info({ eventId }, "RSVP 48h cutoff marked sent");
 }
 
+// ─── Recruitment dedup (#538 follow-up) ────────────────────────────────────
+//
+// Bug: recruitment notifications were enqueued on every cron run within the
+// T-48h / T-24h 2-hour window — flooding every non-playing follower ~24 times
+// per window. These flags ensure each recruitment ping fires exactly once
+// per occurrence, and are reset whenever the event advances to its next
+// occurrence (lazy reset, explicit recurrence reset, or cancel-then-advance).
+
+/** Events needing the T-48h recruitment ping (still needs players). */
+export async function getEventsNeedingRecruitment48h(now: Date = new Date()) {
+  const windowStart = new Date(now.getTime() + (RSVP_WINDOW_HOURS - 1) * 3600_000);
+  const windowEnd = new Date(now.getTime() + (RSVP_WINDOW_HOURS + 1) * 3600_000);
+  return prisma.event.findMany({
+    where: {
+      rsvpCutoffSent: true, // precondition: T-48h fanout has already fired
+      recruitment48hSent: false,
+      dateTime: { gte: windowStart, lte: windowEnd },
+    },
+    select: { id: true, title: true, maxPlayers: true, recruitmentThreshold: true },
+  });
+}
+
+/** Events needing the T-24h urgent recruitment ping (tomorrow — still needs players). */
+export async function getEventsNeedingRecruitment24h(now: Date = new Date()) {
+  const windowStart = new Date(now.getTime() + (RSVP_SUMMARY_HOURS - 1) * 3600_000);
+  const windowEnd = new Date(now.getTime() + (RSVP_SUMMARY_HOURS + 1) * 3600_000);
+  return prisma.event.findMany({
+    where: {
+      rsvpCutoffSent: true,
+      recruitment24hSent: false,
+      dateTime: { gte: windowStart, lte: windowEnd },
+    },
+    select: { id: true, title: true, maxPlayers: true, recruitmentThreshold: true, ownerId: true },
+  });
+}
+
+export async function markRecruitment48hSent(eventId: string) {
+  await prisma.event.update({
+    where: { id: eventId },
+    data: { recruitment48hSent: true },
+  });
+}
+
+export async function markRecruitment24hSent(eventId: string) {
+  await prisma.event.update({
+    where: { id: eventId },
+    data: { recruitment24hSent: true },
+  });
+}
+
+/**
+ * Reset all recruitment dedup flags — called when an event advances to its
+ * next occurrence so the next occurrence gets a fresh recruitment cycle.
+ */
+export async function resetRecruitmentFlags(eventId: string) {
+  await prisma.event.update({
+    where: { id: eventId },
+    data: {
+      recruitment48hSent: false,
+      recruitment24hSent: false,
+    },
+  });
+}
+
 export async function isRsvpCutoffSent(eventId: string) {
   const e = await prisma.event.findUnique({
     where: { id: eventId },

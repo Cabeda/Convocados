@@ -1137,6 +1137,15 @@ const en = {
   costMonthlyGamesCovered: "Games covered per month",
   costDropInSurcharge: "Drop-in surcharge",
   costDropInSurchargeTooltip: "Extra amount added to per-game payers who are not monthly subscribers.",
+
+  // Cancel game
+  cancelGame: "Cancel game",
+  cancelGameConfirmTitle: "Cancel this game?",
+  cancelGameConfirmDesc: "Are you sure you want to cancel this game? All followers will be notified.",
+  cancelGameRecurringNote: "A new game will open for the next scheduled occurrence.",
+  gameCancelled: "Cancelled",
+  gameCancelledSnackbar: "Game has been cancelled.",
+  logGameCancelled: "{actor} cancelled the game",
 } as const;
 
 export default en;

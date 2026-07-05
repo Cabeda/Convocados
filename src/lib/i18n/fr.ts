@@ -1083,6 +1083,15 @@ const fr: TranslationKeys = {
   costMonthlyGamesCovered: "Games covered per month",
   costDropInSurcharge: "Drop-in surcharge",
   costDropInSurchargeTooltip: "Extra amount added to per-game payers who are not monthly subscribers.",
+
+  // Cancel game
+  cancelGame: "Annuler le match",
+  cancelGameConfirmTitle: "Annuler ce match ?",
+  cancelGameConfirmDesc: "Êtes-vous sûr de vouloir annuler ce match ? Tous les abonnés seront notifiés.",
+  cancelGameRecurringNote: "Un nouveau match s'ouvrira pour la prochaine occurrence prévue.",
+  gameCancelled: "Annulé",
+  gameCancelledSnackbar: "Le match a été annulé.",
+  logGameCancelled: "{actor} a annulé le match",
 };
 
 export default fr;

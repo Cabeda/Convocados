@@ -80,6 +80,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [_isPublic, setIsPublic] = useState(false);
   const [sport, setSport] = useState("football-5v5");
   const [relinquishConfirmOpen, setRelinquishConfirmOpen] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [cancelConfirmBusy, setCancelConfirmBusy] = useState(false);
   const [_postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
   const [paymentExpanded, setPaymentExpanded] = useState<boolean | undefined>(undefined);
   const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
@@ -573,6 +575,20 @@ export default function EventPage({ eventId }: { eventId: string }) {
     if (res.ok) fetchEvent();
   };
 
+  const handleCancelGame = async () => {
+    setCancelConfirmBusy(true);
+    const res = await fetch(`/api/events/${eventId}/cancel`, { method: "PUT" });
+    setCancelConfirmBusy(false);
+    setCancelConfirmOpen(false);
+    if (res.ok) {
+      setSnackbar(t("gameCancelledSnackbar"));
+      fetchEvent();
+    } else {
+      const body = await res.json();
+      setSnackbar(body.error || t("somethingWentWrong"));
+    }
+  };
+
   // ── Derived state ───────────────────────────────────────────────────────────
 
   const gameDate = useMemo(() => event ? new Date(event.dateTime) : new Date(), [event]);
@@ -801,11 +817,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
               isAuthenticated={isAuthenticated}
               isOwnerless={isOwnerless}
               localMatches={localMatches}
+              gameStatus={event.gameStatus}
               onSaveTitle={handleSaveTitle}
               onSaveLocation={handleSaveLocation}
               onSaveDateTime={handleSaveDateTime}
               onSaveSport={handleSaveSport}
               onClaimOwnership={handleClaimOwnership}
+              onCancelGame={() => setCancelConfirmOpen(true)}
               onSnackbar={setSnackbar}
             />
 
@@ -1022,6 +1040,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
           relinquishConfirmOpen={relinquishConfirmOpen}
           onRelinquishClose={() => setRelinquishConfirmOpen(false)}
           onRelinquishConfirm={handleRelinquishOwnership}
+          cancelConfirmOpen={cancelConfirmOpen}
+          onCancelConfirmClose={() => setCancelConfirmOpen(false)}
+          onCancelConfirm={handleCancelGame}
+          cancelConfirmBusy={cancelConfirmBusy}
+          isRecurring={event.isRecurring}
           snackbar={snackbar}
           onSnackbarClose={() => setSnackbar(null)}
           undoData={undoData}
