@@ -16,6 +16,7 @@ import ScoreboardIcon from "@mui/icons-material/Scoreboard";
 import SportsIcon from "@mui/icons-material/Sports";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import TuneIcon from "@mui/icons-material/Tune";
+import CancelIcon from "@mui/icons-material/Cancel";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -63,6 +64,7 @@ const ACTION_COLORS: Record<string, "success" | "error" | "info" | "warning" | "
   rating_manual_disabled: "warning",
   override_set: "warning",
   override_cleared: "info",
+  game_cancelled: "error",
 };
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -86,6 +88,7 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
   rating_manual_disabled: <TuneIcon fontSize="small" />,
   override_set: <PaymentIcon fontSize="small" />,
   override_cleared: <PaymentIcon fontSize="small" />,
+  game_cancelled: <CancelIcon fontSize="small" />,
 };
 
 const ACTION_I18N: Record<string, TranslationKey> = {
@@ -121,6 +124,7 @@ const ACTION_I18N: Record<string, TranslationKey> = {
   rating_manual_disabled: "logRatingManualDisabled",
   override_set: "logOverrideSet",
   override_cleared: "logOverrideCleared",
+  game_cancelled: "logGameCancelled",
 };
 
 function LogEntryRow({ entry, currentUserId }: { entry: LogEntry; currentUserId?: string }) {
