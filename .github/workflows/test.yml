@@ -9,51 +9,130 @@ on:
       - main
   workflow_dispatch:
 
+# Cancel in-progress runs for the same ref when a new push lands.
+# Saves CI minutes when a developer pushes repeatedly to the same branch.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
-  ci:
-    name: CI
+  # ── Static analysis: typecheck, lint (parallel) ──────────────────────────
+  typecheck:
+    name: Typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - name: Enable corepack and install pnpm
-        run: corepack enable && corepack install
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@v5
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      - run: pnpm typecheck
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
         with:
-          path: ${{ steps.pnpm-cache.outputs.dir }}
-          key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: pnpm-store-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Security audit
-        # CVE-2025-48065: Vitest UI server file read — dev-only tool, not exposed in CI/prod.
-        # Blocked by vitest 4.x migration (breaking config changes). Track in a follow-up.
-        run: pnpm audit --audit-level=high --ignore CVE-2025-48065
-      - name: Generate Prisma client
-        run: pnpm prisma generate
-      - name: Type check
-        run: pnpm typecheck
-      - name: Lint
-        run: pnpm lint
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  # ── Unit + integration tests ────────────────────────────────────────────
+  # Coverage is only run on push to main — on PRs we skip coverage to halve
+  # the test runtime (~205s → ~80s on this codebase).
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      - name: Run tests (no coverage on PRs)
+        if: github.event_name == 'pull_request'
+        run: pnpm vitest run
       - name: Run tests with coverage
+        if: github.event_name != 'pull_request'
         run: pnpm vitest run --coverage
-      - name: Build
-        run: pnpm build
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
+        env:
+          COVERAGE_THRESHOLDS: "1"
+      - name: Check coverage thresholds
+        if: github.event_name != 'pull_request'
+        run: node -e "const c=require('./coverage/coverage-summary.json');const t={lines:94,functions:94,branches:83,statements:94};for(const k in t)if(c.total[k].pct<t[k])throw new Error(k+' coverage '+c.total[k].pct+'% < '+t[k]+'%')"
+
+  # ── Build (needed for E2E) ──────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      - run: pnpm build
+      - uses: actions/upload-artifact@v7
         with:
           name: build-output
           path: dist/
           retention-days: 1
+
+  # ── Lighthouse — only on push to main, not on PRs ────────────────────────
+  # Was 30% of CI time on PRs. Now main-only.
+  lighthouse:
+    name: Lighthouse
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      - uses: actions/download-artifact@v8
+        with:
+          name: build-output
+          path: dist/
       - name: Prepare database for Lighthouse
         run: pnpm prisma migrate deploy
         env:
@@ -61,32 +140,25 @@ jobs:
       - name: Run Lighthouse CI
         run: pnpm lhci
 
+  # ── E2E tests ──────────────────────────────────────────────────────────
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: ci
+    needs: [build]
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - name: Enable corepack and install pnpm
-        run: corepack enable && corepack install
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@v5
-        with:
-          path: ${{ steps.pnpm-cache.outputs.dir }}
-          key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: pnpm-store-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Generate Prisma client
-        run: pnpm prisma generate
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      - uses: actions/download-artifact@v8
         with:
           name: build-output
           path: dist/
@@ -98,7 +170,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ steps.pw-version.outputs.version }}-chromium
+          key: playwright-${{ steps.pw-version.outputs.version }}-${{ runner.os }}-chromium
       - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'
         run: pnpm playwright install chromium
