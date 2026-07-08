@@ -104,6 +104,17 @@ export const PUT: APIRoute = async ({ params, request }) => {
           });
         }
 
+        // Clear team members for the new game (old teams were snapshotted in GameHistory)
+        const teamResults = await prisma.teamResult.findMany({
+          where: { eventId: event.id },
+          select: { id: true },
+        });
+        if (teamResults.length > 0) {
+          await prisma.teamMember.deleteMany({
+            where: { teamResultId: { in: teamResults.map((tr) => tr.id) } },
+          });
+        }
+
         // Reset notification dedup flags so the next occurrence gets a fresh
         // recruitment / RSVP cycle (T-48h + T-24h reminders schedule separately).
         await prisma.event.update({
