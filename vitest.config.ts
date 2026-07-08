@@ -21,13 +21,7 @@ export default defineConfig({
     // a non-issue. The cap of 2 keeps memory pressure manageable on
     // 4-CPU/8GB local boxes and 2-CPU GitHub Actions runners.
     pool: "threads",
-    poolOptions: {
-      threads: {
-        maxThreads: 2,
-        minThreads: 1,
-        singleThread: !!process.env.VITEST_SINGLE_THREAD,
-      },
-    },
+    maxWorkers: process.env.VITEST_SINGLE_THREAD ? 1 : 2,
     exclude: ["node_modules", "dist", "e2e", "mobile"],
     environment: "node",
     env: {

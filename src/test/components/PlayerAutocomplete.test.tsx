@@ -14,8 +14,8 @@ const suggestions = [
 ];
 
 interface HarnessProps {
-  onAdd: ReturnType<typeof vi.fn>;
-  onRequestAdd: ReturnType<typeof vi.fn>;
+  onAdd: (name: string) => void;
+  onRequestAdd: (intent: { kind: "single"; name: string; email?: string; source: "chip" | "dropdown" }) => void;
   withRequestAdd?: boolean;
 }
 
