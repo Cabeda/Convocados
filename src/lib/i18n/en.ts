@@ -862,6 +862,8 @@ const en = {
   adminWau: "WAU (7d)",
   adminMau: "MAU (30d)",
   adminPlatformBreakdown: "Platform Breakdown (30d)",
+  adminWebBrowsers: "Web — Browsers",
+  adminWebOS: "Web — Operating Systems",
   adminNoUsageData: "No usage data available yet.",
   adminDeleteUser: "Delete user",
   adminDeleteUserConfirm: "Are you sure you want to permanently delete this user? This cannot be undone.",
