@@ -526,6 +526,31 @@ describe("PUT /api/events/[id]/teams", () => {
     const body = await res.json();
     expect(body.error).toContain("Carol");
   });
+
+  it("accepts active players with non-contiguous order values (gaps from archives)", async () => {
+    const id = await seedEvent();
+    await prisma.event.update({ where: { id }, data: { maxPlayers: 4 } });
+    // After archiving/re-adding, order values can have gaps (0, 1, 5, 7)
+    // but these are still the first 4 active players
+    await prisma.player.createMany({
+      data: [
+        { name: "Alice", eventId: id, order: 0 },
+        { name: "Bob", eventId: id, order: 1 },
+        { name: "Carol", eventId: id, order: 5 },
+        { name: "Dave", eventId: id, order: 7 },
+        { name: "Eve", eventId: id, order: 9 }, // bench
+      ],
+    });
+
+    // Carol and Dave are active (positions 3 & 4) despite order > maxPlayers
+    const matches = [
+      { team: "Ninjas", players: [{ name: "Alice", order: 0 }, { name: "Carol", order: 1 }] },
+      { team: "Gunas", players: [{ name: "Bob", order: 0 }, { name: "Dave", order: 1 }] },
+    ];
+
+    const res = await saveTeams(putCtx({ id }, { matches }));
+    expect(res.status).toBe(200);
+  });
 });
 
 // ─── PUT /api/events/[id]/team-names ────────────────────────────────────────

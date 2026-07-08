@@ -32,9 +32,9 @@ export const GET: APIRoute = async ({ params, request }) => {
 
 	const maxPlayers = event.maxPlayers;
 
-	// Active players (order < maxPlayers) vs bench
-	const activePlayers = event.players.filter((p) => p.order < maxPlayers);
-	const benchPlayers = event.players.filter((p) => p.order >= maxPlayers);
+	// Active players are the first N by order (not by order value — gaps possible after archives)
+	const activePlayers = event.players.slice(0, maxPlayers);
+	const benchPlayers = event.players.slice(maxPlayers);
 
 	// Build team member lookup: playerId -> teamResult id
 	const memberLookup = new Map<string, string>(); // playerName -> teamResultId
@@ -136,8 +136,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
 		return Response.json({ error: "matches must be an array" }, { status: 400 });
 	}
 
-	// Validate that all player names in matches are active players
-	const activePlayers = event.players.filter((p) => p.order < event.maxPlayers);
+	// Validate that all player names in matches are active players (first N by position)
+	const activePlayers = event.players.slice(0, event.maxPlayers);
 	const activeNames = new Set(activePlayers.map((p) => p.name));
 
 	for (const match of body.matches) {
@@ -229,9 +229,9 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 		return Response.json({ error: "Duplicate player IDs" }, { status: 400 });
 	}
 
-	// Only allow active players (order < maxPlayers) to be on teams
+	// Only allow active players (first N by position) to be on teams
 	const activePlayerIds = new Set(
-		event.players.filter((p) => p.order < event.maxPlayers).map((p) => p.id),
+		event.players.slice(0, event.maxPlayers).map((p) => p.id),
 	);
 	for (const id of requestedIds) {
 		if (!activePlayerIds.has(id)) {
