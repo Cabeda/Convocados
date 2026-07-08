@@ -181,3 +181,128 @@ describe("Idempotency canonicalization", () => {
     expect(h).toMatch(/^[a-f0-9]{64}$/);
   });
 });
+
+
+// ── Timer lifecycle and cache sweep (untested per handoff notes) ─────────────
+
+import {
+  startIdempotencySweep,
+  stopIdempotencySweep,
+  sweepExpiredCacheEntries,
+  storeCachedResponse,
+  getCachedResponse,
+  hasConflictingEntry,
+  resetIdempotencyCache,
+  idempotencyCacheSize,
+  makeCacheKey,
+
+  _cacheForTests as cache,
+} from "~/lib/idempotency";
+
+describe("Idempotency cache lifecycle", () => {
+  beforeEach(() => {
+    stopIdempotencySweep();
+    resetIdempotencyCache();
+  });
+
+  it("storeCachedResponse stores 2xx responses", () => {
+    storeCachedResponse("k1", "hash1", 200, '{"ok":true}', "application/json");
+    expect(idempotencyCacheSize()).toBe(1);
+  });
+
+  it("storeCachedResponse ignores non-2xx responses", () => {
+    storeCachedResponse("k1", "hash1", 400, '{"error":"bad"}', "application/json");
+    storeCachedResponse("k2", "hash2", 500, '{"error":"fail"}', "application/json");
+    expect(idempotencyCacheSize()).toBe(0);
+  });
+
+  it("getCachedResponse returns cached entry for matching hash", () => {
+    storeCachedResponse("k1", "hash1", 201, '{"id":"1"}', "application/json");
+    const result = getCachedResponse("k1", "hash1");
+    expect(result).not.toBeNull();
+    expect(result!.status).toBe(201);
+    expect(result!.body).toBe('{"id":"1"}');
+  });
+
+  it("getCachedResponse returns null on miss", () => {
+    expect(getCachedResponse("nonexistent", "hash1")).toBeNull();
+  });
+
+  it("getCachedResponse returns null on payload hash mismatch", () => {
+    storeCachedResponse("k1", "hash1", 200, "{}", "application/json");
+    expect(getCachedResponse("k1", "different-hash")).toBeNull();
+  });
+
+  it("getCachedResponse returns null and evicts expired entries", () => {
+    // Manually insert an expired entry
+    cache.set("expired-key", {
+      status: 200,
+      body: "{}",
+      contentType: "application/json",
+      payloadHash: "h",
+      expiresAt: Date.now() - 1000,
+    });
+    expect(getCachedResponse("expired-key", "h")).toBeNull();
+    expect(cache.has("expired-key")).toBe(false);
+  });
+
+  it("hasConflictingEntry detects reused key with different payload", () => {
+    storeCachedResponse("k1", "hash1", 200, "{}", "application/json");
+    expect(hasConflictingEntry("k1", "hash2")).toBe(true);
+    expect(hasConflictingEntry("k1", "hash1")).toBe(false);
+  });
+
+  it("hasConflictingEntry returns false for expired entries", () => {
+    cache.set("old", {
+      status: 200,
+      body: "{}",
+      contentType: "application/json",
+      payloadHash: "h1",
+      expiresAt: Date.now() - 1,
+    });
+    expect(hasConflictingEntry("old", "h2")).toBe(false);
+  });
+
+  it("sweepExpiredCacheEntries removes only expired entries", () => {
+    storeCachedResponse("fresh", "h1", 200, "{}", "application/json");
+    cache.set("stale", {
+      status: 200,
+      body: "{}",
+      contentType: "application/json",
+      payloadHash: "h2",
+      expiresAt: Date.now() - 1,
+    });
+    const dropped = sweepExpiredCacheEntries();
+    expect(dropped).toBe(1);
+    expect(idempotencyCacheSize()).toBe(1);
+    expect(cache.has("fresh")).toBe(true);
+  });
+
+  it("startIdempotencySweep is idempotent — calling twice is a no-op", () => {
+    startIdempotencySweep(100);
+    startIdempotencySweep(100); // should not throw or create a second timer
+    stopIdempotencySweep();
+  });
+
+  it("sweep timer actually fires and evicts expired entries", async () => {
+    cache.set("will-expire", {
+      status: 200,
+      body: "{}",
+      contentType: "application/json",
+      payloadHash: "h",
+      expiresAt: Date.now() + 50, // expires in 50ms
+    });
+    startIdempotencySweep(30); // sweep every 30ms
+    await new Promise((r) => setTimeout(r, 120));
+    stopIdempotencySweep();
+    expect(cache.has("will-expire")).toBe(false);
+  });
+
+  it("makeCacheKey incorporates path, userId, and raw key", () => {
+    const key = makeCacheKey("abc", "/api/events/1/players", "user-42");
+    expect(key).toBe("/api/events/1/players::user-42::abc");
+    const anonKey = makeCacheKey("abc", "/api/events/1/players", null);
+    expect(anonKey).toBe("/api/events/1/players::anon::abc");
+    expect(key).not.toBe(anonKey);
+  });
+});
