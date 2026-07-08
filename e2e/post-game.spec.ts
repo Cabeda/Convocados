@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { execSync } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -36,23 +36,33 @@ function withIp(request: APIRequestContext, ip: string) {
   };
 }
 
-/** Sign up a user and verify their email directly in the DB */
+/**
+ * Sign up a user, verify their email directly in the DB, and sign in via
+ * the page's browser context so the session cookie is set on the page
+ * (not on the test-scoped `request` fixture, which is a separate context
+ * and would not be sent on subsequent `page.goto()` navigations).
+ *
+ * Returns the user id.
+ */
 async function createVerifiedUser(
-  request: APIRequestContext,
+  page: Page,
   email: string,
   password: string,
   name: string,
 ): Promise<string> {
+  // page.context().request shares cookies with the browser context.
+  const ctxRequest = page.context().request;
+
   // Sign up via better-auth API
-  await request.post("/api/auth/sign-up/email", {
+  await ctxRequest.post("/api/auth/sign-up/email", {
     data: { email, password, name },
   });
 
   // Verify email directly in the DB (bypass email verification)
   sql(`UPDATE User SET emailVerified = 1 WHERE email = '${email}'`);
 
-  // Sign in to get session cookie
-  const signInRes = await request.post("/api/auth/sign-in/email", {
+  // Sign in — session cookie is set on the page's browser context.
+  const signInRes = await ctxRequest.post("/api/auth/sign-in/email", {
     data: { email, password },
   });
   expect(signInRes.status()).toBe(200);
@@ -85,16 +95,19 @@ async function createVerifiedUser(
 test.describe("Post-game experience — banner, score, payments", () => {
   test.setTimeout(60_000);
 
-  test("full post-game lifecycle with auth", async ({ page, request }) => {
+  test("full post-game lifecycle with auth", async ({ page }) => {
     const ip = uniqueIp();
-    const api = withIp(request, ip);
+    // Use page.context().request so the session cookie set by sign-in is
+    // sent on every API call. The bare `request` fixture is a separate
+    // context and would not share cookies.
+    const api = withIp(page.context().request, ip);
 
     // ── Step 1: Create and authenticate a user ──
     const email = `e2e-postgame-${Date.now()}@test.com`;
     const password = "TestPassword123!";
     const userName = "E2E Tester";
 
-    const userId = await createVerifiedUser(request, email, password, userName);
+    const userId = await createVerifiedUser(page, email, password, userName);
     expect(userId).toBeTruthy();
 
     // ── Step 2: Create event (will be owned by authenticated user) ──
@@ -121,8 +134,12 @@ test.describe("Post-game experience — banner, score, payments", () => {
     }
 
     // ── Step 4: Randomize teams (needed for history snapshot) ──
+    // The Astro CSRF check requires the Origin header to match the request
+    // host. In CI the webServer listens on 3001; locally it may be
+    // different — read PLAYWRIGHT_PORT and derive the origin.
+    const port = Number(process.env.PLAYWRIGHT_PORT ?? 3001);
     const randomizeRes = await api.post(`/api/events/${eventId}/randomize`, {
-      headers: { Origin: "http://localhost:3001", "X-Forwarded-For": ip },
+      headers: { Origin: `http://localhost:${port}`, "X-Forwarded-For": ip },
     });
     expect(randomizeRes.status()).toBe(200);
 
