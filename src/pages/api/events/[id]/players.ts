@@ -537,7 +537,7 @@ export const POST: APIRoute = async ({ params, request }) => {
         const eventPlayer = await prisma.eventPlayer.upsert({
           where: { eventId_name: { eventId, name: trimmed } },
           create: { eventId, name: trimmed, userId: linkedUserId ?? existing.userId },
-          update: {},
+          update: { ...(linkedUserId ? { userId: linkedUserId } : {}) },
         });
         const alreadyInGame = await prisma.gameParticipant.findUnique({
           where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
