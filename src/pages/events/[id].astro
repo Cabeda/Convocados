@@ -21,12 +21,16 @@ try {
     select: {
       id: true, title: true, location: true, dateTime: true,
       sport: true, maxPlayers: true, isPublic: true,
+      currentGameId: true,
       _count: { select: { players: true } },
     },
   });
 
   if (event) {
-    const playerCount = event._count.players;
+    // ADR 0016: use GameParticipant count when currentGameId is set
+    const playerCount = event.currentGameId
+      ? await prisma.gameParticipant.count({ where: { gameId: event.currentGameId, archivedAt: null } })
+      : event._count.players;
     const spotsLeft = Math.max(0, event.maxPlayers - playerCount);
     title = `${event.title} — Convocados`;
     description = `${event.location || "Game"} · ${playerCount}/${event.maxPlayers} players · ${spotsLeft} spot(s) left`;
