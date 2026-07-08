@@ -1,33 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { PrismaClient } from "@prisma/client";
-
-const testPrisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
-
-vi.mock("~/lib/db.server", () => {
-  const { PrismaClient: PC } = require("@prisma/client");
-  const p = new PC({ datasources: { db: { url: process.env.DATABASE_URL } } });
-  return { prisma: p };
-});
-
-import { enqueueRsvpAnswerNotification } from "~/lib/rsvp-notifications.server";
+import { prisma } from "~/lib/db.server";
 
 vi.mock("~/lib/logger.server", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import { enqueueRsvpAnswerNotification } from "~/lib/rsvp-notifications.server";
+
 beforeEach(async () => {
-  await testPrisma.notificationJob.deleteMany();
-  await testPrisma.eventFollow.deleteMany();
-  await testPrisma.player.deleteMany();
-  await testPrisma.event.deleteMany();
-  await testPrisma.user.deleteMany();
+  await prisma.notificationJob.deleteMany();
+  await prisma.eventFollow.deleteMany();
+  await prisma.player.deleteMany();
+  await prisma.event.deleteMany();
+  await prisma.user.deleteMany();
 });
 
 async function seedUser(overrides: Record<string, unknown> = {}) {
-  return testPrisma.user.create({
+  return prisma.user.create({
     data: {
       id: `u-${Math.random().toString(36).slice(2, 8)}`,
       name: "Alice",
@@ -39,7 +29,7 @@ async function seedUser(overrides: Record<string, unknown> = {}) {
 }
 
 async function seedEvent(ownerId: string | null) {
-  return testPrisma.event.create({
+  return prisma.event.create({
     data: {
       id: `e-${Math.random().toString(36).slice(2, 8)}`,
       title: "Friday Game",
@@ -64,7 +54,7 @@ describe("enqueueRsvpAnswerNotification", () => {
       actorIsLogged: true,
     });
 
-    const jobs = await testPrisma.notificationJob.findMany({ where: { eventId: e.id, type: "rsvp_request" } });
+    const jobs = await prisma.notificationJob.findMany({ where: { eventId: e.id, type: "rsvp_request" } });
     expect(jobs).toHaveLength(1);
     const payload = JSON.parse(jobs[0].payload) as { key: string; params: Record<string, string>; title: string };
     expect(payload.key).toBe("notifyRsvpAnswerYes");
@@ -76,7 +66,7 @@ describe("enqueueRsvpAnswerNotification", () => {
   it("uses the generic (anon) key when the actor is not logged (e.g. admin sets a guest RSVP)", async () => {
     const owner = await seedUser({ name: "Owner" });
     const e = await seedEvent(owner.id);
-    const guest = await testPrisma.player.create({ data: { eventId: e.id, name: "Guest", order: 0 } });
+    const guest = await prisma.player.create({ data: { eventId: e.id, name: "Guest", order: 0 } });
 
     await enqueueRsvpAnswerNotification({
       eventId: e.id,
@@ -88,7 +78,7 @@ describe("enqueueRsvpAnswerNotification", () => {
       senderClientId: owner.id,
     });
 
-    const jobs = await testPrisma.notificationJob.findMany({ where: { eventId: e.id, type: "rsvp_request" } });
+    const jobs = await prisma.notificationJob.findMany({ where: { eventId: e.id, type: "rsvp_request" } });
     expect(jobs).toHaveLength(1);
     const payload = JSON.parse(jobs[0].payload) as { key: string; params: Record<string, string> };
     expect(payload.key).toBe("notifyRsvpAnswerAnon");
@@ -109,7 +99,7 @@ describe("enqueueRsvpAnswerNotification", () => {
       actorName: u.name,
       actorIsLogged: true,
     });
-    const jobs = await testPrisma.notificationJob.findMany({ where: { eventId: e.id, type: "rsvp_request" } });
+    const jobs = await prisma.notificationJob.findMany({ where: { eventId: e.id, type: "rsvp_request" } });
     const payload = JSON.parse(jobs[0].payload) as { key: string };
     expect(payload.key).toBe("notifyRsvpAnswerMaybe");
   });
@@ -135,7 +125,7 @@ describe("enqueueRsvpAnswerNotification", () => {
       actorIsLogged: true,
     });
 
-    const jobs = await testPrisma.notificationJob.findMany({ where: { eventId: e.id, type: "rsvp_request" } });
+    const jobs = await prisma.notificationJob.findMany({ where: { eventId: e.id, type: "rsvp_request" } });
     expect(jobs).toHaveLength(1);
     const payload = JSON.parse(jobs[0].payload) as { key: string };
     expect(payload.key).toBe("notifyRsvpAnswerNo");
@@ -163,7 +153,22 @@ describe("enqueueRsvpAnswerNotification", () => {
       actorIsLogged: true,
     });
 
-    const jobs = await testPrisma.notificationJob.findMany({ where: { eventId: e.id, type: "rsvp_request" } });
+    const jobs = await prisma.notificationJob.findMany({ where: { eventId: e.id, type: "rsvp_request" } });
     expect(jobs).toHaveLength(2);
+  });
+
+  it("no-ops when neither actorUserId nor actorPlayerId is provided", async () => {
+    const e = await seedEvent(null);
+
+    await enqueueRsvpAnswerNotification({
+      eventId: e.id,
+      eventTitle: e.title,
+      status: "yes",
+      actorName: "Ghost",
+      actorIsLogged: false,
+    });
+
+    const jobs = await prisma.notificationJob.findMany({ where: { eventId: e.id, type: "rsvp_request" } });
+    expect(jobs).toHaveLength(0);
   });
 });
