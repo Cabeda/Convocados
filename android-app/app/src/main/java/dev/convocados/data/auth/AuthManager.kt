@@ -12,7 +12,6 @@ import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import dagger.hilt.android.qualifiers.ApplicationContext
-import dev.convocados.BuildConfig
 import dev.convocados.data.api.ApiClient
 import dev.convocados.data.api.OAuthTokenResponse
 import io.ktor.client.*
