@@ -78,3 +78,28 @@ describe("checkSchemaDrift", () => {
     expect(result.missingFromFs).toEqual([]);
   });
 });
+
+
+
+import { runSchemaDriftCheck } from "~/lib/schemaCheck.server";
+
+describe("checkSchemaDrift edge cases", () => {
+  it("returns hasDrift=true when migrations directory does not exist", async () => {
+    const result = await checkSchemaDrift(prisma, "/nonexistent/path/migrations");
+    expect(result.hasDrift).toBe(true);
+    expect(result.missingFromDb).toEqual([]);
+    expect(result.missingFromFs).toEqual([]);
+  });
+});
+
+describe("runSchemaDriftCheck", () => {
+  it("returns result with no drift for a valid directory", async () => {
+    const result = await runSchemaDriftCheck(prisma, tmpDir);
+    expect(result.hasDrift).toBe(false);
+  });
+
+  it("returns result with drift for a non-existent directory", async () => {
+    const result = await runSchemaDriftCheck(prisma, "/nonexistent/path");
+    expect(result.hasDrift).toBe(true);
+  });
+});
