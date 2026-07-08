@@ -185,12 +185,22 @@ export const GET: APIRoute = async ({ params, request }) => {
       include: { eventPlayer: true },
       orderBy: { order: "asc" },
     });
+
+    // ponytail: EventPlayer.userId may be stale (null) if the player rejoined
+    // after a reset and the upsert didn't update it. Fall back to the event-level
+    // Player.userId which is the authoritative link.
+    const playersByName = new Map(
+      event.players
+        .filter((p) => p.userId)
+        .map((p) => [p.name, p.userId]),
+    );
+
     playersPayload = participants.map((gp) => ({
       id: gp.eventPlayer.id,
       name: gp.eventPlayer.name,
       order: gp.order,
       eventId: gp.eventPlayer.eventId,
-      userId: gp.eventPlayer.userId ?? null,
+      userId: gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name) ?? null,
       createdAt: gp.createdAt.toISOString(),
     }));
   } else {
