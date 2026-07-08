@@ -47,6 +47,21 @@ interface GrowthPoint {
   events: number;
 }
 
+interface UsageSummary {
+  dauToday: number;
+  wau: number;
+  mau: number;
+  platforms: { android: number; ios: number; desktop: number };
+}
+
+interface UsagePoint {
+  date: string;
+  dau: number;
+  android: number;
+  ios: number;
+  desktop: number;
+}
+
 type GrowthRange = "30d" | "1y" | "all";
 
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
@@ -176,6 +191,9 @@ export default function AdminDashboardPage() {
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
+  const [usageTimeline, setUsageTimeline] = useState<UsagePoint[]>([]);
+  const [loadingUsage, setLoadingUsage] = useState(false);
 
   const PAGE_SIZE = 20;
 
@@ -198,6 +216,16 @@ export default function AdminDashboardPage() {
       .then((data) => { setGrowthData(data); setLoadingGrowth(false); })
       .catch(() => setLoadingGrowth(false));
   }, [session?.user, forbidden, growthRange]);
+
+  // Fetch usage metrics
+  useEffect(() => {
+    if (!session?.user || forbidden) return;
+    setLoadingUsage(true);
+    fetch("/api/admin/usage?days=30")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) { setUsageSummary(data.summary); setUsageTimeline(data.timeline); } setLoadingUsage(false); })
+      .catch(() => setLoadingUsage(false));
+  }, [session?.user, forbidden]);
 
   const fetchUsers = useCallback(async (p: number, q: string) => {
     setLoadingUsers(true);
@@ -331,6 +359,60 @@ export default function AdminDashboardPage() {
                 )}
 
                 <GrowthChart growthData={growthData} growthRange={growthRange} setGrowthRange={setGrowthRange} loadingGrowth={loadingGrowth} />
+
+                {/* Usage Metrics — DAU, platform breakdown */}
+                <Paper elevation={1} sx={{ p: 3 }}>
+                  <Typography variant="h6" fontWeight={600} gutterBottom>{t("adminUsageMetrics")}</Typography>
+                  {loadingUsage ? (
+                    <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={24} /></Box>
+                  ) : usageSummary ? (
+                    <Stack spacing={3}>
+                      {/* Summary cards */}
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 4 }}>
+                          <StatCard label={t("adminDauToday")} value={usageSummary.dauToday} icon={<PeopleIcon fontSize="small" />} />
+                        </Grid>
+                        <Grid size={{ xs: 4 }}>
+                          <StatCard label={t("adminWau")} value={usageSummary.wau} icon={<PeopleIcon fontSize="small" />} />
+                        </Grid>
+                        <Grid size={{ xs: 4 }}>
+                          <StatCard label={t("adminMau")} value={usageSummary.mau} icon={<PeopleIcon fontSize="small" />} />
+                        </Grid>
+                      </Grid>
+
+                      {/* Platform breakdown */}
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={600} gutterBottom>{t("adminPlatformBreakdown")}</Typography>
+                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                          <Chip label={`Android: ${usageSummary.platforms.android}`} color="success" variant="outlined" />
+                          <Chip label={`iOS: ${usageSummary.platforms.ios}`} color="info" variant="outlined" />
+                          <Chip label={`Desktop: ${usageSummary.platforms.desktop}`} variant="outlined" />
+                        </Stack>
+                      </Box>
+
+                      {/* DAU timeline chart */}
+                      {usageTimeline.length > 0 && (
+                        <Box sx={{ height: 250 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={usageTimeline} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v: string) => v.slice(5)} />
+                              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                              <RechartsTooltip content={<ChartTooltip />} />
+                              <Legend />
+                              <Line type="monotone" dataKey="dau" name="DAU" stroke="#4caf50" strokeWidth={2} dot={false} />
+                              <Line type="monotone" dataKey="android" name="Android" stroke="#66bb6a" strokeWidth={1} dot={false} strokeDasharray="4 2" />
+                              <Line type="monotone" dataKey="ios" name="iOS" stroke="#42a5f5" strokeWidth={1} dot={false} strokeDasharray="4 2" />
+                              <Line type="monotone" dataKey="desktop" name="Desktop" stroke="#ab47bc" strokeWidth={1} dot={false} strokeDasharray="4 2" />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </Box>
+                      )}
+                    </Stack>
+                  ) : (
+                    <Alert severity="info">{t("adminNoUsageData")}</Alert>
+                  )}
+                </Paper>
 
                 {/* User list */}
                 <Paper elevation={1} sx={{ p: 3 }}>

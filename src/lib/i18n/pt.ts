@@ -854,7 +854,13 @@ const pt: TranslationKeys = {
   adminRange30d: "30 dias",
   adminRange1y: "1 ano",
   adminRangeAll: "Todo o período",
-  adminNoGrowthData: "Ainda não há dados de crescimento.",
+  adminNoGrowthData: "No growth data available yet.",
+  adminUsageMetrics: "Usage Metrics",
+  adminDauToday: "DAU (today)",
+  adminWau: "WAU (7d)",
+  adminMau: "MAU (30d)",
+  adminPlatformBreakdown: "Platform Breakdown (30d)",
+  adminNoUsageData: "No usage data available yet.",
 
   // Event archive (#161)
   archiveEvent: "Arquivar evento",
