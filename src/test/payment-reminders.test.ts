@@ -3,11 +3,12 @@ import { prisma } from "~/lib/db.server";
 
 // ── Mock Resend ───────────────────────────────────────────────────────────────
 const mockSend = vi.fn();
-vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(() => ({
-    emails: { send: mockSend },
-  })),
-}));
+vi.mock("resend", () => {
+  class MockResend {
+    emails = { send: mockSend };
+  }
+  return { Resend: MockResend };
+});
 
 // ── Mock web-push (for push notifications) ────────────────────────────────────
 vi.mock("web-push", () => ({
