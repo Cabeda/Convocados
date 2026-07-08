@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockSend = vi.fn();
-vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(() => ({
-    emails: { send: mockSend },
-  })),
-}));
+vi.mock("resend", () => {
+  class MockResend {
+    emails = { send: mockSend };
+  }
+  return { Resend: MockResend };
+});
 
 import {
   sendGameInvite,
