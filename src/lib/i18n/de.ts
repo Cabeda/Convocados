@@ -12,6 +12,7 @@ const de: TranslationKeys = {
   location: "Ort",
   locationPlaceholder: "z.B. Riverside Astro, Platz 2",
   locationOptional: "Ort (optional)",
+  getDirections: "Route anzeigen",
   editLocation: "Ort bearbeiten",
   saveLocation: "Speichern",
   cancelEdit: "Abbrechen",
@@ -268,6 +269,7 @@ const de: TranslationKeys = {
   makePublic: "Öffentlich",
   makePublicTooltip: "Dieses Spiel auf der Seite für öffentliche Spiele sichtbar machen",
   joinGame: "Beitreten",
+  signInToJoin: "Melde dich an, um beizutreten",
   sport: "Sportart",
   sportFootball5v5: "Fußball 5v5",
   sportFootball7v7: "Fußball 7v7",
@@ -298,6 +300,9 @@ const de: TranslationKeys = {
   tableType: "Typ",
   full: "Voll",
   spotsLeft: "{n} Platz/Plätze",
+  momentumFull: "Voll — ab auf die Bank!",
+  momentumFillingFast: "Füllt sich schnell — noch {n} Platz/Plätze",
+  momentumAlmostHalf: "Noch {n} Platz/Plätze frei",
   mapLoading: "Karte wird geladen…",
   mapNoLocation: "Kein Ort festgelegt",
   mapPermissionDenied: "Standortzugriff verweigert — alle Events werden angezeigt",
@@ -1078,6 +1083,15 @@ const de: TranslationKeys = {
   costMonthlyGamesCovered: "Games covered per month",
   costDropInSurcharge: "Drop-in surcharge",
   costDropInSurchargeTooltip: "Extra amount added to per-game payers who are not monthly subscribers.",
+
+  // Cancel game
+  cancelGame: "Spiel absagen",
+  cancelGameConfirmTitle: "Dieses Spiel absagen?",
+  cancelGameConfirmDesc: "Bist du sicher, dass du dieses Spiel absagen möchtest? Alle Follower werden benachrichtigt.",
+  cancelGameRecurringNote: "Ein neues Spiel wird zum nächsten geplanten Termin geöffnet.",
+  gameCancelled: "Abgesagt",
+  gameCancelledSnackbar: "Spiel wurde abgesagt.",
+  logGameCancelled: "{actor} sagte das Spiel ab",
 };
 
 export default de;

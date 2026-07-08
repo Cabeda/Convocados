@@ -152,6 +152,10 @@ model Event {
   // ADR 0017: Dedup flag for few_spots_left notification (reset when player leaves)
   fewSpotsLeftNotified Boolean @default(false)
 
+  // Recruitment notification dedup — T-48h and T-24h pings should fire only once per occurrence
+  recruitment48hSent Boolean @default(false)
+  recruitment24hSent Boolean @default(false)
+
   // Access control
   accessPassword        String?               // bcrypt-hashed password (null = no password)
 

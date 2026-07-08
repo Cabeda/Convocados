@@ -14,6 +14,7 @@ const en = {
   location: "Location",
   locationPlaceholder: "e.g. Riverside Astro, Pitch 2",
   locationOptional: "Location (optional)",
+  getDirections: "Get directions",
   editLocation: "Edit location",
   saveLocation: "Save",
   cancelEdit: "Cancel",
@@ -298,6 +299,7 @@ const en = {
   makePublic: "Public",
   makePublicTooltip: "Make this game visible on the public games page",
   joinGame: "Join",
+  signInToJoin: "Sign in to join this game",
 
   // Sports
   sport: "Sport",
@@ -332,6 +334,9 @@ const en = {
   tableType: "Type",
   full: "Full",
   spotsLeft: "{n} spot(s) left",
+  momentumFull: "Full — join the bench!",
+  momentumFillingFast: "Filling fast — {n} spot(s) left",
+  momentumAlmostHalf: "{n} more spots available",
   mapLoading: "Loading map…",
   mapNoLocation: "No location set",
   mapPermissionDenied: "Location access denied — showing all events",
@@ -1132,6 +1137,15 @@ const en = {
   costMonthlyGamesCovered: "Games covered per month",
   costDropInSurcharge: "Drop-in surcharge",
   costDropInSurchargeTooltip: "Extra amount added to per-game payers who are not monthly subscribers.",
+
+  // Cancel game
+  cancelGame: "Cancel game",
+  cancelGameConfirmTitle: "Cancel this game?",
+  cancelGameConfirmDesc: "Are you sure you want to cancel this game? All followers will be notified.",
+  cancelGameRecurringNote: "A new game will open for the next scheduled occurrence.",
+  gameCancelled: "Cancelled",
+  gameCancelledSnackbar: "Game has been cancelled.",
+  logGameCancelled: "{actor} cancelled the game",
 } as const;
 
 export default en;
