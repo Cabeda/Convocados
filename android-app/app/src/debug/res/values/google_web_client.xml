@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- ponytail: fallback web client ID for debug builds where google-services.json
-     doesn't include a web client entry. Production builds get this from the
-     google-services plugin automatically. -->
-<resources>
-    <string name="default_web_client_id" translatable="false">45519759180-drrbd2j4sfa9dm2r0s1opmcgks9nb7qo.apps.googleusercontent.com</string>
-</resources>

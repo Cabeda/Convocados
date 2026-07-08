@@ -17,6 +17,11 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 val keystoreProperties = Properties().apply {
     val file = rootProject.file("keystore.properties")
     if (file.exists()) file.inputStream().use { load(it) }
@@ -48,6 +53,12 @@ android {
         versionCode = (System.currentTimeMillis() / 1000 / 60).toInt()
         versionName = "1.2.0"
         manifestPlaceholders["appAuthRedirectScheme"] = "convocados"
+
+        buildConfigField(
+            "String",
+            "GOOGLE_SERVER_CLIENT_ID",
+            "\"${localProperties.getProperty("GOOGLE_SERVER_CLIENT_ID", "")}\""
+        )
     }
 
     buildTypes {
@@ -74,6 +85,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     testOptions {
         unitTests {
