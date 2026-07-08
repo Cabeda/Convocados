@@ -530,6 +530,34 @@ export const POST: APIRoute = async ({ params, request }) => {
         }
         return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
       }
+      // ── ADR 0016: game-scoped re-join after recurring reset ─────────────
+      // Player record exists at event level (from last week) but may not be in
+      // the current game yet. If so, add them to the new game instead of erroring.
+      if (existing && !existing.archivedAt && event.currentGameId) {
+        const eventPlayer = await prisma.eventPlayer.upsert({
+          where: { eventId_name: { eventId, name: trimmed } },
+          create: { eventId, name: trimmed, userId: linkedUserId ?? existing.userId },
+          update: {},
+        });
+        const alreadyInGame = await prisma.gameParticipant.findUnique({
+          where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
+        });
+        if (!alreadyInGame) {
+          const gpCount = await prisma.gameParticipant.count({
+            where: { gameId: event.currentGameId, archivedAt: null },
+          });
+          await prisma.gameParticipant.create({
+            data: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: gpCount },
+          });
+          // Link user if not already linked
+          if (linkedUserId && !existing.userId) {
+            await prisma.player.update({ where: { id: existing.id }, data: { userId: linkedUserId } });
+          }
+          return Response.json({ ok: true, invited: null, resolvedName: trimmed });
+        }
+        // Already in the current game — fall through to duplicate error
+      }
+
       if (resolvedUser) {
         if (existing) {
           if (!existing.userId) {
