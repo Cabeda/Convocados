@@ -12,6 +12,7 @@ const es: TranslationKeys = {
   location: "Ubicación",
   locationPlaceholder: "ej: Cancha Riverside, Campo 2",
   locationOptional: "Ubicación (opcional)",
+  getDirections: "Cómo llegar",
   editLocation: "Editar ubicación",
   saveLocation: "Guardar",
   cancelEdit: "Cancelar",
@@ -268,6 +269,7 @@ const es: TranslationKeys = {
   makePublic: "Público",
   makePublicTooltip: "Hacer este juego visible en la página de juegos públicos",
   joinGame: "Unirse",
+  signInToJoin: "Inicia sesión para unirte",
   sport: "Deporte",
   sportFootball5v5: "Fútbol 5v5",
   sportFootball7v7: "Fútbol 7v7",
@@ -298,6 +300,9 @@ const es: TranslationKeys = {
   tableType: "Tipo",
   full: "Completo",
   spotsLeft: "{n} lugar(es)",
+  momentumFull: "Completo — ¡únete al banquillo!",
+  momentumFillingFast: "Se llena rápido — {n} lugar(es) libre(s)",
+  momentumAlmostHalf: "Quedan {n} lugar(es)",
   mapLoading: "Cargando mapa…",
   mapNoLocation: "Sin ubicación definida",
   mapPermissionDenied: "Acceso a ubicación denegado — mostrando todos los eventos",
@@ -1078,6 +1083,15 @@ const es: TranslationKeys = {
   costMonthlyGamesCovered: "Games covered per month",
   costDropInSurcharge: "Drop-in surcharge",
   costDropInSurchargeTooltip: "Extra amount added to per-game payers who are not monthly subscribers.",
+
+  // Cancel game
+  cancelGame: "Cancelar partido",
+  cancelGameConfirmTitle: "¿Cancelar este partido?",
+  cancelGameConfirmDesc: "¿Estás seguro de que quieres cancelar este partido? Todos los seguidores serán notificados.",
+  cancelGameRecurringNote: "Se abrirá un nuevo partido para la próxima ocurrencia programada.",
+  gameCancelled: "Cancelado",
+  gameCancelledSnackbar: "El partido ha sido cancelado.",
+  logGameCancelled: "{actor} canceló el partido",
 };
 
 export default es;

@@ -126,7 +126,7 @@ export const GET: APIRoute = async ({ params, request }) => {
           ] : []),
           prisma.event.update({
             where: { id: event.id },
-            data: { dateTime: newDateTime, rsvpCutoffSent: false },
+            data: { dateTime: newDateTime, rsvpCutoffSent: false, recruitment48hSent: false, recruitment24hSent: false },
           }),
         ]);
 
@@ -193,10 +193,21 @@ export const GET: APIRoute = async ({ params, request }) => {
     playersPayload = event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() }));
   }
 
+  // ADR 0016: include current game status for the UI
+  let gameStatus: string | null = null;
+  if (event.currentGameId) {
+    const currentGame = await prisma.game.findUnique({
+      where: { id: event.currentGameId },
+      select: { status: true },
+    });
+    gameStatus = currentGame?.status ?? null;
+  }
+
   return Response.json({
     wasReset,
     ...event,
     gameId: event.currentGameId ?? null,
+    gameStatus,
     accessPassword: undefined, // never expose the hash
     hasPassword: !!event.accessPassword,
     ownerId: event.ownerId ?? null,
