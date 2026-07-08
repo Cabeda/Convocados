@@ -29,6 +29,7 @@ export const GET: APIRoute = async ({ request }) => {
     maxPlayers: true,
     archivedAt: true,
     isRecurring: true,
+    currentGameId: true,
     _count: { select: { players: true } },
     history: {
       select: { scoreOne: true, scoreTwo: true },
@@ -38,11 +39,23 @@ export const GET: APIRoute = async ({ request }) => {
   } as const;
 
   type GameRow = Prisma.EventGetPayload<{ select: typeof gameSelect }>;
-  const mapGame = (e: GameRow) => ({
+
+  // ponytail: when currentGameId is set, player count comes from GameParticipant
+  // (game-scoped). Otherwise fall back to event-level Player count.
+  async function resolvePlayerCount(e: GameRow): Promise<number> {
+    if (e.currentGameId) {
+      return prisma.gameParticipant.count({
+        where: { gameId: e.currentGameId, archivedAt: null },
+      });
+    }
+    return e._count.players;
+  }
+
+  const mapGame = async (e: GameRow) => ({
     ...e,
     dateTime: e.dateTime.toISOString(),
     archivedAt: e.archivedAt?.toISOString() ?? null,
-    playerCount: e._count.players,
+    playerCount: await resolvePlayerCount(e),
     lastScoreOne: e.history[0]?.scoreOne ?? null,
     lastScoreTwo: e.history[0]?.scoreTwo ?? null,
   });
@@ -99,16 +112,9 @@ export const GET: APIRoute = async ({ request }) => {
   const followedHasMore = followedRecords.length > limit;
   const followedSlice = followedDeduped.slice(0, limit);
 
-  const allOwned = ownedSlice.map(mapGame);
-  const allAdmin = adminSlice.map(mapGame);
-  const allFollowed = followedSlice.map((r) => ({
-    ...r.event,
-    dateTime: r.event.dateTime.toISOString(),
-    archivedAt: r.event.archivedAt?.toISOString() ?? null,
-    playerCount: r.event._count.players,
-    lastScoreOne: r.event.history[0]?.scoreOne ?? null,
-    lastScoreTwo: r.event.history[0]?.scoreTwo ?? null,
-  }));
+  const allOwned = await Promise.all(ownedSlice.map(mapGame));
+  const allAdmin = await Promise.all(adminSlice.map(mapGame));
+  const allFollowed = await Promise.all(followedSlice.map((r) => mapGame(r.event as unknown as GameRow)));
 
   return Response.json({
     owned: allOwned.filter((g) => !g.archivedAt),
