@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock Resend before importing the module under test
 const mockSend = vi.fn();
-vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(() => ({
-    emails: { send: mockSend },
-  })),
-}));
+vi.mock("resend", () => {
+  // ponytail: vitest 4 requires the factory to return a proper module shape.
+  // Resend is used as `new Resend(key)` via dynamic import.
+  class MockResend {
+    emails = { send: mockSend };
+  }
+  return { Resend: MockResend };
+});
 
 import { sendVerificationEmail, sendChangeEmailVerification, _resetResendClient } from "~/lib/email.server";
 
