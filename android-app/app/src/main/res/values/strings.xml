@@ -42,6 +42,12 @@
     <string name="no_games_desc">Create a game or join one to get started.</string>
     <string name="create_a_game">+ Create a Game</string>
     <string name="sign_in">Sign in</string>
+    <string name="sign_up">Sign up</string>
+    <string name="sign_in_with_google">Sign in with Google</string>
+    <string name="magic_link">Magic link</string>
+    <string name="send_magic_link">Send magic link</string>
+    <string name="email">Email</string>
+    <string name="name">Name</string>
     <string name="manage_games">Manage your games on the go</string>
     <string name="server_url">Server URL</string>
     <string name="language">Language</string>

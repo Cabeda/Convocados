@@ -3,7 +3,7 @@ import {
   Box, Button, Stack, Typography,
 } from "@mui/material";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
-import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
+import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutlined";
 import { useT } from "~/lib/useT";
 import type { RsvpStatus } from "~/lib/rsvp";
 

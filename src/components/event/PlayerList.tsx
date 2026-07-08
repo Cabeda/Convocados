@@ -14,7 +14,7 @@ import ShieldIcon from "@mui/icons-material/Shield";
 import ContactsIcon from "@mui/icons-material/Contacts";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
 import CancelIcon from "@mui/icons-material/Cancel";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
 import BackspaceIcon from "@mui/icons-material/Backspace";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useT } from "~/lib/useT";
@@ -340,7 +340,7 @@ export function PlayerList({
               typeof option === "string" ? option : option.name
             }
             isOptionEqualToValue={(option, value) =>
-              option.type === value.type && option.name === value.name
+              typeof option !== "string" && typeof value !== "string" && option.type === value.type && option.name === value.name
             }
             value={null}
             inputValue={playerInput}
@@ -371,7 +371,6 @@ export function PlayerList({
                 size="small"
                 placeholder={t("addPlayerPlaceholder")}
                 fullWidth
-                inputProps={{ ...params.inputProps, maxLength: 120 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     const trimmed = playerInput.trim();
@@ -406,26 +405,29 @@ export function PlayerList({
                     Promise.all(names.map((n) => onAddPlayer(n))).then(() => setPlayerInput(""));
                   }
                 }}
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: contactPickerSupported ? (
-                    <InputAdornment position="start">
-                      <Tooltip title={t("addFromContacts")}>
-                        <IconButton
-                          size="small"
-                          color="primary"
-                          edge="start"
-                          data-testid="pick-contact"
-                          aria-label={t("addFromContacts")}
-                          onClick={handlePickContact}
-                        >
-                          <ContactsIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </InputAdornment>
-                  ) : undefined,
-                }}
-              />
+                slotProps={{
+                  input: {
+                    ...params.slotProps.input,
+                    startAdornment: contactPickerSupported ? (
+                      <InputAdornment position="start">
+                        <Tooltip title={t("addFromContacts")}>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            edge="start"
+                            data-testid="pick-contact"
+                            aria-label={t("addFromContacts")}
+                            onClick={handlePickContact}
+                          >
+                            <ContactsIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </InputAdornment>
+                    ) : undefined,
+                  },
+
+                  htmlInput: { ...params.slotProps.htmlInput, maxLength: 120 }
+                }} />
             )}
             renderOption={(props, option) => {
               const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
@@ -585,7 +587,9 @@ export function PlayerList({
                          {player.name}
                        </a>
                      ) : player.name}
-                     primaryTypographyProps={{ fontWeight: 500, fontSize: "0.9rem" }}
+                     slotProps={{
+                       primary: { sx: { fontWeight: 500, fontSize: "0.9rem" } }
+                     }}
                    />
                 </ListItem>
               ))}
@@ -648,7 +652,9 @@ export function PlayerList({
                             {`${i + 1}. ${player.name}`}
                           </a>
                         ) : `${i + 1}. ${player.name}`}
-                        primaryTypographyProps={{ fontWeight: 500, fontSize: "0.9rem" }}
+                        slotProps={{
+                          primary: { sx: { fontWeight: 500, fontSize: "0.9rem" } }
+                        }}
                       />
                     </ListItem>
                   );

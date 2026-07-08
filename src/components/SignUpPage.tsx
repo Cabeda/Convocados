@@ -88,7 +88,9 @@ export default function SignUpPage() {
                 fullWidth
                 autoComplete="name"
                 autoFocus
-                inputProps={{ maxLength: 50 }}
+                slotProps={{
+                  htmlInput: { maxLength: 50 }
+                }}
               />
               <TextField
                 label={t("email")}
@@ -107,7 +109,9 @@ export default function SignUpPage() {
                 required
                 fullWidth
                 autoComplete="new-password"
-                inputProps={{ minLength: 8 }}
+                slotProps={{
+                  htmlInput: { minLength: 8 }
+                }}
               />
               <TextField
                 label={t("confirmPassword")}

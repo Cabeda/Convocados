@@ -95,7 +95,7 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
         val response = try {
             client.post("$baseUrl/api/auth/oauth2/token") {
                 contentType(ContentType.Application.FormUrlEncoded)
-                setBody("grant_type=refresh_token&refresh_token=${tokens.refreshToken}&client_id=mobile-app")
+                setBody("grant_type=refresh_token&refresh_token=${tokens.refreshToken}&client_id=convocados-mobile-app")
             }
         } catch (e: Exception) {
             throw ApiException(0, "Network error during refresh: ${e.message}")

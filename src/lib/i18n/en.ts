@@ -857,6 +857,14 @@ const en = {
   adminRange1y: "1 year",
   adminRangeAll: "All time",
   adminNoGrowthData: "No growth data available yet.",
+  adminUsageMetrics: "Usage Metrics",
+  adminDauToday: "DAU (today)",
+  adminWau: "WAU (7d)",
+  adminMau: "MAU (30d)",
+  adminPlatformBreakdown: "Platform Breakdown (30d)",
+  adminWebBrowsers: "Web — Browsers",
+  adminWebOS: "Web — Operating Systems",
+  adminNoUsageData: "No usage data available yet.",
   adminDeleteUser: "Delete user",
   adminDeleteUserConfirm: "Are you sure you want to permanently delete this user? This cannot be undone.",
   adminDeleteUserError: "Could not delete user.",
@@ -1137,6 +1145,15 @@ const en = {
   costMonthlyGamesCovered: "Games covered per month",
   costDropInSurcharge: "Drop-in surcharge",
   costDropInSurchargeTooltip: "Extra amount added to per-game payers who are not monthly subscribers.",
+
+  // Cancel game
+  cancelGame: "Cancel game",
+  cancelGameConfirmTitle: "Cancel this game?",
+  cancelGameConfirmDesc: "Are you sure you want to cancel this game? All followers will be notified.",
+  cancelGameRecurringNote: "A new game will open for the next scheduled occurrence.",
+  gameCancelled: "Cancelled",
+  gameCancelledSnackbar: "Game has been cancelled.",
+  logGameCancelled: "{actor} cancelled the game",
 } as const;
 
 export default en;

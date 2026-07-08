@@ -11,9 +11,13 @@ import { expireOldCredits } from "~/lib/creditExpiry.server";
 import {
   getEventsNeedingRsvpPing,
   getEventsNeedingRsvpSummary,
+  getEventsNeedingRecruitment48h,
+  getEventsNeedingRecruitment24h,
   getRsvpRecipients,
   getRsvpSummary,
   markRsvpCutoffSent,
+  markRecruitment48hSent,
+  markRecruitment24hSent,
 } from "~/lib/rsvp.server";
 import { createLogger } from "~/lib/logger.server";
 import { prisma } from "~/lib/db.server";
@@ -258,9 +262,12 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   // ── ADR 0017: Recruitment ping at T-48h for non-full games ─────────────────
+  // Uses the `recruitment48hSent` dedup flag so the ping fires exactly once per
+  // occurrence — not on every cron tick within the 2-hour window.
   const recruitmentPingsSent: string[] = [];
   try {
-    for (const e of t48hEvents) {
+    const t48hRecruitmentEvents = await getEventsNeedingRecruitment48h();
+    for (const e of t48hRecruitmentEvents) {
       const event = await prisma.event.findUnique({
         where: { id: e.id },
         select: { id: true, title: true, maxPlayers: true, recruitmentThreshold: true },
@@ -273,7 +280,11 @@ export const POST: APIRoute = async ({ request }) => {
       const spotsLeft = Math.max(0, event.maxPlayers - activePlayers);
 
       // Only send if game is NOT full (has spots remaining)
-      if (spotsLeft === 0) continue;
+      if (spotsLeft === 0) {
+        // Still mark as sent so we don't re-evaluate on every cron tick.
+        await markRecruitment48hSent(event.id);
+        continue;
+      }
 
       // Get active player userIds to exclude from recruitment
       const playerUsers = await prisma.player.findMany({
@@ -289,26 +300,29 @@ export const POST: APIRoute = async ({ request }) => {
       });
       const nonPlayingFollowers = follows.filter((f) => !playerUserIds.has(f.userId));
 
-      if (nonPlayingFollowers.length > 0) {
-        // Route through notification queue for locale-aware delivery + tier resolution
-        await enqueueNotification(event.id, "recruitment", {
-          title: event.title,
-          key: "notifyRecruitment",
-          params: { title: event.title },
-          url: `/events/${event.id}?action=join`,
-          spotsLeft,
-        });
-        recruitmentPingsSent.push(`${event.id}:${nonPlayingFollowers.length}`);
-      }
+      // Route through notification queue for locale-aware delivery + tier resolution
+      await enqueueNotification(event.id, "recruitment", {
+        title: event.title,
+        key: "notifyRecruitment",
+        params: { title: event.title },
+        url: `/events/${event.id}?action=join`,
+        spotsLeft,
+      });
+      recruitmentPingsSent.push(`${event.id}:${nonPlayingFollowers.length}`);
+
+      // Mark sent BEFORE drain so a stuck/crashed cron doesn't re-fire.
+      await markRecruitment48hSent(event.id);
     }
   } catch (err) {
     log.error({ err }, "Failed to process recruitment pings");
   }
 
   // ── ADR 0018: T-24h urgent recruitment + organizer share-sheet notification ─
+  // Uses the `recruitment24hSent` dedup flag so the urgent ping fires exactly
+  // once per occurrence.
   try {
-    const summaryEventsForRecruitment = await getEventsNeedingRsvpSummary();
-    for (const e of summaryEventsForRecruitment) {
+    const t24hRecruitmentEvents = await getEventsNeedingRecruitment24h();
+    for (const e of t24hRecruitmentEvents) {
       const event = await prisma.event.findUnique({
         where: { id: e.id },
         select: { id: true, title: true, maxPlayers: true, recruitmentThreshold: true, ownerId: true },
@@ -319,7 +333,10 @@ export const POST: APIRoute = async ({ request }) => {
         where: { eventId: event.id, archivedAt: null },
       });
       const spotsLeft = Math.max(0, event.maxPlayers - activePlayers);
-      if (spotsLeft === 0) continue;
+      if (spotsLeft === 0) {
+        await markRecruitment24hSent(event.id);
+        continue;
+      }
 
       // Urgent recruitment to non-playing followers
       await enqueueNotification(event.id, "recruitment", {
@@ -330,6 +347,9 @@ export const POST: APIRoute = async ({ request }) => {
         spotsLeft,
       });
       recruitmentPingsSent.push(`${event.id}:24h`);
+
+      // Mark sent BEFORE drain so a stuck/crashed cron doesn't re-fire.
+      await markRecruitment24hSent(event.id);
 
       // Organizer share-sheet prompt
       if (event.ownerId) {

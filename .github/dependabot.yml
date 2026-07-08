@@ -34,3 +34,12 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # Hilt/Dagger can't read Kotlin 2.4.x metadata yet (shaded kotlin-metadata-jvm).
+      # Remove this once Dagger ships 2.4.0 support.
+      - dependency-name: "org.jetbrains.kotlin:*"
+        versions: [">=2.4.0"]
+      - dependency-name: "org.jetbrains.kotlin.android"
+        versions: [">=2.4.0"]
+      - dependency-name: "org.jetbrains.kotlin.plugin.compose"
+        versions: [">=2.4.0"]

@@ -1,5 +1,4 @@
 ---
-
 interface MetaTag {
   property: string;
   content: string;
@@ -41,7 +40,7 @@ const {
 ---
 
 <!doctype html>
-<html lang="en" data-astro-transition-direction="forward">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -65,34 +64,20 @@ const {
     <style is:inline>
       html, body { background-color: #111412; }
       body { color: #e6e6e6; margin: 0; }
+      /* ponytail: cross-document view transitions (browser-native, CSS-only).
+         Works with client:only islands because navigation is a full page load.
+         The browser captures a screenshot of the old page and crossfades to the
+         new one — no JS router, no DOM swapping, no React remounting issues.
+         Progressive enhancement: unsupported browsers (Firefox) get instant nav.
+         Ceiling: no shared-element morphs or persistent state across pages. */
+      @view-transition { navigation: auto; }
       ::view-transition-old(root),
-      ::view-transition-new(root) { animation-duration: 220ms; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
-      html[data-astro-transition-direction="forward"] ::view-transition-old(root) { animation-name: slide-out-to-left; }
-      html[data-astro-transition-direction="forward"] ::view-transition-new(root) { animation-name: slide-in-from-right; }
-      html[data-astro-transition-direction="back"] ::view-transition-old(root) { animation-name: slide-out-to-right; }
-      html[data-astro-transition-direction="back"] ::view-transition-new(root) { animation-name: slide-in-from-left; }
-      @keyframes slide-out-to-left { to { transform: translateX(-30%); opacity: 0; } }
-      @keyframes slide-in-from-right { from { transform: translateX(100%); opacity: 0; } }
-      @keyframes slide-out-to-right { to { transform: translateX(30%); opacity: 0; } }
-      @keyframes slide-in-from-left { from { transform: translateX(-30%); opacity: 0; } }
+      ::view-transition-new(root) { animation-duration: 200ms; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
       @media (prefers-reduced-motion: reduce) {
         ::view-transition-old(root),
         ::view-transition-new(root) { animation: none !important; }
       }
     </style>
-
-    <!--
-      ClientRouter is intentionally disabled. With Astro 6 and React 19
-      islands using `client:only="react"`, the ClientRouter's hidden-iframe
-      mechanism (used to render the next page's client:only islands before
-      swapping the body) does not work — the new page's React component
-      never mounts after the swap, leaving the page blank. The white-blink
-      fix (inline shell paint above) and the per-page `view-transition-name`
-      still apply, but until Astro upstream fixes the iframe approach, every
-      navigation is a full document load. See ADR 0015 and 0016 for the
-      design history.
-    -->
-    <!-- <ClientRouter fallback="swap" /> -->
   </head>
   <body>
     <main
@@ -101,41 +86,5 @@ const {
     >
       <slot />
     </main>
-
-    {/*
-      Direction detection for the slide animation. Runs before every swap so
-      the CSS above can pick the right keyframe set. Navigation.currentEntry
-      gives us the new entry's type: "push" | "replace" | "reload" | "traverse".
-      Traverse is the only case where we need to know back vs forward — the
-      Navigation API exposes that via `activation` (which we cannot read at
-      this point in the lifecycle). Workaround: compare history.scrollRestoration
-      patterns are unreliable, so we approximate by listening for `popstate`:
-      if the last navigation was a popstate, the next traverse is the opposite
-      direction of the previous one. We use a module-level variable to track
-      that.
-    */}
-    <script>
-      (() => {
-        type Dir = "forward" | "back";
-        const html = document.documentElement;
-        let lastWasPop = false;
-        window.addEventListener("popstate", () => { lastWasPop = true; });
-        document.addEventListener("astro:before-preparation", (ev) => {
-          const e = ev as Event;
-          let dir: Dir = "forward";
-          if (lastWasPop) { dir = "back"; lastWasPop = false; }
-          html.setAttribute("data-astro-transition-direction", dir);
-          // Stash on the event for any listener that needs it
-          (e as CustomEvent).direction = dir;
-        });
-        // Reset on full reload — no animation needed
-        document.addEventListener("astro:before-swap", () => {
-          const nav = (window as unknown as { navigation?: { currentEntry?: { type?: string } } }).navigation;
-          if (nav?.currentEntry?.type === "reload") {
-            html.removeAttribute("data-astro-transition-direction");
-          }
-        });
-      })();
-    </script>
   </body>
 </html>

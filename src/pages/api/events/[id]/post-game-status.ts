@@ -31,6 +31,20 @@ export const GET: APIRoute = async ({ params, request }) => {
     orderBy: { dateTime: "desc" },
     select: { id: true, scoreOne: true, scoreTwo: true, teamsSnapshot: true, paymentsSnapshot: true, status: true, dateTime: true, createdAt: true },
   });
+
+  // ponytail: cancelled games have no post-game actions (no score, no payments, no MVP).
+  // Suppress the banner entirely when the most recent history is "cancelled".
+  if (latestHistory?.status === "cancelled") {
+    return Response.json({
+      gameEnded: false, hasScore: false, hasCost: false, allPaid: true,
+      allComplete: true, isParticipant: false, latestHistoryId: null,
+      paymentsSnapshot: null, costCurrency: null, costAmount: null,
+      hasPendingPastPayments: false, mvpEnabled: false, mvpComplete: true,
+      bannerMvpComplete: true, paidAggregate: { paidCount: 0, totalCount: 0 },
+      scoreOne: null, scoreTwo: null,
+      teamOneName: event.teamOneName, teamTwoName: event.teamTwoName,
+    });
+  }
   const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
 
   // Check payment status — look at live payments first, then fall back to

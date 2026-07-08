@@ -243,3 +243,30 @@ describe("getMbwayAppLink", () => {
     expect(getMbwayAppLink(undefined)).toBeNull();
   });
 });
+
+
+
+// ── Additional coverage for getMethodTypeLabel + edge cases ──────────────────
+
+import { getMethodTypeLabel } from "~/lib/paymentMethods";
+
+describe("getMethodTypeLabel", () => {
+  it("returns correct labels for all types", () => {
+    expect(getMethodTypeLabel("phone")).toBe("Phone");
+    expect(getMethodTypeLabel("mbway")).toBe("MB Way");
+    expect(getMethodTypeLabel("revolut_tag")).toBe("Revolut");
+    expect(getMethodTypeLabel("revolut_link")).toBe("Revolut Link");
+    expect(getMethodTypeLabel("cash")).toBe("Cash");
+    expect(getMethodTypeLabel("other")).toBe("Other");
+  });
+});
+
+describe("getDisplayValue edge cases", () => {
+  it("returns raw value for invalid revolut_link URL", () => {
+    expect(getDisplayValue({ type: "revolut_link", value: "not-a-url" })).toBe("not-a-url");
+  });
+
+  it("returns raw value when URL pathname is empty (root)", () => {
+    expect(getDisplayValue({ type: "revolut_link", value: "https://revolut.me/" })).toBe("https://revolut.me/");
+  });
+});

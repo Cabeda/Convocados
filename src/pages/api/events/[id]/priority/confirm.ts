@@ -14,7 +14,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const event = await prisma.event.findUnique({
     where: { id: params.id },
-    select: { id: true, dateTime: true },
+    select: { id: true, dateTime: true, currentGameId: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -38,6 +38,20 @@ export const POST: APIRoute = async ({ params, request }) => {
           userId: session.user.id,
           order: (maxOrder._max.order ?? -1) + 1,
         },
+      });
+    }
+
+    // ADR 0016: also add to current game via GameParticipant
+    if (event.currentGameId) {
+      const eventPlayer = await prisma.eventPlayer.upsert({
+        where: { eventId_name: { eventId: event.id, name: session.user.name } },
+        create: { eventId: event.id, name: session.user.name, userId: session.user.id },
+        update: {},
+      });
+      await prisma.gameParticipant.upsert({
+        where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
+        create: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: 0 },
+        update: {},
       });
     }
   }
