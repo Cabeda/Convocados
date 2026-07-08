@@ -573,11 +573,11 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
               component="a"
               href="/docs"
               color="text.secondary"
-              sx={{ textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
+              sx={{ display: "flex", alignItems: "center", textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
             >
               {t("docs")}
             </Typography>
-            <Typography variant="body2" color="text.disabled">·</Typography>
+            <Typography variant="body2" color="text.disabled" sx={{ display: "flex", alignItems: "center" }}>·</Typography>
             <Typography
               variant="body2"
               component="a"

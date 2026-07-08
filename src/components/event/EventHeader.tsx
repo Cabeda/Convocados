@@ -19,7 +19,8 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
+import CancelIcon from "@mui/icons-material/Cancel";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { describeRecurrenceRule, parseRecurrenceRule, nextOccurrence } from "~/lib/recurrence";
@@ -46,11 +47,13 @@ interface Props {
   isAuthenticated: boolean;
   isOwnerless: boolean;
   localMatches: Imatch[] | null;
+  gameStatus?: string | null;
   onSaveTitle: (title: string) => Promise<void>;
   onSaveLocation: (location: string) => Promise<void>;
   onSaveDateTime: (dateTime: string, timezone: string) => Promise<void>;
   onSaveSport: (sport: string) => Promise<void>;
   onClaimOwnership: () => Promise<void>;
+  onCancelGame: () => void;
   onSnackbar: (msg: string) => void;
 }
 
@@ -67,8 +70,8 @@ function countdownUrgency(gameDate: Date, durationMinutes?: number): "past" | "l
 
 export function EventHeader({
   eventId, event, sport, gameDate, countdown, canEditSettings,
-  isOwner: _isOwner, isAuthenticated, isOwnerless, localMatches,
-  onSaveTitle, onSaveLocation, onSaveDateTime, onSaveSport, onClaimOwnership,
+  isOwner: _isOwner, isAuthenticated, isOwnerless, localMatches, gameStatus,
+  onSaveTitle, onSaveLocation, onSaveDateTime, onSaveSport, onClaimOwnership, onCancelGame,
 }: Props) {
   const t = useT();
   const locale = detectLocale();
@@ -116,23 +119,26 @@ export function EventHeader({
   }, [canEditSettings, event, sport]);
 
   const rule = parseRecurrenceRule(event.recurrenceRule);
-  const urgency = countdownUrgency(gameDate, event.durationMinutes);
+  const isCancelled = gameStatus === "cancelled";
+  const urgency = isCancelled ? "past" : countdownUrgency(gameDate, event.durationMinutes);
   // ponytail: recurring events in past phase get primary color (next game exists),
   // non-recurring past events get the muted grey.
-  const isRecurringPast = urgency === "past" && !!rule;
-  const urgencyColor = urgency === "past" && !isRecurringPast ? theme.palette.text.disabled
+  const isRecurringPast = urgency === "past" && !!rule && !isCancelled;
+  const urgencyColor = isCancelled ? theme.palette.error.main
+    : urgency === "past" && !isRecurringPast ? theme.palette.text.disabled
     : urgency === "past" && isRecurringPast ? theme.palette.primary.main
     : urgency === "live" ? theme.palette.success.main
     : urgency === "urgent" ? theme.palette.error.main
     : urgency === "soon" ? theme.palette.warning.main
     : theme.palette.primary.main;
-  const urgencyBg = urgency === "past" && !isRecurringPast ? alpha(theme.palette.text.disabled, 0.06)
+  const urgencyBg = isCancelled ? alpha(theme.palette.error.main, 0.1)
+    : urgency === "past" && !isRecurringPast ? alpha(theme.palette.text.disabled, 0.06)
     : urgency === "past" && isRecurringPast ? alpha(theme.palette.primary.main, 0.08)
     : urgency === "live" ? alpha(theme.palette.success.main, 0.1)
     : urgency === "urgent" ? alpha(theme.palette.error.main, 0.1)
     : urgency === "soon" ? alpha(theme.palette.warning.main, 0.1)
     : alpha(theme.palette.primary.main, 0.08);
-  const accentOpacity = urgency === "normal" ? 0.25 : (urgency === "past" && !isRecurringPast) ? 0.15 : 0.8;
+  const accentOpacity = isCancelled ? 0.8 : urgency === "normal" ? 0.25 : (urgency === "past" && !isRecurringPast) ? 0.15 : 0.8;
 
   const openEdit = () => {
     setTitleDraft(event.title);
@@ -188,6 +194,7 @@ export function EventHeader({
       case "live":
         return t("liveNow");
       case "past":
+        if (isCancelled) return t("gameCancelled");
         // For recurring events, show the actual next game date so new players know when to come
         if (rule) {
           const nextDate = nextOccurrence(gameDate, rule, new Date());
@@ -254,8 +261,10 @@ export function EventHeader({
                     size="small" value={titleDraft} fullWidth autoFocus
                     label={t("gameTitle")}
                     onChange={(e) => setTitleDraft(e.target.value)}
-                    inputProps={{ maxLength: 100 }}
                     onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
+                    slotProps={{
+                      htmlInput: { maxLength: 100 }
+                    }}
                   />
                 ) : (
                   <Typography
@@ -344,7 +353,9 @@ export function EventHeader({
                   <TextField
                     size="small" type="datetime-local" value={dateTimeDraft}
                     onChange={(e) => setDateTimeDraft(e.target.value)}
-                    InputLabelProps={{ shrink: true }} label={t("dateTime")} sx={{ flex: 1 }}
+                    label={t("dateTime")} sx={{ flex: 1 }} slotProps={{
+                    inputLabel: { shrink: true }
+                  }}
                   />
                 </Box>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -522,6 +533,12 @@ export function EventHeader({
                   </>
                 )}
                 {canEditSettings && <Divider sx={{ my: 0.5 }} />}
+                {canEditSettings && (
+                  <MenuItem onClick={() => { setAnchorEl(null); onCancelGame(); }}>
+                    <ListItemIcon><CancelIcon fontSize="small" color="error" /></ListItemIcon>
+                    <ListItemText>{t("cancelGame")}</ListItemText>
+                  </MenuItem>
+                )}
                 {canEditSettings && (
                   <MenuItem component="a" href={`/events/${eventId}/settings`} onClick={() => setAnchorEl(null)}>
                     <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>

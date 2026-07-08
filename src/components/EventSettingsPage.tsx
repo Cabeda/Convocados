@@ -589,7 +589,6 @@ export default function EventSettingsPage({ eventId }: Props) {
             <TextField
               size="small"
               type="number"
-              inputProps={{ min: 0, max: 600, step: 5 }}
               value={event.durationMinutes ?? 60}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
@@ -614,6 +613,9 @@ export default function EventSettingsPage({ eventId }: Props) {
               }}
               disabled={!canEdit}
               sx={{ width: 120 }}
+              slotProps={{
+                htmlInput: { min: 0, max: 600, step: 5 }
+              }}
             />
           </Box>
 
@@ -989,7 +991,7 @@ export default function EventSettingsPage({ eventId }: Props) {
                   typeof option === "string" ? option : option.name
                 }
                 filterOptions={(options) => options}
-                isOptionEqualToValue={(a, b) => a.userId === b.userId && a.source === b.source}
+                isOptionEqualToValue={(a, b) => typeof a !== "string" && typeof b !== "string" && a.userId === b.userId && a.source === b.source}
                 value={null}
                 inputValue={adminSearchInput}
                 onInputChange={(_, value, reason) => {

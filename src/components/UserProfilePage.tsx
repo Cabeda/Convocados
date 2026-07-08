@@ -350,7 +350,9 @@ function ProfileEditForm({ user, onSaved }: { user: UserProfile["user"]; onSaved
           onChange={(e) => setName(e.target.value)}
           fullWidth
           size="small"
-          inputProps={{ maxLength: 50 }}
+          slotProps={{
+            htmlInput: { maxLength: 50 }
+          }}
         />
         <Stack direction="row" spacing={1}>
           <Button

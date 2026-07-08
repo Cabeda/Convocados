@@ -124,9 +124,13 @@ export const GET: APIRoute = async ({ params, request }) => {
             prisma.playerPayment.deleteMany({ where: { eventCostId: eventCost.id } }),
             prisma.eventCost.update({ where: { id: eventCost.id }, data: { tempPaymentMethods: null, tempPaymentDetails: null } }),
           ] : []),
+          // Clear team members for the new game (teams are snapshotted in GameHistory above)
+          ...event.teamResults.map((tr) =>
+            prisma.teamMember.deleteMany({ where: { teamResultId: tr.id } }),
+          ),
           prisma.event.update({
             where: { id: event.id },
-            data: { dateTime: newDateTime, rsvpCutoffSent: false },
+            data: { dateTime: newDateTime, rsvpCutoffSent: false, recruitment48hSent: false, recruitment24hSent: false },
           }),
         ]);
 
@@ -193,10 +197,31 @@ export const GET: APIRoute = async ({ params, request }) => {
     playersPayload = event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() }));
   }
 
+  // ADR 0016: include current game status for the UI
+  let gameStatus: string | null = null;
+  if (event.currentGameId) {
+    const currentGame = await prisma.game.findUnique({
+      where: { id: event.currentGameId },
+      select: { status: true },
+    });
+    gameStatus = currentGame?.status ?? null;
+  }
+
+  // ADR 0016: filter teamResults to only include members in the current game's player list.
+  // After a recurrence reset, old team members linger in TeamResult but the player list
+  // is now game-scoped via GameParticipant. Only show team members who are active players.
+  const activePlayerNames = new Set(playersPayload.map((p: { name: string }) => p.name));
+  const filteredTeamResults = event.teamResults.map((tr) => ({
+    ...tr,
+    members: tr.members.filter((m) => activePlayerNames.has(m.name)),
+  }));
+
   return Response.json({
     wasReset,
     ...event,
+    teamResults: filteredTeamResults,
     gameId: event.currentGameId ?? null,
+    gameStatus,
     accessPassword: undefined, // never expose the hash
     hasPassword: !!event.accessPassword,
     ownerId: event.ownerId ?? null,

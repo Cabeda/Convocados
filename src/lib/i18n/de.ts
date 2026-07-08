@@ -805,7 +805,15 @@ const de: TranslationKeys = {
   adminRange30d: "30 Tage",
   adminRange1y: "1 Jahr",
   adminRangeAll: "Gesamter Zeitraum",
-  adminNoGrowthData: "Noch keine Wachstumsdaten verfügbar.",
+  adminNoGrowthData: "No growth data available yet.",
+  adminUsageMetrics: "Usage Metrics",
+  adminDauToday: "DAU (today)",
+  adminWau: "WAU (7d)",
+  adminMau: "MAU (30d)",
+  adminPlatformBreakdown: "Platform Breakdown (30d)",
+  adminWebBrowsers: "Web — Browsers",
+  adminWebOS: "Web — Operating Systems",
+  adminNoUsageData: "No usage data available yet.",
 
   // Event archive (#161)
   archiveEvent: "Event archivieren",
@@ -1083,6 +1091,15 @@ const de: TranslationKeys = {
   costMonthlyGamesCovered: "Games covered per month",
   costDropInSurcharge: "Drop-in surcharge",
   costDropInSurchargeTooltip: "Extra amount added to per-game payers who are not monthly subscribers.",
+
+  // Cancel game
+  cancelGame: "Spiel absagen",
+  cancelGameConfirmTitle: "Dieses Spiel absagen?",
+  cancelGameConfirmDesc: "Bist du sicher, dass du dieses Spiel absagen möchtest? Alle Follower werden benachrichtigt.",
+  cancelGameRecurringNote: "Ein neues Spiel wird zum nächsten geplanten Termin geöffnet.",
+  gameCancelled: "Abgesagt",
+  gameCancelledSnackbar: "Spiel wurde abgesagt.",
+  logGameCancelled: "{actor} sagte das Spiel ab",
 };
 
 export default de;

@@ -3,7 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = 3001;
+const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3001);
 const BASE_URL = `http://localhost:${PORT}`;
 const DB_PATH = path.resolve(__dirname, "e2e-test.db");
 
@@ -15,6 +15,7 @@ const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? "CiPrdEcokfW8WIFvj1bp
 export default defineConfig({
   testDir: "./e2e",
   globalSetup: "./e2e/global-setup.ts",
+  globalTeardown: "./e2e/global-teardown.ts",
   fullyParallel: false, // SQLite doesn't handle parallel writes well
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -29,7 +30,16 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        // Allow overriding the browser path for environments where
+        // Playwright can't download its own Chromium (e.g. low-disk
+        // sandboxes, air-gapped runners). Set PLAYWRIGHT_CHROMIUM_EXECUTABLE
+        // to a system chromium path.
+        launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+          ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+          : {},
+      },
     },
   ],
   webServer: {

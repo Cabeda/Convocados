@@ -68,9 +68,6 @@ android-app/wear/build
 android-app/wear/.gradle
 android-app/wear/.idea
 
-# Beads / Dolt files (added by bd init)
-.dolt/
-.beads-credential-key
 .env.wear.local
 android-app/keystore.properties
 android-app/app/release-keystore.jks
