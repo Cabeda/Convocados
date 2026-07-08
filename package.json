@@ -38,7 +38,7 @@
     "@emotion/styled": "^11.14.1",
     "@fontsource/roboto": "^5.2.10",
     "@mui/icons-material": "^6.5.0",
-    "@mui/material": "^6.5.0",
+    "@mui/material": "^9.2.0",
     "@prisma/client": "^6.19.3",
     "@types/web-push": "^3.6.4",
     "astro": "^7.0.6",
