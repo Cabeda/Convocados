@@ -60,17 +60,17 @@ export function subscriptionWindowFor(d: Date, timezone: string): SubscriptionWi
 
 function firstInstantOfMonth(year: number, month: number, timezone: string): Date {
   // Build a date in the target timezone representing midnight on day 1, then
-  // convert back to a UTC instant. We do this by binary search: the actual
-  // UTC instant whose local-time representation in `timezone` is
-  // YYYY-MM-DDT00:00:00.
+  // convert back to a UTC instant.
   //
-  // We approximate by formatting: take the UTC instant that is *at least*
-  // midnight local time, then nudge backward if it overshoots. The max
-  // offset between any two IANA zones is < 24h, so we search a 48h window.
+  // We do this by formatting a guess UTC instant in the target timezone and
+  // measuring the offset. The `en-GB` locale is used because it formats
+  // midnight as "00:00:00" with hour12:false — `en-CA` would format it as
+  // "24:00:00", which is technically the same instant but trips up
+  // `Date.UTC(..., 24, 0, 0)`.
   const targetLocal = `${year}-${String(month).padStart(2, "0")}-01T00:00:00`;
   const guessUtc = new Date(`${targetLocal}Z`);
-  // Format `guessUtc` in `timezone` to see what local time it shows.
-  const formatted = new Intl.DateTimeFormat("en-CA", {
+
+  const formatted = new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
     year: "numeric",
     month: "2-digit",
@@ -89,16 +89,8 @@ function firstInstantOfMonth(year: number, month: number, timezone: string): Dat
   const localSecond = get("second");
 
   // Compute the offset between the local time shown and the target.
-  // We represent both as epoch ms using a fixed reference: assume the local
-  // wall-clock time is the same instant, so the offset =
-  //   guessUtc - Date(UTC representation of local wall-clock time)
   const localAsUtc = Date.UTC(localYear, localMonth - 1, localDay, localHour, localMinute, localSecond);
   const offsetMs = guessUtc.getTime() - localAsUtc;
-  // `offsetMs` is the signed difference between guessUtc and the UTC instant
-  // whose wall-clock time in `timezone` equals guessUtc's wall-clock time.
-  // If Lisbon is UTC+1, guessUtc=00:00Z formats as 01:00 local, so
-  // localAsUtc = 01:00Z, offsetMs = -1h. We need to shift guessUtc *by* that
-  // offset to land on the UTC instant whose local time is 00:00.
   return new Date(guessUtc.getTime() + offsetMs);
 }
 
