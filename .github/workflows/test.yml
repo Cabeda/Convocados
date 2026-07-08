@@ -243,3 +243,26 @@ jobs:
       - name: Build Wear OS debug APK
         working-directory: android-app
         run: ./gradlew :wear:assembleDebug --no-daemon
+
+
+
+  # ── Gate job: single required status check for branch protection ─────────
+  # Branch protection requires a check named "CI". This job depends on all
+  # the real jobs and reports a single pass/fail status.
+  ci-gate:
+    name: CI
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [typecheck, lint, test, build, e2e]
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "One or more required jobs failed"
+            exit 1
+          fi
+          if [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more required jobs were cancelled"
+            exit 1
+          fi
+          echo "All required jobs passed"
