@@ -376,6 +376,42 @@ describe("DELETE /api/events/[id]/players", () => {
     const archived = await prisma.player.findFirst({ where: { eventId: id } });
     expect(archived?.archivedAt).not.toBeNull();
   });
+
+  it("bench position notification excludes archived players from count", async () => {
+    const id = await seedEvent();
+    await prisma.event.update({ where: { id }, data: { maxPlayers: 2 } });
+
+    // Two active players fill the roster
+    await prisma.player.createMany({
+      data: [
+        { name: "Alice", eventId: id, order: 0 },
+        { name: "Bob", eventId: id, order: 1 },
+      ],
+    });
+    // Three archived (removed) players — should NOT inflate bench position
+    await prisma.player.createMany({
+      data: [
+        { name: "Gone1", eventId: id, order: 10, archivedAt: new Date() },
+        { name: "Gone2", eventId: id, order: 11, archivedAt: new Date() },
+        { name: "Gone3", eventId: id, order: 12, archivedAt: new Date() },
+      ],
+    });
+
+    // Clean notification jobs before adding the bench player
+    await prisma.notificationJob.deleteMany();
+
+    // Carol joins — she's the 1st bench player (position #1), not #4
+    const res = await addPlayer(ctx({ id }, { name: "Carol" }));
+    expect(res.status).toBe(200);
+
+    // Verify the notification payload has correct bench position
+    const job = await prisma.notificationJob.findFirst({
+      where: { eventId: id, type: "player_joined_bench" },
+    });
+    expect(job).not.toBeNull();
+    const payload = JSON.parse(job!.payload);
+    expect(payload.params.position).toBe("1");
+  });
 });
 
 // ─── POST /api/events/[id]/randomize ────────────────────────────────────────
