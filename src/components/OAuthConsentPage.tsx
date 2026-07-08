@@ -14,7 +14,7 @@ import {
   CircularProgress,
   Alert,
 } from "@mui/material";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import LockIcon from "@mui/icons-material/Lock";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
@@ -143,7 +143,9 @@ export default function OAuthConsentPage() {
                   <ListItemIcon sx={{ minWidth: 32 }}>
                     <CheckCircleOutlineIcon fontSize="small" color="success" />
                   </ListItemIcon>
-                  <ListItemText primary={label} primaryTypographyProps={{ variant: "body2" }} />
+                  <ListItemText primary={label} slotProps={{
+                    primary: { variant: "body2" }
+                  }} />
                 </ListItem>
               );
             })}

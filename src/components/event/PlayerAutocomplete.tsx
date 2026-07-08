@@ -47,7 +47,7 @@ export function PlayerAutocomplete({ value, onChange, onAdd, onRequestAdd, sugge
       })()}
       filterOptions={(options) => options}
       getOptionLabel={(option) => (typeof option === "string" ? option : option.name)}
-      isOptionEqualToValue={(option, value) => option.type === value.type && option.name === value.name}
+      isOptionEqualToValue={(option, value) => typeof option !== "string" && typeof value !== "string" && option.type === value.type && option.name === value.name}
       value={null}
       inputValue={value}
       onInputChange={(_, newInputValue, reason) => {
@@ -71,7 +71,6 @@ export function PlayerAutocomplete({ value, onChange, onAdd, onRequestAdd, sugge
           {...params}
           label={label}
           placeholder={t("addPlayerPlaceholder")}
-          inputProps={{ ...params.inputProps, maxLength: 50 }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && value.trim()) {
               const trimmed = value.trim();
@@ -84,20 +83,23 @@ export function PlayerAutocomplete({ value, onChange, onAdd, onRequestAdd, sugge
               }
             }
           }}
-          InputProps={{
-            ...params.InputProps,
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton size="small" color="primary" edge="end"
-                  disabled={!value.trim() || disabled}
-                  onClick={() => { onAdd(value.trim()); onChange(""); }}>
-                  <PersonAddIcon fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
           sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-        />
+          slotProps={{
+            input: {
+              ...params.slotProps.input,
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton size="small" color="primary" edge="end"
+                    disabled={!value.trim() || disabled}
+                    onClick={() => { onAdd(value.trim()); onChange(""); }}>
+                    <PersonAddIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
+
+            htmlInput: { ...params.slotProps.htmlInput, maxLength: 50 }
+          }} />
       )}
       renderOption={(props, option) => {
         const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };

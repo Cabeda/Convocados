@@ -19,7 +19,7 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import CancelIcon from "@mui/icons-material/Cancel";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
@@ -261,8 +261,10 @@ export function EventHeader({
                     size="small" value={titleDraft} fullWidth autoFocus
                     label={t("gameTitle")}
                     onChange={(e) => setTitleDraft(e.target.value)}
-                    inputProps={{ maxLength: 100 }}
                     onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); }}
+                    slotProps={{
+                      htmlInput: { maxLength: 100 }
+                    }}
                   />
                 ) : (
                   <Typography
@@ -351,7 +353,9 @@ export function EventHeader({
                   <TextField
                     size="small" type="datetime-local" value={dateTimeDraft}
                     onChange={(e) => setDateTimeDraft(e.target.value)}
-                    InputLabelProps={{ shrink: true }} label={t("dateTime")} sx={{ flex: 1 }}
+                    label={t("dateTime")} sx={{ flex: 1 }} slotProps={{
+                    inputLabel: { shrink: true }
+                  }}
                   />
                 </Box>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>

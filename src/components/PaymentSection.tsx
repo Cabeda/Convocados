@@ -313,7 +313,6 @@ export function PaymentSection({
           </Typography>
         </Box>
       )}
-
       {hasCost && gamePhase === "upcoming" && myOwes && (
         <Box sx={{
           px: { xs: 2, sm: 3 }, pt: 2, pb: 2,
@@ -358,7 +357,6 @@ export function PaymentSection({
           </Stack>
         </Box>
       )}
-
       {/* ── Admin/organizer accordion (full controls) ── */}
       <Box sx={{ px: { xs: 2, sm: 3 }, py: hasCost && gamePhase === "upcoming" && (myOwes || myPaid) && !canEdit ? 1 : 2 }}>
       <Accordion
@@ -409,10 +407,12 @@ export function PaymentSection({
                       size="small"
                       value={costDraft}
                       onChange={(e) => setCostDraft(e.target.value)}
-                      inputProps={{ min: 0, step: 0.01 }}
                       sx={{ flex: 1 }}
                       autoFocus
                       onKeyDown={(e) => { if (e.key === "Enter") handleSaveCost(); if (e.key === "Escape") setEditing(false); }}
+                      slotProps={{
+                        htmlInput: { min: 0, step: 0.01 }
+                      }}
                     />
                     <FormControl size="small" sx={{ minWidth: 80 }}>
                       <Select
@@ -450,9 +450,11 @@ export function PaymentSection({
                             value={m.value}
                             onChange={(e) => updateMethod(idx, "value", e.target.value)}
                             sx={{ flex: 1, minWidth: 150 }}
-                            InputProps={m.type === "revolut_tag" ? {
-                              startAdornment: <InputAdornment position="start">@</InputAdornment>,
-                            } : undefined}
+                            slotProps={{
+                              input: m.type === "revolut_tag" ? {
+                                startAdornment: <InputAdornment position="start">@</InputAdornment>,
+                              } : undefined
+                            }}
                           />
                           <TextField
                             size="small"
@@ -460,7 +462,9 @@ export function PaymentSection({
                             value={m.label ?? ""}
                             onChange={(e) => updateMethod(idx, "label", e.target.value)}
                             sx={{ flex: 0.7, minWidth: 120 }}
-                            inputProps={{ maxLength: 50 }}
+                            slotProps={{
+                              htmlInput: { maxLength: 50 }
+                            }}
                           />
                           <IconButton size="small" color="error" onClick={() => removeMethod(idx)}>
                             <DeleteIcon fontSize="small" />
@@ -515,8 +519,10 @@ export function PaymentSection({
                           size="small"
                           value={monthlyFeeDraft}
                           onChange={(e) => setMonthlyFeeDraft(e.target.value)}
-                          inputProps={{ min: 0, step: 0.01 }}
                           sx={{ width: 130 }}
+                          slotProps={{
+                            htmlInput: { min: 0, step: 0.01 }
+                          }}
                         />
                         <TextField
                           label={t("costMonthlyGamesCovered") ?? "Games covered per month"}
@@ -524,8 +530,10 @@ export function PaymentSection({
                           size="small"
                           value={monthlyGamesCoveredDraft}
                           onChange={(e) => setMonthlyGamesCoveredDraft(e.target.value)}
-                          inputProps={{ min: 1, step: 1 }}
                           sx={{ width: 110 }}
+                          slotProps={{
+                            htmlInput: { min: 1, step: 1 }
+                          }}
                         />
                         <TextField
                           label={t("currency") ?? "Currency"}
@@ -546,8 +554,10 @@ export function PaymentSection({
                       value={dropInSurchargeDraft}
                       onChange={(e) => setDropInSurchargeDraft(e.target.value)}
                       helperText={t("costDropInSurchargeTooltip") ?? "Extra amount added to per-game payers who are not monthly subscribers."}
-                      inputProps={{ min: 0, step: 0.01 }}
                       sx={{ width: 200 }}
+                      slotProps={{
+                        htmlInput: { min: 0, step: 0.01 }
+                      }}
                     />
                   </Box>
                   <Box sx={{ display: "flex", gap: 1 }}>
@@ -728,9 +738,11 @@ export function PaymentSection({
                                 value={m.value}
                                 onChange={(e) => updateOverrideMethod(idx, "value", e.target.value)}
                                 sx={{ flex: 1, minWidth: 150 }}
-                                InputProps={m.type === "revolut_tag" ? {
-                                  startAdornment: <InputAdornment position="start">@</InputAdornment>,
-                                } : undefined}
+                                slotProps={{
+                                  input: m.type === "revolut_tag" ? {
+                                    startAdornment: <InputAdornment position="start">@</InputAdornment>,
+                                  } : undefined
+                                }}
                               />
                               <TextField
                                 size="small"
@@ -738,7 +750,9 @@ export function PaymentSection({
                                 value={m.label ?? ""}
                                 onChange={(e) => updateOverrideMethod(idx, "label", e.target.value)}
                                 sx={{ flex: 0.7, minWidth: 120 }}
-                                inputProps={{ maxLength: 50 }}
+                                slotProps={{
+                                  htmlInput: { maxLength: 50 }
+                                }}
                               />
                               <IconButton size="small" color="error" onClick={() => removeOverrideMethod(idx)}>
                                 <DeleteIcon fontSize="small" />
@@ -826,7 +840,6 @@ export function PaymentSection({
         </AccordionDetails>
       </Accordion>
       </Box>
-
       {/* Remove cost confirmation */}
       <Dialog open={confirmRemoveOpen} onClose={() => setConfirmRemoveOpen(false)}>
         <DialogTitle>{t("removeCost")}</DialogTitle>
@@ -838,7 +851,6 @@ export function PaymentSection({
           <Button onClick={handleRemoveCost} color="error" variant="contained">{t("removeCost")}</Button>
         </DialogActions>
       </Dialog>
-
       {/* Clear override confirmation */}
       <Dialog open={confirmClearOverride} onClose={() => setConfirmClearOverride(false)}>
         <DialogTitle>{t("clearOverride")}</DialogTitle>

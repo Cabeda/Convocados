@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Chip, Button, Divider,
   CircularProgress, Alert, TextField, Autocomplete, InputAdornment,
-  alpha, useTheme, IconButton, Tooltip, Grid2, Dialog, DialogTitle,
+  alpha, useTheme, IconButton, Tooltip, Grid, Dialog, DialogTitle,
   DialogContent, DialogActions,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -256,7 +256,9 @@ function AddHistoricalGameDialog({
             value={dateTime}
             onChange={(e) => setDateTime(e.target.value)}
             fullWidth
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true }
+            }}
           />
 
           <Stack direction="row" spacing={2}>
@@ -297,9 +299,9 @@ function AddHistoricalGameDialog({
 
           <Typography variant="subtitle2" fontWeight={700}>{t("selectPlayers")}</Typography>
 
-          <Grid2 container spacing={2}>
+          <Grid container spacing={2}>
             {[{ label: teamOneName, players: team1Players, idx: 0 }, { label: teamTwoName, players: team2Players, idx: 1 }].map(({ label, players, idx }) => (
-              <Grid2 key={idx} size={{ xs: 12, sm: 6 }}>
+              <Grid key={idx} size={{ xs: 12, sm: 6 }}>
                 <Box sx={{
                   p: 2, borderRadius: 3,
                   backgroundColor: alpha(theme.palette.action.hover, 0.04),
@@ -329,9 +331,9 @@ function AddHistoricalGameDialog({
                     />
                   </Box>
                 </Box>
-              </Grid2>
+              </Grid>
             ))}
-          </Grid2>
+          </Grid>
 
           {/* ELO Preview */}
           {eloPreview.length > 0 && (
@@ -716,7 +718,6 @@ function HistoryCardFull({
           ) : null}
         </Stack>
       </Box>
-
       {/* Delete confirmation dialog */}
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{t("deleteGame")}</DialogTitle>
@@ -735,7 +736,6 @@ function HistoryCardFull({
           </Button>
         </DialogActions>
       </Dialog>
-
       <Stack spacing={0} divider={<Divider sx={{ mx: 3 }} />}>
         {error && (
           <Box sx={{ px: 3, pt: 2 }}>
@@ -850,179 +850,181 @@ function HistoryCardFull({
                   {t("duplicatePlayerWarning", { names: duplicateNames.join(", ") })}
                 </Alert>
               )}
-              <Grid2 container spacing={2}>
+              <Grid container spacing={2}>
                 {(canEditTeams ? editableTeams : teams).map((team, teamIdx) => {
                   const availableSuggestions = canEditTeams ? getAvailableSuggestions(teamIdx) : [];
                   const inputValue = newPlayerInputs[teamIdx] ?? "";
                   return (
-                  <Grid2 key={team.team} size={{ xs: 12, sm: 6 }}>
-                    <Box
-                      onDragOver={canEditTeams ? handleDragOver : undefined}
-                      onDrop={canEditTeams ? () => handleDrop(teamIdx) : undefined}
-                      sx={{
-                        p: 2, borderRadius: 3,
-                        backgroundColor: alpha(theme.palette.action.hover, 0.04),
-                        border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-                        ...(canEditTeams && dragPlayer && dragPlayer.fromTeam !== teamIdx ? {
-                          border: `2px dashed ${alpha(theme.palette.primary.main, 0.4)}`,
-                          backgroundColor: alpha(theme.palette.primary.main, 0.04),
-                        } : {}),
-                        transition: "border 0.2s, background-color 0.2s",
-                      }}
-                    >
-                      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>{team.team}</Typography>
-                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                        {team.players.map((p) => {
-                          const liveElo = liveEloUpdates.find((e) => e.name === p.name);
-                          const savedElo = entry.eloUpdates?.find((e) => e.name === p.name);
-                          const elo = liveElo ?? savedElo;
-                          const deltaLabel = elo ? (elo.delta >= 0 ? `+${elo.delta}` : `${elo.delta}`) : null;
-                          const isDuplicate = duplicateNames.some((d) => d.toLowerCase() === p.name.toLowerCase());
-                          return (
-                            <Chip
-                              key={p.name} size="small" variant="outlined"
-                              draggable={canEditTeams}
-                              onDragStart={canEditTeams ? () => handleDragStart(p.name, teamIdx) : undefined}
-                              color={isDuplicate ? "error" : "default"}
-                              label={
-                                deltaLabel ? (
-                                  <span>
-                                    {p.name}{" "}
-                                    <span style={{
-                                      color: (elo?.delta ?? 0) > 0 ? theme.palette.success.main
-                                        : (elo?.delta ?? 0) < 0 ? theme.palette.error.main
-                                        : theme.palette.text.secondary,
-                                      fontWeight: 700, fontSize: "0.75rem",
-                                    }}>
-                                      {deltaLabel}
+                    <Grid key={team.team} size={{ xs: 12, sm: 6 }}>
+                      <Box
+                        onDragOver={canEditTeams ? handleDragOver : undefined}
+                        onDrop={canEditTeams ? () => handleDrop(teamIdx) : undefined}
+                        sx={{
+                          p: 2, borderRadius: 3,
+                          backgroundColor: alpha(theme.palette.action.hover, 0.04),
+                          border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+                          ...(canEditTeams && dragPlayer && dragPlayer.fromTeam !== teamIdx ? {
+                            border: `2px dashed ${alpha(theme.palette.primary.main, 0.4)}`,
+                            backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                          } : {}),
+                          transition: "border 0.2s, background-color 0.2s",
+                        }}
+                      >
+                        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>{team.team}</Typography>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                          {team.players.map((p) => {
+                            const liveElo = liveEloUpdates.find((e) => e.name === p.name);
+                            const savedElo = entry.eloUpdates?.find((e) => e.name === p.name);
+                            const elo = liveElo ?? savedElo;
+                            const deltaLabel = elo ? (elo.delta >= 0 ? `+${elo.delta}` : `${elo.delta}`) : null;
+                            const isDuplicate = duplicateNames.some((d) => d.toLowerCase() === p.name.toLowerCase());
+                            return (
+                              <Chip
+                                key={p.name} size="small" variant="outlined"
+                                draggable={canEditTeams}
+                                onDragStart={canEditTeams ? () => handleDragStart(p.name, teamIdx) : undefined}
+                                color={isDuplicate ? "error" : "default"}
+                                label={
+                                  deltaLabel ? (
+                                    <span>
+                                      {p.name}{" "}
+                                      <span style={{
+                                        color: (elo?.delta ?? 0) > 0 ? theme.palette.success.main
+                                          : (elo?.delta ?? 0) < 0 ? theme.palette.error.main
+                                          : theme.palette.text.secondary,
+                                        fontWeight: 700, fontSize: "0.75rem",
+                                      }}>
+                                        {deltaLabel}
+                                      </span>
                                     </span>
-                                  </span>
-                                ) : p.name
-                              }
-                              onDelete={canEditTeams ? () => removePlayerFromTeam(teamIdx, p.name) : undefined}
-                              sx={{
-                                borderRadius: 2,
-                                ...(canEditTeams ? { cursor: "grab", "&:active": { cursor: "grabbing" } } : {}),
-                              }}
-                            />
-                          );
-                        })}
-                      </Box>
-                      {canEditTeams && (
-                        <Box sx={{ mt: 1.5 }}>
-                          <Autocomplete<PlayerOption, false, false, true>
-                            freeSolo
-                            size="small"
-                            options={(() => {
-                              const trimmed = inputValue.trim();
-                              const filtered: PlayerOption[] = availableSuggestions
-                                .filter((s) => matchesWithName(s.name, trimmed))
-                                .map((s) => ({
-                                  type: "existing" as const,
-                                  name: s.name,
-                                  gamesPlayed: s.gamesPlayed,
-                                  userId: s.userId ?? null,
-                                }));
-                              if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
-                                filtered.push({ type: "create" as const, name: trimmed });
-                              }
-                              return filtered;
-                            })()}
-                            filterOptions={(options) => options}
-                            getOptionLabel={(option) =>
-                              typeof option === "string" ? option : option.name
-                            }
-                            isOptionEqualToValue={(option, value) =>
-                              option.type === value.type && option.name === value.name
-                            }
-                            value={null}
-                            inputValue={inputValue}
-                            onInputChange={(_, newInputValue, reason) => {
-                              if (reason === "reset") return;
-                              setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: newInputValue }));
-                            }}
-                            onChange={(_, newValue) => {
-                              if (!newValue) return;
-                              const name = typeof newValue === "string" ? newValue.trim() : newValue.name;
-                              if (name) {
-                                addPlayerToTeam(teamIdx, name);
-                                setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
-                              }
-                            }}
-                            renderInput={(params) => (
-                              <TextField
-                                {...params}
-                                placeholder={t("addPlayerToTeam")}
-                                inputProps={{ ...params.inputProps, maxLength: 50 }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && inputValue.trim()) {
-                                    const trimmed = inputValue.trim();
-                                    const hasMatch = availableSuggestions.some(
-                                      (s) => matchesWithName(s.name, trimmed)
-                                    );
-                                    if (!hasMatch) {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      addPlayerToTeam(teamIdx, trimmed);
-                                      setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
-                                    }
-                                  }
+                                  ) : p.name
+                                }
+                                onDelete={canEditTeams ? () => removePlayerFromTeam(teamIdx, p.name) : undefined}
+                                sx={{
+                                  borderRadius: 2,
+                                  ...(canEditTeams ? { cursor: "grab", "&:active": { cursor: "grabbing" } } : {}),
                                 }}
-                                InputProps={{
-                                  ...params.InputProps,
-                                  endAdornment: (
-                                    <InputAdornment position="end">
-                                      <IconButton size="small" color="primary" edge="end"
-                                        disabled={!inputValue.trim()}
-                                        onClick={() => {
-                                          addPlayerToTeam(teamIdx, inputValue.trim());
-                                          setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
-                                        }}>
-                                        <PersonAddIcon fontSize="small" />
-                                      </IconButton>
-                                    </InputAdornment>
-                                  ),
-                                }}
-                                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
                               />
-                            )}
-                            renderOption={(props, option) => {
-                              const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key: string };
-                              if (option.type === "create") {
+                            );
+                          })}
+                        </Box>
+                        {canEditTeams && (
+                          <Box sx={{ mt: 1.5 }}>
+                            <Autocomplete<PlayerOption, false, false, true>
+                              freeSolo
+                              size="small"
+                              options={(() => {
+                                const trimmed = inputValue.trim();
+                                const filtered: PlayerOption[] = availableSuggestions
+                                  .filter((s) => matchesWithName(s.name, trimmed))
+                                  .map((s) => ({
+                                    type: "existing" as const,
+                                    name: s.name,
+                                    gamesPlayed: s.gamesPlayed,
+                                    userId: s.userId ?? null,
+                                  }));
+                                if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
+                                  filtered.push({ type: "create" as const, name: trimmed });
+                                }
+                                return filtered;
+                              })()}
+                              filterOptions={(options) => options}
+                              getOptionLabel={(option) =>
+                                typeof option === "string" ? option : option.name
+                              }
+                              isOptionEqualToValue={(option, value) =>
+                                typeof option !== "string" && typeof value !== "string" && option.type === value.type && option.name === value.name
+                              }
+                              value={null}
+                              inputValue={inputValue}
+                              onInputChange={(_, newInputValue, reason) => {
+                                if (reason === "reset") return;
+                                setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: newInputValue }));
+                              }}
+                              onChange={(_, newValue) => {
+                                if (!newValue) return;
+                                const name = typeof newValue === "string" ? newValue.trim() : newValue.name;
+                                if (name) {
+                                  addPlayerToTeam(teamIdx, name);
+                                  setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+                                }
+                              }}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  placeholder={t("addPlayerToTeam")}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && inputValue.trim()) {
+                                      const trimmed = inputValue.trim();
+                                      const hasMatch = availableSuggestions.some(
+                                        (s) => matchesWithName(s.name, trimmed)
+                                      );
+                                      if (!hasMatch) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        addPlayerToTeam(teamIdx, trimmed);
+                                        setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+                                      }
+                                    }
+                                  }}
+                                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                                  slotProps={{
+                                    input: {
+                                      ...params.slotProps.input,
+                                      endAdornment: (
+                                        <InputAdornment position="end">
+                                          <IconButton size="small" color="primary" edge="end"
+                                            disabled={!inputValue.trim()}
+                                            onClick={() => {
+                                              addPlayerToTeam(teamIdx, inputValue.trim());
+                                              setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+                                            }}>
+                                            <PersonAddIcon fontSize="small" />
+                                          </IconButton>
+                                        </InputAdornment>
+                                      ),
+                                    },
+
+                                    htmlInput: { ...params.slotProps.htmlInput, maxLength: 50 }
+                                  }} />
+                              )}
+                              renderOption={(props, option) => {
+                                const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key: string };
+                                if (option.type === "create") {
+                                  return (
+                                    <li key={key} {...otherProps} style={{ minHeight: 40, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>
+                                      <PersonAddIcon fontSize="small" color="primary" />
+                                      {t("createNewPlayer", { name: option.name })}
+                                    </li>
+                                  );
+                                }
                                 return (
-                                  <li key={key} {...otherProps} style={{ minHeight: 40, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>
-                                    <PersonAddIcon fontSize="small" color="primary" />
-                                    {t("createNewPlayer", { name: option.name })}
+                                  <li key={key} {...otherProps} style={{ minHeight: 40, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, width: "100%" }}>
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, overflow: "hidden" }}>
+                                      {option.userId ? (
+                                        <Tooltip title={t("protectedPlayer")}>
+                                          <ShieldIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
+                                        </Tooltip>
+                                      ) : null}
+                                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{option.name}</span>
+                                    </Box>
+                                    {option.gamesPlayed > 0 && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
+                                        {t("nGamesPlayed", { n: option.gamesPlayed })}
+                                      </Typography>
+                                    )}
                                   </li>
                                 );
-                              }
-                              return (
-                                <li key={key} {...otherProps} style={{ minHeight: 40, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, width: "100%" }}>
-                                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, overflow: "hidden" }}>
-                                    {option.userId ? (
-                                      <Tooltip title={t("protectedPlayer")}>
-                                        <ShieldIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
-                                      </Tooltip>
-                                    ) : null}
-                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{option.name}</span>
-                                  </Box>
-                                  {option.gamesPlayed > 0 && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
-                                      {t("nGamesPlayed", { n: option.gamesPlayed })}
-                                    </Typography>
-                                  )}
-                                </li>
-                              );
-                            }}
-                            noOptionsText={t("noSuggestions")}
-                          />
-                        </Box>
-                      )}
-                    </Box>
-                  </Grid2>
+                              }}
+                              noOptionsText={t("noSuggestions")}
+                            />
+                          </Box>
+                        )}
+                      </Box>
+                    </Grid>
                   );
                 })}
-              </Grid2>
+              </Grid>
             </Section>
           </Box>
         )}

@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Chip, Button,
-  CircularProgress, useTheme, Grid2, ToggleButtonGroup, ToggleButton,
+  CircularProgress, useTheme, Grid, ToggleButtonGroup, ToggleButton,
   FormControlLabel, Switch, FormControl, Select, MenuItem, InputLabel,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert,
 } from "@mui/material";
@@ -52,13 +52,13 @@ function CardView({ events, locale, t }: {
   t: TFunction;
 }) {
   return (
-    <Grid2 container spacing={2}>
+    <Grid container spacing={2}>
       {events.map((ev) => {
         const date = new Date(ev.dateTime);
         const isFull = ev.spotsLeft === 0;
         const sportPreset = getSportPreset(ev.sport);
         return (
-          <Grid2 key={ev.id} size={{ xs: 12, sm: 6 }}>
+          <Grid key={ev.id} size={{ xs: 12, sm: 6 }}>
             <Paper
               elevation={2}
               sx={{
@@ -138,10 +138,10 @@ function CardView({ events, locale, t }: {
                 </Button>
               </Box>
             </Paper>
-          </Grid2>
+          </Grid>
         );
       })}
-    </Grid2>
+    </Grid>
   );
 }
 

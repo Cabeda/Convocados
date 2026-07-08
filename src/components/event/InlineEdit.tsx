@@ -34,7 +34,9 @@ export function InlineEdit({ value, onSave, label }: Props) {
       <TextField size="small" value={draft} autoFocus
         onChange={(e) => setDraft(e.target.value.slice(0, 50))}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
-        inputProps={{ maxLength: 50 }} />
+        slotProps={{
+          htmlInput: { maxLength: 50 }
+        }} />
       <IconButton size="small" color="primary" onClick={commit}><CheckIcon fontSize="small" /></IconButton>
       <IconButton size="small" onClick={() => setEditing(false)}><CloseIcon fontSize="small" /></IconButton>
     </Box>

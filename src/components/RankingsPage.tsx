@@ -561,9 +561,11 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
               label={t("initialRating")}
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
-              inputProps={{ min: 500, max: 1500, step: 50 }}
               error={!!editError}
               helperText={editError ? "500–1500" : undefined}
+              slotProps={{
+                htmlInput: { min: 500, max: 1500, step: 50 }
+              }}
             />
           </DialogContent>
           <DialogActions>

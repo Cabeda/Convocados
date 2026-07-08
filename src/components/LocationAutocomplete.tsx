@@ -137,26 +137,27 @@ export default function LocationAutocomplete({
         onChange={handleInputChange}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onFocus={() => { if (suggestions.length > 0) setOpen(true); }}
-        inputProps={{ maxLength: 200, ...inputProps }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <LocationOnIcon fontSize="small" color="action" />
-            </InputAdornment>
-          ),
-          endAdornment: (
-            <InputAdornment position="end">
-              {loading && <CircularProgress size={16} />}
-              <Tooltip title={t("locationOpenMap")}>
-                <IconButton size="small" onClick={() => setMapOpen(true)} edge="end">
-                  <MapIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </InputAdornment>
-          ),
-        }}
-      />
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <LocationOnIcon fontSize="small" color="action" />
+              </InputAdornment>
+            ),
+            endAdornment: (
+              <InputAdornment position="end">
+                {loading && <CircularProgress size={16} />}
+                <Tooltip title={t("locationOpenMap")}>
+                  <IconButton size="small" onClick={() => setMapOpen(true)} edge="end">
+                    <MapIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </InputAdornment>
+            ),
+          },
 
+          htmlInput: { maxLength: 200, ...inputProps }
+        }} />
       {/* Autocomplete dropdown */}
       {open && suggestions.length > 0 && (
         <Paper
@@ -176,14 +177,15 @@ export default function LocationAutocomplete({
                 <LocationOnIcon fontSize="small" color="action" sx={{ mr: 1, flexShrink: 0 }} />
                 <ListItemText
                   primary={s.label}
-                  primaryTypographyProps={{ variant: "body2", noWrap: true }}
+                  slotProps={{
+                    primary: { variant: "body2", noWrap: true }
+                  }}
                 />
               </ListItemButton>
             ))}
           </List>
         </Paper>
       )}
-
       {/* Map dialog — lazy loaded to avoid SSR issues with Leaflet */}
       <Dialog open={mapOpen} onClose={() => setMapOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1 }}>
