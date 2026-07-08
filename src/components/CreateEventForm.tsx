@@ -2,11 +2,11 @@
 import React, { useState } from "react";
 import {
   Container, Paper, Typography, TextField, Button, Box, Stack, Select, MenuItem, FormControl, InputLabel,
-  Grid2, Alert, Divider, Chip, Accordion, AccordionSummary, AccordionDetails,
+  Grid, Alert, Divider, Chip, Accordion, AccordionSummary, AccordionDetails,
   InputAdornment, IconButton, Tooltip, ToggleButton, ToggleButtonGroup,
   Dialog, DialogTitle, DialogContent, DialogActions,
 } from "@mui/material";
-import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutlined";
 import SportsIcon from "@mui/icons-material/Sports";
 import CasinoIcon from "@mui/icons-material/Casino";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -170,30 +170,36 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
                 <Stack spacing={3}>
                   {error && <Alert severity="error">{error}</Alert>}
 
-                  <TextField name="title" label={t("gameTitle")}
-                    placeholder={t("gameTitlePlaceholder")} required fullWidth
+                  <TextField
+                    name="title"
+                    label={t("gameTitle")}
+                    placeholder={t("gameTitlePlaceholder")}
+                    required
+                    fullWidth
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    inputProps={{ maxLength: 100 }}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <Tooltip title={t("randomizeTitle")}>
-                            <IconButton
-                              size="small"
-                              onClick={() => setTitle(getRandomTitle(locale as TitleLocale))}
-                              sx={{
-                                transition: "transform 0.2s",
-                                "&:hover": { transform: "rotate(180deg)" },
-                              }}
-                            >
-                              <CasinoIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title={t("randomizeTitle")}>
+                              <IconButton
+                                size="small"
+                                onClick={() => setTitle(getRandomTitle(locale as TitleLocale))}
+                                sx={{
+                                  transition: "transform 0.2s",
+                                  "&:hover": { transform: "rotate(180deg)" },
+                                }}
+                              >
+                                <CasinoIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </InputAdornment>
+                        ),
+                      },
+
+                      htmlInput: { maxLength: 100 }
+                    }} />
 
                   <FormControl fullWidth>
                     <InputLabel>{t("sport")}</InputLabel>
@@ -207,11 +213,18 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
                     </Select>
                   </FormControl>
 
-                  <TextField name="dateTime" label={t("dateTime")} type="datetime-local"
-                    required fullWidth value={dateTime}
+                  <TextField
+                    name="dateTime"
+                    label={t("dateTime")}
+                    type="datetime-local"
+                    required
+                    fullWidth
+                    value={dateTime}
                     onChange={(e) => setDateTime(e.target.value)}
-                    inputProps={{ min: minDateTime() }}
-                    InputLabelProps={{ shrink: true }} />
+                    slotProps={{
+                      htmlInput: { min: minDateTime() },
+                      inputLabel: { shrink: true }
+                    }} />
 
                   <FormControl fullWidth>
                     <InputLabel>{t("timezone")}</InputLabel>
@@ -306,29 +319,35 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
                           type="number"
                           value={maxPlayers}
                           onChange={(e) => setMaxPlayers(e.target.value)}
-                          inputProps={{ min: 2, max: 100 }}
                           helperText={t("maxPlayersHelper")}
                           fullWidth
                           error={maxPlayers !== "" && (isNaN(parseInt(maxPlayers)) || parseInt(maxPlayers) < 2 || parseInt(maxPlayers) > 100)}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start"><PeopleIcon fontSize="small" /></InputAdornment>
-                            ),
-                          }}
-                        />
+                          slotProps={{
+                            input: {
+                              startAdornment: (
+                                <InputAdornment position="start"><PeopleIcon fontSize="small" /></InputAdornment>
+                              ),
+                            },
+
+                            htmlInput: { min: 2, max: 100 }
+                          }} />
 
                         <Divider><Chip label={t("teamNames")} size="small" /></Divider>
 
-                        <Grid2 container spacing={2}>
-                          <Grid2 size={{ xs: 12, sm: 6 }}>
+                        <Grid container spacing={2}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField name="teamOneName" label={t("team1Name")}
-                              defaultValue="Ninjas" fullWidth inputProps={{ maxLength: 50 }} />
-                          </Grid2>
-                          <Grid2 size={{ xs: 12, sm: 6 }}>
+                              defaultValue="Ninjas" fullWidth slotProps={{
+                              htmlInput: { maxLength: 50 }
+                            }} />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField name="teamTwoName" label={t("team2Name")}
-                              defaultValue="Gunas" fullWidth inputProps={{ maxLength: 50 }} />
-                          </Grid2>
-                        </Grid2>
+                              defaultValue="Gunas" fullWidth slotProps={{
+                              htmlInput: { maxLength: 50 }
+                            }} />
+                          </Grid>
+                        </Grid>
 
                       </Stack>
                     </AccordionDetails>
@@ -353,19 +372,21 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
           <DialogTitle>{t("customRecurrenceTitle")}</DialogTitle>
           <DialogContent>
             <Stack spacing={2.5} sx={{ mt: 1 }}>
-              <Grid2 container spacing={2} alignItems="center">
-                <Grid2 size={{ xs: 5 }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid size={{ xs: 5 }}>
                   <TextField
                     label={t("repeatEvery")}
                     type="number"
                     value={customInterval}
                     onChange={(e) => setCustomInterval(Math.max(1, parseInt(e.target.value) || 1))}
-                    inputProps={{ min: 1, max: 52 }}
                     fullWidth
                     size="small"
+                    slotProps={{
+                      htmlInput: { min: 1, max: 52 }
+                    }}
                   />
-                </Grid2>
-                <Grid2 size={{ xs: 7 }}>
+                </Grid>
+                <Grid size={{ xs: 7 }}>
                   <FormControl fullWidth size="small">
                     <InputLabel>{t("frequency")}</InputLabel>
                     <Select
@@ -379,8 +400,8 @@ export default function CreateEventForm({ bare }: { bare?: boolean }) {
                       <MenuItem value="yearly">{t("years")}</MenuItem>
                     </Select>
                   </FormControl>
-                </Grid2>
-              </Grid2>
+                </Grid>
+              </Grid>
 
               {customFreq === "weekly" && (
                 <Box>

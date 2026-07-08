@@ -1,7 +1,7 @@
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Container, Typography, Stack, Box, Paper, Grid2,
+  Container, Typography, Stack, Box, Paper, Grid,
   CircularProgress, Alert, TextField, Button,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   InputAdornment, Chip, ToggleButtonGroup, ToggleButton, useTheme,
@@ -279,42 +279,42 @@ export default function AdminDashboardPage() {
             ) : (
               <>
                 {/* Top-level stat cards */}
-                <Grid2 container spacing={2}>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 6, md: 3 }}>
                     <StatCard label={t("adminTotalUsers")} value={stats.totalUsers} icon={<PeopleIcon />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
                     <StatCard label={t("adminTotalEvents")} value={stats.totalEvents} icon={<EventIcon />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
                     <StatCard label={t("adminGamesPlayed")} value={stats.totalGamesPlayed} icon={<SportsScoreIcon />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
                     <StatCard label={t("adminActiveUsers")} value={stats.activeUsers} icon={<TrendingUpIcon />} />
-                  </Grid2>
-                </Grid2>
+                  </Grid>
+                </Grid>
 
                 {/* Secondary metrics */}
-                <Grid2 container spacing={2}>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminActiveEvents")} value={stats.activeEvents} icon={<EventIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminGamesLast7d")} value={stats.gamesLast7d} icon={<SportsScoreIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminGamesLast30d")} value={stats.gamesLast30d} icon={<SportsScoreIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminAvgPlayers")} value={stats.avgPlayersPerEvent} icon={<PeopleIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminRecurringEvents")} value={stats.recurringEvents} icon={<EventIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminOneOffEvents")} value={stats.oneOffEvents} icon={<EventIcon fontSize="small" />} />
-                  </Grid2>
-                </Grid2>
+                  </Grid>
+                </Grid>
 
                 {/* Sport distribution */}
                 {Object.keys(stats.sportDistribution).length > 0 && (
