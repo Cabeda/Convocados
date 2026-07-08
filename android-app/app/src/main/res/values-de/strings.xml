@@ -126,6 +126,21 @@
     <string name="record_final_score">Endergebnis eintragen</string>
     <string name="record_score">Ergebnis eintragen</string>
     <string name="mark_payments">Zahlungen markieren</string>
+    <!-- Post-game wrap-up banner -->
+    <string name="post_game_title">Letztes Spiel — abschließen</string>
+    <string name="post_game_subtitle">Erledige diese Punkte, um das letzte Spiel abzuschließen und dich auf das nächste vorzubereiten.</string>
+    <string name="post_game_score_done">Ergebnis erfasst</string>
+    <string name="post_game_payments_done">Alle Zahlungen beglichen</string>
+    <string name="post_game_payments_summary">%1$d/%2$d bezahlt</string>
+    <string name="post_game_no_cost">Keine Kosten für dieses Spiel festgelegt</string>
+    <string name="post_game_progress">%1$d von %2$d erledigt</string>
+    <string name="post_game_mvp_done">MVP gewählt</string>
+    <string name="post_game_mvp_pending">MVP wählen</string>
+    <string name="post_game_vote_mvp_button">Jetzt wählen</string>
+    <string name="post_game_payments_label">Zahlungen für das letzte Spiel</string>
+    <string name="post_game_payments_hint">Tippe auf einen Spieler, um „bezahlt“ umzuschalten, dann speichern.</string>
+    <string name="post_game_payments_locked">Zahlungen sind gesperrt. Entsperre das Spiel im Verlauf, um sie zu bearbeiten.</string>
+    <string name="upcoming_game_payments_label">Zahlungen für das kommende Spiel</string>
     <string name="paid_for_last_game">%1$d von %2$d haben für das letzte Spiel bezahlt</string>
     <string name="paid_streak">%1$d Spiele bezahlt in Folge</string>
     <string name="on_bench">Du bist auf der Bank</string>
@@ -169,6 +184,16 @@
     <string name="event_updates">Ereignis-Updates</string>
     <string name="event_updates_desc">Wenn sich Ereignisdetails ändern</string>
     <string name="payment_reminders">Zahlungserinnerungen</string>
+    <string name="post_game_results_desc">Ergebnisse und Zusammenfassung nach dem Spiel</string>
+    <string name="notification_tiers_title">So funktionieren Benachrichtigungen</string>
+    <string name="notification_tiers_desc">Du erhältst Ereignis-Updates (Absagen, Einladungen, freie Plätze) für alle Spiele, denen du folgst. Spieldetails (Spieleraktivität, Erinnerungen, Ergebnisse) werden nur gesendet, wenn du spielst — oder du aktivierst \"Alle Updates\" pro Ereignis.</string>
+
+    <!-- Notification quick actions -->
+    <string name="action_im_in">Bin dabei!</string>
+    <string name="action_cant_make_it">Kann nicht</string>
+    <string name="action_join">Mitmachen</string>
+    <string name="action_add_score">Ergebnis</string>
+    <string name="action_confirm_payment">Confirmar</string>
     <string name="email_notifications">E-Mail-Benachrichtigungen</string>
     <string name="enable_email">E-Mail aktivieren</string>
     <string name="enable_email_desc">Hauptschalter für alle E-Mails</string>
@@ -181,6 +206,8 @@
 
     <string name="paid">Bezahlt</string>
     <string name="pending">Ausstehend</string>
+    <string name="sent">Gesendet</string>
+    <string name="payment_update_failed">Zahlung konnte nicht aktualisiert werden. Möglicherweise fehlt dir die Berechtigung.</string>
     <string name="total">Gesamt</string>
     <string name="mark_all_paid">Alle als bezahlt markieren</string>
     <string name="no_payments">Keine Zahlungen eingerichtet</string>

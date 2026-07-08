@@ -35,6 +35,11 @@ export interface PostGameStatus {
   hasPendingPastPayments: boolean;
   mvpEnabled: boolean;
   mvpComplete: boolean;
+  bannerMvpComplete: boolean;
+  scoreOne: number | null;
+  scoreTwo: number | null;
+  teamOneName: string;
+  teamTwoName: string;
 }
 
 interface Props {
@@ -162,9 +167,41 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
               {t("postGameTitle")}
             </Typography>
           </Box>
-          <Typography variant="body2" color="text.secondary">
-            {t("postGameSubtitle")}
-          </Typography>
+
+          {/* Score hero — celebrate the result when score is set */}
+          {status.hasScore && status.scoreOne !== null && status.scoreTwo !== null && (
+            <Box sx={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
+              py: 2, px: 3, borderRadius: 3,
+              bgcolor: alpha(theme.palette.success.main, 0.06),
+              border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
+            }}>
+              <Box sx={{ textAlign: "center" }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                  {status.teamOneName}
+                </Typography>
+                <Typography variant="h4" fontWeight={800}>
+                  {status.scoreOne}
+                </Typography>
+              </Box>
+              <Typography variant="h5" color="text.disabled" fontWeight={300}>–</Typography>
+              <Box sx={{ textAlign: "center" }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                  {status.teamTwoName}
+                </Typography>
+                <Typography variant="h4" fontWeight={800}>
+                  {status.scoreTwo}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+
+          {/* Subtitle — only show when score is NOT set (otherwise the hero replaces it) */}
+          {!status.hasScore && (
+            <Typography variant="body2" color="text.secondary">
+              {t("postGameSubtitle")}
+            </Typography>
+          )}
 
           {/* Checklist */}
           <Stack spacing={1.5}>

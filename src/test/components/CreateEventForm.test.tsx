@@ -336,7 +336,7 @@ describe("CreateEventForm — recurrence submission", () => {
     renderWithTheme(<CreateEventForm />);
 
     // No alert initially
-    expect(screen.queryByText(/player list resets/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/payments and teams reset/i)).not.toBeInTheDocument();
 
     // Select Daily
     const recurrenceSelect = screen.getAllByText(/Does not repeat/i)[0];
@@ -344,7 +344,7 @@ describe("CreateEventForm — recurrence submission", () => {
     await user.click(await screen.findByText(/Daily/i));
 
     await waitFor(() => {
-      expect(screen.getByText(/player list resets/i)).toBeInTheDocument();
+      expect(screen.getByText(/payments and teams reset/i)).toBeInTheDocument();
     });
   });
 

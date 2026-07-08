@@ -25,13 +25,11 @@ import GroupIcon from "@mui/icons-material/Group";
 import ArchiveIcon from "@mui/icons-material/Archive";
 import UnarchiveIcon from "@mui/icons-material/Unarchive";
 import EmailIcon from "@mui/icons-material/Email";
-import NotificationsIcon from "@mui/icons-material/Notifications";
 import { useT } from "~/lib/useT";
 import { SPORT_PRESETS } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
-import { NotificationDefaultsEditor } from "./event/NotificationDefaultsEditor";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -591,7 +589,6 @@ export default function EventSettingsPage({ eventId }: Props) {
             <TextField
               size="small"
               type="number"
-              inputProps={{ min: 0, max: 600, step: 5 }}
               value={event.durationMinutes ?? 60}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
@@ -616,6 +613,9 @@ export default function EventSettingsPage({ eventId }: Props) {
               }}
               disabled={!canEdit}
               sx={{ width: 120 }}
+              slotProps={{
+                htmlInput: { min: 0, max: 600, step: 5 }
+              }}
             />
           </Box>
 
@@ -692,14 +692,6 @@ export default function EventSettingsPage({ eventId }: Props) {
             />
           </Tooltip>
         </Stack>
-      </SectionCard>
-
-      {/* ── Notification Defaults ── */}
-      <SectionCard title={t("notificationDefaults")} icon={<NotificationsIcon color="action" />}>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          {t("notificationDefaultsDesc")}
-        </Typography>
-        <NotificationDefaultsEditor eventId={eventId} canEdit={canEdit} />
       </SectionCard>
 
       {/* ── Priority Enrollment ── */}
@@ -999,7 +991,7 @@ export default function EventSettingsPage({ eventId }: Props) {
                   typeof option === "string" ? option : option.name
                 }
                 filterOptions={(options) => options}
-                isOptionEqualToValue={(a, b) => a.userId === b.userId && a.source === b.source}
+                isOptionEqualToValue={(a, b) => typeof a !== "string" && typeof b !== "string" && a.userId === b.userId && a.source === b.source}
                 value={null}
                 inputValue={adminSearchInput}
                 onInputChange={(_, value, reason) => {

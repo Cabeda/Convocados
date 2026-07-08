@@ -18,7 +18,7 @@ import { MVP_VOTING_WINDOW_DAYS } from "../../../../lib/mvp.constants";
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
     where: { id: params.id },
-    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true },
+    select: { id: true, dateTime: true, durationMinutes: true, ownerId: true, mvpEnabled: true, teamOneName: true, teamTwoName: true },
   });
 
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
@@ -31,6 +31,20 @@ export const GET: APIRoute = async ({ params, request }) => {
     orderBy: { dateTime: "desc" },
     select: { id: true, scoreOne: true, scoreTwo: true, teamsSnapshot: true, paymentsSnapshot: true, status: true, dateTime: true, createdAt: true },
   });
+
+  // ponytail: cancelled games have no post-game actions (no score, no payments, no MVP).
+  // Suppress the banner entirely when the most recent history is "cancelled".
+  if (latestHistory?.status === "cancelled") {
+    return Response.json({
+      gameEnded: false, hasScore: false, hasCost: false, allPaid: true,
+      allComplete: true, isParticipant: false, latestHistoryId: null,
+      paymentsSnapshot: null, costCurrency: null, costAmount: null,
+      hasPendingPastPayments: false, mvpEnabled: false, mvpComplete: true,
+      bannerMvpComplete: true, paidAggregate: { paidCount: 0, totalCount: 0 },
+      scoreOne: null, scoreTwo: null,
+      teamOneName: event.teamOneName, teamTwoName: event.teamTwoName,
+    });
+  }
   const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
 
   // Check payment status — look at live payments first, then fall back to
@@ -88,10 +102,14 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   // ─── MVP voting completion ──────────────────────────────────────────
   let mvpComplete = true;
+  // ponytail: bannerMvpComplete uses a 24h window for banner dismissal only.
+  // Full MVP voting stays open for MVP_VOTING_WINDOW_DAYS via the history page.
+  let bannerMvpComplete = true;
   if (event.mvpEnabled && latestHistory && latestHistory.status === "played") {
     // Determine if voting window is still open
     const gameEndTime = new Date(latestHistory.dateTime.getTime() + (event.durationMinutes ?? 60) * 60_000);
     const gameHasEnded = gameEndTime <= new Date();
+    const hoursSinceGameEnd = (Date.now() - gameEndTime.getTime()) / 3_600_000;
     const daysSinceCreation = (Date.now() - latestHistory.createdAt.getTime()) / 86400_000;
     const withinWindow = daysSinceCreation <= MVP_VOTING_WINDOW_DAYS;
 
@@ -127,11 +145,16 @@ export const GET: APIRoute = async ({ params, request }) => {
         mvpComplete = voteCount >= eligibleCount;
       }
       // If no eligible voters (no users matched), consider MVP complete
+
+      // Banner dismissal: all voted OR 24h since game ended
+      bannerMvpComplete = mvpComplete || hoursSinceGameEnd >= 24;
     }
-    // If voting is not open (window expired or newer game), mvpComplete stays true
+    // If voting is not open (window expired or newer game), bannerMvpComplete stays true
   }
 
-  const allComplete = hasScore && allPaid && (!event.mvpEnabled || mvpComplete);
+  // ponytail: allComplete gates banner dismissal — score + payments + MVP (24h ceiling).
+  // After 24h the banner hides even if not everyone voted; voting stays open on history page.
+  const allComplete = hasScore && allPaid && bannerMvpComplete;
 
   // Check if there are unsettled payments from a past game in history,
   // even when the current event hasn't ended yet (post-reset scenario).
@@ -217,7 +240,11 @@ export const GET: APIRoute = async ({ params, request }) => {
   return Response.json({
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
-    hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete,
+    hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete, bannerMvpComplete,
     paidAggregate,
+    scoreOne: latestHistory?.scoreOne ?? null,
+    scoreTwo: latestHistory?.scoreTwo ?? null,
+    teamOneName: event.teamOneName,
+    teamTwoName: event.teamTwoName,
   });
 };

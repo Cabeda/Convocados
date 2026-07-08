@@ -89,6 +89,24 @@ export const GET: APIRoute = async ({ params, request }) => {
             })))
           : null;
 
+        // ADR 0016: mark old Game as played + create new Game + swap pointer
+        const oldGameId = event.currentGameId;
+        const newGame = await prisma.game.create({
+          data: { eventId: event.id, dateTime: newDateTime, status: "upcoming" },
+        });
+        if (oldGameId) {
+          await prisma.game.update({
+            where: { id: oldGameId },
+            data: { status: "played" },
+          });
+        }
+        await prisma.event.update({
+          where: { id: event.id },
+          data: { currentGameId: newGame.id },
+        });
+
+        // ADR 0016: keep GameHistory for backward compat (read-only fallback),
+        // but NO destructive deletes. Players/Teams/RSVPs stay intact on the old Game.
         await prisma.$transaction([
           prisma.gameHistory.create({
             data: {
@@ -101,17 +119,18 @@ export const GET: APIRoute = async ({ params, request }) => {
               editableUntil,
             },
           }),
-          prisma.player.deleteMany({ where: { eventId: event.id } }),
-          prisma.teamResult.deleteMany({ where: { eventId: event.id } }),
-          // Clear payments for the new occurrence (keep EventCost settings)
+          // Clear per-occurrence payments (PlayerPayment is still current-game-scoped until GamePayment migration)
           ...(eventCost ? [
             prisma.playerPayment.deleteMany({ where: { eventCostId: eventCost.id } }),
-            // Clear temporary payment method override for the new week
             prisma.eventCost.update({ where: { id: eventCost.id }, data: { tempPaymentMethods: null, tempPaymentDetails: null } }),
           ] : []),
+          // Clear team members for the new game (teams are snapshotted in GameHistory above)
+          ...event.teamResults.map((tr) =>
+            prisma.teamMember.deleteMany({ where: { teamResultId: tr.id } }),
+          ),
           prisma.event.update({
             where: { id: event.id },
-            data: { dateTime: newDateTime },
+            data: { dateTime: newDateTime, rsvpCutoffSent: false, recruitment48hSent: false, recruitment24hSent: false },
           }),
         ]);
 
@@ -124,6 +143,11 @@ export const GET: APIRoute = async ({ params, request }) => {
 
         // Auto-enroll priority players for the new occurrence (non-blocking)
         autoPriorityEnroll(event.id).catch(() => {});
+
+        // ADR 0018: Auto-confirm regulars for the new occurrence (non-blocking)
+        import("../../../../lib/autoConfirm.server")
+          .then(({ applyAutoConfirm }) => applyAutoConfirm(event.id))
+          .catch(() => {});
 
         // Schedule reminder jobs for the new occurrence (non-blocking)
         cancelEventJobs(event.id)
@@ -153,9 +177,51 @@ export const GET: APIRoute = async ({ params, request }) => {
     } catch { /* ignore — request may not have valid headers in tests */ }
   }
 
+  // ADR 0016: read players from GameParticipant+EventPlayer when currentGameId is set
+  let playersPayload: any[];
+  if (event.currentGameId) {
+    const participants = await prisma.gameParticipant.findMany({
+      where: { gameId: event.currentGameId, archivedAt: null },
+      include: { eventPlayer: true },
+      orderBy: { order: "asc" },
+    });
+    playersPayload = participants.map((gp) => ({
+      id: gp.eventPlayer.id,
+      name: gp.eventPlayer.name,
+      order: gp.order,
+      eventId: gp.eventPlayer.eventId,
+      userId: gp.eventPlayer.userId ?? null,
+      createdAt: gp.createdAt.toISOString(),
+    }));
+  } else {
+    playersPayload = event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() }));
+  }
+
+  // ADR 0016: include current game status for the UI
+  let gameStatus: string | null = null;
+  if (event.currentGameId) {
+    const currentGame = await prisma.game.findUnique({
+      where: { id: event.currentGameId },
+      select: { status: true },
+    });
+    gameStatus = currentGame?.status ?? null;
+  }
+
+  // ADR 0016: filter teamResults to only include members in the current game's player list.
+  // After a recurrence reset, old team members linger in TeamResult but the player list
+  // is now game-scoped via GameParticipant. Only show team members who are active players.
+  const activePlayerNames = new Set(playersPayload.map((p: { name: string }) => p.name));
+  const filteredTeamResults = event.teamResults.map((tr) => ({
+    ...tr,
+    members: tr.members.filter((m) => activePlayerNames.has(m.name)),
+  }));
+
   return Response.json({
     wasReset,
     ...event,
+    teamResults: filteredTeamResults,
+    gameId: event.currentGameId ?? null,
+    gameStatus,
     accessPassword: undefined, // never expose the hash
     hasPassword: !!event.accessPassword,
     ownerId: event.ownerId ?? null,
@@ -166,6 +232,6 @@ export const GET: APIRoute = async ({ params, request }) => {
     updatedAt: event.updatedAt.toISOString(),
     nextResetAt: event.nextResetAt?.toISOString() ?? null,
     archivedAt: event.archivedAt?.toISOString() ?? null,
-    players: event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() })),
+    players: playersPayload,
   });
 };

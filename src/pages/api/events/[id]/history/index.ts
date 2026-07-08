@@ -27,6 +27,19 @@ export const GET: APIRoute = async ({ params, request }) => {
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
+  // ADR 0016: also include Game rows with status "played" (new model)
+  const playedGames = await prisma.game.findMany({
+    where: { eventId: params.id, status: "played" },
+    include: {
+      participants: {
+        where: { archivedAt: null },
+        include: { eventPlayer: { select: { name: true } } },
+        orderBy: { order: "asc" },
+      },
+    },
+    orderBy: { dateTime: "desc" },
+  });
+
   // Fetch ALL history for ELO replay (needed for accurate deltas)
   const allHistory = await prisma.gameHistory.findMany({
     where: { eventId: params.id },
@@ -34,7 +47,8 @@ export const GET: APIRoute = async ({ params, request }) => {
   });
   const eloMap = computeHistoryDeltas(params.id ?? "", allHistory);
 
-  const mapped = history.map((h) => ({
+  // Merge legacy GameHistory + new Game rows into a unified response
+  const legacyMapped = history.map((h) => ({
     id: h.id,
     dateTime: h.dateTime.toISOString(),
     status: h.status,
@@ -49,9 +63,35 @@ export const GET: APIRoute = async ({ params, request }) => {
     editable: h.editableUntil > new Date(),
     source: h.source,
     eloUpdates: hideCompetitive ? null : (eloMap.get(h.id) ?? null),
+    isFriendly: h.isFriendly,
   }));
 
-  return Response.json(buildPaginatedResponse(mapped, limit));
+  const gameMapped = playedGames.map((g) => ({
+    id: g.id,
+    dateTime: g.dateTime.toISOString(),
+    status: g.status,
+    scoreOne: hideCompetitive ? null : g.scoreOne,
+    scoreTwo: hideCompetitive ? null : g.scoreTwo,
+    teamOneName: g.teamOneName,
+    teamTwoName: g.teamTwoName,
+    teamsSnapshot: null, // participants available as structured data
+    paymentsSnapshot: null,
+    editableUntil: new Date(g.dateTime.getTime() + 7 * 86400_000).toISOString(),
+    createdAt: g.createdAt.toISOString(),
+    editable: g.dateTime.getTime() + 7 * 86400_000 > Date.now(),
+    source: "live" as const,
+    eloUpdates: null,
+    isFriendly: g.isFriendly,
+    participants: g.participants.map((p) => p.eventPlayer.name),
+  }));
+
+  // Merge and sort by dateTime descending, dedupe by dateTime (legacy GameHistory may overlap with Game)
+  const gameDateTimes = new Set(playedGames.map((g) => g.dateTime.toISOString()));
+  const dedupedLegacy = legacyMapped.filter((h) => !gameDateTimes.has(h.dateTime));
+  const merged = [...gameMapped, ...dedupedLegacy]
+    .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
+
+  return Response.json(buildPaginatedResponse(merged.slice(0, limit + 1), limit));
 };
 
 /** Replay ELO from scratch in memory to get per-game deltas without touching the DB */

@@ -60,7 +60,7 @@ export default function SignUpPage() {
       <ResponsiveLayout>
         <Container maxWidth="xs" sx={{ py: 8 }}>
           <Paper elevation={2} sx={{ borderRadius: 3, p: 4 }}>
-            <Stack spacing={3} component="form" onSubmit={handleSubmit}>
+            <Stack spacing={3} component="form" action="#" method="post" onSubmit={handleSubmit}>
               <Typography variant="h5" fontWeight={700} textAlign="center">
                 {t("signUp")}
               </Typography>
@@ -88,7 +88,9 @@ export default function SignUpPage() {
                 fullWidth
                 autoComplete="name"
                 autoFocus
-                inputProps={{ maxLength: 50 }}
+                slotProps={{
+                  htmlInput: { maxLength: 50 }
+                }}
               />
               <TextField
                 label={t("email")}
@@ -107,7 +109,9 @@ export default function SignUpPage() {
                 required
                 fullWidth
                 autoComplete="new-password"
-                inputProps={{ minLength: 8 }}
+                slotProps={{
+                  htmlInput: { minLength: 8 }
+                }}
               />
               <TextField
                 label={t("confirmPassword")}

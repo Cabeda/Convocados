@@ -93,6 +93,25 @@ docs: update AGENTS.md
 7. **NEVER merge PRs unless the user explicitly asks to merge** — always wait for explicit confirmation before merging
 8. **Before merging**, always run the full test suite (`npm run test`) and type checking (`npm run typecheck`) to ensure the build will succeed in CI/CD
 
+**CRITICAL: ALL changes MUST go through PRs.** Never push directly to `main`. This includes:
+- Bug fixes (even one-liners)
+- Config changes
+- Documentation updates
+- Hotfixes
+
+The only exception is the automated version bump commit from the release workflow (`[skip ci]`).
+
+**Workflow:**
+```
+main (protected) ← PR ← feat/branch
+```
+Never `git push origin main` directly. Always:
+1. Create a branch
+2. Push the branch
+3. Open a PR
+4. Wait for CI
+5. Merge only when user confirms
+
 ## Testing Guidelines
 
 ### Test File Location
@@ -285,6 +304,61 @@ bru run oauth2 --env local --verbose
 The local callback endpoint (`/api/oauth-callback`) returns the auth code as
 JSON so Bruno CLI can capture it without needing a browser redirect.
 
+## Event Lifecycle & Game Phases
+
+### Game Phases (progressive disclosure)
+
+The event page adapts its UI based on the current phase:
+
+| Phase | Condition | Header shows | Payment section |
+|-------|-----------|-------------|-----------------|
+| **Upcoming (normal)** | >24h before | Full date + recurrence | Hidden (no cost) or collapsed summary |
+| **Upcoming (soon)** | <24h before | Countdown + date | Prominent CTA if user owes |
+| **Upcoming (urgent)** | <2h before | Countdown only | Prominent CTA |
+| **Live** | During game | Pulsing "Live now" | Hidden |
+| **Past (one-off)** | After game | "Ended" (grey) | Hidden |
+| **Past (recurring)** | After game, has recurrence | "Next game: [date]" (blue) + recurrence pattern | Hidden |
+
+### Recurring Event Reset
+
+When `nextResetAt` passes (game end time), the lazy reset:
+- Creates a `GameHistory` snapshot (teams, payments)
+- Clears payments and team assignments
+- Advances `dateTime` to next occurrence
+- Marks old `Game` as "played", creates new `Game`
+- **Players persist** — they stay on the list for the next game
+- **Follows persist** — EventFollow records are event-scoped, not game-scoped
+
+### Follow & Notification Model
+
+**Philosophy:** Notifications go to the right people at the right time. Being on the player list = following = getting notified. No unnecessary noise for spectators.
+
+#### Follow rules:
+- **On player list** → automatically following (can't unfollow while playing)
+- **Not on player list** → can manually follow/unfollow via the Follow button
+- **Auto-follow triggers:** Quick Join, claim player, admin grant, push subscription
+- **Auto-unfollow:** only on self-removal from player list
+
+#### Notification tiers (ADR 0017):
+
+| Notification type | Players | Followers (not playing) |
+|---|---|---|
+| Game reminders (24h, 2h) | ✅ | ❌ |
+| Player activity (joins/leaves) | ✅ | ❌ |
+| Post-game (score, MVP, payments) | ✅ | ❌ |
+| Event changes (date/location/title) | ✅ | ✅ |
+| Recruitment (spots available) | ✅ | ✅ |
+
+#### Resolution order for notification delivery:
+1. Per-user per-event override (`EventFollow.muteX` fields)
+2. Role-based default (non-players blocked from Tier 2)
+3. Global user preferences (`NotificationPreferences`)
+
+#### User-facing controls:
+- **Follow button** (EventHeader): shown only to non-players. Simple toggle.
+- **"My notifications" dialog** (More menu): shown to all authenticated users. Per-game toggle with clear descriptions. Shows effective state (push disabled warning, player-only gating).
+- **User account settings**: global push/email on/off, reminder timing.
+
 ## Common Patterns
 
 ### API Route Handler
@@ -328,49 +402,54 @@ Before submitting a PR:
 - [ ] Rate limiting applied to mutations
 - [ ] Error responses use appropriate status codes
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
-## Beads Issue Tracker
+## Issue Tracker (dex)
 
-This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
+This project uses **[dex](https://dex.rip)** for issue tracking. Run `dex --help` for the CLI.
 
 ### Quick Reference
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>         # Complete work
+dex ready              # Find available work
+dex show <id>          # View issue details
+dex start <id>         # Claim work
+dex complete <id>      # Complete work
+dex sync               # Push tasks to GitHub Issues
 ```
 
 ### Rules
 
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- Run `bd prime` for detailed command reference and session close protocol
-- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
+- Use `dex` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
+- GitHub sync is enabled with `on_change = true` (auto-sync on every mutation)
+- Tasks are stored at `.dex/tasks.jsonl` (committed to repo) and synced to GitHub Issues
 
 ## Session Completion
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until the PR is created and pushed.
 
 **MANDATORY WORKFLOW:**
 
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
+1. **File issues for remaining work** - `dex create "..."` for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+3. **Update issue status** - `dex complete` finished work, `dex start` in-progress items
+4. **Create PR and push branch** - This is MANDATORY:
    ```bash
-   git pull --rebase
-   bd dolt push
-   git push
-   git status  # MUST show "up to date with origin"
+   # Create branch if on main
+   git checkout -b feat/description-of-work  # or fix/ refactor/ etc.
+   git add <files>
+   git commit -m "feat: description"
+   git push -u origin feat/description-of-work
+   gh pr create --title "feat: description" --body "Summary of changes"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+5. **Wait for CI** - Check `gh pr checks <number>` passes
+6. **Clean up** - Clear stashes, prune remote branches
+7. **Verify** - Branch pushed, PR created, CI green
+8. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
+- NEVER push directly to `main` — always use a PR
+- Work is NOT complete until the PR is created and pushed to the remote
+- NEVER stop before pushing the branch — that leaves work stranded locally
+- NEVER say "ready to push when you are" — YOU must push the branch and create the PR
 - If push fails, resolve and retry until it succeeds
-<!-- END BEADS INTEGRATION -->
+- Only merge when the user explicitly asks to merge
+- If CI fails on the PR, fix the issue on the same branch and push again

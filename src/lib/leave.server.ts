@@ -65,6 +65,12 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   });
   if (!event) throw new Error("Event not found.");
 
+  // ADR 0016: fetch currentGameId separately to ensure it's available
+  const { currentGameId } = await prisma.event.findUniqueOrThrow({
+    where: { id: eventId },
+    select: { currentGameId: true },
+  });
+
   const playerIndex = event.players.findIndex((p) => p.id === playerId);
   const player = event.players[playerIndex];
   if (!player) throw new Error("Player not found.");
@@ -84,6 +90,19 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     where: { id: playerId, eventId },
     data: { archivedAt: new Date() },
   });
+
+  // ADR 0016: also archive the GameParticipant for the current Game
+  if (currentGameId) {
+    const ep = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId, name: player.name } },
+    });
+    if (ep) {
+      await prisma.gameParticipant.updateMany({
+        where: { gameId: currentGameId, eventPlayerId: ep.id },
+        data: { archivedAt: new Date() },
+      });
+    }
+  }
 
   // Write Rsvp. Two cases:
   //   - Self-leave (linked user): status="no" + respondedAt
@@ -200,9 +219,10 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     );
   }
 
-  // Spot-available push: was full before AND now has an opening AND no bench. Gate on 48h too.
+  // ADR 0017: Spot-available push — fire whenever a spot opens and game is in the future (Tier 2).
+  // Previously gated on 48h; now always fires so interested players/followers learn immediately.
   const wasFull = event.players.length >= event.maxPlayers;
-  if (wasActive && wasFull && !firstBench && spotsLeft > 0 && isWithin48hBeforeKickoff(event.dateTime)) {
+  if (wasActive && wasFull && !firstBench && spotsLeft > 0 && event.dateTime > new Date()) {
     await enqueueNotification(
       eventId,
       "spot_available",
@@ -210,11 +230,13 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
         title: event.title,
         key: "notifySpotAvailable",
         params: { name: player.name },
-        url,
+        url: `${url}?action=join`,
         spotsLeft,
       },
       actor.userId ?? undefined,
     );
+    // ADR 0017: Reset few_spots_left dedup so it can fire again next fill cycle
+    await prisma.event.update({ where: { id: eventId }, data: { fewSpotsLeftNotified: false } }).catch(() => {});
   }
 
   // Drain notification queue before responding

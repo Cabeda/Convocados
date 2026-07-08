@@ -126,6 +126,21 @@
     <string name="record_final_score">Registrar el resultado final</string>
     <string name="record_score">Registrar resultado</string>
     <string name="mark_payments">Marcar pagos</string>
+    <!-- Post-game wrap-up banner -->
+    <string name="post_game_title">Último partido — ciérralo</string>
+    <string name="post_game_subtitle">Completa estas tareas para cerrar el último partido y preparar el siguiente.</string>
+    <string name="post_game_score_done">Resultado registrado</string>
+    <string name="post_game_payments_done">Todos los pagos saldados</string>
+    <string name="post_game_payments_summary">%1$d/%2$d pagados</string>
+    <string name="post_game_no_cost">No se ha fijado coste para este partido</string>
+    <string name="post_game_progress">%1$d de %2$d hechas</string>
+    <string name="post_game_mvp_done">MVP votado</string>
+    <string name="post_game_mvp_pending">Votar al MVP</string>
+    <string name="post_game_vote_mvp_button">Votar ahora</string>
+    <string name="post_game_payments_label">Pagos del último partido</string>
+    <string name="post_game_payments_hint">Toca un jugador para alternar pagado y luego guarda.</string>
+    <string name="post_game_payments_locked">Los pagos están bloqueados. Desbloquea el partido en el Historial para editarlos.</string>
+    <string name="upcoming_game_payments_label">Pagos del próximo partido</string>
     <string name="paid_for_last_game">%1$d de %2$d pagaron el último partido</string>
     <string name="paid_streak">racha de %1$d partidos pagados</string>
     <string name="on_bench">Estás en el banquillo</string>
@@ -169,6 +184,16 @@
     <string name="event_updates">Actualizaciones del evento</string>
     <string name="event_updates_desc">Cuando cambian los detalles del evento</string>
     <string name="payment_reminders">Recordatorios de pago</string>
+    <string name="post_game_results_desc">Resultados y resumen tras el partido</string>
+    <string name="notification_tiers_title">Cómo funcionan las notificaciones</string>
+    <string name="notification_tiers_desc">Recibes actualizaciones del evento (cancelaciones, invitaciones, plazas) de todos los partidos que sigues. Los detalles del juego (actividad de jugadores, recordatorios, resultados) solo se envían cuando juegas — o puedes activar \"Todas las actualizaciones\" por evento.</string>
+
+    <!-- Notification quick actions -->
+    <string name="action_im_in">¡Voy!</string>
+    <string name="action_cant_make_it">No puedo</string>
+    <string name="action_join">Unirme</string>
+    <string name="action_add_score">Resultado</string>
+    <string name="action_confirm_payment">Confirmar</string>
     <string name="email_notifications">Notificaciones por correo</string>
     <string name="enable_email">Activar correo</string>
     <string name="enable_email_desc">Interruptor general de todos los correos</string>
@@ -181,6 +206,8 @@
 
     <string name="paid">Pagado</string>
     <string name="pending">Pendiente</string>
+    <string name="sent">Enviado</string>
+    <string name="payment_update_failed">No se pudo actualizar el pago. Puede que no tengas permiso.</string>
     <string name="total">Total</string>
     <string name="mark_all_paid">Marcar todo como pagado</string>
     <string name="no_payments">Sin pagos configurados</string>

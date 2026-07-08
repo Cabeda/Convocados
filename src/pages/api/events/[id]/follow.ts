@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../../lib/authenticate.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
+import { getNotificationPrefs } from "../../../../lib/notificationPrefs.server";
 
 const OVERRIDE_FIELDS = ["mutePlayerActivity", "muteReminders", "mutePostGame", "muteEventDetails"] as const;
 
@@ -26,7 +27,21 @@ export const GET: APIRoute = async ({ params, request }) => {
   const follow = await prisma.eventFollow.findUnique({
     where: { eventId_userId: { eventId, userId } },
   });
-  return Response.json({ following: !!follow, ...pickOverrides(follow) });
+
+  // Check if user is an active player (not archived) in this event
+  const isPlayer = await prisma.player.count({
+    where: { eventId, userId, archivedAt: null },
+  }) > 0;
+
+  // Check if user is owner or admin of this event
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
+  const isOwner = event?.ownerId === userId;
+  const isAdmin = isOwner || await prisma.eventAdmin.count({ where: { eventId, userId } }) > 0;
+
+  // Include global push status so the dialog can show effective state
+  const prefs = await getNotificationPrefs(userId);
+
+  return Response.json({ following: !!follow, isPlayer, isAdmin, pushEnabled: prefs.pushEnabled, ...pickOverrides(follow) });
 };
 
 export const POST: APIRoute = async ({ params, request }) => {
@@ -65,6 +80,23 @@ export const PUT: APIRoute = async ({ params, request }) => {
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
 
+  // ADR 0017: "Get all updates" shortcut — set all mute flags to false in one call
+  if (body.preset === "all") {
+    const follow = await prisma.eventFollow.update({
+      where: { eventId_userId: { eventId, userId } },
+      data: { mutePlayerActivity: false, muteReminders: false, mutePostGame: false, muteEventDetails: false },
+    });
+    return Response.json({ ok: true, following: true, ...pickOverrides(follow) });
+  }
+  // "event_only" preset — reset all to null (use role-based defaults)
+  if (body.preset === "event_only") {
+    const follow = await prisma.eventFollow.update({
+      where: { eventId_userId: { eventId, userId } },
+      data: { mutePlayerActivity: null, muteReminders: null, mutePostGame: null, muteEventDetails: null },
+    });
+    return Response.json({ ok: true, following: true, ...pickOverrides(follow) });
+  }
+
   const data: Record<string, boolean | null> = {};
   for (const field of OVERRIDE_FIELDS) {
     if (field in body) {
@@ -94,6 +126,15 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const eventId = params.id ?? "";
+
+  // ponytail: can't unfollow while on the player list — leave the game first.
+  const isPlayer = await prisma.player.count({
+    where: { eventId, userId, archivedAt: null },
+  }) > 0;
+  if (isPlayer) {
+    return Response.json({ error: "Leave the player list to unfollow." }, { status: 409 });
+  }
+
   await prisma.eventFollow.deleteMany({ where: { eventId, userId } });
   return Response.json({ ok: true, following: false });
 };

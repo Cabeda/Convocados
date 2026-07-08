@@ -27,6 +27,7 @@ import { useLocale } from "~/lib/useT";
 import type { Locale } from "~/lib/i18n";
 import { useSession, signOut } from "~/lib/auth.client";
 import { shareForHomeScreen } from "~/lib/pwaInstall";
+import { SignInModal } from "./SignInModal";
 
 const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
   { code: "en", label: "English" },
@@ -110,6 +111,15 @@ function UpdateBanner() {
       };
       add(reg, "updatefound", onUpdateFound);
     });
+    // Reload once the new service worker takes control — the reliable signal
+    // that the update has activated (covers browsers where the per-worker
+    // statechange handler in handleUpdate doesn't fire as expected).
+    let reloaded = false;
+    add(navigator.serviceWorker, "controllerchange", () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
     return () => {
       cancelled = true;
       for (const { target, type, listener } of registrations) {
@@ -118,40 +128,62 @@ function UpdateBanner() {
     };
   }, []);
 
-  if (!waiting) return null;
+  const [dismissed, setDismissed] = useState(false);
+
+  if (!waiting || dismissed) return null;
 
   const handleUpdate = () => {
     waiting.postMessage("SKIP_WAITING");
-    waiting.addEventListener("statechange", () => {
-      if (waiting.state === "activated") window.location.reload();
-    });
+    // The controllerchange listener (registered in the effect) reloads as soon
+    // as the new worker takes control. This timeout is a last-resort fallback.
+    // ponytail: 3s heuristic — if the SW never activates we reload anyway so
+    // the user is never stuck on a stale build.
+    setTimeout(() => window.location.reload(), 3000);
   };
 
   const versionText = typeof __APP_VERSION__ !== "undefined"
     ? t("versionAvailable").replace("{version}", __APP_VERSION__)
     : t("updateAvailable");
 
+  // Bottom-anchored slim bar (shares the bottom slot with the install banner
+  // and never overlaps the app bar). Sits just above the install banner if
+  // both happen to show.
   return (
-    <Slide in direction="down">
-      <Paper elevation={4} sx={{
-        position: "fixed", top: 64, left: "50%", transform: "translateX(-50%)",
-        zIndex: theme.zIndex.snackbar,
-        display: "flex", alignItems: "center", gap: 2,
-        px: 3, py: 1.5, borderRadius: 3,
+    <Slide in direction="up">
+      <Paper elevation={6} sx={{
+        position: "fixed",
+        bottom: { xs: 0, sm: 16 },
+        left: { xs: 0, sm: "50%" },
+        right: { xs: 0, sm: "auto" },
+        transform: { sm: "translateX(-50%)" },
+        zIndex: theme.zIndex.snackbar + 1,
+        display: "flex", alignItems: "center", gap: 1.5,
+        px: 2, py: 1.25,
+        borderRadius: { xs: "16px 16px 0 0", sm: 3 },
+        maxWidth: "100%",
         backgroundColor: theme.palette.primary.main,
         color: theme.palette.primary.contrastText,
-        whiteSpace: "nowrap",
       }}>
-        <SystemUpdateAltIcon fontSize="small" />
-        <Typography variant="body2" fontWeight={600}>{versionText}</Typography>
+        <SystemUpdateAltIcon fontSize="small" sx={{ flexShrink: 0 }} />
+        <Typography variant="body2" fontWeight={600} sx={{ flex: 1, minWidth: 0 }} noWrap>
+          {versionText}
+        </Typography>
         <Button size="small" variant="contained" onClick={handleUpdate} sx={{
           backgroundColor: theme.palette.primary.contrastText,
           color: theme.palette.primary.main,
           "&:hover": { backgroundColor: theme.palette.primary.contrastText, opacity: 0.9 },
-          fontWeight: 700, ml: 1,
+          fontWeight: 700, flexShrink: 0,
         }}>
           {t("updateNow")}
         </Button>
+        <IconButton
+          size="small"
+          onClick={() => setDismissed(true)}
+          aria-label={t("installDismiss")}
+          sx={{ color: theme.palette.primary.contrastText, flexShrink: 0 }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
       </Paper>
     </Slide>
   );
@@ -170,6 +202,14 @@ function InstallBanner() {
   useEffect(() => {
     // Don't show if already installed or recently dismissed
     if (isStandalone() || isDismissed()) return;
+
+    // Yield the bottom slot to the update banner when an app update is pending
+    // — they share the same anchor and we never want both at once.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg?.waiting) setShowBanner(false);
+      }).catch(() => {});
+    }
 
     if (typeof Notification !== "undefined") {
       setPermission(Notification.permission);
@@ -319,8 +359,15 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
   const [userAnchor, setUserAnchor] = useState<null | HTMLElement>(null);
   const [prefsAnchor, setPrefsAnchor] = useState<null | HTMLElement>(null);
   const [langAnchor, setLangAnchor] = useState<null | HTMLElement>(null);
-  const { data: session, isPending: sessionLoading } = useSession();
+  const { data: session, isPending: sessionLoading, refetch: refetchSession } = useSession();
   const [isAdminUser, setIsAdminUser] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
+
+  // Where Google redirect should return to: the current page (so in-place
+  // login on an event page lands back on that event).
+  const signInCallbackURL = typeof window !== "undefined"
+    ? (window.location.pathname === "/" ? "/dashboard" : window.location.pathname + window.location.search)
+    : "/dashboard";
 
   useEffect(() => {
     if (!session?.user) { setIsAdminUser(false); return; }
@@ -469,8 +516,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                 </Menu>
                 <Button
                   color="inherit"
-                  component="a"
-                  href={`/auth/signin?callbackURL=${encodeURIComponent(window.location.pathname === "/" ? "/dashboard" : window.location.pathname + window.location.search)}`}
+                  onClick={() => setSignInOpen(true)}
                   size="small"
                   sx={{ textTransform: "none", fontWeight: 600 }}
                 >
@@ -503,6 +549,18 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
         {children}
       </Box>
 
+      <SignInModal
+        open={signInOpen}
+        onClose={() => setSignInOpen(false)}
+        callbackURL={signInCallbackURL}
+        onSuccess={() => {
+          setSignInOpen(false);
+          // Revalidate the session so the signed-in UI swaps in without a
+          // full-page navigation — the user stays on the current page.
+          refetchSession?.();
+        }}
+      />
+
       <Box component="footer" sx={{
         py: 3, px: 2, mt: "auto",
         backgroundColor: theme.palette.background.paper,
@@ -515,11 +573,11 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
               component="a"
               href="/docs"
               color="text.secondary"
-              sx={{ textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
+              sx={{ display: "flex", alignItems: "center", textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
             >
               {t("docs")}
             </Typography>
-            <Typography variant="body2" color="text.disabled">·</Typography>
+            <Typography variant="body2" color="text.disabled" sx={{ display: "flex", alignItems: "center" }}>·</Typography>
             <Typography
               variant="body2"
               component="a"

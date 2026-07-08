@@ -50,16 +50,34 @@ data class BottomNavItem(val route: String, val label: String, val icon: @Compos
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
+fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processingAuth: Boolean = false) {
     val navController = rememberNavController()
-    val startDestination = if (isAuthenticated) Route.Games.route else Route.Login.route
+
+    // While processing OAuth callback, don't navigate — show current screen
+    val startDestination = when {
+        processingAuth -> Route.Login.route // stay on login but don't re-navigate
+        isAuthenticated -> Route.Games.route
+        else -> Route.Login.route
+    }
 
     // Handle deep link navigation
     LaunchedEffect(deepLink, isAuthenticated) {
         if (!isAuthenticated || deepLink == null) return@LaunchedEffect
-        val route = deepLinkToRoute(deepLink)
+        val route = DeepLink.deepLinkToRoute(deepLink)
         if (route != null) {
             navController.navigate(route) { launchSingleTop = true }
+        }
+    }
+
+    // Navigate to games when auth completes (after processingAuth flips to false)
+    LaunchedEffect(isAuthenticated, processingAuth) {
+        if (isAuthenticated && !processingAuth) {
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (currentRoute == Route.Login.route) {
+                navController.navigate(Route.Games.route) {
+                    popUpTo(Route.Login.route) { inclusive = true }
+                }
+            }
         }
     }
 
@@ -110,11 +128,11 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
                 startDestination = startDestination,
             ) {
                 composable(Route.Login.route) {
-                    LoginScreen(onLoginSuccess = {
-                        navController.navigate(Route.Games.route) {
-                            popUpTo(Route.Login.route) { inclusive = true }
-                        }
-                    })
+                    // ADR-0012: post-login navigation is owned by the LaunchedEffect
+                    // below. LoginScreen no longer needs the onLoginSuccess callback —
+                    // signin happens in a Custom Tab, and the result (isAuthenticated flip)
+                    // is what triggers the route change.
+                    LoginScreen()
                 }
                 composable(Route.Games.route) {
                     GamesScreen(
@@ -290,19 +308,4 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null) {
             }
         }
     }
-}
-
-private fun deepLinkToRoute(url: String): String? {
-    // Handle paths like /events/{id} or full URLs
-    val path = url.removePrefix("https://convocados.cabeda.dev")
-        .removePrefix("http://localhost:4321")
-    val eventMatch = Regex("/events?/([^/?]+)").find(path)
-    if (eventMatch != null) {
-        val id = eventMatch.groupValues[1]
-        val actionPay = url.contains("action=pay")
-        return Route.EventDetail.create(id) + if (actionPay) "?action=pay" else ""
-    }
-    if (path == "/games" || url == "games") return Route.Games.route
-    if (path == "/create" || url == "create") return Route.CreateEvent.route
-    return null
 }

@@ -217,7 +217,7 @@ async function sendAppPushToEventUsers(
   excludeUserIds: Set<string>,
   jobType?: NotificationJobType,
   reminderType?: "24h" | "2h" | "1h",
-  opts?: { prefsMap?: Map<string, typeof DEFAULTS>; overridesMap?: Map<string, { mutePlayerActivity: boolean | null; muteReminders: boolean | null; mutePostGame: boolean | null; muteEventDetails: boolean | null }>; eventDefaults?: { mutePlayerActivity?: boolean; muteReminders?: boolean; mutePostGame?: boolean; muteEventDetails?: boolean } | null },
+  opts?: { prefsMap?: Map<string, typeof DEFAULTS>; overridesMap?: Map<string, { mutePlayerActivity: boolean | null; muteReminders: boolean | null; mutePostGame: boolean | null; muteEventDetails: boolean | null }>; eventDefaults?: { mutePlayerActivity?: boolean; muteReminders?: boolean; mutePostGame?: boolean; muteEventDetails?: boolean } | null; playerUserIds?: Set<string> },
 ): Promise<void> {
   const follows = await prisma.eventFollow.findMany({
     where: { eventId },
@@ -246,13 +246,14 @@ async function sendAppPushToEventUsers(
     if (opts?.prefsMap && jobType) {
       const prefs = opts.prefsMap.get(token.userId) ?? DEFAULTS;
       const overrides = opts.overridesMap?.get(token.userId) ?? null;
-      if (!wantsPushWithOverrides(prefs, jobType, overrides, opts.eventDefaults ?? null)) continue;
+      const isPlayer = opts.playerUserIds?.has(token.userId) ?? undefined;
+      if (!wantsPushWithOverrides(prefs, jobType, overrides, opts.eventDefaults ?? null, isPlayer)) continue;
       if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) continue;
     }
     const t = createT((token.locale as Locale) ?? "en");
     const body = t(key, params);
     const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
-    fcmMessages.push({ token: token.token, title, body: `${body} · ${suffix}`, data: { url } });
+    fcmMessages.push({ token: token.token, title, body: `${body} · ${suffix}`, data: { url, ...(jobType ? { type: jobType } : {}), ...params } });
   }
 
   await sendFcmBatch(fcmMessages);
@@ -314,11 +315,18 @@ export async function sendPushToEvent(
   });
   const prefsMap = new Map(prefsRows.map((p) => [p.userId, { ...DEFAULTS, ...p }]));
 
+  // ADR 0017: Resolve active player membership for role-aware tier filtering
+  const activePlayers = await prisma.player.findMany({
+    where: { eventId, archivedAt: null, userId: { not: null } },
+    select: { userId: true },
+  });
+  const playerUserIds = new Set(activePlayers.map((p) => p.userId as string));
+
   const promises: Promise<unknown>[] = [];
 
   // App push (FCM)
   promises.push(
-    sendAppPushToEventUsers(eventId, title, key, params, url, spotsLeft, senderUserIds, jobType, reminderType, { prefsMap, overridesMap, eventDefaults }),
+    sendAppPushToEventUsers(eventId, title, key, params, url, spotsLeft, senderUserIds, jobType, reminderType, { prefsMap, overridesMap, eventDefaults, playerUserIds }),
   );
 
   // Web push
@@ -338,7 +346,8 @@ export async function sendPushToEvent(
             if (jobType) {
               const prefs = prefsMap.get(sub.userId) ?? DEFAULTS;
               const overrides = overridesMap.get(sub.userId) ?? null;
-              if (!wantsPushWithOverrides(prefs, jobType, overrides, eventDefaults)) return;
+              const isPlayer = playerUserIds.has(sub.userId);
+              if (!wantsPushWithOverrides(prefs, jobType, overrides, eventDefaults, isPlayer)) return;
               if (jobType === "reminder" && reminderType && !wantsPushReminder(prefs, reminderType)) return;
             }
 

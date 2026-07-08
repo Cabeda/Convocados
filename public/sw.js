@@ -6,6 +6,12 @@ self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
 });
 
+// Take control of open pages as soon as this worker activates, so the page's
+// `controllerchange` listener fires and the app reloads onto the new build.
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("push", (event) => {
   const data = event.data ? event.data.json() : {};
   const title = data.title ?? "Convocados";

@@ -1,7 +1,7 @@
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Container, Typography, Stack, Box, Paper, Grid2,
+  Container, Typography, Stack, Box, Paper, Grid,
   CircularProgress, Alert, TextField, Button,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   InputAdornment, Chip, ToggleButtonGroup, ToggleButton, useTheme,
@@ -45,6 +45,21 @@ interface GrowthPoint {
   date: string;
   users: number;
   events: number;
+}
+
+interface UsageSummary {
+  dauToday: number;
+  wau: number;
+  mau: number;
+  platforms: { android: number; web: number };
+  webDrillDown: { browsers: Record<string, number>; os: Record<string, number> };
+}
+
+interface UsagePoint {
+  date: string;
+  dau: number;
+  android: number;
+  web: number;
 }
 
 type GrowthRange = "30d" | "1y" | "all";
@@ -176,6 +191,9 @@ export default function AdminDashboardPage() {
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
+  const [usageTimeline, setUsageTimeline] = useState<UsagePoint[]>([]);
+  const [loadingUsage, setLoadingUsage] = useState(false);
 
   const PAGE_SIZE = 20;
 
@@ -198,6 +216,16 @@ export default function AdminDashboardPage() {
       .then((data) => { setGrowthData(data); setLoadingGrowth(false); })
       .catch(() => setLoadingGrowth(false));
   }, [session?.user, forbidden, growthRange]);
+
+  // Fetch usage metrics
+  useEffect(() => {
+    if (!session?.user || forbidden) return;
+    setLoadingUsage(true);
+    fetch("/api/admin/usage?days=30")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) { setUsageSummary(data.summary); setUsageTimeline(data.timeline); } setLoadingUsage(false); })
+      .catch(() => setLoadingUsage(false));
+  }, [session?.user, forbidden]);
 
   const fetchUsers = useCallback(async (p: number, q: string) => {
     setLoadingUsers(true);
@@ -279,42 +307,42 @@ export default function AdminDashboardPage() {
             ) : (
               <>
                 {/* Top-level stat cards */}
-                <Grid2 container spacing={2}>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 6, md: 3 }}>
                     <StatCard label={t("adminTotalUsers")} value={stats.totalUsers} icon={<PeopleIcon />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
                     <StatCard label={t("adminTotalEvents")} value={stats.totalEvents} icon={<EventIcon />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
                     <StatCard label={t("adminGamesPlayed")} value={stats.totalGamesPlayed} icon={<SportsScoreIcon />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, md: 3 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, md: 3 }}>
                     <StatCard label={t("adminActiveUsers")} value={stats.activeUsers} icon={<TrendingUpIcon />} />
-                  </Grid2>
-                </Grid2>
+                  </Grid>
+                </Grid>
 
                 {/* Secondary metrics */}
-                <Grid2 container spacing={2}>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminActiveEvents")} value={stats.activeEvents} icon={<EventIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminGamesLast7d")} value={stats.gamesLast7d} icon={<SportsScoreIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminGamesLast30d")} value={stats.gamesLast30d} icon={<SportsScoreIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminAvgPlayers")} value={stats.avgPlayersPerEvent} icon={<PeopleIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminRecurringEvents")} value={stats.recurringEvents} icon={<EventIcon fontSize="small" />} />
-                  </Grid2>
-                  <Grid2 size={{ xs: 6, sm: 4, md: 2 }}>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminOneOffEvents")} value={stats.oneOffEvents} icon={<EventIcon fontSize="small" />} />
-                  </Grid2>
-                </Grid2>
+                  </Grid>
+                </Grid>
 
                 {/* Sport distribution */}
                 {Object.keys(stats.sportDistribution).length > 0 && (
@@ -331,6 +359,80 @@ export default function AdminDashboardPage() {
                 )}
 
                 <GrowthChart growthData={growthData} growthRange={growthRange} setGrowthRange={setGrowthRange} loadingGrowth={loadingGrowth} />
+
+                {/* Usage Metrics — DAU, platform breakdown */}
+                <Paper elevation={1} sx={{ p: 3 }}>
+                  <Typography variant="h6" fontWeight={600} gutterBottom>{t("adminUsageMetrics")}</Typography>
+                  {loadingUsage ? (
+                    <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={24} /></Box>
+                  ) : usageSummary ? (
+                    <Stack spacing={3}>
+                      {/* Summary cards */}
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 4 }}>
+                          <StatCard label={t("adminDauToday")} value={usageSummary.dauToday} icon={<PeopleIcon fontSize="small" />} />
+                        </Grid>
+                        <Grid size={{ xs: 4 }}>
+                          <StatCard label={t("adminWau")} value={usageSummary.wau} icon={<PeopleIcon fontSize="small" />} />
+                        </Grid>
+                        <Grid size={{ xs: 4 }}>
+                          <StatCard label={t("adminMau")} value={usageSummary.mau} icon={<PeopleIcon fontSize="small" />} />
+                        </Grid>
+                      </Grid>
+
+                      {/* Platform breakdown */}
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={600} gutterBottom>{t("adminPlatformBreakdown")}</Typography>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
+                          <Chip label={`Android: ${usageSummary.platforms.android}`} color="success" variant="outlined" />
+                          <Chip label={`Web: ${usageSummary.platforms.web}`} color="primary" variant="outlined" />
+                        </Stack>
+
+                        {/* Web drill-down */}
+                        {usageSummary.platforms.web > 0 && usageSummary.webDrillDown && (
+                          <Stack spacing={1} sx={{ pl: 2, borderLeft: 3, borderColor: "primary.main" }}>
+                            <Typography variant="caption" fontWeight={600} color="text.secondary">{t("adminWebBrowsers")}</Typography>
+                            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                              {Object.entries(usageSummary.webDrillDown.browsers)
+                                .sort(([, a], [, b]) => b - a)
+                                .map(([name, count]) => (
+                                  <Chip key={name} label={`${name}: ${count}`} size="small" variant="outlined" />
+                                ))}
+                            </Stack>
+                            <Typography variant="caption" fontWeight={600} color="text.secondary">{t("adminWebOS")}</Typography>
+                            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                              {Object.entries(usageSummary.webDrillDown.os)
+                                .sort(([, a], [, b]) => b - a)
+                                .map(([name, count]) => (
+                                  <Chip key={name} label={`${name}: ${count}`} size="small" variant="outlined" />
+                                ))}
+                            </Stack>
+                          </Stack>
+                        )}
+                      </Box>
+
+                      {/* DAU timeline chart */}
+                      {usageTimeline.length > 0 && (
+                        <Box sx={{ height: 250 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={usageTimeline} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v: string) => v.slice(5)} />
+                              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                              <RechartsTooltip content={<ChartTooltip />} />
+                              <Legend />
+                              <Line type="monotone" dataKey="dau" name="DAU" stroke="#4caf50" strokeWidth={2} dot={false} />
+                              <Line type="monotone" dataKey="android" name="Android" stroke="#66bb6a" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+                              <Line type="monotone" dataKey="web" name="Web" stroke="#42a5f5" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </Box>
+                      )}
+                    </Stack>
+                  ) : (
+                    <Alert severity="info">{t("adminNoUsageData")}</Alert>
+                  )}
+                </Paper>
 
                 {/* User list */}
                 <Paper elevation={1} sx={{ p: 3 }}>

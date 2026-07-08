@@ -74,11 +74,19 @@ data class EventScreenState(
     val historyCursor: String? = null,
     val knownPlayers: List<KnownPlayer> = emptyList(),
     val postGame: PostGameStatus? = null,
+    // Local, editable copy of the PAST game's payment snapshot for the
+    // post-game banner. Initialized from postGame.paymentsSnapshot; toggled
+    // locally, then saved to the GameHistory entry. Null until status loads.
+    val postGamePayments: List<PaymentSnapshotEntry>? = null,
+    val postGamePaymentsDirty: Boolean = false,
+    val postGameSaving: Boolean = false,
     val error: String? = null,
     val locked: Boolean = false,
     val undoData: UndoData? = null,
     val teamMoveUndo: TeamMoveUndo? = null,
     val isFollowing: Boolean = false,
+    val isPlayer: Boolean = false,
+    val isAdmin: Boolean = false,
     val mutePlayerActivity: Boolean? = null,
     val muteReminders: Boolean? = null,
     val mutePostGame: Boolean? = null,
@@ -154,9 +162,17 @@ class EventDetailViewModel @Inject constructor(
             val known = runCatching { api.fetchKnownPlayers(eventId) }.getOrNull()?.players ?: emptyList()
             val following = runCatching { api.getFollowState(eventId) }.getOrNull()
             val balance = runCatching { api.fetchBalance(eventId) }.getOrNull()
+            // Seed the editable past-game payment snapshot from the server, but
+            // don't clobber unsaved local edits.
+            val seededPayments = if (_state.value.postGamePaymentsDirty)
+                _state.value.postGamePayments
+            else postGame?.paymentsSnapshot
             _state.value = _state.value.copy(
                 loading = false, refreshing = false, postGame = postGame, knownPlayers = known,
+                postGamePayments = seededPayments,
                 isFollowing = following?.following ?: false,
+                isPlayer = following?.isPlayer ?: false,
+                isAdmin = following?.isAdmin ?: false,
                 mutePlayerActivity = following?.mutePlayerActivity,
                 muteReminders = following?.muteReminders,
                 mutePostGame = following?.mutePostGame,
@@ -168,8 +184,12 @@ class EventDetailViewModel @Inject constructor(
 
     fun toggleFollow(eventId: String) {
         if (_state.value.isFollowing) {
-            // Already following — show notification preferences sheet
-            _state.value = _state.value.copy(showNotificationSheet = true)
+            // Unfollow — API will block if user is a player (409)
+            viewModelScope.launch {
+                _state.value = _state.value.copy(isFollowing = false)
+                runCatching { api.unfollowEvent(eventId) }
+                    .onFailure { _state.value = _state.value.copy(isFollowing = true) }
+            }
             return
         }
         viewModelScope.launch {
@@ -181,6 +201,10 @@ class EventDetailViewModel @Inject constructor(
 
     fun dismissNotificationSheet() {
         _state.value = _state.value.copy(showNotificationSheet = false)
+    }
+
+    fun showNotifications() {
+        _state.value = _state.value.copy(showNotificationSheet = true)
     }
 
     fun updateNotificationOverride(eventId: String, field: String, value: Boolean?) {
@@ -375,10 +399,53 @@ class EventDetailViewModel @Inject constructor(
     fun saveScore(eventId: String, historyId: String, s1: Int, s2: Int) {
         viewModelScope.launch {
             runCatching { api.updateScore(eventId, historyId, s1, s2) }
-                .onSuccess { repository.refreshEventDetail(eventId) }
+                .onSuccess {
+                    repository.refreshEventDetail(eventId)
+                    // Refresh post-game status so banner hides when allComplete
+                    val pg = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
+                    _state.value = _state.value.copy(postGame = pg)
+                }
                 .onFailure { e ->
                     val msg = parseApiErrorMessage(e) ?: "Failed to update score"
                     _state.value = _state.value.copy(error = msg)
+                }
+        }
+    }
+
+    /** Cycle a past-game player's payment status (pending <-> paid) locally. */
+    fun togglePostGamePayment(playerName: String) {
+        val current = _state.value.postGamePayments ?: return
+        val updated = current.map {
+            if (it.playerName == playerName)
+                it.copy(status = if (it.status == "paid") "pending" else "paid")
+            else it
+        }
+        _state.value = _state.value.copy(postGamePayments = updated, postGamePaymentsDirty = true)
+    }
+
+    /**
+     * Persist the edited past-game payment snapshot to the GameHistory entry.
+     * Mirrors the web PostGameBanner save (PATCH .../history/{id} with
+     * paymentsSnapshot). Owner/admin only — surfaces a clear error otherwise.
+     */
+    fun savePostGamePayments(eventId: String) {
+        val historyId = _state.value.postGame?.latestHistoryId ?: return
+        val payments = _state.value.postGamePayments ?: return
+        _state.value = _state.value.copy(postGameSaving = true)
+        viewModelScope.launch {
+            runCatching { api.updateHistoryPayments(eventId, historyId, payments) }
+                .onSuccess {
+                    _state.value = _state.value.copy(postGamePaymentsDirty = false, postGameSaving = false)
+                    // Refresh status so allComplete / hide logic re-evaluates.
+                    val pg = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
+                    _state.value = _state.value.copy(
+                        postGame = pg,
+                        postGamePayments = pg?.paymentsSnapshot ?: payments,
+                    )
+                }
+                .onFailure { e ->
+                    val msg = parseApiErrorMessage(e) ?: "Failed to save payments"
+                    _state.value = _state.value.copy(postGameSaving = false, error = msg)
                 }
         }
     }
@@ -494,12 +561,31 @@ fun EventDetailScreen(
                 NotificationToggleRow(stringResource(R.string.event_changes), state.muteEventDetails) { value ->
                     viewModel.updateNotificationOverride(eventId, "muteEventDetails", value)
                 }
+                // Admin-specific section
+                if (state.isAdmin) {
+                    Spacer(Modifier.height(16.dp))
+                    HorizontalDivider()
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.notify_admin_section_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.notify_admin_section_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(Modifier.height(24.dp))
-                TextButton(
-                    onClick = { viewModel.unfollow(eventId) },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(stringResource(R.string.unfollow)) }
+                if (!state.isPlayer) {
+                    TextButton(
+                        onClick = { viewModel.unfollow(eventId) },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.unfollow)) }
+                }
                 Spacer(Modifier.height(16.dp))
             }
         }
@@ -513,12 +599,25 @@ fun EventDetailScreen(
                 title = { Text(event?.title ?: stringResource(R.string.event_fallback), maxLines = 1) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
-                    IconButton(onClick = { viewModel.toggleFollow(eventId) }) {
-                        Icon(
-                            if (state.isFollowing) Icons.Default.Notifications else Icons.Default.NotificationsNone,
-                            contentDescription = if (state.isFollowing) stringResource(R.string.following) else stringResource(R.string.follow),
-                            tint = if (state.isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    // Follow button: hidden for players (auto-followed), shown for non-players
+                    if (!state.isPlayer) {
+                        IconButton(onClick = { viewModel.toggleFollow(eventId) }) {
+                            Icon(
+                                if (state.isFollowing) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = if (state.isFollowing) stringResource(R.string.following) else stringResource(R.string.follow),
+                                tint = if (state.isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    // Notification settings: shown when following (players or manual followers)
+                    if (state.isFollowing) {
+                        IconButton(onClick = { viewModel.showNotifications() }) {
+                            Icon(
+                                Icons.Default.Notifications,
+                                contentDescription = stringResource(R.string.notification_settings),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
@@ -596,19 +695,45 @@ fun EventDetailScreen(
                         }
 
                         // Post-game banner — prominent, right after action bar
+                        // Post-game wrap-up banner — settles the LAST game
+                        // (score, payments, MVP), kept clearly separate from the
+                        // upcoming game's UI below. Hidden once everything is
+                        // settled (allComplete) so it disappears when fulfilled.
                         state.postGame?.let { pg ->
-                            if (pg.gameEnded || pg.hasPendingPastPayments) {
+                            val showBanner = !pg.allComplete &&
+                                (pg.gameEnded || pg.hasPendingPastPayments || (pg.mvpEnabled && !pg.mvpComplete))
+                            if (showBanner) {
+                                val scoreDone = pg.hasScore
+                                val paysDone = pg.allPaid || !pg.hasCost
+                                val doneCount = (if (scoreDone) 1 else 0) + (if (paysDone) 1 else 0)
                                 Card(
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                                 ) {
                                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        Text(stringResource(R.string.game_ended), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Icon(Icons.Default.Celebration, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            Text(stringResource(R.string.post_game_title), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+                                        }
+                                        Text(stringResource(R.string.post_game_subtitle), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
 
-                                        if (!pg.hasScore && pg.latestHistoryId != null) {
+                                        // ── Task 1: Score ──────────────────────────
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Icon(
+                                                if (scoreDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                null, modifier = Modifier.size(20.dp),
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
+                                            Text(
+                                                if (scoreDone) stringResource(R.string.post_game_score_done) else stringResource(R.string.record_final_score),
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                        if (!scoreDone && pg.latestHistoryId != null) {
                                             if (editingScoreId == pg.latestHistoryId) {
-                                                // Inline score entry
-                                                Text(stringResource(R.string.record_final_score), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     OutlinedTextField(
                                                         value = scoreOne, onValueChange = { scoreOne = it.filter { c -> c.isDigit() } },
@@ -640,13 +765,86 @@ fun EventDetailScreen(
                                             }
                                         }
 
-                                        if (pg.hasCost && !pg.allPaid) {
-                                            Button(
-                                                onClick = onPayments,
-                                                modifier = Modifier.fillMaxWidth(),
-                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                                            ) { Text(stringResource(R.string.mark_payments), color = MaterialTheme.colorScheme.background, style = MaterialTheme.typography.titleSmall) }
+                                        // ── Task 2: Payments (for the LAST game) ────
+                                        val snapshot = state.postGamePayments
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Icon(
+                                                if (paysDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                null, modifier = Modifier.size(20.dp),
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
+                                            val payLabel = when {
+                                                !pg.hasCost -> stringResource(R.string.post_game_no_cost)
+                                                paysDone -> stringResource(R.string.post_game_payments_done)
+                                                snapshot != null -> stringResource(
+                                                    R.string.post_game_payments_summary,
+                                                    snapshot.count { it.status == "paid" }, snapshot.size,
+                                                )
+                                                else -> stringResource(R.string.post_game_payments_label)
+                                            }
+                                            Text(payLabel, color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                         }
+                                        // Inline per-player payment chips, editing the
+                                        // history snapshot (owner/admin only — server enforces).
+                                        if (pg.hasCost && !paysDone && snapshot != null && snapshot.isNotEmpty()) {
+                                            Text(stringResource(R.string.post_game_payments_hint), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
+                                            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                snapshot.forEach { p ->
+                                                    val isPaid = p.status == "paid"
+                                                    FilterChip(
+                                                        selected = isPaid,
+                                                        onClick = { viewModel.togglePostGamePayment(p.playerName) },
+                                                        label = { Text("${p.playerName} ${"%.2f".format(p.amount)}") },
+                                                        leadingIcon = if (isPaid) { { Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(16.dp)) } } else null,
+                                                    )
+                                                }
+                                            }
+                                            if (state.postGamePaymentsDirty) {
+                                                Button(
+                                                    onClick = { viewModel.savePostGamePayments(eventId) },
+                                                    enabled = !state.postGameSaving,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                                ) { Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
+                                            }
+                                        }
+
+                                        // Progress summary
+                                        val totalTasks = 2 + (if (pg.mvpEnabled) 1 else 0)
+                                        val mvpDone = !pg.mvpEnabled || pg.mvpComplete
+                                        val finalDoneCount = doneCount + (if (mvpDone) 1 else 0)
+
+                                        // ── Task 3: MVP vote (if enabled) ────
+                                        if (pg.mvpEnabled) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Icon(
+                                                    if (pg.mvpComplete) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                    null, modifier = Modifier.size(20.dp),
+                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                )
+                                                Text(
+                                                    if (pg.mvpComplete) stringResource(R.string.post_game_mvp_done) else stringResource(R.string.post_game_mvp_pending),
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                            }
+                                            if (!pg.mvpComplete && pg.latestHistoryId != null) {
+                                                Button(
+                                                    onClick = { onHistoryClick(pg.latestHistoryId) },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                                ) { Text(stringResource(R.string.post_game_vote_mvp_button), color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleSmall) }
+                                            }
+                                        }
+
+                                        Text(
+                                            stringResource(R.string.post_game_progress, finalDoneCount, totalTasks),
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                                        )
                                     }
                                 }
                             }

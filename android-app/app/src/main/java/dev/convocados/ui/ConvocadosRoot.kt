@@ -41,10 +41,32 @@ class RootViewModel @Inject constructor(
     val themeMode = settingsStore.themeMode
     val dynamicColor = settingsStore.dynamicColor
 
+    // ADR 0018: Prevents navigation to Login during OAuth callback processing
+    private val _processingAuth = MutableStateFlow(false)
+    val processingAuth: StateFlow<Boolean> = _processingAuth
+
+    // Blocks initial navigation until we've confirmed auth state (silent refresh if needed)
+    private val _ready = MutableStateFlow(false)
+    val ready: StateFlow<Boolean> = _ready
+
     private val _user = MutableStateFlow<UserProfile?>(null)
     val user: StateFlow<UserProfile?> = _user
 
     init {
+        // On cold start: if tokens exist but are expired, try silent refresh before showing UI
+        viewModelScope.launch {
+            val tokens = tokenStore.getTokens()
+            if (tokens != null && tokenStore.isExpired()) {
+                // Try silent refresh
+                try {
+                    api.fetchMyGames() // This triggers the refresh interceptor in ApiClient
+                } catch (_: Exception) {
+                    // Refresh failed — tokens cleared by ApiClient, isAuthenticated will be false
+                }
+            }
+            _ready.value = true
+        }
+
         viewModelScope.launch {
             isAuthenticated.collect { authed ->
                 if (authed) {
@@ -61,11 +83,16 @@ class RootViewModel @Inject constructor(
 
     fun handleIntent(intent: Intent) {
         val uri = intent.data ?: return
-        if (uri.scheme == "convocados") {
+        if (uri.scheme == "convocados" && uri.host == "auth") {
+            _processingAuth.value = true
             viewModelScope.launch {
-                authManager.handleCallback(uri)
-                runCatching { _user.value = api.fetchUserInfo() }
-                pushTokenManager.registerCurrentToken()
+                try {
+                    authManager.handleCallback(uri)
+                    runCatching { _user.value = api.fetchUserInfo() }
+                    pushTokenManager.registerCurrentToken()
+                } finally {
+                    _processingAuth.value = false
+                }
             }
         }
     }
@@ -104,6 +131,12 @@ fun ConvocadosRoot(deepLink: String? = null, intentVersion: Int = 0, viewModel: 
         themeMode = viewModel.themeMode.collectAsState(initial = ThemeMode.System).value,
         dynamicColor = viewModel.dynamicColor.collectAsState(initial = false).value,
     ) {
-        AppNavigation(isAuthenticated = isAuthenticated, deepLink = deepLink)
+        val processingAuth by viewModel.processingAuth.collectAsState()
+        val ready by viewModel.ready.collectAsState()
+
+        // Don't render navigation until we've confirmed auth state (avoids Login flash)
+        if (!ready) return@ConvocadosTheme
+
+        AppNavigation(isAuthenticated = isAuthenticated, deepLink = deepLink, processingAuth = processingAuth)
     }
 }

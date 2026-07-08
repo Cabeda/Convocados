@@ -252,6 +252,27 @@ data class PostGameStatus(
     val costCurrency: String? = null,
     val costAmount: Double? = null,
     val hasPendingPastPayments: Boolean = false,
+    // Payments for the PAST game. After a recurrence reset this comes from the
+    // GameHistory snapshot, NOT the live (next-game) EventCost — so the banner
+    // settles the last game, not the upcoming one.
+    val paymentsSnapshot: List<PaymentSnapshotEntry>? = null,
+    val mvpEnabled: Boolean = false,
+    val mvpComplete: Boolean = true,
+    val paidAggregate: PaidAggregate? = null,
+)
+
+@Serializable
+data class PaymentSnapshotEntry(
+    val playerName: String,
+    val amount: Double = 0.0,
+    val status: String = "pending",
+    val method: String? = null,
+)
+
+@Serializable
+data class PaidAggregate(
+    val paidCount: Int = 0,
+    val totalCount: Int = 0,
 )
 
 @Serializable
@@ -264,6 +285,7 @@ data class NotificationPrefs(
     val gameReminderPush: Boolean = true,
     val playerActivityPush: Boolean = true,
     val eventDetailsPush: Boolean = true,
+    val postGamePush: Boolean = true,
     val weeklySummaryEmail: Boolean = true,
     val paymentReminderEmail: Boolean = true,
     val paymentReminderPush: Boolean = true,
@@ -414,6 +436,9 @@ data class UndoData(
 @Serializable
 data class FollowStateResponse(
     val following: Boolean = false,
+    val isPlayer: Boolean = false,
+    val isAdmin: Boolean = false,
+    val pushEnabled: Boolean = true,
     val mutePlayerActivity: Boolean? = null,
     val muteReminders: Boolean? = null,
     val mutePostGame: Boolean? = null,

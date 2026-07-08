@@ -3,7 +3,7 @@ import {
   Paper, Typography, Box, Stack, Chip, Button, Alert,
   IconButton, Tooltip, InputAdornment, TextField, Autocomplete,
   List, ListItem, ListItemText, Menu, MenuItem, ListItemIcon, Divider,
-  alpha, useTheme,
+  alpha, useTheme, LinearProgress,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
@@ -14,7 +14,7 @@ import ShieldIcon from "@mui/icons-material/Shield";
 import ContactsIcon from "@mui/icons-material/Contacts";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
 import CancelIcon from "@mui/icons-material/Cancel";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
 import BackspaceIcon from "@mui/icons-material/Backspace";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useT } from "~/lib/useT";
@@ -22,7 +22,6 @@ import { matchesWithName } from "~/lib/stringMatch";
 import type { Player, PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 import { ConfirmLeaveDialog, type LeaveContext } from "./ConfirmLeaveDialog";
-import { AttendanceCta } from "./AttendanceCta";
 import type { RsvpStatus } from "~/lib/rsvp";
 
 export type { RsvpStatus } from "~/lib/rsvp";
@@ -103,13 +102,13 @@ export function PlayerList({
   onAddPlayer, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
   onRandomize, onConfirmReRandomize, canRemovePlayer,
   currentUserId,
-  myRsvpStatus,
+  myRsvpStatus: _myRsvpStatus,
   guestRsvpMap,
   userRsvpMap,
   canEditGuestAttendance,
   onSetMyRsvp,
   onSetGuestRsvp,
-  onJoinAsSelf,
+  onJoinAsSelf: _onJoinAsSelf,
   eventDateTime,
 }: Props) {
   const t = useT();
@@ -192,7 +191,7 @@ export function PlayerList({
 
   // #XXX Attendance — the user's own player record (null if not on the list).
   // Drives the "Join this game" vs "Going" copy on the AttendanceCta.
-  const myPlayer: Player | undefined = currentUserId
+  const _myPlayer: Player | undefined = currentUserId
     ? players.find((p) => p.userId === currentUserId)
     : undefined;
 
@@ -269,42 +268,6 @@ export function PlayerList({
   return (
     <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
       <Stack spacing={2}>
-        {/* #XXX AttendanceCta — "Your response" widget for the signed-in user. Two buttons,
-            always rendered for users on the list or following the event. Anonymous = nothing. */}
-        {currentUserId && (myPlayer || players.length >= 0) && (
-          <AttendanceCta
-            myRsvpStatus={myRsvpStatus ?? null}
-            isOnList={!!myPlayer}
-            onGoing={() => {
-              if (myPlayer) {
-                onSetMyRsvp?.("yes");
-              } else {
-                onJoinAsSelf?.();
-              }
-            }}
-            onNotComing={() => {
-              if (!myPlayer) {
-                // Follower-only: no removal needed, just record Rsvp=no. One-click.
-                onSetMyRsvp?.("no");
-                return;
-              }
-              // On-list user: only show the confirm dialog when the "no replacement" warning
-              // is warranted (within 48h + bench empty). For the simple case, archive + Rsvp=no
-              // happen in one click — the slot is freed up immediately. The 60s undo snackbar
-              // (wired in EventPage) gives the user a way back if they fat-fingered.
-              const snapshot = leaveSnapshotRef.current;
-              const benchEmptyAfter = computeBenchEmptyAfter(
-                myPlayer.id, snapshot.players, snapshot.active, snapshot.maxPlayers,
-              );
-              const within48h = computeWithin48h(snapshot.eventDateTime);
-              if (within48h && benchEmptyAfter) {
-                openLeaveDialog(myPlayer.id, "self");
-              } else {
-                onSetMyRsvp?.("no");
-              }
-            }}
-          />
-        )}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Typography variant="h6" fontWeight={600}>{t("players")}</Typography>
           <Chip label={t("activePlayers", { n: active.length, max: maxPlayers })} size="small" color="primary" />
@@ -317,6 +280,34 @@ export function PlayerList({
             </Tooltip>
           )}
         </Box>
+
+        {/* Player progress bar + social momentum nudge */}
+        {maxPlayers > 0 && (() => {
+          const fillPct = active.length / maxPlayers;
+          const spotsLeft = maxPlayers - active.length;
+          const isFull = spotsLeft <= 0;
+          // ponytail: momentum messages at different fill levels.
+          // Ceiling: static thresholds. Upgrade path: A/B test copy.
+          const nudge = isFull ? t("momentumFull")
+            : fillPct >= 0.8 ? t("momentumFillingFast", { n: String(spotsLeft) })
+            : fillPct >= 0.5 ? t("momentumAlmostHalf", { n: String(spotsLeft) })
+            : null;
+          return (
+            <Box>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(fillPct * 100, 100)}
+                color={isFull ? "error" : fillPct >= 0.75 ? "warning" : "primary"}
+                sx={{ borderRadius: 1, height: 6 }}
+              />
+              {nudge && (
+                <Typography variant="caption" fontWeight={600} sx={{ mt: 0.5, display: "block", color: isFull ? "error.main" : fillPct >= 0.8 ? "warning.main" : "text.secondary" }}>
+                  {nudge}
+                </Typography>
+              )}
+            </Box>
+          );
+        })()}
 
         {playerError && <Alert severity="error" onClose={() => onPlayerErrorChange(null)}>{playerError}</Alert>}
 
@@ -349,7 +340,7 @@ export function PlayerList({
               typeof option === "string" ? option : option.name
             }
             isOptionEqualToValue={(option, value) =>
-              option.type === value.type && option.name === value.name
+              typeof option !== "string" && typeof value !== "string" && option.type === value.type && option.name === value.name
             }
             value={null}
             inputValue={playerInput}
@@ -380,7 +371,6 @@ export function PlayerList({
                 size="small"
                 placeholder={t("addPlayerPlaceholder")}
                 fullWidth
-                inputProps={{ ...params.inputProps, maxLength: 120 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     const trimmed = playerInput.trim();
@@ -415,26 +405,29 @@ export function PlayerList({
                     Promise.all(names.map((n) => onAddPlayer(n))).then(() => setPlayerInput(""));
                   }
                 }}
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: contactPickerSupported ? (
-                    <InputAdornment position="start">
-                      <Tooltip title={t("addFromContacts")}>
-                        <IconButton
-                          size="small"
-                          color="primary"
-                          edge="start"
-                          data-testid="pick-contact"
-                          aria-label={t("addFromContacts")}
-                          onClick={handlePickContact}
-                        >
-                          <ContactsIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </InputAdornment>
-                  ) : undefined,
-                }}
-              />
+                slotProps={{
+                  input: {
+                    ...params.slotProps.input,
+                    startAdornment: contactPickerSupported ? (
+                      <InputAdornment position="start">
+                        <Tooltip title={t("addFromContacts")}>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            edge="start"
+                            data-testid="pick-contact"
+                            aria-label={t("addFromContacts")}
+                            onClick={handlePickContact}
+                          >
+                            <ContactsIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </InputAdornment>
+                    ) : undefined,
+                  },
+
+                  htmlInput: { ...params.slotProps.htmlInput, maxLength: 120 }
+                }} />
             )}
             renderOption={(props, option) => {
               const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
@@ -594,7 +587,9 @@ export function PlayerList({
                          {player.name}
                        </a>
                      ) : player.name}
-                     primaryTypographyProps={{ fontWeight: 500, fontSize: "0.9rem" }}
+                     slotProps={{
+                       primary: { sx: { fontWeight: 500, fontSize: "0.9rem" } }
+                     }}
                    />
                 </ListItem>
               ))}
@@ -657,7 +652,9 @@ export function PlayerList({
                             {`${i + 1}. ${player.name}`}
                           </a>
                         ) : `${i + 1}. ${player.name}`}
-                        primaryTypographyProps={{ fontWeight: 500, fontSize: "0.9rem" }}
+                        slotProps={{
+                          primary: { sx: { fontWeight: 500, fontSize: "0.9rem" } }
+                        }}
                       />
                     </ListItem>
                   );

@@ -3,7 +3,7 @@ import {
   Box, Button, Stack, Typography,
 } from "@mui/material";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
-import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
+import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutlined";
 import { useT } from "~/lib/useT";
 import type { RsvpStatus } from "~/lib/rsvp";
 
@@ -62,7 +62,7 @@ export function AttendanceCta({
             color={myRsvpStatus === "yes" ? "success" : "inherit"}
             startIcon={<HowToRegIcon />}
             onClick={onGoing}
-            disabled={busy || myRsvpStatus === "yes"}
+            disabled={busy || (myRsvpStatus === "yes" && isOnList)}
             data-testid="attendance-cta-going"
           >
             {goingLabel}

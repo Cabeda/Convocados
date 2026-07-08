@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Chip, Button,
-  CircularProgress, useTheme, Grid2, ToggleButtonGroup, ToggleButton,
+  CircularProgress, useTheme, Grid, ToggleButtonGroup, ToggleButton,
   FormControlLabel, Switch, FormControl, Select, MenuItem, InputLabel,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert,
 } from "@mui/material";
@@ -13,6 +13,7 @@ import PeopleIcon from "@mui/icons-material/People";
 import GridViewIcon from "@mui/icons-material/GridView";
 import TableRowsIcon from "@mui/icons-material/TableRows";
 import MapIcon from "@mui/icons-material/Map";
+import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -32,6 +33,7 @@ interface PublicEvent {
   maxPlayers: number;
   playerCount: number;
   spotsLeft: number;
+  isRecurring: boolean;
 }
 
 interface PaginatedPublicEvents {
@@ -50,13 +52,13 @@ function CardView({ events, locale, t }: {
   t: TFunction;
 }) {
   return (
-    <Grid2 container spacing={2}>
+    <Grid container spacing={2}>
       {events.map((ev) => {
         const date = new Date(ev.dateTime);
         const isFull = ev.spotsLeft === 0;
         const sportPreset = getSportPreset(ev.sport);
         return (
-          <Grid2 key={ev.id} size={{ xs: 12, sm: 6 }}>
+          <Grid key={ev.id} size={{ xs: 12, sm: 6 }}>
             <Paper
               elevation={2}
               sx={{
@@ -70,13 +72,23 @@ function CardView({ events, locale, t }: {
                 <Typography variant="h6" fontWeight={700} noWrap sx={{ flex: 1 }}>
                   {ev.title}
                 </Typography>
-                <Chip
-                  label={t(sportPreset.labelKey as Parameters<typeof t>[0])}
-                  size="small"
-                  variant="outlined"
-                  color="primary"
-                  sx={{ ml: 1, flexShrink: 0 }}
-                />
+                <Box sx={{ display: "flex", gap: 0.5, ml: 1, flexShrink: 0 }}>
+                  <Chip
+                    label={t(sportPreset.labelKey as Parameters<typeof t>[0])}
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                  />
+                  {ev.isRecurring && (
+                    <Chip
+                      icon={<EventRepeatIcon />}
+                      label={t("recurring")}
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                    />
+                  )}
+                </Box>
               </Box>
 
               <Stack spacing={0.5}>
@@ -126,10 +138,10 @@ function CardView({ events, locale, t }: {
                 </Button>
               </Box>
             </Paper>
-          </Grid2>
+          </Grid>
         );
       })}
-    </Grid2>
+    </Grid>
   );
 }
 
@@ -151,6 +163,7 @@ function TableView({ events, locale, t }: {
             <TableCell sx={{ fontWeight: 700 }}>{t("tableDateTime")}</TableCell>
             <TableCell sx={{ fontWeight: 700 }}>{t("tablePlayers")}</TableCell>
             <TableCell sx={{ fontWeight: 700 }}>{t("tableStatus")}</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>{t("tableType")}</TableCell>
             <TableCell />
           </TableRow>
         </TableHead>
@@ -194,6 +207,13 @@ function TableView({ events, locale, t }: {
                     <Chip label={t("full")} size="small" color="error" />
                   ) : (
                     <Chip label={t("spotsLeft", { n: ev.spotsLeft })} size="small" color="success" />
+                  )}
+                </TableCell>
+                <TableCell>
+                  {ev.isRecurring ? (
+                    <Chip icon={<EventRepeatIcon />} label={t("recurring")} size="small" color="secondary" variant="outlined" />
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">{t("oneOff")}</Typography>
                   )}
                 </TableCell>
                 <TableCell>
@@ -333,6 +353,7 @@ export default function PublicGamesPage() {
   const [viewMode, setViewMode] = useState<ViewMode>(initial.view);
   const [filterSport, setFilterSport] = useState(initial.sport);
   const [filterHasSpots, setFilterHasSpots] = useState(initial.hasSpots);
+  const [filterType, setFilterType] = useState<"" | "recurring" | "oneoff">("");
 
   // Sync filters to URL
   useEffect(() => {
@@ -341,10 +362,11 @@ export default function PublicGamesPage() {
     if (viewMode !== "cards") params.set("view", viewMode);
     if (filterSport) params.set("sport", filterSport);
     if (filterHasSpots) params.set("hasSpots", "true");
+    if (filterType) params.set("type", filterType);
     const qs = params.toString();
     const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, "", newUrl);
-  }, [viewMode, filterSport, filterHasSpots]);
+  }, [viewMode, filterSport, filterHasSpots, filterType]);
 
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -390,9 +412,11 @@ export default function PublicGamesPage() {
     return events.filter((ev) => {
       if (filterSport && ev.sport !== filterSport) return false;
       if (filterHasSpots && ev.spotsLeft === 0) return false;
+      if (filterType === "recurring" && !ev.isRecurring) return false;
+      if (filterType === "oneoff" && ev.isRecurring) return false;
       return true;
     });
-  }, [events, filterSport, filterHasSpots]);
+  }, [events, filterSport, filterHasSpots, filterType]);
 
   return (
     <ThemeModeProvider>
@@ -427,6 +451,18 @@ export default function PublicGamesPage() {
                       {availableSports.map((s) => (
                         <MenuItem key={s.id} value={s.id}>{t(s.labelKey as Parameters<typeof t>[0])}</MenuItem>
                       ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" sx={{ minWidth: 140 }}>
+                    <InputLabel>{t("filterType")}</InputLabel>
+                    <Select
+                      value={filterType}
+                      label={t("filterType")}
+                      onChange={(e) => setFilterType(e.target.value as "" | "recurring" | "oneoff")}
+                    >
+                      <MenuItem value="">{t("allTypes")}</MenuItem>
+                      <MenuItem value="recurring">{t("recurring")}</MenuItem>
+                      <MenuItem value="oneoff">{t("oneOff")}</MenuItem>
                     </Select>
                   </FormControl>
                   <FormControlLabel

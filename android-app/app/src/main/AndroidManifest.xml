@@ -26,6 +26,19 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="convocados.fly.dev" />
+                <data android:host="convocados.cabeda.dev" />
+                <data android:pathPrefix="/events/" />
+                <data android:pathPrefix="/games" />
+                <data android:pathPrefix="/dashboard" />
+                <data android:pathPrefix="/profile" />
+                <data android:pathPrefix="/auth/" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -44,6 +57,10 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <receiver
+            android:name=".data.push.NotificationActionReceiver"
+            android:exported="false" />
 
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
