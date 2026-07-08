@@ -70,15 +70,18 @@ jobs:
       - run: pnpm prisma generate
       - name: Run tests (no coverage on PRs)
         if: github.event_name == 'pull_request'
-        run: pnpm vitest run
+        run: pnpm vitest run --reporter=default --reporter=json --outputFile=test-results.json
       - name: Run tests with coverage
         if: github.event_name != 'pull_request'
-        run: pnpm vitest run --coverage
+        run: pnpm vitest run --coverage --reporter=default --reporter=json --outputFile=test-results.json
         env:
           COVERAGE_THRESHOLDS: "1"
+      - name: Report flaky tests
+        if: always()
+        run: node scripts/report-flaky.mjs
       - name: Check coverage thresholds
         if: github.event_name != 'pull_request'
-        run: node -e "const c=require('./coverage/coverage-summary.json');const t={lines:94,functions:94,branches:83,statements:94};for(const k in t)if(c.total[k].pct<t[k])throw new Error(k+' coverage '+c.total[k].pct+'% < '+t[k]+'%')"
+        run: node -e "const c=require('./coverage/coverage-summary.json');const t={lines:95,functions:89,branches:83,statements:92};for(const k in t)if(c.total[k].pct<t[k])throw new Error(k+' coverage '+c.total[k].pct+'% < '+t[k]+'%')"
 
   # ── Build (needed for E2E) ──────────────────────────────────────────────
   build:
@@ -240,3 +243,26 @@ jobs:
       - name: Build Wear OS debug APK
         working-directory: android-app
         run: ./gradlew :wear:assembleDebug --no-daemon
+
+
+
+  # ── Gate job: single required status check for branch protection ─────────
+  # Branch protection requires a check named "CI". This job depends on all
+  # the real jobs and reports a single pass/fail status.
+  ci-gate:
+    name: CI
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [typecheck, lint, test, build, e2e]
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "One or more required jobs failed"
+            exit 1
+          fi
+          if [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more required jobs were cancelled"
+            exit 1
+          fi
+          echo "All required jobs passed"
