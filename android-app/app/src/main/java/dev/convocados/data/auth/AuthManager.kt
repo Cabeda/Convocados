@@ -12,6 +12,7 @@ import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.convocados.BuildConfig
 import dev.convocados.data.api.ApiClient
 import dev.convocados.data.api.OAuthTokenResponse
 import io.ktor.client.*
@@ -233,14 +234,8 @@ class AuthManager @Inject constructor(
     }
 
     private fun getWebClientId(): String {
-        // ponytail: uses the web client ID (not android client ID) for Credential Manager.
-        // The web client ID is what Google's ID token `aud` field will contain.
-        // Set via BuildConfig or fall back to env-injected string resource.
-        return try {
-            context.getString(context.resources.getIdentifier("default_web_client_id", "string", context.packageName))
-        } catch (_: Exception) {
-            // Fallback — should be set in google-services.json
-            ""
-        }
+        // ponytail: reads web client ID from BuildConfig (injected via local.properties in CI).
+        // Same approach as wear module — avoids dependency on google-services.json oauth_client.
+        return BuildConfig.GOOGLE_SERVER_CLIENT_ID
     }
 }
