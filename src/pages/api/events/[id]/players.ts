@@ -350,7 +350,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const senderClientId = session?.user?.id ?? request.headers.get("x-client-id") ?? undefined;
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    include: { players: { orderBy: { order: "asc" } } },
+    include: { players: { where: { archivedAt: null }, orderBy: { order: "asc" } } },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
