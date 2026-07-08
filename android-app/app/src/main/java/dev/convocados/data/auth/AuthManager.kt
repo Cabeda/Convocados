@@ -69,9 +69,15 @@ class AuthManager @Inject constructor(
 
     /** Build the Credential Manager request for Google Sign-In. */
     fun buildGoogleSignInRequest(): GetCredentialRequest {
+        val clientId = getWebClientId()
+        require(clientId.isNotBlank()) {
+            "Google Sign-In not configured: default_web_client_id is missing. " +
+                "Ensure google-services.json is present."
+        }
+
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(getWebClientId())
+            .setServerClientId(clientId)
             .setAutoSelectEnabled(true)
             .build()
 
@@ -207,8 +213,10 @@ class AuthManager @Inject constructor(
             setBody(mapOf("action" to "google-id-token", "idToken" to idToken))
         }
         if (!response.status.isSuccess()) {
-            val err = runCatching { response.body<MobileAuthMessage>() }.getOrNull()
-            throw Exception(err?.error ?: "Google token exchange failed")
+            val errBody = runCatching { response.body<MobileAuthMessage>() }.getOrNull()
+            val msg = errBody?.error ?: errBody?.message ?: "Google token exchange failed (${response.status})"
+            Log.e(TAG, "Token exchange failed: status=${response.status}, error=$msg")
+            throw Exception(msg)
         }
         return response.body()
     }

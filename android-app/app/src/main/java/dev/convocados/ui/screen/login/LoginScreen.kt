@@ -75,6 +75,8 @@ class LoginViewModel @Inject constructor(
                 handleResult(result)
             } catch (e: GetCredentialException) {
                 handleResult(authManager.handleCredentialError(e))
+            } catch (e: Exception) {
+                handleResult(AuthResult.Error(e.message ?: "Google sign-in failed"))
             }
         }
     }
