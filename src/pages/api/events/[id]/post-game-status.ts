@@ -34,7 +34,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   // ponytail: cancelled games have no post-game actions (no score, no payments, no MVP).
   // Suppress the banner entirely when the most recent history is "cancelled".
-  if (latestHistory?.status === "cancelled" && gameEnded) {
+  if (latestHistory?.status === "cancelled") {
     return Response.json({
       gameEnded: false, hasScore: false, hasCost: false, allPaid: true,
       allComplete: true, isParticipant: false, latestHistoryId: null,
