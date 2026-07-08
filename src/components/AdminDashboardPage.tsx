@@ -51,15 +51,15 @@ interface UsageSummary {
   dauToday: number;
   wau: number;
   mau: number;
-  platforms: { android: number; ios: number; desktop: number };
+  platforms: { android: number; web: number };
+  webDrillDown: { browsers: Record<string, number>; os: Record<string, number> };
 }
 
 interface UsagePoint {
   date: string;
   dau: number;
   android: number;
-  ios: number;
-  desktop: number;
+  web: number;
 }
 
 type GrowthRange = "30d" | "1y" | "all";
@@ -383,11 +383,32 @@ export default function AdminDashboardPage() {
                       {/* Platform breakdown */}
                       <Box>
                         <Typography variant="subtitle2" fontWeight={600} gutterBottom>{t("adminPlatformBreakdown")}</Typography>
-                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
                           <Chip label={`Android: ${usageSummary.platforms.android}`} color="success" variant="outlined" />
-                          <Chip label={`iOS: ${usageSummary.platforms.ios}`} color="info" variant="outlined" />
-                          <Chip label={`Desktop: ${usageSummary.platforms.desktop}`} variant="outlined" />
+                          <Chip label={`Web: ${usageSummary.platforms.web}`} color="primary" variant="outlined" />
                         </Stack>
+
+                        {/* Web drill-down */}
+                        {usageSummary.platforms.web > 0 && usageSummary.webDrillDown && (
+                          <Stack spacing={1} sx={{ pl: 2, borderLeft: 3, borderColor: "primary.main" }}>
+                            <Typography variant="caption" fontWeight={600} color="text.secondary">{t("adminWebBrowsers")}</Typography>
+                            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                              {Object.entries(usageSummary.webDrillDown.browsers)
+                                .sort(([, a], [, b]) => b - a)
+                                .map(([name, count]) => (
+                                  <Chip key={name} label={`${name}: ${count}`} size="small" variant="outlined" />
+                                ))}
+                            </Stack>
+                            <Typography variant="caption" fontWeight={600} color="text.secondary">{t("adminWebOS")}</Typography>
+                            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                              {Object.entries(usageSummary.webDrillDown.os)
+                                .sort(([, a], [, b]) => b - a)
+                                .map(([name, count]) => (
+                                  <Chip key={name} label={`${name}: ${count}`} size="small" variant="outlined" />
+                                ))}
+                            </Stack>
+                          </Stack>
+                        )}
                       </Box>
 
                       {/* DAU timeline chart */}
@@ -401,9 +422,8 @@ export default function AdminDashboardPage() {
                               <RechartsTooltip content={<ChartTooltip />} />
                               <Legend />
                               <Line type="monotone" dataKey="dau" name="DAU" stroke="#4caf50" strokeWidth={2} dot={false} />
-                              <Line type="monotone" dataKey="android" name="Android" stroke="#66bb6a" strokeWidth={1} dot={false} strokeDasharray="4 2" />
-                              <Line type="monotone" dataKey="ios" name="iOS" stroke="#42a5f5" strokeWidth={1} dot={false} strokeDasharray="4 2" />
-                              <Line type="monotone" dataKey="desktop" name="Desktop" stroke="#ab47bc" strokeWidth={1} dot={false} strokeDasharray="4 2" />
+                              <Line type="monotone" dataKey="android" name="Android" stroke="#66bb6a" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+                              <Line type="monotone" dataKey="web" name="Web" stroke="#42a5f5" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
                             </LineChart>
                           </ResponsiveContainer>
                         </Box>

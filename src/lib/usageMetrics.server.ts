@@ -1,38 +1,65 @@
 /**
  * Anonymous usage metrics derived from existing Session + UserAppOpen tables.
  * No individual tracking — only aggregated counts.
+ *
+ * Platform split: Android (native app) vs Web (everything else).
+ * Web drill-down: browser (Chrome, Safari, Firefox, etc.) + OS (Windows, macOS, Linux, iOS, Android).
  */
 import { prisma } from "./db.server";
 
-// ponytail: parse platform from user-agent string. Intentionally coarse —
-// we only care about iOS/Android/Desktop, not specific device models.
-function parsePlatform(ua: string | null): "android" | "ios" | "desktop" | "unknown" {
-  if (!ua) return "unknown";
+// ponytail: "android" = native app (user-agent contains "Convocados" or specific
+// Android WebView patterns from the native app's Ktor client). Everything else = web.
+function isAndroidApp(ua: string | null): boolean {
+  if (!ua) return false;
   const lower = ua.toLowerCase();
-  if (lower.includes("android") || lower.includes("convocados")) return "android";
-  if (lower.includes("iphone") || lower.includes("ipad") || lower.includes("ipod")) return "ios";
-  if (lower.includes("mobile") && !lower.includes("android")) return "ios"; // Safari mobile
-  return "desktop";
+  // The native Android app uses Ktor which includes "ktor" or the app sets a custom UA with "Convocados"
+  return lower.includes("convocados") || (lower.includes("ktor") && lower.includes("android"));
+}
+
+function parseBrowser(ua: string | null): string {
+  if (!ua) return "Unknown";
+  if (ua.includes("Firefox/") || ua.includes("FxiOS/")) return "Firefox";
+  if (ua.includes("Edg/") || ua.includes("EdgA/") || ua.includes("EdgiOS/")) return "Edge";
+  if (ua.includes("OPR/") || ua.includes("Opera/")) return "Opera";
+  if (ua.includes("SamsungBrowser/")) return "Samsung";
+  if (ua.includes("CriOS/") || ua.includes("Chrome/")) return "Chrome";
+  if (ua.includes("Safari/") && !ua.includes("Chrome/")) return "Safari";
+  return "Other";
+}
+
+function parseOS(ua: string | null): string {
+  if (!ua) return "Unknown";
+  const lower = ua.toLowerCase();
+  if (lower.includes("iphone") || lower.includes("ipad") || lower.includes("ipod")) return "iOS";
+  if (lower.includes("android")) return "Android";
+  if (lower.includes("windows")) return "Windows";
+  if (lower.includes("mac os") || lower.includes("macintosh")) return "macOS";
+  if (lower.includes("linux") && !lower.includes("android")) return "Linux";
+  if (lower.includes("cros")) return "ChromeOS";
+  return "Other";
 }
 
 export interface DailyUsage {
   date: string;
   dau: number;
   android: number;
-  ios: number;
-  desktop: number;
+  web: number;
+}
+
+export interface WebDrillDown {
+  browsers: Record<string, number>;
+  os: Record<string, number>;
 }
 
 /**
  * DAU over time from UserAppOpen (one row per user per day).
- * Platform breakdown from Session.userAgent for sessions active on that day.
+ * Platform breakdown: Android (native) vs Web.
  */
 export async function getDailyUsage(days = 30): Promise<DailyUsage[]> {
   const since = new Date();
   since.setDate(since.getDate() - days);
   since.setHours(0, 0, 0, 0);
 
-  // DAU from UserAppOpen
   const appOpens = await prisma.userAppOpen.findMany({
     where: { day: { gte: since } },
     select: { userId: true, day: true },
@@ -45,11 +72,10 @@ export async function getDailyUsage(days = 30): Promise<DailyUsage[]> {
     orderBy: { createdAt: "desc" },
   });
 
-  // Build user → platform map (most recent session wins)
-  const userPlatform = new Map<string, "android" | "ios" | "desktop" | "unknown">();
+  const userIsAndroid = new Map<string, boolean>();
   for (const s of sessions) {
-    if (!userPlatform.has(s.userId)) {
-      userPlatform.set(s.userId, parsePlatform(s.userAgent));
+    if (!userIsAndroid.has(s.userId)) {
+      userIsAndroid.set(s.userId, isAndroidApp(s.userAgent));
     }
   }
 
@@ -62,20 +88,16 @@ export async function getDailyUsage(days = 30): Promise<DailyUsage[]> {
     dayMap.set(day, set);
   }
 
-  // Build result sorted by date
   const result: DailyUsage[] = [];
   const sortedDays = [...dayMap.keys()].sort();
   for (const day of sortedDays) {
     const users = dayMap.get(day)!;
-    let android = 0, ios = 0, desktop = 0;
+    let android = 0, web = 0;
     for (const userId of users) {
-      const platform = userPlatform.get(userId) ?? "unknown";
-      if (platform === "android") android++;
-      else if (platform === "ios") ios++;
-      else if (platform === "desktop") desktop++;
-      else desktop++; // unknown → desktop bucket
+      if (userIsAndroid.get(userId)) android++;
+      else web++;
     }
-    result.push({ date: day, dau: users.size, android, ios, desktop });
+    result.push({ date: day, dau: users.size, android, web });
   }
 
   return result;
@@ -102,19 +124,26 @@ export async function getUsageSummary() {
     }),
   ]);
 
-  // Platform breakdown from sessions in last 30 days
+  // Platform + web drill-down from sessions in last 30 days
   const recentSessions = await prisma.session.findMany({
     where: { createdAt: { gte: thirtyDaysAgo } },
     select: { userId: true, userAgent: true },
     distinct: ["userId"],
   });
 
-  const platforms = { android: 0, ios: 0, desktop: 0 };
+  const platforms = { android: 0, web: 0 };
+  const webDrillDown: WebDrillDown = { browsers: {}, os: {} };
+
   for (const s of recentSessions) {
-    const p = parsePlatform(s.userAgent);
-    if (p === "android") platforms.android++;
-    else if (p === "ios") platforms.ios++;
-    else platforms.desktop++;
+    if (isAndroidApp(s.userAgent)) {
+      platforms.android++;
+    } else {
+      platforms.web++;
+      const browser = parseBrowser(s.userAgent);
+      const os = parseOS(s.userAgent);
+      webDrillDown.browsers[browser] = (webDrillDown.browsers[browser] ?? 0) + 1;
+      webDrillDown.os[os] = (webDrillDown.os[os] ?? 0) + 1;
+    }
   }
 
   return {
@@ -122,5 +151,6 @@ export async function getUsageSummary() {
     wau: wau.length,
     mau: mau.length,
     platforms,
+    webDrillDown,
   };
 }
