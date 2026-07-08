@@ -76,7 +76,7 @@ class ApiClient @Inject constructor(private val tokenStore: TokenStore) {
         val tokens = tokenStore.getTokens() ?: throw ApiException(401, "No refresh token")
         val response = client.post("$baseUrl/api/auth/oauth2/token") {
             contentType(ContentType.Application.FormUrlEncoded)
-            setBody("grant_type=refresh_token&refresh_token=${tokens.refreshToken}&client_id=mobile-app")
+            setBody("grant_type=refresh_token&refresh_token=${tokens.refreshToken}&client_id=convocados-mobile-app")
         }
         if (!response.status.isSuccess()) {
             tokenStore.clearTokens()

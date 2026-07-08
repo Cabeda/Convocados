@@ -1,9 +1,9 @@
 [versions]
 agp = "9.2.1"
-kotlin = "2.4.0"
+kotlin = "2.3.21"
 ksp = "2.3.9"
 googleServices = "4.4.4"
-hilt = "2.59.2"
+hilt = "2.60.1"
 composeBom = "2025.06.00"
 androidxCore = "1.16.0"
 androidxLifecycle = "2.9.1"

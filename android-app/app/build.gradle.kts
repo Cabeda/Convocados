@@ -142,9 +142,14 @@ dependencies {
     // Security (encrypted shared prefs for tokens)
     implementation(libs.androidx.security.crypto)
 
-    // Browser (Custom Tabs for OAuth)
+    // Browser (Custom Tabs for OAuth — kept as fallback)
     implementation(libs.androidx.browser)
     implementation(libs.androidx.appcompat)
+
+    // Credential Manager (native auth: Google Sign-In, passwords, passkeys)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play)
+    implementation(libs.google.id.identity)
 
     // Splash screen
     implementation(libs.androidx.core.splashscreen)
