@@ -116,11 +116,14 @@ export default defineConfig({
         "src/pages/api/users/[id]/calendar.ics.ts",
         "src/test/**",
       ],
-      // ponytail: lines/branches at 95%, statements/functions at current measured values.
-      // Statements metric in V8 counts per-expression (ternaries, chains) — harder to reach 95%.
-      // email.server.ts excluded (Resend HTML templates, better tested visually/integration).
-      // Remaining small gaps: priority.server.ts (autoPriorityEnroll), creditExpiry P2002 path.
-      thresholds: { lines: 95, functions: 83, branches: 83, statements: 92 },
+      // ponytail: thresholds set at current measured values (2026-07-08).
+      // Lines at 95% is the headline metric. Other metrics have structural ceilings:
+      //   - Functions 89%: remaining 19 uncovered are .catch(() => {}) and setInterval callbacks
+      //   - Branches 83%: 542 gap from ternaries, ??, || spread across all files
+      //   - Statements 92%: correlated with branches (uncovered branch = uncovered expression)
+      // email.server.ts excluded (Resend HTML templates, tested via integration/E2E).
+      // Upgrade path: mutation testing (Stryker) validates assertion quality where coverage can't.
+      thresholds: { lines: 95, functions: 89, branches: 83, statements: 92 },
     },
   },
 });

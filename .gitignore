@@ -75,3 +75,11 @@ android-app/release-output/
 *.jks
 *.aab
 play-service-account.json
+
+
+
+# Mutation testing reports
+reports/
+.stryker-tmp/
+
+test-results.json
