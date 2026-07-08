@@ -121,7 +121,6 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
           />
         </Box>
       )}
-
       <Stack
         spacing={2}
         onPointerMove={drag ? handlePointerMove : undefined}
@@ -181,11 +180,13 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
                         }
                         if (e.key === "Escape") setEditingTeam(null);
                       }}
-                      inputProps={{ maxLength: 50 }}
                       sx={{
                         flex: 1,
                         "& .MuiInputBase-root": { bgcolor: "background.paper", borderRadius: 1.5 },
                         "& .MuiInputBase-input": { py: 0.5, px: 1, fontSize: "0.9rem", fontWeight: 700 },
+                      }}
+                      slotProps={{
+                        htmlInput: { maxLength: 50 }
                       }}
                     />
                     <IconButton size="small" onClick={() => {
@@ -240,7 +241,6 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
                   )}
                 </Stack>
               </Box>
-
               {/* Player list */}
               {n > 0 ? (
                 <List dense disablePadding sx={{
@@ -281,16 +281,15 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
                         <ListItemText
                           primary={player.name}
                           secondary={ratingsMap ? `${Math.round(ratingsMap[player.name] ?? 1000)}` : undefined}
-                          primaryTypographyProps={{
-                            fontWeight: 500,
-                            fontSize: "0.9rem",
-                          }}
-                          secondaryTypographyProps={{
-                            fontSize: "0.75rem",
-                            fontWeight: 600,
-                            color: "text.secondary",
-                          }}
-                        />
+                          slotProps={{
+                            primary: {
+                              sx: { fontWeight: 500, fontSize: "0.9rem" },
+                            },
+
+                            secondary: {
+                              sx: { fontSize: "0.75rem", fontWeight: 600, color: "text.secondary" },
+                            }
+                          }} />
                         <Box
                           onPointerDown={(e) => handlePointerDown(e, player.name, team.team)}
                           sx={{
