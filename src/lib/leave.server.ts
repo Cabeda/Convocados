@@ -152,9 +152,9 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
 
   // Auto-sync teams: remove player, optionally promote bench player into their team
   if (wasActive) {
-    await removePlayerFromTeams(eventId, player.name, firstBench?.name);
+    await removePlayerFromTeams(eventId, player.name, firstBench?.name, currentGameId);
   }
-  await validateTeams(eventId, event.maxPlayers);
+  await validateTeams(eventId, event.maxPlayers, currentGameId);
 
   // spotsLeft after removal
   const activeAfter = wasActive

@@ -4,6 +4,9 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
@@ -126,6 +129,7 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processing
             NavHost(
                 navController = navController,
                 startDestination = startDestination,
+                modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars),
             ) {
                 composable(Route.Login.route) {
                     // ADR-0012: post-login navigation is owned by the LaunchedEffect
