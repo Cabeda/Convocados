@@ -216,6 +216,15 @@ _Avoid_: historical payment, retroactive payment, settle past
 The per-player × per-game grid rendered on the **Payments** tab of `/events/[id]/settle`. Shows the frozen `GameHistory.paymentsSnapshot` status for every (player, historical game) pair, netted against any Historical Settlement, with one-click Owner/Admin actions to record a settlement. Inspired by settleup.app's per-activity entry list. The canonical place to see money state across the whole event in one view.
 _Avoid_: payments grid, activity feed (already used for a per-user ledger view), all-payments view
 
+## Ghost User
+A real `User` row with `id = "ghost:{eventPlayerId}"` and email
+`ghost-{eventPlayerId}@system.local`, created during the
+Player → EventPlayer backfill (ADR 0019) for legacy players without
+a `userId`. The synthetic id is stable across renames of the
+`EventPlayer.name` because the read path joins on `userId`, not on
+name. The original-name drift problem (e.g. `Gonçalo` vs `Gonçalo
+Silva` in the same event) is fixed at the source. ADR 0019.
+
 ## Manager-initiated add
 A Player record created by the Event Owner or an Admin acting on behalf of someone else — typically a guest with no Convocados account, or a registered user the organizer is adding. Distinct from a self-initiated add (Quick Join, Claim), where the player themselves triggered the action.
 
