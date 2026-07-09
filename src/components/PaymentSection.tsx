@@ -204,23 +204,6 @@ export function PaymentSection({
     fetchCost();
   };
 
-  const handleTogglePayment = async (playerName: string, currentStatus: string) => {
-    const nextStatus = currentStatus === "pending" ? "paid" : "pending";
-    await fetch(`/api/events/${eventId}/payments`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerName, status: nextStatus }),
-    });
-    fetchCost();
-    onPaymentChange?.();
-  };
-
-  const handleBulkMarkPaid = async () => {
-    await fetch(`/api/events/${eventId}/payments/bulk`, { method: "PUT" });
-    fetchCost();
-    onPaymentChange?.();
-  };
-
   const handleCopy = async (text: string, id: string) => {
     await navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -290,11 +273,6 @@ export function PaymentSection({
 
   const removeOverrideMethod = (idx: number) => {
     setOverrideMethodsDraft((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const statusColor = (status: string): "success" | "default" => {
-    if (status === "paid") return "success";
-    return "default";
   };
 
   if (shouldHide) return null;
@@ -782,50 +760,22 @@ export function PaymentSection({
                   </Paper>
                 )}
 
-                {/* Per-player payment chips */}
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                  {costData.payments.map((p) => (
-                    <Chip
-                      key={p.playerName}
-                      label={`${p.playerName} — ${p.amount.toFixed(2)}`}
-                      color={statusColor(p.status)}
-                      variant={p.status === "pending" ? "outlined" : "filled"}
-                      size="small"
-                      onClick={canEdit ? () => handleTogglePayment(p.playerName, p.status) : undefined}
-                      sx={{
-                        cursor: canEdit ? "pointer" : "default",
-                        ...(canEdit && {
-                          "&:hover": { opacity: 0.85 },
-                        }),
-                      }}
-                    />
-                  ))}
-                </Box>
+                {/* ADR 0019: per-player chips and bulk button removed from this
+                    surface. The full payment management has moved to the
+                    "Payments" tab in /events/[id]/settle (per-game matrix +
+                    per-player debts). The chip endpoint is still wired in the
+                    API for backwards compat but no longer has a UI here. */}
 
-                {/* Bulk mark all as paid */}
-                {canEdit && costData.payments.some((p) => p.status !== "paid") && (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="success"
-                    onClick={handleBulkMarkPaid}
-                    startIcon={<CheckIcon />}
-                  >
-                    {t("bulkMarkAllPaid")}
-                  </Button>
-                )}
-
-                {/* Legend */}
-                <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                    <Chip label="" size="small" color="success" sx={{ width: 12, height: 12, minWidth: 12 }} />
-                    <Typography variant="caption" color="text.secondary">{t("paymentStatusPaid")}</Typography>
-                  </Box>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                    <Chip label="" size="small" variant="outlined" sx={{ width: 12, height: 12, minWidth: 12 }} />
-                    <Typography variant="caption" color="text.secondary">{t("paymentStatusPending")}</Typography>
-                  </Box>
-                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  component="a"
+                  href={`/events/${eventId}/settle`}
+                  startIcon={<OpenInNewIcon fontSize="small" />}
+                  sx={{ alignSelf: "flex-start", textTransform: "none" }}
+                >
+                  {t("paymentsManageLink") ?? "Manage all payments →"}
+                </Button>
               </Stack>
             ) : canEdit ? (
               <Button variant="outlined" size="small" startIcon={<PaymentsIcon />} onClick={startEditing}>
