@@ -206,7 +206,7 @@ export function PlayerDebtsTab({ eventId, onChange }: { eventId: string; onChang
         <DialogActions>
           <Button onClick={() => setConfirmBulk(null)}>{t("cancel")}</Button>
           <Button
-            onClick={() => confirmBulk && settleAll(confirmBulk)}
+            onClick={() => { if (confirmBulk) { void settleAll(confirmBulk); } }}
             color="success"
             variant="contained"
             startIcon={<CheckIcon />}
