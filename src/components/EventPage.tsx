@@ -956,6 +956,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 onExpandedChange={(exp) => setPaymentExpanded(exp ? true : undefined)}
                 onPaymentChange={() => setBannerRefreshKey((k) => k + 1)}
                 currentUserName={session?.user?.name ?? null}
+                isOnList={!!(session?.user?.id && event.players.some((p) => p.userId === session.user!.id))}
               />
             )}
 

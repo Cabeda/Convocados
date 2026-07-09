@@ -37,6 +37,7 @@ export type EventAction =
   | "player_merged"
   | "override_set"
   | "override_cleared"
+  | "payment_methods_updated"
   | "rsvp_yes"
   | "rsvp_no"
   | "rsvp_maybe"
