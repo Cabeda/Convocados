@@ -210,7 +210,7 @@ export default function SettleUpPage({ eventId }: Props) {
               </Stack>
             )}
             {tab === 1 && (
-              <HistoryTab eventId={eventId} currency={data.event.currency} onChange={fetchData} />
+              <HistoryTab eventId={eventId} onChange={fetchData} />
             )}
           </Stack>
         </Box>
@@ -555,7 +555,7 @@ interface HistoryEntry {
  * History drill-down: lists past games with their payment snapshot so owners
  * can see who still owes what, game by game (ADR 0020).
  */
-function HistoryTab({ eventId, currency, onChange }: { eventId: string; currency: string; onChange: () => void }) {
+function HistoryTab({ eventId, onChange }: { eventId: string; onChange: () => void }) {
   const t = useT();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
