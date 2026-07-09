@@ -72,7 +72,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   if (event.isRecurring) {
     const rule = parseRecurrenceRule(event.recurrenceRule);
     if (rule) {
-      const newDateTime = nextOccurrence(event.dateTime, rule, now);
+      const newDateTime = nextOccurrence(event.dateTime, rule, event.dateTime);
       const newNextResetAt = new Date(newDateTime.getTime() + event.durationMinutes * 60 * 1000);
 
       // Atomically claim the reset (CAS)
