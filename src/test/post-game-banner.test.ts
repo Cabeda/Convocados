@@ -20,6 +20,7 @@ beforeEach(async () => {
   await resetRateLimitStore();
   await resetApiRateLimitStore();
   await prisma.mvpVote.deleteMany();
+  await prisma.walletTransaction.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.gameHistory.deleteMany();
@@ -403,8 +404,130 @@ describe("GET /api/events/:id/post-game-status", () => {
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
     const json = await res.json();
-    expect(json.allPaid).toBe(true);
+    expect(json.mvpComplete).toBe(true);
     expect(json.allComplete).toBe(true);
+  });
+
+  // ─── Historical Settlement netting (ADR 0019) ────────────────────────────
+
+  it("nets a Historical Settlement into the displayed snapshot (settled player shows paid)", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Settled Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+      },
+    });
+    const user = await prisma.user.create({
+      data: { id: "u-kevin", name: "Kevin", email: "kevin@test.com", emailVerified: false },
+    });
+    const history = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: event.dateTime,
+        teamOneName: "A",
+        teamTwoName: "B",
+        scoreOne: 3,
+        scoreTwo: 2,
+        status: "played",
+        paymentsSnapshot: JSON.stringify([
+          { playerName: "Kevin", amount: 25, status: "pending", method: null },
+          { playerName: "Alice", amount: 25, status: "pending", method: null },
+        ]),
+        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+    // Owner recorded Kevin's settlement as a payment_received ledger row.
+    await prisma.walletTransaction.create({
+      data: {
+        eventId: event.id,
+        userId: user.id,
+        amountCents: 2500,
+        currency: "EUR",
+        direction: "credit",
+        reason: "payment_received",
+        statusAfter: "paid",
+        gameHistoryId: history.id,
+        playerName: "Kevin",
+        markedById: user.id,
+      },
+    });
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.allPaid).toBe(false);
+    const kevin = json.paymentsSnapshot.find((p: any) => p.playerName === "Kevin");
+    const alice = json.paymentsSnapshot.find((p: any) => p.playerName === "Alice");
+    expect(kevin.status).toBe("paid");
+    expect(alice.status).toBe("pending");
+  });
+
+  it("reports paymentWriteMode='historical' when reading from a frozen snapshot", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Settled Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+      },
+    });
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: event.dateTime,
+        teamOneName: "A",
+        teamTwoName: "B",
+        scoreOne: 3,
+        scoreTwo: 2,
+        status: "played",
+        paymentsSnapshot: JSON.stringify([
+          { playerName: "Kevin", amount: 25, status: "pending", method: null },
+        ]),
+        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.paymentWriteMode).toBe("historical");
+  });
+
+  it("reports paymentWriteMode='live' when reading from live payments (no snapshot yet)", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Live Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+      },
+    });
+    const cost = await prisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 50, currency: "EUR" },
+    });
+    await prisma.playerPayment.create({
+      data: { eventCostId: cost.id, playerName: "Kevin", amount: 50, status: "pending" },
+    });
+    // History exists but without a snapshot (same game, not yet reset).
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: event.dateTime,
+        teamOneName: "A",
+        teamTwoName: "B",
+        scoreOne: 3,
+        scoreTwo: 2,
+        status: "played",
+        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.paymentWriteMode).toBe("live");
   });
 
   it("returns latestHistoryId and paymentsSnapshot for banner rendering", async () => {

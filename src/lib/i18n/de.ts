@@ -879,6 +879,8 @@ const de: TranslationKeys = {
   eventArchived: "Event archiviert.",
   eventUnarchived: "Event wiederhergestellt.",
   archivedBadge: "Archiviert",
+  headerNextGameCost: "{per} {currency} / Spieler",
+  headerNextGameCostTotal: "Gesamtkosten des Spiels: {total} {currency}",
   archivePlayer: "Spieler archivieren",
   archivePlayerDesc: "Archivierte Spieler werden aus der Spielerliste ausgeblendet. Verwende dies für doppelte Konten oder inaktive Spieler.",
   archivePlayerBtn: "Archivieren",
@@ -1124,6 +1126,11 @@ const de: TranslationKeys = {
 
   // Settle Up — English fallback, see src/lib/i18n/en.ts
   settleUpTitle: "Settle Up",
+  settleTabStatus: "Status",
+  settleTabHistory: "Verlauf",
+  settlePaymentsMethodTitle: "Zahlungsmethode",
+  settlePaymentsMethodChange: "Methode ändern",
+  settleHistoryEmpty: "Noch keine vergangenen Spiele.",
   settleTabSettle: "Settle",
   settleTabActivity: "Deine Aktivität",
   settleTabExtras: "Extras",
