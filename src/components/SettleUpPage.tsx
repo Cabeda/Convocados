@@ -9,7 +9,10 @@ import CloseIcon from "@mui/icons-material/Close";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import HistoryIcon from "@mui/icons-material/History";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import GridOnIcon from "@mui/icons-material/GridOn";
 import { useT } from "~/lib/useT";
+import { PaymentsMatrixTab } from "./PaymentsMatrixTab";
+import { PlayerDebtsTab } from "./PlayerDebtsTab";
 
 interface Props {
   eventId: string;
@@ -154,14 +157,35 @@ export function SettleUpPage({ eventId }: Props) {
             <Tab icon={<ReceiptIcon />} iconPosition="start" label={t("settleTabSettle") ?? "Settle"} />
             <Tab icon={<HistoryIcon />} iconPosition="start" label={t("settleTabActivity") ?? "Your activity"} />
             <Tab icon={<AccountBalanceWalletIcon />} iconPosition="start" label={t("settleTabExtras") ?? "Extras"} />
+            {data.admin && (
+              <Tab icon={<GridOnIcon />} iconPosition="start" label={t("settleTabPayments") ?? "Payments"} />
+            )}
           </Tabs>
         </Paper>
 
         {tab === 0 && <SettleTab data={data} onChange={fetchData} />}
         {tab === 1 && <ActivityTab data={data} />}
         {tab === 2 && <ExtrasTab data={data} onChange={fetchData} />}
+        {tab === 3 && data.admin && <PaymentsSubTabs eventId={data.event.id} onChange={fetchData} />}
       </Stack>
     </Box>
+  );
+}
+
+function PaymentsSubTabs({ eventId, onChange }: { eventId: string; onChange: () => void }) {
+  const t = useT();
+  const [sub, setSub] = useState(0);
+  return (
+    <Stack spacing={2}>
+      <Paper sx={{ borderRadius: 3 }}>
+        <Tabs value={sub} onChange={(_, v) => setSub(v)} variant="fullWidth">
+          <Tab label={t("paymentsMatrixTitle") ?? "By game"} />
+          <Tab label={t("playerDebtsTitle") ?? "By player"} />
+        </Tabs>
+      </Paper>
+      {sub === 0 && <PaymentsMatrixTab eventId={eventId} onChange={onChange} />}
+      {sub === 1 && <PlayerDebtsTab eventId={eventId} onChange={onChange} />}
+    </Stack>
   );
 }
 
