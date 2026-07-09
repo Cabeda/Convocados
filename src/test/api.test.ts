@@ -376,6 +376,42 @@ describe("DELETE /api/events/[id]/players", () => {
     const archived = await prisma.player.findFirst({ where: { eventId: id } });
     expect(archived?.archivedAt).not.toBeNull();
   });
+
+  it("bench position notification excludes archived players from count", async () => {
+    const id = await seedEvent();
+    await prisma.event.update({ where: { id }, data: { maxPlayers: 2 } });
+
+    // Two active players fill the roster
+    await prisma.player.createMany({
+      data: [
+        { name: "Alice", eventId: id, order: 0 },
+        { name: "Bob", eventId: id, order: 1 },
+      ],
+    });
+    // Three archived (removed) players — should NOT inflate bench position
+    await prisma.player.createMany({
+      data: [
+        { name: "Gone1", eventId: id, order: 10, archivedAt: new Date() },
+        { name: "Gone2", eventId: id, order: 11, archivedAt: new Date() },
+        { name: "Gone3", eventId: id, order: 12, archivedAt: new Date() },
+      ],
+    });
+
+    // Clean notification jobs before adding the bench player
+    await prisma.notificationJob.deleteMany();
+
+    // Carol joins — she's the 1st bench player (position #1), not #4
+    const res = await addPlayer(ctx({ id }, { name: "Carol" }));
+    expect(res.status).toBe(200);
+
+    // Verify the notification payload has correct bench position
+    const job = await prisma.notificationJob.findFirst({
+      where: { eventId: id, type: "player_joined_bench" },
+    });
+    expect(job).not.toBeNull();
+    const payload = JSON.parse(job!.payload);
+    expect(payload.params.position).toBe("1");
+  });
 });
 
 // ─── POST /api/events/[id]/randomize ────────────────────────────────────────
@@ -489,6 +525,31 @@ describe("PUT /api/events/[id]/teams", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toContain("Carol");
+  });
+
+  it("accepts active players with non-contiguous order values (gaps from archives)", async () => {
+    const id = await seedEvent();
+    await prisma.event.update({ where: { id }, data: { maxPlayers: 4 } });
+    // After archiving/re-adding, order values can have gaps (0, 1, 5, 7)
+    // but these are still the first 4 active players
+    await prisma.player.createMany({
+      data: [
+        { name: "Alice", eventId: id, order: 0 },
+        { name: "Bob", eventId: id, order: 1 },
+        { name: "Carol", eventId: id, order: 5 },
+        { name: "Dave", eventId: id, order: 7 },
+        { name: "Eve", eventId: id, order: 9 }, // bench
+      ],
+    });
+
+    // Carol and Dave are active (positions 3 & 4) despite order > maxPlayers
+    const matches = [
+      { team: "Ninjas", players: [{ name: "Alice", order: 0 }, { name: "Carol", order: 1 }] },
+      { team: "Gunas", players: [{ name: "Bob", order: 0 }, { name: "Dave", order: 1 }] },
+    ];
+
+    const res = await saveTeams(putCtx({ id }, { matches }));
+    expect(res.status).toBe(200);
   });
 });
 

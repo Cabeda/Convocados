@@ -4,6 +4,30 @@ import { authenticateRequest } from "../../../../lib/authenticate.server";
 import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
+/** Resolve the active player list for an event.
+ * ADR 0016: when currentGameId exists, use GameParticipant (game-scoped).
+ * Falls back to the legacy Player table for events without a current game. */
+async function getActivePlayers(eventId: string, currentGameId: string | null) {
+	if (currentGameId) {
+		const participants = await prisma.gameParticipant.findMany({
+			where: { gameId: currentGameId, archivedAt: null },
+			include: { eventPlayer: { select: { id: true, name: true, userId: true } } },
+			orderBy: { order: "asc" },
+		});
+		return participants.map((gp) => ({
+			id: gp.eventPlayer.id,
+			name: gp.eventPlayer.name,
+			order: gp.order,
+			userId: gp.eventPlayer.userId,
+		}));
+	}
+	const players = await prisma.player.findMany({
+		where: { eventId, archivedAt: null },
+		orderBy: { order: "asc" },
+	});
+	return players.map((p) => ({ id: p.id, name: p.name, order: p.order, userId: p.userId }));
+}
+
 
 /**
  * GET /api/events/[id]/teams
@@ -23,18 +47,18 @@ export const GET: APIRoute = async ({ params, request }) => {
 	const event = await prisma.event.findUnique({
 		where: { id: params.id },
 		include: {
-			players: { where: { archivedAt: null }, orderBy: { order: "asc" } },
 			teamResults: { include: { members: { orderBy: { order: "asc" } } } },
 		},
 	});
 
 	if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
+	const allPlayers = await getActivePlayers(params.id, event.currentGameId);
 	const maxPlayers = event.maxPlayers;
 
-	// Active players (order < maxPlayers) vs bench
-	const activePlayers = event.players.filter((p) => p.order < maxPlayers);
-	const benchPlayers = event.players.filter((p) => p.order >= maxPlayers);
+	// Active players are the first N by position
+	const activePlayers = allPlayers.slice(0, maxPlayers);
+	const benchPlayers = allPlayers.slice(maxPlayers);
 
 	// Build team member lookup: playerId -> teamResult id
 	const memberLookup = new Map<string, string>(); // playerName -> teamResultId
@@ -110,15 +134,14 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
 	const event = await prisma.event.findUnique({
 		where: { id: eventId },
-		include: {
-			players: { where: { archivedAt: null }, orderBy: { order: "asc" } },
-		},
 	});
 
 	if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
+	const allPlayers = await getActivePlayers(eventId, event.currentGameId);
+
 	const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
-	const isPlayer = event.players.some((p) => p.userId === session.user.id);
+	const isPlayer = allPlayers.some((p) => p.userId === session.user.id);
 
 	if (!isOwner && !isAdmin && !isPlayer) {
 		return Response.json({ error: "You must be the event owner, an admin, or a player in this game to update teams." }, { status: 403 });
@@ -136,8 +159,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
 		return Response.json({ error: "matches must be an array" }, { status: 400 });
 	}
 
-	// Validate that all player names in matches are active players
-	const activePlayers = event.players.filter((p) => p.order < event.maxPlayers);
+	// Validate that all player names in matches are active players (first N by position)
+	const activePlayers = allPlayers.slice(0, event.maxPlayers);
 	const activeNames = new Set(activePlayers.map((p) => p.name));
 
 	for (const match of body.matches) {
@@ -182,12 +205,13 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 	const event = await prisma.event.findUnique({
 		where: { id: params.id },
 		include: {
-			players: { where: { archivedAt: null }, orderBy: { order: "asc" } },
 			teamResults: { include: { members: true } },
 		},
 	});
 
 	if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+	const allPlayersForPatch = await getActivePlayers(params.id, event.currentGameId);
 
 	// Check ownership or admin
 	const isOwner = event.ownerId === auth.userId;
@@ -215,7 +239,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 	}
 
 	// Validate all player IDs belong to this event
-	const allPlayerIds = new Set(event.players.map((p) => p.id));
+	const allPlayerIds = new Set(allPlayersForPatch.map((p) => p.id));
 	const requestedIds = [...teamOnePlayerIds, ...teamTwoPlayerIds];
 	for (const id of requestedIds) {
 		if (!allPlayerIds.has(id)) {
@@ -229,9 +253,9 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 		return Response.json({ error: "Duplicate player IDs" }, { status: 400 });
 	}
 
-	// Only allow active players (order < maxPlayers) to be on teams
+	// Only allow active players (first N by position) to be on teams
 	const activePlayerIds = new Set(
-		event.players.filter((p) => p.order < event.maxPlayers).map((p) => p.id),
+		allPlayersForPatch.slice(0, event.maxPlayers).map((p) => p.id),
 	);
 	for (const id of requestedIds) {
 		if (!activePlayerIds.has(id)) {
@@ -267,7 +291,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 	const teamTwo = teams[1];
 
 	const memberCreates: { name: string; order: number; teamResultId: string }[] = [];
-	const playerLookup = new Map(event.players.map((p) => [p.id, p.name]));
+	const playerLookup = new Map(allPlayersForPatch.map((p) => [p.id, p.name]));
 
 	for (let i = 0; i < teamOnePlayerIds.length; i++) {
 		const name = playerLookup.get(teamOnePlayerIds[i]);
@@ -291,14 +315,14 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 	const updatedEvent = await prisma.event.findUnique({
 		where: { id: event.id },
 		include: {
-			players: { where: { archivedAt: null }, orderBy: { order: "asc" } },
 			teamResults: { include: { members: { orderBy: { order: "asc" } } } },
 		},
 	});
 	if (!updatedEvent) return Response.json({ error: "Not found." }, { status: 404 });
 
-	const activeUpdated = updatedEvent.players.slice(0, updatedEvent.maxPlayers);
-	const benchUpdated = updatedEvent.players.slice(updatedEvent.maxPlayers);
+	const updatedPlayers = await getActivePlayers(event.id, event.currentGameId);
+	const activeUpdated = updatedPlayers.slice(0, updatedEvent.maxPlayers);
+	const benchUpdated = updatedPlayers.slice(updatedEvent.maxPlayers);
 
 	const updatedMemberLookup = new Map<string, string>();
 	for (const team of updatedEvent.teamResults) {
