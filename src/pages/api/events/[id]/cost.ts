@@ -181,6 +181,7 @@ export const GET: APIRoute = async ({ params }) => {
   return Response.json({
     ...eventCost,
     hasOverride,
+    showDebtorNames: event.showDebtorNames,
     effectivePaymentMethods: eventCost.tempPaymentMethods ?? eventCost.paymentMethods ?? null,
     effectivePaymentDetails: eventCost.tempPaymentDetails ?? eventCost.paymentDetails ?? null,
     createdAt: eventCost.createdAt.toISOString(),
