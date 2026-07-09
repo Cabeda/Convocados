@@ -1,18 +1,13 @@
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Accordion, AccordionSummary, AccordionDetails, Box, Typography, TextField,
-  Button, Stack, Chip, IconButton, Tooltip, Paper, alpha, useTheme,
-  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
-  Select, MenuItem, FormControl, FormControlLabel, Switch, Divider,
-  InputAdornment,
+  Box, Typography, Stack, Chip, IconButton, Tooltip, Paper, alpha, useTheme,
+  Button, Accordion, AccordionSummary, AccordionDetails,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PaymentsIcon from "@mui/icons-material/Payments";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
-import DeleteIcon from "@mui/icons-material/Delete";
-import AddIcon from "@mui/icons-material/Add";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import PhoneIcon from "@mui/icons-material/Phone";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { useT } from "~/lib/useT";
@@ -20,7 +15,6 @@ import type { TranslationKey } from "~/lib/i18n";
 import {
   type PaymentMethod,
   type PaymentMethodType,
-  PAYMENT_METHOD_TYPES,
   parsePaymentMethods,
   getDeepLink,
   getDisplayValue,
@@ -40,34 +34,14 @@ interface CostData {
   id: string;
   totalAmount: number;
   currency: string;
-  paymentMethods: string | null;
   effectivePaymentMethods: string | null;
-  hasOverride: boolean;
-  tempPaymentMethods: string | null;
   payments: PaymentData[];
-  monthlyEnabled: boolean;
-  monthlyFeeCents: number | null;
-  monthlyGamesCovered: number;
-  dropInSurchargeCents: number;
-  organizerExtrasCents: number;
   summary: {
     paidCount: number;
     totalCount: number;
     paidAmount: number;
   };
 }
-
-const CURRENCIES = ["EUR", "USD", "GBP", "BRL", "CHF"];
-
-/** Map method type to i18n key for the placeholder */
-const PLACEHOLDER_KEYS: Record<PaymentMethodType, TranslationKey> = {
-  phone: "paymentMethodPhonePlaceholder",
-  mbway: "paymentMethodMbwayPlaceholder",
-  revolut_tag: "paymentMethodRevolutTagPlaceholder",
-  revolut_link: "paymentMethodRevolutLinkPlaceholder",
-  cash: "paymentMethodCashPlaceholder",
-  other: "paymentMethodOtherPlaceholder",
-};
 
 /** Map method type to i18n key for the label */
 const LABEL_KEYS: Record<PaymentMethodType, TranslationKey> = {
@@ -79,739 +53,411 @@ const LABEL_KEYS: Record<PaymentMethodType, TranslationKey> = {
   other: "paymentMethodOther",
 };
 
+/**
+ * Phase-aware game phase derived from dateTime:
+ *  - upcoming_far  : >24h before
+ *  - upcoming_soon : <24h before
+ *  - upcoming_urgent: <2h before
+ *  - live          : during (between dateTime and dateTime + durationMinutes)
+ *  - past          : after game ended
+ */
+type GamePhaseDetail = "upcoming_far" | "upcoming_soon" | "upcoming_urgent" | "live" | "past";
+
+function derivePhase(dateTime: string, durationMinutes: number): GamePhaseDetail {
+  const now = Date.now();
+  const start = new Date(dateTime).getTime();
+  const end = start + durationMinutes * 60_000;
+  const msUntil = start - now;
+  if (now >= start && now < end) return "live";
+  if (now >= end) return "past";
+  if (msUntil < 2 * 60 * 60_000) return "upcoming_urgent";
+  if (msUntil < 24 * 60 * 60_000) return "upcoming_soon";
+  return "upcoming_far";
+}
+
 export function PaymentSection({
   eventId,
   canEdit,
   activePlayerCount,
+  maxPlayers,
+  dateTime,
+  durationMinutes = 90,
   expanded: controlledExpanded,
   onExpandedChange,
   onPaymentChange: _onPaymentChange,
-  gamePhase = "upcoming",
   currentUserName = null,
 }: {
   eventId: string;
+  /** Whether the current user is owner/admin — shows manage link more prominently */
   canEdit: boolean;
+  /** Number of active (non-bench) players currently on the list */
   activePlayerCount: number;
+  /** Event max players — used for price preview before payment list exists */
+  maxPlayers: number;
+  dateTime: string;
+  durationMinutes?: number;
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
   onPaymentChange?: () => void;
-  gamePhase?: "upcoming" | "past";
   currentUserName?: string | null;
 }) {
   const t = useT();
   const theme = useTheme();
-  const [costDraft, setCostDraft] = useState("");
-  const [currencyDraft, setCurrencyDraft] = useState("EUR");
-  const [methodsDraft, setMethodsDraft] = useState<PaymentMethod[]>([]);
-  const [editing, setEditing] = useState(false);
-  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selfReportSaving, setSelfReportSaving] = useState(false);
 
   const [costData, setCostData] = useState<CostData | null>(null);
-  const [overrideEditing, setOverrideEditing] = useState(false);
-  const [overrideMethodsDraft, setOverrideMethodsDraft] = useState<PaymentMethod[]>([]);
-  const [confirmClearOverride, setConfirmClearOverride] = useState(false);
-
-  // Monthly subscription / drop-in surcharge drafts (ADR 0008)
-  const [monthlyEnabledDraft, setMonthlyEnabledDraft] = useState(false);
-  const [monthlyFeeDraft, setMonthlyFeeDraft] = useState("");
-  const [monthlyGamesCoveredDraft, setMonthlyGamesCoveredDraft] = useState("5");
-  const [dropInSurchargeDraft, setDropInSurchargeDraft] = useState("");
 
   const fetchCost = useCallback(async () => {
-    const r = await fetch(`/api/events/${eventId}/cost`);
-    const data = await r.json();
-    setCostData(data);
+    try {
+      const r = await fetch(`/api/events/${eventId}/cost`);
+      if (r.ok) setCostData(await r.json());
+      else setCostData(null);
+    } catch { /* ignore */ }
   }, [eventId]);
 
   useEffect(() => { fetchCost(); }, [fetchCost, activePlayerCount]);
 
-  // Poll for cost updates every 10s (replaces SSE refreshKey)
+  // Poll every 15s
   useEffect(() => {
-    const id = setInterval(fetchCost, 10_000);
+    const id = setInterval(fetchCost, 15_000);
     return () => clearInterval(id);
   }, [fetchCost]);
 
-  const storageKey = `splitCosts_expanded_${eventId}`;
+  const storageKey = `paymentsSection_expanded_${eventId}`;
   const [accordionOpen, setAccordionOpen] = useState(() => {
     try { return localStorage.getItem(storageKey) === "true"; } catch { return false; }
   });
 
-  // Persist accordion state to localStorage
   useEffect(() => {
     try { localStorage.setItem(storageKey, String(accordionOpen)); } catch {}
   }, [accordionOpen, storageKey]);
 
-  // Sync with external control — when controlledExpanded becomes true, open
+  // Auto-expand when phase becomes urgent (<24h) or controlled
+  const phase = derivePhase(dateTime, durationMinutes);
+  useEffect(() => {
+    if (phase === "upcoming_soon" || phase === "upcoming_urgent") setAccordionOpen(true);
+  }, [phase]);
   useEffect(() => {
     if (controlledExpanded === true) setAccordionOpen(true);
   }, [controlledExpanded]);
 
-  const hasCost = costData && costData.totalAmount > 0;
-  const perPlayer = hasCost && activePlayerCount > 0
-    ? costData.totalAmount / activePlayerCount
-    : 0;
-  const methods = hasCost ? parsePaymentMethods(costData.effectivePaymentMethods) : [];
+  const hasCost = costData !== null && costData.totalAmount > 0;
+  const methods: PaymentMethod[] = hasCost ? parsePaymentMethods(costData.effectivePaymentMethods) : [];
 
-  // ponytail: derive current user's payment status for the player-facing CTA.
-  // Upgrade path: use userId match instead of name match for multi-name disambiguation.
+  // Per-player amount: actual list count if available, otherwise maxPlayers preview
+  const paymentListCount = hasCost ? costData.payments.length : 0;
+  const divisor = paymentListCount > 0 ? paymentListCount : Math.max(maxPlayers, 1);
+  const perPlayer = hasCost ? costData.totalAmount / divisor : 0;
+  const isPreview = paymentListCount === 0;
+
+  const paidCount = hasCost ? costData.summary.paidCount : 0;
+  const totalCount = hasCost ? costData.summary.totalCount : 0;
+
+  // Current user's payment row (matched by name, case-insensitive)
   const myPayment = hasCost && currentUserName && costData.payments.length > 0
     ? costData.payments.find((p) => p.playerName.toLowerCase() === currentUserName.toLowerCase())
     : null;
-  const myOwes = myPayment && myPayment.status !== "paid";
-  const myPaid = myPayment && myPayment.status === "paid";
-  const paidCount = hasCost ? costData.payments.filter((p) => p.status === "paid").length : 0;
-  const totalPayments = hasCost ? costData.payments.length : 0;
+  const myStatus = myPayment?.status ?? null; // "pending" | "sent" | "paid" | null
+  const myAmount = myPayment?.amount ?? perPlayer;
 
-  // Phase-aware visibility: hide entirely when no cost set and user can't edit
-  const shouldHide = !hasCost && !canEdit && gamePhase === "upcoming";
+  // Hide entirely when no cost set (player can't do anything)
+  if (!hasCost) return null;
 
-  const handleSaveCost = async () => {
-    const amount = parseFloat(costDraft);
-    if (!amount || amount <= 0) return;
-    setEditing(false);
+  // Phase-derived urgency color
+  const urgencyColor: "warning" | "error" | "success" | "default" =
+    myStatus === "paid" ? "success"
+    : myStatus === "sent" ? "default"
+    : phase === "upcoming_urgent" || phase === "live" ? "error"
+    : phase === "upcoming_soon" ? "warning"
+    : "default";
 
-    // Convert UI strings to integer cents for the new fields.
-    const monthlyFeeMajor = parseFloat(monthlyFeeDraft);
-    const monthlyFeeCents = Number.isFinite(monthlyFeeMajor) && monthlyFeeMajor >= 0
-      ? Math.round(monthlyFeeMajor * 100)
-      : null;
-    const gamesCovered = parseInt(monthlyGamesCoveredDraft, 10);
-    const surchargeMajor = parseFloat(dropInSurchargeDraft);
-    const dropInSurchargeCents = Number.isFinite(surchargeMajor) && surchargeMajor >= 0
-      ? Math.round(surchargeMajor * 100)
-      : 0;
+  const urgencyBg =
+    urgencyColor === "error" ? alpha(theme.palette.error.main, 0.08)
+    : urgencyColor === "warning" ? alpha(theme.palette.warning.main, 0.08)
+    : urgencyColor === "success" ? alpha(theme.palette.success.main, 0.06)
+    : alpha(theme.palette.action.hover, 0.04);
 
-    await fetch(`/api/events/${eventId}/cost`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        totalAmount: amount,
-        currency: currencyDraft,
-        paymentMethods: methodsDraft.length > 0 ? methodsDraft : null,
-        monthlyEnabled: monthlyEnabledDraft,
-        monthlyFeeCents: monthlyEnabledDraft ? monthlyFeeCents : null,
-        monthlyGamesCovered: Number.isFinite(gamesCovered) && gamesCovered > 0 ? gamesCovered : 5,
-        dropInSurchargeCents,
-      }),
-    });
-    fetchCost();
-  };
+  const urgencyBorder =
+    urgencyColor === "error" ? alpha(theme.palette.error.main, 0.3)
+    : urgencyColor === "warning" ? alpha(theme.palette.warning.main, 0.3)
+    : urgencyColor === "success" ? alpha(theme.palette.success.main, 0.3)
+    : alpha(theme.palette.divider, 0.3);
 
-  const handleRemoveCost = async () => {
-    setConfirmRemoveOpen(false);
-    await fetch(`/api/events/${eventId}/cost`, { method: "DELETE" });
-    fetchCost();
+  // Self-report "I paid" — moves pending → sent
+  const handleSelfReport = async () => {
+    if (!myPayment || myStatus !== "pending") return;
+    setSelfReportSaving(true);
+    try {
+      await fetch(`/api/events/${eventId}/payments`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerName: myPayment.playerName, status: "sent" }),
+      });
+      await fetchCost();
+    } catch { /* ignore */ }
+    setSelfReportSaving(false);
   };
 
   const handleCopy = async (text: string, id: string) => {
-    await navigator.clipboard.writeText(text);
+    try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  const startEditing = () => {
-    setCostDraft(hasCost ? String(costData.totalAmount) : "");
-    setCurrencyDraft(hasCost ? costData.currency : "EUR");
-    setMethodsDraft(hasCost ? parsePaymentMethods(costData.paymentMethods) : []);
-    setMonthlyEnabledDraft(hasCost ? Boolean(costData.monthlyEnabled) : false);
-    setMonthlyFeeDraft(hasCost && costData.monthlyFeeCents !== null && costData.monthlyFeeCents !== undefined
-      ? (costData.monthlyFeeCents / 100).toFixed(2) : "");
-    setMonthlyGamesCoveredDraft(hasCost ? String(costData.monthlyGamesCovered) : "5");
-    setDropInSurchargeDraft(hasCost ? (costData.dropInSurchargeCents / 100).toFixed(2) : "");
-    setEditing(true);
-  };
-
-  const addMethod = () => {
-    setMethodsDraft((prev) => [...prev, { type: "mbway", value: "" }]);
-  };
-
-  const updateMethod = (idx: number, field: keyof PaymentMethod, val: string) => {
-    setMethodsDraft((prev) => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m));
-  };
-
-  const removeMethod = (idx: number) => {
-    setMethodsDraft((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  // Override handlers
-  const startOverrideEditing = () => {
-    const current = hasCost && costData.hasOverride
-      ? parsePaymentMethods(costData.tempPaymentMethods)
-      : [];
-    setOverrideMethodsDraft(current.length > 0 ? current : [{ type: "mbway", value: "" }]);
-    setOverrideEditing(true);
-  };
-
-  const handleSaveOverride = async () => {
-    setOverrideEditing(false);
-    await fetch(`/api/events/${eventId}/cost/override`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        paymentMethods: overrideMethodsDraft.filter((m) => m.value.trim()).length > 0
-          ? overrideMethodsDraft.filter((m) => m.value.trim())
-          : null,
-      }),
-    });
-    fetchCost();
-  };
-
-  const handleClearOverride = async () => {
-    setConfirmClearOverride(false);
-    await fetch(`/api/events/${eventId}/cost/override`, { method: "DELETE" });
-    fetchCost();
-  };
-
-  const addOverrideMethod = () => {
-    setOverrideMethodsDraft((prev) => [...prev, { type: "mbway", value: "" }]);
-  };
-
-  const updateOverrideMethod = (idx: number, field: keyof PaymentMethod, val: string) => {
-    setOverrideMethodsDraft((prev) => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m));
-  };
-
-  const removeOverrideMethod = (idx: number) => {
-    setOverrideMethodsDraft((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  if (shouldHide) return null;
-
   return (
     <Paper id="payment-section" elevation={2} sx={{ borderRadius: 3, overflow: "hidden" }}>
-      {/* ── Player-facing CTA: prominent when user owes, collapsed when paid ── */}
-      {hasCost && gamePhase === "upcoming" && !canEdit && myPaid && (
-        <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2, pb: 1, display: "flex", alignItems: "center", gap: 1 }}>
-          <CheckIcon sx={{ color: theme.palette.success.main, fontSize: 18 }} />
-          <Typography variant="body2" color="success.main" fontWeight={600}>
-            {t("paymentYouPaid")}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
-            {t("paymentSocialProof", { paid: String(paidCount), total: String(totalPayments) })}
-          </Typography>
-        </Box>
-      )}
-      {hasCost && gamePhase === "upcoming" && myOwes && (
+      {/* ── Prominent CTA bar — shown outside accordion for maximum visibility ── */}
+      {myStatus !== null && phase !== "past" && (
         <Box sx={{
-          px: { xs: 2, sm: 3 }, pt: 2, pb: 2,
-          background: `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.08)} 0%, ${alpha(theme.palette.primary.main, 0.04)} 100%)`,
-          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+          px: { xs: 2, sm: 3 }, pt: 2, pb: 1.5,
+          background: urgencyBg,
+          borderBottom: `1px solid ${urgencyBorder}`,
         }}>
-          <Stack spacing={1.5}>
+          {myStatus === "paid" ? (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <PaymentsIcon sx={{ color: theme.palette.warning.main, fontSize: 20 }} />
-              <Typography variant="body1" fontWeight={700}>
-                {myPayment!.amount.toFixed(2)} {costData!.currency}
+              <CheckIcon sx={{ color: theme.palette.success.main, fontSize: 18 }} />
+              <Typography variant="body2" color="success.main" fontWeight={600}>
+                {t("paymentYouPaid")}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
-                {t("paymentSocialProof", { paid: String(paidCount), total: String(totalPayments) })}
+                {t("paymentSocialProof", { paid: String(paidCount), total: String(totalCount) })}
               </Typography>
             </Box>
-
-            {/* One-tap payment methods */}
-            {methods.length > 0 && (
-              <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
-                {methods.map((m, idx) => {
-                  const deepLink = getDeepLink(m, myPayment!.amount, costData!.currency);
-                  const display = getDisplayValue(m);
-                  return (
-                    <Chip
-                      key={`cta-${m.type}-${idx}`}
-                      label={`${t(LABEL_KEYS[m.type])}${display ? ` · ${display}` : ""}`}
-                      size="small"
-                      color="primary"
-                      variant="outlined"
-                      component={deepLink ? "a" : "span"}
-                      href={deepLink || undefined}
-                      target={deepLink ? "_blank" : undefined}
-                      rel={deepLink ? "noopener noreferrer" : undefined}
-                      clickable={!!deepLink}
-                      sx={{ fontWeight: 600, borderRadius: 2 }}
-                    />
-                  );
-                })}
+          ) : myStatus === "sent" ? (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <PaymentsIcon sx={{ color: theme.palette.info.main, fontSize: 18 }} />
+              <Typography variant="body2" color="info.main" fontWeight={600}>
+                {t("paymentNudgeSentConfirmation")}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
+                {t("paymentSocialProof", { paid: String(paidCount), total: String(totalCount) })}
+              </Typography>
+            </Box>
+          ) : (
+            /* pending — show debt + payment method chips */
+            <Stack spacing={1.5}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                <PaymentsIcon sx={{
+                  color: urgencyColor === "error" ? theme.palette.error.main : theme.palette.warning.main,
+                  fontSize: 20,
+                }} />
+                <Typography variant="body1" fontWeight={700}>
+                  {t("paymentsYouOwe", { amount: myAmount.toFixed(2), currency: costData.currency })}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
+                  {t("paymentSocialProof", { paid: String(paidCount), total: String(totalCount) })}
+                </Typography>
               </Box>
-            )}
-          </Stack>
+
+              {/* One-tap payment methods */}
+              {methods.length > 0 && (
+                <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
+                  {methods.map((m, idx) => {
+                    const deepLink = getDeepLink(m, myAmount, costData.currency);
+                    const display = getDisplayValue(m);
+                    return (
+                      <Chip
+                        key={`cta-${m.type}-${idx}`}
+                        label={`${t(LABEL_KEYS[m.type])}${display ? ` · ${display}` : ""}`}
+                        size="small"
+                        color={urgencyColor === "error" ? "error" : "warning"}
+                        variant="outlined"
+                        component={deepLink ? "a" : "span"}
+                        href={deepLink || undefined}
+                        target={deepLink ? "_blank" : undefined}
+                        rel={deepLink ? "noopener noreferrer" : undefined}
+                        clickable={!!deepLink}
+                        sx={{ fontWeight: 600, borderRadius: 2 }}
+                      />
+                    );
+                  })}
+                </Box>
+              )}
+
+              {/* Self-report button */}
+              <Button
+                size="small"
+                variant="text"
+                onClick={handleSelfReport}
+                disabled={selfReportSaving}
+                sx={{ alignSelf: "flex-start", textTransform: "none", opacity: 0.75 }}
+              >
+                {t("paymentNudgeMarkSent")}
+              </Button>
+            </Stack>
+          )}
         </Box>
       )}
-      {/* ── Admin/organizer accordion (full controls) ── */}
-      <Box sx={{ px: { xs: 2, sm: 3 }, py: hasCost && gamePhase === "upcoming" && (myOwes || myPaid) && !canEdit ? 1 : 2 }}>
-      <Accordion
-        disableGutters
-        elevation={0}
-        expanded={accordionOpen}
-        onChange={(_e, exp) => {
-          setAccordionOpen(exp);
-          onExpandedChange?.(exp);
-        }}
-        sx={{ "&:before": { display: "none" }, backgroundColor: "transparent" }}
-      >
-        <AccordionSummary
-          expandIcon={<ExpandMoreIcon />}
-          sx={{ px: 0, minHeight: 0, "& .MuiAccordionSummary-content": { my: 0.5 } }}
+
+      {/* Post-game read-only summary */}
+      {phase === "past" && (
+        <Box sx={{
+          px: { xs: 2, sm: 3 }, pt: 2, pb: 1.5,
+          display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap",
+          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+        }}>
+          <PaymentsIcon fontSize="small" color="action" />
+          <Typography variant="body2" color="text.secondary">
+            {t("paymentSocialProof", { paid: String(paidCount), total: String(totalCount) })}
+          </Typography>
+          <Button
+            size="small"
+            variant="text"
+            component="a"
+            href={`/events/${eventId}/settle`}
+            endIcon={<OpenInNewIcon fontSize="small" />}
+            sx={{ ml: "auto", textTransform: "none" }}
+          >
+            {t("paymentsViewAll")}
+          </Button>
+        </Box>
+      )}
+
+      {/* ── Accordion: price breakdown + payment methods details ── */}
+      <Box sx={{ px: { xs: 2, sm: 3 }, py: 0.5 }}>
+        <Accordion
+          disableGutters
+          elevation={0}
+          expanded={accordionOpen}
+          onChange={(_e, exp) => {
+            setAccordionOpen(exp);
+            onExpandedChange?.(exp);
+          }}
+          sx={{ "&:before": { display: "none" }, backgroundColor: "transparent" }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, width: "100%" }}>
-            <PaymentsIcon fontSize="small" color="action" />
-            <Typography variant="body2" color="text.secondary">
-              {t("splitTheCost")}
-            </Typography>
-            {hasCost && costData.summary && (
+          <AccordionSummary
+            expandIcon={<ExpandMoreIcon />}
+            sx={{ px: 0, minHeight: 0, "& .MuiAccordionSummary-content": { my: 0.75 } }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, width: "100%" }}>
+              <PaymentsIcon fontSize="small" color="action" />
+              <Typography variant="body2" color="text.secondary">
+                {t("paymentsSection")}
+              </Typography>
+              {/* Price pill: actual per-player or preview */}
               <Chip
-                label={t("paymentSummary", {
-                  paid: String(costData.summary.paidCount),
-                  total: String(costData.summary.totalCount),
-                  amount: costData.summary.paidAmount.toFixed(2),
-                  currency: costData.currency,
-                })}
+                label={isPreview
+                  ? t("paymentsPricePreview", { amount: perPlayer.toFixed(2), currency: costData.currency })
+                  : t("paymentsPrice", { amount: perPlayer.toFixed(2), currency: costData.currency })
+                }
                 size="small"
-                color="primary"
                 variant="outlined"
-                sx={{ ml: "auto" }}
+                sx={{ ml: "auto", fontWeight: 600, fontSize: "0.7rem" }}
               />
-            )}
-          </Box>
-        </AccordionSummary>
-        <AccordionDetails sx={{ px: 0, pt: 0 }}>
-          <Stack spacing={2}>
-            {/* Cost setup / edit form */}
-            {editing ? (
-              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                <Stack spacing={2}>
-                  <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
-                    <TextField
-                      label={t("totalCost")}
-                      type="number"
-                      size="small"
-                      value={costDraft}
-                      onChange={(e) => setCostDraft(e.target.value)}
-                      sx={{ flex: 1 }}
-                      autoFocus
-                      onKeyDown={(e) => { if (e.key === "Enter") handleSaveCost(); if (e.key === "Escape") setEditing(false); }}
-                      slotProps={{
-                        htmlInput: { min: 0, step: 0.01 }
-                      }}
-                    />
-                    <FormControl size="small" sx={{ minWidth: 80 }}>
-                      <Select
-                        value={currencyDraft}
-                        onChange={(e) => setCurrencyDraft(e.target.value)}
-                      >
-                        {CURRENCIES.map((c) => (
-                          <MenuItem key={c} value={c}>{c}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Box>
-
-                  {/* Structured payment methods editor */}
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block" }}>
-                      {t("paymentMethods")}
-                    </Typography>
-                    <Stack spacing={1}>
-                      {methodsDraft.map((m, idx) => (
-                        <Box key={`${m.type}-${m.label}`} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
-                          <FormControl size="small" sx={{ minWidth: 130 }}>
-                            <Select
-                              value={m.type}
-                              onChange={(e) => updateMethod(idx, "type", e.target.value)}
-                            >
-                              {PAYMENT_METHOD_TYPES.map((pt) => (
-                                <MenuItem key={pt} value={pt}>{t(LABEL_KEYS[pt])}</MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                          <TextField
-                            size="small"
-                            placeholder={t(PLACEHOLDER_KEYS[m.type])}
-                            value={m.value}
-                            onChange={(e) => updateMethod(idx, "value", e.target.value)}
-                            sx={{ flex: 1, minWidth: 150 }}
-                            slotProps={{
-                              input: m.type === "revolut_tag" ? {
-                                startAdornment: <InputAdornment position="start">@</InputAdornment>,
-                              } : undefined
-                            }}
-                          />
-                          <TextField
-                            size="small"
-                            placeholder={t("paymentMethodLabelPlaceholder")}
-                            value={m.label ?? ""}
-                            onChange={(e) => updateMethod(idx, "label", e.target.value)}
-                            sx={{ flex: 0.7, minWidth: 120 }}
-                            slotProps={{
-                              htmlInput: { maxLength: 50 }
-                            }}
-                          />
-                          <IconButton size="small" color="error" onClick={() => removeMethod(idx)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      ))}
-                      <Button
-                        size="small"
-                        variant="text"
-                        startIcon={<AddIcon />}
-                        onClick={addMethod}
-                        sx={{ alignSelf: "flex-start" }}
-                      >
-                        {t("addPaymentMethod")}
-                      </Button>
-                    </Stack>
-                  </Box>
-
-                  {activePlayerCount > 0 && costDraft && parseFloat(costDraft) > 0 && (
-                    <Typography variant="body2" color="text.secondary">
-                      {t("perPlayer", { amount: (parseFloat(costDraft) / activePlayerCount).toFixed(2) })}
-                    </Typography>
-                  )}
-
-                  {/* Monthly subscription + drop-in surcharge (ADR 0008) */}
-                  <Divider sx={{ my: 1 }} />
-                  <Box>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={monthlyEnabledDraft}
-                          onChange={(e) => setMonthlyEnabledDraft(e.target.checked)}
-                          size="small"
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body2" fontWeight={600}>
-                            {t("costMonthlyEnabled") ?? "Monthly subscriptions"}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {t("costMonthlyEnabledTooltip") ?? "Allow players to pay a fixed monthly fee covering N games, with credit on misses."}
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                    {monthlyEnabledDraft && (
-                      <Stack direction="row" spacing={1} sx={{ mt: 1, ml: 1 }}>
-                        <TextField
-                          label={t("costMonthlyFee") ?? "Monthly fee"}
-                          type="number"
-                          size="small"
-                          value={monthlyFeeDraft}
-                          onChange={(e) => setMonthlyFeeDraft(e.target.value)}
-                          sx={{ width: 130 }}
-                          slotProps={{
-                            htmlInput: { min: 0, step: 0.01 }
-                          }}
-                        />
-                        <TextField
-                          label={t("costMonthlyGamesCovered") ?? "Games covered per month"}
-                          type="number"
-                          size="small"
-                          value={monthlyGamesCoveredDraft}
-                          onChange={(e) => setMonthlyGamesCoveredDraft(e.target.value)}
-                          sx={{ width: 110 }}
-                          slotProps={{
-                            htmlInput: { min: 1, step: 1 }
-                          }}
-                        />
-                        <TextField
-                          label={t("currency") ?? "Currency"}
-                          size="small"
-                          value={currencyDraft}
-                          onChange={(e) => setCurrencyDraft(e.target.value)}
-                          sx={{ width: 90 }}
-                        />
-                      </Stack>
-                    )}
-                  </Box>
-
-                  <Box>
-                    <TextField
-                      label={t("costDropInSurcharge") ?? "Drop-in surcharge"}
-                      type="number"
-                      size="small"
-                      value={dropInSurchargeDraft}
-                      onChange={(e) => setDropInSurchargeDraft(e.target.value)}
-                      helperText={t("costDropInSurchargeTooltip") ?? "Extra amount added to per-game payers who are not monthly subscribers."}
-                      sx={{ width: 200 }}
-                      slotProps={{
-                        htmlInput: { min: 0, step: 0.01 }
-                      }}
-                    />
-                  </Box>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <Button variant="contained" size="small" onClick={handleSaveCost}>
-                      {hasCost ? t("updateCost") : t("setCost")}
-                    </Button>
-                    <Button variant="text" size="small" onClick={() => setEditing(false)}>
-                      {t("cancel")}
-                    </Button>
-                  </Box>
-                </Stack>
-              </Paper>
-            ) : hasCost ? (
-              <Stack spacing={1.5}>
-                {/* Cost summary */}
-                <Box sx={{
-                  display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap",
-                  px: 2, py: 1, borderRadius: 2,
-                  backgroundColor: alpha(theme.palette.success.main, 0.06),
-                }}>
-                  <Typography variant="body1" fontWeight={600}>
-                    {costData.totalAmount.toFixed(2)} {costData.currency}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    ({t("perPlayer", { amount: perPlayer.toFixed(2) })})
-                  </Typography>
-                  <Box sx={{ flex: 1 }} />
-                  <Button
-                    size="small"
-                    component="a"
-                    href={`/events/${eventId}/settle`}
-                    startIcon={<OpenInNewIcon fontSize="small" />}
-                    sx={{ textTransform: "none" }}
-                  >
-                    {t("settleUpTitle") ?? "Settle Up"}
-                  </Button>
-                  {canEdit && (
-                    <Box sx={{ ml: "auto", display: "flex", gap: 0.5 }}>
-                      <Button size="small" variant="text" onClick={startEditing}>
-                        {t("updateCost")}
-                      </Button>
-                      <Tooltip title={t("removeCost")}>
-                        <IconButton size="small" color="error" onClick={() => setConfirmRemoveOpen(true)}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  )}
-                </Box>
-
-                {/* Structured payment method buttons */}
-                {methods.length > 0 && (
-                  <Stack spacing={0.75}>
-                    {methods.map((m, idx) => {
-                      const deepLink = getDeepLink(m, perPlayer, costData.currency);
-                      const display = getDisplayValue(m);
-                      const isCopied = copiedId === `method-${idx}`;
-                      const label = t(LABEL_KEYS[m.type]);
-
-                      return (
-                        <Paper key={`${m.type}-${m.label}-${deepLink}`} variant="outlined" sx={{
-                          borderRadius: 2, px: 1.5, py: 0.75,
-                          display: "flex", alignItems: "center", gap: 1,
-                        }}>
-                          <MethodIcon type={m.type} />
-                          <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="caption" color="text.secondary">
-                              {label}{m.label ? ` — ${m.label}` : ""}
-                            </Typography>
-                            <Typography variant="body2" sx={{
-                              fontFamily: "monospace", fontSize: "0.85rem",
-                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                            }}>
-                              {display}
-                            </Typography>
-                            {m.type === "mbway" && (
-                              <>
-                                <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
-                                  {t("paymentMethodMbwayInstructions")}
-                                </Typography>
-                                {(() => {
-                                  const mbLink = getMbwayAppLink(typeof navigator !== "undefined" ? navigator.userAgent : undefined);
-                                  return mbLink ? (
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      color="primary"
-                                      component="a"
-                                      href={mbLink}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      sx={{ mt: 0.5, textTransform: "none", fontSize: "0.75rem" }}
-                                    >
-                                      {t("paymentMethodOpenMbway")}
-                                    </Button>
-                                  ) : null;
-                                })()}
-                              </>
-                            )}
-                          </Box>
-                          {deepLink && (
-                            <Tooltip title={m.type === "phone" ? t("paymentMethodCallPhone") : t("paymentMethodOpen")}>
-                              <IconButton
-                                size="small"
-                                color="primary"
-                                component="a"
-                                href={deepLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {m.type === "phone" ? <PhoneIcon fontSize="small" /> : <OpenInNewIcon fontSize="small" />}
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          <Tooltip title={isCopied ? t("paymentMethodCopied") : t("paymentMethodCopy")}>
-                            <IconButton
-                              size="small"
-                              color={isCopied ? "success" : "default"}
-                              onClick={() => handleCopy(m.type === "revolut_tag" ? `@${m.value}` : m.value, `method-${idx}`)}
-                            >
-                              {isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
-                            </IconButton>
-                          </Tooltip>
-                        </Paper>
-                      );
-                    })}
-                  </Stack>
-                )}
-
-                {/* Temporary override indicator + admin controls */}
-                {canEdit && hasCost && !editing && (
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                    {costData.hasOverride && (
-                      <Chip label={t("temporaryOverride")} size="small" color="warning" variant="outlined" />
-                    )}
-                    {!overrideEditing && (
-                      <>
-                        <Button size="small" variant="text" onClick={startOverrideEditing}>
-                          {t("overridePaymentMethods")}
-                        </Button>
-                        {costData.hasOverride && (
-                          <Button size="small" variant="text" color="warning" onClick={() => setConfirmClearOverride(true)}>
-                            {t("clearOverride")}
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </Box>
-                )}
-
-                {/* Override editor */}
-                {overrideEditing && (
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, borderColor: "warning.main" }}>
-                    <Stack spacing={2}>
-                      <Typography variant="caption" color="text.secondary">
-                        {t("overridePaymentMethodsDesc")}
-                      </Typography>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block" }}>
-                          {t("paymentMethods")}
-                        </Typography>
-                        <Stack spacing={1}>
-                          {overrideMethodsDraft.map((m, idx) => (
-                            <Box key={`${m.type}-${m.label}`} sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
-                              <FormControl size="small" sx={{ minWidth: 130 }}>
-                                <Select
-                                  value={m.type}
-                                  onChange={(e) => updateOverrideMethod(idx, "type", e.target.value)}
-                                >
-                                  {PAYMENT_METHOD_TYPES.map((pt) => (
-                                    <MenuItem key={pt} value={pt}>{t(LABEL_KEYS[pt])}</MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                              <TextField
-                                size="small"
-                                placeholder={t(PLACEHOLDER_KEYS[m.type])}
-                                value={m.value}
-                                onChange={(e) => updateOverrideMethod(idx, "value", e.target.value)}
-                                sx={{ flex: 1, minWidth: 150 }}
-                                slotProps={{
-                                  input: m.type === "revolut_tag" ? {
-                                    startAdornment: <InputAdornment position="start">@</InputAdornment>,
-                                  } : undefined
-                                }}
-                              />
-                              <TextField
-                                size="small"
-                                placeholder={t("paymentMethodLabelPlaceholder")}
-                                value={m.label ?? ""}
-                                onChange={(e) => updateOverrideMethod(idx, "label", e.target.value)}
-                                sx={{ flex: 0.7, minWidth: 120 }}
-                                slotProps={{
-                                  htmlInput: { maxLength: 50 }
-                                }}
-                              />
-                              <IconButton size="small" color="error" onClick={() => removeOverrideMethod(idx)}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Box>
-                          ))}
-                          <Button
-                            size="small"
-                            variant="text"
-                            startIcon={<AddIcon />}
-                            onClick={addOverrideMethod}
-                            sx={{ alignSelf: "flex-start" }}
-                          >
-                            {t("addPaymentMethod")}
-                          </Button>
-                        </Stack>
-                      </Box>
-                      <Box sx={{ display: "flex", gap: 1 }}>
-                        <Button variant="contained" size="small" color="warning" onClick={handleSaveOverride}>
-                          {t("overridePaymentMethods")}
-                        </Button>
-                        <Button variant="text" size="small" onClick={() => setOverrideEditing(false)}>
-                          {t("cancel")}
-                        </Button>
-                      </Box>
-                    </Stack>
-                  </Paper>
-                )}
-
-                {/* ADR 0019: per-player chips and bulk button removed from this
-                    surface. The full payment management has moved to the
-                    "Payments" tab in /events/[id]/settle (per-game matrix +
-                    per-player debts). The chip endpoint is still wired in the
-                    API for backwards compat but no longer has a UI here. */}
-
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails sx={{ px: 0, pt: 0, pb: 1 }}>
+            <Stack spacing={1.5}>
+              {/* Total + per-player breakdown */}
+              <Box sx={{
+                display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap",
+                px: 1.5, py: 1, borderRadius: 2,
+                backgroundColor: alpha(theme.palette.success.main, 0.06),
+              }}>
+                <Typography variant="body1" fontWeight={600}>
+                  {costData.totalAmount.toFixed(2)} {costData.currency}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {isPreview
+                    ? t("paymentsPerPlayerPreview", { amount: perPlayer.toFixed(2), max: String(maxPlayers) })
+                    : t("paymentsPerPlayer", { amount: perPlayer.toFixed(2), total: String(paymentListCount) })
+                  }
+                </Typography>
+                <Box sx={{ flex: 1 }} />
                 <Button
                   size="small"
-                  variant="outlined"
                   component="a"
                   href={`/events/${eventId}/settle`}
-                  startIcon={<OpenInNewIcon fontSize="small" />}
-                  sx={{ alignSelf: "flex-start", textTransform: "none" }}
+                  endIcon={<OpenInNewIcon fontSize="small" />}
+                  sx={{ textTransform: "none", fontSize: "0.75rem" }}
                 >
-                  {t("paymentsManageLink") ?? "Manage all payments →"}
+                  {canEdit ? t("paymentsManageLink") : t("paymentsViewAll")}
                 </Button>
-              </Stack>
-            ) : canEdit ? (
-              <Button variant="outlined" size="small" startIcon={<PaymentsIcon />} onClick={startEditing}>
-                {t("setCost")}
-              </Button>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                {t("noCostSet")}
-              </Typography>
-            )}
-          </Stack>
-        </AccordionDetails>
-      </Accordion>
+              </Box>
+
+              {/* Payment methods */}
+              {methods.length > 0 && (
+                <Stack spacing={0.75}>
+                  {methods.map((m, idx) => {
+                    const deepLink = getDeepLink(m, perPlayer, costData.currency);
+                    const display = getDisplayValue(m);
+                    const isCopied = copiedId === `method-${idx}`;
+                    const label = t(LABEL_KEYS[m.type]);
+
+                    return (
+                      <Paper key={`${m.type}-${m.label ?? ""}-${idx}`} variant="outlined" sx={{
+                        borderRadius: 2, px: 1.5, py: 0.75,
+                        display: "flex", alignItems: "center", gap: 1,
+                      }}>
+                        <MethodIcon type={m.type} />
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {label}{m.label ? ` — ${m.label}` : ""}
+                          </Typography>
+                          <Typography variant="body2" sx={{
+                            fontFamily: "monospace", fontSize: "0.85rem",
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          }}>
+                            {display}
+                          </Typography>
+                          {m.type === "mbway" && (
+                            <>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                                {t("paymentMethodMbwayInstructions")}
+                              </Typography>
+                              {(() => {
+                                const mbLink = getMbwayAppLink(typeof navigator !== "undefined" ? navigator.userAgent : undefined);
+                                return mbLink ? (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="primary"
+                                    component="a"
+                                    href={mbLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    sx={{ mt: 0.5, textTransform: "none", fontSize: "0.75rem" }}
+                                  >
+                                    {t("paymentMethodOpenMbway")}
+                                  </Button>
+                                ) : null;
+                              })()}
+                            </>
+                          )}
+                        </Box>
+                        {deepLink && (
+                          <Tooltip title={m.type === "phone" ? t("paymentMethodCallPhone") : t("paymentMethodOpen")}>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              component="a"
+                              href={deepLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {m.type === "phone" ? <PhoneIcon fontSize="small" /> : <OpenInNewIcon fontSize="small" />}
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        <Tooltip title={isCopied ? t("paymentMethodCopied") : t("paymentMethodCopy")}>
+                          <IconButton
+                            size="small"
+                            color={isCopied ? "success" : "default"}
+                            onClick={() => handleCopy(m.type === "revolut_tag" ? `@${m.value}` : m.value, `method-${idx}`)}
+                          >
+                            {isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+                          </IconButton>
+                        </Tooltip>
+                      </Paper>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
       </Box>
-      {/* Remove cost confirmation */}
-      <Dialog open={confirmRemoveOpen} onClose={() => setConfirmRemoveOpen(false)}>
-        <DialogTitle>{t("removeCost")}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t("removeCostConfirm")}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmRemoveOpen(false)}>{t("cancel")}</Button>
-          <Button onClick={handleRemoveCost} color="error" variant="contained">{t("removeCost")}</Button>
-        </DialogActions>
-      </Dialog>
-      {/* Clear override confirmation */}
-      <Dialog open={confirmClearOverride} onClose={() => setConfirmClearOverride(false)}>
-        <DialogTitle>{t("clearOverride")}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t("clearOverrideConfirm")}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmClearOverride(false)}>{t("cancel")}</Button>
-          <Button onClick={handleClearOverride} color="warning" variant="contained">{t("clearOverride")}</Button>
-        </DialogActions>
-      </Dialog>
     </Paper>
   );
 }

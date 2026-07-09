@@ -46,9 +46,9 @@ typo orphans the row from the new ledger.
 
 We are in beta. Do everything in a single PR.
 
-### 1. Schema: `gameHistoryId` + `playerName` on `WalletTransaction`
+### 1. Schema: `gameHistoryId` + `playerName` + `payerUserId` + `paidToUserId` on `WalletTransaction`
 
-Add two nullable columns:
+Add four nullable columns:
 
 - `gameHistoryId` — FK to `GameHistory.id`. A `payment_received` row with
   `gameHistoryId` set is a **Historical Settlement** — a record that a
@@ -57,8 +57,23 @@ Add two nullable columns:
   ghost players whose `User` is a synthetic `ghost:{eventPlayerId}`
   account. The read path joins on `userId`, not on name; the column is
   for the activity-tab display and for the backfill keying.
+- `payerUserId` — FK to `User.id`. **Who actually handed over the money**
+  for a `payment_received` row. The existing `userId` field on the same
+  row is the debtor (the player whose debt was cleared); the payer may
+  be the same person or someone else (a friend paid for them, cash
+  from outside the participant list, etc.). Required field for new
+  settlements — there is no "anonymous" option, because the system
+  needs to track who paid to keep the books right (Splitwise-style).
+- `paidToUserId` — FK to `User.id`. **Who received the money** —
+  typically the event owner, but can be another player collecting on
+  the organizer's behalf.
 
-The migration is additive: nullable columns + three indexes. No
+The payer does not need to be a participant of the specific game. A
+player who booked online but didn't attend can still pay for the
+game's share. The payer dropdown is the full event roster (any event
+user, not just the game's participants), no anonymous option.
+
+The migration is additive: nullable columns + indexes. No
 destructive changes.
 
 ### 2. Backfill: `npm run wallet:backfill`
@@ -188,8 +203,24 @@ gone. A "Manage all payments" link points to the new tab.
   that survives renames. The rename-tolerant name drift is fixed at
   the source: the ledger rows are joined on `userId`, not on name.
 - The `notifyPaymentReminder` translation key is new in all 6 locales.
-- A 4th "Payments" tab is added to `/settle`. The other tabs are
-  unchanged.
+- The "Payments" view is now the 4th tab in `/settle`. It contains
+  three sections: a per-game outstanding list (which games have which
+  players still pending, with totals), a per-player bulk settle list,
+  and the dense payments matrix. The settlement dialogs let the
+  admin pick a **method** (cash / MB Way / Revolut / transfer), a
+  **paid by** user (any event user, no anonymous), and a **paid to**
+  user (defaults to the event owner).
+
+### Smart debt simplification (deferred)
+
+The "By player" tab in Splitwise (and similar apps) can simplify
+debts: if A owes B €5 and B owes C €5, then A can pay C €5 directly
+and B's debt to C is netted. This is graph reduction: minimum number
+of transactions to settle all debts. We have the data to do it
+(`WalletTransaction` has both `userId` (debtor) and `payerUserId`
+(payer) for `payment_received` rows), but the algorithm is a
+substantial feature on its own. **Deferred to a follow-up PR** —
+captured here so future-me knows the design was considered.
 
 ## Alternatives considered
 

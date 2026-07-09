@@ -257,7 +257,11 @@ _Avoid_: membership, plan, subscription
 A Monthly Subscription is **per-Event** — a player can be Monthly on Event A and Per-game on Event B at the same time.
 
 ## Per-game Player
-A player paying the existing per-game share (`eventCost.totalAmount / maxPlayers`) on each Event instance. The default model.
+A player paying the existing per-game share on each Event instance. The default model.
+
+**Per-player amount** = `EventCost.totalAmount / count(players on the payment list)`. The payment list is the set of `PlayerPayment` rows for the current Game. Before the payment list exists (pre-game, cost set but no players yet added), the UI shows a **price preview** of `totalAmount / maxPlayers` so players know what to budget. Once the game is over and the payment list is final, the actual per-player amount may differ from the preview if fewer than `maxPlayers` attended.
+
+Who is on the payment list is entirely at the Organizer's discretion — there is no automatic exclusion of no-shows. The Organizer controls the list before distributing it.
 _Avoid_: pay-as-you-go player, casual player
 
 ## Wallet

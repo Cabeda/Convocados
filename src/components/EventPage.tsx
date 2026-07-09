@@ -942,16 +942,19 @@ export default function EventPage({ eventId }: { eventId: string }) {
             />
             )}
 
-            {/* Payment tracking — hidden for unauthenticated users */}
-            {isAuthenticated && (event.splitCostsEnabled !== false) && (
+            {/* Payment section — shown to all authenticated users when a cost exists.
+                splitCostsEnabled is no longer used to gate visibility (ADR 0020). */}
+            {isAuthenticated && (
               <PaymentSection
                 eventId={eventId}
                 canEdit={canEditSettings}
                 activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
+                maxPlayers={event.maxPlayers}
+                dateTime={event.dateTime}
+                durationMinutes={event.durationMinutes ?? 90}
                 expanded={paymentExpanded}
                 onExpandedChange={(exp) => setPaymentExpanded(exp ? true : undefined)}
                 onPaymentChange={() => setBannerRefreshKey((k) => k + 1)}
-                gamePhase={new Date(event.dateTime) > new Date() ? "upcoming" : "past"}
                 currentUserName={session?.user?.name ?? null}
               />
             )}

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Paper, Typography, Stack, Box, Button, alpha, useTheme,
-  LinearProgress, Chip, Alert,
+  LinearProgress, Chip,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
@@ -10,7 +10,7 @@ import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import CelebrationIcon from "@mui/icons-material/Celebration";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
-import SaveIcon from "@mui/icons-material/Save";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { useT } from "~/lib/useT";
 import { MvpVotingCard } from "./MvpVotingCard";
 
@@ -51,14 +51,10 @@ interface Props {
   refreshKey?: number;
 }
 
-export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey }: Props) {
+export function PostGameBanner({ eventId, canEdit: _canEdit, onScrollToScore, onScrollToPayments: _onScrollToPayments, onStatusChange, refreshKey }: Props) {
   const t = useT();
   const theme = useTheme();
   const [status, setStatus] = useState<PostGameStatus | null>(null);
-  const [editablePayments, setEditablePayments] = useState<PaymentEntry[]>([]);
-  const [paymentsDirty, setPaymentsDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   const onStatusChangeRef = useRef(onStatusChange);
   useEffect(() => {
@@ -72,12 +68,9 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
         const data = await statusRes.json();
         setStatus(data);
         onStatusChangeRef.current?.(data);
-        if (data.paymentsSnapshot && !paymentsDirty) {
-          setEditablePayments(data.paymentsSnapshot);
-        }
       }
     } catch { /* ignore */ }
-  }, [eventId, paymentsDirty]);
+  }, [eventId]);
 
   useEffect(() => {
     fetchStatus();
@@ -89,53 +82,14 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
     if (refreshKey !== undefined && refreshKey > 0) fetchStatus();
   }, [refreshKey, fetchStatus]);
 
-  // Sync editable payments when status loads for the first time
-  useEffect(() => {
-    if (status?.paymentsSnapshot && editablePayments.length === 0) {
-      setEditablePayments(status.paymentsSnapshot);
-    }
-  }, [status?.paymentsSnapshot, editablePayments.length]);
-
   // Don't show if game hasn't ended (unless there are unsettled past payments or pending MVP votes) or everything is complete
   if (!status || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || status.allComplete) return null;
 
   const completedCount = (status.hasScore ? 1 : 0) + (status.allPaid ? 1 : 0);
   const progressPct = (completedCount / 2) * 100;
 
-  const cyclePaymentStatus = (idx: number) => {
-    const order: Array<"paid" | "pending"> = ["pending", "paid"];
-    setEditablePayments((prev) =>
-      prev.map((p, i) => {
-        if (i !== idx) return p;
-        const next = order[(order.indexOf(p.status) + 1) % order.length];
-        return { ...p, status: next };
-      }),
-    );
-    setPaymentsDirty(true);
-  };
-
-  const handleSavePayments = async () => {
-    if (!status.latestHistoryId) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const res = await fetch(`/api/events/${eventId}/history/${status.latestHistoryId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentsSnapshot: editablePayments }),
-      });
-      if (!res.ok) {
-        setSaveError(res.status === 403 ? t("postGamePaymentsLocked") : t("somethingWentWrong"));
-      } else {
-        setPaymentsDirty(false);
-        fetchStatus();
-      }
-    } catch { /* ignore */ }
-    setSaving(false);
-  };
-
-  const paidCount = editablePayments.filter((p) => p.status === "paid").length;
-  const hasPayments = editablePayments.length > 0;
+  const paidCount = status.paymentsSnapshot?.filter((p) => p.status === "paid").length ?? 0;
+  const totalCount = status.paymentsSnapshot?.length ?? 0;
 
   return (
     <Paper
@@ -287,61 +241,54 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
                         ? t("postGameNoCostSet")
                         : t("postGamePaymentsSummary")
                             .replace("{paid}", String(paidCount))
-                            .replace("{total}", String(editablePayments.length))}
+                            .replace("{total}", String(totalCount))}
                   </Typography>
                 </Box>
+                {/* Read-only: link to Settle page for full payment management (ADR 0020) */}
+                {status.hasCost && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color={status.allPaid ? "success" : "warning"}
+                    component="a"
+                    href={`/events/${eventId}/settle`}
+                    endIcon={<OpenInNewIcon fontSize="small" />}
+                    sx={{ textTransform: "none", whiteSpace: "nowrap" }}
+                  >
+                    {t("paymentsViewAll")}
+                  </Button>
+                )}
                 {!status.hasCost && (
-                  <Button size="small" variant="outlined" color="info" onClick={onScrollToPayments}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="info"
+                    component="a"
+                    href={`/events/${eventId}/settle`}
+                  >
                     {t("postGameSetCost")}
                   </Button>
                 )}
               </Box>
 
-              {/* Inline payment chips */}
-              {hasPayments && !status.allPaid && (
+              {/* Read-only payment summary chips (no editing) */}
+              {totalCount > 0 && !status.allPaid && (
                 <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}` }}>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                    {editablePayments.map((p, idx) => {
+                    {(status.paymentsSnapshot ?? []).map((p) => {
                       const isPaid = p.status === "paid";
-                      const chipColor = isPaid ? "success" : "warning";
                       return (
                         <Chip
                           key={p.playerName}
                           size="small"
                           variant={isPaid ? "filled" : "outlined"}
-                          color={chipColor}
+                          color={isPaid ? "success" : "warning"}
                           label={`${p.playerName}  ${p.amount.toFixed(2)}`}
-                          onClick={canEdit ? () => cyclePaymentStatus(idx) : undefined}
-                          sx={{
-                            borderRadius: 2,
-                            fontWeight: isPaid ? 600 : 400,
-                            ...(canEdit ? { cursor: "pointer" } : {}),
-                          }}
+                          sx={{ borderRadius: 2, fontWeight: isPaid ? 600 : 400 }}
                         />
                       );
                     })}
                   </Box>
-                  {canEdit && paymentsDirty && (
-                    <Box sx={{ mt: 1, display: "flex", justifyContent: "flex-end" }}>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="warning"
-                        disableElevation
-                        startIcon={<SaveIcon />}
-                        onClick={handleSavePayments}
-                        disabled={saving}
-                        sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
-                      >
-                        {t("savePayments")}
-                      </Button>
-                    </Box>
-                  )}
-                  {saveError && (
-                    <Alert severity="warning" sx={{ mt: 1, borderRadius: 2 }} onClose={() => setSaveError(null)}>
-                      {saveError}
-                    </Alert>
-                  )}
                 </Box>
               )}
             </Box>

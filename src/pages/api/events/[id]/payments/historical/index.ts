@@ -33,6 +33,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   const playerName = String(body.playerName ?? "").trim();
   const amountCents = typeof body.amountCents === "number" ? body.amountCents : undefined;
   const method = body.method ? String(body.method).trim().slice(0, 50) : null;
+  const payerUserId = body.payerUserId ? String(body.payerUserId).trim() : null;
+  const paidToUserId = body.paidToUserId ? String(body.paidToUserId).trim() : null;
 
   if (!gameHistoryId || !playerName) {
     return Response.json({ error: "gameHistoryId and playerName are required." }, { status: 400 });
@@ -45,6 +47,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     markedById,
     method,
     amountCents,
+    payerUserId,
+    paidToUserId,
   });
 
   if (result.reason === "no-event-player" || result.reason === "no-snapshot") {
