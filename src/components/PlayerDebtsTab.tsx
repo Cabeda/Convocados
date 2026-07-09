@@ -58,6 +58,7 @@ export function PlayerDebtsTab({ eventId, onChange }: { eventId: string; onChang
 
   const remind = async (playerName: string) => {
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch(`/api/events/${eventId}/payments/remind`, {
         method: "POST",
@@ -68,6 +69,8 @@ export function PlayerDebtsTab({ eventId, onChange }: { eventId: string; onChang
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? `Failed (${res.status}).`);
       }
+    } catch (e) {
+      setError(String(e));
     } finally {
       setBusy(false);
     }
@@ -75,6 +78,7 @@ export function PlayerDebtsTab({ eventId, onChange }: { eventId: string; onChang
 
   const settleAll = async (playerName: string) => {
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch(`/api/events/${eventId}/payments/historical/bulk`, {
         method: "POST",
@@ -84,13 +88,15 @@ export function PlayerDebtsTab({ eventId, onChange }: { eventId: string; onChang
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? `Failed (${res.status}).`);
-        return;
+        return; // keep modal open so the user sees the error and can retry
       }
       await fetchData();
       onChange?.();
+      setConfirmBulk(null);
+    } catch (e) {
+      setError(String(e));
     } finally {
       setBusy(false);
-      setConfirmBulk(null);
     }
   };
 
@@ -202,6 +208,9 @@ export function PlayerDebtsTab({ eventId, onChange }: { eventId: string; onChang
               </>
             )}
           </DialogContentText>
+          {error && (
+            <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmBulk(null)}>{t("cancel")}</Button>

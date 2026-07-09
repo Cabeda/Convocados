@@ -56,9 +56,13 @@ export const GET: APIRoute = async ({ params, request }) => {
     settledAt: string | null;
   }
 
-  // If using ledger, fetch the relevant settlement rows in one query
+  // Always check the ledger for settlement rows (a payment_received row
+  // with `gameHistoryId` set is a Historical Settlement — ADR 0019). This
+  // is independent of the `useLedger` flag: the matrix should always show
+  // settlements, even when the balance read path is still on the legacy
+  // PlayerPayment + snapshot impl.
   const settlementsByGameAndUser = new Map<string, { amountCents: number; createdAt: Date }>();
-  if (useLedger) {
+  {
     const userIds = eventPlayers.map((p) => p.userId).filter((u): u is string => !!u);
     if (userIds.length > 0 && histories.length > 0) {
       const settlements = await prisma.walletTransaction.findMany({
