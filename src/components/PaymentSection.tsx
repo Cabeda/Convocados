@@ -85,7 +85,7 @@ export function PaymentSection({
   activePlayerCount,
   expanded: controlledExpanded,
   onExpandedChange,
-  onPaymentChange,
+  onPaymentChange: _onPaymentChange,
   gamePhase = "upcoming",
   currentUserName = null,
 }: {

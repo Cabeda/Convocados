@@ -441,7 +441,7 @@ export async function settleHistoricalGame(
   // Use the snapshot's amount for the entry if not provided. The snapshot
   // is the source of truth for "what was owed" at the time of the game.
   let effectiveAmountCents = amountCents;
-  if (effectiveAmountCents == null) {
+  if (effectiveAmountCents === undefined || effectiveAmountCents === null) {
     const h = await prisma.gameHistory.findUnique({
       where: { id: gameHistoryId },
       select: { paymentsSnapshot: true },

@@ -1,9 +1,9 @@
 /* eslint-disable react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. */
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  Box, Paper, Stack, Tabs, Tab, Typography, Alert, Chip,
+  Box, Paper, Stack, Typography, Alert, Chip,
   Table, TableBody, TableCell, TableHead, TableRow, Button,
-  CircularProgress, alpha, IconButton, Tooltip, Checkbox,
+  CircularProgress, Tooltip,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
 } from "@mui/material";
 import CheckIcon from "@mui/icons-material/Check";
@@ -222,7 +222,7 @@ export function PaymentsMatrixTab({ eventId, onChange }: { eventId: string; onCh
         <DialogActions>
           <Button onClick={() => setConfirmSettle(null)}>{t("cancel")}</Button>
           <Button
-            onClick={() => confirmSettle && settle(confirmSettle.gameHistoryId, confirmSettle.playerName)}
+            onClick={() => { if (confirmSettle) { void settle(confirmSettle.gameHistoryId, confirmSettle.playerName); } }}
             color="success"
             variant="contained"
             startIcon={<CheckIcon />}

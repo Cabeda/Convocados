@@ -24,7 +24,7 @@ import {
   getGateBalanceLegacy,
 } from "~/lib/balance.legacy.server";
 
-const LEGACY = { WALLET_READ_PATH_ENABLED: "false" } as Record<string, string>;
+const _LEGACY = { WALLET_READ_PATH_ENABLED: "false" } as Record<string, string>;
 
 beforeEach(async () => {
   await prisma.walletTransaction.deleteMany();
