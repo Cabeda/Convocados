@@ -73,31 +73,55 @@ export const GET: APIRoute = async ({ params, request }) => {
   const hasResetOccurred = latestHistory
     && event.dateTime.getTime() > latestHistory.dateTime.getTime();
 
+  // The snapshot actually rendered in the banner. For a settled (snapshot)
+  // game we net Historical Settlements into it so a payment_received ledger
+  // row flips the frozen entry to "paid" without mutating the snapshot (ADR 0019).
+  let nettedSnapshot: Array<{ playerName: string; amount: number; status: string; method?: string | null }> | null = null;
+
   if (latestHistory?.paymentsSnapshot) {
     // History snapshot exists — this is the authoritative source for the past game
     pastGameSource = "snapshot";
     hasCost = true;
     try {
-      const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
-      if (snapshot.length > 0) {
-        allPaid = snapshot.every(
-          (p) => p.status === "paid",
-        );
-      }
+      nettedSnapshot = JSON.parse(latestHistory.paymentsSnapshot);
     } catch { /* ignore parse errors */ }
   } else if (eventCost && eventCost.totalAmount > 0 && !hasResetOccurred) {
     // No snapshot AND game hasn't reset yet — live payments are the past game's
     pastGameSource = "live";
     hasCost = true;
     if (eventCost.payments.length > 0) {
-      allPaid = eventCost.payments.every(
-        (p) => p.status === "paid",
-      );
+      nettedSnapshot = eventCost.payments.map((p) => ({
+        playerName: p.playerName,
+        amount: p.amount,
+        status: p.status,
+        method: p.method,
+      }));
     }
   } else {
     // Either: no cost at all, OR history exists post-reset with no snapshot
     // (past game had no cost). Live payments belong to the NEW game — don't use.
     hasCost = false;
+  }
+
+  // Net Historical Settlements (ADR 0019) into the snapshot-derived view.
+  if (pastGameSource === "snapshot" && nettedSnapshot && latestHistory) {
+    const settled = await prisma.walletTransaction.findMany({
+      where: {
+        eventId: event.id,
+        gameHistoryId: latestHistory.id,
+        reason: "payment_received",
+        statusAfter: "paid",
+      },
+      select: { playerName: true },
+    });
+    const settledNames = new Set((settled ?? []).map((s) => s.playerName));
+    nettedSnapshot = nettedSnapshot.map((p) =>
+      settledNames.has(p.playerName) ? { ...p, status: "paid" as const } : p,
+    );
+  }
+
+  if (nettedSnapshot && nettedSnapshot.length > 0) {
+    allPaid = nettedSnapshot.every((p) => p.status === "paid");
   }
 
   // ─── MVP voting completion ──────────────────────────────────────────
@@ -161,20 +185,13 @@ export const GET: APIRoute = async ({ params, request }) => {
   // This allows the banner to show for recurring events that have already
   // reset to the next occurrence but still have unpaid past game payments.
   let hasPendingPastPayments = false;
-  if (!gameEnded && latestHistory?.paymentsSnapshot) {
-    try {
-      const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
-      if (snapshot.length > 0) {
-        hasPendingPastPayments = !snapshot.every(
-          (p) => p.status === "paid",
-        );
-      }
-    } catch { /* ignore */ }
+  if (!gameEnded && nettedSnapshot && nettedSnapshot.length > 0) {
+    hasPendingPastPayments = !nettedSnapshot.every((p) => p.status === "paid");
   }
 
   // Build paymentsSnapshot for the banner to render inline.
-  // Must match the same source used for allPaid above.
-  let paymentsSnapshot: Array<{ playerName: string; amount: number; status: string; method?: string | null }> | null = null;
+  // Must match the same source used for allPaid above (netted snapshot).
+  const paymentsSnapshot = nettedSnapshot;
   let latestHistoryId: string | null = null;
   let costCurrency: string | null = null;
   let costAmount: number | null = null;
@@ -188,18 +205,15 @@ export const GET: APIRoute = async ({ params, request }) => {
     latestHistoryId = latestHistory.id;
   }
 
-  if (pastGameSource === "snapshot" && latestHistory?.paymentsSnapshot) {
-    try {
-      paymentsSnapshot = JSON.parse(latestHistory.paymentsSnapshot);
-    } catch { /* ignore */ }
-  } else if (pastGameSource === "live" && eventCost && eventCost.payments.length > 0) {
-    paymentsSnapshot = eventCost.payments.map((p) => ({
-      playerName: p.playerName,
-      amount: p.amount,
-      status: p.status,
-      method: p.method,
-    }));
-  }
+  // Tells the banner which write path to use when an owner/admin taps a pill:
+  //  - "historical": settled game → POST /payments/historical (records a
+  //    payment_received ledger row netted against the frozen snapshot)
+  //  - "live": game ended but not yet reset → PUT /payments (live PlayerPayment)
+  //  - "none": no actionable payment source
+  const paymentWriteMode: "historical" | "live" | "none" =
+    pastGameSource === "snapshot" ? "historical"
+      : pastGameSource === "live" ? "live"
+        : "none";
 
   // Check if the current user is a participant
   let isParticipant = false;
@@ -239,7 +253,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   return Response.json({
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant,
-    latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
+    latestHistoryId, paymentsSnapshot, costCurrency, costAmount, paymentWriteMode,
     hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete, bannerMvpComplete,
     paidAggregate,
     scoreOne: latestHistory?.scoreOne ?? null,

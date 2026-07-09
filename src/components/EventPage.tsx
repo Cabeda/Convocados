@@ -8,7 +8,6 @@ import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
-import { PaymentSection } from "./PaymentSection";
 import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
@@ -79,7 +78,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelConfirmBusy, setCancelConfirmBusy] = useState(false);
   const [_postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
-  const [paymentExpanded, setPaymentExpanded] = useState<boolean | undefined>(undefined);
   const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
 
   // ── ELO ratings for balanced mode ───────────────────────────────────────────
@@ -198,10 +196,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
       }, 300);
     }
     if (deepLinkAction === "confirm-payment" && deepLinkPlayer) {
-      setPaymentExpanded(true);
-      setTimeout(() => {
-        document.getElementById("payment-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 300);
+      window.location.href = `/events/${eventId}/settle`;
     }
   }, [autoOpenPay, deepLinkAction, deepLinkPlayer, refreshBalance, eventId]);
 
@@ -899,36 +894,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onScrollToScore={() => {
                 window.location.href = `/events/${eventId}/history`;
               }}
-              onScrollToPayments={() => {
-                setPaymentExpanded(true);
-                setTimeout(() => {
-                  const el = document.getElementById("payment-section");
-                  if (el) {
-                    const y = el.getBoundingClientRect().top + window.scrollY - 80;
-                    window.scrollTo({ top: y, behavior: "smooth" });
-                  }
-                }, 100);
-              }}
-            />
-            )}
-
-            {/* Payment section — shown to all authenticated users when a cost exists.
-                splitCostsEnabled is no longer used to gate visibility (ADR 0020). */}
-            {isAuthenticated && (
-              <PaymentSection
-                eventId={eventId}
-                canEdit={canEditSettings}
-                activePlayerCount={Math.min(event.players.length, event.maxPlayers)}
-                maxPlayers={event.maxPlayers}
-                dateTime={event.dateTime}
-                durationMinutes={event.durationMinutes ?? 90}
-                expanded={paymentExpanded}
-                onExpandedChange={(exp) => setPaymentExpanded(exp ? true : undefined)}
-                onPaymentChange={() => setBannerRefreshKey((k) => k + 1)}
-                currentUserName={session?.user?.name ?? null}
-                isOnList={!!(session?.user?.id && event.players.some((p) => p.userId === session.user!.id))}
-              />
-            )}
+            />)}
 
             {/* Players — single merged component (name+email+contacts+pills).
                 The Quick Join pill is the first pill in the row when authenticated. */}

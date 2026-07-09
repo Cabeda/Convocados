@@ -17,6 +17,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import AssignmentIcon from "@mui/icons-material/Assignment";
+import PaymentsIcon from "@mui/icons-material/Payments";
 import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
@@ -78,6 +79,22 @@ export function EventHeader({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isPast = gameDate < new Date();
+
+  // Slim "next game" payment chip — pulls the live cost so the header always
+  // reflects what's owed for the upcoming game (ADR 0020).
+  const [headerCost, setHeaderCost] = useState<{
+    totalAmount: number;
+    currency: string;
+    payments: Array<{ playerName: string; amount: number; status: string }>;
+  } | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/events/${eventId}/cost`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (active) setHeaderCost(d); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [eventId]);
 
   // ── Edit mode ────────────────────────────────────────────────────────────────
   const [editMode, setEditMode] = useState(false);
@@ -434,7 +451,7 @@ export function EventHeader({
             )}
 
             {/* ── Row 5: Contextual chips (minimal — only show what's actionable/critical) ── */}
-            {!editMode && (event.archivedAt || (isAuthenticated && isOwnerless)) && (
+            {!editMode && (event.archivedAt || (isAuthenticated && isOwnerless) || (headerCost && headerCost.totalAmount > 0)) && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
                 {event.archivedAt && (
                   <Chip label={t("archivedBadge")} size="small" color="warning" variant="outlined" />
@@ -444,6 +461,24 @@ export function EventHeader({
                     sx={{ height: 24, fontSize: "0.75rem", py: 0 }}>
                     {t("claimOwnership")}
                   </Button>
+                )}
+                {headerCost && headerCost.totalAmount > 0 && (
+                  <Tooltip title={t("headerNextGameCostTotal", { total: headerCost.totalAmount.toFixed(2), currency: headerCost.currency })}>
+                    <Chip
+                      component="a"
+                      href={`/events/${eventId}/settle`}
+                      clickable
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                      icon={<PaymentsIcon fontSize="small" />}
+                      label={t("headerNextGameCost", {
+                        per: (headerCost.totalAmount / Math.max(headerCost.payments.length || event.maxPlayers, 1)).toFixed(2),
+                        currency: headerCost.currency,
+                      })}
+                      sx={{ fontWeight: 600 }}
+                    />
+                  </Tooltip>
                 )}
               </Box>
             )}

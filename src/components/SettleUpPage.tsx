@@ -3,14 +3,16 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   Box, Paper, Stack, Tabs, Tab, Typography, Alert, Chip,
   Table, TableBody, TableCell, TableHead, TableRow, TextField, Button,
-  CircularProgress, alpha, IconButton, Divider,
+  CircularProgress, alpha, IconButton, Divider, Collapse,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useT } from "~/lib/useT";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
-import { SettlePaymentsTab } from "./SettlePaymentsTab";
+import { PaymentMethodOverrideDialog } from "./event/PaymentMethodOverrideDialog";
+import { PaymentChips } from "./PaymentChips";
 
 interface Props {
   eventId: string;
@@ -120,9 +122,6 @@ export default function SettleUpPage({ eventId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Event users for the payer/paidTo picker in the payments dialog
-  const [eventUsers, setEventUsers] = useState<Array<{ id: string; name: string }>>([]);
-
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch(`/api/events/${eventId}/settle`);
@@ -140,24 +139,6 @@ export default function SettleUpPage({ eventId }: Props) {
   }, [eventId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-
-  // Fetch event users for the payer/paidTo picker. This is a separate
-  // endpoint so it can be reused by the payments matrix and the picker.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/events/${eventId}/event-users`);
-        if (!res.ok) return;
-        const json = await res.json();
-        if (cancelled) return;
-        setEventUsers((json.users ?? []) as Array<{ id: string; name: string }>);
-      } catch {
-        /* non-fatal */
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [eventId]);
 
   if (loading) {
     return (
@@ -215,24 +196,21 @@ export default function SettleUpPage({ eventId }: Props) {
                 variant="scrollable"
                 scrollButtons="auto"
               >
-                <Tab label={t("settleTabSettle") ?? "Settle"} />
-                <Tab label={t("settleTabActivity") ?? "Your activity"} />
-                <Tab label={t("settleTabExtras") ?? "Extras"} />
-                {data.admin && (
-                  <Tab label={t("settleTabPayments") ?? "Payments"} />
-                )}
+                <Tab label={t("settleTabStatus") ?? "Status"} />
+                <Tab label={t("settleTabHistory") ?? "History"} />
               </Tabs>
             </Paper>
 
-            {tab === 0 && <SettleTab data={data} />}
-            {tab === 1 && <ActivityTab data={data} />}
-            {tab === 2 && <ExtrasTab data={data} />}
-            {tab === 3 && data.admin && (
-              <SettlePaymentsTab
-                eventId={eventId}
-                eventUsers={eventUsers}
-                onChange={fetchData}
-              />
+            {tab === 0 && (
+              <Stack spacing={2}>
+                <SettleTab data={data} />
+                <PaymentMethodCard eventId={data.event.id} canSetDefault={!!data.admin} onChange={fetchData} />
+                <ActivityTab data={data} />
+                <ExtrasTab data={data} />
+              </Stack>
+            )}
+            {tab === 1 && (
+              <HistoryTab eventId={eventId} currency={data.event.currency} onChange={fetchData} />
             )}
           </Stack>
         </Box>
@@ -524,6 +502,134 @@ function ExtrasTab({ data }: { data: SettlePayload }) {
           </Stack>
         )}
       </Paper>
+    </Stack>
+  );
+}
+
+/**
+ * Embeds the PaymentMethodOverrideDialog in the Status tab. Previously the
+ * dialog existed but had no trigger, so the "change method" control was
+ * effectively invisible (ADR 0020 fix).
+ */
+function PaymentMethodCard({ eventId, canSetDefault, onChange }: { eventId: string; canSetDefault: boolean; onChange: () => void }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [cost, setCost] = useState<{ paymentMethods: string | null; tempPaymentMethods: string | null } | null>(null);
+
+  const openDialog = () => {
+    fetch(`/api/events/${eventId}/cost`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { setCost(d); setOpen(true); })
+      .catch(() => setOpen(true));
+  };
+
+  return (
+    <Paper sx={{ p: 2, borderRadius: 3 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Typography variant="h6" sx={{ flex: 1 }}>{t("settlePaymentsMethodTitle") ?? "Payment method"}</Typography>
+        <Button variant="outlined" size="small" onClick={openDialog}>
+          {t("settlePaymentsMethodChange") ?? "Change method"}
+        </Button>
+      </Box>
+      <PaymentMethodOverrideDialog
+        eventId={eventId}
+        defaultMethods={cost?.paymentMethods ?? null}
+        overrideMethods={cost?.tempPaymentMethods ?? null}
+        canSetDefault={canSetDefault}
+        open={open}
+        onClose={() => setOpen(false)}
+        onSaved={() => { setOpen(false); onChange(); }}
+      />
+    </Paper>
+  );
+}
+
+interface HistoryEntry {
+  id: string;
+  dateTime: string;
+  status: string;
+  paymentsSnapshot: string | null;
+}
+
+/**
+ * History drill-down: lists past games with their payment snapshot so owners
+ * can see who still owes what, game by game (ADR 0020).
+ */
+function HistoryTab({ eventId, currency, onChange }: { eventId: string; currency: string; onChange: () => void }) {
+  const t = useT();
+  const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/events/${eventId}/history?limit=50`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        const rows: HistoryEntry[] = (json.data ?? []).filter(
+          (e: any) => e.status === "played" || e.status === "cancelled",
+        );
+        setEntries(rows);
+      } catch {
+        /* non-fatal */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [eventId, onChange]);
+
+  if (loading) {
+    return <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress /></Box>;
+  }
+  if (entries.length === 0) {
+    return <Alert severity="info">{t("settleHistoryEmpty") ?? "No past games yet."}</Alert>;
+  }
+
+  return (
+    <Stack spacing={1.5}>
+      {entries.map((e) => {
+        let payments: Array<{ playerName: string; amount: number; status: string; method?: string | null }> = [];
+        if (e.paymentsSnapshot) {
+          try { payments = JSON.parse(e.paymentsSnapshot); } catch { /* ignore */ }
+        }
+        const isOpen = expanded === e.id;
+        return (
+          <Paper key={e.id} sx={{ p: 2, borderRadius: 3 }}>
+            <Box
+              sx={{ display: "flex", alignItems: "center", gap: 1, cursor: payments.length ? "pointer" : "default" }}
+              onClick={() => payments.length && setExpanded(isOpen ? null : e.id)}
+            >
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  {new Date(e.dateTime).toLocaleString()}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {e.status === "cancelled" ? "Cancelled" : (t("settleTabHistory") ?? "Game")}
+                  {payments.length > 0 && ` · ${payments.filter((p) => p.status === "paid").length}/${payments.length} paid`}
+                </Typography>
+              </Box>
+              {payments.length > 0 && (
+                <ExpandMoreIcon sx={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+              )}
+            </Box>
+            <Collapse in={isOpen}>
+              {payments.length > 0 ? (
+                <Box sx={{ mt: 1.5 }}>
+                  <PaymentChips payments={payments} />
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {t("historyNoPayments") ?? "No payments for this game."}
+                </Typography>
+              )}
+            </Collapse>
+          </Paper>
+        );
+      })}
     </Stack>
   );
 }

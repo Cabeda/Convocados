@@ -34,6 +34,7 @@ import { formatDateInTz } from "~/lib/timezones";
 import { ScoreRoller } from "./event/ScoreRoller";
 import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
 import { MvpVotingCard } from "./MvpVotingCard";
+import { PaymentChips } from "./PaymentChips";
 
 type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
@@ -421,7 +422,6 @@ function HistoryCardFull({
 
   const payments: PaymentSnapshotEntry[] = entry.paymentsSnapshot ? JSON.parse(entry.paymentsSnapshot) : [];
   const [editablePayments, setEditablePayments] = useState<PaymentSnapshotEntry[]>(payments);
-  const [paymentsDirty, setPaymentsDirty] = useState(false);
   const date = new Date(entry.dateTime);
   const editableUntil = new Date(entry.editableUntil);
   const isCancelled = entry.status === "cancelled";
@@ -616,19 +616,34 @@ function HistoryCardFull({
 
   const cyclePaymentStatus = (idx: number) => {
     const order: Array<"paid" | "pending"> = ["pending", "paid"];
-    setEditablePayments((prev) =>
-      prev.map((p, i) => {
-        if (i !== idx) return p;
-        const next = order[(order.indexOf(p.status) + 1) % order.length];
-        return { ...p, status: next };
-      }),
-    );
-    setPaymentsDirty(true);
-  };
-
-  const handleSavePayments = () => {
-    patch({ paymentsSnapshot: editablePayments });
-    setPaymentsDirty(false);
+    const nextPayments = editablePayments.map((p, i) => {
+      if (i !== idx) return p;
+      const next = order[(order.indexOf(p.status) + 1) % order.length];
+      return { ...p, status: next };
+    });
+    // Optimistic update; revert on failure.
+    setEditablePayments(nextPayments);
+    setSaving(true);
+    setError(null);
+    const res = fetch(`/api/events/${eventId}/history/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentsSnapshot: nextPayments }),
+    });
+    res.then(async (r) => {
+      const json = await r.json().catch(() => ({}));
+      setSaving(false);
+      if (!r.ok) {
+        setEditablePayments(editablePayments);
+        setError(json.error);
+        return;
+      }
+      onUpdate(json);
+    }).catch((err) => {
+      setSaving(false);
+      setEditablePayments(editablePayments);
+      setError(String(err));
+    });
   };
 
   // Filter known players for autocomplete: exclude players already on this team
@@ -1035,52 +1050,14 @@ function HistoryCardFull({
             <Section
               title={t("historyPayments")}
               icon={<PaymentIcon fontSize="small" sx={{ color: "text.secondary" }} />}
-              action={
-                canEditPayments && paymentsDirty ? (
-                  <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
-                    onClick={handleSavePayments} disabled={saving}
-                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
-                    {t("savePayments")}
-                  </Button>
-                ) : undefined
-              }
+              action={undefined}
             >
-              <Box sx={{
-                p: 2, borderRadius: 3,
-                backgroundColor: alpha(theme.palette.action.hover, 0.04),
-                border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-              }}>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                  {(canEditPayments ? editablePayments : payments).map((p, idx) => {
-                    const isPaid = p.status === "paid";
-                    const chipColor = isPaid ? "success" : "warning";
-                    return (
-                      <Chip
-                        key={p.playerName}
-                        size="small"
-                        variant={isPaid ? "filled" : "outlined"}
-                        color={chipColor}
-                        label={`${p.playerName}  ${p.amount.toFixed(2)}`}
-                        onClick={canEditPayments ? () => cyclePaymentStatus(idx) : undefined}
-                        sx={{
-                          borderRadius: 2,
-                          fontWeight: isPaid ? 600 : 400,
-                          ...(canEditPayments ? { cursor: "pointer" } : {}),
-                        }}
-                      />
-                    );
-                  })}
-                </Box>
-                {payments.some((p) => p.method) && (
-                  <Stack spacing={0.25} sx={{ mt: 1.5, pt: 1.5, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.2)}` }}>
-                    {payments.filter((p) => p.method).map((p) => (
-                      <Typography key={p.playerName} variant="caption" color="text.secondary">
-                        {t("historyPaymentRef", { ref: `${p.playerName}: ${p.method}` })}
-                      </Typography>
-                    ))}
-                  </Stack>
-                )}
-              </Box>
+              <PaymentChips
+                payments={canEditPayments ? editablePayments : payments}
+                editable={canEditPayments}
+                onToggle={canEditPayments ? cyclePaymentStatus : undefined}
+                showMethodRefs
+              />
             </Section>
           </Box>
         )}

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Paper, Typography, Stack, Box, Button, alpha, useTheme,
-  LinearProgress, Chip, Tooltip,
+  LinearProgress,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
@@ -13,6 +13,7 @@ import HowToRegIcon from "@mui/icons-material/HowToReg";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { useT } from "~/lib/useT";
 import { MvpVotingCard } from "./MvpVotingCard";
+import { PaymentChips } from "./PaymentChips";
 
 interface PaymentEntry {
   playerName: string;
@@ -30,6 +31,7 @@ export interface PostGameStatus {
   isParticipant: boolean;
   latestHistoryId: string | null;
   paymentsSnapshot: PaymentEntry[] | null;
+  paymentWriteMode: "historical" | "live" | "none";
   costCurrency: string | null;
   costAmount: number | null;
   hasPendingPastPayments: boolean;
@@ -84,14 +86,24 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   }, [refreshKey, fetchStatus]);
 
   // Admin/owner taps a pending player pill to mark that single debt paid.
+  // Settled games (frozen snapshot) write via the Historical Settlement path;
+  // games ended-but-not-reset write to the live payment.
   const markPlayerPaid = async (playerName: string) => {
     setSavingPlayer(playerName);
     try {
-      await fetch(`/api/events/${eventId}/payments`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerName, status: "paid" }),
-      });
+      if (status?.paymentWriteMode === "historical" && status.latestHistoryId) {
+        await fetch(`/api/events/${eventId}/payments/historical`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ gameHistoryId: status.latestHistoryId, playerName }),
+        });
+      } else {
+        await fetch(`/api/events/${eventId}/payments`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ playerName, status: "paid" }),
+        });
+      }
       await fetchStatus();
     } catch { /* ignore */ }
     setSavingPlayer(null);
@@ -105,6 +117,14 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
 
   const paidCount = status.paymentsSnapshot?.filter((p) => p.status === "paid").length ?? 0;
   const totalCount = status.paymentsSnapshot?.length ?? 0;
+
+  const onToggleBanner = (idx: number) => {
+    const p = status?.paymentsSnapshot?.[idx];
+    if (p) markPlayerPaid(p.playerName);
+  };
+  const savingIdx = savingPlayer
+    ? (status?.paymentsSnapshot?.findIndex((p) => p.playerName === savingPlayer) ?? null)
+    : null;
 
   return (
     <Paper
@@ -287,41 +307,16 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
               </Box>
 
               {/* Payment summary chips. Admin/owner can tap a pending pill to mark that player paid. */}
-              {totalCount > 0 && !status.allPaid && (
+              {totalCount > 0 && !status.allPaid && canEdit && (
                 <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}` }}>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                    {(status.paymentsSnapshot ?? []).map((p) => {
-                      const isPaid = p.status === "paid";
-                      const canToggle = canEdit && !isPaid;
-                      return (
-                        <Tooltip
-                          key={p.playerName}
-                          title={canToggle
-                            ? t("postGameMarkPaidHint", { player: p.playerName })
-                            : isPaid
-                              ? t("postGamePaidHint", { player: p.playerName })
-                              : t("postGameTapToPayHint")}
-                        >
-                          <span>
-                            <Chip
-                              size="small"
-                              variant={isPaid ? "filled" : "outlined"}
-                              color={isPaid ? "success" : "warning"}
-                              label={`${p.playerName}  ${p.amount.toFixed(2)}`}
-                              onClick={canToggle ? () => markPlayerPaid(p.playerName) : undefined}
-                              disabled={savingPlayer === p.playerName}
-                              clickable={canToggle}
-                              sx={{
-                                borderRadius: 2,
-                                fontWeight: isPaid ? 600 : 400,
-                                ...(canToggle ? { cursor: "pointer" } : {}),
-                              }}
-                            />
-                          </span>
-                        </Tooltip>
-                      );
-                    })}
-                  </Box>
+                  <PaymentChips
+                    payments={status.paymentsSnapshot ?? []}
+                    editable
+                    onToggle={onToggleBanner}
+                    savingIdx={savingIdx}
+                    isDisabled={(p) => p.status === "paid"}
+                    showMethodRefs
+                  />
                 </Box>
               )}
             </Box>

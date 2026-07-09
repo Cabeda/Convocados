@@ -942,6 +942,8 @@ const en = {
   eventArchived: "Event archived.",
   eventUnarchived: "Event unarchived.",
   archivedBadge: "Archived",
+  headerNextGameCost: "{per} {currency} / player",
+  headerNextGameCostTotal: "Total game cost: {total} {currency}",
   archivePlayer: "Archive player",
   archivePlayerDesc: "Archived players are hidden from the player list. Use this for duplicate accounts or inactive players.",
   archivePlayerBtn: "Archive",
@@ -1176,6 +1178,11 @@ const en = {
 
   // Settle Up
   settleUpTitle: "Settle Up",
+  settleTabStatus: "Status",
+  settleTabHistory: "History",
+  settlePaymentsMethodTitle: "Payment method",
+  settlePaymentsMethodChange: "Change method",
+  settleHistoryEmpty: "No past games yet.",
   settleTabSettle: "Settle",
   settleTabActivity: "Your activity",
   settleTabExtras: "Extras",
