@@ -78,7 +78,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelConfirmBusy, setCancelConfirmBusy] = useState(false);
   const [_postGameStatus, setPostGameStatus] = useState<PostGameStatus | null>(null);
-  const [bannerRefreshKey, setBannerRefreshKey] = useState(0);
+  const [bannerRefreshKey] = useState(0);
 
   // ── ELO ratings for balanced mode ───────────────────────────────────────────
   const [ratingsResponse, setRatingsResponse] = useState<{ data: { name: string; rating: number }[] } | null>(null);
