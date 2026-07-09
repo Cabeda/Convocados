@@ -31,24 +31,42 @@ const log = createLogger("players-api");
 startIdempotencySweep();
 
 /**
+ * Resolve the authoritative active player names for an event.
+ * ADR 0016: when currentGameId exists, use GameParticipant (game-scoped).
+ * Falls back to the legacy Player table for non-recurring events.
+ */
+async function getActivePlayerNames(eventId: string, maxPlayers: number, currentGameId?: string | null): Promise<Set<string>> {
+  if (currentGameId) {
+    const participants = await prisma.gameParticipant.findMany({
+      where: { gameId: currentGameId, archivedAt: null },
+      include: { eventPlayer: { select: { name: true } } },
+      orderBy: { order: "asc" },
+      take: maxPlayers,
+    });
+    return new Set(participants.map((gp) => gp.eventPlayer.name));
+  }
+  const players = await prisma.player.findMany({
+    where: { eventId, archivedAt: null },
+    orderBy: { order: "asc" },
+    take: maxPlayers,
+    select: { name: true },
+  });
+  return new Set(players.map(p => p.name));
+}
+
+/**
  * Validate that all team members are active players (order < maxPlayers).
  * Removes any invalid members from teams rather than clearing all teams.
  * Returns true if any members were removed.
  */
-export async function validateTeams(eventId: string, maxPlayers: number): Promise<boolean> {
+export async function validateTeams(eventId: string, maxPlayers: number, currentGameId?: string | null): Promise<boolean> {
   const teams = await prisma.teamResult.findMany({
     where: { eventId },
     include: { members: true },
   });
   if (teams.length === 0) return false;
 
-  const activePlayers = await prisma.player.findMany({
-    where: { eventId },
-    orderBy: { order: "asc" },
-    take: maxPlayers,
-    select: { name: true },
-  });
-  const activeNames = new Set(activePlayers.map(p => p.name));
+  const activeNames = await getActivePlayerNames(eventId, maxPlayers, currentGameId);
 
   const idsToRemove: string[] = [];
   for (const team of teams) {
@@ -71,23 +89,19 @@ export async function validateTeams(eventId: string, maxPlayers: number): Promis
  * When the event has balanced=true, triggers a full rebalance (minimum swaps).
  * Otherwise, adds to the team with fewer players.
  */
-export async function addPlayerToTeams(eventId: string, playerName: string) {
+export async function addPlayerToTeams(eventId: string, playerName: string, currentGameId?: string | null) {
   const teams = await prisma.teamResult.findMany({
     where: { eventId },
     include: { members: true },
   });
   if (teams.length === 0) return; // no teams generated yet
 
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true } });
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true, currentGameId: true } });
+  const gameId = currentGameId ?? event?.currentGameId;
 
   if (event?.balanced && teams.length === 2) {
     // Full rebalance: include all current members + new player
-    const allPlayers = await prisma.player.findMany({
-      where: { eventId, archivedAt: null },
-      orderBy: { order: "asc" },
-      take: event.maxPlayers,
-    });
-    const activeNames = new Set(allPlayers.map(p => p.name));
+    const activeNames = await getActivePlayerNames(eventId, event.maxPlayers, gameId);
     // Only rebalance if new player is in active range
     if (activeNames.has(playerName)) {
       const ratings = await prisma.playerRating.findMany({ where: { eventId } });
@@ -130,23 +144,19 @@ export async function addPlayerToTeams(eventId: string, playerName: string) {
  * If a promoted bench player name is given, slot them into the same team.
  * When the event has balanced=true, triggers a full rebalance instead of a single swap.
  */
-export async function removePlayerFromTeams(eventId: string, playerName: string, promotedName?: string) {
+export async function removePlayerFromTeams(eventId: string, playerName: string, promotedName?: string, currentGameId?: string | null) {
   const teams = await prisma.teamResult.findMany({
     where: { eventId },
     include: { members: true },
   });
   if (teams.length === 0) return;
 
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true } });
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { balanced: true, maxPlayers: true, teamOneName: true, teamTwoName: true, currentGameId: true } });
+  const gameId = currentGameId ?? event?.currentGameId;
 
   // Balanced mode: full rebalance with current active players (excluding the leaving one, including promoted)
   if (event?.balanced && teams.length === 2) {
-    const allPlayers = await prisma.player.findMany({
-      where: { eventId, archivedAt: null },
-      orderBy: { order: "asc" },
-      take: event.maxPlayers,
-    });
-    const activeNames = allPlayers.map(p => p.name).filter(n => n !== playerName);
+    const activeNames = [...await getActivePlayerNames(eventId, event.maxPlayers, gameId)].filter(n => n !== playerName);
     if (promotedName && !activeNames.includes(promotedName)) {
       activeNames.push(promotedName);
     }
@@ -350,7 +360,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   const senderClientId = session?.user?.id ?? request.headers.get("x-client-id") ?? undefined;
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    include: { players: { orderBy: { order: "asc" } } },
+    include: { players: { where: { archivedAt: null }, orderBy: { order: "asc" } } },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -620,10 +630,10 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   // Auto-sync teams
   if (!isOnBench) {
-    await addPlayerToTeams(eventId, trimmed);
+    await addPlayerToTeams(eventId, trimmed, event.currentGameId);
   }
 
-  await validateTeams(eventId, event.maxPlayers);
+  await validateTeams(eventId, event.maxPlayers, event.currentGameId);
 
   if (isOnBench) {
     // ADR 0018: Include bench position in notification body

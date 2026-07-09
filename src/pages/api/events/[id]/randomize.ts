@@ -16,14 +16,24 @@ export const POST: APIRoute = async ({ params, url, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  // Get ALL non-archived players first to validate team membership. The
-  // `archivedAt: null` filter is critical: archiveAndLeave leaves archived
-  // rows in place (for audit + undo) but never re-indexes their `order`, so
-  // they can collide with the re-indexed bench replacement at the same slot.
-  const allPlayers = await prisma.player.findMany({
-    where: { eventId, archivedAt: null },
-    orderBy: { order: "asc" },
-  });
+  // ADR 0016: when a currentGameId exists, the authoritative player list is
+  // GameParticipant (game-scoped), not the legacy Player table (event-scoped).
+  // The Player table may contain stale rows from prior recurring game cycles.
+  let allPlayers: { name: string; order: number }[];
+  if (event.currentGameId) {
+    const participants = await prisma.gameParticipant.findMany({
+      where: { gameId: event.currentGameId, archivedAt: null },
+      include: { eventPlayer: { select: { name: true } } },
+      orderBy: { order: "asc" },
+    });
+    allPlayers = participants.map((gp) => ({ name: gp.eventPlayer.name, order: gp.order }));
+  } else {
+    const rows = await prisma.player.findMany({
+      where: { eventId, archivedAt: null },
+      orderBy: { order: "asc" },
+    });
+    allPlayers = rows.map((p) => ({ name: p.name, order: p.order }));
+  }
 
   // Take only active players for team generation
   const players = allPlayers.slice(0, event.maxPlayers);
