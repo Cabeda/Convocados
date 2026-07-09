@@ -5,6 +5,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import PaymentsIcon from "@mui/icons-material/Payments";
 import { useT } from "~/lib/useT";
 import { googleCalendarUrl } from "~/lib/calendar";
 import type { EventData } from "./types";
@@ -32,6 +33,10 @@ export function MoreActionsMenu({ eventId, event, gameDate }: Props) {
         <MenuItem component="a" href={`/events/${eventId}/log`} onClick={() => setAnchorEl(null)}>
           <ListItemIcon><AssignmentIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t("activityLog")}</ListItemText>
+        </MenuItem>
+        <MenuItem component="a" href={`/events/${eventId}/settle`} onClick={() => setAnchorEl(null)}>
+          <ListItemIcon><PaymentsIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t("settleUpTitle") ?? "Settle Up"}</ListItemText>
         </MenuItem>
         {(gameDate <= new Date() || event.isRecurring) && (
           <MenuItem component="a" href={`/events/${eventId}/attendance`} onClick={() => setAnchorEl(null)}>
