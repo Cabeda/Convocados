@@ -21,6 +21,7 @@
     "db:studio": "prisma studio",
     "db:seed": "sh -c 'set -a; . ./.env; set +a; npx tsx prisma/seed.ts'",
     "db:seed:settle": "sh -c 'set -a; . ./.env; set +a; npx tsx prisma/seed-settle-demo.ts'",
+    "wallet:backfill": "sh -c 'set -a; . ./.env; set +a; npx tsx scripts/wallet-backfill.ts'",
     "db:pull-prod": "sh ./scripts/pull-prod-db.sh",
     "dev:prod-db": "npm run db:pull-prod && DATABASE_URL=file:./prod-debug.db node --env-file=.env node_modules/.bin/astro dev --host 0.0.0.0",
     "lhci": "lhci autorun --config=lighthouserc.cjs",

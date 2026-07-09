@@ -208,6 +208,14 @@ A `PlayerPayment` (and each entry in a `GameHistory.paymentsSnapshot`) moves thr
 
 The Owner/Admin remains the single source of truth for money actually received; `sent` is a courtesy signal that gives the payer closure and gives the organizer a "confirm received" worklist. It never auto-promotes to `paid`.
 
+## Historical Settlement
+A `WalletTransaction` row with `reason = "payment_received"` and a non-null `gameHistoryId` linking it to a specific frozen `GameHistory.paymentsSnapshot` entry. The act of recording that an Owner/Admin has confirmed receipt of money for a historical game, even though the snapshot still says `pending`. The read path nets Historical Settlements against the snapshot-derived Outstanding Balance, so the per-game status is effectively `paid` without mutating the frozen snapshot. Idempotent on `(gameHistoryId, userId)`. Owner/Admin only. ADR 0019.
+_Avoid_: historical payment, retroactive payment, settle past
+
+## Payment Matrix
+The per-player × per-game grid rendered on the **Payments** tab of `/events/[id]/settle`. Shows the frozen `GameHistory.paymentsSnapshot` status for every (player, historical game) pair, netted against any Historical Settlement, with one-click Owner/Admin actions to record a settlement. Inspired by settleup.app's per-activity entry list. The canonical place to see money state across the whole event in one view.
+_Avoid_: payments grid, activity feed (already used for a per-user ledger view), all-payments view
+
 ## Manager-initiated add
 A Player record created by the Event Owner or an Admin acting on behalf of someone else — typically a guest with no Convocados account, or a registered user the organizer is adding. Distinct from a self-initiated add (Quick Join, Claim), where the player themselves triggered the action.
 

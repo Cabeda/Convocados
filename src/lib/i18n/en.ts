@@ -248,6 +248,7 @@ const en = {
   notifyBenchPromotedCapacity: "🎉 You've been promoted to the active list!",
   notifyPaymentConfirmed: "✅ Your payment for {title} has been confirmed",
   notifyPaymentSelfReported: "💸 {player} says they paid for {title} — confirm?",
+  notifyPaymentReminder: "💸 Reminder: you still owe for {title} — tap to pay",
   notifyRecruitment: "📢 {title} still needs players — join now!",
   notifyRecruitmentUrgent: "🚨 TOMORROW — {title} still needs {n} player(s)!",
   notifyOrganizerSharePrompt: "🔗 {title} needs {n} more — share the invite link?",
