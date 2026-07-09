@@ -29,6 +29,7 @@ export type NotificationJobType =
   | "bench_promoted_capacity"
   | "payment_confirmed"
   | "payment_self_reported"
+  | "payment_reminder"
   | "recruitment"
   | "few_spots_left";
 

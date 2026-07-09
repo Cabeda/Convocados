@@ -67,6 +67,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       });
 
       if (claimed.count === 1) {
+        const oldGameId = event.currentGameId;
         const editableUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
         const teamsSnapshot = event.teamResults.length > 0
           ? JSON.stringify(event.teamResults.map((tr) => ({
@@ -75,22 +76,98 @@ export const GET: APIRoute = async ({ params, request }) => {
             })))
           : null;
 
-        // Snapshot payments before reset
+        // Snapshot payments before reset. ADR 0019: read from the ledger
+        // (the canonical source of truth). PlayerPayment is no longer the
+        // write target, so building the snapshot from it would produce an
+        // empty string.
         const eventCost = await prisma.eventCost.findUnique({
           where: { eventId: event.id },
-          include: { payments: true },
         });
-        const paymentsSnapshot = eventCost && eventCost.payments.length > 0
-          ? JSON.stringify(eventCost.payments.map((p) => ({
-              playerName: p.playerName,
-              amount: p.amount,
-              status: p.status,
-              method: p.method,
-            })))
-          : null;
+        let paymentsSnapshot: string | null = null;
+        if (eventCost && eventCost.totalAmount > 0) {
+          // Find every per_game_share debit for the current game (the old
+          // currentGameId, pre-reset), aggregate per userId, and build the
+          // snapshot.
+          const perGameShareRows = oldGameId
+            ? await prisma.walletTransaction.findMany({
+                where: { eventId: event.id, reason: "per_game_share", eventInstanceId: oldGameId },
+                select: { userId: true, amountCents: true, playerName: true, createdAt: true },
+                orderBy: { createdAt: "asc" },
+              })
+            : [];
+          // Aggregate per userId
+          const perUser = new Map<string, { amountCents: number; playerName: string | null }>();
+          for (const r of perGameShareRows) {
+            const cur = perUser.get(r.userId) ?? { amountCents: 0, playerName: r.playerName };
+            cur.amountCents += r.amountCents;
+            cur.playerName = cur.playerName ?? r.playerName;
+            perUser.set(r.userId, cur);
+          }
+          // For each user, look up the latest payment_received / payment_self_reported
+          // to determine the status. We use a single grouped query.
+          const userIds = [...perUser.keys()];
+          if (userIds.length > 0) {
+            const credits = await prisma.walletTransaction.findMany({
+              where: {
+                eventId: event.id,
+                userId: { in: userIds },
+                reason: { in: ["payment_received", "payment_self_reported"] },
+                eventInstanceId: oldGameId ?? undefined,
+              },
+              select: { userId: true, reason: true },
+            });
+            const received = new Set<string>();
+            const selfReported = new Set<string>();
+            for (const c of credits) {
+              if (c.reason === "payment_received") received.add(c.userId);
+              else if (c.reason === "payment_self_reported") selfReported.add(c.userId);
+            }
+            // Also check the live-game self-report (no eventInstanceId)
+            const liveSelfReports = await prisma.walletTransaction.findMany({
+              where: {
+                eventId: event.id,
+                userId: { in: userIds },
+                reason: "payment_self_reported",
+                eventInstanceId: event.id,
+                gameHistoryId: null,
+              },
+              select: { userId: true },
+            });
+            for (const c of liveSelfReports) selfReported.add(c.userId);
+
+            const entries: Array<{ playerName: string; amount: number; status: string; method: string | null }> = [];
+            for (const [userId, { amountCents, playerName }] of perUser) {
+              if (!playerName) continue;
+              const status = received.has(userId) ? "paid" : selfReported.has(userId) ? "sent" : "pending";
+              entries.push({ playerName, amount: amountCents / 100, status, method: null });
+            }
+            if (entries.length > 0) {
+              paymentsSnapshot = JSON.stringify(entries);
+            }
+          }
+
+          // Backwards compat: if the ledger is empty (the cost was set but no
+          // recordPerGameShare has been called yet — true for the first game
+          // of a new event), fall back to the live PlayerPayment rows so
+          // the snapshot still captures the user's manual chip toggles.
+          if (!paymentsSnapshot) {
+            const live = await prisma.playerPayment.findMany({
+              where: { eventCostId: eventCost.id },
+            });
+            if (live.length > 0) {
+              paymentsSnapshot = JSON.stringify(
+                live.map((p) => ({
+                  playerName: p.playerName,
+                  amount: p.amount,
+                  status: p.status,
+                  method: p.method,
+                })),
+              );
+            }
+          }
+        }
 
         // ADR 0016: mark old Game as played + create new Game + swap pointer
-        const oldGameId = event.currentGameId;
         const newGame = await prisma.game.create({
           data: { eventId: event.id, dateTime: newDateTime, status: "upcoming" },
         });

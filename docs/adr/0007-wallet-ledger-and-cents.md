@@ -69,8 +69,11 @@ with the old data; new code paths only write to `WalletTransaction`.
   authoritative state.
 - Any future feature touching money (payment integrations, receipts, etc.)
   MUST write to `WalletTransaction` and not invent a third source of truth.
-- A follow-up PR will switch the read path to the ledger once the dual-write
-  is in production for at least one full monthly cycle.
+- The **historical** read path is now ledger-driven via ADR 0019
+  (`gameHistoryId` on `WalletTransaction`, snapshot is netted against
+  `payment_received` rows for that history). The **current-game** read
+  path still uses `PlayerPayment` and will be migrated in a separate
+  PR once the monthly cycle is complete.
 
 ## Alternatives considered
 

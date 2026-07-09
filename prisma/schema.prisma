@@ -218,6 +218,7 @@ model GameHistory {
   source           String   @default("live") // "live" | "historical"
   createdAt        DateTime @default(now())
   mvpVotes         MvpVote[]
+  walletTransactions WalletTransaction[]
 }
 
 model MvpVote {
@@ -545,6 +546,13 @@ model WalletTransaction {
   eventInstanceId String?  // Event.id of the instance this row is about
   subscriptionId  String?  // MonthlySubscription.id
   extrasId        String?  // ExtrasDeclaration.id
+  gameHistoryId   String?  // GameHistory.id — null for per-game-share debits/credits that are NOT bound to a historical game
+  gameHistory     GameHistory? @relation(fields: [gameHistoryId], references: [id], onDelete: SetNull)
+  // Player name snapshot (for ghost players whose User is a synthetic "ghost:{id}" account
+  // — see scripts/wallet-backfill.ts). For linked users, this is a denormalized copy of
+  // EventPlayer.name at the time of write; rename-tolerant because the read path joins on
+  // userId, not on name.
+  playerName      String?
   // Idempotency / authorship
   idempotencyKey  String?  // unique key for system-generated rows (expiry, etc.)
   markedById      String?  // who recorded this
@@ -555,6 +563,9 @@ model WalletTransaction {
   @@index([eventId, userId, createdAt])
   @@index([eventId, createdAt])
   @@index([eventInstanceId])
+  @@index([gameHistoryId])
+  @@index([eventId, userId, gameHistoryId])
+  @@index([playerName])
 }
 
 model ExtrasDeclaration {

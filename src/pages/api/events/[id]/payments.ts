@@ -1,12 +1,19 @@
 import type { APIRoute } from "astro";
-import { prisma } from "../../../../lib/db.server";
-import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
-import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
-import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
+import { prisma } from "~/lib/db.server";
+import { checkOwnership, getSession } from "~/lib/auth.helpers.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
+import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
+import { isWalletReadPathEnabled } from "~/lib/featureFlag.server";
 
 const VALID_STATUSES = ["pending", "sent", "paid"];
 
-/** GET — list all payments with summary. */
+/**
+ * GET /api/events/[id]/payments
+ *
+ * Returns the current game payments for the event. Reads from the
+ * PlayerPayment table (read-cache, kept populated for backwards compat and
+ * rollback). For historical settlement actions, use POST /api/events/[id]/payments/historical.
+ */
 export const GET: APIRoute = async ({ params }) => {
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({ where: { id: eventId } });
@@ -21,15 +28,17 @@ export const GET: APIRoute = async ({ params }) => {
     return Response.json({
       payments: [],
       summary: { paidCount: 0, pendingCount: 0, totalCount: 0, paidAmount: 0 },
+      source: isWalletReadPathEnabled() ? "ledger-empty" : "legacy-empty",
     });
   }
 
+  // Live PlayerPayment rows: the chip toggle has been removed, but existing
+  // rows may still exist from before the migration. We expose them as a
+  // read-cache; the new canonical state lives in the ledger.
   const payments = eventCost.payments;
   const paidCount = payments.filter((p) => p.status === "paid").length;
-  const pendingCount = payments.filter((p) => p.status === "pending").length;
-  const paidAmount = payments
-    .filter((p) => p.status === "paid")
-    .reduce((sum, p) => sum + p.amount, 0);
+  const pendingCount = payments.filter((p) => p.status === "pending" || p.status === "sent").length;
+  const paidAmount = payments.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount, 0);
 
   return Response.json({
     payments: payments.map((p) => ({
@@ -38,16 +47,23 @@ export const GET: APIRoute = async ({ params }) => {
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
     })),
-    summary: {
-      paidCount,
-      pendingCount,
-      totalCount: payments.length,
-      paidAmount,
-    },
+    summary: { paidCount, pendingCount, totalCount: payments.length, paidAmount },
+    source: "legacy",
   });
 };
 
-/** PUT — update a player's payment status. */
+/**
+ * PUT /api/events/[id]/payments
+ *
+ * Two flows, both still supported for backwards compat (the chip UI has
+ * been removed in the web UI, but the endpoint keeps working for the
+ * Android app and external callers):
+ *  - Owner/Admin: toggles a PlayerPayment row (pending ↔ paid, with method)
+ *  - Player: self-reports as `sent` (pending → sent) on their own row
+ *
+ * For HISTORICAL payment recording (frozen snapshot entries, past games),
+ * use POST /api/events/[id]/payments/historical instead.
+ */
 export const PUT: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
@@ -66,12 +82,15 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const status = String(body.status ?? "");
 
   if (session?.user && !isOwner && !isAdmin) {
-    // Check if the player is linked to this user
-    const linkedPlayer = await prisma.player.findFirst({
+    // Check both the new EventPlayer table and the legacy Player table for
+    // backwards compat with pre-migration data.
+    const linkedEventPlayer = await prisma.eventPlayer.findFirst({
       where: { eventId, userId: session.user.id, name: playerName },
     });
-    if (linkedPlayer && status === "sent") {
-      // Allowed: player marking their own payment as sent
+    const linkedLegacyPlayer = linkedEventPlayer ? null : await prisma.player.findFirst({
+      where: { eventId, userId: session.user.id, name: playerName },
+    });
+    if ((linkedEventPlayer || linkedLegacyPlayer) && status === "sent") {
       isSelfReport = true;
     }
   }
@@ -115,20 +134,82 @@ export const PUT: APIRoute = async ({ params, request }) => {
     },
   });
 
+  // Also write a corresponding WalletTransaction row for the new ledger
+  // (ADR 0019). This is what makes the new read path see the change.
+  if (status === "paid" && !isSelfReport) {
+    const ep = await prisma.eventPlayer.findFirst({
+      where: { eventId, name: playerName },
+      select: { userId: true },
+    });
+    const userId = ep?.userId ?? (await prisma.player.findFirst({
+      where: { eventId, name: playerName },
+      select: { userId: true },
+    }))?.userId;
+    if (userId) {
+      await prisma.walletTransaction.upsert({
+        where: { idempotencyKey: `chip:${eventId}:${playerName}:current:paid` },
+        create: {
+          eventId,
+          userId,
+          amountCents: Math.round(payment.amount * 100),
+          currency: eventCost.currency,
+          direction: "credit",
+          reason: "payment_received",
+          statusAfter: "paid",
+          eventInstanceId: eventId,
+          playerName,
+          markedById: session?.user?.id,
+          note: method ?? null,
+          idempotencyKey: `chip:${eventId}:${playerName}:current:paid`,
+        },
+        update: { markedById: session?.user?.id, note: method ?? null },
+      });
+    }
+  } else if (isSelfReport && status === "sent") {
+    if (session?.user) {
+      const maxPlayers = (await prisma.event.findUnique({
+        where: { id: eventId },
+        select: { maxPlayers: true },
+      }))?.maxPlayers ?? 1;
+      const shareCents = Math.round((eventCost.totalAmount / maxPlayers) * 100);
+      await prisma.walletTransaction.upsert({
+        where: { idempotencyKey: `self-report:${eventId}:${session.user.id}:current` },
+        create: {
+          eventId,
+          userId: session.user.id,
+          amountCents: shareCents,
+          currency: eventCost.currency,
+          direction: "credit",
+          reason: "payment_self_reported",
+          statusAfter: "sent",
+          eventInstanceId: eventId,
+          playerName,
+          note: method,
+          idempotencyKey: `self-report:${eventId}:${session.user.id}:current`,
+        },
+        update: { note: method },
+      });
+    }
+  }
+
   // ADR 0017: Notify the player when their payment is confirmed (via queue, respects tier + overrides)
   if (status === "paid" && !isSelfReport) {
-    const player = await prisma.player.findFirst({
+    const ep = await prisma.eventPlayer.findFirst({
       where: { eventId, name: playerName, userId: { not: null } },
       select: { userId: true },
     });
-    if (player?.userId) {
+    const userId = ep?.userId ?? (await prisma.player.findFirst({
+      where: { eventId, name: playerName, userId: { not: null } },
+      select: { userId: true },
+    }))?.userId;
+    if (userId) {
       await enqueueNotification(eventId, "payment_confirmed", {
         title: event.title,
         key: "notifyPaymentConfirmed",
         params: { title: event.title },
         url: `/events/${eventId}?action=pay`,
         spotsLeft: 0,
-      }, player.userId);
+      }, userId);
       if (!process.env.VITEST) {
         await drainNotificationQueue().catch(() => {});
       }
@@ -148,7 +229,6 @@ export const PUT: APIRoute = async ({ params, request }) => {
       await drainNotificationQueue().catch(() => {});
     }
   }
-
 
   return Response.json({
     ...updated,

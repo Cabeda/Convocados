@@ -226,6 +226,7 @@ const it: TranslationKeys = {
   notifyBenchPromotedCapacity: "🎉 Sei stato promosso alla lista attiva!",
   notifyPaymentConfirmed: "✅ Il tuo pagamento per {title} è stato confermato",
   notifyPaymentSelfReported: "💸 {player} dice di aver pagato {title} — confermare?",
+  notifyPaymentReminder: "💸 Promemoria: devi ancora pagare per {title} — tocca per pagare",
   notifyRecruitment: "📢 {title} ha ancora bisogno di giocatori — unisciti!",
   notifyRecruitmentUrgent: "🚨 DOMANI — {title} ha ancora bisogno di {n} giocatore/i!",
   notifyOrganizerSharePrompt: "🔗 {title} ha bisogno di {n} in più — condividere il link?",

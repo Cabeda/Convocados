@@ -1,16 +1,15 @@
 /**
  * Payment recording — writes to the per-Event `WalletTransaction` ledger
- * (ADR 0007) and, for backwards compatibility with `PostGameBanner` and the
- * existing snapshot pipeline, also keeps a `PlayerPayment` row per active
- * player (OI-2: amount:0, status:paid for monthly-covered or fully-redeemed
- * rows so the rest of the system keeps working).
+ * (ADR 0007, ADR 0019). The legacy `PlayerPayment` table is no longer
+ * written by this code path; reads are feature-flagged in
+ * `balance.server.ts` so a rollback just flips the env var.
  *
  * ADR 0007 — Wallet ledger is the single source of truth for money.
  * ADR 0008 — Monthly subscriptions cover non-cancelled Event instances in
  *             their Subscription Window; missed games earn 1 Game Unit.
- * OI-1    — Monthly subscribers have no per-attendance ledger rows.
- * OI-2    — Monthly-covered or fully-redeemed rows still create a
- *            PlayerPayment row with amount:0, status:paid.
+ * ADR 0019 — Historical Settlement via `gameHistoryId` lets an Owner/Admin
+ *             mark a frozen GameHistory.paymentsSnapshot entry as paid
+ *             without mutating the snapshot.
  *
  * This file is `.server.ts` (not pure) — it talks to Prisma.
  */
@@ -134,7 +133,9 @@ export async function recordPerGameShare(
 
   if (subscription) {
     // Monthly-covered. Per OI-1: no per-attendance ledger rows.
-    // Per OI-2: zero-amount paid PlayerPayment row.
+    // Per OI-2: zero-amount paid PlayerPayment row (kept for backwards compat
+    // — the chip UI is gone, but external code and the legacy read path
+    // still expect the row).
     const upserted = await prisma.playerPayment.upsert({
       where: {
         eventCostId_playerName: { eventCostId: eventCost.id, playerName },
@@ -206,7 +207,9 @@ export async function recordPerGameShare(
     });
   }
 
-  // 6. Upsert PlayerPayment row for backwards compat.
+  // 6. Upsert PlayerPayment row for backwards compat. The chip UI has been
+  // removed (ADR 0019) but the row is kept populated so the legacy read
+  // path and external code (e.g. the cost editor response) keep working.
   const upserted = await prisma.playerPayment.upsert({
     where: {
       eventCostId_playerName: { eventCostId: eventCost.id, playerName },
@@ -398,4 +401,132 @@ export async function syncPaymentsForEvent(eventId: string): Promise<void> {
       playerName: { notIn: [...activeNames] },
     },
   });
+}
+
+// ─── Historical Settlement (ADR 0019) ─────────────────────────────────────
+
+export interface SettleHistoricalGameArgs {
+  eventId: string;
+  gameHistoryId: string;
+  playerName: string;
+  markedById: string;
+  method?: string | null;
+  amountCents?: number; // defaults to the snapshot entry's amount
+}
+
+export interface SettleHistoricalResult {
+  written: boolean;
+  walletTransactionId: string | null;
+  reason: "created" | "already-settled" | "no-snapshot" | "no-event-player";
+}
+
+export async function settleHistoricalGame(
+  args: SettleHistoricalGameArgs,
+): Promise<SettleHistoricalResult> {
+  const { eventId, gameHistoryId, playerName, markedById, method, amountCents } = args;
+
+  const idempotencyKey = `settle-historical:${gameHistoryId}:${playerName}`;
+  const existing = await prisma.walletTransaction.findUnique({ where: { idempotencyKey } });
+  if (existing) return { written: false, walletTransactionId: existing.id, reason: "already-settled" };
+
+  const eventPlayer = await prisma.eventPlayer.findUnique({
+    where: { eventId_name: { eventId, name: playerName } },
+    select: { userId: true },
+  });
+  if (!eventPlayer?.userId) return { written: false, walletTransactionId: null, reason: "no-event-player" };
+
+  const eventCost = await prisma.eventCost.findUnique({ where: { eventId }, select: { currency: true } });
+  const currency = eventCost?.currency ?? "EUR";
+
+  // Use the snapshot's amount for the entry if not provided. The snapshot
+  // is the source of truth for "what was owed" at the time of the game.
+  let effectiveAmountCents = amountCents;
+  if (effectiveAmountCents == null) {
+    const h = await prisma.gameHistory.findUnique({
+      where: { id: gameHistoryId },
+      select: { paymentsSnapshot: true },
+    });
+    if (!h?.paymentsSnapshot) return { written: false, walletTransactionId: null, reason: "no-snapshot" };
+    try {
+      const entries: Array<{ playerName: string; amount: number; status: string }> = JSON.parse(h.paymentsSnapshot);
+      const entry = entries.find((e) => e.playerName === playerName);
+      if (!entry) return { written: false, walletTransactionId: null, reason: "no-snapshot" };
+      effectiveAmountCents = Math.round(entry.amount * 100);
+    } catch {
+      return { written: false, walletTransactionId: null, reason: "no-snapshot" };
+    }
+  }
+
+  const wt = await prisma.walletTransaction.create({
+    data: {
+      eventId,
+      userId: eventPlayer.userId,
+      amountCents: effectiveAmountCents,
+      currency,
+      direction: "credit",
+      reason: "payment_received",
+      statusAfter: "paid",
+      eventInstanceId: eventId,
+      gameHistoryId,
+      playerName,
+      markedById,
+      note: method ?? null,
+      idempotencyKey,
+    },
+  });
+  return { written: true, walletTransactionId: wt.id, reason: "created" };
+}
+
+export interface SettleAllHistoricalArgs {
+  eventId: string;
+  playerName: string;
+  markedById: string;
+}
+
+export interface SettleAllHistoricalResult {
+  settled: number;
+  skipped: number;
+  failed: number;
+  details: Array<{ gameHistoryId: string; reason: SettleHistoricalResult["reason"] }>;
+}
+
+export async function settleAllHistoricalForPlayer(
+  args: SettleAllHistoricalArgs,
+): Promise<SettleAllHistoricalResult> {
+  const { eventId, playerName, markedById } = args;
+  const result: SettleAllHistoricalResult = { settled: 0, skipped: 0, failed: 0, details: [] };
+
+  // Find every GameHistory for this event with a paymentsSnapshot that
+  // includes this player as `pending` or `sent` (i.e. the ones that need
+  // settling).
+  const histories = await prisma.gameHistory.findMany({
+    where: { eventId, status: { not: "cancelled" }, paymentsSnapshot: { not: null } },
+    select: { id: true, paymentsSnapshot: true },
+    orderBy: { dateTime: "asc" },
+  });
+
+  for (const h of histories) {
+    if (!h.paymentsSnapshot) continue;
+    let entries: Array<{ playerName: string; amount: number; status: string }>;
+    try {
+      entries = JSON.parse(h.paymentsSnapshot);
+    } catch {
+      continue;
+    }
+    const entry = entries.find((e) => e.playerName === playerName);
+    if (!entry) continue;
+    if (entry.status !== "pending" && entry.status !== "sent") continue;
+
+    const r = await settleHistoricalGame({
+      eventId,
+      gameHistoryId: h.id,
+      playerName,
+      markedById,
+    });
+    if (r.reason === "created") result.settled++;
+    else if (r.reason === "already-settled") result.skipped++;
+    else result.failed++;
+    result.details.push({ gameHistoryId: h.id, reason: r.reason });
+  }
+  return result;
 }
