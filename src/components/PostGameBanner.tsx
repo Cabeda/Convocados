@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Paper, Typography, Stack, Box, Button, alpha, useTheme,
-  LinearProgress, Chip,
+  LinearProgress, Chip, Tooltip,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
@@ -51,10 +51,11 @@ interface Props {
   refreshKey?: number;
 }
 
-export function PostGameBanner({ eventId, canEdit: _canEdit, onScrollToScore, onScrollToPayments: _onScrollToPayments, onStatusChange, refreshKey }: Props) {
+export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPayments: _onScrollToPayments, onStatusChange, refreshKey }: Props) {
   const t = useT();
   const theme = useTheme();
   const [status, setStatus] = useState<PostGameStatus | null>(null);
+  const [savingPlayer, setSavingPlayer] = useState<string | null>(null);
 
   const onStatusChangeRef = useRef(onStatusChange);
   useEffect(() => {
@@ -81,6 +82,20 @@ export function PostGameBanner({ eventId, canEdit: _canEdit, onScrollToScore, on
   useEffect(() => {
     if (refreshKey !== undefined && refreshKey > 0) fetchStatus();
   }, [refreshKey, fetchStatus]);
+
+  // Admin/owner taps a pending player pill to mark that single debt paid.
+  const markPlayerPaid = async (playerName: string) => {
+    setSavingPlayer(playerName);
+    try {
+      await fetch(`/api/events/${eventId}/payments`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerName, status: "paid" }),
+      });
+      await fetchStatus();
+    } catch { /* ignore */ }
+    setSavingPlayer(null);
+  };
 
   // Don't show if game hasn't ended (unless there are unsettled past payments or pending MVP votes) or everything is complete
   if (!status || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || status.allComplete) return null;
@@ -271,21 +286,39 @@ export function PostGameBanner({ eventId, canEdit: _canEdit, onScrollToScore, on
                 )}
               </Box>
 
-              {/* Read-only payment summary chips (no editing) */}
+              {/* Payment summary chips. Admin/owner can tap a pending pill to mark that player paid. */}
               {totalCount > 0 && !status.allPaid && (
                 <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}` }}>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
                     {(status.paymentsSnapshot ?? []).map((p) => {
                       const isPaid = p.status === "paid";
+                      const canToggle = canEdit && !isPaid;
                       return (
-                        <Chip
+                        <Tooltip
                           key={p.playerName}
-                          size="small"
-                          variant={isPaid ? "filled" : "outlined"}
-                          color={isPaid ? "success" : "warning"}
-                          label={`${p.playerName}  ${p.amount.toFixed(2)}`}
-                          sx={{ borderRadius: 2, fontWeight: isPaid ? 600 : 400 }}
-                        />
+                          title={canToggle
+                            ? t("postGameMarkPaidHint", { player: p.playerName })
+                            : isPaid
+                              ? t("postGamePaidHint", { player: p.playerName })
+                              : t("postGameTapToPayHint")}
+                        >
+                          <span>
+                            <Chip
+                              size="small"
+                              variant={isPaid ? "filled" : "outlined"}
+                              color={isPaid ? "success" : "warning"}
+                              label={`${p.playerName}  ${p.amount.toFixed(2)}`}
+                              onClick={canToggle ? () => markPlayerPaid(p.playerName) : undefined}
+                              disabled={savingPlayer === p.playerName}
+                              clickable={canToggle}
+                              sx={{
+                                borderRadius: 2,
+                                fontWeight: isPaid ? 600 : 400,
+                                ...(canToggle ? { cursor: "pointer" } : {}),
+                              }}
+                            />
+                          </span>
+                        </Tooltip>
                       );
                     })}
                   </Box>
