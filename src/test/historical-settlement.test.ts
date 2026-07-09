@@ -124,6 +124,60 @@ describe("settleHistoricalGame (ADR 0019)", () => {
     expect(row?.amountCents).toBe(500);
   });
 
+  it("records the payer (defaults to the debtor) and the paidTo (defaults to the event owner)", async () => {
+    const { event, games, userId, goncaloEventPlayerId } = await seedGoncaloEvent();
+    const r = await settleHistoricalGame({
+      eventId: event.id,
+      gameHistoryId: games[0].id,
+      playerName: "Gonçalo",
+      markedById: userId,
+    });
+    const row = await prisma.walletTransaction.findUnique({ where: { id: r.walletTransactionId! } });
+    // Payer defaults to the debtor (Gonçalo, the ghost user)
+    expect(row?.payerUserId).toBe(`ghost:${goncaloEventPlayerId}`);
+    // paidTo defaults to the event owner (no owner set in the test seed, so null)
+    expect(row?.paidToUserId).toBeNull();
+  });
+
+  it("records the explicit payer + paidTo when provided", async () => {
+    const { event, games, userId } = await seedGoncaloEvent();
+    // Add a "friend" user who pays on Gonçalo's behalf, and set an owner
+    // so the paidTo default has somewhere to point.
+    const friend = await prisma.user.create({ data: { id: "friend-1", name: "Friend", email: "friend@test.com", emailVerified: false } });
+    await prisma.user.create({ data: { id: "owner-1", name: "Owner", email: "owner@test.com", emailVerified: false } });
+    await prisma.event.update({ where: { id: event.id }, data: { ownerId: "owner-1" } });
+
+    const r = await settleHistoricalGame({
+      eventId: event.id,
+      gameHistoryId: games[0].id,
+      playerName: "Gonçalo",
+      markedById: userId,
+      payerUserId: friend.id,
+      paidToUserId: "owner-1",
+    });
+    const row = await prisma.walletTransaction.findUnique({ where: { id: r.walletTransactionId! } });
+    expect(row?.payerUserId).toBe(friend.id);
+    expect(row?.paidToUserId).toBe("owner-1");
+  });
+
+  it("is idempotent on (gameHistoryId, playerName, payer, paidTo)", async () => {
+    const { event, games, userId } = await seedGoncaloEvent();
+    await settleHistoricalGame({
+      eventId: event.id,
+      gameHistoryId: games[0].id,
+      playerName: "Gonçalo",
+      markedById: userId,
+    });
+    const r2 = await settleHistoricalGame({
+      eventId: event.id,
+      gameHistoryId: games[0].id,
+      playerName: "Gonçalo",
+      markedById: userId,
+    });
+    expect(r2.written).toBe(false);
+    expect(r2.reason).toBe("already-settled");
+  });
+
   it("overrides the amount when amountCents is provided", async () => {
     const { event, games, userId } = await seedGoncaloEvent();
     const r = await settleHistoricalGame({

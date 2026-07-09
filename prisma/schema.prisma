@@ -27,6 +27,7 @@ model User {
   accounts       Account[]
   ownedEvents    Event[]         @relation("EventOwner")
   players        Player[]        @relation("PlayerUser")
+  eventPlayers   EventPlayer[]   @relation("EventPlayerUser")
   calendarTokens CalendarToken[]
   apiKeys        ApiKey[]
   notificationPreferences NotificationPreferences?
@@ -48,6 +49,8 @@ model User {
   monthlySubscriptions    MonthlySubscription[]
   appOpens                UserAppOpen[]
   walletTransactions      WalletTransaction[]
+  paidWalletTransactions      WalletTransaction[] @relation("WalletTransactionPayer")
+  receivedWalletTransactions  WalletTransaction[] @relation("WalletTransactionPaidTo")
 }
 
 model Session {
@@ -303,6 +306,7 @@ model EventPlayer {
   event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   name          String
   userId        String?
+  user          User?    @relation("EventPlayerUser", fields: [userId], references: [id], onDelete: SetNull)
   rating        Float    @default(1000)
   gamesPlayed   Int      @default(0)
   wins          Int      @default(0)
@@ -553,6 +557,15 @@ model WalletTransaction {
   // EventPlayer.name at the time of write; rename-tolerant because the read path joins on
   // userId, not on name.
   playerName      String?
+  // Who actually handed over the money for this credit (the debtor's `userId` field above
+  // is the person whose debt was cleared, which may or may not be the same person). Null
+  // for non-payment-received rows or for legacy entries predating ADR 0019.
+  payerUserId     String?
+  payer           User?    @relation("WalletTransactionPayer", fields: [payerUserId], references: [id], onDelete: SetNull)
+  // Who received the money (typically the event owner, but can be another player
+  // collecting on the organizer's behalf).
+  paidToUserId    String?
+  paidTo          User?    @relation("WalletTransactionPaidTo", fields: [paidToUserId], references: [id], onDelete: SetNull)
   // Idempotency / authorship
   idempotencyKey  String?  // unique key for system-generated rows (expiry, etc.)
   markedById      String?  // who recorded this
@@ -566,6 +579,8 @@ model WalletTransaction {
   @@index([gameHistoryId])
   @@index([eventId, userId, gameHistoryId])
   @@index([playerName])
+  @@index([payerUserId])
+  @@index([paidToUserId])
 }
 
 model ExtrasDeclaration {

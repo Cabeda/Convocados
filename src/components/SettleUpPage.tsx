@@ -7,38 +7,10 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import ReceiptIcon from "@mui/icons-material/Receipt";
-import HistoryIcon from "@mui/icons-material/History";
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import GridOnIcon from "@mui/icons-material/GridOn";
 import { useT } from "~/lib/useT";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
-import { PaymentsMatrixTab } from "./PaymentsMatrixTab";
-import { PlayerDebtsTab } from "./PlayerDebtsTab";
-
-// Read/write a query param to/from the URL so the active tab survives
-// page refresh. ADR 0019: the Payments tab is a primary destination —
-// users who mark a debt paid and then refresh should land back on it.
-function useTabQueryParam(name: string, fallback: number): [number, (v: number) => void] {
-  const [value, setValue] = useState<number>(() => {
-    if (typeof window === "undefined") return fallback;
-    const p = new URLSearchParams(window.location.search).get(name);
-    const n = p ? Number(p) : NaN;
-    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
-  });
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    if (value === fallback) {
-      url.searchParams.delete(name);
-    } else {
-      url.searchParams.set(name, String(value));
-    }
-    window.history.replaceState({}, "", url.toString());
-  }, [name, value, fallback]);
-  return [value, setValue];
-}
+import { SettlePaymentsTab } from "./SettlePaymentsTab";
 
 interface Props {
   eventId: string;
@@ -54,6 +26,7 @@ interface SettlePayload {
     monthlyFeeCents: number | null;
     monthlyGamesCovered: number;
     dropInSurchargeCents: number;
+    ownerId?: string | null;
   };
   extras: {
     potCents: number;
@@ -115,10 +88,29 @@ interface SettlePayload {
 }
 
 function formatMoney(cents: number, currency: string): string {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-  }).format(cents / 100);
+  return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(cents / 100);
+}
+
+// Read/write a query param to/from the URL so the active inner tab survives
+// page refresh. ADR 0019.
+function useTabQueryParam(name: string, fallback: number): [number, (v: number) => void] {
+  const [value, setValue] = useState<number>(() => {
+    if (typeof window === "undefined") return fallback;
+    const p = new URLSearchParams(window.location.search).get(name);
+    const n = p ? Number(p) : NaN;
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (value === fallback) {
+      url.searchParams.delete(name);
+    } else {
+      url.searchParams.set(name, String(value));
+    }
+    window.history.replaceState({}, "", url.toString());
+  }, [name, value, fallback]);
+  return [value, setValue];
 }
 
 export default function SettleUpPage({ eventId }: Props) {
@@ -127,6 +119,9 @@ export default function SettleUpPage({ eventId }: Props) {
   const [data, setData] = useState<SettlePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Event users for the payer/paidTo picker in the payments dialog
+  const [eventUsers, setEventUsers] = useState<Array<{ id: string; name: string }>>([]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -145,6 +140,24 @@ export default function SettleUpPage({ eventId }: Props) {
   }, [eventId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Fetch event users for the payer/paidTo picker. This is a separate
+  // endpoint so it can be reused by the payments matrix and the picker.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/events/${eventId}/event-users`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        setEventUsers((json.users ?? []) as Array<{ id: string; name: string }>);
+      } catch {
+        /* non-fatal */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [eventId]);
 
   if (loading) {
     return (
@@ -202,19 +215,25 @@ export default function SettleUpPage({ eventId }: Props) {
                 variant="scrollable"
                 scrollButtons="auto"
               >
-                <Tab icon={<ReceiptIcon />} iconPosition="start" label={t("settleTabSettle") ?? "Settle"} />
-                <Tab icon={<HistoryIcon />} iconPosition="start" label={t("settleTabActivity") ?? "Your activity"} />
-                <Tab icon={<AccountBalanceWalletIcon />} iconPosition="start" label={t("settleTabExtras") ?? "Extras"} />
+                <Tab label={t("settleTabSettle") ?? "Settle"} />
+                <Tab label={t("settleTabActivity") ?? "Your activity"} />
+                <Tab label={t("settleTabExtras") ?? "Extras"} />
                 {data.admin && (
-                  <Tab icon={<GridOnIcon />} iconPosition="start" label={t("settleTabPayments") ?? "Payments"} />
+                  <Tab label={t("settleTabPayments") ?? "Payments"} />
                 )}
               </Tabs>
             </Paper>
 
-            {tab === 0 && <SettleTab data={data} onChange={fetchData} />}
+            {tab === 0 && <SettleTab data={data} />}
             {tab === 1 && <ActivityTab data={data} />}
-            {tab === 2 && <ExtrasTab data={data} onChange={fetchData} />}
-            {tab === 3 && data.admin && <PaymentsSubTabs eventId={data.event.id} onChange={fetchData} />}
+            {tab === 2 && <ExtrasTab data={data} />}
+            {tab === 3 && data.admin && (
+              <SettlePaymentsTab
+                eventId={eventId}
+                eventUsers={eventUsers}
+                onChange={fetchData}
+              />
+            )}
           </Stack>
         </Box>
       </ResponsiveLayout>
@@ -222,24 +241,7 @@ export default function SettleUpPage({ eventId }: Props) {
   );
 }
 
-function PaymentsSubTabs({ eventId, onChange }: { eventId: string; onChange: () => void }) {
-  const t = useT();
-  const [sub, setSub] = useTabQueryParam("sub", 0);
-  return (
-    <Stack spacing={2}>
-      <Paper sx={{ borderRadius: 3 }}>
-        <Tabs value={sub} onChange={(_, v) => setSub(v)} variant="fullWidth">
-          <Tab label={t("paymentsMatrixTitle") ?? "By game"} />
-          <Tab label={t("playerDebtsTitle") ?? "By player"} />
-        </Tabs>
-      </Paper>
-      {sub === 0 && <PaymentsMatrixTab eventId={eventId} onChange={onChange} />}
-      {sub === 1 && <PlayerDebtsTab eventId={eventId} onChange={onChange} />}
-    </Stack>
-  );
-}
-
-function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => void }) {
+function SettleTab({ data }: { data: SettlePayload }) {
   const t = useT();
   const [extrasLabel, setExtrasLabel] = useState("");
   const [extrasAmount, setExtrasAmount] = useState("");
@@ -273,7 +275,6 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
       }
       setExtrasLabel("");
       setExtrasAmount("");
-      onChange();
     } finally {
       setExtrasBusy(false);
     }
@@ -289,7 +290,6 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
         body: JSON.stringify({ userId: subUserId.trim() }),
       });
       setSubUserId("");
-      onChange();
     } finally {
       setSubBusy(false);
     }
@@ -297,7 +297,6 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
 
   const cancelSub = async (id: string) => {
     await fetch(`/api/events/${data.event.id}/settle/subscriptions/${id}`, { method: "DELETE" });
-    onChange();
   };
 
   return (
@@ -308,13 +307,13 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
           <Typography variant="body2" color="text.secondary">
             {data.you.playerName}
           </Typography>
-          <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
+          <Stack direction="row" spacing={2} sx={{ mt: 1 }} flexWrap="wrap">
             <Chip
               label={t("settleYouBalance") ?? "Balance"}
               color={data.you.balanceCents > 0 ? "warning" : "success"}
               variant="outlined"
             />
-            <Typography variant="body2">
+            <Typography variant="body2" sx={{ alignSelf: "center" }}>
               {formatMoney(data.you.balanceCents, data.event.currency)}
             </Typography>
             <Chip
@@ -328,9 +327,9 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
           </Stack>
           {data.you.activeSubscription && (
             <Alert severity="info" sx={{ mt: 1 }}>
-              {t("settleYouSubscribed") ?? "Subscribed"}: {data.you.activeSubscription.mode} ·
-              {" "}{formatMoney(data.you.activeSubscription.feeCents, data.event.currency)} ·
-              {" "}{data.you.activeSubscription.gamesCovered} games covered
+              {t("settleYouSubscribed") ?? "Subscribed"}: {data.you.activeSubscription.mode} ·{" "}
+              {formatMoney(data.you.activeSubscription.feeCents, data.event.currency)} ·{" "}
+              {data.you.activeSubscription.gamesCovered} games covered
             </Alert>
           )}
         </Paper>
@@ -479,7 +478,7 @@ function ActivityTab({ data }: { data: SettlePayload }) {
   );
 }
 
-function ExtrasTab({ data }: { data: SettlePayload; onChange: () => void }) {
+function ExtrasTab({ data }: { data: SettlePayload }) {
   const t = useT();
   return (
     <Stack spacing={2}>

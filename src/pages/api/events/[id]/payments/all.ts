@@ -14,7 +14,11 @@ import { isWalletReadPathEnabled } from "~/lib/featureFlag.server";
  *     amountCents: number,
  *     gameHistoryId: string,
  *     settled: boolean,         // true if a payment_received Historical Settlement exists
- *     settledAt: string | null  // ISO of the settlement, if any
+ *     settledAt: string | null, // ISO of the settlement, if any
+ *     payerUserId: string | null,
+ *     payerName: string | null,
+ *     paidToUserId: string | null,
+ *     paidToName: string | null
  *   }
  *
  * Reads from the ledger when WALLET_READ_PATH_ENABLED=true (the post-ADR-0019
@@ -54,6 +58,10 @@ export const GET: APIRoute = async ({ params, request }) => {
     gameHistoryId: string;
     settled: boolean;
     settledAt: string | null;
+    payerUserId: string | null;
+    payerName: string | null;
+    paidToUserId: string | null;
+    paidToName: string | null;
   }
 
   // Always check the ledger for settlement rows (a payment_received row
@@ -61,7 +69,15 @@ export const GET: APIRoute = async ({ params, request }) => {
   // is independent of the `useLedger` flag: the matrix should always show
   // settlements, even when the balance read path is still on the legacy
   // PlayerPayment + snapshot impl.
-  const settlementsByGameAndUser = new Map<string, { amountCents: number; createdAt: Date }>();
+  interface SettlementRow {
+    amountCents: number;
+    createdAt: Date;
+    payerUserId: string | null;
+    paidToUserId: string | null;
+    payerName: string | null;
+    paidToName: string | null;
+  }
+  const settlementsByGameAndUser = new Map<string, SettlementRow>();
   {
     const userIds = eventPlayers.map((p) => p.userId).filter((u): u is string => !!u);
     if (userIds.length > 0 && histories.length > 0) {
@@ -72,12 +88,24 @@ export const GET: APIRoute = async ({ params, request }) => {
           gameHistoryId: { in: histories.map((h) => h.id) },
           userId: { in: userIds },
         },
-        select: { gameHistoryId: true, userId: true, amountCents: true, createdAt: true },
+        select: {
+          gameHistoryId: true, userId: true, amountCents: true, createdAt: true,
+          payerUserId: true, paidToUserId: true,
+          payer: { select: { name: true } },
+          paidTo: { select: { name: true } },
+        },
       });
       for (const s of settlements) {
         if (!s.gameHistoryId) continue;
         const key = `${s.gameHistoryId}:${s.userId}`;
-        settlementsByGameAndUser.set(key, { amountCents: s.amountCents, createdAt: s.createdAt });
+        settlementsByGameAndUser.set(key, {
+          amountCents: s.amountCents,
+          createdAt: s.createdAt,
+          payerUserId: s.payerUserId,
+          paidToUserId: s.paidToUserId,
+          payerName: s.payer?.name ?? null,
+          paidToName: s.paidTo?.name ?? null,
+        });
       }
     }
   }
@@ -102,7 +130,11 @@ export const GET: APIRoute = async ({ params, request }) => {
     for (const name of playerNames) {
       const entry = snapshot.find((e) => e.playerName === name);
       if (!entry && !participants.has(name)) {
-        cells[name] = { status: "absent", amountCents: 0, gameHistoryId: h.id, settled: false, settledAt: null };
+        cells[name] = {
+          status: "absent", amountCents: 0, gameHistoryId: h.id,
+          settled: false, settledAt: null,
+          payerUserId: null, payerName: null, paidToUserId: null, paidToName: null,
+        };
         continue;
       }
       const userId = userIdByName.get(name);
@@ -115,6 +147,10 @@ export const GET: APIRoute = async ({ params, request }) => {
         gameHistoryId: h.id,
         settled: !!settlement || status === "paid",
         settledAt: settlement?.createdAt.toISOString() ?? null,
+        payerUserId: settlement?.payerUserId ?? null,
+        payerName: settlement?.payerName ?? null,
+        paidToUserId: settlement?.paidToUserId ?? null,
+        paidToName: settlement?.paidToName ?? null,
       };
     }
     return {

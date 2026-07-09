@@ -29,10 +29,12 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const body = await request.json();
   const playerName = String(body.playerName ?? "").trim();
+  const payerUserId = body.payerUserId ? String(body.payerUserId).trim() : null;
+  const paidToUserId = body.paidToUserId ? String(body.paidToUserId).trim() : null;
   if (!playerName) {
     return Response.json({ error: "playerName is required." }, { status: 400 });
   }
 
-  const result = await settleAllHistoricalForPlayer({ eventId, playerName, markedById });
+  const result = await settleAllHistoricalForPlayer({ eventId, playerName, markedById, payerUserId, paidToUserId });
   return Response.json({ ok: true, ...result });
 };

@@ -412,6 +412,8 @@ export interface SettleHistoricalGameArgs {
   markedById: string;
   method?: string | null;
   amountCents?: number; // defaults to the snapshot entry's amount
+  payerUserId?: string | null; // who actually handed over the money (defaults to the player)
+  paidToUserId?: string | null; // who received the money (defaults to the event owner)
 }
 
 export interface SettleHistoricalResult {
@@ -423,9 +425,9 @@ export interface SettleHistoricalResult {
 export async function settleHistoricalGame(
   args: SettleHistoricalGameArgs,
 ): Promise<SettleHistoricalResult> {
-  const { eventId, gameHistoryId, playerName, markedById, method, amountCents } = args;
+  const { eventId, gameHistoryId, playerName, markedById, method, amountCents, payerUserId, paidToUserId } = args;
 
-  const idempotencyKey = `settle-historical:${gameHistoryId}:${playerName}`;
+  const idempotencyKey = `settle-historical:${gameHistoryId}:${playerName}:${payerUserId ?? "_"}:${paidToUserId ?? "_"}`;
   const existing = await prisma.walletTransaction.findUnique({ where: { idempotencyKey } });
   if (existing) return { written: false, walletTransactionId: existing.id, reason: "already-settled" };
 
@@ -457,6 +459,13 @@ export async function settleHistoricalGame(
     }
   }
 
+  // Resolve payer + paidTo with sensible defaults. Payer defaults to the
+  // debtor (the person whose debt was cleared). paidTo defaults to the
+  // event owner.
+  const finalPayerUserId = payerUserId ?? eventPlayer.userId;
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
+  const finalPaidToUserId = paidToUserId ?? event?.ownerId ?? null;
+
   const wt = await prisma.walletTransaction.create({
     data: {
       eventId,
@@ -470,6 +479,8 @@ export async function settleHistoricalGame(
       gameHistoryId,
       playerName,
       markedById,
+      payerUserId: finalPayerUserId,
+      paidToUserId: finalPaidToUserId,
       note: method ?? null,
       idempotencyKey,
     },
@@ -481,6 +492,8 @@ export interface SettleAllHistoricalArgs {
   eventId: string;
   playerName: string;
   markedById: string;
+  payerUserId?: string | null;
+  paidToUserId?: string | null;
 }
 
 export interface SettleAllHistoricalResult {
@@ -493,7 +506,7 @@ export interface SettleAllHistoricalResult {
 export async function settleAllHistoricalForPlayer(
   args: SettleAllHistoricalArgs,
 ): Promise<SettleAllHistoricalResult> {
-  const { eventId, playerName, markedById } = args;
+  const { eventId, playerName, markedById, payerUserId, paidToUserId } = args;
   const result: SettleAllHistoricalResult = { settled: 0, skipped: 0, failed: 0, details: [] };
 
   // Find every GameHistory for this event with a paymentsSnapshot that
@@ -522,6 +535,8 @@ export async function settleAllHistoricalForPlayer(
       gameHistoryId: h.id,
       playerName,
       markedById,
+      payerUserId,
+      paidToUserId,
     });
     if (r.reason === "created") result.settled++;
     else if (r.reason === "already-settled") result.skipped++;
