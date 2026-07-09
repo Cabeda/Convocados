@@ -17,6 +17,29 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { PaymentsMatrixTab } from "./PaymentsMatrixTab";
 import { PlayerDebtsTab } from "./PlayerDebtsTab";
 
+// Read/write a query param to/from the URL so the active tab survives
+// page refresh. ADR 0019: the Payments tab is a primary destination —
+// users who mark a debt paid and then refresh should land back on it.
+function useTabQueryParam(name: string, fallback: number): [number, (v: number) => void] {
+  const [value, setValue] = useState<number>(() => {
+    if (typeof window === "undefined") return fallback;
+    const p = new URLSearchParams(window.location.search).get(name);
+    const n = p ? Number(p) : NaN;
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (value === fallback) {
+      url.searchParams.delete(name);
+    } else {
+      url.searchParams.set(name, String(value));
+    }
+    window.history.replaceState({}, "", url.toString());
+  }, [name, value, fallback]);
+  return [value, setValue];
+}
+
 interface Props {
   eventId: string;
 }
@@ -100,7 +123,7 @@ function formatMoney(cents: number, currency: string): string {
 
 export default function SettleUpPage({ eventId }: Props) {
   const t = useT();
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useTabQueryParam("tab", 0);
   const [data, setData] = useState<SettlePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -201,7 +224,7 @@ export default function SettleUpPage({ eventId }: Props) {
 
 function PaymentsSubTabs({ eventId, onChange }: { eventId: string; onChange: () => void }) {
   const t = useT();
-  const [sub, setSub] = useState(0);
+  const [sub, setSub] = useTabQueryParam("sub", 0);
   return (
     <Stack spacing={2}>
       <Paper sx={{ borderRadius: 3 }}>

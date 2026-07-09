@@ -68,6 +68,7 @@ export function PaymentsMatrixTab({ eventId, onChange }: { eventId: string; onCh
 
   const settle = async (gameHistoryId: string, playerName: string) => {
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch(`/api/events/${eventId}/payments/historical`, {
         method: "POST",
@@ -77,13 +78,15 @@ export function PaymentsMatrixTab({ eventId, onChange }: { eventId: string; onCh
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? `Failed (${res.status}).`);
-        return;
+        return; // keep modal open so the user sees the error and can retry
       }
       await fetchData();
       onChange?.();
+      setConfirmSettle(null);
+    } catch (e) {
+      setError(String(e));
     } finally {
       setBusy(false);
-      setConfirmSettle(null);
     }
   };
 
@@ -218,6 +221,9 @@ export function PaymentsMatrixTab({ eventId, onChange }: { eventId: string; onCh
               </>
             )}
           </DialogContentText>
+          {error && (
+            <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmSettle(null)}>{t("cancel")}</Button>
