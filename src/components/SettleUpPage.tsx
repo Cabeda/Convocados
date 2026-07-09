@@ -6,11 +6,14 @@ import {
   CircularProgress, alpha, IconButton, Divider,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import HistoryIcon from "@mui/icons-material/History";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import GridOnIcon from "@mui/icons-material/GridOn";
 import { useT } from "~/lib/useT";
+import { ThemeModeProvider } from "./ThemeModeProvider";
+import { ResponsiveLayout } from "./ResponsiveLayout";
 import { PaymentsMatrixTab } from "./PaymentsMatrixTab";
 import { PlayerDebtsTab } from "./PlayerDebtsTab";
 
@@ -95,7 +98,7 @@ function formatMoney(cents: number, currency: string): string {
   }).format(cents / 100);
 }
 
-export function SettleUpPage({ eventId }: Props) {
+export default function SettleUpPage({ eventId }: Props) {
   const t = useT();
   const [tab, setTab] = useState(0);
   const [data, setData] = useState<SettlePayload | null>(null);
@@ -122,53 +125,77 @@ export function SettleUpPage({ eventId }: Props) {
 
   if (loading) {
     return (
-      <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}>
-        <CircularProgress />
-      </Box>
+      <ThemeModeProvider>
+        <ResponsiveLayout>
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
+            <CircularProgress />
+          </Box>
+        </ResponsiveLayout>
+      </ThemeModeProvider>
     );
   }
   if (error || !data) {
     return (
-      <Box sx={{ p: 4 }}>
-        <Alert severity="error">{error ?? "Unknown error."}</Alert>
-      </Box>
+      <ThemeModeProvider>
+        <ResponsiveLayout>
+          <Box sx={{ p: 4, maxWidth: 1100, mx: "auto" }}>
+            <Stack spacing={2}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <IconButton href={`/events/${eventId}`} size="small" aria-label={t("backToGame")}>
+                  <ArrowBackIcon />
+                </IconButton>
+              </Box>
+              <Alert severity="error">{error ?? "Unknown error."}</Alert>
+            </Stack>
+          </Box>
+        </ResponsiveLayout>
+      </ThemeModeProvider>
     );
   }
 
   return (
-    <Box sx={{ maxWidth: 1100, mx: "auto", p: { xs: 2, sm: 3 } }}>
-      <Stack spacing={2}>
-        <Box>
-          <Typography variant="h4" fontWeight={700}>
-            {t("settleUpTitle") ?? "Settle Up"}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {data.event.title}
-          </Typography>
+    <ThemeModeProvider>
+      <ResponsiveLayout>
+        <Box sx={{ maxWidth: 1100, mx: "auto", p: { xs: 2, sm: 3 } }}>
+          <Stack spacing={2}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <IconButton href={`/events/${eventId}`} size="small" aria-label={t("backToGame")}>
+                <ArrowBackIcon />
+              </IconButton>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h4" fontWeight={700}>
+                  {t("settleUpTitle") ?? "Settle Up"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {data.event.title}
+                </Typography>
+              </Box>
+            </Box>
+
+            <Paper sx={{ borderRadius: 3 }}>
+              <Tabs
+                value={tab}
+                onChange={(_, v) => setTab(v)}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
+                <Tab icon={<ReceiptIcon />} iconPosition="start" label={t("settleTabSettle") ?? "Settle"} />
+                <Tab icon={<HistoryIcon />} iconPosition="start" label={t("settleTabActivity") ?? "Your activity"} />
+                <Tab icon={<AccountBalanceWalletIcon />} iconPosition="start" label={t("settleTabExtras") ?? "Extras"} />
+                {data.admin && (
+                  <Tab icon={<GridOnIcon />} iconPosition="start" label={t("settleTabPayments") ?? "Payments"} />
+                )}
+              </Tabs>
+            </Paper>
+
+            {tab === 0 && <SettleTab data={data} onChange={fetchData} />}
+            {tab === 1 && <ActivityTab data={data} />}
+            {tab === 2 && <ExtrasTab data={data} onChange={fetchData} />}
+            {tab === 3 && data.admin && <PaymentsSubTabs eventId={data.event.id} onChange={fetchData} />}
+          </Stack>
         </Box>
-
-        <Paper sx={{ borderRadius: 3 }}>
-          <Tabs
-            value={tab}
-            onChange={(_, v) => setTab(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-          >
-            <Tab icon={<ReceiptIcon />} iconPosition="start" label={t("settleTabSettle") ?? "Settle"} />
-            <Tab icon={<HistoryIcon />} iconPosition="start" label={t("settleTabActivity") ?? "Your activity"} />
-            <Tab icon={<AccountBalanceWalletIcon />} iconPosition="start" label={t("settleTabExtras") ?? "Extras"} />
-            {data.admin && (
-              <Tab icon={<GridOnIcon />} iconPosition="start" label={t("settleTabPayments") ?? "Payments"} />
-            )}
-          </Tabs>
-        </Paper>
-
-        {tab === 0 && <SettleTab data={data} onChange={fetchData} />}
-        {tab === 1 && <ActivityTab data={data} />}
-        {tab === 2 && <ExtrasTab data={data} onChange={fetchData} />}
-        {tab === 3 && data.admin && <PaymentsSubTabs eventId={data.event.id} onChange={fetchData} />}
-      </Stack>
-    </Box>
+      </ResponsiveLayout>
+    </ThemeModeProvider>
   );
 }
 
