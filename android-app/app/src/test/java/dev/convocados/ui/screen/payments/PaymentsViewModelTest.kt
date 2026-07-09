@@ -57,6 +57,86 @@ class PaymentsViewModelTest {
     }
 
     @Test
+    fun `toggle updates observable status in place on success`() = runTest {
+        // Regression: the user reported the row status not changing after tapping.
+        // The API write succeeds (verified on-device, HTTP 200) but the UI must
+        // also reflect the new status via the data StateFlow.
+        val response = PaymentsResponse(
+            payments = listOf(
+                Payment("p1", "Alice", 5.0, "pending"),
+                Payment("p2", "Bob", 5.0, "pending"),
+            ),
+            summary = PaymentSummary(paidCount = 0, pendingCount = 2, totalCount = 2, paidAmount = 0.0),
+        )
+        coEvery { api.fetchPayments("e1") } returns response
+        coEvery { api.updatePaymentStatus("e1", "Alice", "paid") } returns OkResponse()
+
+        val vm = PaymentsViewModel(api)
+        vm.load("e1")
+        advanceUntilIdle()
+
+        vm.toggle("e1", "Alice", "pending")
+        advanceUntilIdle()
+
+        val data = vm.data.value!!
+        assertEquals("paid", data.payments.first { it.id == "p1" }.status)
+        assertEquals("pending", data.payments.first { it.id == "p2" }.status)
+        assertEquals(1, data.summary.paidCount)
+        assertEquals(1, data.summary.pendingCount)
+        assertNull(vm.error.value)
+    }
+
+    @Test
+    fun `toggle surfaces error and leaves status unchanged on failure`() = runTest {
+        // If the write fails (e.g. 403 for a non-owner/admin) the row must stay
+        // as-is and an error must be surfaced rather than failing silently.
+        val response = PaymentsResponse(
+            payments = listOf(Payment("p1", "Alice", 5.0, "pending")),
+            summary = PaymentSummary(pendingCount = 1, totalCount = 1),
+        )
+        coEvery { api.fetchPayments("e1") } returns response
+        coEvery { api.updatePaymentStatus("e1", "Alice", "paid") } throws
+            ApiException(403, "Only the event owner can do this.")
+
+        val vm = PaymentsViewModel(api)
+        vm.load("e1")
+        advanceUntilIdle()
+
+        vm.toggle("e1", "Alice", "pending")
+        advanceUntilIdle()
+
+        assertEquals("pending", vm.data.value!!.payments.first().status)
+        assertNotNull(vm.error.value)
+    }
+
+    @Test
+    fun `bulkMarkAllPaid reloads to reflect all paid`() = runTest {
+        // "Marcar pagamentos" -> bulk button. After success it re-fetches; the
+        // second fetch returns everything paid so the UI reflects it.
+        val pending = PaymentsResponse(
+            payments = listOf(Payment("p1", "Alice", 5.0, "pending"), Payment("p2", "Bob", 5.0, "pending")),
+            summary = PaymentSummary(pendingCount = 2, totalCount = 2),
+        )
+        val allPaid = PaymentsResponse(
+            payments = listOf(Payment("p1", "Alice", 5.0, "paid"), Payment("p2", "Bob", 5.0, "paid")),
+            summary = PaymentSummary(paidCount = 2, totalCount = 2, paidAmount = 10.0),
+        )
+        coEvery { api.fetchPayments("e1") } returnsMany listOf(pending, allPaid)
+        coEvery { api.bulkMarkAllPaid("e1") } returns OkResponse()
+
+        val vm = PaymentsViewModel(api)
+        vm.load("e1")
+        advanceUntilIdle()
+        assertEquals(2, vm.data.value!!.summary.pendingCount)
+
+        vm.bulkMarkAllPaid("e1")
+        advanceUntilIdle()
+
+        assertEquals(2, vm.data.value!!.summary.paidCount)
+        assertTrue(vm.data.value!!.payments.all { it.status == "paid" })
+    }
+
+    @Test
     fun `setCostOverride calls api and reloads`() = runTest {
         val response = PaymentsResponse(payments = listOf(Payment("p1", "Bob", 5.0, "pending")))
         coEvery { api.fetchPayments("e1") } returns response
