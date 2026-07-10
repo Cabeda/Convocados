@@ -973,7 +973,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(body.teamsSnapshot).toBeDefined();
   });
 
-  it("returns 403 when participant tries to edit payments", async () => {
+  it("allows participant to edit their own payment status", async () => {
     const owner = await seedUser();
     const participant = await seedUser({ name: "Alice" });
     mockAuth(participant.id, "Alice");
@@ -986,9 +986,33 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, {
       paymentsSnapshot: [{ playerName: "Alice", amount: 10, status: "paid" }],
     }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.paymentsSnapshot).toBeDefined();
+  });
+
+  it("returns 403 when participant tries to edit another player's payment", async () => {
+    const owner = await seedUser();
+    const participant = await seedUser({ name: "Alice" });
+    mockAuth(participant.id, "Alice");
+    const id = await seedEvent({ ownerId: owner.id });
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, {
+      teamsSnapshot: JSON.stringify(teams),
+      paymentsSnapshot: JSON.stringify([
+        { playerName: "Alice", amount: 10, status: "pending" },
+        { playerName: "Bob", amount: 10, status: "pending" },
+      ]),
+    });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, {
+      paymentsSnapshot: [{ playerName: "Bob", amount: 10, status: "paid" }],
+    }));
     expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body.error).toContain("owner or admin");
+    expect(body.error).toContain("own payment");
   });
 
   it("allows owner to edit teams", async () => {
