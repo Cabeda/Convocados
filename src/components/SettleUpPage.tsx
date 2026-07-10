@@ -101,6 +101,11 @@ export default function SettleUpPage({ eventId }: Props) {
   const [data, setData] = useState<SettlePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pmDialogOpen, setPmDialogOpen] = useState(false);
+  const [pmCost, setPmCost] = useState<{ paymentMethods: string | null } | null>(null);
+  const [pmEventUsers, setPmEventUsers] = useState<
+    Array<{ id: string; name: string; role: "owner" | "admin" | "player" }>
+  >([]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -119,6 +124,19 @@ export default function SettleUpPage({ eventId }: Props) {
   }, [eventId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const openPaymentMethodDialog = () => {
+    Promise.all([
+      fetch(`/api/events/${eventId}/cost`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/events/${eventId}/event-users`).then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([costData, usersData]) => {
+        setPmCost(costData);
+        setPmEventUsers(usersData?.users ?? []);
+        setPmDialogOpen(true);
+      })
+      .catch(() => setPmDialogOpen(true));
+  };
 
   if (loading) {
     return (
@@ -161,91 +179,48 @@ export default function SettleUpPage({ eventId }: Props) {
               </IconButton>
             </Box>
 
-            <SettleTab data={data} onChange={fetchData} />
-            <PaymentMethodCard eventId={data.event.id} canSetDefault={!!data.admin} onChange={fetchData} />
-            <ActivityTab data={data} />
-            <ExtrasTab data={data} />
+            <SettleTab data={data} onChange={fetchData} onChangePaymentMethod={openPaymentMethodDialog} />
           </Stack>
         </Box>
       </ResponsiveLayout>
+      <PaymentMethodOverrideDialog
+        eventId={data.event.id}
+        defaultMethods={pmCost?.paymentMethods ?? null}
+        overrideMethods={null}
+        canSetDefault={!!data.admin}
+        eventUsers={pmEventUsers}
+        mode="default"
+        open={pmDialogOpen}
+        onClose={() => setPmDialogOpen(false)}
+        onSaved={() => { setPmDialogOpen(false); fetchData(); }}
+      />
     </ThemeModeProvider>
   );
 }
 
-function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => void }) {
+function SettleTab({
+  data,
+  onChange,
+  onChangePaymentMethod,
+}: {
+  data: SettlePayload;
+  onChange: () => void;
+  onChangePaymentMethod: () => void;
+}) {
   const t = useT();
-  const [activeTab, setActiveTab] = useState<"transactions" | "debts" | "members" | "permissions" | "activity">("debts");
+  const [activeTab, setActiveTab] = useState<"transactions" | "debts">("debts");
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [chartOpen, setChartOpen] = useState(false);
-  const [extrasLabel, setExtrasLabel] = useState("");
-  const [extrasAmount, setExtrasAmount] = useState("");
-  const [extrasBusy, setExtrasBusy] = useState(false);
-  const [extrasError, setExtrasError] = useState<string | null>(null);
-  const [subUserId, setSubUserId] = useState("");
   const [settleBusy, setSettleBusy] = useState(false);
   const [settleFeedback, setSettleFeedback] = useState<
     { severity: "success" | "error" | "info"; message: string } | null
   >(null);
-  const [subBusy, setSubBusy] = useState(false);
 
   const netPositions = data.admin?.netPositions ?? [];
   const pairwiseDebts = data.admin?.pairwiseDebts ?? [];
   const transactionsCount = data.you?.transactions.length ?? 0;
-  const membersCount = 2; // placeholder — we don't have a per-event member count endpoint here; the API should expose it. For now derive from netPositions.
   const realMembersCount = netPositions.length > 0 ? netPositions.length : 2;
   const totalSpentCents = data.extras.potCents;
-
-  const declare = async () => {
-    setExtrasError(null);
-    const amountCents = Math.round(parseFloat(extrasAmount) * 100);
-    if (!Number.isFinite(amountCents) || amountCents <= 0) {
-      setExtrasError("Enter a positive amount.");
-      return;
-    }
-    if (!extrasLabel.trim()) {
-      setExtrasError("Enter a label.");
-      return;
-    }
-    setExtrasBusy(true);
-    try {
-      const res = await fetch(`/api/events/${data.event.id}/settle/extras`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ amountCents, label: extrasLabel.trim() }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setExtrasError(body.error ?? `Failed (${res.status}).`);
-        return;
-      }
-      setExtrasLabel("");
-      setExtrasAmount("");
-      onChange();
-    } finally {
-      setExtrasBusy(false);
-    }
-  };
-
-  const subscribe = async () => {
-    if (!subUserId.trim()) return;
-    setSubBusy(true);
-    try {
-      await fetch(`/api/events/${data.event.id}/settle/subscriptions`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId: subUserId.trim() }),
-      });
-      setSubUserId("");
-      onChange();
-    } finally {
-      setSubBusy(false);
-    }
-  };
-
-  const cancelSub = async (id: string) => {
-    await fetch(`/api/events/${data.event.id}/settle/subscriptions/${id}`, { method: "DELETE" });
-    onChange();
-  };
 
   const handleMarkSettled = async (debt: PairwiseDebt) => {
     if (!data.admin) {
@@ -335,6 +310,7 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
         netPositions={netPositions}
         onShowCharts={() => setChartOpen((v) => !v)}
         onMore={(el) => setMoreAnchor(el)}
+        onChangePaymentMethod={onChangePaymentMethod}
       />
       <Menu open={!!moreAnchor && !chartOpen} anchorEl={moreAnchor} onClose={() => setMoreAnchor(null)}>
         <MenuItem onClick={() => setMoreAnchor(null)}>
@@ -387,9 +363,6 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
       >
         <Tab value="transactions" label={t("settleTabTransactions") ?? "Transactions"} />
         <Tab value="debts" label={t("settleTabDebts") ?? "Debts"} data-testid="tab-debts" />
-        <Tab value="members" label={t("settleTabMembers") ?? "Members"} />
-        <Tab value="permissions" label={t("settleTabPermissions") ?? "Permissions"} />
-        <Tab value="activity" label={t("settleTabRecentActivity") ?? "Recent activity"} />
       </Tabs>
 
       {activeTab === "debts" && (
@@ -414,264 +387,11 @@ function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => vo
       )}
 
       {activeTab === "transactions" && (
-        <Alert severity="info">
-          {t("settleTabTransactionsHint") ?? "Detailed transactions live in the Payments tab on the event page."}
-        </Alert>
-      )}
-
-      {activeTab === "members" && data.admin && (
-        <Paper sx={{ p: 2, borderRadius: 3 }}>
-          <Typography variant="h6">{t("settleAdminBalances") ?? "Outstanding balances"}</Typography>
-          {data.admin.balances.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              {t("settleAdminNoDebts") ?? "Nobody owes anything."}
-            </Typography>
-          ) : (
-            <Table size="small" sx={{ mt: 1 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Player</TableCell>
-                  <TableCell align="right">Owed</TableCell>
-                  <TableCell align="right">Games</TableCell>
-                  <TableCell align="right">Streak</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.admin.balances.map((b) => (
-                  <TableRow key={b.playerName}>
-                    <TableCell>{b.playerName}</TableCell>
-                    <TableCell align="right">{formatMoney(Math.round(b.amount * 100), data.event.currency)}</TableCell>
-                    <TableCell align="right">{b.gamesOwed}</TableCell>
-                    <TableCell align="right">{b.streak}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Paper>
-      )}
-
-      {activeTab === "members" && !data.admin && (
-        <Alert severity="info">{t("settleActivityLoginRequired") ?? "Log in to see members."}</Alert>
-      )}
-
-      {activeTab === "permissions" && data.admin && (
-        <>
-          {data.event.monthlyEnabled && (
-            <Paper sx={{ p: 2, borderRadius: 3 }}>
-              <Typography variant="h6">{t("settleAdminSubscriptions") ?? "Monthly subscriptions"}</Typography>
-              <Stack direction="row" spacing={1} sx={{ mt: 1, mb: 1 }}>
-                <TextField
-                  size="small"
-                  label="User ID"
-                  value={subUserId}
-                  onChange={(e) => setSubUserId(e.target.value)}
-                />
-                <Button variant="contained" onClick={subscribe} disabled={subBusy || !subUserId.trim()}>
-                  {t("settleAdminSubscribe") ?? "Subscribe"}
-                </Button>
-              </Stack>
-              {data.admin.subscriptions.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  {t("settleAdminNoSubs") ?? "No active subscriptions."}
-                </Typography>
-              ) : (
-                <Stack spacing={1}>
-                  {data.admin.subscriptions.map((s) => (
-                    <Box
-                      key={s.id}
-                      sx={{
-                        display: "flex", alignItems: "center", gap: 1,
-                        p: 1, borderRadius: 2,
-                        bgcolor: (theme) => theme.palette.action.hover,
-                      }}
-                    >
-                      <Typography sx={{ flex: 1 }}>
-                        <strong>{s.userName}</strong> · {formatMoney(s.feeCents, data.event.currency)} ·{" "}
-                        {s.gamesCovered} games
-                      </Typography>
-                      <Chip label={s.status} size="small" color={s.status === "active" ? "success" : "default"} />
-                      <IconButton size="small" onClick={() => cancelSub(s.id)} aria-label="cancel">
-                        <CloseIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  ))}
-                </Stack>
-              )}
-            </Paper>
-          )}
-
-          <Paper sx={{ p: 2, borderRadius: 3 }}>
-            <Typography variant="h6">{t("settleAdminDeclareSpend") ?? "Declare a spend from the pot"}</Typography>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1 }}>
-              <TextField
-                size="small" label="Label (e.g. Apple Developer fee)"
-                value={extrasLabel}
-                onChange={(e) => setExtrasLabel(e.target.value)}
-                sx={{ flex: 1 }}
-              />
-              <TextField
-                size="small" label="Amount" type="number"
-                value={extrasAmount}
-                onChange={(e) => setExtrasAmount(e.target.value)}
-                slotProps={{ htmlInput: { step: "0.01", min: "0" } }}
-                sx={{ width: 120 }}
-              />
-              <Button variant="contained" onClick={declare} disabled={extrasBusy}>
-                {t("settleAdminDeclare") ?? "Declare"}
-              </Button>
-            </Stack>
-            {extrasError && <Alert severity="error" sx={{ mt: 1 }}>{extrasError}</Alert>}
-          </Paper>
-        </>
-      )}
-
-      {activeTab === "permissions" && !data.admin && (
-        <Alert severity="info">{t("settleActivityLoginRequired") ?? "Log in to manage permissions."}</Alert>
-      )}
-
-      {activeTab === "activity" && (
-        <Alert severity="info">
-          {t("settleActivityLoginRequired") ?? "Recent activity shows up after the next game."}
+        <Alert severity="info" data-testid="settle-transactions-hint">
+          {t("settleTabTransactionsHint") ??
+            "Detailed payments live in the game history for each game. Open a past game to see who paid what."}
         </Alert>
       )}
     </Stack>
-  );
-}
-
-function ActivityTab({ data }: { data: SettlePayload }) {
-  const t = useT();
-  if (!data.you) {
-    return <Alert severity="info">{t("settleActivityLoginRequired") ?? "Log in to see your activity."}</Alert>;
-  }
-  if (data.you.transactions.length === 0) {
-    return <Alert severity="info">{t("settleActivityEmpty") ?? "No transactions yet."}</Alert>;
-  }
-  return (
-    <Paper sx={{ p: 2, borderRadius: 3 }}>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Date</TableCell>
-            <TableCell>Reason</TableCell>
-            <TableCell align="right">Amount</TableCell>
-            <TableCell align="right">Game units</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {data.you.transactions.map((tx) => (
-            <TableRow key={tx.id}>
-              <TableCell>{new Date(tx.createdAt).toLocaleString()}</TableCell>
-              <TableCell>
-                <Chip label={tx.reason} size="small" />
-                {tx.statusAfter && (
-                  <Chip label={tx.statusAfter} size="small" sx={{ ml: 0.5 }} />
-                )}
-              </TableCell>
-              <TableCell align="right">{formatMoney(tx.amountCents, tx.currency)}</TableCell>
-              <TableCell align="right">{tx.gameUnits > 0 ? `+${tx.gameUnits}` : tx.gameUnits || ""}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </Paper>
-  );
-}
-
-function ExtrasTab({ data }: { data: SettlePayload }) {
-  const t = useT();
-  return (
-    <Stack spacing={2}>
-      <Paper sx={{ p: 2, borderRadius: 3 }}>
-        <Typography variant="overline" color="text.secondary">
-          {t("settleExtrasCurrentPot") ?? "Extras pot"}
-        </Typography>
-        <Typography variant="h3" fontWeight={700} sx={{ mt: 0.5 }}>
-          {formatMoney(data.extras.potCents, data.extras.currency)}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          {t("settleExtrasExplanation") ??
-            "Forfeited Game Units from expired credits. Visible to everyone in the group."}
-        </Typography>
-      </Paper>
-
-      <Paper sx={{ p: 2, borderRadius: 3 }}>
-        <Typography variant="h6">{t("settleExtrasSpendingLog") ?? "Spending log"}</Typography>
-        <Divider sx={{ my: 1 }} />
-        {data.extras.declarations.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            {t("settleExtrasNoDeclarations") ?? "No spends declared yet."}
-          </Typography>
-        ) : (
-          <Stack spacing={1}>
-            {data.extras.declarations.map((d) => (
-              <Box
-                key={d.id}
-                sx={{
-                  display: "flex", alignItems: "center", gap: 1,
-                  p: 1, borderRadius: 2,
-                  bgcolor: (theme) => theme.palette.action.hover,
-                }}
-              >
-                <Typography sx={{ flex: 1 }}>
-                  <strong>{d.label}</strong> · {new Date(d.declaredAt).toLocaleDateString()}
-                </Typography>
-                <Typography color="error.main" fontWeight={600}>
-                  −{formatMoney(d.amountCents, d.currency)}
-                </Typography>
-              </Box>
-            ))}
-          </Stack>
-        )}
-      </Paper>
-    </Stack>
-  );
-}
-
-/**
- * Embeds the PaymentMethodOverrideDialog in the Status tab. Previously the
- * dialog existed but had no trigger, so the "change method" control was
- * effectively invisible (ADR 0020 fix).
- */
-function PaymentMethodCard({ eventId, canSetDefault, onChange }: { eventId: string; canSetDefault: boolean; onChange: () => void }) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  const [cost, setCost] = useState<{ paymentMethods: string | null; tempPaymentMethods: string | null } | null>(null);
-  const [eventUsers, setEventUsers] = useState<
-    Array<{ id: string; name: string; role: "owner" | "admin" | "player" }>
-  >([]);
-
-  const openDialog = () => {
-    Promise.all([
-      fetch(`/api/events/${eventId}/cost`).then((r) => (r.ok ? r.json() : null)),
-      fetch(`/api/events/${eventId}/event-users`).then((r) => (r.ok ? r.json() : null)),
-    ])
-      .then(([costData, usersData]) => {
-        setCost(costData);
-        setEventUsers(usersData?.users ?? []);
-        setOpen(true);
-      })
-      .catch(() => setOpen(true));
-  };
-
-  return (
-    <Paper sx={{ p: 2, borderRadius: 3 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-        <Typography variant="h6" sx={{ flex: 1 }}>{t("settlePaymentsMethodTitle") ?? "Payment method"}</Typography>
-        <Button variant="outlined" size="small" onClick={openDialog}>
-          {t("settlePaymentsMethodChange") ?? "Change method"}
-        </Button>
-      </Box>
-      <PaymentMethodOverrideDialog
-        eventId={eventId}
-        defaultMethods={cost?.paymentMethods ?? null}
-        overrideMethods={cost?.tempPaymentMethods ?? null}
-        canSetDefault={canSetDefault}
-        eventUsers={eventUsers}
-        open={open}
-        onClose={() => setOpen(false)}
-        onSaved={() => { setOpen(false); onChange(); }}
-      />
-    </Paper>
   );
 }
