@@ -1,18 +1,16 @@
 /* eslint-disable react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  Box, Paper, Stack, Tabs, Tab, Typography, Alert, Chip,
+  Box, Paper, Stack, Typography, Alert, Chip,
   Table, TableBody, TableCell, TableHead, TableRow, TextField, Button,
-  CircularProgress, alpha, IconButton, Divider, Collapse,
+  CircularProgress, alpha, IconButton, Divider,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useT } from "~/lib/useT";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { PaymentMethodOverrideDialog } from "./event/PaymentMethodOverrideDialog";
-import { PaymentChips } from "./PaymentChips";
 
 interface Props {
   eventId: string;
@@ -93,31 +91,8 @@ function formatMoney(cents: number, currency: string): string {
   return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(cents / 100);
 }
 
-// Read/write a query param to/from the URL so the active inner tab survives
-// page refresh. ADR 0019.
-function useTabQueryParam(name: string, fallback: number): [number, (v: number) => void] {
-  const [value, setValue] = useState<number>(() => {
-    if (typeof window === "undefined") return fallback;
-    const p = new URLSearchParams(window.location.search).get(name);
-    const n = p ? Number(p) : NaN;
-    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
-  });
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    if (value === fallback) {
-      url.searchParams.delete(name);
-    } else {
-      url.searchParams.set(name, String(value));
-    }
-    window.history.replaceState({}, "", url.toString());
-  }, [name, value, fallback]);
-  return [value, setValue];
-}
-
 export default function SettleUpPage({ eventId }: Props) {
   const t = useT();
-  const [tab, setTab] = useTabQueryParam("tab", 0);
   const [data, setData] = useState<SettlePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -189,29 +164,12 @@ export default function SettleUpPage({ eventId }: Props) {
               </Box>
             </Box>
 
-            <Paper sx={{ borderRadius: 3 }}>
-              <Tabs
-                value={tab}
-                onChange={(_, v) => setTab(v)}
-                variant="scrollable"
-                scrollButtons="auto"
-              >
-                <Tab label={t("settleTabStatus") ?? "Status"} />
-                <Tab label={t("settleTabHistory") ?? "History"} />
-              </Tabs>
-            </Paper>
-
-            {tab === 0 && (
-              <Stack spacing={2}>
-                <SettleTab data={data} />
-                <PaymentMethodCard eventId={data.event.id} canSetDefault={!!data.admin} onChange={fetchData} />
-                <ActivityTab data={data} />
-                <ExtrasTab data={data} />
-              </Stack>
-            )}
-            {tab === 1 && (
-              <HistoryTab eventId={eventId} onChange={fetchData} />
-            )}
+            <Stack spacing={2}>
+              <SettleTab data={data} onChange={fetchData} />
+              <PaymentMethodCard eventId={data.event.id} canSetDefault={!!data.admin} onChange={fetchData} />
+              <ActivityTab data={data} />
+              <ExtrasTab data={data} />
+            </Stack>
           </Stack>
         </Box>
       </ResponsiveLayout>
@@ -219,7 +177,7 @@ export default function SettleUpPage({ eventId }: Props) {
   );
 }
 
-function SettleTab({ data }: { data: SettlePayload }) {
+function SettleTab({ data, onChange }: { data: SettlePayload; onChange: () => void }) {
   const t = useT();
   const [extrasLabel, setExtrasLabel] = useState("");
   const [extrasAmount, setExtrasAmount] = useState("");
@@ -253,6 +211,7 @@ function SettleTab({ data }: { data: SettlePayload }) {
       }
       setExtrasLabel("");
       setExtrasAmount("");
+      onChange();
     } finally {
       setExtrasBusy(false);
     }
@@ -268,6 +227,7 @@ function SettleTab({ data }: { data: SettlePayload }) {
         body: JSON.stringify({ userId: subUserId.trim() }),
       });
       setSubUserId("");
+      onChange();
     } finally {
       setSubBusy(false);
     }
@@ -275,6 +235,7 @@ function SettleTab({ data }: { data: SettlePayload }) {
 
   const cancelSub = async (id: string) => {
     await fetch(`/api/events/${data.event.id}/settle/subscriptions/${id}`, { method: "DELETE" });
+    onChange();
   };
 
   return (
@@ -541,95 +502,5 @@ function PaymentMethodCard({ eventId, canSetDefault, onChange }: { eventId: stri
         onSaved={() => { setOpen(false); onChange(); }}
       />
     </Paper>
-  );
-}
-
-interface HistoryEntry {
-  id: string;
-  dateTime: string;
-  status: string;
-  paymentsSnapshot: string | null;
-}
-
-/**
- * History drill-down: lists past games with their payment snapshot so owners
- * can see who still owes what, game by game (ADR 0020).
- */
-function HistoryTab({ eventId, onChange }: { eventId: string; onChange: () => void }) {
-  const t = useT();
-  const [entries, setEntries] = useState<HistoryEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/events/${eventId}/history?limit=50`);
-        if (!res.ok) return;
-        const json = await res.json();
-        if (cancelled) return;
-        const rows: HistoryEntry[] = (json.data ?? []).filter(
-          (e: any) => e.status === "played" || e.status === "cancelled",
-        );
-        setEntries(rows);
-      } catch {
-        /* non-fatal */
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [eventId, onChange]);
-
-  if (loading) {
-    return <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress /></Box>;
-  }
-  if (entries.length === 0) {
-    return <Alert severity="info">{t("settleHistoryEmpty") ?? "No past games yet."}</Alert>;
-  }
-
-  return (
-    <Stack spacing={1.5}>
-      {entries.map((e) => {
-        let payments: Array<{ playerName: string; amount: number; status: string; method?: string | null }> = [];
-        if (e.paymentsSnapshot) {
-          try { payments = JSON.parse(e.paymentsSnapshot); } catch { /* ignore */ }
-        }
-        const isOpen = expanded === e.id;
-        return (
-          <Paper key={e.id} sx={{ p: 2, borderRadius: 3 }}>
-            <Box
-              sx={{ display: "flex", alignItems: "center", gap: 1, cursor: payments.length ? "pointer" : "default" }}
-              onClick={() => payments.length && setExpanded(isOpen ? null : e.id)}
-            >
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  {new Date(e.dateTime).toLocaleString()}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {e.status === "cancelled" ? "Cancelled" : (t("settleTabHistory") ?? "Game")}
-                  {payments.length > 0 && ` · ${payments.filter((p) => p.status === "paid").length}/${payments.length} paid`}
-                </Typography>
-              </Box>
-              {payments.length > 0 && (
-                <ExpandMoreIcon sx={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
-              )}
-            </Box>
-            <Collapse in={isOpen}>
-              {payments.length > 0 ? (
-                <Box sx={{ mt: 1.5 }}>
-                  <PaymentChips payments={payments} />
-                </Box>
-              ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  {t("historyNoPayments") ?? "No payments for this game."}
-                </Typography>
-              )}
-            </Collapse>
-          </Paper>
-        );
-      })}
-    </Stack>
   );
 }

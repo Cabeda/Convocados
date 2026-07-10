@@ -8,8 +8,6 @@ import SettleUpPage from "~/components/SettleUpPage";
 (globalThis as any).__APP_VERSION__ = "0.0.0-test";
 
 beforeEach(() => {
-  // The page persists the active tab in the URL (?tab=). Reset between tests
-  // so each render starts on the default (Status) tab.
   window.history.replaceState({}, "", "/");
 });
 afterEach(() => cleanup());
@@ -39,27 +37,11 @@ const settlePayload = {
   },
 };
 
-const historyResponse = {
-  data: [
-    {
-      id: "gh-1",
-      dateTime: new Date().toISOString(),
-      status: "played",
-      paymentsSnapshot: JSON.stringify([
-        { playerName: "Kevin", amount: 25, status: "pending", method: null },
-        { playerName: "Alice", amount: 25, status: "paid", method: null },
-      ]),
-    },
-  ],
-  nextCursor: null,
-  hasMore: false,
-};
-
-describe("SettleUpPage 2-tab restructure", () => {
-  it("renders Status and History tabs", async () => {
+describe("SettleUpPage Status view", () => {
+  it("renders the Status content without a History tab", async () => {
     const fetchMock = vi.fn((url: string) => {
-      if (url.includes("/history")) {
-        return Promise.resolve({ ok: true, json: async () => historyResponse } as any);
+      if (url.includes("/cost")) {
+        return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
       }
       return Promise.resolve({ ok: true, json: async () => settlePayload } as any);
     });
@@ -67,33 +49,15 @@ describe("SettleUpPage 2-tab restructure", () => {
 
     renderWithTheme(<SettleUpPage eventId="evt-1" />);
 
-    await waitFor(() => expect(screen.getByText(/Status/)).toBeInTheDocument());
-    expect(screen.getAllByText(/History/).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByText(/Settle/i)).toBeInTheDocument());
+    // The game-history drill-down tab is gone — no History tab.
+    expect(screen.queryByRole("tab", { name: /History/i })).not.toBeInTheDocument();
+    // Status content renders the "You" summary.
+    expect(screen.getByText("Kevin")).toBeInTheDocument();
   });
 
-  it("switches to the History tab and shows past games", async () => {
+  it("shows a Change method button in the Status view (fixes invisible bug)", async () => {
     const fetchMock = vi.fn((url: string) => {
-      if (url.includes("/history")) {
-        return Promise.resolve({ ok: true, json: async () => historyResponse } as any);
-      }
-      return Promise.resolve({ ok: true, json: async () => settlePayload } as any);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    renderWithTheme(<SettleUpPage eventId="evt-1" />);
-
-    const historyTab = await screen.findAllByText(/History/);
-    fireEvent.click(historyTab[historyTab.length - 1].closest("button") ?? historyTab[historyTab.length - 1]);
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/history")));
-    expect(await screen.findByText(/Kevin/)).toBeInTheDocument();
-  });
-
-  it("shows a Change method button in the Status tab (fixes invisible bug)", async () => {
-    const fetchMock = vi.fn((url: string) => {
-      if (url.includes("/history")) {
-        return Promise.resolve({ ok: true, json: async () => historyResponse } as any);
-      }
       if (url.includes("/cost")) {
         return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
       }
@@ -104,5 +68,49 @@ describe("SettleUpPage 2-tab restructure", () => {
     renderWithTheme(<SettleUpPage eventId="evt-1" />);
 
     await waitFor(() => expect(screen.getByText(/Change method/)).toBeInTheDocument());
+  });
+
+  it("refreshes the UI after declaring a spend (no manual refresh)", async () => {
+    const payloadWithAdmin = {
+      ...settlePayload,
+      admin: { balances: [], aggregate: { paidCount: 0, totalCount: 0 }, subscriptions: [] },
+    };
+    let settleCalls = 0;
+    const fetchMock = vi.fn((url: string, init?: any) => {
+      if (url.includes("/cost")) {
+        return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
+      }
+      if (url.includes("/settle/extras") && init?.method === "POST") {
+        return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+      }
+      // GET /settle — return the declared spend on the second load.
+      settleCalls += 1;
+      const declared = settleCalls > 1
+        ? {
+            ...payloadWithAdmin,
+            extras: {
+              ...payloadWithAdmin.extras,
+              declarations: [{
+                id: "d1", amountCents: 1000, currency: "EUR",
+                label: "Apple fee", declaredBy: "u-owner", declaredAt: new Date().toISOString(),
+              }],
+            },
+          }
+        : payloadWithAdmin;
+      return Promise.resolve({ ok: true, json: async () => declared } as any);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithTheme(<SettleUpPage eventId="evt-1" />);
+    await waitFor(() => expect(screen.getByText(/Settle/i)).toBeInTheDocument());
+
+    const labelInput = screen.getByLabelText(/Label/i);
+    const amountInput = screen.getByLabelText(/Amount/i);
+    fireEvent.change(labelInput, { target: { value: "Apple fee" } });
+    fireEvent.change(amountInput, { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: /Declare/i }));
+
+    // The declared spend appears in the UI without a manual refresh.
+    expect(await screen.findByText(/Apple fee/)).toBeInTheDocument();
   });
 });

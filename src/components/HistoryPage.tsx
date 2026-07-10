@@ -429,10 +429,8 @@ function HistoryCardFull({
   // Drag state for moving players between teams
   const [dragPlayer, setDragPlayer] = useState<{ name: string; fromTeam: number } | null>(null);
 
-  // Gate editing on both time-based editability AND authentication
-  // Score: owner/admin or participant can edit
-  // Teams: owner/admin or participant can edit
-  // Payments: only owner/admin can edit
+  // Gate editing on both time-based editability AND authentication.
+  // Score / Teams / Payments: owner/admin OR a participant of that game.
   const isParticipantInGame = (() => {
     if (isOwner) return true;
     if (!userName) return false;
@@ -442,7 +440,7 @@ function HistoryCardFull({
   })();
   const canEditScore = entry.editable && isAuthenticated && isParticipantInGame;
   const canEditTeams = entry.editable && isAuthenticated && (isOwner || isParticipantInGame);
-  const canEditPayments = entry.editable && isAuthenticated && isOwner;
+  const canEditPayments = entry.editable && isAuthenticated && (isOwner || isParticipantInGame);
 
   const [unlocking, setUnlocking] = useState(false);
   const handleToggleLock = async () => {

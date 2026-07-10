@@ -464,7 +464,7 @@ describe("GET /api/events/:id/post-game-status", () => {
     expect(alice.status).toBe("pending");
   });
 
-  it("reports paymentWriteMode='historical' when reading from a frozen snapshot", async () => {
+  it("reports paymentWriteMode='historical' when reading from a frozen (past editable window) snapshot", async () => {
     const event = await prisma.event.create({
       data: {
         title: "Settled Game",
@@ -487,12 +487,47 @@ describe("GET /api/events/:id/post-game-status", () => {
         paymentsSnapshot: JSON.stringify([
           { playerName: "Kevin", amount: 25, status: "pending", method: null },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        // Past the editable window → frozen, can only be marked paid (not un-paid).
+        editableUntil: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
     const json = await res.json();
     expect(json.paymentWriteMode).toBe("historical");
+    expect(json.editable).toBe(false);
+  });
+
+  it("reports paymentWriteMode='editable' when the snapshot game is still within its editable window", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Editable Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+      },
+    });
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: event.dateTime,
+        teamOneName: "A",
+        teamTwoName: "B",
+        scoreOne: 3,
+        scoreTwo: 2,
+        status: "played",
+        paymentsSnapshot: JSON.stringify([
+          { playerName: "Kevin", amount: 25, status: "pending", method: null },
+        ]),
+        // Still within the editable window → bidirectional toggle via PATCH.
+        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.paymentWriteMode).toBe("editable");
+    expect(json.editable).toBe(true);
   });
 
   it("reports paymentWriteMode='live' when reading from live payments (no snapshot yet)", async () => {

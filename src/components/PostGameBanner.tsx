@@ -31,7 +31,8 @@ export interface PostGameStatus {
   isParticipant: boolean;
   latestHistoryId: string | null;
   paymentsSnapshot: PaymentEntry[] | null;
-  paymentWriteMode: "historical" | "live" | "none";
+  paymentWriteMode: "editable" | "historical" | "live" | "none";
+  editable: boolean;
   costCurrency: string | null;
   costAmount: number | null;
   hasPendingPastPayments: boolean;
@@ -85,23 +86,39 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
     if (refreshKey !== undefined && refreshKey > 0) fetchStatus();
   }, [refreshKey, fetchStatus]);
 
-  // Admin/owner taps a pending player pill to mark that single debt paid.
-  // Settled games (frozen snapshot) write via the Historical Settlement path;
-  // games ended-but-not-reset write to the live payment.
-  const markPlayerPaid = async (playerName: string) => {
+  // Toggles a single player's payment status (paid <-> pending) when the
+  // viewer is permitted (owner/admin or a participant of that game).
+  //  - editable: game still in its editable window → PATCH /history/:id
+  //    (bidirectional, mirrors the history page)
+  //  - live: game ended but not reset → PUT /payments (bidirectional)
+  //  - historical: frozen settled game → POST /payments/historical to mark
+  //    paid only (a frozen snapshot can't be un-paid from the UI)
+  const togglePlayerPaid = async (playerName: string, currentStatus: string) => {
+    const newStatus = currentStatus === "paid" ? "pending" : "paid";
     setSavingPlayer(playerName);
     try {
-      if (status?.paymentWriteMode === "historical" && status.latestHistoryId) {
+      if (status?.paymentWriteMode === "editable" && status.latestHistoryId) {
+        const next = (status.paymentsSnapshot ?? []).map((p) =>
+          p.playerName === playerName ? { ...p, status: newStatus } : p,
+        );
+        await fetch(`/api/events/${eventId}/history/${status.latestHistoryId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentsSnapshot: next }),
+        });
+      } else if (status?.paymentWriteMode === "live") {
+        await fetch(`/api/events/${eventId}/payments`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ playerName, status: newStatus }),
+        });
+      } else if (status?.paymentWriteMode === "historical" && status.latestHistoryId) {
+        // Frozen: only allow marking paid, never un-paying.
+        if (newStatus !== "paid") return;
         await fetch(`/api/events/${eventId}/payments/historical`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ gameHistoryId: status.latestHistoryId, playerName }),
-        });
-      } else {
-        await fetch(`/api/events/${eventId}/payments`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ playerName, status: "paid" }),
         });
       }
       await fetchStatus();
@@ -118,9 +135,14 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   const paidCount = status.paymentsSnapshot?.filter((p) => p.status === "paid").length ?? 0;
   const totalCount = status.paymentsSnapshot?.length ?? 0;
 
+  // Permitted togglers: owner/admin (canEdit) or a participant of that game.
+  const canTogglePayments = canEdit || !!status.isParticipant;
+  // Frozen settled games can be marked paid but never un-paid from the UI.
+  const isFrozenHistorical = status.paymentWriteMode === "historical";
+
   const onToggleBanner = (idx: number) => {
     const p = status?.paymentsSnapshot?.[idx];
-    if (p) markPlayerPaid(p.playerName);
+    if (p) togglePlayerPaid(p.playerName, p.status);
   };
   const savingIdx = savingPlayer
     ? (status?.paymentsSnapshot?.findIndex((p) => p.playerName === savingPlayer) ?? null)
@@ -306,15 +328,16 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
                 )}
               </Box>
 
-              {/* Payment summary chips. Admin/owner can tap a pending pill to mark that player paid. */}
-              {totalCount > 0 && !status.allPaid && canEdit && (
+              {/* Payment summary chips. Owner/admin or a game participant can
+                  tap a pill to toggle that player's payment (paid <-> pending). */}
+              {totalCount > 0 && canTogglePayments && (
                 <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}` }}>
                   <PaymentChips
                     payments={status.paymentsSnapshot ?? []}
                     editable
                     onToggle={onToggleBanner}
                     savingIdx={savingIdx}
-                    isDisabled={(p) => p.status === "paid"}
+                    isDisabled={(p) => isFrozenHistorical && p.status === "paid"}
                     showMethodRefs
                   />
                 </Box>
