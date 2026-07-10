@@ -83,17 +83,32 @@ export async function getOutstandingBalanceLegacy(
 }
 
 export async function getEventBalanceSummaryLegacy(eventId: string): Promise<BalanceSummary> {
-  const [histories, eventCost] = await Promise.all([
+  const [histories, eventCost, settlements] = await Promise.all([
     prisma.gameHistory.findMany({
       where: { eventId, status: { not: "cancelled" } },
-      select: { paymentsSnapshot: true, dateTime: true },
+      select: { id: true, paymentsSnapshot: true, dateTime: true },
       orderBy: { dateTime: "desc" },
     }),
     prisma.eventCost.findUnique({
       where: { eventId },
       include: { payments: true },
     }),
+    // Historical Settlements (ADR 0019) — a `payment_received` row with a
+    // `gameHistoryId` is a written payment against a frozen snapshot entry.
+    // Net them into the read view so the UI reflects the latest state even
+    // though the snapshot itself is treated as immutable.
+    prisma.walletTransaction.findMany({
+      where: { eventId, reason: "payment_received", gameHistoryId: { not: null } },
+      select: { gameHistoryId: true, playerName: true },
+    }),
   ]);
+
+  // Build a fast lookup: `${gameHistoryId}:${playerName}` → settled
+  const settledKeys = new Set<string>();
+  for (const s of settlements) {
+    if (!s.gameHistoryId || !s.playerName) continue;
+    settledKeys.add(`${s.gameHistoryId}:${s.playerName}`);
+  }
 
   const debts = new Map<string, { amount: number; gamesOwed: number }>();
 
@@ -102,12 +117,15 @@ export async function getEventBalanceSummaryLegacy(eventId: string): Promise<Bal
     try {
       const entries: SnapshotEntry[] = JSON.parse(h.paymentsSnapshot);
       for (const e of entries) {
-        if (e.status === "pending" || e.status === "sent") {
-          const d = debts.get(e.playerName) ?? { amount: 0, gamesOwed: 0 };
-          d.amount += e.amount;
-          d.gamesOwed++;
-          debts.set(e.playerName, d);
-        }
+        if (e.status !== "pending" && e.status !== "sent") continue;
+        // Skip snapshot entries that have been settled via a payment_received
+        // wallet transaction. Without this net, settling a debt wouldn't
+        // remove the row from the balance summary on the legacy read path.
+        if (settledKeys.has(`${h.id}:${e.playerName}`)) continue;
+        const d = debts.get(e.playerName) ?? { amount: 0, gamesOwed: 0 };
+        d.amount += e.amount;
+        d.gamesOwed++;
+        debts.set(e.playerName, d);
       }
     } catch { /* skip */ }
   }

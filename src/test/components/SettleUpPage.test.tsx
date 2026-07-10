@@ -37,8 +37,8 @@ const settlePayload = {
   },
 };
 
-describe("SettleUpPage Status view", () => {
-  it("renders the Status content without a History tab", async () => {
+describe("SettleUpPage redesigned view", () => {
+  it("renders the SettleHero with the event title (no more legacy 'Settle Up' header)", async () => {
     const fetchMock = vi.fn((url: string) => {
       if (url.includes("/cost")) {
         return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
@@ -49,14 +49,10 @@ describe("SettleUpPage Status view", () => {
 
     renderWithTheme(<SettleUpPage eventId="evt-1" />);
 
-    await waitFor(() => expect(screen.getByText(/Settle/i)).toBeInTheDocument());
-    // The game-history drill-down tab is gone — no History tab.
-    expect(screen.queryByRole("tab", { name: /History/i })).not.toBeInTheDocument();
-    // Status content renders the "You" summary.
-    expect(screen.getByText("Kevin")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Tuesday 5-a-side")).toBeInTheDocument());
   });
 
-  it("shows a Change method button in the Status view (fixes invisible bug)", async () => {
+  it("shows a Change method button (still wired to the override dialog)", async () => {
     const fetchMock = vi.fn((url: string) => {
       if (url.includes("/cost")) {
         return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
@@ -70,10 +66,127 @@ describe("SettleUpPage Status view", () => {
     await waitFor(() => expect(screen.getByText(/Change method/)).toBeInTheDocument());
   });
 
-  it("refreshes the UI after declaring a spend (no manual refresh)", async () => {
+  it("renders the 5 tabs (Transactions, Debts, Members, Permissions, Recent activity)", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/cost")) {
+        return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => settlePayload } as any);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithTheme(<SettleUpPage eventId="evt-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /Transactions/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Debts/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Members/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Permissions/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Recent activity/ })).toBeInTheDocument();
+    });
+  });
+
+  it("renders the SettleHero bubble graph when admin data has netPositions", async () => {
     const payloadWithAdmin = {
       ...settlePayload,
-      admin: { balances: [], aggregate: { paidCount: 0, totalCount: 0 }, subscriptions: [] },
+      admin: {
+        balances: [],
+        aggregate: { paidCount: 0, totalCount: 0 },
+        netPositions: [
+          { playerName: "Pai", netCents: -257800 },
+          { playerName: "José", netCents: 257800 },
+        ],
+        pairwiseDebts: [
+          { fromName: "Pai", toName: "José", amountCents: 257800 },
+        ],
+        subscriptions: [],
+      },
+    };
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/cost")) {
+        return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => payloadWithAdmin } as any);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderWithTheme(<SettleUpPage eventId="evt-1" />);
+    await waitFor(() => expect(screen.getByText("Tuesday 5-a-side")).toBeInTheDocument());
+    // Two bubbles expected (one per net position).
+    expect(container.querySelectorAll('[data-testid^="bubble-group-"]')).toHaveLength(2);
+  });
+
+  it("renders the DebtsList inside the active Debts tab by default", async () => {
+    const payloadWithAdmin = {
+      ...settlePayload,
+      admin: {
+        balances: [],
+        aggregate: { paidCount: 0, totalCount: 0 },
+        netPositions: [
+          { playerName: "Pai", netCents: -257800 },
+          { playerName: "José", netCents: 257800 },
+        ],
+        pairwiseDebts: [
+          { fromName: "Pai", toName: "José", amountCents: 277760 },
+        ],
+        subscriptions: [],
+      },
+    };
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/cost")) {
+        return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => payloadWithAdmin } as any);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithTheme(<SettleUpPage eventId="evt-1" />);
+    await waitFor(() => expect(screen.getByTestId("debts-list")).toBeInTheDocument());
+    expect(screen.getByTestId("debt-row-Pai-José")).toBeInTheDocument();
+  });
+
+  it("opens the context menu on the creditor avatar (Mark settled / Remind / Generate QR)", async () => {
+    const payloadWithAdmin = {
+      ...settlePayload,
+      admin: {
+        balances: [],
+        aggregate: { paidCount: 0, totalCount: 0 },
+        netPositions: [
+          { playerName: "Pai", netCents: -257800 },
+          { playerName: "José", netCents: 257800 },
+        ],
+        pairwiseDebts: [
+          { fromName: "Pai", toName: "José", amountCents: 277760 },
+        ],
+        subscriptions: [],
+      },
+    };
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/cost")) {
+        return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => payloadWithAdmin } as any);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithTheme(<SettleUpPage eventId="evt-1" />);
+    await waitFor(() => expect(screen.getByTestId("debts-list")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("creditor-avatar-José"));
+    expect(screen.getByTestId("debt-action-mark-settled")).toBeInTheDocument();
+    expect(screen.getByTestId("debt-action-remind")).toBeInTheDocument();
+    expect(screen.getByTestId("debt-action-generate-qr")).toBeInTheDocument();
+  });
+
+  it("refreshes the UI after declaring a spend (no manual refresh, regression)", async () => {
+    const payloadWithAdmin = {
+      ...settlePayload,
+      admin: {
+        balances: [],
+        aggregate: { paidCount: 0, totalCount: 0 },
+        netPositions: [],
+        pairwiseDebts: [],
+        subscriptions: [],
+      },
     };
     let settleCalls = 0;
     const fetchMock = vi.fn((url: string, init?: any) => {
@@ -102,7 +215,10 @@ describe("SettleUpPage Status view", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderWithTheme(<SettleUpPage eventId="evt-1" />);
-    await waitFor(() => expect(screen.getByText(/Settle/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Tuesday 5-a-side")).toBeInTheDocument());
+
+    // The declare-spend form lives on the Permissions tab — switch to it.
+    fireEvent.click(screen.getByRole("tab", { name: /Permissions/ }));
 
     const labelInput = screen.getByLabelText(/Label/i);
     const amountInput = screen.getByLabelText(/Amount/i);
@@ -110,7 +226,6 @@ describe("SettleUpPage Status view", () => {
     fireEvent.change(amountInput, { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: /Declare/i }));
 
-    // The declared spend appears in the UI without a manual refresh.
     expect(await screen.findByText(/Apple fee/)).toBeInTheDocument();
   });
 });
