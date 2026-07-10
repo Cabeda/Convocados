@@ -4,12 +4,26 @@
  * Usage:  npm run db:seed
  *
  * Each event gets a random sport, 4-12 players, a location, and a date
- * spread across the next 30 days (some in the past for history testing).
+ * that is **anchored to the current dev time** (`Date.now()` at run time)
+ * so the seed always produces a useful mix of states regardless of when
+ * the developer runs it:
  *
- * Past events also get:
- * - Game history with scores and team snapshots
- * - ELO player ratings (accumulated across games)
- * - Event costs with payment records (some paid, some pending)
+ *   - ~15% "just ended"  — ended 30 min–4 h ago, no score, pending payments
+ *                          so the post-game banner shows both tasks
+ *   - ~25% past          — 1–10 days ago, with full history + payments
+ *   - ~60% upcoming      — anywhere from later today to +30 days
+ *
+ * Past and just-ended events also get:
+ * - Game history with team snapshots (and scores, except for the just-ended
+ *   bucket which intentionally has no score yet)
+ * - ELO player ratings (skipped for the just-ended bucket — no score = no
+ *   rating to compute)
+ * - Event costs with payment records (all pending for just-ended events,
+ *   mixed paid/pending otherwise)
+ *
+ * A guaranteed "just ended" event is also appended at the end, owned by a
+ * demo user, so the post-game banner can be inspected end-to-end after
+ * signing in.
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -109,6 +123,15 @@ function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+/** Whole-day diff between two dates in the same local timezone, ignoring time-of-day. */
+function offsetDaysInRange(dateTime: Date, nowMs: number): number {
+  const d = new Date(dateTime);
+  d.setHours(0, 0, 0, 0);
+  const n = new Date(nowMs);
+  n.setHours(0, 0, 0, 0);
+  return Math.round((d.getTime() - n.getTime()) / 86400000);
+}
+
 function generateTitle(sport: string, location: string): string {
   const template = pick(TITLE_TEMPLATES);
   const day = pick(DAYS);
@@ -149,15 +172,36 @@ async function main() {
     const venue = pick(LOCATIONS);
     const maxPlayers = SPORT_MAX_PLAYERS[sport] ?? 10;
 
-    // Spread dates: ~30% in the past, ~70% in the future
-    const offsetDays = randInt(-10, 30);
-    const offsetHours = randInt(8, 22); // games between 8am and 10pm
-    const dateTime = new Date(now + offsetDays * 86400000);
-    dateTime.setHours(offsetHours, 0, 0, 0);
+    // Date distribution is time-aware: every event is anchored to `now` so the
+    // seed always produces a useful mix of past, present, and future states
+    // regardless of when the developer runs `npm run db:seed`.
+    //
+    //   ~15% "just ended"  — ended 30min–4h ago, no score, pending payments.
+    //                        The post-game banner shows both tasks on these.
+    //   ~25% past          — 1–10 days ago, with full history + payments
+    //   ~10% today         — still upcoming today
+    //   ~50% upcoming      — 1–30 days in the future
+    const justEnded = Math.random() < 0.15;
+    let dateTime: Date;
+    let isPast: boolean;
+    if (justEnded) {
+      // 30 min to 4 h ago. The post-game banner shows until 24h after the
+      // game ends (game end = dateTime + durationMinutes), so anything in
+      // this window is guaranteed to show the banner.
+      const minutesAgo = randInt(30, 240);
+      dateTime = new Date(now - minutesAgo * 60_000);
+      isPast = true;
+    } else {
+      const offsetDays = randInt(-10, 30);
+      const offsetHours = randInt(8, 22); // games between 8am and 10pm
+      dateTime = new Date(now + offsetDays * 86400000);
+      dateTime.setHours(offsetHours, 0, 0, 0);
+      isPast = offsetDays < 0;
+    }
 
     const title = generateTitle(sport, venue.name);
     const isPublic = Math.random() < 0.4;
-    const isRecurring = Math.random() < 0.25;
+    const isRecurring = !justEnded && Math.random() < 0.25; // recurring only for stable events
     const balanced = Math.random() < 0.2;
 
     const recurrenceRule = isRecurring
@@ -189,16 +233,20 @@ async function main() {
       },
     });
 
-    const isPast = offsetDays < 0;
-    const status = isPast ? "(past)" : offsetDays === 0 ? "(today)" : "(upcoming)";
+    const status = justEnded
+      ? "(just ended)"
+      : isPast ? "(past)" : offsetDaysInRange(dateTime, now) === 0 ? "(today)" : "(upcoming)";
 
     // ── Past events: add game history, teams, elo, and payments ──────────
     // Recurring events get multiple game history entries (simulating weeks of play)
     // Public events always get a recent game (yesterday) so editableUntil is in the future
+    // Just-ended events get exactly one entry with no score (banner shows "Add score")
     const needsRecentGame = isPublic && playerNames.length >= 4;
-    const gameCount = isPast && playerNames.length >= 4
-      ? isRecurring ? randInt(4, 12) : 1
-      : needsRecentGame ? 1 : 0;
+    const gameCount = justEnded
+      ? (playerNames.length >= 4 ? 1 : 0)
+      : isPast && playerNames.length >= 4
+        ? isRecurring ? randInt(4, 12) : 1
+        : needsRecentGame ? 1 : 0;
 
     if (gameCount > 0) {
       // ELO ratings — accumulate across games for this event
@@ -207,15 +255,20 @@ async function main() {
       }
       const eventRatings = eloByEvent.get(event.id)!;
 
-      // Payment data for the live event cost (only once, not per game)
-      const hasCost = Math.random() < 0.6;
+      // Payment data for the live event cost (only once, not per game).
+      // Just-ended events always have a cost with all payments pending, so the
+      // post-game banner shows the "Complete payments" task in addition to "Add score".
+      const hasCost = justEnded ? true : Math.random() < 0.6;
 
       for (let g = 0; g < gameCount; g++) {
         // Each game is 7 days apart going back in time
         // For public events, the most recent game (g===0) is yesterday so editableUntil is in the future
-        const gameDateTime = needsRecentGame && g === 0
-          ? new Date(now - 86400000)
-          : new Date(dateTime.getTime() - g * 7 * 86400000);
+        // For just-ended events, the only game is anchored to the event's dateTime
+        const gameDateTime = justEnded
+          ? dateTime
+          : needsRecentGame && g === 0
+            ? new Date(now - 86400000)
+            : new Date(dateTime.getTime() - g * 7 * 86400000);
 
         // Vary the roster per game: some players may miss some games (70-100% attendance)
         const allPlayers = playerNames.slice(0, maxPlayers);
@@ -236,8 +289,10 @@ async function main() {
           { team: "Gunas", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
         ]);
 
-        const scoreOne = randInt(0, 8);
-        const scoreTwo = randInt(0, 8);
+        // Just-ended games intentionally have NO score yet — the banner's
+        // "Add score" task is the whole point of this bucket.
+        const scoreOne = justEnded ? null : randInt(0, 8);
+        const scoreTwo = justEnded ? null : randInt(0, 8);
 
         // Create team results (only for the most recent game)
         if (g === 0) {
@@ -267,8 +322,8 @@ async function main() {
           const totalAmount = pick(COST_AMOUNTS);
           const share = totalAmount / gamePlayers.length;
           const paymentSnapshotData = gamePlayers.map((name) => {
-            const roll = Math.random();
-            const pStatus = roll < 0.5 ? "paid" : "pending";
+            // Just-ended games: every payment is still pending.
+            const pStatus = justEnded ? "pending" : (Math.random() < 0.5 ? "paid" : "pending");
             return {
               playerName: name,
               amount: Math.round(share * 100) / 100,
@@ -293,43 +348,50 @@ async function main() {
             teamsSnapshot,
             paymentsSnapshot,
             editableUntil,
-            eloProcessed: true,
+            // Just-ended games are awaiting a score; ELO can't run until the
+            // owner enters one. The post-game banner's "Add score" flow
+            // triggers ELO when the score is saved.
+            eloProcessed: !justEnded,
           },
         });
 
-        // Build player info for elo computation
-        const playerInfos = gamePlayers.map((name) => {
-          const existing = eventRatings.get(name);
-          return {
-            name,
-            rating: existing?.rating ?? 1000,
-            gamesPlayed: existing?.gamesPlayed ?? 0,
-          };
-        });
-
-        const teams = [
-          { team: "Ninjas", players: teamOnePlayers.map((name, order) => ({ name, order })) },
-          { team: "Gunas", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
-        ];
-
-        const eloUpdates = computeGameUpdates(playerInfos, teams, scoreOne, scoreTwo);
-
-        for (const update of eloUpdates) {
-          const isTeamOne = teamOnePlayers.includes(update.name);
-          const won = isTeamOne ? scoreOne > scoreTwo : scoreTwo > scoreOne;
-          const drew = scoreOne === scoreTwo;
-
-          const prev = eventRatings.get(update.name) ?? {
-            rating: 1000, gamesPlayed: 0, wins: 0, draws: 0, losses: 0,
-          };
-
-          eventRatings.set(update.name, {
-            rating: update.newRating,
-            gamesPlayed: prev.gamesPlayed + 1,
-            wins: prev.wins + (won ? 1 : 0),
-            draws: prev.draws + (drew ? 1 : 0),
-            losses: prev.losses + (!won && !drew ? 1 : 0),
+        // Build player info for elo computation. Just-ended games have no
+        // score yet (the banner is waiting for the owner to enter one), so
+        // there's nothing to rate — skip ELO entirely for this bucket.
+        if (!justEnded && scoreOne !== null && scoreTwo !== null) {
+          const playerInfos = gamePlayers.map((name) => {
+            const existing = eventRatings.get(name);
+            return {
+              name,
+              rating: existing?.rating ?? 1000,
+              gamesPlayed: existing?.gamesPlayed ?? 0,
+            };
           });
+
+          const teams = [
+            { team: "Ninjas", players: teamOnePlayers.map((name, order) => ({ name, order })) },
+            { team: "Gunas", players: teamTwoPlayers.map((name, order) => ({ name, order })) },
+          ];
+
+          const eloUpdates = computeGameUpdates(playerInfos, teams, scoreOne, scoreTwo);
+
+          for (const update of eloUpdates) {
+            const isTeamOne = teamOnePlayers.includes(update.name);
+            const won = isTeamOne ? scoreOne > scoreTwo : scoreTwo > scoreOne;
+            const drew = scoreOne === scoreTwo;
+
+            const prev = eventRatings.get(update.name) ?? {
+              rating: 1000, gamesPlayed: 0, wins: 0, draws: 0, losses: 0,
+            };
+
+            eventRatings.set(update.name, {
+              rating: update.newRating,
+              gamesPlayed: prev.gamesPlayed + 1,
+              wins: prev.wins + (won ? 1 : 0),
+              draws: prev.draws + (drew ? 1 : 0),
+              losses: prev.losses + (!won && !drew ? 1 : 0),
+            });
+          }
         }
       }
 
@@ -373,8 +435,9 @@ async function main() {
         });
 
         for (const name of activePlayers) {
-          const roll = Math.random();
-          const pStatus = roll < 0.5 ? "paid" : "pending";
+          // Just-ended events: every live payment is still pending so the
+          // banner's "Complete payments" task has work to do.
+          const pStatus = justEnded ? "pending" : (Math.random() < 0.5 ? "paid" : "pending");
           await prisma.playerPayment.create({
             data: {
               eventCostId: eventCost.id,
