@@ -144,10 +144,24 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });
   }
 
-  // Restrict team edits to owner/admin/participant; payment edits to owner/admin only
+  // Restrict team edits to owner/admin/participant; payment edits to owner/admin/participant
   if (body.paymentsSnapshot !== undefined) {
-    if (!isOwner && !isAdmin) {
-      return Response.json({ error: "Only the event owner or admin can edit payments." }, { status: 403 });
+    if (!isOwner && !isAdmin && !isParticipant) {
+      return Response.json({ error: "Only the event owner, admin, or a participant of this game can edit payments." }, { status: 403 });
+    }
+    // If participant, only allow toggling their own payment entry
+    if (isParticipant && !isOwner && !isAdmin) {
+      const newSnapshot = body.paymentsSnapshot as Array<{ playerName: string; status: string }>;
+      const oldSnapshot = entry.paymentsSnapshot ? JSON.parse(entry.paymentsSnapshot) as Array<{ playerName: string; status: string }> : [];
+      const participantName = session.user.name?.toLowerCase();
+      const changes = newSnapshot.filter((newEntry) => {
+        const oldEntry = oldSnapshot.find((o) => o.playerName === newEntry.playerName);
+        return oldEntry && newEntry.status !== oldEntry.status;
+      });
+      const onlyOwnChanged = changes.every(c => c.playerName.toLowerCase() === participantName);
+      if (!onlyOwnChanged || changes.length > 1) {
+        return Response.json({ error: "Participants can only toggle their own payment status." }, { status: 403 });
+      }
     }
   }
   if (body.teamsSnapshot !== undefined) {
