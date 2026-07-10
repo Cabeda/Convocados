@@ -101,10 +101,13 @@ describe("SettleUpPage redesigned view", () => {
     expect(screen.queryByText(/log in to see/i)).not.toBeInTheDocument();
   });
 
-  it("Transactions tab points users to the game history page, not the event Payments tab", async () => {
+  it("Transactions tab shows the unified transactions list with filter chips and an Add button", async () => {
     const fetchMock = vi.fn((url: string) => {
       if (url.includes("/cost")) {
         return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
+      }
+      if (url.includes("/settle/transactions")) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [] }) } as any);
       }
       return Promise.resolve({ ok: true, json: async () => settlePayload } as any);
     });
@@ -112,12 +115,17 @@ describe("SettleUpPage redesigned view", () => {
 
     renderWithTheme(<SettleUpPage eventId="evt-1" />);
     await waitFor(() => expect(screen.getByText("Tuesday 5-a-side")).toBeInTheDocument());
-    // Switch to Transactions
+    // Switch to Transactions tab
     fireEvent.click(screen.getByRole("tab", { name: /Transactions/ }));
-    // The old "Payments tab on the event page" copy is gone.
+    // Filter chips visible
+    expect(screen.getByTestId("txn-filter-all")).toBeInTheDocument();
+    expect(screen.getByTestId("txn-filter-game")).toBeInTheDocument();
+    expect(screen.getByTestId("txn-filter-subscription")).toBeInTheDocument();
+    expect(screen.getByTestId("txn-filter-spend")).toBeInTheDocument();
+    // Add button visible
+    expect(screen.getByTestId("add-transaction-button")).toBeInTheDocument();
+    // The old misleading "Payments tab on the event page" copy is gone.
     expect(screen.queryByText(/Payments tab on the event page/i)).not.toBeInTheDocument();
-    // The new copy mentions game history.
-    expect(screen.getByText(/game history/i)).toBeInTheDocument();
   });
 
   it("renders the SettleHero bubble graph when admin data has netPositions", async () => {

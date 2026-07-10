@@ -51,13 +51,32 @@ export function DebtsList({ debts, currency, onMarkSettled, onRemind, onGenerate
         {debts.map((debt, idx) => (
           <Box
             key={`${debt.fromName}->${debt.toName}-${idx}`}
+            role="button"
+            tabIndex={0}
+            aria-label={`${debt.fromName} owes ${debt.toName} ${formatMoney(debt.amountCents, currency)}`}
+            onClick={(e) => setMenuAnchor({ el: e.currentTarget, debt })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setMenuAnchor({ el: e.currentTarget, debt });
+              }
+            }}
             sx={{
               display: "flex",
               alignItems: "center",
               gap: 2,
               p: 1.5,
               borderRadius: 2,
+              cursor: "pointer",
               bgcolor: (theme) => alpha(theme.palette.background.default, 0.4),
+              transition: "background-color 0.15s ease",
+              "&:hover": {
+                bgcolor: (theme) => alpha(theme.palette.action.hover, 0.8),
+              },
+              "&:focus-visible": {
+                outline: (theme) => `2px solid ${theme.palette.primary.main}`,
+                outlineOffset: 2,
+              },
             }}
             data-testid={`debt-row-${debt.fromName}-${debt.toName}`}
           >
@@ -91,7 +110,7 @@ export function DebtsList({ debts, currency, onMarkSettled, onRemind, onGenerate
               aria-hidden
             />
 
-            {/* Creditor side (clickable for context menu) */}
+            {/* Creditor side */}
             <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", minWidth: 0, flex: 1, justifyContent: "flex-end" }}>
               <Box sx={{ minWidth: 0, textAlign: "right" }}>
                 <Typography variant="body1" fontWeight={600} noWrap>
@@ -105,13 +124,9 @@ export function DebtsList({ debts, currency, onMarkSettled, onRemind, onGenerate
                     width: 40,
                     height: 40,
                     bgcolor: "secondary.main",
-                    cursor: "pointer",
                   }}
                   alt={debt.toName}
-                  role="button"
-                  aria-label={debt.toName}
                   data-testid={`creditor-avatar-${debt.toName}`}
-                  onClick={(e) => setMenuAnchor({ el: e.currentTarget, debt })}
                 >
                   {initials(debt.toName)}
                 </Avatar>

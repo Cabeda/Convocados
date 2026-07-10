@@ -58,7 +58,7 @@ describe("DebtsList", () => {
     expect(screen.getByText(/all caught up/i)).toBeInTheDocument();
   });
 
-  it("opens the context menu when the creditor avatar is clicked", () => {
+  it("opens the context menu when anywhere on the row is clicked", () => {
     renderWithTheme(
       <DebtsList
         debts={debts}
@@ -68,12 +68,45 @@ describe("DebtsList", () => {
         onGenerateQr={vi.fn()}
       />,
     );
-    // The creditor is José — click his avatar button.
-    const joseButton = screen.getByRole("button", { name: /José/ });
-    fireEvent.click(joseButton);
+    // Click the debtor side (Pai name) — should open the menu.
+    const row = screen.getByTestId("debt-row-Pai-José");
+    fireEvent.click(row);
     expect(screen.getByTestId("debt-action-mark-settled")).toBeInTheDocument();
     expect(screen.getByTestId("debt-action-remind")).toBeInTheDocument();
     expect(screen.getByTestId("debt-action-generate-qr")).toBeInTheDocument();
+  });
+
+  it("opens the context menu when the debtor name is clicked", () => {
+    renderWithTheme(
+      <DebtsList
+        debts={debts}
+        currency="EUR"
+        onMarkSettled={vi.fn()}
+        onRemind={vi.fn()}
+        onGenerateQr={vi.fn()}
+      />,
+    );
+    // The debtor label is just a <span>, clicking it should also open the menu.
+    const debtorName = screen.getByText("Pai");
+    fireEvent.click(debtorName);
+    expect(screen.getByTestId("debt-action-mark-settled")).toBeInTheDocument();
+  });
+
+  it("opens the context menu when the creditor avatar is clicked (kept for a11y)", () => {
+    renderWithTheme(
+      <DebtsList
+        debts={debts}
+        currency="EUR"
+        onMarkSettled={vi.fn()}
+        onRemind={vi.fn()}
+        onGenerateQr={vi.fn()}
+      />,
+    );
+    // The creditor avatar is a labelled button (a11y affordance). Clicking
+    // it directly still opens the menu — same handler as the row.
+    const joseButton = screen.getByRole("button", { name: /José/ });
+    fireEvent.click(joseButton);
+    expect(screen.getByTestId("debt-action-mark-settled")).toBeInTheDocument();
   });
 
   it("invokes onMarkSettled when Mark settled is clicked", () => {

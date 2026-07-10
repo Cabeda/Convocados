@@ -215,6 +215,11 @@ model GameHistory {
   teamTwoName      String
   teamsSnapshot    String? // JSON: [{team, players:[{name,order}]}]
   paymentsSnapshot String? // JSON: [{playerName, amount, status, method}]
+  // Per-game payment method override. When set, this game's players see
+  // these methods instead of the event default (or the event's
+  // tempPaymentMethods). Same JSON shape as EventCost.paymentMethods:
+  // [{type, value, label?, payerUserId?, payerName?}].
+  paymentMethods   String?
   editableUntil    DateTime
   eloProcessed     Boolean  @default(false)
   isFriendly       Boolean  @default(false)
