@@ -94,6 +94,8 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   //  - historical: frozen settled game → POST /payments/historical to mark
   //    paid only (a frozen snapshot can't be un-paid from the UI)
   const togglePlayerPaid = async (playerName: string, currentStatus: string) => {
+    // Prevent double-click / rapid toggles
+    if (savingPlayer) return;
     const newStatus = currentStatus === "paid" ? "pending" : "paid";
     setSavingPlayer(playerName);
     try {
@@ -141,6 +143,7 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
   const isFrozenHistorical = status.paymentWriteMode === "historical";
 
   const onToggleBanner = (idx: number) => {
+    if (savingPlayer) return;
     const p = status?.paymentsSnapshot?.[idx];
     if (p) togglePlayerPaid(p.playerName, p.status);
   };
