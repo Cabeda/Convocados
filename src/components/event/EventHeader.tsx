@@ -528,6 +528,10 @@ export function EventHeader({
                   <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
                   <ListItemText>{t("history")}</ListItemText>
                 </MenuItem>
+                <MenuItem component="a" href={`/events/${eventId}/settle`} onClick={() => setAnchorEl(null)}>
+                  <ListItemIcon><PaymentsIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText>{t("settleUpTitle") ?? "Settle Up"}</ListItemText>
+                </MenuItem>
                 {(isPast || event.isRecurring) && (
                   <MenuItem component="a" href={`/events/${eventId}/attendance`} onClick={() => setAnchorEl(null)}>
                     <ListItemIcon><EmojiPeopleIcon fontSize="small" /></ListItemIcon>

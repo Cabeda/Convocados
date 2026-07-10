@@ -26,10 +26,10 @@ export const GET: APIRoute = async ({ params, request }) => {
   const gameEnded = isGameEnded(event.dateTime, event.durationMinutes);
 
   // Check if the most recent game history has a score recorded
-  const latestHistory = await prisma.gameHistory.findFirst({
-    where: { eventId: event.id },
+const latestHistory = await prisma.gameHistory.findFirst({
+    where: { eventId: params.id },
     orderBy: { dateTime: "desc" },
-    select: { id: true, scoreOne: true, scoreTwo: true, teamsSnapshot: true, paymentsSnapshot: true, status: true, dateTime: true, createdAt: true },
+    select: { id: true, scoreOne: true, scoreTwo: true, teamsSnapshot: true, paymentsSnapshot: true, status: true, dateTime: true, createdAt: true, editableUntil: true },
   });
 
   // ponytail: cancelled games have no post-game actions (no score, no payments, no MVP).
@@ -205,13 +205,17 @@ export const GET: APIRoute = async ({ params, request }) => {
     latestHistoryId = latestHistory.id;
   }
 
-  // Tells the banner which write path to use when an owner/admin taps a pill:
-  //  - "historical": settled game → POST /payments/historical (records a
-  //    payment_received ledger row netted against the frozen snapshot)
-  //  - "live": game ended but not yet reset → PUT /payments (live PlayerPayment)
+  // Tells the banner which write path to use when a permitted user taps a pill:
+  //  - "editable": game within its editable window → PATCH /history/:id
+  //    paymentsSnapshot (bidirectional: pay or un-pay, mirrors the history page)
+  //  - "historical": settled/frozen game → POST /payments/historical to mark
+  //    paid (one-way: a frozen snapshot can't be un-paid via the UI)
+  //  - "live": game ended but not yet reset → PUT /payments (live PlayerPayment, bidirectional)
   //  - "none": no actionable payment source
-  const paymentWriteMode: "historical" | "live" | "none" =
-    pastGameSource === "snapshot" ? "historical"
+  const historyEditable = latestHistory ? latestHistory.editableUntil > new Date() : false;
+  const paymentWriteMode: "editable" | "historical" | "live" | "none" =
+    pastGameSource === "snapshot"
+      ? (historyEditable ? "editable" : "historical")
       : pastGameSource === "live" ? "live"
         : "none";
 
@@ -254,6 +258,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   return Response.json({
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount, paymentWriteMode,
+    editable: historyEditable,
     hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete, bannerMvpComplete,
     paidAggregate,
     scoreOne: latestHistory?.scoreOne ?? null,

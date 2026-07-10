@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import React from "react";
-import { screen, cleanup, waitFor } from "@testing-library/react";
+import { screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import { EventHeader } from "~/components/event/EventHeader";
@@ -96,5 +96,14 @@ describe("EventHeader next-game payment chip", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(screen.queryByText(/player/)).not.toBeInTheDocument();
+  });
+
+it("shows a Settle Up link in the more-actions menu", async () => {
+    renderWithTheme(<EventHeader {...baseProps} isOwnerless={false} />);
+
+    fireEvent.click(screen.getByText(/More/i));
+
+    const settleItem = await screen.findByText(/Settle Up/);
+    expect(settleItem.closest("a")).toHaveAttribute("href", "/events/evt-1/settle");
   });
 });
