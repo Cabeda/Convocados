@@ -66,7 +66,7 @@ describe("SettleUpPage redesigned view", () => {
     await waitFor(() => expect(screen.getByText(/Change method/)).toBeInTheDocument());
   });
 
-  it("renders the 5 tabs (Transactions, Debts, Members, Permissions, Recent activity)", async () => {
+  it("only shows the Transactions and Debts tabs (Members/Permissions/Recent activity were removed)", async () => {
     const fetchMock = vi.fn((url: string) => {
       if (url.includes("/cost")) {
         return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
@@ -80,10 +80,44 @@ describe("SettleUpPage redesigned view", () => {
     await waitFor(() => {
       expect(screen.getByRole("tab", { name: /Transactions/ })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /Debts/ })).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: /Members/ })).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: /Permissions/ })).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: /Recent activity/ })).toBeInTheDocument();
     });
+    expect(screen.queryByRole("tab", { name: /Members/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Permissions/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Recent activity/ })).not.toBeInTheDocument();
+  });
+
+  it("never shows 'Log in to see your activity' anywhere on the page", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/cost")) {
+        return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => settlePayload } as any);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithTheme(<SettleUpPage eventId="evt-1" />);
+    await waitFor(() => expect(screen.getByText("Tuesday 5-a-side")).toBeInTheDocument());
+    // The misleading "Log in" copy was removed along with the ActivityTab.
+    expect(screen.queryByText(/log in to see/i)).not.toBeInTheDocument();
+  });
+
+  it("Transactions tab points users to the game history page, not the event Payments tab", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/cost")) {
+        return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => settlePayload } as any);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithTheme(<SettleUpPage eventId="evt-1" />);
+    await waitFor(() => expect(screen.getByText("Tuesday 5-a-side")).toBeInTheDocument());
+    // Switch to Transactions
+    fireEvent.click(screen.getByRole("tab", { name: /Transactions/ }));
+    // The old "Payments tab on the event page" copy is gone.
+    expect(screen.queryByText(/Payments tab on the event page/i)).not.toBeInTheDocument();
+    // The new copy mentions game history.
+    expect(screen.getByText(/game history/i)).toBeInTheDocument();
   });
 
   it("renders the SettleHero bubble graph when admin data has netPositions", async () => {
@@ -145,6 +179,51 @@ describe("SettleUpPage redesigned view", () => {
     expect(screen.getByTestId("debt-row-Pai-José")).toBeInTheDocument();
   });
 
+  it("sends creditorName in the bulk settle request so the API can authorize the creditor", async () => {
+    const payloadWithAdmin = {
+      ...settlePayload,
+      admin: {
+        balances: [],
+        aggregate: { paidCount: 0, totalCount: 0 },
+        netPositions: [
+          { playerName: "Pai", netCents: -257800 },
+          { playerName: "José", netCents: 257800 },
+        ],
+        pairwiseDebts: [
+          { fromName: "Pai", toName: "José", amountCents: 277760 },
+        ],
+        subscriptions: [],
+      },
+    };
+    const fetchMock = vi.fn((url: string, init?: any) => {
+      if (url.includes("/cost")) {
+        return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
+      }
+      if (url.includes("/payments/historical/bulk") && init?.method === "POST") {
+        return Promise.resolve({ ok: true, json: async () => ({ ok: true, settled: 1, skipped: 0, failed: 0 }) } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => payloadWithAdmin } as any);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithTheme(<SettleUpPage eventId="evt-1" />);
+    await waitFor(() => expect(screen.getByTestId("debt-row-Pai-José")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("debt-row-Pai-José"));
+    fireEvent.click(screen.getByTestId("debt-action-mark-settled"));
+
+    await waitFor(() => {
+      const putCall = fetchMock.mock.calls.find(
+        ([url, init]) => typeof url === "string" && url.includes("/payments/historical/bulk") && init?.method === "POST",
+      );
+      expect(putCall).toBeDefined();
+      const body = JSON.parse((putCall?.[1] as any).body);
+      // The frontend MUST send creditorName so the backend can authorize
+      // the creditor (and reject the debtor from marking themselves paid).
+      expect(body.creditorName).toBe("José");
+      expect(body.playerName).toBe("Pai");
+    });
+  });
+
   it("opens the context menu on the creditor avatar (Mark settled / Remind / Generate QR)", async () => {
     const payloadWithAdmin = {
       ...settlePayload,
@@ -177,14 +256,23 @@ describe("SettleUpPage redesigned view", () => {
     expect(screen.getByTestId("debt-action-generate-qr")).toBeInTheDocument();
   });
 
-  it("refreshes the UI after declaring a spend (no manual refresh, regression)", async () => {
+  it("refreshes the UI after settling a debt (no manual refresh, regression)", async () => {
+    // Regression: the "Mark debt as settled" action must re-fetch the data
+    // and remove the row from the list. The declare-spend form was removed
+    // along with the Permissions tab, so this test now exercises the
+    // remaining live-mutation flow.
     const payloadWithAdmin = {
       ...settlePayload,
       admin: {
         balances: [],
         aggregate: { paidCount: 0, totalCount: 0 },
-        netPositions: [],
-        pairwiseDebts: [],
+        netPositions: [
+          { playerName: "Pai", netCents: -257800 },
+          { playerName: "José", netCents: 257800 },
+        ],
+        pairwiseDebts: [
+          { fromName: "Pai", toName: "José", amountCents: 257800 },
+        ],
         subscriptions: [],
       },
     };
@@ -193,39 +281,26 @@ describe("SettleUpPage redesigned view", () => {
       if (url.includes("/cost")) {
         return Promise.resolve({ ok: true, json: async () => ({ paymentMethods: null, tempPaymentMethods: null }) } as any);
       }
-      if (url.includes("/settle/extras") && init?.method === "POST") {
-        return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+      if (url.includes("/payments/historical/bulk") && init?.method === "POST") {
+        return Promise.resolve({ ok: true, json: async () => ({ ok: true, settled: 1, skipped: 0, failed: 0 }) } as any);
       }
-      // GET /settle — return the declared spend on the second load.
+      // GET /settle — second load has no debts.
       settleCalls += 1;
-      const declared = settleCalls > 1
-        ? {
-            ...payloadWithAdmin,
-            extras: {
-              ...payloadWithAdmin.extras,
-              declarations: [{
-                id: "d1", amountCents: 1000, currency: "EUR",
-                label: "Apple fee", declaredBy: "u-owner", declaredAt: new Date().toISOString(),
-              }],
-            },
-          }
+      const data = settleCalls > 1
+        ? { ...payloadWithAdmin, admin: { ...payloadWithAdmin.admin, pairwiseDebts: [], netPositions: [] } }
         : payloadWithAdmin;
-      return Promise.resolve({ ok: true, json: async () => declared } as any);
+      return Promise.resolve({ ok: true, json: async () => data } as any);
     });
     vi.stubGlobal("fetch", fetchMock);
 
     renderWithTheme(<SettleUpPage eventId="evt-1" />);
-    await waitFor(() => expect(screen.getByText("Tuesday 5-a-side")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("debt-row-Pai-José")).toBeInTheDocument());
 
-    // The declare-spend form lives on the Permissions tab — switch to it.
-    fireEvent.click(screen.getByRole("tab", { name: /Permissions/ }));
+    // Open the menu by clicking anywhere on the row and pick "Mark settled".
+    fireEvent.click(screen.getByTestId("debt-row-Pai-José"));
+    fireEvent.click(await screen.findByTestId("debt-action-mark-settled"));
 
-    const labelInput = screen.getByLabelText(/Label/i);
-    const amountInput = screen.getByLabelText(/Amount/i);
-    fireEvent.change(labelInput, { target: { value: "Apple fee" } });
-    fireEvent.change(amountInput, { target: { value: "10" } });
-    fireEvent.click(screen.getByRole("button", { name: /Declare/i }));
-
-    expect(await screen.findByText(/Apple fee/)).toBeInTheDocument();
+    // The data refetches; the row disappears.
+    await waitFor(() => expect(screen.queryByTestId("debt-row-Pai-José")).not.toBeInTheDocument());
   });
 });
