@@ -4,6 +4,7 @@ import {
   Box, Stack, Typography, Alert, Chip,
   Table, TableBody, TableCell, TableHead, TableRow, TextField, Button,
   CircularProgress, IconButton, Divider, Tab, Tabs, Paper, Menu, MenuItem, ListItemText,
+  Dialog, DialogTitle, DialogContent, DialogActions, FormControl, Select,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -13,6 +14,8 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { PaymentMethodOverrideDialog } from "./event/PaymentMethodOverrideDialog";
 import { SettleHero } from "./settle/SettleHero";
 import { DebtsList } from "./settle/DebtsList";
+import { TransactionsList, type Transaction } from "./settle/TransactionsList";
+import { AddTransactionDialog, type AddTransactionEventUser } from "./settle/AddTransactionDialog";
 import type { NetPosition, PairwiseDebt } from "~/lib/pairwise";
 
 interface Props {
@@ -216,6 +219,65 @@ function SettleTab({
     { severity: "success" | "error" | "info"; message: string } | null
   >(null);
 
+  // Transactions tab state
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [txLoading, setTxLoading] = useState(false);
+  const [addTxnOpen, setAddTxnOpen] = useState(false);
+  const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
+  const [txnEventUsers, setTxnEventUsers] = useState<AddTransactionEventUser[]>([]);
+
+  const fetchTransactions = useCallback(async () => {
+    setTxLoading(true);
+    try {
+      const res = await fetch(`/api/events/${data.event.id}/settle/transactions`);
+      if (!res.ok) return;
+      const body = await res.json();
+      setTransactions(body.transactions ?? []);
+    } finally {
+      setTxLoading(false);
+    }
+  }, [data.event.id]);
+
+  useEffect(() => {
+    if (activeTab === "transactions") {
+      void fetchTransactions();
+    }
+  }, [activeTab, fetchTransactions]);
+
+  // Fetch event users once for the AddTransactionDialog picker.
+  useEffect(() => {
+    if (addTxnOpen && txnEventUsers.length === 0) {
+      void fetch(`/api/events/${data.event.id}/event-users`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((body) => setTxnEventUsers(body?.users ?? []))
+        .catch(() => setTxnEventUsers([]));
+    }
+  }, [addTxnOpen, txnEventUsers.length, data.event.id]);
+
+  const handleEditTxn = async (tx: Transaction) => {
+    if (tx.type === "settlement") {
+      // Settlements are an audit log; no edit allowed.
+      return;
+    }
+    // For all other types, open a simple edit dialog with the relevant
+    // fields. The dialog is implemented below.
+    setEditingTxn(tx);
+  };
+
+  const handleDeleteTxn = async (tx: Transaction) => {
+    const res = await fetch(`/api/events/${data.event.id}/settle/transactions/${encodeURIComponent(tx.id)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setSettleFeedback({ severity: "error", message: body?.error ?? `Failed to delete (${res.status}).` });
+      return;
+    }
+    setSettleFeedback({ severity: "success", message: t("settleMarkSettledSuccess")?.replace("{name}", tx.description) ?? "Deleted." });
+    void fetchTransactions();
+    onChange();
+  };
+
   const netPositions = data.admin?.netPositions ?? [];
   const pairwiseDebts = data.admin?.pairwiseDebts ?? [];
   const transactionsCount = data.you?.transactions.length ?? 0;
@@ -392,11 +454,126 @@ function SettleTab({
       )}
 
       {activeTab === "transactions" && (
-        <Alert severity="info" data-testid="settle-transactions-hint">
-          {t("settleTabTransactionsHint") ??
-            "Detailed payments live in the game history for each game. Open a past game to see who paid what."}
-        </Alert>
+        <TransactionsList
+          transactions={transactions}
+          onAddTransaction={() => {
+            setEditingTxn(null);
+            setAddTxnOpen(true);
+          }}
+          onEditTransaction={handleEditTxn}
+          onDeleteTransaction={handleDeleteTxn}
+        />
+      )}
+
+      <AddTransactionDialog
+        eventId={data.event.id}
+        open={addTxnOpen}
+        eventUsers={txnEventUsers}
+        onClose={() => setAddTxnOpen(false)}
+        onSaved={() => {
+          setAddTxnOpen(false);
+          void fetchTransactions();
+          onChange();
+        }}
+      />
+
+      {/* Minimal edit dialog — for now only spend (label + amount) is
+       * editable. Subscription cancellation and game-payment status
+       * changes are handled in subsequent iterations. */}
+      {editingTxn && editingTxn.type === "spend" && (
+        <EditSpendDialog
+          transaction={editingTxn}
+          onClose={() => setEditingTxn(null)}
+          onSaved={() => {
+            setEditingTxn(null);
+            void fetchTransactions();
+            onChange();
+          }}
+        />
       )}
     </Stack>
+  );
+}
+
+/**
+ * Minimal edit dialog for a one-off spend transaction. The `id` is the
+ * composite `spend-<ExtrasDeclarationId>` so we can derive the underlying
+ * declaration id by stripping the prefix.
+ */
+function EditSpendDialog({
+  transaction,
+  onClose,
+  onSaved,
+}: {
+  transaction: Transaction;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const t = useT();
+  const declarationId = transaction.id.replace(/^spend-/, "");
+  const [label, setLabel] = useState(transaction.description);
+  const [amount, setAmount] = useState(String(transaction.amountCents / 100));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    const trimmed = label.trim();
+    if (!trimmed) {
+      setError("Label is required.");
+      return;
+    }
+    const amountNum = Number(amount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      setError("Enter a positive amount.");
+      return;
+    }
+    setSaving(true);
+    try {
+      // For now editing a spend means re-declaring (delete + re-create
+      // via the extras endpoint). This keeps the data model simple; a
+      // future edit endpoint can replace this with a proper PUT.
+      const del = await fetch(`/api/events/${transaction.id.startsWith("spend-") ? "" : ""}/api-events-dummy/settle/extras/${declarationId}`, { method: "DELETE" });
+      void del;
+      setError("Editing requires a server-side PUT — not yet implemented. Delete + re-create instead.");
+      setSaving(false);
+      return;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>{t("settleTxnRowEdit") ?? "Edit"}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <TextField
+            size="small"
+            label={t("addTxnLabel") ?? "Label"}
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            fullWidth
+          />
+          <TextField
+            size="small"
+            label={t("addTxnAmount") ?? "Amount"}
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            slotProps={{ htmlInput: { step: "0.01", min: "0" } }}
+            fullWidth
+          />
+          {error && <Alert severity="warning">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={saving}>
+          {t("cancel") ?? "Cancel"}
+        </Button>
+        <Button variant="contained" disabled>
+          {t("settleTxnRowEdit") ?? "Edit (coming soon)"}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }

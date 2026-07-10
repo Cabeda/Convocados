@@ -104,12 +104,51 @@ export const POST: APIRoute = async ({ params, request }) => {
     ? String(body.paidToUserId).trim()
     : (creditorUserId ?? null);
 
-  const result = await settleAllHistoricalForPlayer({
+  const historical = await settleAllHistoricalForPlayer({
     eventId,
     playerName,
     markedById,
     payerUserId,
     paidToUserId,
   });
-  return Response.json({ ok: true, ...result });
+
+  // Live payments: the `PlayerPayment` rows on `EventCost` are the "next
+  // game" or just-played game's pending payments. These are the "default"
+  // payments that an event with no historical games still has. The
+  // historical flow above only touches `paymentsSnapshot` (frozen past
+  // games) so without this second step, freshly-played events show no
+  // visible change when the user clicks "Mark settled".
+  //
+  // Live payments are paid to the event owner (the implicit creditor), so
+  // only the owner / admin can confirm them — the creditor gate from the
+  // historical flow doesn't extend here.
+  let liveUpdated = 0;
+  if (isOwner || isAdmin) {
+    const eventCost = await prisma.eventCost.findUnique({
+      where: { eventId },
+      select: { id: true },
+    });
+    if (eventCost) {
+      const live = await prisma.playerPayment.updateMany({
+        where: {
+          eventCostId: eventCost.id,
+          playerName,
+          status: { in: ["pending", "sent"] },
+        },
+        data: { status: "paid", paidAt: new Date() },
+      });
+      liveUpdated = live.count;
+    }
+  }
+
+  const totalSettled = historical.settled + liveUpdated;
+  return Response.json({
+    ok: true,
+    settled: totalSettled,
+    skipped: historical.skipped,
+    failed: historical.failed,
+    historical: { settled: historical.settled, skipped: historical.skipped, failed: historical.failed },
+    live: liveUpdated,
+    details: historical.details,
+  });
 };

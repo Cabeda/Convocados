@@ -45,6 +45,8 @@ export interface PaymentMethodEventUser {
   role: "owner" | "admin" | "player";
 }
 
+export type PaymentMethodDialogMode = "default" | "override" | "auto";
+
 interface Props {
   eventId: string;
   /** Existing default payment methods (from EventCost.paymentMethods) */
@@ -58,6 +60,18 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
+  /**
+   * What this dialog is editing. "default" updates the event-wide
+   * `paymentMethods`; "override" updates a per-game override;
+   * "auto" falls back to the old toggle-based behavior. Defaults to "auto"
+   * so existing callers don't change.
+   */
+  mode?: PaymentMethodDialogMode;
+  /**
+   * Required when `mode="override"`. The GameHistory row that the
+   * per-game override is being written to. Ignored in other modes.
+   */
+  gameHistoryId?: string;
 }
 
 const DIRECT_PAYER_ID = "__direct__";
@@ -71,15 +85,25 @@ export function PaymentMethodOverrideDialog({
   open,
   onClose,
   onSaved,
+  mode = "auto",
+  gameHistoryId,
 }: Props) {
   const t = useT();
 
-  // Start from the active effective methods (override if present, else default)
-  const activeMethods = parsePaymentMethods(overrideMethods ?? defaultMethods);
+  // Start from the active effective methods:
+  //   - "override" mode: read the per-game override (passed via defaultMethods
+  //     for simplicity — the caller resolves the right JSON).
+  //   - "default"/"auto" mode: prefer the override if present (so editing
+  //     the override starts from the current override values), else default.
+  const sourceJson =
+    mode === "override" ? defaultMethods : (overrideMethods ?? defaultMethods);
+  const activeMethods = parsePaymentMethods(sourceJson);
   const [methods, setMethods] = useState<PaymentMethod[]>(() =>
     activeMethods.length > 0 ? activeMethods : [{ type: "mbway", value: "" }]
   );
-  const [setAsDefault, setSetAsDefault] = useState(false);
+  // In "default" / "override" modes the "set as default" toggle is meaningless
+  // (the mode itself encodes that choice). Lock it to the mode default.
+  const [setAsDefault, setSetAsDefault] = useState(mode === "auto" ? false : mode === "default");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,10 +142,28 @@ export function PaymentMethodOverrideDialog({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/events/${eventId}/cost/override`, {
+      // Pick the right endpoint + body based on mode.
+      let url: string;
+      let body: unknown;
+      if (mode === "override") {
+        if (!gameHistoryId) {
+          setError(t("paymentOverrideMissingGameId") ?? "gameHistoryId is required for per-game override.");
+          setSaving(false);
+          return;
+        }
+        url = `/api/events/${eventId}/history/${gameHistoryId}/payment-methods`;
+        body = { paymentMethods: valid };
+      } else if (mode === "default") {
+        url = `/api/events/${eventId}/cost/override`;
+        body = { paymentMethods: valid, setAsDefault: true };
+      } else {
+        url = `/api/events/${eventId}/cost/override`;
+        body = { paymentMethods: valid, setAsDefault };
+      }
+      const res = await fetch(url, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentMethods: valid, setAsDefault }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -136,14 +178,33 @@ export function PaymentMethodOverrideDialog({
     setSaving(false);
   };
 
+  // "Override" mode edits a per-game row, so the legacy "clear override" /
+  // "set as default" affordances don't apply.
   const hasOverride = Boolean(overrideMethods);
+  const showSetAsDefaultToggle = mode === "auto" && canSetDefault;
+  const showClearOverride = hasOverride && !setAsDefault && mode === "auto";
   const directLabel = t("paymentMethodPayerDirect") ?? "Each player pays directly to the court";
+
+  const titleKey =
+    mode === "default"
+      ? "paymentOverrideDefaultTitle"
+      : mode === "override"
+        ? "paymentOverrideGameTitle"
+        : "paymentOverrideTitle";
+  const saveLabelKey =
+    mode === "default"
+      ? "paymentOverrideSaveDefault"
+      : mode === "override"
+        ? "paymentOverrideSaveGame"
+        : (setAsDefault ? "paymentOverrideSaveDefault" : "paymentOverrideSaveOneOff");
+  const saveColor: "primary" | "warning" =
+    mode === "default" ? "primary" : mode === "override" ? "primary" : (setAsDefault ? "primary" : "warning");
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <EditIcon fontSize="small" />
-        {t("paymentOverrideTitle")}
+        {t(titleKey) ?? t("paymentOverrideTitle")}
       </DialogTitle>
       <DialogContent>
         <Stack spacing={2.5} sx={{ pt: 0.5 }}>
@@ -263,8 +324,8 @@ export function PaymentMethodOverrideDialog({
             </Button>
           </Stack>
 
-          {/* set-as-default toggle — owner/admin only */}
-          {canSetDefault && (
+          {/* set-as-default toggle — only relevant in the legacy "auto" mode */}
+          {showSetAsDefaultToggle && (
             <Box sx={{ pt: 0.5 }}>
               <FormControlLabel
                 control={
@@ -302,7 +363,7 @@ export function PaymentMethodOverrideDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        {hasOverride && !setAsDefault && (
+        {showClearOverride && (
           <Tooltip title={t("clearOverride")}>
             <Button
               variant="text"
@@ -324,11 +385,11 @@ export function PaymentMethodOverrideDialog({
         </Button>
         <Button
           variant="contained"
-          color={setAsDefault ? "primary" : "warning"}
+          color={saveColor}
           onClick={handleSave}
           disabled={saving}
         >
-          {setAsDefault ? t("paymentOverrideSaveDefault") : t("paymentOverrideSaveOneOff")}
+          {t(saveLabelKey) ?? t("paymentOverrideSaveDefault")}
         </Button>
       </DialogActions>
     </Dialog>
