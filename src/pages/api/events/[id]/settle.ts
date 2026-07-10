@@ -8,6 +8,7 @@ import {
   getOutstandingBalance,
   getEventBalanceSummary,
 } from "../../../../lib/balance.server";
+import { getEventDebtSummary } from "../../../../lib/settleDebts.server";
 
 /**
  * GET /api/events/[id]/settle
@@ -142,9 +143,23 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   if (isPrivileged) {
     const summary = await getEventBalanceSummary(eventId);
+    // Owner name is needed as the implicit creditor for the bubble graph +
+    // Debts tab. Owner may be a different player than the event creator in
+    // some cases; fall back to the owner's email local part if no name.
+    let ownerName: string | null = null;
+    if (event.ownerId) {
+      const owner = await prisma.user.findUnique({
+        where: { id: event.ownerId },
+        select: { name: true, email: true },
+      });
+      ownerName = owner?.name ?? owner?.email?.split("@")[0] ?? null;
+    }
+    const debtSummary = await getEventDebtSummary(eventId, ownerName);
     response.admin = {
       balances: summary.balances,
       aggregate: { paidCount: summary.paidCount, totalCount: summary.totalCount },
+      netPositions: debtSummary.netPositions,
+      pairwiseDebts: debtSummary.pairwiseDebts,
       // List of active subscriptions for the current window
       subscriptions: (await prisma.monthlySubscription.findMany({
         where: { eventId, status: "active" },

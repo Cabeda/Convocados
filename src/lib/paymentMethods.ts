@@ -10,17 +10,40 @@ export interface PaymentMethod {
   type: PaymentMethodType;
   value: string;
   label?: string;
+  /**
+   * Optional event user who is responsible for this payment method. When set,
+   * the player is told to send their share to this user (e.g. "Pay José via
+   * MB Way"). When null/absent, each player pays the court directly using
+   * this method (e.g. "Cash on arrival at the venue").
+   */
+  payerUserId?: string | null;
+  payerName?: string | null;
 }
 
 /** Validate a single payment method. Returns an error string or null if valid. */
 export function validatePaymentMethod(m: unknown): string | null {
   if (!m || typeof m !== "object") return "Invalid payment method.";
-  const { type, value } = m as Record<string, unknown>;
+  const { type, value, payerUserId, payerName } = m as Record<string, unknown>;
   if (!type || !PAYMENT_METHOD_TYPES.includes(type as PaymentMethodType)) {
     return `Invalid type. Must be one of: ${PAYMENT_METHOD_TYPES.join(", ")}`;
   }
   if (!value || typeof value !== "string" || !value.trim()) {
     return "Value is required.";
+  }
+  // Payer fields must come as a pair (or both null/undefined). Mismatched
+  // pairs would render an empty "Pay" label in the UI.
+  const hasId = payerUserId !== undefined && payerUserId !== null;
+  const hasName = payerName !== undefined && payerName !== null;
+  if (hasId !== hasName) {
+    return "Payer user id and name must be provided together.";
+  }
+  if (hasId) {
+    if (typeof payerUserId !== "string" || !payerUserId.trim()) {
+      return "Payer user id must be a non-empty string.";
+    }
+    if (typeof payerName !== "string" || !payerName.trim()) {
+      return "Payer name must be a non-empty string.";
+    }
   }
   const v = (value as string).trim();
   switch (type as PaymentMethodType) {
@@ -66,14 +89,18 @@ export function validatePaymentMethods(methods: unknown): string | null {
 /** Normalize a payment method value (trim, strip @ from revolut tags, etc.) */
 export function normalizePaymentMethod(m: PaymentMethod): PaymentMethod {
   const value = m.value.trim();
+  const payerUserId = m.payerUserId?.trim() || null;
+  const payerName = m.payerName?.trim() || null;
+  // Drop payer if either half is empty so the field pair stays consistent.
+  const cleanedPayer = payerUserId && payerName ? { payerUserId, payerName } : {};
   switch (m.type) {
     case "revolut_tag":
-      return { ...m, value: value.replace(/^@/, ""), label: m.label?.trim() };
+      return { ...m, value: value.replace(/^@/, ""), label: m.label?.trim(), ...cleanedPayer };
     case "phone":
     case "mbway":
-      return { ...m, value: value.replace(/\s+/g, ""), label: m.label?.trim() };
+      return { ...m, value: value.replace(/\s+/g, ""), label: m.label?.trim(), ...cleanedPayer };
     default:
-      return { ...m, value, label: m.label?.trim() };
+      return { ...m, value, label: m.label?.trim(), ...cleanedPayer };
   }
 }
 
@@ -158,6 +185,19 @@ export function getDisplayValue(method: PaymentMethod): string {
     default:
       return method.value;
   }
+}
+
+/**
+ * Short label for the "who collects this payment" axis. When a payer is
+ * set, returns "{directLabel} → {name}" so the UI can show e.g.
+ * "Each player pays directly → José". The caller passes the localized
+ * "direct" string (because this file is i18n-free).
+ */
+export function getPayerLabel(method: PaymentMethod, directLabel: string): string {
+  if (method.payerName) {
+    return `${directLabel} → ${method.payerName}`;
+  }
+  return directLabel;
 }
 
 /**

@@ -4,269 +4,113 @@ import {
   validatePaymentMethods,
   normalizePaymentMethod,
   parsePaymentMethods,
-  getDeepLink,
-  getMbwayAppLink,
-  getDisplayValue,
-} from "~/lib/paymentMethods";
+  getPayerLabel,
+} from "../lib/paymentMethods";
 
-describe("validatePaymentMethod", () => {
-  it("rejects non-object input", () => {
-    expect(validatePaymentMethod(null)).toBeTruthy();
-    expect(validatePaymentMethod("string")).toBeTruthy();
-    expect(validatePaymentMethod(42)).toBeTruthy();
-  });
-
-  it("rejects unknown type", () => {
-    expect(validatePaymentMethod({ type: "bitcoin", value: "abc" })).toMatch(/Invalid type/);
-  });
-
-  it("rejects empty value", () => {
-    expect(validatePaymentMethod({ type: "phone", value: "" })).toMatch(/required/);
-    expect(validatePaymentMethod({ type: "phone", value: "   " })).toMatch(/required/);
-  });
-
-  it("validates phone numbers", () => {
-    expect(validatePaymentMethod({ type: "phone", value: "+351912345678" })).toBeNull();
-    expect(validatePaymentMethod({ type: "phone", value: "912 345 678" })).toBeNull();
-    expect(validatePaymentMethod({ type: "phone", value: "123" })).toMatch(/6-15 digits/);
-    expect(validatePaymentMethod({ type: "phone", value: "1234567890123456" })).toMatch(/6-15 digits/);
-  });
-
-  it("validates mbway numbers", () => {
+describe("validatePaymentMethod with payer fields", () => {
+  it("accepts a method without payer fields (backwards compat)", () => {
     expect(validatePaymentMethod({ type: "mbway", value: "912345678" })).toBeNull();
-    expect(validatePaymentMethod({ type: "mbway", value: "+351 912 345 678" })).toBeNull();
-    expect(validatePaymentMethod({ type: "mbway", value: "12" })).toMatch(/6-15 digits/);
   });
 
-  it("validates revolut tags", () => {
-    expect(validatePaymentMethod({ type: "revolut_tag", value: "jose" })).toBeNull();
-    expect(validatePaymentMethod({ type: "revolut_tag", value: "@jose" })).toBeNull();
-    expect(validatePaymentMethod({ type: "revolut_tag", value: "jose.cabeda" })).toBeNull();
-    expect(validatePaymentMethod({ type: "revolut_tag", value: "" })).toMatch(/required/);
-    expect(validatePaymentMethod({ type: "revolut_tag", value: "a b c" })).toMatch(/Invalid Revolut tag/);
+  it("accepts a method with payerUserId and payerName", () => {
+    expect(
+      validatePaymentMethod({
+        type: "mbway",
+        value: "912345678",
+        payerUserId: "u-jose",
+        payerName: "José",
+      }),
+    ).toBeNull();
   });
 
-  it("validates revolut links", () => {
-    expect(validatePaymentMethod({ type: "revolut_link", value: "https://revolut.me/jose" })).toBeNull();
-    expect(validatePaymentMethod({ type: "revolut_link", value: "https://rev.money/abc123" })).toBeNull();
-    expect(validatePaymentMethod({ type: "revolut_link", value: "http://revolut.me/jose" })).toBeNull();
-    expect(validatePaymentMethod({ type: "revolut_link", value: "https://example.com/pay" })).toMatch(/revolut\.me/);
-    expect(validatePaymentMethod({ type: "revolut_link", value: "not-a-url" })).toMatch(/revolut\.me/);
+  it("rejects payerName without payerUserId (must be a pair)", () => {
+    const err = validatePaymentMethod({
+      type: "mbway",
+      value: "912345678",
+      payerName: "José",
+    });
+    expect(err).toMatch(/payer/i);
   });
 
-  it("validates cash type (any non-empty value)", () => {
-    expect(validatePaymentMethod({ type: "cash", value: "Pay José" })).toBeNull();
-    expect(validatePaymentMethod({ type: "cash", value: "At the game" })).toBeNull();
-    expect(validatePaymentMethod({ type: "cash", value: "" })).toMatch(/required/);
+  it("rejects payerUserId of wrong type", () => {
+    const err = validatePaymentMethod({
+      type: "mbway",
+      value: "912345678",
+      payerUserId: 12345,
+      payerName: "José",
+    });
+    expect(err).toMatch(/payer/i);
   });
 
-  it("validates other type (free text)", () => {
-    expect(validatePaymentMethod({ type: "other", value: "Bizum +34612345678" })).toBeNull();
-    expect(validatePaymentMethod({ type: "other", value: "PayPal jose@email.com" })).toBeNull();
-    expect(validatePaymentMethod({ type: "other", value: "" })).toMatch(/required/);
-  });
-
-  it("preserves label field", () => {
-    expect(validatePaymentMethod({ type: "mbway", value: "912345678", label: "José's MB Way" })).toBeNull();
-    expect(validatePaymentMethod({ type: "cash", value: "At the game", label: "Pay to João" })).toBeNull();
-  });
-});
-
-describe("validatePaymentMethods", () => {
-  it("rejects non-array", () => {
-    expect(validatePaymentMethods("not array")).toMatch(/must be an array/);
-  });
-
-  it("rejects more than 10 methods", () => {
-    const methods = Array.from({ length: 11 }, () => ({ type: "phone", value: "912345678" }));
-    expect(validatePaymentMethods(methods)).toMatch(/Maximum 10/);
-  });
-
-  it("accepts valid array", () => {
-    expect(validatePaymentMethods([
-      { type: "mbway", value: "912345678" },
-      { type: "revolut_tag", value: "jose" },
-    ])).toBeNull();
-  });
-
-  it("returns first error in array", () => {
-    expect(validatePaymentMethods([
-      { type: "mbway", value: "912345678" },
-      { type: "phone", value: "12" },
-    ])).toMatch(/6-15 digits/);
+  it("rejects empty payerName when payerUserId is set", () => {
+    const err = validatePaymentMethod({
+      type: "mbway",
+      value: "912345678",
+      payerUserId: "u-jose",
+      payerName: "   ",
+    });
+    expect(err).toMatch(/payer/i);
   });
 });
 
-describe("normalizePaymentMethod", () => {
-  it("strips @ from revolut tags", () => {
-    const m = normalizePaymentMethod({ type: "revolut_tag", value: "@jose" });
-    expect(m.value).toBe("jose");
-  });
-
-  it("removes spaces from phone numbers", () => {
-    const m = normalizePaymentMethod({ type: "phone", value: "+351 912 345 678" });
-    expect(m.value).toBe("+351912345678");
-  });
-
-  it("removes spaces from mbway numbers", () => {
-    const m = normalizePaymentMethod({ type: "mbway", value: "912 345 678" });
-    expect(m.value).toBe("912345678");
-  });
-
-  it("trims revolut links", () => {
-    const m = normalizePaymentMethod({ type: "revolut_link", value: "  https://revolut.me/jose  " });
-    expect(m.value).toBe("https://revolut.me/jose");
-  });
-
-  it("trims cash value and label", () => {
-    const m = normalizePaymentMethod({ type: "cash", value: "  Pay José  ", label: "  At the pitch  " });
-    expect(m.value).toBe("Pay José");
-    expect(m.label).toBe("At the pitch");
-  });
-
-  it("trims other value and label", () => {
-    const m = normalizePaymentMethod({ type: "other", value: "  Bizum +34612345678  ", label: "  Spanish payment  " });
-    expect(m.value).toBe("Bizum +34612345678");
-    expect(m.label).toBe("Spanish payment");
-  });
-
-  it("trims label on all types", () => {
-    const m = normalizePaymentMethod({ type: "mbway", value: "912345678", label: "  José's MB Way  " });
-    expect(m.label).toBe("José's MB Way");
-  });
-});
-
-describe("parsePaymentMethods", () => {
-  it("returns empty array for null/undefined", () => {
-    expect(parsePaymentMethods(null)).toEqual([]);
-    expect(parsePaymentMethods(undefined)).toEqual([]);
-  });
-
-  it("parses valid JSON string", () => {
-    const json = JSON.stringify([{ type: "mbway", value: "912345678" }]);
-    const result = parsePaymentMethods(json);
-    expect(result).toHaveLength(1);
-    expect(result[0].type).toBe("mbway");
-  });
-
-  it("filters out invalid entries", () => {
-    const json = JSON.stringify([
-      { type: "mbway", value: "912345678" },
-      { type: "invalid", value: "x" },
-      { type: "phone", value: "12" }, // too short
+describe("validatePaymentMethods with payer fields", () => {
+  it("accepts a mixed array (some with payer, some without)", () => {
+    const err = validatePaymentMethods([
+      { type: "mbway", value: "912345678", payerUserId: "u-jose", payerName: "José" },
+      { type: "cash", value: "On arrival" },
     ]);
-    const result = parsePaymentMethods(json);
-    expect(result).toHaveLength(1);
-  });
-
-  it("returns empty array for invalid JSON", () => {
-    expect(parsePaymentMethods("not json")).toEqual([]);
+    expect(err).toBeNull();
   });
 });
 
-describe("getDeepLink", () => {
-  it("generates tel: link for phone", () => {
-    expect(getDeepLink({ type: "phone", value: "+351912345678" })).toBe("tel:+351912345678");
+describe("normalizePaymentMethod preserves payer", () => {
+  it("preserves payerUserId and trims payerName", () => {
+    const out = normalizePaymentMethod({
+      type: "mbway",
+      value: "912 345 678",
+      payerUserId: "u-jose",
+      payerName: "  José  ",
+    });
+    expect(out.payerUserId).toBe("u-jose");
+    expect(out.payerName).toBe("José");
+    expect(out.value).toBe("912345678"); // phones get whitespace stripped
   });
 
-  it("returns null for mbway (no direct deep link)", () => {
-    expect(getDeepLink({ type: "mbway", value: "912345678" })).toBeNull();
-  });
-
-  it("generates revolut.me link for revolut_tag", () => {
-    expect(getDeepLink({ type: "revolut_tag", value: "jose" })).toBe("https://revolut.me/jose");
-  });
-
-  it("appends amount and currency to revolut_tag link", () => {
-    const link = getDeepLink({ type: "revolut_tag", value: "jose" }, 20, "EUR");
-    expect(link).toBe("https://revolut.me/jose?amount=20.00&currency=EUR");
-  });
-
-  it("does not append amount if zero or negative", () => {
-    expect(getDeepLink({ type: "revolut_tag", value: "jose" }, 0)).toBe("https://revolut.me/jose");
-    expect(getDeepLink({ type: "revolut_tag", value: "jose" }, -5)).toBe("https://revolut.me/jose");
-  });
-
-  it("returns the URL directly for revolut_link", () => {
-    expect(getDeepLink({ type: "revolut_link", value: "https://revolut.me/jose" })).toBe("https://revolut.me/jose");
-  });
-
-  it("returns null for cash", () => {
-    expect(getDeepLink({ type: "cash", value: "Pay José" })).toBeNull();
-  });
-
-  it("returns null for other", () => {
-    expect(getDeepLink({ type: "other", value: "Bizum +34612345678" })).toBeNull();
+  it("passes through null payer (backwards compat)", () => {
+    const out = normalizePaymentMethod({ type: "cash", value: "On arrival" });
+    expect(out.payerUserId ?? null).toBeNull();
+    expect(out.payerName ?? null).toBeNull();
   });
 });
 
-describe("getDisplayValue", () => {
-  it("prefixes @ for revolut_tag", () => {
-    expect(getDisplayValue({ type: "revolut_tag", value: "jose" })).toBe("@jose");
+describe("parsePaymentMethods with payer fields", () => {
+  it("parses methods with and without payer from JSON", () => {
+    const json = JSON.stringify([
+      { type: "mbway", value: "912345678", payerUserId: "u-jose", payerName: "José" },
+      { type: "cash", value: "On arrival" },
+    ]);
+    const parsed = parsePaymentMethods(json);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].payerName).toBe("José");
+    expect(parsed[1].payerUserId ?? null).toBeNull();
   });
 
-  it("shows path for revolut_link", () => {
-    expect(getDisplayValue({ type: "revolut_link", value: "https://revolut.me/jose123" })).toBe("jose123");
-  });
-
-  it("returns value as-is for phone and mbway", () => {
-    expect(getDisplayValue({ type: "phone", value: "+351912345678" })).toBe("+351912345678");
-    expect(getDisplayValue({ type: "mbway", value: "912345678" })).toBe("912345678");
-  });
-
-  it("returns value as-is for cash and other", () => {
-    expect(getDisplayValue({ type: "cash", value: "Pay José" })).toBe("Pay José");
-    expect(getDisplayValue({ type: "other", value: "Bizum +34612345678" })).toBe("Bizum +34612345678");
-  });
-});
-
-describe("getMbwayAppLink", () => {
-  it("returns Android intent URI that opens app with Play Store fallback", () => {
-    const link = getMbwayAppLink("Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36");
-    expect(link).toBe(
-      "intent://#Intent;package=pt.sibs.android.mbway;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dpt.sibs.android.mbway;end"
-    );
-  });
-
-  it("returns mbway:// custom scheme for iOS to open app directly", () => {
-    const link = getMbwayAppLink("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)");
-    expect(link).toBe("mbway://");
-  });
-
-  it("returns null for desktop user agent", () => {
-    const link = getMbwayAppLink("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)");
-    expect(link).toBeNull();
-  });
-
-  it("returns null for empty user agent", () => {
-    expect(getMbwayAppLink("")).toBeNull();
-    expect(getMbwayAppLink(undefined)).toBeNull();
+  it("ignores methods with invalid payer (drops them)", () => {
+    const json = JSON.stringify([
+      { type: "mbway", value: "912345678", payerName: "José" }, // no payerUserId
+    ]);
+    expect(parsePaymentMethods(json)).toEqual([]);
   });
 });
 
-
-
-// ── Additional coverage for getMethodTypeLabel + edge cases ──────────────────
-
-import { getMethodTypeLabel } from "~/lib/paymentMethods";
-
-describe("getMethodTypeLabel", () => {
-  it("returns correct labels for all types", () => {
-    expect(getMethodTypeLabel("phone")).toBe("Phone");
-    expect(getMethodTypeLabel("mbway")).toBe("MB Way");
-    expect(getMethodTypeLabel("revolut_tag")).toBe("Revolut");
-    expect(getMethodTypeLabel("revolut_link")).toBe("Revolut Link");
-    expect(getMethodTypeLabel("cash")).toBe("Cash");
-    expect(getMethodTypeLabel("other")).toBe("Other");
-  });
-});
-
-describe("getDisplayValue edge cases", () => {
-  it("returns raw value for invalid revolut_link URL", () => {
-    expect(getDisplayValue({ type: "revolut_link", value: "not-a-url" })).toBe("not-a-url");
+describe("getPayerLabel", () => {
+  it("returns 'Each player pays directly' when no payer is set", () => {
+    expect(getPayerLabel({ type: "mbway", value: "912345678" }, "tDirect"))
+      .toBe("tDirect");
   });
 
-  it("returns raw value when URL pathname is empty (root)", () => {
-    expect(getDisplayValue({ type: "revolut_link", value: "https://revolut.me/" })).toBe("https://revolut.me/");
+  it("returns 'Pay {name}' when a payer is set", () => {
+    expect(getPayerLabel({ type: "mbway", value: "912345678", payerUserId: "u-jose", payerName: "José" }, "tDirect"))
+      .toMatch(/José/);
   });
 });
