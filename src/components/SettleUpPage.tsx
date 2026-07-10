@@ -223,10 +223,15 @@ function SettleTab({
   const totalSpentCents = data.extras.potCents;
 
   const handleMarkSettled = async (debt: PairwiseDebt) => {
-    if (!data.admin) {
+    // Authorization gate: owner/admin OR the creditor (the person the
+    // money is owed to) can mark a debt as settled. The debtor themselves
+    // cannot — that would let any player self-clear money they owe.
+    const isCreditor = data.you?.playerName === debt.toName;
+    if (!data.admin && !isCreditor) {
       setSettleFeedback({
         severity: "error",
-        message: t("settleMarkSettledNoPermission") ?? "Only the event owner can do this.",
+        message: t("settleMarkSettledNoPermission") ??
+          "Only the event owner or the creditor can mark this debt as settled.",
       });
       return;
     }
@@ -236,7 +241,7 @@ function SettleTab({
       const res = await fetch(`/api/events/${data.event.id}/payments/historical/bulk`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ playerName: debt.fromName }),
+        body: JSON.stringify({ playerName: debt.fromName, creditorName: debt.toName }),
       });
       const body = await res.json().catch(() => ({} as { error?: string; settled?: number; skipped?: number; failed?: number }));
       if (!res.ok) {
