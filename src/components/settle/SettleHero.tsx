@@ -4,6 +4,7 @@ import {
 } from "@mui/material";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
+import EditIcon from "@mui/icons-material/Edit";
 import { alpha, useTheme } from "@mui/material/styles";
 import { useT } from "~/lib/useT";
 import type { NetPosition } from "~/lib/pairwise";
@@ -26,6 +27,12 @@ interface Props {
   netPositions: NetPosition[];
   onShowCharts: () => void;
   onMore: (anchorEl: HTMLElement) => void;
+  /**
+   * Opens the payment-method editor (the event default for the Settle page;
+   * per-game override for the history page). Optional for backwards compat
+   * — when omitted the button is hidden.
+   */
+  onChangePaymentMethod?: () => void;
 }
 
 const DEBTOR_COLOR = "#8b5a3c"; // brown/tan
@@ -186,7 +193,7 @@ function clampFontSize(size: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, size));
 }
 
-export function SettleHero({ event, stats, netPositions, onShowCharts, onMore }: Props) {
+export function SettleHero({ event, stats, netPositions, onShowCharts, onMore, onChangePaymentMethod }: Props) {
   const t = useT();
   const theme = useTheme();
   const placements = React.useMemo(() => computeLayout(netPositions), [netPositions]);
@@ -378,6 +385,17 @@ export function SettleHero({ event, stats, netPositions, onShowCharts, onMore }:
           >
             {t("settleHeroShowCharts") ?? "Show charts"}
           </Button>
+          {onChangePaymentMethod && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<EditIcon />}
+              onClick={onChangePaymentMethod}
+              data-testid="settle-hero-change-method"
+            >
+              {t("settleHeroChangeMethod") ?? "Change method"}
+            </Button>
+          )}
           <Button
             variant="outlined"
             size="small"

@@ -107,6 +107,43 @@ describe("SettleHero", () => {
     expect(onMore).toHaveBeenCalledTimes(1);
   });
 
+  it("calls onChangePaymentMethod when the Change method button is clicked", () => {
+    const onChangePaymentMethod = vi.fn();
+    renderWithTheme(
+      <SettleHero
+        event={baseEvent}
+        stats={{ transactions: 0, members: 2, totalSpentCents: 0 }}
+        netPositions={[{ playerName: "Pai", netCents: -1000 }]}
+        onShowCharts={vi.fn()}
+        onMore={vi.fn()}
+        onChangePaymentMethod={onChangePaymentMethod}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /change method/i }));
+    expect(onChangePaymentMethod).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the three action buttons in order: Show charts, Change method, More", () => {
+    renderWithTheme(
+      <SettleHero
+        event={baseEvent}
+        stats={{ transactions: 0, members: 2, totalSpentCents: 0 }}
+        netPositions={[{ playerName: "Pai", netCents: -1000 }]}
+        onShowCharts={vi.fn()}
+        onMore={vi.fn()}
+        onChangePaymentMethod={vi.fn()}
+      />,
+    );
+    const buttons = screen.getAllByRole("button");
+    const labels = buttons.map((b) => b.textContent?.trim() ?? "");
+    const chartsIdx = labels.findIndex((l) => /show charts/i.test(l));
+    const changeIdx = labels.findIndex((l) => /change method/i.test(l));
+    const moreIdx = labels.findIndex((l) => /^more/i.test(l));
+    expect(chartsIdx).toBeGreaterThanOrEqual(0);
+    expect(changeIdx).toBeGreaterThan(chartsIdx);
+    expect(moreIdx).toBeGreaterThan(changeIdx);
+  });
+
   // ── Responsive layout ───────────────────────────────────────────────────
 
   it("does not overlap bubbles when there are 5+ players (multi-orbit layout)", () => {
