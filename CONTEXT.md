@@ -285,8 +285,47 @@ An immutable row in the per-Event ledger recording a money or Game-Unit movement
 _Avoid_: payment, ledger entry, journal line
 
 ## Extras Pot
-The per-Event running balance of *forfeited* credit and declared spends, in Event currency. Credited by `credit_expired` transactions; debited by `extras_declare` transactions the organizer enters. Visible to all members of the Event. The pot is an honest ledger, not a money account — the app never touches real funds.
-_Avoid_: surplus, organizer wallet, kitty
+The per-Event running balance of all **money that doesn't belong to a specific game or a specific player**, in Event currency. It is the organizer's honest ledger — not a money account, not a real bank balance. The app never touches real funds; it only tracks cents.
+
+**Credited (sources):**
+- `credit_expired` — subscription credits that expired at end-of-next-month (ADR 0008). E.g., Ana subscribes Jan 1 for €30 covering 5 games; uses €18 across 3 games; the remaining €12 expires end of Feb and is credited to the pot.
+- `payment_received` overpayment — when a player pays more than their per-game share, the excess is a pot credit. E.g., drop-in Bruno pays €10 for a €6 game; the €6 covers his share, €4 is pot credit. The drop-in absorbs the rounding remainder: €10 / 3 = €3.33; each player owes €3.33; Bruno pays €3.34 (rounds up to absorb the cent), pot unchanged.
+- Player-debt-to-organizer — when a player owes more than their subscription/credits cover (overage), the overage is added to the player's debt to the organizer. The pot is **not** the vehicle; the player's per-player owed balance is.
+
+**Debited (uses):**
+- `extras_declare` — the organizer declares an expense. Required fields: amountCents, currency, label, category, optional receiptUrl, optional allocation. Only organizer/admin can declare.
+
+**Expense categories** (enum `ExtrasCategory`): `court_rental`, `equipment`, `refreshments`, `admin`.
+
+**Receipt** — single optional `receiptUrl` field on the expense, pointing to an uploaded file.
+
+**Allocation modes** (one per expense, organizer decides):
+1. `organizer_absorbs` (default) — pot shrinks, no per-player change.
+2. `allocate_to_players` — expense is split among named players (each gets a share added to their owed balance). Pot does **not** shrink.
+3. `split_equally` — expense is split equally among all current players. Each player's owed balance goes up equally. Pot does **not** shrink.
+
+**Deficit policy:** the pot may go negative. The organizer owes the difference to themselves. On the next positive pot delta, the deficit is auto-cleared. UI shows the deficit explicitly ("Pot balance: -€5.00 — organizer owes the event.").
+
+**Auto-deduct for player deficit:** when a player next pays a per-game share, the deficit is deducted first. E.g., Bruno owes €12 (overage debt to organizer); next game costs €6; the €6 is debited from Bruno's debt, the game share is €0; Bruno still owes €6. Bruno's per-player ledger shows this clearly.
+
+**Visibility:** on the SettleUp page, the pot is shown with three sections: (1) current balance, (2) this event's feeds (credit_expired, overpayment receipts) with who/when/why, (3) this event's spends (extras_declare) with what/by-whom/when. Per-event only — the pot is not aggregated across events.
+
+_Avoid_: surplus, organizer wallet, kitty, expense fund, slush fund, house account
+
+## Expense
+A pot-debiting record declared by the organizer. Required fields: `amountCents`, `currency`, `label`, `category`, `declaredAt`, `declaredBy` (userId). Optional: `receiptUrl`, `allocation` (object describing how the expense is shared). Visible to all members of the Event. The `extras_declare` WalletTransaction mirrors the pot-debit for audit.
+
+_Avoid_: cost, charge, payment
+
+## Category
+One of: `court_rental`, `equipment`, `refreshments`, `admin`. Used by `Expense.category` to bucket spend types for reporting.
+
+_Avoid_: type, kind, tag
+
+## Allocation
+How an `Expense` is distributed. Object with `mode` (one of `organizer_absorbs`, `allocate_to_players`, `split_equally`) and `shares` (record of playerId → cents for `allocate_to_players`). Determines whether the pot shrinks or per-player balances change.
+
+_Avoid_: distribution, split
 
 ## Invite
 A request to participate in a **Game**, sent to a person on behalf of the inviting **User** when a **Player** is being added by an Owner/Admin. Carried as a push notification (to a registered **User** whose email matches) or an email (to an unregistered address, asking them to register). Triggered automatically by the add-player action whenever the email resolves to a non-self **User** or is provided without resolving. Single-shot: not stored, not retried, not visible to the recipient before they accept. On the web/Android client, an Owner/Admin can also pick a contact from the device address book to populate the player's name and email in one step.

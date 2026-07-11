@@ -26,6 +26,8 @@ export interface Transaction {
   playerName?: string;
   gamePlayers?: string[];
   gameHistoryId?: string;
+  category?: string;
+  allocation?: { mode: string; shares?: Record<string, number> };
 }
 
 type Filter = "all" | "game" | "subscription" | "spend" | "settlement";
@@ -158,6 +160,15 @@ export function TransactionsList({ transactions, onAddTransaction, onEditTransac
                     {tx.description}
                     {tx.type === "game" && tx.gamePlayers && tx.gamePlayers.length > 0 && (
                       <GamePlayersText players={tx.gamePlayers} />
+                    )}
+                    {tx.type === "spend" && tx.category && (
+                      <Chip
+                        size="small"
+                        label={tx.category.replace("_", " ")}
+                        variant="outlined"
+                        color="default"
+                        sx={{ ml: 1, fontSize: "0.7rem", height: 20 }}
+                      />
                     )}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">

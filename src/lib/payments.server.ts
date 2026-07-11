@@ -244,7 +244,7 @@ export async function recordPerGameShare(
  * for the relation). For unlinked players we create a system placeholder
  * user per (event, playerName) so the ledger stays consistent.
  */
-async function ensureSystemUserId(
+export async function ensureSystemUserId(
   eventId: string,
   playerName: string,
   existingUserId: string | null,
@@ -544,4 +544,79 @@ export async function settleAllHistoricalForPlayer(
     result.details.push({ gameHistoryId: h.id, reason: r.reason });
   }
   return result;
+}
+
+// ─── applyAllocation (ADR 0020 — Extras Pot rich model) ────────────────────────
+
+export type AllocationMode = "organizer_absorbs" | "allocate_to_players" | "split_equally";
+
+export interface AllocationInput {
+  mode: AllocationMode;
+  amountCents: number;
+  players: string[];
+  shares?: Record<string, number>; // playerName -> cents (only for allocate_to_players)
+}
+
+export interface AllocationOutput {
+  playerName: string;
+  cents: number;
+  gameUnits: 0;
+  reason: "extras_share";
+}
+
+/**
+ * Compute per-player cents for an ExtrasDeclaration spend based on the
+ * chosen allocation mode.
+ *
+ * Modes:
+ *   - organizer_absorbs: organizer covers the full cost; no per-player rows emitted.
+ *   - allocate_to_players: organizer provides explicit `shares` map. Sum must not exceed amountCents.
+ *   - split_equally: divide amountCents equally among all active players (round down; remainder absorbed by organizer).
+ *
+ * @throws {Error} if amountCents <= 0, players empty for split_equally, shares exceed amount, or unknown mode.
+ */
+export function applyAllocation(input: AllocationInput): AllocationOutput[] {
+  const { mode, amountCents, players, shares } = input;
+
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    throw new Error("amountCents must be a positive integer");
+  }
+
+  if (mode === "organizer_absorbs") {
+    return [];
+  }
+
+  if (mode === "split_equally") {
+    if (players.length === 0) {
+      throw new Error("no active players to split equally");
+    }
+    const perPlayer = Math.floor(amountCents / players.length);
+    return players.map((playerName) => ({
+      playerName,
+      cents: perPlayer,
+      gameUnits: 0,
+      reason: "extras_share" as const,
+    }));
+  }
+
+  if (mode === "allocate_to_players") {
+    if (!shares || Object.keys(shares).length === 0) {
+      return [];
+    }
+    const totalShares = Object.values(shares).reduce((sum, v) => sum + v, 0);
+    if (totalShares > amountCents) {
+      throw new Error("shares exceed amountCents");
+    }
+    // Only include players who are in the active players list
+    return Object.entries(shares)
+      .filter(([name]) => players.includes(name))
+      .map(([playerName, cents]) => ({
+        playerName,
+        cents,
+        gameUnits: 0,
+        reason: "extras_share" as const,
+      }));
+  }
+
+  throw new Error(`unknown allocation mode: ${mode}`);
 }
