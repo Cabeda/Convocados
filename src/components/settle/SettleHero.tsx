@@ -376,26 +376,18 @@ export function SettleHero({ event, stats, netPositions, onShowCharts, onMore, o
         <Typography variant="h6" fontWeight={600} sx={{ mb: 1.5 }}>
           {headline}
         </Typography>
-        <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<ShowChartIcon />}
-            onClick={onShowCharts}
-          >
-            {t("settleHeroShowCharts") ?? "Show charts"}
-          </Button>
-          {onChangePaymentMethod && (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<EditIcon />}
-              onClick={onChangePaymentMethod}
-              data-testid="settle-hero-change-method"
-            >
-              {t("settleHeroChangeMethod") ?? "Change method"}
-            </Button>
-          )}
+<Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+            {onChangePaymentMethod && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<EditIcon />}
+                onClick={onChangePaymentMethod}
+                data-testid="settle-hero-change-method"
+              >
+                {t("settleHeroChangeMethod") ?? "Change method"}
+              </Button>
+            )}
           <Button
             variant="outlined"
             size="small"

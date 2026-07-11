@@ -10,6 +10,8 @@ import { prisma } from "~/lib/db.server";
  *
  * Response shape: { users: Array<{ id: string, name: string, role: "owner" | "admin" | "player" }> }
  *
+ * Includes ALL EventPlayers, even ghost players without a linked User account.
+ * For ghost players, the id is "ghost:{eventPlayerId}" and role is "player".
  * Distinct on userId (a ghost user has the same id for the EventPlayer
  * and the underlying User).
  */
@@ -21,15 +23,28 @@ export const GET: APIRoute = async ({ params }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  // EventPlayers (covers the backfilled ghost users + linked users)
-  const eventPlayers = await prisma.eventPlayer.findMany({
-    where: { eventId, userId: { not: null } },
-    include: { user: { select: { id: true, name: true } } },
-  });
   const byUser = new Map<string, { id: string; name: string; role: "owner" | "admin" | "player" }>();
+
+  // 1. ALL EventPlayers (including ghost players without a linked User)
+  const eventPlayers = await prisma.eventPlayer.findMany({
+    where: { eventId },
+    select: { id: true, name: true, userId: true },
+  });
+
   for (const ep of eventPlayers) {
-    if (!ep.userId) continue;
-    byUser.set(ep.userId, { id: ep.userId, name: ep.user?.name ?? ep.name, role: "player" });
+    if (ep.userId) {
+      // Linked user
+      const user = await prisma.user.findUnique({
+        where: { id: ep.userId },
+        select: { id: true, name: true },
+      });
+      if (user) {
+        byUser.set(user.id, { id: user.id, name: user.name, role: "player" });
+      }
+    } else {
+      // Ghost player (no linked user account) - use ghost:{id} as id
+      byUser.set(`ghost:${ep.id}`, { id: `ghost:${ep.id}`, name: ep.name, role: "player" });
+    }
   }
 
   // Event owner

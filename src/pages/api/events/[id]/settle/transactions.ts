@@ -18,6 +18,10 @@ export interface UnifiedTransaction {
   status: string;
   /** For game payments: who owes/paid. For subscriptions: the subscriber. For spends: the declarer. For settlements: the debtor. */
   playerName?: string;
+  /** For game payments: array of all player names in the game. */
+  gamePlayers?: string[];
+  /** For game transactions: the GameHistory ID this transaction belongs to. */
+  gameHistoryId?: string;
 }
 
 /**
@@ -30,7 +34,7 @@ export interface UnifiedTransaction {
  *   - Regular player: their own WalletTransaction ledger (legacy).
  *
  * Query params (only for the unified view):
- *   type  — filter to one of "game" | "subscription" | "spend"
+ *   type  — filter to one of "game" | "subscription" | "spend" | "settlement"
  *   from  — ISO date; only entries with date >= from
  *   to    — ISO date; only entries with date <= to
  */
@@ -91,56 +95,101 @@ export const GET: APIRoute = async ({ params, request }) => {
   const toParam = url.searchParams.get("to");
   const fromDate = fromParam ? new Date(fromParam) : null;
   const toDate = toParam ? new Date(toParam) : null;
-  const include = (t: "game" | "subscription" | "spend") =>
+  const include = (t: "game" | "subscription" | "spend" | "settlement") =>
     !typeFilter || typeFilter === t;
 
   const result: UnifiedTransaction[] = [];
   const currency = event.eventCost?.currency ?? "EUR";
 
   // 1. Live per-game payments (PlayerPayment rows on EventCost).
+  // These don't have a GameHistory entry yet — they belong to the "current" game.
   if (include("game")) {
     const livePayments = await prisma.playerPayment.findMany({
       where: { eventCost: { eventId } },
       include: { eventCost: { select: { currency: true } } },
     });
-    for (const p of livePayments) {
+    if (livePayments.length > 0) {
+      // Group live payments: one entry for the current game
+      const totalAmount = livePayments.reduce((sum, p) => sum + Math.round(p.amount * 100), 0);
+      const allPlayerNames = [...new Set(livePayments.map(p => p.playerName))];
+      const allPaid = livePayments.every(p => p.status === "paid");
+      const anyPending = livePayments.some(p => p.status === "pending" || p.status === "sent");
+      const status = allPaid ? "paid" : (anyPending ? "pending" : "sent");
+
       result.push({
-        id: `live-${p.id}`,
-        date: (p.paidAt ?? p.createdAt).toISOString(),
+        id: `live-game-${eventId}`,
+        date: new Date().toISOString(), // current game
         type: "game",
-        description: `${p.playerName} — game payment`,
-        amountCents: Math.round(p.amount * 100),
-        currency: p.eventCost.currency,
-        status: p.status,
-        playerName: p.playerName,
+        description: `Game payment — ${livePayments[0].eventCost.currency}`,
+        amountCents: totalAmount,
+        currency: livePayments[0].eventCost.currency,
+        status: anyPending ? "pending" : (allPaid ? "paid" : "sent"),
+        gamePlayers: [...new Set(livePayments.map(p => p.playerName))],
+        playerName: "multiple",
       });
     }
 
     // Historical per-game payments (GameHistory.paymentsSnapshot).
+    // One entry per GameHistory (one per game played).
     const histories = await prisma.gameHistory.findMany({
       where: { eventId, status: { not: "cancelled" } },
-      select: { id: true, dateTime: true, paymentsSnapshot: true },
+      select: { id: true, dateTime: true, paymentsSnapshot: true, teamsSnapshot: true },
+      orderBy: { dateTime: "desc" },
     });
+
     for (const h of histories) {
       if (!h.paymentsSnapshot) continue;
-      let entries: Array<{ playerName: string; amount: number; status: string }>;
+      let paymentEntries: Array<{ playerName: string; amount: number; status: string }>;
       try {
-        entries = JSON.parse(h.paymentsSnapshot);
+        paymentEntries = JSON.parse(h.paymentsSnapshot);
       } catch {
         continue;
       }
-      for (const e of entries) {
-        result.push({
-          id: `hist-${h.id}-${e.playerName}`,
-          date: h.dateTime.toISOString(),
-          type: "game",
-          description: `${e.playerName} — game payment`,
-          amountCents: Math.round(e.amount * 100),
-          currency, // GameHistory doesn't carry its own currency; use the event's
-          status: e.status,
-          playerName: e.playerName,
-        });
+
+      // Get all players from teamsSnapshot (includes those who didn't pay yet)
+      let entries: Array<{ playerName: string; amount: number; status: string }>;
+      try {
+        entries = JSON.parse(h.paymentsSnapshot) as Array<{ playerName: string; amount: number; status: string }>;
+      } catch {
+        continue;
       }
+
+      // Get all players from teamsSnapshot (includes those who didn't pay yet)
+      let allPlayers: string[] = [];
+      if (h.teamsSnapshot) {
+        try {
+          const teams = JSON.parse(h.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
+          const teamPlayers = teams.flatMap(t => t.players.map(p => p.name));
+          allPlayers = [...new Set(teamPlayers)];
+        } catch {
+          // fallback to paymentsSnapshot players
+          allPlayers = [...new Set(entries.map(e => e.playerName))];
+        }
+      } else {
+        allPlayers = [...new Set(entries.map(e => e.playerName))];
+      }
+
+      // Also include any players from paymentsSnapshot who aren't in teamsSnapshot
+      const paymentPlayers = entries.map(e => e.playerName);
+      const allPlayerNames = [...new Set([...allPlayers, ...paymentPlayers])];
+
+      const totalAmount = entries.reduce((sum, e) => sum + Math.round(e.amount * 100), 0);
+      const allPaid = entries.every(e => e.status === "paid");
+      const anyPending = entries.some(e => e.status === "pending" || e.status === "sent");
+      const status = allPaid ? "paid" : (entries.some(e => e.status === "pending" || e.status === "sent") ? "pending" : "sent");
+
+      result.push({
+        id: `game-${h.id}`,
+        date: h.dateTime.toISOString(),
+        type: "game",
+        description: `Game — ${currency}`,
+        amountCents: Math.round(entries.reduce((sum, e) => sum + e.amount * 100, 0)),
+        currency, // use event currency
+        status: entries.every(e => e.status === "paid") ? "paid" : (entries.some(e => e.status === "pending" || e.status === "sent") ? "pending" : "sent"),
+        gamePlayers: allPlayerNames,
+        playerName: "multiple",
+        gameHistoryId: h.id,
+      });
     }
   }
 
