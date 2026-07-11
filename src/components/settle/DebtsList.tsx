@@ -184,18 +184,6 @@ export function DebtsList({ debts, currency, onMarkSettled, onRemind, onGenerate
                 ?? `Remind ${menuAnchor?.debt.fromName ?? ""}`}
             </ListItemText>
           </MenuItem>
-          <MenuItem
-            onClick={() => {
-              if (menuAnchor) {
-                onGenerateQr(menuAnchor.debt);
-                setMenuAnchor(null);
-              }
-            }}
-            data-testid="debt-action-generate-qr"
-          >
-            <ListItemIcon><QrCode2Icon fontSize="small" /></ListItemIcon>
-            <ListItemText>{t("settleDebtsActionGenerateQr") ?? "Generate QR payment"}</ListItemText>
-          </MenuItem>
         </MenuList>
       </Popover>
     </Paper>

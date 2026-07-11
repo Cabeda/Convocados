@@ -1205,6 +1205,7 @@ const it: TranslationKeys = {
   settleTxnsFilterGames: "Partite",
   settleTxnsFilterSubs: "Abbonamenti",
   settleTxnsFilterSpends: "Spese",
+  settleTxnsFilterSettlements: "Regolamenti",
   settleTxnsAddButton: "Aggiungi transazione",
   settleTxnsEmptyNone: "Nessuna transazione. Aggiungi un abbonamento o una spesa.",
   settleTxnsEmptyFiltered: "Nessuna transazione corrisponde al filtro.",

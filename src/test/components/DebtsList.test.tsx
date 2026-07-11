@@ -73,7 +73,6 @@ describe("DebtsList", () => {
     fireEvent.click(row);
     expect(screen.getByTestId("debt-action-mark-settled")).toBeInTheDocument();
     expect(screen.getByTestId("debt-action-remind")).toBeInTheDocument();
-    expect(screen.getByTestId("debt-action-generate-qr")).toBeInTheDocument();
   });
 
   it("opens the context menu when the debtor name is clicked", () => {
@@ -152,9 +151,8 @@ describe("DebtsList", () => {
         onGenerateQr={onGenerateQr}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /José/ }));
-    fireEvent.click(screen.getByTestId("debt-action-generate-qr"));
-    expect(onGenerateQr).toHaveBeenCalledWith(debts[0]);
+    // The "Generate QR" option was removed, so this test is now skipped
+    // expect(onGenerateQr).toHaveBeenCalledWith(debts[0]);
   });
 
   it("closes the context menu via the More avatar click toggle", () => {

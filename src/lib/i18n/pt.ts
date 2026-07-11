@@ -1253,6 +1253,7 @@ const pt: TranslationKeys = {
   settleTxnsFilterGames: "Jogos",
   settleTxnsFilterSubs: "Subscrições",
   settleTxnsFilterSpends: "Despesas",
+  settleTxnsFilterSettlements: "Liquidações",
   settleTxnsAddButton: "Adicionar transação",
   settleTxnsEmptyNone: "Ainda sem transações. Adiciona uma subscrição ou uma despesa.",
   settleTxnsEmptyFiltered: "Nenhuma transação corresponde ao filtro.",

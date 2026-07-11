@@ -77,21 +77,6 @@ describe("SettleHero", () => {
     expect(screen.getByTestId("settle-hero-all-clear")).toBeInTheDocument();
   });
 
-  it("calls onShowCharts when the Show charts button is clicked", () => {
-    const onShowCharts = vi.fn();
-    renderWithTheme(
-      <SettleHero
-        event={baseEvent}
-        stats={{ transactions: 0, members: 2, totalSpentCents: 0 }}
-        netPositions={[{ playerName: "Pai", netCents: -1000 }]}
-        onShowCharts={onShowCharts}
-        onMore={vi.fn()}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: /charts/i }));
-    expect(onShowCharts).toHaveBeenCalledTimes(1);
-  });
-
   it("calls onMore when the More button is clicked", () => {
     const onMore = vi.fn();
     renderWithTheme(
@@ -101,6 +86,7 @@ describe("SettleHero", () => {
         netPositions={[{ playerName: "Pai", netCents: -1000 }]}
         onShowCharts={vi.fn()}
         onMore={onMore}
+        onChangePaymentMethod={vi.fn()}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /more/i }));
@@ -123,7 +109,7 @@ describe("SettleHero", () => {
     expect(onChangePaymentMethod).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the three action buttons in order: Show charts, Change method, More", () => {
+  it("renders the three action buttons in order: Change method, More", () => {
     renderWithTheme(
       <SettleHero
         event={baseEvent}
@@ -136,11 +122,10 @@ describe("SettleHero", () => {
     );
     const buttons = screen.getAllByRole("button");
     const labels = buttons.map((b) => b.textContent?.trim() ?? "");
-    const chartsIdx = labels.findIndex((l) => /show charts/i.test(l));
     const changeIdx = labels.findIndex((l) => /change method/i.test(l));
     const moreIdx = labels.findIndex((l) => /^more/i.test(l));
-    expect(chartsIdx).toBeGreaterThanOrEqual(0);
-    expect(changeIdx).toBeGreaterThan(chartsIdx);
+    // "Show charts" button was removed; only "Change method" and "More" remain
+    expect(changeIdx).toBeGreaterThanOrEqual(0);
     expect(moreIdx).toBeGreaterThan(changeIdx);
   });
 

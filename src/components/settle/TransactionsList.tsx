@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import {
   Box, Stack, Typography, Button, Chip, Paper, Alert,
   IconButton, Menu, MenuItem, ListItemIcon, ListItemText, Divider,
-  Dialog, DialogTitle, DialogContent, DialogActions,
+  Dialog, DialogTitle, DialogContent, DialogActions, Tooltip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -12,9 +12,9 @@ import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import HandshakeIcon from "@mui/icons-material/Handshake";
+import PeopleIcon from "@mui/icons-material/People";
 import { useT } from "~/lib/useT";
 
-/** Mirrors the `UnifiedTransaction` shape returned by the API. */
 export interface Transaction {
   id: string;
   date: string;
@@ -24,17 +24,16 @@ export interface Transaction {
   currency: string;
   status: string;
   playerName?: string;
+  gamePlayers?: string[];
+  gameHistoryId?: string;
 }
 
 type Filter = "all" | "game" | "subscription" | "spend" | "settlement";
 
 interface Props {
   transactions: Transaction[];
-  /** Owner/Admin only — the SettleUp page guards this. */
   onAddTransaction: () => void;
-  /** Called when the user wants to edit a transaction. */
   onEditTransaction: (tx: Transaction) => void;
-  /** Called when the user wants to delete a transaction. */
   onDeleteTransaction: (tx: Transaction) => void;
 }
 
@@ -65,6 +64,25 @@ function statusSeverity(status: string): "default" | "success" | "warning" {
   return "default";
 }
 
+function GamePlayersText({ players }: { players: string[] }) {
+  if (!players || players.length === 0) return null;
+  const display = players.slice(0, 3).join(", ");
+  const more = players.length > 3 ? ` +${players.length - 3} more` : "";
+  return (
+    <Tooltip title={players.join(", ")} arrow>
+      <Box
+        component="span"
+        data-testid="game-players-icon"
+        sx={{ fontSize: "0.75rem", fontWeight: 500, ml: 1, cursor: "help", color: "text.secondary" }}
+      >
+        <PeopleIcon fontSize="small" sx={{ verticalAlign: "middle", mr: 0.5 }} />
+        {display}
+        {more}
+      </Box>
+    </Tooltip>
+  );
+}
+
 export function TransactionsList({ transactions, onAddTransaction, onEditTransaction, onDeleteTransaction }: Props) {
   const t = useT();
   const [filter, setFilter] = useState<Filter>("all");
@@ -81,6 +99,7 @@ export function TransactionsList({ transactions, onAddTransaction, onEditTransac
     { value: "game", label: t("settleTxnsFilterGames") ?? "Games" },
     { value: "subscription", label: t("settleTxnsFilterSubs") ?? "Subscriptions" },
     { value: "spend", label: t("settleTxnsFilterSpends") ?? "Spends" },
+    { value: "settlement", label: t("settleTxnsFilterSettlements") ?? "Settlements" },
   ];
 
   return (
@@ -137,6 +156,9 @@ export function TransactionsList({ transactions, onAddTransaction, onEditTransac
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" fontWeight={600} noWrap>
                     {tx.description}
+                    {tx.type === "game" && tx.gamePlayers && tx.gamePlayers.length > 0 && (
+                      <GamePlayersText players={tx.gamePlayers} />
+                    )}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {formatDate(tx.date)}
@@ -167,7 +189,6 @@ export function TransactionsList({ transactions, onAddTransaction, onEditTransac
         </Stack>
       )}
 
-      {/* Per-row overflow menu (Edit / Delete). */}
       <Menu
         open={!!menuFor}
         anchorEl={menuFor?.el ?? null}
@@ -198,7 +219,6 @@ export function TransactionsList({ transactions, onAddTransaction, onEditTransac
         </MenuItem>
       </Menu>
 
-      {/* Delete confirmation dialog. */}
       <Dialog
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}

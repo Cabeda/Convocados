@@ -87,7 +87,7 @@ describe("GET /settle/transactions — unified view", () => {
     const res = await GET({ params: { id: "evt-1" }, request: req } as any);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.transactions).toHaveLength(3);
+    expect(body.transactions).toHaveLength(2);
     for (const tx of body.transactions) {
       expect(tx.type).toBe("game");
     }

@@ -261,7 +261,6 @@ describe("SettleUpPage redesigned view", () => {
     fireEvent.click(screen.getByTestId("creditor-avatar-José"));
     expect(screen.getByTestId("debt-action-mark-settled")).toBeInTheDocument();
     expect(screen.getByTestId("debt-action-remind")).toBeInTheDocument();
-    expect(screen.getByTestId("debt-action-generate-qr")).toBeInTheDocument();
   });
 
   it("refreshes the UI after settling a debt (no manual refresh, regression)", async () => {
