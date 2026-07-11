@@ -597,8 +597,23 @@ model ExtrasDeclaration {
   label       String
   declaredBy  String   // userId of the organizer
   declaredAt  DateTime @default(now())
+  // ADR 0020 — Extras Pot rich model
+  category     ExtrasCategory @default(admin)
+  receiptUrl   String?
+  // JSON: { mode: "organizer_absorbs" | "allocate_to_players" | "split_equally", shares?: Record<playerName, cents> }
+  allocation   Json?
+  // For "allocate_to_players" / "split_equally" we emit one
+  // `per_player_share` row per named player in WalletTransaction.
+  shares       Json?
 
   @@index([eventId, declaredAt])
+}
+
+enum ExtrasCategory {
+  court_rental
+  equipment
+  refreshments
+  admin
 }
 
 // ── Notification preferences ──────────────────────────────────────────────────

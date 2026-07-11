@@ -18,10 +18,14 @@ export interface UnifiedTransaction {
   status: string;
   /** For game payments: who owes/paid. For subscriptions: the subscriber. For spends: the declarer. For settlements: the debtor. */
   playerName?: string;
-  /** For game payments: array of all player names in the game. */
+  /** For game transactions: array of all player names in the game. */
   gamePlayers?: string[];
   /** For game transactions: the GameHistory ID this transaction belongs to. */
   gameHistoryId?: string;
+  /** For spend transactions: the category of the extras spend. */
+  category?: string;
+  /** For spend transactions: the allocation mode and shares. */
+  allocation?: { mode: string; shares?: Record<string, number> };
 }
 
 /**
@@ -230,6 +234,8 @@ export const GET: APIRoute = async ({ params, request }) => {
         amountCents: s.amountCents,
         currency: s.currency,
         status: "paid",
+        category: s.category,
+        allocation: s.allocation as { mode: string; shares?: Record<string, number> } | undefined,
       });
     }
   }

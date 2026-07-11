@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Button, Stack, TextField, Box, FormControl, Select, MenuItem,
-  Alert, InputAdornment, Chip,
+  Alert, InputAdornment, Chip, Radio, RadioGroup, FormControlLabel, Typography,
 } from "@mui/material";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
@@ -24,13 +24,15 @@ interface Props {
 
 type Type = "subscription" | "spend";
 
+type AllocationMode = "organizer_absorbs" | "allocate_to_players" | "split_equally";
+
 /**
  * Add Transaction dialog (UX best practice: a single "+ Add" button that
  * opens a focused modal with a type chip + form).
  *
  * Type:
  *   - subscription → POST /settle/subscriptions { userId }
- *   - spend        → POST /settle/extras { label, amountCents }
+ *   - spend        → POST /settle/extras { label, amountCents, category, receiptUrl, allocation }
  */
 export function AddTransactionDialog({ open, eventId, eventUsers, onClose, onSaved }: Props) {
   const t = useT();
@@ -38,6 +40,10 @@ export function AddTransactionDialog({ open, eventId, eventUsers, onClose, onSav
   const [userId, setUserId] = useState<string>("");
   const [label, setLabel] = useState("");
   const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState<"court_rental" | "equipment" | "refreshments" | "admin">("admin");
+  const [receiptUrl, setReceiptUrl] = useState("");
+  const [allocationMode, setAllocationMode] = useState<AllocationMode>("organizer_absorbs");
+  const [shares, setShares] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +52,10 @@ export function AddTransactionDialog({ open, eventId, eventUsers, onClose, onSav
     setUserId("");
     setLabel("");
     setAmount("");
+    setCategory("admin");
+    setReceiptUrl("");
+    setAllocationMode("organizer_absorbs");
+    setShares({});
     setError(null);
   };
 
@@ -91,12 +101,29 @@ export function AddTransactionDialog({ open, eventId, eventUsers, onClose, onSav
       setError(t("addTxnInvalidAmount") ?? "Enter a positive amount.");
       return;
     }
+    if (allocationMode === "allocate_to_players") {
+      const sharesSum = Object.values(shares).reduce((a, b) => a + b, 0);
+      if (sharesSum > Math.round(amountNum * 100)) {
+        setError("Shares sum exceeds the total amount.");
+        return;
+      }
+    }
     setSaving(true);
     try {
+      const body: Record<string, unknown> = {
+        label: trimmed,
+        amountCents: Math.round(amountNum * 100),
+        category,
+        receiptUrl: receiptUrl.trim() || undefined,
+        allocation: {
+          mode: allocationMode,
+          ...(allocationMode === "allocate_to_players" && { shares }),
+        },
+      };
       const res = await fetch(`/api/events/${eventId}/settle/extras`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: trimmed, amountCents: Math.round(amountNum * 100) }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -112,6 +139,19 @@ export function AddTransactionDialog({ open, eventId, eventUsers, onClose, onSav
       setSaving(false);
     }
   };
+
+  const categories: Array<{ value: typeof category; label: string }> = [
+    { value: "court_rental", label: t("extrasCatCourtRental") ?? "Court rental" },
+    { value: "equipment", label: t("extrasCatEquipment") ?? "Equipment" },
+    { value: "refreshments", label: t("extrasCatRefreshments") ?? "Refreshments" },
+    { value: "admin", label: t("extrasCatAdmin") ?? "Admin" },
+  ];
+
+  const allocationOptions: Array<{ value: AllocationMode; label: string; description: string }> = [
+    { value: "organizer_absorbs", label: t("extrasAllocOrganizer") ?? "Organizer absorbs", description: t("extrasAllocOrganizerDesc") ?? "Organizer pays; no player charges" },
+    { value: "allocate_to_players", label: t("extrasAllocToPlayers") ?? "Allocate to players", description: t("extrasAllocToPlayersDesc") ?? "Specify exact cents per player" },
+    { value: "split_equally", label: t("extrasAllocSplitEqually") ?? "Split equally", description: t("extrasAllocSplitEquallyDesc") ?? "Divide evenly among active players" },
+  ];
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -188,6 +228,69 @@ export function AddTransactionDialog({ open, eventId, eventUsers, onClose, onSav
                 data-testid="add-txn-spend-amount"
                 fullWidth
               />
+              <FormControl size="small" component="fieldset" fullWidth>
+                <Box component="legend" sx={{ fontSize: "0.875rem", fontWeight: 600, mb: 1 }}>
+                  {t("extrasCatLabel") ?? "Category"}
+                </Box>
+                <Stack direction="row" spacing={2} sx={{ flexWrap: "wrap" }}>
+                  {categories.map((c) => (
+                    <FormControlLabel
+                      key={c.value}
+                      control={<Radio color="primary" name="category" value={c.value} checked={category === c.value} onChange={(e) => setCategory(e.target.value as typeof category)} />}
+                      label={c.label}
+                    />
+                  ))}
+                </Stack>
+              </FormControl>
+              <TextField
+                size="small"
+                label={t("extrasReceiptUrlLabel") ?? "Receipt URL (optional)"}
+                value={receiptUrl}
+                onChange={(e) => setReceiptUrl(e.target.value)}
+                placeholder="https://..."
+                fullWidth
+                data-testid="add-txn-receipt-url"
+              />
+              <FormControl size="small" component="fieldset" fullWidth>
+                <Box component="legend" sx={{ fontSize: "0.875rem", fontWeight: 600, mb: 1 }}>
+                  {t("extrasAllocLabel") ?? "Allocation"}
+                </Box>
+                <Stack spacing={1}>
+                  {allocationOptions.map((opt) => (
+                    <FormControlLabel
+                      key={opt.value}
+                      control={<Radio color="primary" name="allocation" value={opt.value} checked={allocationMode === opt.value} onChange={(e) => setAllocationMode(e.target.value as AllocationMode)} />}
+                      label={
+                        <Stack spacing={0.5}>
+                          <Box fontWeight={500}>{opt.label}</Box>
+                          <Typography variant="caption" color="text.secondary">{opt.description}</Typography>
+                        </Stack>
+                      }
+                    />
+                  ))}
+                </Stack>
+              </FormControl>
+              {allocationMode === "allocate_to_players" && eventUsers.length > 0 && (
+                <Box sx={{ mt: 1, p: 2, bgcolor: "action.hover", borderRadius: 1 }}>
+                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                    {t("extrasAllocSharesLabel") ?? "Shares per player (cents)"}
+                  </Typography>
+                  <Stack spacing={1}>
+                    {eventUsers.map((u) => (
+                      <TextField
+                        key={u.id}
+                        size="small"
+                        label={u.name}
+                        type="number"
+                        value={shares[u.id] ?? ""}
+                        onChange={(e) => setShares({ ...shares, [u.id]: Number(e.target.value) || 0 })}
+                        slotProps={{ htmlInput: { min: 0, step: 1 } }}
+                        fullWidth
+                      />
+                    ))}
+                  </Stack>
+                </Box>
+              )}
             </Stack>
           )}
 
