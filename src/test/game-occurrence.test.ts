@@ -374,14 +374,14 @@ describe("RSVP does not carry over after recurrence advancement", () => {
     });
 
     // User has RSVP "yes" for the old game
-    await prisma.rsvp.create({
-      data: { eventId: event.id, userId: user.id, status: "yes", respondedAt: new Date() },
-    });
     await prisma.player.create({
       data: { eventId: event.id, name: "José", order: 0, userId: user.id },
     });
     const ep = await prisma.eventPlayer.create({
       data: { eventId: event.id, name: "José", userId: user.id },
+    });
+    await prisma.rsvp.create({
+      data: { eventPlayerId: ep.id, gameId: game1.id, status: "yes", respondedAt: new Date() },
     });
     await prisma.gameParticipant.create({
       data: { gameId: game1.id, eventPlayerId: ep.id, order: 0 },
@@ -614,13 +614,12 @@ describe("Recurrence advancement preserves legacy data (no destructive reset)", 
         members: { create: [{ name: "Keep Me", order: 0 }] },
       },
     });
-    await prisma.rsvp.create({
-      data: { eventId: event.id, userId: user.id, status: "yes", respondedAt: new Date() },
-    });
-
     // Also seed new-model data
     const ep = await prisma.eventPlayer.create({
       data: { eventId: event.id, name: "Keep Me", userId: user.id },
+    });
+    await prisma.rsvp.create({
+      data: { eventPlayerId: ep.id, gameId: game1.id, status: "yes", respondedAt: new Date() },
     });
     await prisma.gameParticipant.create({
       data: { gameId: game1.id, eventPlayerId: ep.id, order: 0 },
@@ -640,9 +639,13 @@ describe("Recurrence advancement preserves legacy data (no destructive reset)", 
     const teams = await prisma.teamResult.findMany({ where: { eventId: event.id } });
     expect(teams).toHaveLength(1);
 
-    // RSVP should still exist (scoped to old game conceptually)
-    const rsvps = await prisma.rsvp.findMany({ where: { eventId: event.id } });
+    // RSVP stays on the OLD game (game-scoped — no destructive delete needed)
+    const rsvps = await prisma.rsvp.findMany({ where: { gameId: game1.id } });
     expect(rsvps).toHaveLength(1);
+    // New game has no RSVPs yet
+    const updatedEvt = await prisma.event.findUnique({ where: { id: event.id }, select: { currentGameId: true } });
+    const newRsvps = await prisma.rsvp.findMany({ where: { gameId: updatedEvt!.currentGameId! } });
+    expect(newRsvps).toHaveLength(0);
   });
 });
 

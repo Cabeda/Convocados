@@ -80,13 +80,22 @@ export async function applyAutoConfirm(eventId: string): Promise<string[]> {
   const autoConfirmed = await getAutoConfirmedUserIds(eventId);
   if (autoConfirmed.size === 0) return [];
 
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (!event?.currentGameId) return [];
+
   const applied: string[] = [];
   for (const userId of autoConfirmed) {
     try {
-      // Create or update RSVP as "yes" (auto-confirmed)
+      // Resolve EventPlayer for this user
+      const ep = await prisma.eventPlayer.findFirst({
+        where: { eventId, userId },
+        select: { id: true },
+      });
+      if (!ep) continue;
+      // Create or update RSVP as "yes" (auto-confirmed) on the new game
       await prisma.rsvp.upsert({
-        where: { userId_eventId: { userId, eventId } },
-        create: { eventId, userId, status: "yes" },
+        where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
+        create: { eventPlayerId: ep.id, gameId: event.currentGameId, status: "yes" },
         update: { status: "yes" },
       });
       applied.push(userId);

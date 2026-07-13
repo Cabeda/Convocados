@@ -57,7 +57,7 @@ function ctx(eventId: string, playerId: string, body: unknown, session: { user: 
 }
 
 async function seedEvent(ownerId: string | null, dateOffsetMs = 7 * 86400_000) {
-  return testPrisma.event.create({
+  const event = await testPrisma.event.create({
     data: {
       title: "Game",
       location: "Pitch",
@@ -65,6 +65,9 @@ async function seedEvent(ownerId: string | null, dateOffsetMs = 7 * 86400_000) {
       ownerId,
     },
   });
+  const game = await testPrisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+  await testPrisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  return { ...event, currentGameId: game.id };
 }
 
 describe("POST /api/events/[id]/players/[playerId]/rsvp", () => {
@@ -114,9 +117,9 @@ describe("POST /api/events/[id]/players/[playerId]/rsvp", () => {
     expect(body.status).toBe("yes");
     expect(body.respondedByUserId).toBe("owner");
 
-    const row = await testPrisma.rsvp.findFirst({ where: { eventId: ev.id, playerId: guest.id } });
+    const row = await testPrisma.rsvp.findFirst({ where: { gameId: ev.currentGameId! } });
     expect(row?.status).toBe("yes");
-    expect(row?.userId).toBeNull();
+    expect(row?.eventPlayerId).toBeTruthy();
   });
 
   it("admin (non-owner) can set guest attendance", async () => {
@@ -204,7 +207,7 @@ describe("POST /api/events/[id]/players/[playerId]/rsvp", () => {
     await guestRsvpPost(ctx(ev.id, guest.id, { status: "yes" }, { user: { id: "owner", name: "O" } }));
     await guestRsvpPost(ctx(ev.id, guest.id, { status: "no" }, { user: { id: "owner", name: "O" } }));
 
-    const count = await testPrisma.rsvp.count({ where: { eventId: ev.id, playerId: guest.id } });
+    const count = await testPrisma.rsvp.count({ where: { gameId: ev.currentGameId! } });
     expect(count).toBe(1);
   });
 });
