@@ -490,7 +490,12 @@ export const POST: APIRoute = async ({ params, request }) => {
   const invitedByUserId = (session?.user && linkToAccount !== true) ? session.user.id : null;
 
   try {
-    const nextOrder = event.players.length;
+    // ponytail: use max(order)+1 to avoid landing in gaps from past removals/reorders
+    const maxOrder = await prisma.player.aggregate({
+      where: { eventId, archivedAt: null },
+      _max: { order: true },
+    });
+    const nextOrder = (maxOrder._max.order ?? -1) + 1;
     await prisma.player.create({
       data: {
         name: trimmed,
