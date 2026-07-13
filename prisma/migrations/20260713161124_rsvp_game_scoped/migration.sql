@@ -5,6 +5,9 @@
 PRAGMA defer_foreign_keys=ON;
 PRAGMA foreign_keys=OFF;
 
+-- Drop new_Rsvp if it exists from a previous failed attempt
+DROP TABLE IF EXISTS "new_Rsvp";
+
 CREATE TABLE "new_Rsvp" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "eventPlayerId" TEXT NOT NULL,
@@ -20,8 +23,12 @@ CREATE TABLE "new_Rsvp" (
 );
 
 -- Backfill: resolve eventPlayerId and gameId from existing RSVPs.
+-- Uses INSERT OR IGNORE to skip duplicates (same eventPlayerId+gameId from multiple Player rows).
+-- RSVPs that can't be resolved (no EventPlayer, no currentGameId) are silently dropped (stale data).
+
 -- Case 1: userId-keyed RSVPs → join through Player.userId to find the EventPlayer
-INSERT INTO "new_Rsvp" ("id", "eventPlayerId", "gameId", "status", "respondedAt", "respondedByUserId", "createdAt", "updatedAt")
+-- Use GROUP BY to deduplicate when multiple Player rows exist for same user+event
+INSERT OR IGNORE INTO "new_Rsvp" ("id", "eventPlayerId", "gameId", "status", "respondedAt", "respondedByUserId", "createdAt", "updatedAt")
 SELECT
     r."id",
     ep."id" AS "eventPlayerId",
@@ -33,10 +40,11 @@ SELECT
     r."updatedAt"
 FROM "Rsvp" r
 JOIN "Event" e ON e."id" = r."eventId"
-JOIN "Player" p ON p."userId" = r."userId" AND p."eventId" = r."eventId"
+JOIN "Player" p ON p."userId" = r."userId" AND p."eventId" = r."eventId" AND p."archivedAt" IS NULL
 JOIN "EventPlayer" ep ON ep."eventId" = r."eventId" AND ep."name" = p."name"
 WHERE r."userId" IS NOT NULL
-  AND e."currentGameId" IS NOT NULL;
+  AND e."currentGameId" IS NOT NULL
+GROUP BY ep."id", e."currentGameId";
 
 -- Case 2: playerId-keyed RSVPs (guest players) → join through Player.name to EventPlayer
 INSERT OR IGNORE INTO "new_Rsvp" ("id", "eventPlayerId", "gameId", "status", "respondedAt", "respondedByUserId", "createdAt", "updatedAt")
