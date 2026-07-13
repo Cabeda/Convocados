@@ -43,6 +43,7 @@ import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.repository.EventRepository
 import dev.convocados.ui.screen.courts.PLAYTOMIC_SPORTS
+import dev.convocados.ui.screen.games.formatEventDateInTz
 import dev.convocados.ui.screen.games.formatRelativeDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -682,7 +683,7 @@ fun EventDetailScreen(
                             AssistChip(onClick = {
                                 val url = viewModel.getShareUrl(eventId)
                                 val spotsLeft = event.maxPlayers - event.players.size
-                                val text = "\u26BD ${event.title}\n\uD83D\uDCC5 ${formatRelativeDate(event.dateTime)}" +
+                                val text = "\u26BD ${event.title}\n\uD83D\uDCC5 ${formatEventDateInTz(event.dateTime, event.timezone)}" +
                                     (if (event.location.isNotBlank()) "\n\uD83D\uDCCD ${event.location}" else "") +
                                     "\n\uD83D\uDC65 ${if (spotsLeft > 0) "$spotsLeft spot(s) left" else "Full"}\n\n$url"
                                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, context.getString(R.string.share)))
