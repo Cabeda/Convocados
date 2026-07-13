@@ -36,22 +36,32 @@ if [ -f /data/db.sqlite ]; then
     (async () => {
       try {
         const failed = await p.$queryRawUnsafe(
-          "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND started_at < (strftime(\"%s\", \"now\") - 300)"
+          "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND started_at < (strftime(\"%s\", \"now\") - 120)"
         );
         if (failed.length > 0) {
           console.log(`[startup] WARNING: detected ${failed.length} failed migration(s) from a previous deploy`);
-          console.log("[startup] Auto-resolving as applied (tables likely exist from partial execution)...");
+          console.log("[startup] Restoring database from pre-migration backup and marking as rolled back...");
+          await p.$disconnect();
+          // Restore from backup first to get a clean schema state
+          const fs = require("fs");
+          if (fs.existsSync("/data/db.sqlite.pre-migrate-backup")) {
+            fs.copyFileSync("/data/db.sqlite.pre-migrate-backup", "/data/db.sqlite");
+            console.log("[startup] Database restored from pre-migrate backup");
+          }
+          // Mark failed migrations as rolled back so prisma migrate deploy retries them
+          const p2 = new PrismaClient();
           for (const m of failed) {
             try {
-              await p.$executeRawUnsafe(
-                "UPDATE _prisma_migrations SET finished_at = CURRENT_TIMESTAMP WHERE migration_name = ?",
+              await p2.$executeRawUnsafe(
+                "UPDATE _prisma_migrations SET rolled_back_at = CURRENT_TIMESTAMP WHERE migration_name = ? AND finished_at IS NULL",
                 m.migration_name
               );
-              console.log(`[startup] Marked ${m.migration_name} as applied (recovery)`);
+              console.log(`[startup] Marked ${m.migration_name} as rolled back`);
             } catch (e) {
-              console.error(`[startup] Failed to mark ${m.migration_name} as applied:`, e.message);
+              console.error(`[startup] Failed to mark ${m.migration_name} as rolled back:`, e.message);
             }
           }
+          await p2.$disconnect();
         } else {
           console.log("[startup] No failed migrations detected.");
         }
