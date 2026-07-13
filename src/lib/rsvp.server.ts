@@ -37,7 +37,7 @@ export type PushPromptState = "default" | "granted" | "dismissed" | "denied";
 /** Resolve the EventPlayer for a linked user on an event. Creates one if missing (lazy). */
 export async function resolveEventPlayerId(eventId: string, userId: string): Promise<string> {
   // Try finding by userId first
-  let ep = await prisma.eventPlayer.findFirst({
+  const ep = await prisma.eventPlayer.findFirst({
     where: { eventId, userId },
     select: { id: true },
   });

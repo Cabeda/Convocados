@@ -96,7 +96,7 @@ describe("GET /api/events/[id]/rsvp/users", () => {
   it("excludes guest (playerId-keyed) RSVPs from the user map", async () => {
     const owner = await testPrisma.user.create({ data: { id: "owner", name: "O", email: "o@t.com", emailVerified: true } });
     const ev = await seedEvent(owner.id);
-    const guest = await testPrisma.player.create({ data: { eventId: ev.id, name: "G", order: 0 } });
+    const _guest = await testPrisma.player.create({ data: { eventId: ev.id, name: "G", order: 0 } });
     const epGuest = await testPrisma.eventPlayer.create({ data: { eventId: ev.id, name: "G" } });
     await testPrisma.rsvp.create({ data: { eventPlayerId: epGuest.id, gameId: ev.currentGameId!, status: "yes", respondedAt: new Date() } });
 
