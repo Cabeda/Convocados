@@ -31,7 +31,6 @@ model User {
   apiKeys        ApiKey[]
   notificationPreferences NotificationPreferences?
   priorityEnrollments     PriorityEnrollment[]
-  rsvps                   Rsvp[]
   rsvpsActedOn            Rsvp[]            @relation("RsvpActedBy")
   priorityConfirmations   PriorityConfirmation[]
   eventInvites            EventInvite[]
@@ -123,7 +122,6 @@ model Event {
   eventLogs      EventLog[]
   priorityEnrollments PriorityEnrollment[]
   priorityConfirmations PriorityConfirmation[]
-  rsvps                Rsvp[]
   invites         EventInvite[]
   admins          EventAdmin[]
   followers        EventFollow[]
@@ -246,7 +244,6 @@ model Player {
   invitedByUserId String?
   archivedAt      DateTime?
   createdAt       DateTime  @default(now())
-  rsvps           Rsvp[]
 
   @@unique([eventId, name])
   @@index([userId])
@@ -291,6 +288,7 @@ model Game {
 
   participants    GameParticipant[]
   payments        GamePayment[]
+  rsvps           Rsvp[]
 
   @@index([eventId, dateTime])
   @@index([eventId, status])
@@ -312,6 +310,7 @@ model EventPlayer {
 
   participations GameParticipant[]
   payments       GamePayment[]
+  rsvps          Rsvp[]
 
   @@unique([eventId, name])
   @@index([userId])
@@ -991,30 +990,24 @@ model PlaytomicAvailabilityCache {
 
 // #457 RSVP per (subject, Event). status null == pending.
 // A row is keyed by exactly one of {userId, playerId}: userId for linked accounts
-// (the user self-RSVPs), playerId for guest Players (the admin RSVPs on their
-// behalf). respondedByUserId audits who set a guest RSVP — null for self-RSVPs.
-// Application invariant: (userId IS NULL) XOR (playerId IS NULL) must be false
-// i.e. exactly one is set. SQLite unique constraints on nullable columns treat
-// NULL as distinct, so this is enforced in lib/rsvp.server.ts, not in the schema.
+// ADR 0016: Rsvp is game-scoped, keyed on EventPlayer (the series-level identity).
+// respondedByUserId audits who set the RSVP when an admin acts on behalf of a guest.
 model Rsvp {
   id                String    @id @default(cuid())
-  userId            String?
-  playerId          String?
-  eventId           String
+  eventPlayerId     String
+  gameId            String
   status            String?   // "yes" | "no" | null
   respondedAt       DateTime?
   respondedByUserId String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  user              User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  player            Player?   @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  respondedBy       User?     @relation("RsvpActedBy", fields: [respondedByUserId], references: [id], onDelete: SetNull)
-  event             Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventPlayer       EventPlayer @relation(fields: [eventPlayerId], references: [id], onDelete: Cascade)
+  game              Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  respondedBy       User?       @relation("RsvpActedBy", fields: [respondedByUserId], references: [id], onDelete: SetNull)
 
-  @@unique([userId, eventId])
-  @@unique([playerId, eventId])
-  @@index([eventId, status])
+  @@unique([eventPlayerId, gameId])
+  @@index([gameId, status])
 }
 
 // #457 daily heartbeat for "≥3 app-open days in rolling 7d" re-prompt rule.

@@ -187,19 +187,18 @@ describe("Data integrity during recurrence advancement", () => {
         members: { create: [{ name: "José", order: 0 }, { name: "Miguel", order: 1 }] },
       },
     });
-    await prisma.rsvp.create({
-      data: { eventId: event.id, userId: user.id, status: "yes", respondedAt: new Date() },
-    });
-
     const ep1 = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "José", userId: user.id } });
     const ep2 = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Miguel" } });
+    await prisma.rsvp.create({
+      data: { eventPlayerId: ep1.id, gameId: game1.id, status: "yes", respondedAt: new Date() },
+    });
     await prisma.gameParticipant.create({ data: { gameId: game1.id, eventPlayerId: ep1.id, order: 0 } });
     await prisma.gameParticipant.create({ data: { gameId: game1.id, eventPlayerId: ep2.id, order: 1 } });
 
     // Record counts BEFORE advancement
     const beforePlayers = await prisma.player.count({ where: { eventId: event.id } });
     const beforeTeams = await prisma.teamResult.count({ where: { eventId: event.id } });
-    const beforeRsvps = await prisma.rsvp.count({ where: { eventId: event.id } });
+    const beforeRsvps = await prisma.rsvp.count({ where: { gameId: game1.id } });
     const beforeEventPlayers = await prisma.eventPlayer.count({ where: { eventId: event.id } });
     const beforeParticipants = await prisma.gameParticipant.count({ where: { gameId: game1.id } });
 
@@ -211,12 +210,13 @@ describe("Data integrity during recurrence advancement", () => {
     // Verify NO data was lost
     const afterPlayers = await prisma.player.count({ where: { eventId: event.id } });
     const afterTeams = await prisma.teamResult.count({ where: { eventId: event.id } });
-    const afterRsvps = await prisma.rsvp.count({ where: { eventId: event.id } });
+    const afterRsvps = await prisma.rsvp.count({ where: { gameId: game1.id } });
     const afterEventPlayers = await prisma.eventPlayer.count({ where: { eventId: event.id } });
     const afterParticipants = await prisma.gameParticipant.count({ where: { gameId: game1.id } });
 
     expect(afterPlayers).toBe(beforePlayers);
     expect(afterTeams).toBe(beforeTeams);
+    // RSVPs stay on the old game (game-scoped — preserved as historical record)
     expect(afterRsvps).toBe(beforeRsvps);
     expect(afterEventPlayers).toBe(beforeEventPlayers);
     expect(afterParticipants).toBe(beforeParticipants);

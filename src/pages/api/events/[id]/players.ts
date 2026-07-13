@@ -530,17 +530,28 @@ export const POST: APIRoute = async ({ params, request }) => {
             ...(resolvedUser && !existing.userId ? { userId: resolvedUser.id } : {}),
           },
         });
-        if (reactivatedUserId) {
+        if (reactivatedUserId && event.currentGameId) {
+          const ep = await prisma.eventPlayer.upsert({
+            where: { eventId_name: { eventId, name: trimmed } },
+            create: { eventId, name: trimmed, userId: reactivatedUserId },
+            update: { ...(reactivatedUserId ? { userId: reactivatedUserId } : {}) },
+          });
           await prisma.rsvp.upsert({
-            where: { userId_eventId: { userId: reactivatedUserId, eventId } },
-            create: { eventId, userId: reactivatedUserId, status: "yes", respondedAt: new Date() },
+            where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
+            create: { eventPlayerId: ep.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
             update: { status: "yes", respondedAt: new Date() },
           });
-        } else {
-          // Guest re-add: reset their guest Rsvp to "yes" if it was "no".
-          await prisma.rsvp.updateMany({
-            where: { playerId: existing.id, status: "no" },
-            data: { status: "yes", respondedAt: new Date() },
+        } else if (!reactivatedUserId && event.currentGameId) {
+          // Guest re-add: reset their RSVP to "yes" on the current game
+          const ep = await prisma.eventPlayer.upsert({
+            where: { eventId_name: { eventId, name: trimmed } },
+            create: { eventId, name: trimmed },
+            update: {},
+          });
+          await prisma.rsvp.upsert({
+            where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
+            create: { eventPlayerId: ep.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
+            update: { status: "yes", respondedAt: new Date() },
           });
         }
         return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
@@ -564,10 +575,22 @@ export const POST: APIRoute = async ({ params, request }) => {
           await prisma.gameParticipant.create({
             data: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: gpCount },
           });
-          // Link user if not already linked
-          if (linkedUserId && !existing.userId) {
-            await prisma.player.update({ where: { id: existing.id }, data: { userId: linkedUserId } });
-          }
+          // Move player to end of list — their old order is stale from the previous game
+          const maxOrder = await prisma.player.aggregate({
+            where: { eventId, archivedAt: null },
+            _max: { order: true },
+          });
+          const newOrder = (maxOrder._max.order ?? -1) + 1;
+          await prisma.player.update({
+            where: { id: existing.id },
+            data: { order: newOrder, ...(linkedUserId && !existing.userId ? { userId: linkedUserId } : {}) },
+          });
+          // Reset stale RSVP from previous game occurrence — write "yes" on the new game
+          await prisma.rsvp.upsert({
+            where: { eventPlayerId_gameId: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId } },
+            create: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
+            update: { status: "yes", respondedAt: new Date() },
+          });
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
         // Already in the current game — fall through to duplicate error
