@@ -63,7 +63,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   // Re-sync teams if the restored player is in the active range
   if (order < event.maxPlayers) {
-    await addPlayerToTeams(eventId, name);
+    await addPlayerToTeams(eventId, name, event.currentGameId);
   }
 
   // ADR 0016: restore GameParticipant for the current Game
@@ -81,7 +81,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   // Validate teams: ensure no bench players are in teams after undo
-  await validateTeams(eventId, event.maxPlayers);
+  await validateTeams(eventId, event.maxPlayers, event.currentGameId);
 
 
   return Response.json({ ok: true });
