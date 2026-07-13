@@ -38,9 +38,12 @@ function ctx(eventId: string) {
 }
 
 async function seedEvent(ownerId: string | null) {
-  return testPrisma.event.create({
+  const event = await testPrisma.event.create({
     data: { title: "Game", location: "Pitch", dateTime: new Date(Date.now() + 86400_000), ownerId },
   });
+  const game = await testPrisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+  await testPrisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  return { ...event, currentGameId: game.id };
 }
 
 beforeEach(async () => {

@@ -108,29 +108,28 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   //   - Self-leave (linked user): status="no" + respondedAt
   //   - Admin declining a guest (organizer + no userId): status="no" + respondedByUserId audit.
   //   - Organizer X on a linked user: do not touch Rsvp (the user can still respond later).
-  // The Rsvp audit is only written when there's a real actor userId (FK to User).
-  if (actor.kind === "self" && player.userId) {
-    await prisma.rsvp.upsert({
-      where: { userId_eventId: { userId: player.userId, eventId } },
-      create: { eventId, userId: player.userId, status: "no", respondedAt: new Date() },
-      update: { status: "no", respondedAt: new Date() },
+  // ADR 0016: RSVP is keyed on (eventPlayerId, gameId).
+  if (currentGameId && (actor.kind === "self" && player.userId || actor.kind === "organizer" && !player.userId && actor.userId)) {
+    const ep = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId, name: player.name } },
     });
-  } else if (actor.kind === "organizer" && !player.userId && actor.userId) {
-    await prisma.rsvp.upsert({
-      where: { playerId_eventId: { playerId, eventId } },
-      create: {
-        eventId,
-        playerId,
-        status: "no",
-        respondedAt: new Date(),
-        respondedByUserId: actor.userId ?? undefined,
-      },
-      update: {
-        status: "no",
-        respondedAt: new Date(),
-        respondedByUserId: actor.userId ?? undefined,
-      },
-    });
+    if (ep) {
+      await prisma.rsvp.upsert({
+        where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: currentGameId } },
+        create: {
+          eventPlayerId: ep.id,
+          gameId: currentGameId,
+          status: "no",
+          respondedAt: new Date(),
+          ...(actor.kind === "organizer" ? { respondedByUserId: actor.userId ?? undefined } : {}),
+        },
+        update: {
+          status: "no",
+          respondedAt: new Date(),
+          ...(actor.kind === "organizer" ? { respondedByUserId: actor.userId ?? undefined } : {}),
+        },
+      });
+    }
   }
 
   // Auto-unfollow on self-removal

@@ -22,9 +22,12 @@ async function seedUser(name: string) {
 }
 
 async function seedEvent(dateTime: Date, ownerId: string | null) {
-  return prisma.event.create({
+  const event = await prisma.event.create({
     data: { title: "Game", location: "Pitch", dateTime, ownerId },
   });
+  const game = await prisma.game.create({ data: { eventId: event.id, dateTime } });
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  return { ...event, currentGameId: game.id };
 }
 
 describe("RSVP 48h tick windowing", () => {
