@@ -1163,7 +1163,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const owner = await seedUser();
     mockAuth(owner.id);
     const id = await seedEvent({ ownerId: owner.id });
-    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 10000) });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, {
       paymentsSnapshot: [{ playerName: "Alice", amount: 10, status: "paid" }],
     }));
