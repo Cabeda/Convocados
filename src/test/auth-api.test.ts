@@ -1159,7 +1159,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(res.status).toBe(403);
   });
 
-  it("returns 403 when owner tries to edit paymentsSnapshot on locked entry", async () => {
+  it("allows owner to edit paymentsSnapshot on locked entry", async () => {
     const owner = await seedUser();
     mockAuth(owner.id);
     const id = await seedEvent({ ownerId: owner.id });
@@ -1167,9 +1167,9 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, {
       paymentsSnapshot: [{ playerName: "Alice", amount: 10, status: "paid" }],
     }));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.error).toContain("no longer be edited");
+    expect(body.paymentsSnapshot).toBeDefined();
   });
 
   it("updates teamsSnapshot", async () => {

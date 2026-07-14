@@ -21,9 +21,7 @@ import LockOpenIcon from "@mui/icons-material/LockOpen";
 import SportsIcon from "@mui/icons-material/Sports";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
-import StarIcon from "@mui/icons-material/Star";
-import StarBorderIcon from "@mui/icons-material/StarBorder";
-import StarHalfIcon from "@mui/icons-material/StarHalf";
+
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -851,7 +849,11 @@ export function HistoryCardFull({
               </Alert>
             )}
 
-            <Stack spacing={1.5}>
+            <Box sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+              gap: 1.5,
+            }}>
               {playerRowsByTeam.map((team, teamIdx) => {
                 // Win/loss tint: green for winners, red for losers, none for draw
                 const isWinner = entry.scoreOne !== null && entry.scoreTwo !== null && (
@@ -867,8 +869,15 @@ export function HistoryCardFull({
                   : isLoser
                     ? alpha(theme.palette.error.main, 0.04)
                     : "transparent";
+                const borderColor = isWinner
+                  ? theme.palette.success.main
+                  : isLoser
+                    ? theme.palette.error.main
+                    : "transparent";
                 return (
-                <Box key={team.teamName}
+                <Stack
+                  key={team.teamName}
+                  spacing={0.25}
                   onDragOver={canEditTeams ? handleDragOver : undefined}
                   onDrop={canEditTeams ? () => handleDrop(teamIdx) : undefined}
                   sx={{
@@ -878,17 +887,10 @@ export function HistoryCardFull({
                     backgroundColor: (canEditTeams && dragPlayer && dragPlayer.fromTeam !== teamIdx)
                       ? alpha(theme.palette.primary.main, 0.04)
                       : tintColor,
-                    borderLeft: isWinner
-                      ? `3px solid ${theme.palette.success.main}`
-                      : isLoser
-                        ? `3px solid ${theme.palette.error.main}`
-                        : "3px solid transparent",
+                    borderTop: { sm: `3px solid ${borderColor}` },
                     transition: "background-color 0.2s",
-                  }}>
-                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5, color: "text.secondary" }}>
-                    {team.teamName}
-                  </Typography>
-                  <Stack spacing={0.25}>
+                  }}
+                >
                     {team.rows.map((row) => {
                       const liveElo = liveEloUpdates.find((e) => e.name === row.name);
                       const elo = row.elo ?? liveElo?.delta ?? null;
@@ -948,16 +950,16 @@ export function HistoryCardFull({
                             <Box /> /* keep grid alignment */
                           )}
 
-                          {/* MVP vote star */}
+                          {/* MVP vote crown */}
                           {mvpState && isParticipantInGame && mvpState.isVotingOpen && row.participant && row.participant.id !== `name:${userName ?? ""}` ? (
                             <Tooltip title={mvpState.hasVoted ? t("mvpChangeVote") : t("voteMvp")}>
                               <IconButton size="small" onClick={(e) => row.participant && handleVote(row.participant!, e)}
                                 disabled={votingFor !== null}
                                 sx={{ p: 0, minWidth: 0 }}>
                                 {row.isMvp ? (
-                                  <StarIcon sx={{ fontSize: 14, color: "warning.main" }} />
+                                  <EmojiEventsIcon sx={{ fontSize: 14, color: "warning.main" }} />
                                 ) : (
-                                  <StarBorderIcon sx={{ fontSize: 14, color: "action.active" }} />
+                                  <EmojiEventsIcon sx={{ fontSize: 14, color: "action.active" }} />
                                 )}
                               </IconButton>
                             </Tooltip>
@@ -965,7 +967,7 @@ export function HistoryCardFull({
                             <Tooltip title={t("mvpSelfVoteError")}>
                               <span>
                                 <IconButton size="small" disabled sx={{ p: 0, minWidth: 0 }}>
-                                  <StarHalfIcon sx={{ fontSize: 14, color: "action.disabled" }} />
+                                  <EmojiEventsIcon sx={{ fontSize: 14, color: "action.disabled" }} />
                                 </IconButton>
                               </span>
                             </Tooltip>
@@ -984,7 +986,6 @@ export function HistoryCardFull({
                         </Box>
                       );
                     })}
-                  </Stack>
 
                   {/* Add player (only when editing) */}
                   {canEditTeams && (
@@ -1051,14 +1052,14 @@ export function HistoryCardFull({
                               htmlInput: { ...params.slotProps.htmlInput, maxLength: 50 },
                             }} />
                         )}
-                         noOptionsText={t("noSuggestions")}
-                       />
-                     </Box>
-                   )}
-                 </Box>
+                          noOptionsText={t("noSuggestions")}
+                        />
+                      </Box>
+                    )}
+                </Stack>
                 );
               })}
-            </Stack>
+            </Box>
           </Box>
         )}
 
