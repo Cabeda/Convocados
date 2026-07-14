@@ -598,10 +598,19 @@ export function HistoryCardFull({
               <>
                 <Tooltip title={entry.isFriendly ? t("markCompetitive") : t("markFriendly")}>
                   <span>
-                    <IconButton size="small" color={entry.isFriendly ? "success" : "default"}
-                      onClick={handleToggleFriendly} disabled={togglingFriendly}>
-                      <SentimentSatisfiedAltIcon fontSize="small" />
-                    </IconButton>
+                    <Button
+                      data-testid="friendly-toggle"
+                      size="small"
+                      variant={entry.isFriendly ? "contained" : "outlined"}
+                      color={entry.isFriendly ? "success" : "inherit"}
+                      disableElevation
+                      startIcon={<SentimentSatisfiedAltIcon />}
+                      onClick={handleToggleFriendly}
+                      disabled={togglingFriendly}
+                      sx={{ borderRadius: 999, textTransform: "none", fontWeight: 600, px: 1.5, minWidth: 0 }}
+                    >
+                      {entry.isFriendly ? t("friendly") : t("competitive")}
+                    </Button>
                   </span>
                 </Tooltip>
                 <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
@@ -795,13 +804,19 @@ export function HistoryCardFull({
                             )}
                           </Typography>
 
-                          {/* ELO chip */}
-                          {elo !== null && (
+                          {/* ELO chip — hidden on friendly games, no rating change */}
+                          {entry.isFriendly ? (
+                            <Tooltip title={t("friendlyNoElo")}>
+                              <Chip size="small" label={t("noElo")}
+                                variant="outlined"
+                                sx={{ height: 22, fontSize: "0.7rem", color: "text.disabled", borderColor: "divider" }} />
+                            </Tooltip>
+                          ) : elo !== null ? (
                             <Chip size="small" label={elo >= 0 ? `+${elo}` : `${elo}`}
                               color={eloColor as "success" | "error" | "default"}
                               variant={elo === 0 ? "outlined" : "filled"}
                               sx={{ height: 22, fontSize: "0.7rem", fontWeight: 700 }} />
-                          )}
+                          ) : null}
 
                           {/* Payment chip */}
                           {row.paid && row.amount !== null && (
