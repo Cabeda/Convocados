@@ -282,13 +282,11 @@ describe("HistoryCardFull — Players stream", () => {
     expect(screen.getByText("TF")).toBeInTheDocument();
   });
 
-  it("renders team names as section headers with counts", () => {
+  it("renders team names as section headers", () => {
     renderCard();
     // "Ninjas" appears in score + players stream. Use heading role for section.
     const ninjasHeaders = screen.getAllByText("Ninjas");
     expect(ninjasHeaders.length).toBeGreaterThanOrEqual(2);
-    // Count badge "(2)" next to each team name
-    expect(screen.getAllByText("(2)").length).toBe(2);
   });
 
   it("shows ELO delta on each player row", () => {
@@ -299,11 +297,11 @@ describe("HistoryCardFull — Players stream", () => {
     expect(screen.getByText("-18")).toBeInTheDocument();
   });
 
-  it("shows payment chip on each row with the amount", () => {
+  it("shows payment chip on each row with the amount (compact)", () => {
     renderCard();
     const joaoRow = screen.getByText("João Fernandes").closest("[data-player-row]") as HTMLElement;
-    // Paid = filled chip with amount
-    expect(within(joaoRow).getByText(/5\.00/i)).toBeInTheDocument();
+    // Compact format: "€5" (no trailing .00, symbol instead of code)
+    expect(within(joaoRow).getByText("€5")).toBeInTheDocument();
     // João is paid (success) — check for check icon
     expect(within(joaoRow).getByTestId("CheckCircleIcon")).toBeInTheDocument();
   });

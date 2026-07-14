@@ -433,7 +433,11 @@ export function HistoryCardFull({
     const sum = cost.payments.reduce((acc, p) => acc + p.amount, 0);
     return sum / cost.payments.length;
   })();
-  const formatAmount = (n: number) => `${n.toFixed(2)} ${costCurrency}`;
+  const CURRENCY_SYMBOLS: Record<string, string> = { EUR: "€", USD: "$", GBP: "£", BRL: "R$" };
+  const formatAmount = (n: number) => {
+    const sym = CURRENCY_SYMBOLS[costCurrency] ?? `${costCurrency} `;
+    return `${sym}${n % 1 === 0 ? n : n.toFixed(2)}`;
+  };
 
   // Build per-player row data
   type PlayerRow = {
@@ -513,13 +517,7 @@ export function HistoryCardFull({
             </Typography>
           </Stack>
 
-          <Stack direction="row" spacing={0.5} alignItems="center">
-            {entry.source === "historical" && (
-              <Tooltip title={t("historicalGame")}>
-                <Chip icon={<HistoryIcon color="primary" />} label={t("historicalGame")}
-                  color="warning" size="small" variant="outlined" sx={{ fontWeight: 600 }} />
-              </Tooltip>
-            )}
+          <Stack direction="row" spacing={0.25} alignItems="center">
             {isPlayAdmin && (
               <>
                 <Tooltip title={entry.isFriendly ? t("markCompetitive") : t("markFriendly")}>
@@ -595,6 +593,12 @@ export function HistoryCardFull({
 
         {/* Meta row: location + cost + share + source */}
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ mt: 0.5 }}>
+          {entry.source === "historical" && (
+            <Tooltip title={t("historicalGame")}>
+              <Chip icon={<HistoryIcon color="primary" />} label={t("historicalGame")}
+                color="warning" size="small" variant="outlined" sx={{ fontWeight: 600, height: 22 }} />
+            </Tooltip>
+          )}
           {event.location ? (
             <Tooltip title={t("getDirections")}>
               <a href={mapsUrl(event.location, event.latitude, event.longitude)}
@@ -740,10 +744,11 @@ export function HistoryCardFull({
         ) : null}
 
         {/* Status row — always shown (Played / Cancelled / Upcoming) */}
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ pb: 2 }}>
+        <Box sx={{ display: "flex", justifyContent: "center", pb: 2 }}>
           <Typography
             data-testid="status-chip"
             variant="caption"
+            component="span"
             onClick={entry.editable && isAuthenticated ? (e) => setStatusMenuAnchor(e.currentTarget) : undefined}
             sx={{
               color: isCancelled ? "error.main" : "success.main",
@@ -756,7 +761,7 @@ export function HistoryCardFull({
           >
             {isCancelled ? t("statusCancelled") : t("statusPlayed")}
           </Typography>
-        </Stack>
+        </Box>
         <Menu
           anchorEl={statusMenuAnchor}
           open={!!statusMenuAnchor}
@@ -853,21 +858,42 @@ export function HistoryCardFull({
               </Alert>
             )}
 
-            <Stack spacing={2.5}>
-              {playerRowsByTeam.map((team, teamIdx) => (
+            <Stack spacing={1.5}>
+              {playerRowsByTeam.map((team, teamIdx) => {
+                // Win/loss tint: green for winners, red for losers, none for draw
+                const isWinner = entry.scoreOne !== null && entry.scoreTwo !== null && (
+                  (teamIdx === 0 && entry.scoreOne > entry.scoreTwo) ||
+                  (teamIdx === 1 && entry.scoreTwo > entry.scoreOne)
+                );
+                const isLoser = entry.scoreOne !== null && entry.scoreTwo !== null && (
+                  (teamIdx === 0 && entry.scoreOne < entry.scoreTwo) ||
+                  (teamIdx === 1 && entry.scoreTwo < entry.scoreOne)
+                );
+                const tintColor = isWinner
+                  ? alpha(theme.palette.success.main, 0.06)
+                  : isLoser
+                    ? alpha(theme.palette.error.main, 0.04)
+                    : "transparent";
+                return (
                 <Box key={team.teamName}
                   onDragOver={canEditTeams ? handleDragOver : undefined}
                   onDrop={canEditTeams ? () => handleDrop(teamIdx) : undefined}
                   sx={{
-                    ...(canEditTeams && dragPlayer && dragPlayer.fromTeam !== teamIdx ? {
-                      backgroundColor: alpha(theme.palette.primary.main, 0.04),
-                      borderRadius: 2,
-                      p: 1,
-                    } : {}),
+                    borderRadius: 2,
+                    px: 1,
+                    py: 0.5,
+                    backgroundColor: (canEditTeams && dragPlayer && dragPlayer.fromTeam !== teamIdx)
+                      ? alpha(theme.palette.primary.main, 0.04)
+                      : tintColor,
+                    borderLeft: isWinner
+                      ? `3px solid ${theme.palette.success.main}`
+                      : isLoser
+                        ? `3px solid ${theme.palette.error.main}`
+                        : "3px solid transparent",
                     transition: "background-color 0.2s",
                   }}>
                   <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5, color: "text.secondary" }}>
-                    {team.teamName} <Typography component="span" variant="caption" color="text.disabled">({team.rows.length})</Typography>
+                    {team.teamName}
                   </Typography>
                   <Stack spacing={0.25}>
                     {team.rows.map((row) => {
@@ -883,7 +909,7 @@ export function HistoryCardFull({
                             gridTemplateColumns: "1fr auto auto auto auto",
                             alignItems: "center",
                             gap: 1,
-                            py: 0.4, px: 1, borderRadius: 1.5,
+                            py: 0.25, px: 1, borderRadius: 1.5,
                             ...(canEditTeams ? { cursor: "grab", "&:active": { cursor: "grabbing" } } : {}),
                           }}>
                           <Typography variant="body2" sx={{ fontWeight: 500, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -1032,12 +1058,13 @@ export function HistoryCardFull({
                               htmlInput: { ...params.slotProps.htmlInput, maxLength: 50 },
                             }} />
                         )}
-                        noOptionsText={t("noSuggestions")}
-                      />
-                    </Box>
-                  )}
-                </Box>
-              ))}
+                         noOptionsText={t("noSuggestions")}
+                       />
+                     </Box>
+                   )}
+                 </Box>
+                );
+              })}
             </Stack>
           </Box>
         )}
