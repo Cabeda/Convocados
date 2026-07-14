@@ -509,10 +509,10 @@ export function HistoryCardFull({
         pt: 2.5, pb: isCancelled ? 2.5 : 0, px: 3,
       }}>
         {/* Top context: event title + admin */}
-        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1.5} flexWrap="wrap">
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-            <SportsIcon fontSize="small" sx={{ color: "text.secondary" }} />
-            <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }} noWrap>
+        <Stack direction="row" alignItems="center" gap={1.5}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
+            <SportsIcon fontSize="small" sx={{ color: "text.secondary", flexShrink: 0 }} />
+            <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {event.title}
             </Typography>
           </Stack>
