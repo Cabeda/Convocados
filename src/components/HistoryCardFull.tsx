@@ -1,0 +1,956 @@
+/* eslint-disable react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import {
+  Box, Stack, Chip, Button, Divider, Paper,
+  Alert, TextField, Autocomplete, InputAdornment,
+  alpha, useTheme, IconButton, Tooltip, Dialog, DialogTitle,
+  DialogContent, DialogActions, Menu, MenuItem, ListItemIcon, ListItemText, Typography,
+} from "@mui/material";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CancelIcon from "@mui/icons-material/Cancel";
+import LockIcon from "@mui/icons-material/Lock";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
+import SportsIcon from "@mui/icons-material/Sports";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import StarIcon from "@mui/icons-material/Star";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
+import StarHalfIcon from "@mui/icons-material/StarHalf";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import DeleteIcon from "@mui/icons-material/Delete";
+import SentimentSatisfiedAltIcon from "@mui/icons-material/SentimentSatisfiedAlt";
+import LoginIcon from "@mui/icons-material/Login";
+import HistoryIcon from "@mui/icons-material/History";
+import { useT } from "~/lib/useT";
+import { detectLocale } from "~/lib/i18n";
+import { matchesWithName } from "~/lib/stringMatch";
+import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
+import { formatDateInTz } from "~/lib/timezones";
+import { ScoreRoller } from "./event/ScoreRoller";
+
+type PlayerOption =
+  | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
+  | { type: "create"; name: string };
+
+export interface HistoryCardFullEntry {
+  id: string;
+  eventId: string;
+  dateTime: string;
+  status: "played" | "cancelled";
+  scoreOne: number | null;
+  scoreTwo: number | null;
+  teamOneName: string;
+  teamTwoName: string;
+  teamsSnapshot: string | null;
+  paymentsSnapshot: string | null;
+  editableUntil: string;
+  editable: boolean;
+  source: string;
+  eloProcessed: boolean;
+  isFriendly: boolean;
+  eloUpdates?: { name: string; delta: number }[] | null;
+  participants?: string[];
+}
+
+interface EventLite {
+  id: string;
+  title: string;
+  location: string;
+  latitude: number | null;
+  longitude: number | null;
+  timezone: string;
+  ownerId: string | null;
+}
+
+interface CostSummary {
+  totalAmount: number;
+  currency: string;
+  payments: Array<{ playerName: string; amount: number; status: "paid" | "pending" }>;
+  summary?: { paidCount: number; totalCount: number; paidAmount: number };
+}
+
+interface MvpCandidate {
+  playerId: string;
+  playerName: string;
+  voteCount: number;
+}
+
+interface MvpSummary {
+  mvp: MvpCandidate[] | null;
+  isVotingOpen: boolean;
+  hasVoted: boolean | null;
+  totalVotes: number;
+  eligibleVoters: number;
+  participants: Array<{ id: string; name: string; voteCount: number }>;
+}
+
+interface TeamSnapshot {
+  team: string;
+  players: { name: string; order: number }[];
+}
+
+interface PaymentSnapshotEntry {
+  playerName: string;
+  amount: number;
+  status: "paid" | "pending";
+  method?: string | null;
+}
+
+const SCORE_AUTOSAVE_DEBOUNCE_MS = 400;
+const SAVED_PILL_DURATION_MS = 1200;
+
+function mapsUrl(location: string, lat: number | null, lng: number | null): string {
+  if (lat !== null && lng !== null) {
+    return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  }
+  return /^https?:\/\//i.test(location)
+    ? location
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+}
+
+export function HistoryCardFull({
+  entry,
+  eventId,
+  event,
+  cost,
+  mvp,
+  onUpdate,
+  onDelete,
+  isAuthenticated,
+  knownPlayers,
+  playerRatings,
+  isOwner,
+  isAdmin,
+  userName,
+  eventPlayers: _eventPlayers,
+}: {
+  entry: HistoryCardFullEntry;
+  eventId: string;
+  event: EventLite;
+  cost: CostSummary | null;
+  mvp?: MvpSummary | null;
+  onUpdate: (updated: HistoryCardFullEntry) => void;
+  onDelete: (id: string) => void;
+  isAuthenticated: boolean;
+  knownPlayers: { name: string; gamesPlayed: number; userId?: string | null }[];
+  playerRatings: { name: string; rating: number; gamesPlayed: number }[];
+  isOwner: boolean;
+  isAdmin: boolean;
+  userName: string | null;
+  eventPlayers?: { id: string; name: string }[];
+}) {
+  const t = useT();
+  const locale = detectLocale();
+  const theme = useTheme();
+  const isPlayAdmin = isOwner || isAdmin;
+
+  const [scoreOne, setScoreOne] = useState(entry.scoreOne !== null ? String(entry.scoreOne) : "");
+  const [scoreTwo, setScoreTwo] = useState(entry.scoreTwo !== null ? String(entry.scoreTwo) : "");
+  const [savingScore, setSavingScore] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [savingTeams, setSavingTeams] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const teams: TeamSnapshot[] = entry.teamsSnapshot ? JSON.parse(entry.teamsSnapshot) : [];
+  const [editableTeams, setEditableTeams] = useState<TeamSnapshot[]>(teams);
+  const [newPlayerInputs, setNewPlayerInputs] = useState<Record<number, string>>({});
+  const [teamsDirty, setTeamsDirty] = useState(false);
+
+  const payments: PaymentSnapshotEntry[] = entry.paymentsSnapshot ? JSON.parse(entry.paymentsSnapshot) : [];
+  const [editablePayments, setEditablePayments] = useState<PaymentSnapshotEntry[]>(payments);
+  const [paymentsDirty, setPaymentsDirty] = useState(false);
+  const date = new Date(entry.dateTime);
+  const editableUntil = new Date(entry.editableUntil);
+  const isCancelled = entry.status === "cancelled";
+
+  // Drag state
+  const [dragPlayer, setDragPlayer] = useState<{ name: string; fromTeam: number } | null>(null);
+
+  // Status menu
+  const [statusMenuAnchor, setStatusMenuAnchor] = useState<HTMLElement | null>(null);
+
+  // Mvp vote state
+  const [votingFor, setVotingFor] = useState<string | null>(null);
+  const [mvpState, setMvpState] = useState<MvpSummary | null>(mvp ?? null);
+
+  // If mvp wasn't passed in, fetch it
+  useEffect(() => {
+    if (mvp) { setMvpState(mvp); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/events/${eventId}/history/${entry.id}/mvp`);
+        if (res.ok && !cancelled) setMvpState(await res.json());
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [eventId, entry.id, mvp]);
+
+  // Permissions
+  const isParticipantInGame = (() => {
+    if (isPlayAdmin) return true;
+    if (!userName) return false;
+    const allNames = teams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
+    if (allNames.includes(userName.toLowerCase())) return true;
+    return (entry.participants ?? []).some((n) => n.toLowerCase() === userName.toLowerCase());
+  })();
+  const canEditScore = entry.editable && isAuthenticated && isParticipantInGame;
+  const canEditTeams = entry.editable && isAuthenticated && (isPlayAdmin || isParticipantInGame);
+  const canEditPayments = entry.editable && isAuthenticated && isPlayAdmin;
+
+  const [unlocking, setUnlocking] = useState(false);
+  const [togglingFriendly, setTogglingFriendly] = useState(false);
+  const [approvingElo, setApprovingElo] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const patch = useCallback(async (data: object) => {
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (!res.ok) { setError(json.error); return null; }
+    onUpdate(json);
+    return json;
+  }, [eventId, entry.id, onUpdate]);
+
+  // ── Auto-save score ────────────────────────────────────────────────────────
+  const scoreSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedScore = useRef<{ one: number | null; two: number | null }>({
+    one: entry.scoreOne,
+    two: entry.scoreTwo,
+  });
+
+  useEffect(() => {
+    const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
+    const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
+    const s1Norm = s1 !== null && isNaN(s1) ? null : s1;
+    const s2Norm = s2 !== null && isNaN(s2) ? null : s2;
+    if (s1Norm === lastSavedScore.current.one && s2Norm === lastSavedScore.current.two) return;
+    if (!canEditScore) return;
+
+    if (scoreSaveTimer.current) clearTimeout(scoreSaveTimer.current);
+    scoreSaveTimer.current = setTimeout(async () => {
+      setSavingScore(true);
+      const result = await patch({ scoreOne: s1Norm, scoreTwo: s2Norm });
+      setSavingScore(false);
+      if (result) {
+        lastSavedScore.current = { one: s1Norm, two: s2Norm };
+        setSavedFlash(true);
+        setTimeout(() => setSavedFlash(false), SAVED_PILL_DURATION_MS);
+      }
+    }, SCORE_AUTOSAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (scoreSaveTimer.current) clearTimeout(scoreSaveTimer.current);
+    };
+  }, [scoreOne, scoreTwo, canEditScore, patch]);
+
+  // ── Status change ──────────────────────────────────────────────────────────
+  const handleStatusChange = async (newStatus: "played" | "cancelled" | "upcoming") => {
+    setStatusMenuAnchor(null);
+    await patch({ status: newStatus });
+  };
+
+  // ── Lock / friendly / approve-elo / delete ─────────────────────────────────
+  const handleToggleLock = async () => {
+    setUnlocking(true);
+    setError(null);
+    const action = entry.editable ? { lock: true } : { unlock: true };
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(action),
+    });
+    setUnlocking(false);
+    if (!res.ok) { const j = await res.json(); setError(j.error); return; }
+    onUpdate(await res.json());
+  };
+
+  const handleToggleFriendly = async () => {
+    setTogglingFriendly(true);
+    setError(null);
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isFriendly: !entry.isFriendly }),
+    });
+    setTogglingFriendly(false);
+    if (!res.ok) { const j = await res.json(); setError(j.error); return; }
+    onUpdate(await res.json());
+  };
+
+  const handleApproveElo = async () => {
+    setApprovingElo(true);
+    setError(null);
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}/approve-elo`, { method: "POST" });
+    setApprovingElo(false);
+    if (!res.ok) { const j = await res.json(); setError(j.error); return; }
+    onUpdate(await res.json());
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, { method: "DELETE" });
+    setDeleting(false);
+    setConfirmDelete(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json.error ?? "Failed to delete.");
+      return;
+    }
+    onDelete(entry.id);
+  };
+
+  // ── ELO preview ────────────────────────────────────────────────────────────
+  const liveEloUpdates: EloUpdate[] = useMemo(() => {
+    if (isCancelled || editableTeams.length !== 2) return [];
+    const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
+    const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
+    if (s1 === null || s2 === null || isNaN(s1) || isNaN(s2)) return [];
+    return computeGameUpdates(playerRatings, editableTeams, s1, s2);
+  }, [editableTeams, scoreOne, scoreTwo, playerRatings, isCancelled]);
+
+  const duplicateNames = useMemo(() => {
+    if (editableTeams.length < 2) return [];
+    const seen = new Map<string, number>();
+    const dupes: string[] = [];
+    for (const team of editableTeams) {
+      for (const p of team.players) {
+        const lower = p.name.toLowerCase();
+        if (seen.has(lower)) dupes.push(p.name);
+        else seen.set(lower, 1);
+      }
+    }
+    return [...new Set(dupes)];
+  }, [editableTeams]);
+
+  // ── Teams edit ─────────────────────────────────────────────────────────────
+  const removePlayerFromTeam = (teamIdx: number, playerName: string) => {
+    setEditableTeams((prev) => prev.map((t, i) => {
+      if (i !== teamIdx) return t;
+      const filtered = t.players.filter((p) => p.name !== playerName);
+      return { ...t, players: filtered.map((p, j) => ({ ...p, order: j })) };
+    }));
+    setTeamsDirty(true);
+  };
+
+  const addPlayerToTeam = (teamIdx: number, playerName?: string) => {
+    const name = (playerName ?? newPlayerInputs[teamIdx] ?? "").trim();
+    if (!name) return;
+    setEditableTeams((prev) => prev.map((t, i) => {
+      if (i !== teamIdx) return t;
+      if (t.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) return t;
+      return { ...t, players: [...t.players, { name, order: t.players.length }] };
+    }));
+    if (!playerName) setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+    setTeamsDirty(true);
+  };
+
+  const handleSaveTeams = async () => {
+    if (duplicateNames.length > 0) {
+      setError(t("duplicatePlayerWarning", { names: duplicateNames.join(", ") }));
+      return;
+    }
+    setSavingTeams(true);
+    await patch({ teamsSnapshot: editableTeams });
+    setSavingTeams(false);
+    setTeamsDirty(false);
+  };
+
+  const handleDragStart = (playerName: string, fromTeam: number) => setDragPlayer({ name: playerName, fromTeam });
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
+  const handleDrop = (targetTeam: number) => {
+    if (!dragPlayer || dragPlayer.fromTeam === targetTeam) { setDragPlayer(null); return; }
+    setEditableTeams((prev) => prev.map((t, i) => {
+      if (i === dragPlayer.fromTeam) {
+        const filtered = t.players.filter((p) => p.name !== dragPlayer.name);
+        return { ...t, players: filtered.map((p, j) => ({ ...p, order: j })) };
+      }
+      if (i === targetTeam) {
+        return { ...t, players: [...t.players, { name: dragPlayer.name, order: t.players.length }] };
+      }
+      return t;
+    }));
+    setTeamsDirty(true);
+    setDragPlayer(null);
+  };
+
+  // ── Payments edit ──────────────────────────────────────────────────────────
+  const cyclePaymentStatus = (idx: number) => {
+    const order: Array<"paid" | "pending"> = ["pending", "paid"];
+    setEditablePayments((prev) => prev.map((p, i) => {
+      if (i !== idx) return p;
+      const next = order[(order.indexOf(p.status) + 1) % order.length];
+      return { ...p, status: next };
+    }));
+    setPaymentsDirty(true);
+  };
+
+  const handleSavePayments = async () => {
+    setSavingTeams(true);
+    await patch({ paymentsSnapshot: editablePayments });
+    setSavingTeams(false);
+    setPaymentsDirty(false);
+  };
+
+  // ── MVP vote ───────────────────────────────────────────────────────────────
+  const handleVote = async (targetParticipant: { id: string; name: string }, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isAuthenticated || !mvpState?.isVotingOpen || votingFor) return;
+    setVotingFor(targetParticipant.id);
+    try {
+      const res = await fetch(`/api/events/${eventId}/history/${entry.id}/mvp-vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ votedForPlayerId: targetParticipant.id, votedForName: targetParticipant.name }),
+      });
+      if (res.ok) {
+        // Refresh mvp state
+        const mvpRes = await fetch(`/api/events/${eventId}/history/${entry.id}/mvp`);
+        if (mvpRes.ok) setMvpState(await mvpRes.json());
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Vote failed");
+      }
+    } catch { /* ignore */ }
+    setVotingFor(null);
+  };
+
+  // ── Cost display ───────────────────────────────────────────────────────────
+  const costTotal = cost?.totalAmount ?? null;
+  const costCurrency = cost?.currency ?? "EUR";
+  const costPerPlayer = (() => {
+    if (!cost || !cost.payments.length) return null;
+    const sum = cost.payments.reduce((acc, p) => acc + p.amount, 0);
+    return sum / cost.payments.length;
+  })();
+  const formatAmount = (n: number) => `${n.toFixed(2)} ${costCurrency}`;
+
+  // Build per-player row data
+  type PlayerRow = {
+    name: string;
+    teamIdx: number;
+    elo: number | null;
+    paid: "paid" | "pending" | null;
+    amount: number | null;
+    participant: { id: string; name: string; voteCount: number } | null;
+    isMvp: boolean;
+  };
+  const playerRowsByTeam = useMemo(() => {
+    const mvpIdSet = new Set((mvpState?.mvp ?? []).map((m) => m.playerId));
+    const participantsByName = new Map(
+      (mvpState?.participants ?? []).map((p) => [p.name.toLowerCase(), p]),
+    );
+    const paymentsByName = new Map(
+      (canEditPayments ? editablePayments : payments).map((p) => [p.playerName.toLowerCase(), p]),
+    );
+    const eloByName = new Map<string, number>();
+    // Saved ELO is the source of truth for past games. Only fall back to live
+    // preview when the user is mid-edit and saved data isn't present.
+    for (const e of entry.eloUpdates ?? []) eloByName.set(e.name, e.delta);
+    if (eloByName.size === 0) {
+      for (const e of liveEloUpdates) eloByName.set(e.name, e.delta);
+    }
+    return (canEditTeams ? editableTeams : teams).map((team, teamIdx) => ({
+      teamName: team.team,
+      rows: team.players.map<PlayerRow>((p) => {
+        const participant = participantsByName.get(p.name.toLowerCase()) ?? null;
+        const payment = paymentsByName.get(p.name.toLowerCase()) ?? null;
+        return {
+          name: p.name,
+          teamIdx,
+          elo: eloByName.get(p.name) ?? null,
+          paid: payment?.status ?? null,
+          amount: payment?.amount ?? null,
+          participant,
+          isMvp: participant ? mvpIdSet.has(participant.id) : false,
+        };
+      }),
+    }));
+  }, [
+    canEditTeams, canEditPayments,
+    editableTeams, teams,
+    editablePayments, payments,
+    liveEloUpdates, entry.eloUpdates,
+    mvpState,
+  ]);
+
+  const localeStr = locale === "pt" ? "pt-PT" : "en-GB";
+
+  return (
+    <Paper elevation={0}
+      data-testid="history-card"
+      sx={{
+        borderRadius: 4,
+        overflow: "hidden",
+        opacity: isCancelled ? 0.7 : 1,
+        border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+        transition: "box-shadow 0.2s",
+        "&:hover": { boxShadow: theme.shadows[4] },
+      }}>
+      {/* ── Header ── */}
+      <Box sx={{
+        px: 3, py: 2.5,
+        background: `linear-gradient(135deg, ${alpha(
+          isCancelled ? theme.palette.error.main : theme.palette.success.main, 0.08,
+        )}, ${alpha(theme.palette.background.paper, 0)})`,
+      }}>
+        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" gap={1.5}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
+              {formatDateInTz(date, localeStr, event.timezone, {
+                weekday: "long", day: "numeric", month: "long", year: "numeric",
+              })}
+              <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1.5 }}>
+                {formatDateInTz(date, localeStr, event.timezone, { hour: "2-digit", minute: "2-digit" })}
+              </Typography>
+            </Typography>
+            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ mt: 0.5 }}>
+              {/* Location */}
+              {event.location ? (
+                <Tooltip title={t("getDirections")}>
+                  <a href={mapsUrl(event.location, event.latitude, event.longitude)}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{ color: "inherit", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <LocationOnIcon fontSize="small" sx={{ color: "primary.main" }} />
+                    <Typography variant="body2" color="text.secondary" sx={{ textDecoration: "underline", textDecorationStyle: "dotted" }}>
+                      {event.location}
+                    </Typography>
+                  </a>
+                </Tooltip>
+              ) : isPlayAdmin ? (
+                <Button size="small" variant="text" startIcon={<LocationOnIcon />}
+                  href={`/events/${eventId}`}
+                  sx={{ textTransform: "none", minWidth: 0, p: 0.5, color: "text.secondary" }}>
+                  {t("addLocationInline")}
+                </Button>
+              ) : (
+                <Typography variant="body2" color="text.disabled">{t("noLocationSet")}</Typography>
+              )}
+
+              {/* Cost */}
+              {cost && costTotal !== null ? (
+                <Tooltip title={t("totalCost")}>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <AttachMoneyIcon fontSize="small" sx={{ color: "success.main" }} />
+                    <Typography variant="body2" color="text.secondary">
+                      {costTotal.toFixed(2)} {costCurrency}
+                      {costPerPlayer !== null && costPerPlayer > 0 && (
+                        <> · <strong>{costPerPlayer.toFixed(2)} {costCurrency}</strong>/player</>
+                      )}
+                    </Typography>
+                  </Stack>
+                </Tooltip>
+              ) : isPlayAdmin ? (
+                <Button size="small" variant="text" startIcon={<AttachMoneyIcon />}
+                  href={`/events/${eventId}`}
+                  sx={{ textTransform: "none", minWidth: 0, p: 0.5, color: "text.secondary" }}>
+                  {t("addCostInline")}
+                </Button>
+              ) : null}
+            </Stack>
+          </Box>
+
+          <Stack direction="row" spacing={1} alignItems="center">
+            {entry.source === "historical" && (
+              <Chip icon={<HistoryIcon color="primary" />} label={t("historicalGame")}
+                color="warning" size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+            )}
+            {/* Status dropdown trigger */}
+            <Button
+              data-testid="status-chip"
+              size="small"
+              variant="outlined"
+              color={isCancelled ? "error" : "success"}
+              startIcon={isCancelled ? <CancelIcon /> : <CheckCircleIcon />}
+              endIcon={entry.editable && isAuthenticated ? <KeyboardArrowDownIcon /> : undefined}
+              onClick={entry.editable && isAuthenticated ? (e) => setStatusMenuAnchor(e.currentTarget) : undefined}
+              disabled={!entry.editable || !isAuthenticated}
+              aria-haspopup="menu"
+              sx={{ borderRadius: 999, textTransform: "none", fontWeight: 600, px: 1.5 }}
+            >
+              {isCancelled ? t("statusCancelled") : t("statusPlayed")}
+            </Button>
+            <Menu
+              anchorEl={statusMenuAnchor}
+              open={!!statusMenuAnchor}
+              onClose={() => setStatusMenuAnchor(null)}
+            >
+              {(["played", "cancelled", "upcoming"] as const).map((s) => (
+                <MenuItem key={s} data-testid={`status-option-${s}`} onClick={() => handleStatusChange(s)}
+                  selected={entry.status === s}>
+                  <ListItemIcon>
+                    {s === "played" && <CheckCircleIcon fontSize="small" color="success" />}
+                    {s === "cancelled" && <CancelIcon fontSize="small" color="error" />}
+                    {s === "upcoming" && <SportsIcon fontSize="small" color="action" />}
+                  </ListItemIcon>
+                  <ListItemText>{s === "played" ? t("statusPlayed") : s === "cancelled" ? t("statusCancelled") : t("statusUpcoming")}</ListItemText>
+                </MenuItem>
+              ))}
+            </Menu>
+
+            {isPlayAdmin && (
+              <>
+                <Tooltip title={entry.isFriendly ? t("markCompetitive") : t("markFriendly")}>
+                  <span>
+                    <IconButton size="small" color={entry.isFriendly ? "success" : "default"}
+                      onClick={handleToggleFriendly} disabled={togglingFriendly}>
+                      <SentimentSatisfiedAltIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
+                  <span>
+                    <IconButton size="small" color={entry.editable ? "default" : "warning"}
+                      onClick={handleToggleLock} disabled={unlocking}>
+                      {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title={t("deleteGame")}>
+                  <IconButton size="small" color="error" onClick={() => setConfirmDelete(true)} disabled={deleting}>
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
+            {!isPlayAdmin && !entry.editable && (
+              <Tooltip title={t("notEditable")}>
+                <LockIcon fontSize="small" color="disabled" />
+              </Tooltip>
+            )}
+          </Stack>
+        </Stack>
+      </Box>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t("deleteGame")}</DialogTitle>
+        <DialogContent>
+          <Typography>{t("deleteHistoryConfirm")}</Typography>
+          {entry.eloProcessed && (
+            <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
+              {t("deleteHistoryEloWarning")}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)} disabled={deleting}>{t("cancel")}</Button>
+          <Button color="error" variant="contained" onClick={handleDelete} disabled={deleting}>
+            {deleting ? t("deleting") : t("deleteGame")}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Stack spacing={0} divider={<Divider sx={{ mx: 3 }} />}>
+        {error && (
+          <Box sx={{ px: 3, pt: 2 }}>
+            <Alert severity="error" onClose={() => setError(null)} sx={{ borderRadius: 2 }}>{error}</Alert>
+          </Box>
+        )}
+
+        {/* ── Score (auto-save, no button) ── */}
+        {!isCancelled && (
+          <Box sx={{ px: 3, py: 2.5 }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+              <Typography variant="subtitle2" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
+                {t("score")}
+              </Typography>
+              <Box sx={{ minHeight: 18, display: "flex", alignItems: "center" }}>
+                {savingScore ? (
+                  <Typography variant="caption" color="text.disabled">{t("savingDateTime")}</Typography>
+                ) : savedFlash ? (
+                  <Typography variant="caption" color="success.main">✓ {t("saved")}</Typography>
+                ) : null}
+              </Box>
+            </Stack>
+            <Stack direction="row" spacing={2} alignItems="center" justifyContent="center"
+              sx={{ py: 2, px: 3, borderRadius: 3, backgroundColor: alpha(theme.palette.action.hover, 0.04) }}>
+              {canEditScore ? (
+                <>
+                  <ScoreRoller value={scoreOne} onChange={setScoreOne} teamName={entry.teamOneName} />
+                  <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
+                  <ScoreRoller value={scoreTwo} onChange={setScoreTwo} teamName={entry.teamTwoName} />
+                </>
+              ) : (
+                <>
+                  <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
+                    <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
+                      {entry.teamOneName}
+                    </Typography>
+                    <Typography variant="h3" fontWeight={800} color="text.primary">
+                      {entry.scoreOne !== null ? entry.scoreOne : "—"}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
+                  <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
+                    <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
+                      {entry.teamTwoName}
+                    </Typography>
+                    <Typography variant="h3" fontWeight={800} color="text.primary">
+                      {entry.scoreTwo !== null ? entry.scoreTwo : "—"}
+                    </Typography>
+                  </Stack>
+                </>
+              )}
+            </Stack>
+          </Box>
+        )}
+
+        {/* ── ELO Approval for Historical Games ── */}
+        {entry.source === "historical" && !isCancelled && (
+          <Box sx={{ px: 3, py: 2.5 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+              <EmojiEventsIcon fontSize="small" sx={{ color: entry.eloProcessed ? "success.main" : "warning.main" }} />
+              <Typography variant="subtitle2" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
+                {entry.eloProcessed ? t("eloApproved") : t("eloPending")}
+              </Typography>
+              {!entry.eloProcessed && isPlayAdmin && (
+                <Button size="small" variant="contained" disableElevation startIcon={<EmojiEventsIcon />}
+                  onClick={handleApproveElo} disabled={approvingElo} sx={{ ml: "auto", borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
+                  {approvingElo ? t("approvingElo") : t("approveElo")}
+                </Button>
+              )}
+            </Stack>
+            <Alert severity={entry.eloProcessed ? "success" : "warning"} sx={{ borderRadius: 2 }}>
+              {entry.eloProcessed ? t("eloApprovedSuccess") : t("eloPending")}
+            </Alert>
+          </Box>
+        )}
+
+        {/* ── Players stream (teams + payments + mvp) ── */}
+        {playerRowsByTeam.length > 0 && !isCancelled && (
+          <Box sx={{ px: 3, py: 2.5 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+              <SportsIcon fontSize="small" sx={{ color: "text.secondary" }} />
+              <Typography variant="subtitle2" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
+                {t("players")}
+              </Typography>
+              {canEditTeams && teamsDirty && (
+                <Button size="small" variant="contained" disableElevation
+                  onClick={handleSaveTeams} disabled={savingTeams || duplicateNames.length > 0}
+                  sx={{ ml: "auto", borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
+                  {savingTeams ? t("savingDateTime") : t("saveTeams")}
+                </Button>
+              )}
+              {canEditPayments && paymentsDirty && (
+                <Button size="small" variant="contained" disableElevation
+                  onClick={handleSavePayments} disabled={savingTeams}
+                  sx={{ ml: teamsDirty ? 1 : "auto", borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
+                  {savingTeams ? t("savingDateTime") : t("savePayments")}
+                </Button>
+              )}
+            </Stack>
+
+            {duplicateNames.length > 0 && (
+              <Alert severity="warning" sx={{ mb: 1.5, borderRadius: 2 }}>
+                {t("duplicatePlayerWarning", { names: duplicateNames.join(", ") })}
+              </Alert>
+            )}
+
+            <Stack spacing={2}>
+              {playerRowsByTeam.map((team, teamIdx) => (
+                <Box key={team.teamName}
+                  onDragOver={canEditTeams ? handleDragOver : undefined}
+                  onDrop={canEditTeams ? () => handleDrop(teamIdx) : undefined}
+                  sx={{
+                    p: 2, borderRadius: 3,
+                    backgroundColor: alpha(theme.palette.action.hover, 0.04),
+                    border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+                    ...(canEditTeams && dragPlayer && dragPlayer.fromTeam !== teamIdx ? {
+                      border: `2px dashed ${alpha(theme.palette.primary.main, 0.4)}`,
+                      backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                    } : {}),
+                    transition: "border 0.2s, background-color 0.2s",
+                  }}>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                    {team.teamName} ({team.rows.length})
+                  </Typography>
+                  <Stack spacing={0.5}>
+                    {team.rows.map((row) => {
+                      const liveElo = liveEloUpdates.find((e) => e.name === row.name);
+                      const elo = row.elo ?? liveElo?.delta ?? null;
+                      const eloColor = elo === null ? "default" : elo > 0 ? "success" : elo < 0 ? "error" : "default";
+                      return (
+                        <Box key={row.name} data-player-row={row.name}
+                          draggable={canEditTeams}
+                          onDragStart={canEditTeams ? () => handleDragStart(row.name, teamIdx) : undefined}
+                          sx={{
+                            display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap",
+                            py: 0.5, px: 1, borderRadius: 2,
+                            ...(canEditTeams ? { cursor: "grab", "&:active": { cursor: "grabbing" } } : {}),
+                          }}>
+                          <Typography variant="body2" sx={{ fontWeight: 500, flex: "0 1 auto", minWidth: 80 }}>
+                            {row.name}
+                            {canEditTeams && (
+                              <IconButton size="small" onClick={() => removePlayerFromTeam(teamIdx, row.name)}
+                                sx={{ ml: 0.5, p: 0.25 }}>
+                                <CancelIcon sx={{ fontSize: 14 }} color="error" />
+                              </IconButton>
+                            )}
+                          </Typography>
+
+                          {/* ELO chip */}
+                          {elo !== null && (
+                            <Chip size="small" label={elo >= 0 ? `+${elo}` : `${elo}`}
+                              color={eloColor as "success" | "error" | "default"}
+                              variant={elo === 0 ? "outlined" : "filled"}
+                              sx={{ height: 22, fontSize: "0.7rem", fontWeight: 700 }} />
+                          )}
+
+                          {/* Payment chip */}
+                          {row.paid && row.amount !== null && (
+                            <Chip size="small"
+                              label={`${formatAmount(row.amount)}`}
+                              color={row.paid === "paid" ? "success" : "warning"}
+                              variant={row.paid === "paid" ? "filled" : "outlined"}
+                              onClick={canEditPayments ? () => {
+                                const idx = (canEditPayments ? editablePayments : payments).findIndex((p) => p.playerName === row.name);
+                                if (idx >= 0) cyclePaymentStatus(idx);
+                              } : undefined}
+                              icon={row.paid === "paid" ? <CheckCircleIcon sx={{ fontSize: 14 }} /> : undefined}
+                              sx={{ height: 22, fontSize: "0.7rem", fontWeight: 600,
+                                ...(canEditPayments ? { cursor: "pointer" } : {}) }} />
+                          )}
+
+                          {/* MVP vote star */}
+                          {mvpState && isParticipantInGame && mvpState.isVotingOpen && row.participant && row.participant.id !== `name:${userName ?? ""}` && (
+                            <Tooltip title={mvpState.hasVoted ? t("mvpChangeVote") : t("voteMvp")}>
+                              <span>
+                                <IconButton size="small" onClick={(e) => row.participant && handleVote(row.participant!, e)}
+                                  disabled={votingFor !== null}
+                                  sx={{ p: 0.25 }}>
+                                  {row.isMvp ? (
+                                    <StarIcon sx={{ fontSize: 16, color: "warning.main" }} />
+                                  ) : (
+                                    <StarBorderIcon sx={{ fontSize: 16, color: "action.active" }} />
+                                  )}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                          {mvpState && isParticipantInGame && mvpState.isVotingOpen && row.participant && row.participant.id === `name:${userName ?? ""}` && (
+                            <Tooltip title={t("mvpSelfVoteError")}>
+                              <span>
+                                <IconButton size="small" disabled sx={{ p: 0.25 }}>
+                                  <StarHalfIcon sx={{ fontSize: 16, color: "action.disabled" }} />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+
+                          {/* MVP count badge (always visible if voting happened) */}
+                          {row.participant && row.participant.voteCount > 0 && (
+                            <Typography variant="caption" color="warning.main" fontWeight={700}>
+                              {row.participant.voteCount}
+                            </Typography>
+                          )}
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+
+                  {/* Add player (only when editing) */}
+                  {canEditTeams && (
+                    <Box sx={{ mt: 1.5 }}>
+                      <Autocomplete<PlayerOption, false, false, true>
+                        freeSolo size="small"
+                        options={(() => {
+                          const trimmed = (newPlayerInputs[teamIdx] ?? "").trim();
+                          const currentNames = new Set(team.rows.map((r) => r.name.toLowerCase()));
+                          const available = knownPlayers.filter((kp) => !currentNames.has(kp.name.toLowerCase()));
+                          const filtered: PlayerOption[] = available
+                            .filter((s) => matchesWithName(s.name, trimmed))
+                            .map((s) => ({ type: "existing" as const, name: s.name, gamesPlayed: s.gamesPlayed, userId: s.userId ?? null }));
+                          if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
+                            filtered.push({ type: "create" as const, name: trimmed });
+                          }
+                          return filtered;
+                        })()}
+                        filterOptions={(options) => options}
+                        getOptionLabel={(option) => typeof option === "string" ? option : option.name}
+                        isOptionEqualToValue={(option, value) =>
+                          typeof option !== "string" && typeof value !== "string" && option.type === value.type && option.name === value.name}
+                        value={null}
+                        inputValue={newPlayerInputs[teamIdx] ?? ""}
+                        onInputChange={(_, newInputValue, reason) => {
+                          if (reason === "reset") return;
+                          setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: newInputValue }));
+                        }}
+                        onChange={(_, newValue) => {
+                          if (!newValue) return;
+                          const name = typeof newValue === "string" ? newValue.trim() : newValue.name;
+                          if (name) {
+                            addPlayerToTeam(teamIdx, name);
+                            setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+                          }
+                        }}
+                        renderInput={(params) => (
+                          <TextField {...params} placeholder={t("addPlayerToTeam")}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && (newPlayerInputs[teamIdx] ?? "").trim()) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                addPlayerToTeam(teamIdx, (newPlayerInputs[teamIdx] ?? "").trim());
+                                setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+                              }
+                            }}
+                            sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                            slotProps={{
+                              input: {
+                                ...params.slotProps.input,
+                                endAdornment: (
+                                  <InputAdornment position="end">
+                                    <IconButton size="small" color="primary" edge="end"
+                                      disabled={!(newPlayerInputs[teamIdx] ?? "").trim()}
+                                      onClick={() => {
+                                        addPlayerToTeam(teamIdx, (newPlayerInputs[teamIdx] ?? "").trim());
+                                        setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+                                      }}>
+                                      <PersonAddIcon fontSize="small" />
+                                    </IconButton>
+                                  </InputAdornment>
+                                ),
+                              },
+                              htmlInput: { ...params.slotProps.htmlInput, maxLength: 50 },
+                            }} />
+                        )}
+                        noOptionsText={t("noSuggestions")}
+                      />
+                    </Box>
+                  )}
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+        )}
+
+        {/* ── Editable info footer ── */}
+        {canEditScore && (
+          <Box sx={{ px: 3, py: 2 }}>
+            <Typography variant="caption" color="text.disabled" sx={{ display: "block", textAlign: "right" }}>
+              {t("editableUntil", {
+                date: formatDateInTz(editableUntil, localeStr, event.timezone, {
+                  day: "numeric", month: "short", year: "numeric",
+                }),
+              })}
+            </Typography>
+          </Box>
+        )}
+
+        {entry.editable && !isAuthenticated && (
+          <Box sx={{ px: 3, py: 2 }}>
+            <Alert severity="info" icon={<LoginIcon />} sx={{ borderRadius: 2 }}>
+              {t("loginRequiredToEdit")}
+            </Alert>
+          </Box>
+        )}
+      </Stack>
+    </Paper>
+  );
+}

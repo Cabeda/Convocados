@@ -35,6 +35,7 @@ export function ScoreRoller({ value, onChange, teamName, min = 0, max = 20 }: Sc
 
       {/* Increment button */}
       <Box
+        data-testid="score-plus"
         onClick={() => { if (numValue < max) onChange(String(numValue + 1)); }}
         sx={{
           display: "flex", justifyContent: "center", alignItems: "center",
