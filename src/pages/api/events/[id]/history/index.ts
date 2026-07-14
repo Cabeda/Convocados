@@ -40,6 +40,22 @@ export const GET: APIRoute = async ({ params, request }) => {
     orderBy: { dateTime: "desc" },
   });
 
+  // ADR 0016: live Games store team membership in the event-level teamResults
+  // (not in the Game row). Snapshot them so the UI can render the players that
+  // were on the game even before the recurrence reset materialises a GameHistory.
+  const teamResults = await prisma.teamResult.findMany({
+    where: { eventId: params.id },
+    include: { members: { orderBy: { order: "asc" } } },
+  });
+  const teamsSnapshotForGame = teamResults.length
+    ? JSON.stringify(
+        teamResults.map((tr) => ({
+          team: tr.name,
+          players: tr.members.map((m) => ({ name: m.name, order: m.order })),
+        })),
+      )
+    : null;
+
   // Fetch ALL history for ELO replay (needed for accurate deltas)
   const allHistory = await prisma.gameHistory.findMany({
     where: { eventId: params.id },
@@ -74,7 +90,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     scoreTwo: hideCompetitive ? null : g.scoreTwo,
     teamOneName: g.teamOneName,
     teamTwoName: g.teamTwoName,
-    teamsSnapshot: null, // participants available as structured data
+    teamsSnapshot: teamsSnapshotForGame, // reconstructed from event teamResults
     paymentsSnapshot: null,
     editableUntil: new Date(g.dateTime.getTime() + 7 * 86400_000).toISOString(),
     createdAt: g.createdAt.toISOString(),
@@ -85,10 +101,32 @@ export const GET: APIRoute = async ({ params, request }) => {
     participants: g.participants.map((p) => p.eventPlayer.name),
   }));
 
-  // Merge and sort by dateTime descending, dedupe by dateTime (legacy GameHistory may overlap with Game)
-  const gameDateTimes = new Set(playedGames.map((g) => g.dateTime.toISOString()));
-  const dedupedLegacy = legacyMapped.filter((h) => !gameDateTimes.has(h.dateTime));
-  const merged = [...gameMapped, ...dedupedLegacy]
+  // Merge and sort by dateTime descending.
+  //
+  // ADR 0016 dedup: when the recurrence reset has already materialised a
+  // GameHistory row for a played Game (same dateTime), prefer the GameHistory
+  // — it carries the teamsSnapshot (players) and is the editable entity the
+  // PATCH endpoint understands. Keeping the bare live Game here caused the
+  // "Not found." error and hid the players who were on the game.
+  // We also dedupe legacy rows that share a dateTime (e.g. a reset-created
+  // snapshot plus one created on-demand by PATCH), keeping the most complete.
+  const legacyByDate = new Map<string, (typeof legacyMapped)[number]>();
+  for (const h of legacyMapped) {
+    const existing = legacyByDate.get(h.dateTime);
+    if (!existing) {
+      legacyByDate.set(h.dateTime, h);
+      continue;
+    }
+    const keepExisting =
+      (existing.teamsSnapshot && !h.teamsSnapshot) ||
+      (Boolean(existing.teamsSnapshot) === Boolean(h.teamsSnapshot) &&
+        new Date(existing.createdAt).getTime() >= new Date(h.createdAt).getTime());
+    if (!keepExisting) legacyByDate.set(h.dateTime, h);
+  }
+  const dedupedLegacy = [...legacyByDate.values()];
+  const legacyDateTimes = new Set(dedupedLegacy.map((h) => h.dateTime));
+  const dedupedGames = gameMapped.filter((g) => !legacyDateTimes.has(g.dateTime));
+  const merged = [...dedupedLegacy, ...dedupedGames]
     .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
 
   return Response.json(buildPaginatedResponse(merged.slice(0, limit + 1), limit));

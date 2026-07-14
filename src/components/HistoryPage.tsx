@@ -67,6 +67,7 @@ interface HistoryEntry {
   eloProcessed: boolean;
   isFriendly: boolean;
   eloUpdates?: { name: string; delta: number }[] | null;
+  participants?: string[];
 }
 
 /** Reusable section wrapper with optional title + icon */
@@ -438,7 +439,9 @@ function HistoryCardFull({
     if (!userName) return false;
     const teams: TeamSnapshot[] = entry.teamsSnapshot ? JSON.parse(entry.teamsSnapshot) : [];
     const allNames = teams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
-    return allNames.includes(userName.toLowerCase());
+    if (allNames.includes(userName.toLowerCase())) return true;
+    // Fallback: live Games surface participants as a flat list
+    return (entry.participants ?? []).some((n) => n.toLowerCase() === userName.toLowerCase());
   })();
   const canEditScore = entry.editable && isAuthenticated && isParticipantInGame;
   const canEditTeams = entry.editable && isAuthenticated && (isOwner || isParticipantInGame);
