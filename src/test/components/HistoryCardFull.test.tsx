@@ -17,7 +17,7 @@ vi.mock("~/lib/auth.client", () => ({
 const baseEntry: HistoryCardFullEntry = {
   id: "h-1",
   eventId: "evt-1",
-  dateTime: new Date(2026, 6, 13, 19, 0).toISOString(),
+  dateTime: new Date(Date.UTC(2026, 6, 13, 19, 0)).toISOString(),
   status: "played",
   scoreOne: 11,
   scoreTwo: 5,
@@ -64,7 +64,7 @@ const event = {
   location: "Campo do Maia",
   latitude: 41.15,
   longitude: -8.61,
-  timezone: "Europe/Lisbon",
+  timezone: "UTC",
   ownerId: "owner-1",
 };
 
