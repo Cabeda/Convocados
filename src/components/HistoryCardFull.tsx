@@ -109,7 +109,6 @@ interface PaymentSnapshotEntry {
 }
 
 const SCORE_AUTOSAVE_DEBOUNCE_MS = 400;
-const SAVED_PILL_DURATION_MS = 1200;
 
 function mapsUrl(location: string, lat: number | null, lng: number | null): string {
   if (lat !== null && lng !== null) {
@@ -158,8 +157,6 @@ export function HistoryCardFull({
 
   const [scoreOne, setScoreOne] = useState(entry.scoreOne !== null ? String(entry.scoreOne) : "");
   const [scoreTwo, setScoreTwo] = useState(entry.scoreTwo !== null ? String(entry.scoreTwo) : "");
-  const [savingScore, setSavingScore] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
   const [savingTeams, setSavingTeams] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -207,9 +204,12 @@ export function HistoryCardFull({
     if (allNames.includes(userName.toLowerCase())) return true;
     return (entry.participants ?? []).some((n) => n.toLowerCase() === userName.toLowerCase());
   })();
-  const canEditScore = entry.editable && isAuthenticated && isParticipantInGame;
-  const canEditTeams = entry.editable && isAuthenticated && (isPlayAdmin || isParticipantInGame);
-  const canEditPayments = entry.editable && isAuthenticated && isPlayAdmin;
+  // Owners/admins bypass the 7-day editable window. Regular players
+  // (incl. participants) lose edit access after the window.
+  const inEditWindow = entry.editable || isPlayAdmin;
+  const canEditScore = isAuthenticated && isParticipantInGame && inEditWindow;
+  const canEditTeams = isAuthenticated && (isPlayAdmin || isParticipantInGame) && inEditWindow;
+  const canEditPayments = isAuthenticated && isPlayAdmin && inEditWindow;
 
   const [unlocking, setUnlocking] = useState(false);
   const [togglingFriendly, setTogglingFriendly] = useState(false);
@@ -246,13 +246,9 @@ export function HistoryCardFull({
 
     if (scoreSaveTimer.current) clearTimeout(scoreSaveTimer.current);
     scoreSaveTimer.current = setTimeout(async () => {
-      setSavingScore(true);
       const result = await patch({ scoreOne: s1Norm, scoreTwo: s2Norm });
-      setSavingScore(false);
       if (result) {
         lastSavedScore.current = { one: s1Norm, two: s2Norm };
-        setSavedFlash(true);
-        setTimeout(() => setSavedFlash(false), SAVED_PILL_DURATION_MS);
       }
     }, SCORE_AUTOSAVE_DEBOUNCE_MS);
 
@@ -744,13 +740,6 @@ export function HistoryCardFull({
             </Box>
 
             {/* Status: small text below score, like FotMob "Full time" */}
-            <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ mt: 1 }}>
-              {(savingScore || savedFlash) && (
-                <Typography variant="caption" color="text.disabled">
-                  {savingScore ? `· ${t("savingDateTime")}` : savedFlash ? `· ✓ ${t("saved")}` : ""}
-                </Typography>
-              )}
-            </Stack>
           </Box>
         ) : null}
 
