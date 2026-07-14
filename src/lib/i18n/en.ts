@@ -23,6 +23,8 @@ const en = {
   competitive: "Competitive",
   noElo: "no ELO",
   friendlyNoElo: "Friendly games don't affect player ratings",
+  lockAction: "Lock",
+  unlockAction: "Unlock",
   saveLocation: "Save",
   cancelEdit: "Cancel",
   locationNotGeocoded: "Location saved but couldn't be placed on the map. Try a more specific address or paste a Google Maps link.",

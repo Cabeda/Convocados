@@ -141,7 +141,8 @@ afterEach(() => {
 describe("HistoryCardFull — header", () => {
   it("renders date and time", () => {
     renderCard();
-    expect(screen.getByText(/13 July 2026/i)).toBeInTheDocument();
+    // Date rendered in compact format: weekday + day + month (e.g., "Mon, 13 Jul")
+    expect(screen.getByText(/13 Jul/i)).toBeInTheDocument();
     expect(screen.getByText(/19:00/i)).toBeInTheDocument();
   });
 
@@ -260,6 +261,16 @@ describe("HistoryCardFull — score", () => {
       expect(patchCall).toBeDefined();
     }, { timeout: 2000 });
   });
+
+  it("renders horizontal FotMob-style score with team names alongside", () => {
+    renderCard();
+    // ScoreRoller with hideLabel should not show team name inside it.
+    // The team names appear once each in the score row, once in the players stream.
+    const ninjasOccurrences = screen.getAllByText("Ninjas");
+    const gunasOccurrences = screen.getAllByText("Gunas");
+    expect(ninjasOccurrences.length).toBeGreaterThanOrEqual(2);
+    expect(gunasOccurrences.length).toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe("HistoryCardFull — Players stream", () => {
@@ -273,8 +284,11 @@ describe("HistoryCardFull — Players stream", () => {
 
   it("renders team names as section headers with counts", () => {
     renderCard();
-    expect(screen.getByText(/Ninjas\s*\(2\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Gunas\s*\(2\)/)).toBeInTheDocument();
+    // "Ninjas" appears in score + players stream. Use heading role for section.
+    const ninjasHeaders = screen.getAllByText("Ninjas");
+    expect(ninjasHeaders.length).toBeGreaterThanOrEqual(2);
+    // Count badge "(2)" next to each team name
+    expect(screen.getAllByText("(2)").length).toBe(2);
   });
 
   it("shows ELO delta on each player row", () => {
@@ -325,8 +339,66 @@ describe("HistoryCardFull — cancelled", () => {
     expect(screen.queryByText("João Fernandes")).not.toBeInTheDocument();
   });
 
-  it("shows 'Cancelled' status chip", () => {
+  it("shows 'Cancelled' status text below score", () => {
     renderCard({ status: "cancelled" });
     expect(screen.getByTestId("status-chip")).toHaveTextContent(/cancelled/i);
+  });
+});
+
+describe("HistoryCardFull — admin controls", () => {
+  it("shows friendly icon + kebab menu for owner", () => {
+    cleanup();
+    renderWithTheme(
+      <HistoryCardFull
+        entry={baseEntry}
+        eventId="evt-1"
+        event={event}
+        cost={cost}
+        mvp={mvp}
+        isOwner
+        isAdmin={false}
+        isAuthenticated
+        userName="owner"
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        knownPlayers={[]}
+        playerRatings={[]}
+      />,
+    );
+    expect(screen.getByTestId("friendly-toggle")).toBeInTheDocument();
+    expect(screen.getByTestId("more-actions")).toBeInTheDocument();
+    // Lock + Delete are inside the kebab menu, not in the header
+    expect(screen.queryByTestId("lock-toggle")).not.toBeInTheDocument();
+  });
+
+  it("kebab menu reveals Lock and Delete actions for owner", async () => {
+    const user = userEvent.setup();
+    cleanup();
+    renderWithTheme(
+      <HistoryCardFull
+        entry={baseEntry}
+        eventId="evt-1"
+        event={event}
+        cost={cost}
+        mvp={mvp}
+        isOwner
+        isAdmin={false}
+        isAuthenticated
+        userName="owner"
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        knownPlayers={[]}
+        playerRatings={[]}
+      />,
+    );
+    await user.click(screen.getByTestId("more-actions"));
+    expect(screen.getByTestId("lock-toggle")).toBeInTheDocument();
+    expect(screen.getByTestId("delete-action")).toBeInTheDocument();
+  });
+
+  it("hides admin controls for non-owner", () => {
+    renderCard();
+    expect(screen.queryByTestId("friendly-toggle")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("more-actions")).not.toBeInTheDocument();
   });
 });

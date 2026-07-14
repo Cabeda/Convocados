@@ -21,6 +21,8 @@ const it: TranslationKeys = {
   competitive: "Competitivo",
   noElo: "senza ELO",
   friendlyNoElo: "Le partite amichevoli non influenzano il punteggio",
+  lockAction: "Blocca",
+  unlockAction: "Sblocca",
   saveLocation: "Salva",
   cancelEdit: "Annulla",
   locationNotGeocoded: "Luogo salvato ma non è stato possibile posizionarlo sulla mappa. Prova un indirizzo più specifico o incolla un link di Google Maps.",

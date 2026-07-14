@@ -1219,7 +1219,9 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
       eloProcessed: true,
     });
 
-    // Process ELO for the original game so ratings reflect Alice vs Bob
+    // Process ELO for the original game so ratings reflect Alice vs Bob.
+    // processGame is idempotent on eloProcessed games, so clear the flag first.
+    await testPrisma.gameHistory.update({ where: { id: history.id }, data: { eloProcessed: false } });
     const { processGame } = await import("~/lib/elo.server");
     await processGame(id, history.id, originalTeams, 3, 1);
 

@@ -21,6 +21,8 @@ const de: TranslationKeys = {
   competitive: "Wettkampf",
   noElo: "kein ELO",
   friendlyNoElo: "Freundschaftsspiele beeinflussen die Spielerbewertung nicht",
+  lockAction: "Sperren",
+  unlockAction: "Entsperren",
   saveLocation: "Speichern",
   cancelEdit: "Abbrechen",
   locationNotGeocoded: "Ort gespeichert, konnte aber nicht auf der Karte platziert werden. Versuche eine genauere Adresse oder füge einen Google Maps Link ein.",

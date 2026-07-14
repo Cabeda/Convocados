@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
-  Box, Stack, Chip, Button, Divider, Paper,
+  Box, Stack, Chip, Button, Paper,
   Alert, TextField, Autocomplete, InputAdornment,
   alpha, useTheme, IconButton, Tooltip, Dialog, DialogTitle,
   DialogContent, DialogActions, Menu, MenuItem, ListItemIcon, ListItemText, Typography,
@@ -18,9 +18,12 @@ import StarBorderIcon from "@mui/icons-material/StarBorder";
 import StarHalfIcon from "@mui/icons-material/StarHalf";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SentimentSatisfiedAltIcon from "@mui/icons-material/SentimentSatisfiedAlt";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import RemoveIcon from "@mui/icons-material/Remove";
+import AddIcon from "@mui/icons-material/Add";
+import EventIcon from "@mui/icons-material/Event";
 import LoginIcon from "@mui/icons-material/Login";
 import HistoryIcon from "@mui/icons-material/History";
 import { useT } from "~/lib/useT";
@@ -28,7 +31,6 @@ import { detectLocale } from "~/lib/i18n";
 import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
 import { formatDateInTz } from "~/lib/timezones";
-import { ScoreRoller } from "./event/ScoreRoller";
 
 type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
@@ -170,6 +172,8 @@ export function HistoryCardFull({
 
   // Status menu
   const [statusMenuAnchor, setStatusMenuAnchor] = useState<HTMLElement | null>(null);
+  // Admin actions (kebab) menu
+  const [moreMenuAnchor, setMoreMenuAnchor] = useState<HTMLElement | null>(null);
 
   // Mvp vote state
   const [votingFor, setVotingFor] = useState<string | null>(null);
@@ -382,9 +386,9 @@ export function HistoryCardFull({
 
   // ── Payments edit ──────────────────────────────────────────────────────────
   const cyclePaymentStatus = (idx: number) => {
-    const order: Array<"paid" | "pending"> = ["pending", "paid"];
     setEditablePayments((prev) => prev.map((p, i) => {
       if (i !== idx) return p;
+      const order: Array<"paid" | "pending"> = ["pending", "paid"];
       const next = order[(order.indexOf(p.status) + 1) % order.length];
       return { ...p, status: next };
     }));
@@ -493,139 +497,80 @@ export function HistoryCardFull({
         transition: "box-shadow 0.2s",
         "&:hover": { boxShadow: theme.shadows[4] },
       }}>
-      {/* ── Header ── */}
+      {/* ── Hero + Score zone (continuous, no divider) ── */}
       <Box sx={{
-        px: 3, py: 2.5,
         background: `linear-gradient(135deg, ${alpha(
           isCancelled ? theme.palette.error.main : theme.palette.success.main, 0.08,
         )}, ${alpha(theme.palette.background.paper, 0)})`,
+        pt: 2.5, pb: isCancelled ? 2.5 : 0, px: 3,
       }}>
-        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" gap={1.5}>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
-              {formatDateInTz(date, localeStr, event.timezone, {
-                weekday: "long", day: "numeric", month: "long", year: "numeric",
-              })}
-              <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1.5 }}>
-                {formatDateInTz(date, localeStr, event.timezone, { hour: "2-digit", minute: "2-digit" })}
-              </Typography>
+        {/* Top context: event title + admin */}
+        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1.5} flexWrap="wrap">
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+            <SportsIcon fontSize="small" sx={{ color: "text.secondary" }} />
+            <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }} noWrap>
+              {event.title}
             </Typography>
-            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ mt: 0.5 }}>
-              {/* Location */}
-              {event.location ? (
-                <Tooltip title={t("getDirections")}>
-                  <a href={mapsUrl(event.location, event.latitude, event.longitude)}
-                    target="_blank" rel="noopener noreferrer"
-                    style={{ color: "inherit", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                    <LocationOnIcon fontSize="small" sx={{ color: "primary.main" }} />
-                    <Typography variant="body2" color="text.secondary" sx={{ textDecoration: "underline", textDecorationStyle: "dotted" }}>
-                      {event.location}
-                    </Typography>
-                  </a>
-                </Tooltip>
-              ) : isPlayAdmin ? (
-                <Button size="small" variant="text" startIcon={<LocationOnIcon />}
-                  href={`/events/${eventId}`}
-                  sx={{ textTransform: "none", minWidth: 0, p: 0.5, color: "text.secondary" }}>
-                  {t("addLocationInline")}
-                </Button>
-              ) : (
-                <Typography variant="body2" color="text.disabled">{t("noLocationSet")}</Typography>
-              )}
+          </Stack>
 
-              {/* Cost */}
-              {cost && costTotal !== null ? (
-                <Tooltip title={t("totalCost")}>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <AttachMoneyIcon fontSize="small" sx={{ color: "success.main" }} />
-                    <Typography variant="body2" color="text.secondary">
-                      {costTotal.toFixed(2)} {costCurrency}
-                      {costPerPlayer !== null && costPerPlayer > 0 && (
-                        <> · <strong>{costPerPlayer.toFixed(2)} {costCurrency}</strong>/player</>
-                      )}
-                    </Typography>
-                  </Stack>
-                </Tooltip>
-              ) : isPlayAdmin ? (
-                <Button size="small" variant="text" startIcon={<AttachMoneyIcon />}
-                  href={`/events/${eventId}`}
-                  sx={{ textTransform: "none", minWidth: 0, p: 0.5, color: "text.secondary" }}>
-                  {t("addCostInline")}
-                </Button>
-              ) : null}
-            </Stack>
-          </Box>
-
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={0.5} alignItems="center">
             {entry.source === "historical" && (
-              <Chip icon={<HistoryIcon color="primary" />} label={t("historicalGame")}
-                color="warning" size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+              <Tooltip title={t("historicalGame")}>
+                <Chip icon={<HistoryIcon color="primary" />} label={t("historicalGame")}
+                  color="warning" size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+              </Tooltip>
             )}
-            {/* Status dropdown trigger */}
-            <Button
-              data-testid="status-chip"
-              size="small"
-              variant="outlined"
-              color={isCancelled ? "error" : "success"}
-              startIcon={isCancelled ? <CancelIcon /> : <CheckCircleIcon />}
-              endIcon={entry.editable && isAuthenticated ? <KeyboardArrowDownIcon /> : undefined}
-              onClick={entry.editable && isAuthenticated ? (e) => setStatusMenuAnchor(e.currentTarget) : undefined}
-              disabled={!entry.editable || !isAuthenticated}
-              aria-haspopup="menu"
-              sx={{ borderRadius: 999, textTransform: "none", fontWeight: 600, px: 1.5 }}
-            >
-              {isCancelled ? t("statusCancelled") : t("statusPlayed")}
-            </Button>
-            <Menu
-              anchorEl={statusMenuAnchor}
-              open={!!statusMenuAnchor}
-              onClose={() => setStatusMenuAnchor(null)}
-            >
-              {(["played", "cancelled", "upcoming"] as const).map((s) => (
-                <MenuItem key={s} data-testid={`status-option-${s}`} onClick={() => handleStatusChange(s)}
-                  selected={entry.status === s}>
-                  <ListItemIcon>
-                    {s === "played" && <CheckCircleIcon fontSize="small" color="success" />}
-                    {s === "cancelled" && <CancelIcon fontSize="small" color="error" />}
-                    {s === "upcoming" && <SportsIcon fontSize="small" color="action" />}
-                  </ListItemIcon>
-                  <ListItemText>{s === "played" ? t("statusPlayed") : s === "cancelled" ? t("statusCancelled") : t("statusUpcoming")}</ListItemText>
-                </MenuItem>
-              ))}
-            </Menu>
-
             {isPlayAdmin && (
               <>
                 <Tooltip title={entry.isFriendly ? t("markCompetitive") : t("markFriendly")}>
                   <span>
-                    <Button
+                    <IconButton
                       data-testid="friendly-toggle"
                       size="small"
-                      variant={entry.isFriendly ? "contained" : "outlined"}
-                      color={entry.isFriendly ? "success" : "inherit"}
-                      disableElevation
-                      startIcon={<SentimentSatisfiedAltIcon />}
+                      color={entry.isFriendly ? "success" : "default"}
                       onClick={handleToggleFriendly}
                       disabled={togglingFriendly}
-                      sx={{ borderRadius: 999, textTransform: "none", fontWeight: 600, px: 1.5, minWidth: 0 }}
                     >
-                      {entry.isFriendly ? t("friendly") : t("competitive")}
-                    </Button>
-                  </span>
-                </Tooltip>
-                <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
-                  <span>
-                    <IconButton size="small" color={entry.editable ? "default" : "warning"}
-                      onClick={handleToggleLock} disabled={unlocking}>
-                      {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+                      <SentimentSatisfiedAltIcon fontSize="small" />
                     </IconButton>
                   </span>
                 </Tooltip>
-                <Tooltip title={t("deleteGame")}>
-                  <IconButton size="small" color="error" onClick={() => setConfirmDelete(true)} disabled={deleting}>
-                    <DeleteIcon fontSize="small" />
+                <Tooltip title={t("moreActions")}>
+                  <IconButton
+                    data-testid="more-actions"
+                    size="small"
+                    onClick={(e) => setMoreMenuAnchor(e.currentTarget)}
+                  >
+                    <MoreVertIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
+                <Menu
+                  anchorEl={moreMenuAnchor}
+                  open={!!moreMenuAnchor}
+                  onClose={() => setMoreMenuAnchor(null)}
+                >
+                  <MenuItem
+                    data-testid="lock-toggle"
+                    onClick={() => { setMoreMenuAnchor(null); handleToggleLock(); }}
+                    disabled={unlocking}
+                  >
+                    <ListItemIcon>
+                      {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+                    </ListItemIcon>
+                    <ListItemText>{entry.editable ? t("lockAction") : t("unlockAction")}</ListItemText>
+                  </MenuItem>
+                  <MenuItem
+                    data-testid="delete-action"
+                    onClick={() => { setMoreMenuAnchor(null); setConfirmDelete(true); }}
+                    disabled={deleting}
+                    sx={{ color: "error.main" }}
+                  >
+                    <ListItemIcon>
+                      <DeleteIcon fontSize="small" color="error" />
+                    </ListItemIcon>
+                    <ListItemText>{t("deleteGame")}</ListItemText>
+                  </MenuItem>
+                </Menu>
               </>
             )}
             {!isPlayAdmin && !entry.editable && (
@@ -635,6 +580,200 @@ export function HistoryCardFull({
             )}
           </Stack>
         </Stack>
+
+        {/* Date row */}
+        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5 }}>
+          <EventIcon fontSize="small" sx={{ color: "text.disabled" }} />
+          <Typography variant="body2" color="text.secondary">
+            {formatDateInTz(date, localeStr, event.timezone, {
+              weekday: "short", day: "numeric", month: "short", year: "numeric",
+            })}
+            {" · "}
+            {formatDateInTz(date, localeStr, event.timezone, { hour: "2-digit", minute: "2-digit" })}
+          </Typography>
+        </Stack>
+
+        {/* Meta row: location + cost + share + source */}
+        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ mt: 0.5 }}>
+          {event.location ? (
+            <Tooltip title={t("getDirections")}>
+              <a href={mapsUrl(event.location, event.latitude, event.longitude)}
+                target="_blank" rel="noopener noreferrer"
+                style={{ color: "inherit", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <LocationOnIcon fontSize="small" sx={{ color: "primary.main" }} />
+                <Typography variant="body2" color="text.secondary" sx={{ textDecoration: "underline", textDecorationStyle: "dotted" }}>
+                  {event.location}
+                </Typography>
+              </a>
+            </Tooltip>
+          ) : isPlayAdmin ? (
+            <Button size="small" variant="text" startIcon={<LocationOnIcon />}
+              href={`/events/${eventId}`}
+              sx={{ textTransform: "none", minWidth: 0, p: 0.5, color: "text.secondary" }}>
+              {t("addLocationInline")}
+            </Button>
+          ) : (
+            <Typography variant="body2" color="text.disabled">{t("noLocationSet")}</Typography>
+          )}
+
+          {cost && costTotal !== null ? (
+            <Tooltip title={t("totalCost")}>
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <AttachMoneyIcon fontSize="small" sx={{ color: "success.main" }} />
+                <Typography variant="body2" color="text.secondary">
+                  {costTotal.toFixed(2)} {costCurrency}
+                  {costPerPlayer !== null && costPerPlayer > 0 && (
+                    <> · <strong>{costPerPlayer.toFixed(2)} {costCurrency}</strong>/player</>
+                  )}
+                </Typography>
+              </Stack>
+            </Tooltip>
+          ) : isPlayAdmin ? (
+            <Button size="small" variant="text" startIcon={<AttachMoneyIcon />}
+              href={`/events/${eventId}`}
+              sx={{ textTransform: "none", minWidth: 0, p: 0.5, color: "text.secondary" }}>
+              {t("addCostInline")}
+            </Button>
+          ) : null}
+        </Stack>
+
+        {/* Score band — same hero zone, no divider */}
+        {!isCancelled ? (
+          <Box sx={{ pt: 2.5, pb: 1 }}>
+            <Box sx={{
+              display: "grid",
+              gridTemplateColumns: "1fr auto 1fr",
+              alignItems: "center",
+              gap: { xs: 1.5, sm: 3 },
+            }}>
+              {/* Team 1 */}
+              <Stack alignItems={{ xs: "center", sm: "flex-end" }} spacing={0} sx={{ minWidth: 0 }}>
+                <Typography
+                  variant="h6"
+                  fontWeight={700}
+                  sx={{ lineHeight: 1.1, fontSize: { xs: "1rem", sm: "1.15rem" }, textAlign: { xs: "center", sm: "right" } }}
+                >
+                  {entry.teamOneName}
+                </Typography>
+                {canEditScore && (
+                  <Typography variant="caption" color="text.disabled" sx={{ textAlign: { xs: "center", sm: "right" } }}>
+                    {scoreOne !== "" ? scoreOne : "0"}
+                  </Typography>
+                )}
+              </Stack>
+
+              {/* Score */}
+              {canEditScore ? (
+                <Box
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    borderRadius: 999,
+                    border: `1px solid ${theme.palette.divider}`,
+                    bgcolor: theme.palette.action.hover,
+                    px: 0.5, py: 0.25,
+                  }}
+                >
+                  <IconButton data-testid="score-minus" size="small" onClick={() => setScoreOne(String(Math.max(0, (parseInt(scoreOne, 10) || 0) - 1)))} sx={{ p: 0.5 }}>
+                    <RemoveIcon fontSize="small" />
+                  </IconButton>
+                  <Typography sx={{ fontSize: "2rem", fontWeight: 800, fontVariantNumeric: "tabular-nums", lineHeight: 1, minWidth: "2ch", textAlign: "center", px: 1 }}>
+                    {(scoreOne || "0").padStart(2, "0")}
+                  </Typography>
+                  <IconButton data-testid="score-plus" size="small" color="primary" onClick={() => setScoreOne(String((parseInt(scoreOne, 10) || 0) + 1))} sx={{ p: 0.5 }}>
+                    <AddIcon fontSize="small" />
+                  </IconButton>
+                  <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ mx: -1 }}>-</Typography>
+                  <IconButton size="small" onClick={() => setScoreTwo(String(Math.max(0, (parseInt(scoreTwo, 10) || 0) - 1)))} sx={{ p: 0.5 }}>
+                    <RemoveIcon fontSize="small" />
+                  </IconButton>
+                  <Typography sx={{ fontSize: "2rem", fontWeight: 800, fontVariantNumeric: "tabular-nums", lineHeight: 1, minWidth: "2ch", textAlign: "center", px: 1 }}>
+                    {(scoreTwo || "0").padStart(2, "0")}
+                  </Typography>
+                  <IconButton size="small" color="primary" onClick={() => setScoreTwo(String((parseInt(scoreTwo, 10) || 0) + 1))} sx={{ p: 0.5 }}>
+                    <AddIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              ) : (
+                <Typography
+                  variant="h2"
+                  fontWeight={800}
+                  sx={{
+                    fontSize: { xs: "2.5rem", sm: "3rem" },
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1,
+                    color: "text.primary",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {entry.scoreOne ?? 0}-{entry.scoreTwo ?? 0}
+                </Typography>
+              )}
+
+              {/* Team 2 */}
+              <Stack alignItems={{ xs: "center", sm: "flex-start" }} spacing={0} sx={{ minWidth: 0 }}>
+                <Typography
+                  variant="h6"
+                  fontWeight={700}
+                  sx={{ lineHeight: 1.1, fontSize: { xs: "1rem", sm: "1.15rem" }, textAlign: { xs: "center", sm: "left" } }}
+                >
+                  {entry.teamTwoName}
+                </Typography>
+                {canEditScore && (
+                  <Typography variant="caption" color="text.disabled" sx={{ textAlign: { xs: "center", sm: "left" } }}>
+                    {scoreTwo !== "" ? scoreTwo : "0"}
+                  </Typography>
+                )}
+              </Stack>
+            </Box>
+
+            {/* Status: small text below score, like FotMob "Full time" */}
+            <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ mt: 1 }}>
+              {(savingScore || savedFlash) && (
+                <Typography variant="caption" color="text.disabled">
+                  {savingScore ? `· ${t("savingDateTime")}` : savedFlash ? `· ✓ ${t("saved")}` : ""}
+                </Typography>
+              )}
+            </Stack>
+          </Box>
+        ) : null}
+
+        {/* Status row — always shown (Played / Cancelled / Upcoming) */}
+        <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ pb: 2 }}>
+          <Typography
+            data-testid="status-chip"
+            variant="caption"
+            onClick={entry.editable && isAuthenticated ? (e) => setStatusMenuAnchor(e.currentTarget) : undefined}
+            sx={{
+              color: isCancelled ? "error.main" : "success.main",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+              cursor: entry.editable && isAuthenticated ? "pointer" : "default",
+              userSelect: "none",
+            }}
+          >
+            {isCancelled ? t("statusCancelled") : t("statusPlayed")}
+          </Typography>
+        </Stack>
+        <Menu
+          anchorEl={statusMenuAnchor}
+          open={!!statusMenuAnchor}
+          onClose={() => setStatusMenuAnchor(null)}
+        >
+          {(["played", "cancelled", "upcoming"] as const).map((s) => (
+            <MenuItem key={s} data-testid={`status-option-${s}`} onClick={() => handleStatusChange(s)}
+              selected={entry.status === s}>
+              <ListItemIcon>
+                {s === "played" && <CheckCircleIcon fontSize="small" color="success" />}
+                {s === "cancelled" && <CancelIcon fontSize="small" color="error" />}
+                {s === "upcoming" && <SportsIcon fontSize="small" color="action" />}
+              </ListItemIcon>
+              <ListItemText>{s === "played" ? t("statusPlayed") : s === "cancelled" ? t("statusCancelled") : t("statusUpcoming")}</ListItemText>
+            </MenuItem>
+          ))}
+        </Menu>
       </Box>
 
       {/* Delete confirmation dialog */}
@@ -656,58 +795,10 @@ export function HistoryCardFull({
         </DialogActions>
       </Dialog>
 
-      <Stack spacing={0} divider={<Divider sx={{ mx: 3 }} />}>
+      <Stack spacing={0}>
         {error && (
           <Box sx={{ px: 3, pt: 2 }}>
             <Alert severity="error" onClose={() => setError(null)} sx={{ borderRadius: 2 }}>{error}</Alert>
-          </Box>
-        )}
-
-        {/* ── Score (auto-save, no button) ── */}
-        {!isCancelled && (
-          <Box sx={{ px: 3, py: 2.5 }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-              <Typography variant="subtitle2" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
-                {t("score")}
-              </Typography>
-              <Box sx={{ minHeight: 18, display: "flex", alignItems: "center" }}>
-                {savingScore ? (
-                  <Typography variant="caption" color="text.disabled">{t("savingDateTime")}</Typography>
-                ) : savedFlash ? (
-                  <Typography variant="caption" color="success.main">✓ {t("saved")}</Typography>
-                ) : null}
-              </Box>
-            </Stack>
-            <Stack direction="row" spacing={2} alignItems="center" justifyContent="center"
-              sx={{ py: 2, px: 3, borderRadius: 3, backgroundColor: alpha(theme.palette.action.hover, 0.04) }}>
-              {canEditScore ? (
-                <>
-                  <ScoreRoller value={scoreOne} onChange={setScoreOne} teamName={entry.teamOneName} />
-                  <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
-                  <ScoreRoller value={scoreTwo} onChange={setScoreTwo} teamName={entry.teamTwoName} />
-                </>
-              ) : (
-                <>
-                  <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
-                    <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
-                      {entry.teamOneName}
-                    </Typography>
-                    <Typography variant="h3" fontWeight={800} color="text.primary">
-                      {entry.scoreOne !== null ? entry.scoreOne : "—"}
-                    </Typography>
-                  </Stack>
-                  <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
-                  <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
-                    <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
-                      {entry.teamTwoName}
-                    </Typography>
-                    <Typography variant="h3" fontWeight={800} color="text.primary">
-                      {entry.scoreTwo !== null ? entry.scoreTwo : "—"}
-                    </Typography>
-                  </Stack>
-                </>
-              )}
-            </Stack>
           </Box>
         )}
 
@@ -734,8 +825,8 @@ export function HistoryCardFull({
 
         {/* ── Players stream (teams + payments + mvp) ── */}
         {playerRowsByTeam.length > 0 && !isCancelled && (
-          <Box sx={{ px: 3, py: 2.5 }}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+          <Box sx={{ px: 3, py: 2 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
               <SportsIcon fontSize="small" sx={{ color: "text.secondary" }} />
               <Typography variant="subtitle2" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
                 {t("players")}
@@ -762,25 +853,23 @@ export function HistoryCardFull({
               </Alert>
             )}
 
-            <Stack spacing={2}>
+            <Stack spacing={2.5}>
               {playerRowsByTeam.map((team, teamIdx) => (
                 <Box key={team.teamName}
                   onDragOver={canEditTeams ? handleDragOver : undefined}
                   onDrop={canEditTeams ? () => handleDrop(teamIdx) : undefined}
                   sx={{
-                    p: 2, borderRadius: 3,
-                    backgroundColor: alpha(theme.palette.action.hover, 0.04),
-                    border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
                     ...(canEditTeams && dragPlayer && dragPlayer.fromTeam !== teamIdx ? {
-                      border: `2px dashed ${alpha(theme.palette.primary.main, 0.4)}`,
                       backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                      borderRadius: 2,
+                      p: 1,
                     } : {}),
-                    transition: "border 0.2s, background-color 0.2s",
+                    transition: "background-color 0.2s",
                   }}>
-                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
-                    {team.teamName} ({team.rows.length})
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5, color: "text.secondary" }}>
+                    {team.teamName} <Typography component="span" variant="caption" color="text.disabled">({team.rows.length})</Typography>
                   </Typography>
-                  <Stack spacing={0.5}>
+                  <Stack spacing={0.25}>
                     {team.rows.map((row) => {
                       const liveElo = liveEloUpdates.find((e) => e.name === row.name);
                       const elo = row.elo ?? liveElo?.delta ?? null;
@@ -790,16 +879,19 @@ export function HistoryCardFull({
                           draggable={canEditTeams}
                           onDragStart={canEditTeams ? () => handleDragStart(row.name, teamIdx) : undefined}
                           sx={{
-                            display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap",
-                            py: 0.5, px: 1, borderRadius: 2,
+                            display: "grid",
+                            gridTemplateColumns: "1fr auto auto auto auto",
+                            alignItems: "center",
+                            gap: 1,
+                            py: 0.4, px: 1, borderRadius: 1.5,
                             ...(canEditTeams ? { cursor: "grab", "&:active": { cursor: "grabbing" } } : {}),
                           }}>
-                          <Typography variant="body2" sx={{ fontWeight: 500, flex: "0 1 auto", minWidth: 80 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 500, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {row.name}
                             {canEditTeams && (
                               <IconButton size="small" onClick={() => removePlayerFromTeam(teamIdx, row.name)}
-                                sx={{ ml: 0.5, p: 0.25 }}>
-                                <CancelIcon sx={{ fontSize: 14 }} color="error" />
+                                sx={{ ml: 0.25, p: 0, verticalAlign: "middle" }}>
+                                <CancelIcon sx={{ fontSize: 12 }} color="error" />
                               </IconButton>
                             )}
                           </Typography>
@@ -809,17 +901,19 @@ export function HistoryCardFull({
                             <Tooltip title={t("friendlyNoElo")}>
                               <Chip size="small" label={t("noElo")}
                                 variant="outlined"
-                                sx={{ height: 22, fontSize: "0.7rem", color: "text.disabled", borderColor: "divider" }} />
+                                sx={{ height: 20, fontSize: "0.7rem", color: "text.disabled", borderColor: "divider" }} />
                             </Tooltip>
                           ) : elo !== null ? (
                             <Chip size="small" label={elo >= 0 ? `+${elo}` : `${elo}`}
                               color={eloColor as "success" | "error" | "default"}
                               variant={elo === 0 ? "outlined" : "filled"}
-                              sx={{ height: 22, fontSize: "0.7rem", fontWeight: 700 }} />
-                          ) : null}
+                              sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }} />
+                          ) : (
+                            <Box /> /* keep grid alignment */
+                          )}
 
                           {/* Payment chip */}
-                          {row.paid && row.amount !== null && (
+                          {row.paid && row.amount !== null ? (
                             <Chip size="small"
                               label={`${formatAmount(row.amount)}`}
                               color={row.paid === "paid" ? "success" : "warning"}
@@ -828,42 +922,45 @@ export function HistoryCardFull({
                                 const idx = (canEditPayments ? editablePayments : payments).findIndex((p) => p.playerName === row.name);
                                 if (idx >= 0) cyclePaymentStatus(idx);
                               } : undefined}
-                              icon={row.paid === "paid" ? <CheckCircleIcon sx={{ fontSize: 14 }} /> : undefined}
-                              sx={{ height: 22, fontSize: "0.7rem", fontWeight: 600,
+                              icon={row.paid === "paid" ? <CheckCircleIcon sx={{ fontSize: 12 }} /> : undefined}
+                              sx={{ height: 20, fontSize: "0.7rem", fontWeight: 600,
                                 ...(canEditPayments ? { cursor: "pointer" } : {}) }} />
+                          ) : (
+                            <Box /> /* keep grid alignment */
                           )}
 
                           {/* MVP vote star */}
-                          {mvpState && isParticipantInGame && mvpState.isVotingOpen && row.participant && row.participant.id !== `name:${userName ?? ""}` && (
+                          {mvpState && isParticipantInGame && mvpState.isVotingOpen && row.participant && row.participant.id !== `name:${userName ?? ""}` ? (
                             <Tooltip title={mvpState.hasVoted ? t("mvpChangeVote") : t("voteMvp")}>
-                              <span>
-                                <IconButton size="small" onClick={(e) => row.participant && handleVote(row.participant!, e)}
-                                  disabled={votingFor !== null}
-                                  sx={{ p: 0.25 }}>
-                                  {row.isMvp ? (
-                                    <StarIcon sx={{ fontSize: 16, color: "warning.main" }} />
-                                  ) : (
-                                    <StarBorderIcon sx={{ fontSize: 16, color: "action.active" }} />
-                                  )}
-                                </IconButton>
-                              </span>
+                              <IconButton size="small" onClick={(e) => row.participant && handleVote(row.participant!, e)}
+                                disabled={votingFor !== null}
+                                sx={{ p: 0, minWidth: 0 }}>
+                                {row.isMvp ? (
+                                  <StarIcon sx={{ fontSize: 14, color: "warning.main" }} />
+                                ) : (
+                                  <StarBorderIcon sx={{ fontSize: 14, color: "action.active" }} />
+                                )}
+                              </IconButton>
                             </Tooltip>
-                          )}
-                          {mvpState && isParticipantInGame && mvpState.isVotingOpen && row.participant && row.participant.id === `name:${userName ?? ""}` && (
+                          ) : mvpState && isParticipantInGame && mvpState.isVotingOpen && row.participant && row.participant.id === `name:${userName ?? ""}` ? (
                             <Tooltip title={t("mvpSelfVoteError")}>
                               <span>
-                                <IconButton size="small" disabled sx={{ p: 0.25 }}>
-                                  <StarHalfIcon sx={{ fontSize: 16, color: "action.disabled" }} />
+                                <IconButton size="small" disabled sx={{ p: 0, minWidth: 0 }}>
+                                  <StarHalfIcon sx={{ fontSize: 14, color: "action.disabled" }} />
                                 </IconButton>
                               </span>
                             </Tooltip>
+                          ) : (
+                            <Box /> /* keep grid alignment */
                           )}
 
                           {/* MVP count badge (always visible if voting happened) */}
-                          {row.participant && row.participant.voteCount > 0 && (
-                            <Typography variant="caption" color="warning.main" fontWeight={700}>
+                          {row.participant && row.participant.voteCount > 0 ? (
+                            <Typography variant="caption" color="warning.main" fontWeight={700} sx={{ minWidth: 16, textAlign: "right" }}>
                               {row.participant.voteCount}
                             </Typography>
+                          ) : (
+                            <Box /> /* keep grid alignment */
                           )}
                         </Box>
                       );
@@ -872,7 +969,7 @@ export function HistoryCardFull({
 
                   {/* Add player (only when editing) */}
                   {canEditTeams && (
-                    <Box sx={{ mt: 1.5 }}>
+                    <Box sx={{ mt: 1 }}>
                       <Autocomplete<PlayerOption, false, false, true>
                         freeSolo size="small"
                         options={(() => {
