@@ -400,3 +400,23 @@ describe("HistoryCardFull — admin controls", () => {
     expect(screen.queryByTestId("more-actions")).not.toBeInTheDocument();
   });
 });
+
+describe("HistoryCardFull — typography floor", () => {
+  it("source file contains no fontSize below 0.75rem (12px)", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const file = path.resolve(__dirname, "../../components/HistoryCardFull.tsx");
+    const src = await fs.readFile(file, "utf8");
+    // Match fontSize values like 0.7rem, 0.65rem, 11px, etc.
+    const re = /fontSize:\s*"?(\d+(?:\.\d+)?)(rem|px)"?/g;
+    const offenders: string[] = [];
+    let m;
+    while ((m = re.exec(src)) !== null) {
+      const num = parseFloat(m[1]);
+      const unit = m[2];
+      const px = unit === "rem" ? num * 16 : num;
+      if (px < 12) offenders.push(`${px}px (${m[0]})`);
+    }
+    expect(offenders, `fontSize below 12px found:\n${offenders.join("\n")}`).toEqual([]);
+  });
+});

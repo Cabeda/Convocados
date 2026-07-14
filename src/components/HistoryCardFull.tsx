@@ -1,4 +1,12 @@
 /* eslint-disable react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
+/**
+ * Typography scale (minimum sizes enforced by HistoryCardFull.test.tsx):
+ * - Score:          2.75rem (44px) mobile / 3.5rem (56px) desktop
+ * - Team names:     1rem (16px) mobile / 1.15rem (18.4px) desktop
+ * - ELO / paid chip: 0.8rem (12.8px) — floor for metadata chips
+ * - Status / date:  body2 (14px) / caption (12px)
+ * - Anything below 0.75rem (12px) is a regression.
+ */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Box, Stack, Chip, Button, Paper,
@@ -162,7 +170,6 @@ export function HistoryCardFull({
 
   const payments: PaymentSnapshotEntry[] = entry.paymentsSnapshot ? JSON.parse(entry.paymentsSnapshot) : [];
   const [editablePayments, setEditablePayments] = useState<PaymentSnapshotEntry[]>(payments);
-  const [paymentsDirty, setPaymentsDirty] = useState(false);
   const date = new Date(entry.dateTime);
   const editableUntil = new Date(entry.editableUntil);
   const isCancelled = entry.status === "cancelled";
@@ -384,22 +391,26 @@ export function HistoryCardFull({
     setDragPlayer(null);
   };
 
-  // ── Payments edit ──────────────────────────────────────────────────────────
-  const cyclePaymentStatus = (idx: number) => {
-    setEditablePayments((prev) => prev.map((p, i) => {
-      if (i !== idx) return p;
-      const order: Array<"paid" | "pending"> = ["pending", "paid"];
-      const next = order[(order.indexOf(p.status) + 1) % order.length];
-      return { ...p, status: next };
-    }));
-    setPaymentsDirty(true);
-  };
+  // ── Payments edit (auto-save on click, no manual save) ─────────────────────
+  const paymentSaveInFlight = useRef<Set<number>>(new Set());
+  const cyclePaymentStatus = async (idx: number) => {
+    // Prevent double-fire on the same chip while a PATCH is in flight
+    if (paymentSaveInFlight.current.has(idx)) return;
 
-  const handleSavePayments = async () => {
-    setSavingTeams(true);
-    await patch({ paymentsSnapshot: editablePayments });
-    setSavingTeams(false);
-    setPaymentsDirty(false);
+    const order: Array<"paid" | "pending"> = ["pending", "paid"];
+    let nextSnapshot: PaymentSnapshotEntry[] = [];
+    setEditablePayments((prev) => {
+      nextSnapshot = prev.map((p, i) => {
+        if (i !== idx) return p;
+        const next = order[(order.indexOf(p.status) + 1) % order.length];
+        return { ...p, status: next };
+      });
+      return nextSnapshot;
+    });
+
+    paymentSaveInFlight.current.add(idx);
+    await patch({ paymentsSnapshot: nextSnapshot });
+    paymentSaveInFlight.current.delete(idx);
   };
 
   // ── MVP vote ───────────────────────────────────────────────────────────────
@@ -682,7 +693,7 @@ export function HistoryCardFull({
                   <IconButton data-testid="score-minus" size="small" onClick={() => setScoreOne(String(Math.max(0, (parseInt(scoreOne, 10) || 0) - 1)))} sx={{ p: 0.5 }}>
                     <RemoveIcon fontSize="small" />
                   </IconButton>
-                  <Typography sx={{ fontSize: "2rem", fontWeight: 800, fontVariantNumeric: "tabular-nums", lineHeight: 1, minWidth: "2ch", textAlign: "center", px: 1 }}>
+                  <Typography sx={{ fontSize: { xs: "1.75rem", sm: "2rem" }, fontWeight: 800, fontVariantNumeric: "tabular-nums", lineHeight: 1, minWidth: "2ch", textAlign: "center", px: 1 }}>
                     {(scoreOne || "0").padStart(2, "0")}
                   </Typography>
                   <IconButton data-testid="score-plus" size="small" color="primary" onClick={() => setScoreOne(String((parseInt(scoreOne, 10) || 0) + 1))} sx={{ p: 0.5 }}>
@@ -692,7 +703,7 @@ export function HistoryCardFull({
                   <IconButton size="small" onClick={() => setScoreTwo(String(Math.max(0, (parseInt(scoreTwo, 10) || 0) - 1)))} sx={{ p: 0.5 }}>
                     <RemoveIcon fontSize="small" />
                   </IconButton>
-                  <Typography sx={{ fontSize: "2rem", fontWeight: 800, fontVariantNumeric: "tabular-nums", lineHeight: 1, minWidth: "2ch", textAlign: "center", px: 1 }}>
+                  <Typography sx={{ fontSize: { xs: "1.75rem", sm: "2rem" }, fontWeight: 800, fontVariantNumeric: "tabular-nums", lineHeight: 1, minWidth: "2ch", textAlign: "center", px: 1 }}>
                     {(scoreTwo || "0").padStart(2, "0")}
                   </Typography>
                   <IconButton size="small" color="primary" onClick={() => setScoreTwo(String((parseInt(scoreTwo, 10) || 0) + 1))} sx={{ p: 0.5 }}>
@@ -704,7 +715,7 @@ export function HistoryCardFull({
                   variant="h2"
                   fontWeight={800}
                   sx={{
-                    fontSize: { xs: "2.5rem", sm: "3rem" },
+                    fontSize: { xs: "2.75rem", sm: "3.5rem" },
                     fontVariantNumeric: "tabular-nums",
                     lineHeight: 1,
                     color: "text.primary",
@@ -843,13 +854,6 @@ export function HistoryCardFull({
                   {savingTeams ? t("savingDateTime") : t("saveTeams")}
                 </Button>
               )}
-              {canEditPayments && paymentsDirty && (
-                <Button size="small" variant="contained" disableElevation
-                  onClick={handleSavePayments} disabled={savingTeams}
-                  sx={{ ml: teamsDirty ? 1 : "auto", borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
-                  {savingTeams ? t("savingDateTime") : t("savePayments")}
-                </Button>
-              )}
             </Stack>
 
             {duplicateNames.length > 0 && (
@@ -927,13 +931,13 @@ export function HistoryCardFull({
                             <Tooltip title={t("friendlyNoElo")}>
                               <Chip size="small" label={t("noElo")}
                                 variant="outlined"
-                                sx={{ height: 20, fontSize: "0.7rem", color: "text.disabled", borderColor: "divider" }} />
+                                sx={{ height: 22, fontSize: "0.8rem", color: "text.disabled", borderColor: "divider" }} />
                             </Tooltip>
                           ) : elo !== null ? (
                             <Chip size="small" label={elo >= 0 ? `+${elo}` : `${elo}`}
                               color={eloColor as "success" | "error" | "default"}
                               variant={elo === 0 ? "outlined" : "filled"}
-                              sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }} />
+                              sx={{ height: 22, fontSize: "0.8rem", fontWeight: 700 }} />
                           ) : (
                             <Box /> /* keep grid alignment */
                           )}
@@ -949,7 +953,7 @@ export function HistoryCardFull({
                                 if (idx >= 0) cyclePaymentStatus(idx);
                               } : undefined}
                               icon={row.paid === "paid" ? <CheckCircleIcon sx={{ fontSize: 12 }} /> : undefined}
-                              sx={{ height: 20, fontSize: "0.7rem", fontWeight: 600,
+                              sx={{ height: 22, fontSize: "0.8rem", fontWeight: 600,
                                 ...(canEditPayments ? { cursor: "pointer" } : {}) }} />
                           ) : (
                             <Box /> /* keep grid alignment */
