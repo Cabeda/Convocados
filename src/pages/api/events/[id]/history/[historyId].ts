@@ -402,8 +402,10 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   let deleteHistoryId = params.historyId;
 
   // ADR 0016: a "played" live Game may not yet have a GameHistory snapshot.
-  // Materialise one, then delete it and cancel the Game so it no longer
-  // surfaces as a played occurrence.
+  // Materialise one, then delete it. The source Game keeps its "played" status
+  // so it can be re-derived on demand — marking it "cancelled" would be wrong
+  // (cancelled means a skipped game) and would leak into the post-game banner
+  // and ELO skip filters.
   if (!entry) {
     const game = await prisma.game.findUnique({
       where: { id: params.historyId, eventId: params.id },
@@ -412,7 +414,6 @@ export const DELETE: APIRoute = async ({ params, request }) => {
       const snap = await buildSnapshotForGame(params.id ?? "", game);
       entry = await prisma.gameHistory.create({ data: snap });
       deleteHistoryId = entry.id;
-      await prisma.game.update({ where: { id: game.id }, data: { status: "cancelled" } });
     }
   }
   if (!entry) return Response.json({ error: "Not found." }, { status: 404 });
