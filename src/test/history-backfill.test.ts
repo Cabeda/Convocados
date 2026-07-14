@@ -477,3 +477,86 @@ describe("Delete Historical Game API", () => {
     expect(res.status).toBe(401);
   });
 });
+
+// ─── ADR 0016 regression: played live Game resolves to an editable GameHistory ─
+// A recurring event's reset flips the old Game to "played" AND creates a
+// GameHistory snapshot with the same dateTime. The history list used to surface
+// the bare live Game (no teamsSnapshot, uneditable id) which hid the players
+// and made PATCH return "Not found.".
+import { GET as getHistory } from "~/pages/api/events/[id]/history/index";
+import { PATCH as patchHistory } from "~/pages/api/events/[id]/history/[historyId]";
+
+describe("Played live Game resolves to editable GameHistory (regression)", () => {
+  beforeEach(async () => {
+    await prisma.game.deleteMany();
+    await prisma.gameHistory.deleteMany();
+    await prisma.teamResult.deleteMany();
+    await prisma.teamMember.deleteMany();
+    await prisma.event.deleteMany();
+    await prisma.user.deleteMany();
+    mockGetSession.mockResolvedValue({ user: { id: "owner1", name: "Owner" } } as any);
+    mockCheckOwnership.mockResolvedValue({
+      isOwner: true,
+      isAdmin: false,
+      session: { user: { id: "owner1", name: "Owner" } },
+    } as any);
+  });
+
+  it("GET history returns the GameHistory snapshot (with players), not the bare live Game", async () => {
+    const event = await seedEvent("owner1");
+    const dt = new Date("2025-03-10T18:00:00Z");
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: dt, status: "played" },
+    });
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: dt,
+        status: "played",
+        teamOneName: "A",
+        teamTwoName: "B",
+        teamsSnapshot: JSON.stringify([
+          { team: "A", players: [{ name: "Alice", order: 0 }] },
+          { team: "B", players: [{ name: "Bob", order: 0 }] },
+        ]),
+        editableUntil: new Date(Date.now() + 86400_000),
+      },
+    });
+
+    const res = await getHistory(ctx({ id: event.id }, undefined, "GET"));
+    const body = await res.json();
+
+    const entry = body.data.find((e: any) => e.dateTime === dt.toISOString());
+    expect(entry).toBeTruthy();
+    // Players are visible because the GameHistory snapshot is preferred
+    expect(entry.teamsSnapshot).not.toBeNull();
+    // The id must be the editable GameHistory id, not the bare live Game id
+    expect(entry.id).not.toBe(game.id);
+  });
+
+  it("PATCH on a played live Game id saves the score (materialises GameHistory)", async () => {
+    const event = await seedEvent("owner1");
+    // Recent date so the derived snapshot is still editable (dateTime + 7 days)
+    const dt = new Date(Date.now() - 1 * 86400_000);
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: dt, status: "played", scoreOne: null, scoreTwo: null },
+    });
+    // Teams so the on-demand snapshot carries the players
+    const trA = await prisma.teamResult.create({ data: { name: "A", eventId: event.id } });
+    await prisma.teamMember.create({ data: { name: "Alice", order: 0, teamResultId: trA.id } });
+    const trB = await prisma.teamResult.create({ data: { name: "B", eventId: event.id } });
+    await prisma.teamMember.create({ data: { name: "Bob", order: 0, teamResultId: trB.id } });
+
+    const res = await patchHistory(
+      ctx({ id: event.id, historyId: game.id }, { scoreOne: 3, scoreTwo: 1 }, "PATCH"),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scoreOne).toBe(3);
+    expect(body.scoreTwo).toBe(1);
+
+    const gh = await prisma.gameHistory.findFirst({ where: { eventId: event.id, dateTime: dt } });
+    expect(gh).toBeTruthy();
+    expect(gh!.teamsSnapshot).not.toBeNull();
+  });
+});
