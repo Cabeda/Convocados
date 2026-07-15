@@ -99,6 +99,10 @@ async function addPlayerViaUi(page: Page, name: string): Promise<void> {
   await input.press("Enter");
   // No dialog should open on Enter.
   await expect(page.getByRole("dialog")).not.toBeVisible();
+  // Wait for the player to appear on the roster and input to clear before
+  // returning — prevents race when adding multiple players in sequence.
+  await expect(page.getByText(name, { exact: true }).first()).toBeVisible({ timeout: 10_000 });
+  await expect(input).toHaveValue("", { timeout: 5_000 });
 }
 
 async function expectRosterContains(
