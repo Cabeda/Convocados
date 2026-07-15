@@ -1,14 +1,10 @@
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, user interactions mutate it, server data resyncs on refetch. Setting from async fetch callbacks is also fine. */
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
-  Container, Paper, Typography, Box, Stack, Button, IconButton, Tooltip,
+  Container, Paper, Typography, Box, Stack, Button,
   Alert, Skeleton,
 } from "@mui/material";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
-import ShuffleIcon from "@mui/icons-material/Shuffle";
-import ShareIcon from "@mui/icons-material/Share";
-import PaymentsIcon from "@mui/icons-material/Payments";
-import SettingsIcon from "@mui/icons-material/Settings";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
@@ -827,31 +823,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onSnackbar={setSnackbar}
             />
 
-            {/* Organizer toolbar — quick actions for owner/admin */}
-            {canEditSettings && (
-              <Paper elevation={0} sx={{ borderRadius: 3, px: 2, py: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 1, bgcolor: (theme) => `${theme.palette.action.hover}` }}>
-                <Tooltip title={t("randomize")}>
-                  <IconButton size="small" onClick={() => localMatches ? setConfirmOpen(true) : doRandomize()}>
-                    <ShuffleIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title={t("shareGameMobile")}>
-                  <IconButton size="small" onClick={() => { if (navigator.share) navigator.share({ title: event.title, url: window.location.href }).catch(() => {}); else { navigator.clipboard.writeText(window.location.href); setSnackbar(t("linkCopied")); } }}>
-                    <ShareIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title={t("splitTheCost")}>
-                  <IconButton size="small" onClick={() => { setPaymentExpanded(true); setTimeout(() => document.getElementById("payment-section")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100); }}>
-                    <PaymentsIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title={t("eventSettings")}>
-                  <IconButton size="small" component="a" href={`/events/${eventId}/settings`}>
-                    <SettingsIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Paper>
-            )}
+
 
             {/* Location card — prominent when game is <24h away (the "where do I go?" moment) */}
             {/* eslint-disable-next-line react-hooks/purity -- Date.now() is fine here; re-render is triggered by state changes */}
