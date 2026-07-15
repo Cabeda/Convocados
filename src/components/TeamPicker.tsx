@@ -121,8 +121,12 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
           />
         </Box>
       )}
-      <Stack
-        spacing={2}
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+          gap: 2,
+        }}
         onPointerMove={drag ? handlePointerMove : undefined}
         onPointerUp={drag ? handlePointerUp : undefined}
         onPointerCancel={() => { setDrag(null); setActiveDropZone(null); }}
@@ -326,7 +330,7 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
             </Paper>
           );
         })}
-      </Stack>
+      </Box>
     </>
   );
 }
