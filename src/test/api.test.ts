@@ -881,6 +881,41 @@ describe("PUT /api/events/[id]/sport", () => {
     const body = await res.json();
     expect(body.maxPlayers).toBe(10); // falls back to first preset default
   });
+
+  it("notifies bench players when sport change increases maxPlayers", async () => {
+    // Start with padel (maxPlayers=4), add 5 players so one is on bench
+    const event = await prisma.event.create({
+      data: {
+        title: "Bench Promo Test", location: "Court",
+        dateTime: new Date(Date.now() + 86400_000),
+        sport: "padel", maxPlayers: 4,
+      },
+    });
+    const user = await prisma.user.create({
+      data: { id: `bench-user-${Date.now()}`, name: "Bench Player", email: `bench-${Date.now()}@test.com`, emailVerified: false },
+    });
+    // Add 5 players (order 0-4); player at order 4 is on the bench (maxPlayers=4)
+    for (let i = 0; i < 5; i++) {
+      await prisma.player.create({
+        data: {
+          eventId: event.id,
+          name: `Player ${i}`,
+          order: i,
+          userId: i === 4 ? user.id : null,
+        },
+      });
+    }
+    // Change sport to football (maxPlayers=10) — bench player should be promoted
+    const res = await updateSport(putCtx({ id: event.id }, { sport: "football" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.maxPlayers).toBe(10);
+    // Verify notification was enqueued for the promoted player
+    const jobs = await prisma.notificationJob.findMany({
+      where: { eventId: event.id, type: "bench_promoted_capacity" },
+    });
+    expect(jobs.length).toBe(1);
+  });
 });
 
 // ─── GET /api/events/public ─────────────────────────────────────────────────
