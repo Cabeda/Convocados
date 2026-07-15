@@ -118,6 +118,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
     return Response.json({
       ...unlocked,
+      id: params.historyId, // ponytail: use original requested id so client can match state (materialized entries get a new cuid)
       dateTime: unlocked.dateTime.toISOString(),
       editableUntil: unlocked.editableUntil.toISOString(),
       createdAt: unlocked.createdAt.toISOString(),
@@ -146,6 +147,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
     return Response.json({
       ...locked,
+      id: params.historyId, // ponytail: use original requested id so client can match state
       dateTime: locked.dateTime.toISOString(),
       editableUntil: locked.editableUntil.toISOString(),
       createdAt: locked.createdAt.toISOString(),
@@ -176,6 +178,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
     return Response.json({
       ...updated,
+      id: params.historyId, // ponytail: use original requested id so client can match state
       dateTime: updated.dateTime.toISOString(),
       editableUntil: updated.editableUntil.toISOString(),
       createdAt: updated.createdAt.toISOString(),
@@ -375,6 +378,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
   return Response.json({
     ...updated,
+    id: params.historyId, // ponytail: use original requested id so client can match state
     dateTime: updated.dateTime.toISOString(),
     editableUntil: updated.editableUntil.toISOString(),
     createdAt: updated.createdAt.toISOString(),
