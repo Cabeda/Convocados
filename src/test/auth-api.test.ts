@@ -1125,6 +1125,8 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     mockAuth(other.id, "Outsider");
     const id = await seedEvent({ ownerId: owner.id });
     const history = await seedHistory(id, { editableUntil: new Date("2000-01-01T00:00:00.000Z") });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
+    expect(res.status).toBe(403);
   });
 
   it("returns 401 when unauthenticated user tries to unlock", async () => {
@@ -1161,8 +1163,8 @@ it("allows owner to edit paymentsSnapshot on locked entry", async () => {
     const owner = await seedUser();
     mockAuth(owner.id);
     const id = await seedEvent({ ownerId: owner.id });
-    // Use explicit UTC ISO string far in the past to avoid any timezone/parsing issues
-    const history = await seedHistory(id, { editableUntil: new Date("2000-01-01T00:00:00.000Z") });
+    // Use a date far in the past with explicit UTC to avoid any timezone/parsing issues
+    const history = await seedHistory(id, { editableUntil: new Date("1970-01-01T00:00:00.000Z") });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, {
       paymentsSnapshot: [{ playerName: "Alice", amount: 10, status: "paid" }],
     }));
