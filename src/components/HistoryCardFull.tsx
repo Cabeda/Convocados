@@ -13,6 +13,7 @@ import {
   Alert, TextField, Autocomplete, InputAdornment,
   alpha, useTheme, IconButton, Tooltip, Dialog, DialogTitle,
   DialogContent, DialogActions, Menu, MenuItem, ListItemIcon, ListItemText, Typography,
+  Popover,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
@@ -155,6 +156,31 @@ function eloTooltipText(
     t("eloTooltipK", { k }),
     t("eloTooltipFormula", { delta: `${delta >= 0 ? "+" : ""}${delta}` }),
   ].join("\n");
+}
+
+// ponytail: tap-to-popover for ELO chip — works on touch screens where hover tooltips don't fire
+function EloChipWithPopover({ label, color, variant, tooltipText }: {
+  label: string;
+  color: "success" | "error" | "default";
+  variant: "filled" | "outlined";
+  tooltipText: string;
+}) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  return (
+    <>
+      <Chip size="small" label={label} color={color} variant={variant}
+        onClick={(e) => setAnchor(e.currentTarget)}
+        sx={{ height: 22, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" }} />
+      <Popover open={!!anchor} anchorEl={anchor} onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        transformOrigin={{ vertical: "bottom", horizontal: "center" }}
+        slotProps={{ paper: { sx: { p: 1.5, maxWidth: 260, whiteSpace: "pre-line", fontSize: "0.8rem" } } }}>
+        <Typography variant="caption" component="div" sx={{ whiteSpace: "pre-line" }}>
+          {tooltipText}
+        </Typography>
+      </Popover>
+    </>
+  );
 }
 
 export function HistoryCardFull({
@@ -565,6 +591,20 @@ export function HistoryCardFull({
           <Stack direction="row" spacing={0.25} alignItems="center">
             {isPlayAdmin && (
               <>
+                {/* ponytail: direct lock toggle gives immediate visual feedback — the kebab menu version remains for discoverability */}
+                <Tooltip title={entry.editable ? t("lockAction") : t("unlockAction")}>
+                  <span>
+                    <IconButton
+                      data-testid="lock-toggle-inline"
+                      size="small"
+                      color={entry.editable ? "default" : "warning"}
+                      onClick={handleToggleLock}
+                      disabled={unlocking}
+                    >
+                      {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+                    </IconButton>
+                  </span>
+                </Tooltip>
                 <Tooltip title={entry.isFriendly ? t("markCompetitive") : t("markFriendly")}>
                   <span>
                     <IconButton
@@ -637,7 +677,7 @@ export function HistoryCardFull({
         </Stack>
 
         {/* Meta row: location + cost + share + source */}
-        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ mt: 0.5 }}>
+        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ mt: 0.5, rowGap: 0.5 }}>
           {entry.source === "historical" && (
             <Tooltip title={t("historicalGame")}>
               <Chip icon={<HistoryIcon color="primary" />} label={t("historicalGame")}
@@ -648,9 +688,9 @@ export function HistoryCardFull({
             <Tooltip title={t("getDirections")}>
               <a href={mapsUrl(event.location, event.latitude, event.longitude)}
                 target="_blank" rel="noopener noreferrer"
-                style={{ color: "inherit", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <LocationOnIcon fontSize="small" sx={{ color: "primary.main" }} />
-                <Typography variant="body2" color="text.secondary" sx={{ textDecoration: "underline", textDecorationStyle: "dotted" }}>
+                style={{ color: "inherit", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0, maxWidth: "60%" }}>
+                <LocationOnIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
+                <Typography variant="body2" color="text.secondary" noWrap sx={{ textDecoration: "underline", textDecorationStyle: "dotted" }}>
                   {event.location}
                 </Typography>
               </a>
@@ -965,12 +1005,12 @@ export function HistoryCardFull({
                                 sx={{ height: 22, fontSize: "0.8rem", color: "text.disabled", borderColor: "divider" }} />
                             </Tooltip>
                           ) : elo !== null ? (
-                            <Tooltip title={eloTooltipText(t, row.name, elo, teams, playerRatings, entry.scoreOne, entry.scoreTwo)} slotProps={{ tooltip: { sx: { whiteSpace: "pre-line" } } }}>
-                              <Chip size="small" label={elo >= 0 ? `+${elo}` : `${elo}`}
-                                color={eloColor as "success" | "error" | "default"}
-                                variant={elo === 0 ? "outlined" : "filled"}
-                                sx={{ height: 22, fontSize: "0.8rem", fontWeight: 700 }} />
-                            </Tooltip>
+                            <EloChipWithPopover
+                              label={elo >= 0 ? `+${elo}` : `${elo}`}
+                              color={eloColor as "success" | "error" | "default"}
+                              variant={elo === 0 ? "outlined" : "filled"}
+                              tooltipText={eloTooltipText(t, row.name, elo, teams, playerRatings, entry.scoreOne, entry.scoreTwo)}
+                            />
                           ) : (
                             <Box /> /* keep grid alignment */
                           )}
