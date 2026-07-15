@@ -302,6 +302,18 @@ const en = {
   initialRatingSaved: "Initial rating saved.",
   initialRatingNeedsRecalculate: "Initial rating saved. Recalculate ratings to apply to game history.",
   editRating: "Edit",
+  eloHowItWorks: "How ELO works",
+  eloExplainer: "Ratings update after each game using the ELO system. You gain more points for beating stronger opponents and lose more for losing to weaker ones. New players' ratings move faster (K=48) until they play 6 games, then stabilize (K=32).",
+  eloTooltipRating: "Your rating: {rating}",
+  eloTooltipOpponent: "Opponent avg: {rating}",
+  eloTooltipExpected: "Win probability: {pct}%",
+  eloTooltipOutcome: "Outcome: {outcome}",
+  eloTooltipK: "K-factor: {k}",
+  eloTooltipFormula: "K × (outcome − expected) = {delta}",
+  eloOutcomeWin: "Win",
+  eloOutcomeDraw: "Draw",
+  eloOutcomeLoss: "Loss",
+  eloMvpBonus: "+{bonus} MVP bonus",
 
   // Public events
   publicGames: "Public Games",
