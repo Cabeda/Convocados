@@ -2,98 +2,27 @@
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  Container, Paper, Typography, Box, Stack, Chip, Button, Divider,
-  CircularProgress, Alert, TextField, Autocomplete, InputAdornment,
-  alpha, useTheme, IconButton, Tooltip, Grid, Dialog, DialogTitle,
+  Container, Paper, Typography, Box, Stack, Button, Chip,
+  CircularProgress, Alert, TextField,
+  alpha, useTheme, Grid, Dialog, DialogTitle,
   DialogContent, DialogActions,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import HistoryIcon from "@mui/icons-material/History";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import CancelIcon from "@mui/icons-material/Cancel";
-import LockIcon from "@mui/icons-material/Lock";
-import ShieldIcon from "@mui/icons-material/Shield";
-import LockOpenIcon from "@mui/icons-material/LockOpen";
 import SaveIcon from "@mui/icons-material/Save";
 import SportsIcon from "@mui/icons-material/Sports";
-import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
-import PaymentIcon from "@mui/icons-material/Payment";
-import LoginIcon from "@mui/icons-material/Login";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
-import DeleteIcon from "@mui/icons-material/Delete";
-import SentimentSatisfiedAltIcon from "@mui/icons-material/SentimentSatisfiedAlt";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
-import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
-import { formatDateInTz } from "~/lib/timezones";
 import { ScoreRoller } from "./event/ScoreRoller";
 import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
-import { MvpVotingCard } from "./MvpVotingCard";
+import { HistoryCardFull, type HistoryCardFullEntry } from "./HistoryCardFull";
 
-type PlayerOption =
-  | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
-  | { type: "create"; name: string };
-
-interface TeamSnapshot {
-  team: string;
-  players: { name: string; order: number }[];
-}
-
-interface PaymentSnapshotEntry {
-  playerName: string;
-  amount: number;
-  status: "paid" | "pending";
-  method?: string | null;
-}
-
-interface HistoryEntry {
-  id: string;
-  dateTime: string;
-  status: "played" | "cancelled";
-  scoreOne: number | null;
-  scoreTwo: number | null;
-  teamOneName: string;
-  teamTwoName: string;
-  teamsSnapshot: string | null;
-  paymentsSnapshot: string | null;
-  editableUntil: string;
-  editable: boolean;
-  source: string;
-  eloProcessed: boolean;
-  isFriendly: boolean;
-  eloUpdates?: { name: string; delta: number }[] | null;
-  participants?: string[];
-}
-
-/** Reusable section wrapper with optional title + icon */
-function Section({ icon, title, children, action }: {
-  icon?: React.ReactNode;
-  title?: string;
-  children: React.ReactNode;
-  action?: React.ReactNode;
-}) {
-  return (
-    <Box>
-      {title && (
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-          <Stack direction="row" spacing={0.75} alignItems="center">
-            {icon}
-            <Typography variant="subtitle2" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
-              {title}
-            </Typography>
-          </Stack>
-          {action}
-        </Stack>
-      )}
-      {children}
-    </Box>
-  );
-}
+type HistoryEntry = HistoryCardFullEntry;
 
 interface AddHistoricalGameDialogProps {
   open: boolean;
@@ -382,777 +311,6 @@ function AddHistoricalGameDialog({
   );
 }
 
-function HistoryCardFull({
-  entry,
-  eventId,
-  onUpdate,
-  onDelete,
-  isAuthenticated,
-  knownPlayers,
-  playerRatings,
-  isOwner,
-  userName,
-  timezone,
-  eventPlayers: _eventPlayers,
-}: {
-  entry: HistoryEntry;
-  eventId: string;
-  timezone: string;
-  onUpdate: (updated: HistoryEntry) => void;
-  onDelete: (id: string) => void;
-  isAuthenticated: boolean;
-  knownPlayers: { name: string; gamesPlayed: number; userId?: string | null }[];
-  playerRatings: { name: string; rating: number; gamesPlayed: number }[];
-  isOwner: boolean;
-  userName: string | null;
-  eventPlayers: { id: string; name: string }[];
-}) {
-  const t = useT();
-  const locale = detectLocale();
-  const theme = useTheme();
-  const [scoreOne, setScoreOne] = useState(entry.scoreOne !== null ? String(entry.scoreOne) : "");
-  const [scoreTwo, setScoreTwo] = useState(entry.scoreTwo !== null ? String(entry.scoreTwo) : "");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const teams: TeamSnapshot[] = entry.teamsSnapshot ? JSON.parse(entry.teamsSnapshot) : [];
-  const [editableTeams, setEditableTeams] = useState<TeamSnapshot[]>(teams);
-  const [newPlayerInputs, setNewPlayerInputs] = useState<Record<number, string>>({});
-  const [teamsDirty, setTeamsDirty] = useState(false);
-
-  const payments: PaymentSnapshotEntry[] = entry.paymentsSnapshot ? JSON.parse(entry.paymentsSnapshot) : [];
-  const [editablePayments, setEditablePayments] = useState<PaymentSnapshotEntry[]>(payments);
-  const [paymentsDirty, setPaymentsDirty] = useState(false);
-  const date = new Date(entry.dateTime);
-  const editableUntil = new Date(entry.editableUntil);
-  const isCancelled = entry.status === "cancelled";
-
-  // Drag state for moving players between teams
-  const [dragPlayer, setDragPlayer] = useState<{ name: string; fromTeam: number } | null>(null);
-
-  // Gate editing on both time-based editability AND authentication
-  // Score: owner/admin or participant can edit
-  // Teams: owner/admin or participant can edit
-  // Payments: only owner/admin can edit
-  const isParticipantInGame = (() => {
-    if (isOwner) return true;
-    if (!userName) return false;
-    const teams: TeamSnapshot[] = entry.teamsSnapshot ? JSON.parse(entry.teamsSnapshot) : [];
-    const allNames = teams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
-    if (allNames.includes(userName.toLowerCase())) return true;
-    // Fallback: live Games surface participants as a flat list
-    return (entry.participants ?? []).some((n) => n.toLowerCase() === userName.toLowerCase());
-  })();
-  const canEditScore = entry.editable && isAuthenticated && isParticipantInGame;
-  const canEditTeams = entry.editable && isAuthenticated && (isOwner || isParticipantInGame);
-  const canEditPayments = entry.editable && isAuthenticated && isOwner;
-
-  const [unlocking, setUnlocking] = useState(false);
-  const handleToggleLock = async () => {
-    setUnlocking(true);
-    setError(null);
-    const action = entry.editable ? { lock: true } : { unlock: true };
-    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(action),
-    });
-    const json = await res.json();
-    setUnlocking(false);
-    if (!res.ok) { setError(json.error); return; }
-    onUpdate(json);
-  };
-
-  const [togglingFriendly, setTogglingFriendly] = useState(false);
-  const handleToggleFriendly = async () => {
-    setTogglingFriendly(true);
-    setError(null);
-    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isFriendly: !entry.isFriendly }),
-    });
-    const json = await res.json();
-    setTogglingFriendly(false);
-    if (!res.ok) { setError(json.error); return; }
-    onUpdate(json);
-  };
-
-  const [approvingElo, setApprovingElo] = useState(false);
-  const handleApproveElo = async () => {
-    setApprovingElo(true);
-    setError(null);
-    const res = await fetch(`/api/events/${eventId}/history/${entry.id}/approve-elo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    const json = await res.json();
-    setApprovingElo(false);
-    if (!res.ok) { setError(json.error); return; }
-    onUpdate(json);
-  };
-
-  const [deleting, setDeleting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const handleDelete = async () => {
-    setDeleting(true);
-    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, { method: "DELETE" });
-    setDeleting(false);
-    setConfirmDelete(false);
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      setError(json.error ?? "Failed to delete.");
-      return;
-    }
-    onDelete(entry.id);
-  };
-
-  // Live ELO preview: compute deltas from current editable teams + scores
-  const liveEloUpdates: EloUpdate[] = useMemo(() => {
-    if (isCancelled || editableTeams.length !== 2) return [];
-    const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
-    const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
-    if (s1 === null || s2 === null || isNaN(s1) || isNaN(s2)) return [];
-    return computeGameUpdates(playerRatings, editableTeams, s1, s2);
-  }, [editableTeams, scoreOne, scoreTwo, playerRatings, isCancelled]);
-
-  // Duplicate detection across teams
-  const duplicateNames = useMemo(() => {
-    if (editableTeams.length < 2) return [];
-    const seen = new Map<string, number>();
-    const dupes: string[] = [];
-    for (const team of editableTeams) {
-      for (const p of team.players) {
-        const lower = p.name.toLowerCase();
-        if (seen.has(lower)) dupes.push(p.name);
-        else seen.set(lower, 1);
-      }
-    }
-    return [...new Set(dupes)];
-  }, [editableTeams]);
-
-  const patch = async (data: object) => {
-    setSaving(true);
-    setError(null);
-    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const json = await res.json();
-    setSaving(false);
-    if (!res.ok) { setError(json.error); return; }
-    onUpdate(json);
-  };
-
-  const handleSaveScore = () => {
-    const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
-    const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
-    patch({ scoreOne: isNaN(s1 as number) ? null : s1, scoreTwo: isNaN(s2 as number) ? null : s2 });
-  };
-
-  const removePlayerFromTeam = (teamIdx: number, playerName: string) => {
-    setEditableTeams((prev) => prev.map((t, i) => {
-      if (i !== teamIdx) return t;
-      const filtered = t.players.filter((p) => p.name !== playerName);
-      return { ...t, players: filtered.map((p, j) => ({ ...p, order: j })) };
-    }));
-    setTeamsDirty(true);
-  };
-
-  const addPlayerToTeam = (teamIdx: number, playerName?: string) => {
-    const name = (playerName ?? newPlayerInputs[teamIdx] ?? "").trim();
-    if (!name) return;
-    // Allow temporary duplicates during editing — validated on save
-    setEditableTeams((prev) => prev.map((t, i) => {
-      if (i !== teamIdx) return t;
-      // Don't add if already on this specific team
-      if (t.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) return t;
-      return { ...t, players: [...t.players, { name, order: t.players.length }] };
-    }));
-    if (!playerName) setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
-    setTeamsDirty(true);
-  };
-
-  const handleSaveTeams = () => {
-    if (duplicateNames.length > 0) {
-      setError(t("duplicatePlayerWarning", { names: duplicateNames.join(", ") }));
-      return;
-    }
-    patch({ teamsSnapshot: editableTeams });
-    setTeamsDirty(false);
-  };
-
-  // Drag & drop handlers
-  const handleDragStart = (playerName: string, fromTeam: number) => {
-    setDragPlayer({ name: playerName, fromTeam });
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  };
-
-  const handleDrop = (targetTeam: number) => {
-    if (!dragPlayer || dragPlayer.fromTeam === targetTeam) {
-      setDragPlayer(null);
-      return;
-    }
-    // Move player from source team to target team
-    setEditableTeams((prev) => {
-      const updated = prev.map((t, i) => {
-        if (i === dragPlayer.fromTeam) {
-          const filtered = t.players.filter((p) => p.name !== dragPlayer.name);
-          return { ...t, players: filtered.map((p, j) => ({ ...p, order: j })) };
-        }
-        if (i === targetTeam) {
-          // Allow temporary duplicate — validated on save
-          return { ...t, players: [...t.players, { name: dragPlayer.name, order: t.players.length }] };
-        }
-        return t;
-      });
-      return updated;
-    });
-    setTeamsDirty(true);
-    setDragPlayer(null);
-  };
-
-  const cyclePaymentStatus = (idx: number) => {
-    const order: Array<"paid" | "pending"> = ["pending", "paid"];
-    setEditablePayments((prev) =>
-      prev.map((p, i) => {
-        if (i !== idx) return p;
-        const next = order[(order.indexOf(p.status) + 1) % order.length];
-        return { ...p, status: next };
-      }),
-    );
-    setPaymentsDirty(true);
-  };
-
-  const handleSavePayments = () => {
-    patch({ paymentsSnapshot: editablePayments });
-    setPaymentsDirty(false);
-  };
-
-  // Filter known players for autocomplete: exclude players already on this team
-  const getAvailableSuggestions = (teamIdx: number) => {
-    const currentNames = new Set(
-      editableTeams[teamIdx]?.players.map((p) => p.name.toLowerCase()) ?? []
-    );
-    return knownPlayers.filter((kp) => !currentNames.has(kp.name.toLowerCase()));
-  };
-
-  const localeStr = locale === "pt" ? "pt-PT" : "en-GB";
-
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        borderRadius: 4,
-        overflow: "hidden",
-        opacity: isCancelled ? 0.7 : 1,
-        border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
-        transition: "box-shadow 0.2s",
-        "&:hover": { boxShadow: theme.shadows[4] },
-      }}
-    >
-      {/* ── Header ── */}
-      <Box sx={{
-        px: 3, py: 2.5,
-        background: `linear-gradient(135deg, ${alpha(
-          isCancelled ? theme.palette.error.main : theme.palette.success.main, 0.08,
-        )}, ${alpha(theme.palette.background.paper, 0)})`,
-        display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1,
-      }}>
-        <Box>
-          <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
-            {formatDateInTz(date, localeStr, timezone, {
-              weekday: "long", day: "numeric", month: "long", year: "numeric",
-            })}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-            {formatDateInTz(date, localeStr, timezone, { hour: "2-digit", minute: "2-digit" })}
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1} alignItems="center">
-          {entry.source === "historical" && (
-            <Chip
-              icon={<HistoryIcon />}
-              label={t("historicalGame")}
-              color="warning"
-              size="small"
-              variant="outlined"
-              sx={{ fontWeight: 600 }}
-            />
-          )}
-          <Chip
-            icon={isCancelled ? <CancelIcon /> : <CheckCircleIcon />}
-            label={isCancelled ? t("statusCancelled") : t("statusPlayed")}
-            color={isCancelled ? "error" : "success"}
-            size="small"
-            sx={{ fontWeight: 600 }}
-          />
-          {isOwner ? (
-            <>
-              <Tooltip title={entry.isFriendly ? t("markCompetitive") : t("markFriendly")}>
-                <span>
-                  <IconButton size="small" color={entry.isFriendly ? "success" : "default"} onClick={handleToggleFriendly} disabled={togglingFriendly}>
-                    <SentimentSatisfiedAltIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title={entry.editable ? t("lockHistory") : t("unlockHistory")}>
-                <span>
-                  <IconButton size="small" color={entry.editable ? "default" : "warning"} onClick={handleToggleLock} disabled={unlocking}>
-                    {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title={t("deleteGame")}>
-                <IconButton size="small" color="error" onClick={() => setConfirmDelete(true)} disabled={deleting}>
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </>
-          ) : !entry.editable ? (
-            <Tooltip title={t("notEditable")}>
-              <LockIcon fontSize="small" color="disabled" />
-            </Tooltip>
-          ) : null}
-        </Stack>
-      </Box>
-      {/* Delete confirmation dialog */}
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t("deleteGame")}</DialogTitle>
-        <DialogContent>
-          <Typography>{t("deleteHistoryConfirm")}</Typography>
-          {entry.eloProcessed && (
-            <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
-              {t("deleteHistoryEloWarning")}
-            </Alert>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)} disabled={deleting}>{t("cancel")}</Button>
-          <Button color="error" variant="contained" onClick={handleDelete} disabled={deleting}>
-            {deleting ? t("deleting") : t("deleteGame")}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <Stack spacing={0} divider={<Divider sx={{ mx: 3 }} />}>
-        {error && (
-          <Box sx={{ px: 3, pt: 2 }}>
-            <Alert severity="error" onClose={() => setError(null)} sx={{ borderRadius: 2 }}>{error}</Alert>
-          </Box>
-        )}
-
-        {/* ── Score ── */}
-        {!isCancelled && (
-          <Box sx={{ px: 3, py: 2.5 }}>
-            <Section title={t("score")} action={
-              canEditScore ? (
-                <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
-                  onClick={handleSaveScore} disabled={saving}
-                  sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
-                  {t("saveScore")}
-                </Button>
-              ) : undefined
-            }>
-              <Stack direction="row" spacing={2} alignItems="center" justifyContent="center"
-                sx={{
-                  py: 2, px: 3, borderRadius: 3,
-                  backgroundColor: alpha(theme.palette.action.hover, 0.04),
-                }}>
-                {canEditScore ? (
-                  <>
-                    <ScoreRoller value={scoreOne} onChange={setScoreOne} teamName={entry.teamOneName} />
-                    <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
-                    <ScoreRoller value={scoreTwo} onChange={setScoreTwo} teamName={entry.teamTwoName} />
-                  </>
-                ) : (
-                  <>
-                    {/* Team 1 */}
-                    <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
-                      <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
-                        {entry.teamOneName}
-                      </Typography>
-                      <Typography variant="h3" fontWeight={800} color="text.primary">
-                        {entry.scoreOne !== null ? entry.scoreOne : "—"}
-                      </Typography>
-                    </Stack>
-                    <Typography variant="h4" color="text.disabled" fontWeight={300} sx={{ px: 1 }}>:</Typography>
-                    {/* Team 2 */}
-                    <Stack alignItems="center" spacing={0.5} sx={{ flex: 1 }}>
-                      <Typography variant="caption" fontWeight={600} color="text.secondary" noWrap>
-                        {entry.teamTwoName}
-                      </Typography>
-                      <Typography variant="h3" fontWeight={800} color="text.primary">
-                        {entry.scoreTwo !== null ? entry.scoreTwo : "—"}
-                      </Typography>
-                    </Stack>
-                  </>
-                )}
-              </Stack>
-            </Section>
-          </Box>
-        )}
-
-        {/* ── ELO Approval for Historical Games ── */}
-        {entry.source === "historical" && !isCancelled && (
-          <Box sx={{ px: 3, py: 2.5 }}>
-            <Section
-              title={entry.eloProcessed ? t("eloApproved") : t("eloPending")}
-              icon={<EmojiEventsIcon fontSize="small" sx={{ color: entry.eloProcessed ? "success.main" : "warning.main" }} />}
-              action={
-                !entry.eloProcessed && isOwner ? (
-                  <Button
-                    variant="contained"
-                    size="small"
-                    disableElevation
-                    startIcon={<EmojiEventsIcon />}
-                    onClick={handleApproveElo}
-                    disabled={approvingElo}
-                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
-                  >
-                    {approvingElo ? t("approvingElo") : t("approveElo")}
-                  </Button>
-                ) : undefined
-              }
-            >
-              {entry.eloProcessed ? (
-                <Alert severity="success" sx={{ borderRadius: 2 }}>
-                  {t("eloApprovedSuccess")}
-                </Alert>
-              ) : (
-                <Alert severity="warning" sx={{ borderRadius: 2 }}>
-                  {t("eloPending")}
-                </Alert>
-              )}
-            </Section>
-          </Box>
-        )}
-
-        {/* ── Teams ── */}
-        {teams.length > 0 && !isCancelled && (
-          <Box sx={{ px: 3, py: 2.5 }}>
-            <Section
-              title={t("teams")}
-              icon={<SportsIcon fontSize="small" sx={{ color: "text.secondary" }} />}
-              action={
-                canEditTeams && teamsDirty ? (
-                  <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
-                    onClick={handleSaveTeams} disabled={saving || duplicateNames.length > 0}
-                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
-                    {t("saveTeams")}
-                  </Button>
-                ) : undefined
-              }
-            >
-              {duplicateNames.length > 0 && (
-                <Alert severity="warning" sx={{ mb: 1.5, borderRadius: 2 }}>
-                  {t("duplicatePlayerWarning", { names: duplicateNames.join(", ") })}
-                </Alert>
-              )}
-              <Grid container spacing={2}>
-                {(canEditTeams ? editableTeams : teams).map((team, teamIdx) => {
-                  const availableSuggestions = canEditTeams ? getAvailableSuggestions(teamIdx) : [];
-                  const inputValue = newPlayerInputs[teamIdx] ?? "";
-                  return (
-                    <Grid key={team.team} size={{ xs: 12, sm: 6 }}>
-                      <Box
-                        onDragOver={canEditTeams ? handleDragOver : undefined}
-                        onDrop={canEditTeams ? () => handleDrop(teamIdx) : undefined}
-                        sx={{
-                          p: 2, borderRadius: 3,
-                          backgroundColor: alpha(theme.palette.action.hover, 0.04),
-                          border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-                          ...(canEditTeams && dragPlayer && dragPlayer.fromTeam !== teamIdx ? {
-                            border: `2px dashed ${alpha(theme.palette.primary.main, 0.4)}`,
-                            backgroundColor: alpha(theme.palette.primary.main, 0.04),
-                          } : {}),
-                          transition: "border 0.2s, background-color 0.2s",
-                        }}
-                      >
-                        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>{team.team}</Typography>
-                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                          {team.players.map((p) => {
-                            const liveElo = liveEloUpdates.find((e) => e.name === p.name);
-                            const savedElo = entry.eloUpdates?.find((e) => e.name === p.name);
-                            const elo = liveElo ?? savedElo;
-                            const deltaLabel = elo ? (elo.delta >= 0 ? `+${elo.delta}` : `${elo.delta}`) : null;
-                            const isDuplicate = duplicateNames.some((d) => d.toLowerCase() === p.name.toLowerCase());
-                            return (
-                              <Chip
-                                key={p.name} size="small" variant="outlined"
-                                draggable={canEditTeams}
-                                onDragStart={canEditTeams ? () => handleDragStart(p.name, teamIdx) : undefined}
-                                color={isDuplicate ? "error" : "default"}
-                                label={
-                                  deltaLabel ? (
-                                    <span>
-                                      {p.name}{" "}
-                                      <span style={{
-                                        color: (elo?.delta ?? 0) > 0 ? theme.palette.success.main
-                                          : (elo?.delta ?? 0) < 0 ? theme.palette.error.main
-                                          : theme.palette.text.secondary,
-                                        fontWeight: 700, fontSize: "0.75rem",
-                                      }}>
-                                        {deltaLabel}
-                                      </span>
-                                    </span>
-                                  ) : p.name
-                                }
-                                onDelete={canEditTeams ? () => removePlayerFromTeam(teamIdx, p.name) : undefined}
-                                sx={{
-                                  borderRadius: 2,
-                                  ...(canEditTeams ? { cursor: "grab", "&:active": { cursor: "grabbing" } } : {}),
-                                }}
-                              />
-                            );
-                          })}
-                        </Box>
-                        {canEditTeams && (
-                          <Box sx={{ mt: 1.5 }}>
-                            <Autocomplete<PlayerOption, false, false, true>
-                              freeSolo
-                              size="small"
-                              options={(() => {
-                                const trimmed = inputValue.trim();
-                                const filtered: PlayerOption[] = availableSuggestions
-                                  .filter((s) => matchesWithName(s.name, trimmed))
-                                  .map((s) => ({
-                                    type: "existing" as const,
-                                    name: s.name,
-                                    gamesPlayed: s.gamesPlayed,
-                                    userId: s.userId ?? null,
-                                  }));
-                                if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
-                                  filtered.push({ type: "create" as const, name: trimmed });
-                                }
-                                return filtered;
-                              })()}
-                              filterOptions={(options) => options}
-                              getOptionLabel={(option) =>
-                                typeof option === "string" ? option : option.name
-                              }
-                              isOptionEqualToValue={(option, value) =>
-                                typeof option !== "string" && typeof value !== "string" && option.type === value.type && option.name === value.name
-                              }
-                              value={null}
-                              inputValue={inputValue}
-                              onInputChange={(_, newInputValue, reason) => {
-                                if (reason === "reset") return;
-                                setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: newInputValue }));
-                              }}
-                              onChange={(_, newValue) => {
-                                if (!newValue) return;
-                                const name = typeof newValue === "string" ? newValue.trim() : newValue.name;
-                                if (name) {
-                                  addPlayerToTeam(teamIdx, name);
-                                  setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
-                                }
-                              }}
-                              renderInput={(params) => (
-                                <TextField
-                                  {...params}
-                                  placeholder={t("addPlayerToTeam")}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" && inputValue.trim()) {
-                                      const trimmed = inputValue.trim();
-                                      const hasMatch = availableSuggestions.some(
-                                        (s) => matchesWithName(s.name, trimmed)
-                                      );
-                                      if (!hasMatch) {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        addPlayerToTeam(teamIdx, trimmed);
-                                        setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
-                                      }
-                                    }
-                                  }}
-                                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-                                  slotProps={{
-                                    input: {
-                                      ...params.slotProps.input,
-                                      endAdornment: (
-                                        <InputAdornment position="end">
-                                          <IconButton size="small" color="primary" edge="end"
-                                            disabled={!inputValue.trim()}
-                                            onClick={() => {
-                                              addPlayerToTeam(teamIdx, inputValue.trim());
-                                              setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
-                                            }}>
-                                            <PersonAddIcon fontSize="small" />
-                                          </IconButton>
-                                        </InputAdornment>
-                                      ),
-                                    },
-
-                                    htmlInput: { ...params.slotProps.htmlInput, maxLength: 50 }
-                                  }} />
-                              )}
-                              renderOption={(props, option) => {
-                                const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & { key: string };
-                                if (option.type === "create") {
-                                  return (
-                                    <li key={key} {...otherProps} style={{ minHeight: 40, fontStyle: "italic", display: "flex", alignItems: "center", gap: 8 }}>
-                                      <PersonAddIcon fontSize="small" color="primary" />
-                                      {t("createNewPlayer", { name: option.name })}
-                                    </li>
-                                  );
-                                }
-                                return (
-                                  <li key={key} {...otherProps} style={{ minHeight: 40, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, width: "100%" }}>
-                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, overflow: "hidden" }}>
-                                      {option.userId ? (
-                                        <Tooltip title={t("protectedPlayer")}>
-                                          <ShieldIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
-                                        </Tooltip>
-                                      ) : null}
-                                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{option.name}</span>
-                                    </Box>
-                                    {option.gamesPlayed > 0 && (
-                                      <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
-                                        {t("nGamesPlayed", { n: option.gamesPlayed })}
-                                      </Typography>
-                                    )}
-                                  </li>
-                                );
-                              }}
-                              noOptionsText={t("noSuggestions")}
-                            />
-                          </Box>
-                        )}
-                      </Box>
-                    </Grid>
-                  );
-                })}
-              </Grid>
-            </Section>
-          </Box>
-        )}
-
-        {/* ── Payments ── */}
-        {payments.length > 0 && !isCancelled && (
-          <Box sx={{ px: 3, py: 2.5 }}>
-            <Section
-              title={t("historyPayments")}
-              icon={<PaymentIcon fontSize="small" sx={{ color: "text.secondary" }} />}
-              action={
-                canEditPayments && paymentsDirty ? (
-                  <Button variant="contained" size="small" disableElevation startIcon={<SaveIcon />}
-                    onClick={handleSavePayments} disabled={saving}
-                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}>
-                    {t("savePayments")}
-                  </Button>
-                ) : undefined
-              }
-            >
-              <Box sx={{
-                p: 2, borderRadius: 3,
-                backgroundColor: alpha(theme.palette.action.hover, 0.04),
-                border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-              }}>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                  {(canEditPayments ? editablePayments : payments).map((p, idx) => {
-                    const isPaid = p.status === "paid";
-                    const chipColor = isPaid ? "success" : "warning";
-                    return (
-                      <Chip
-                        key={p.playerName}
-                        size="small"
-                        variant={isPaid ? "filled" : "outlined"}
-                        color={chipColor}
-                        label={`${p.playerName}  ${p.amount.toFixed(2)}`}
-                        onClick={canEditPayments ? () => cyclePaymentStatus(idx) : undefined}
-                        sx={{
-                          borderRadius: 2,
-                          fontWeight: isPaid ? 600 : 400,
-                          ...(canEditPayments ? { cursor: "pointer" } : {}),
-                        }}
-                      />
-                    );
-                  })}
-                </Box>
-                {payments.some((p) => p.method) && (
-                  <Stack spacing={0.25} sx={{ mt: 1.5, pt: 1.5, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.2)}` }}>
-                    {payments.filter((p) => p.method).map((p) => (
-                      <Typography key={p.playerName} variant="caption" color="text.secondary">
-                        {t("historyPaymentRef", { ref: `${p.playerName}: ${p.method}` })}
-                      </Typography>
-                    ))}
-                  </Stack>
-                )}
-              </Box>
-            </Section>
-          </Box>
-        )}
-        {payments.length === 0 && entry.paymentsSnapshot !== null && !isCancelled && (
-          <Box sx={{ px: 3, py: 2.5 }}>
-            <Typography variant="body2" color="text.secondary">{t("historyNoPayments")}</Typography>
-          </Box>
-        )}
-
-        {/* ── MVP Voting ── */}
-        {!isCancelled && (
-          <Box sx={{ px: 3, py: 1.5 }}>
-            <MvpVotingCard
-              eventId={eventId}
-              historyId={entry.id}
-            />
-          </Box>
-        )}
-
-        {/* ── Status + Editable info ── */}
-        {canEditScore && (
-          <Box sx={{ px: 3, py: 2.5 }}>
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-              <Button
-                size="small"
-                variant={isCancelled ? "outlined" : "contained"}
-                color="success"
-                disableElevation
-                startIcon={<CheckCircleIcon />}
-                disabled={saving}
-                onClick={() => patch({ status: "played" })}
-                sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
-              >
-                {t("markPlayed")}
-              </Button>
-              <Button
-                size="small"
-                variant={isCancelled ? "contained" : "outlined"}
-                color="error"
-                disableElevation
-                startIcon={<CancelIcon />}
-                disabled={saving}
-                onClick={() => patch({ status: "cancelled" })}
-                sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
-              >
-                {t("markCancelled")}
-              </Button>
-              <Typography variant="caption" color="text.disabled" sx={{ ml: "auto !important" }}>
-                {t("editableUntil", {
-                  date: formatDateInTz(editableUntil, localeStr, timezone, {
-                    day: "numeric", month: "short", year: "numeric",
-                  }),
-                })}
-              </Typography>
-            </Stack>
-          </Box>
-        )}
-        {entry.editable && !isAuthenticated && (
-          <Box sx={{ px: 3, py: 2 }}>
-            <Alert severity="info" icon={<LoginIcon />} sx={{ borderRadius: 2 }}>
-              {t("loginRequiredToEdit")}
-            </Alert>
-          </Box>
-        )}
-      </Stack>
-    </Paper>
-  );
-}
-
 // ── History page ──────────────────────────────────────────────────────────────
 
 export default function HistoryPage({ eventId }: { eventId: string }) {
@@ -1176,12 +334,17 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [timezone, setTimezone] = useState("UTC");
   const [showAddHistorical, setShowAddHistorical] = useState(false);
   const [eventPlayers, setEventPlayers] = useState<{ id: string; name: string }[]>([]);
+  const [eventLocation, setEventLocation] = useState<string>("");
+  const [eventLat, setEventLat] = useState<number | null>(null);
+  const [eventLng, setEventLng] = useState<number | null>(null);
+  const [cost, setCost] = useState<{ totalAmount: number; currency: string; payments: Array<{ playerName: string; amount: number; status: "paid" | "pending" }> } | null>(null);
   const isOwner = !!(session?.user && ownerId && session.user.id === ownerId);
 
   const load = useCallback(async () => {
-    const [evRes, histRes] = await Promise.all([
+    const [evRes, histRes, costRes] = await Promise.all([
       fetch(`/api/events/${eventId}`),
       fetch(`/api/events/${eventId}/history`),
+      fetch(`/api/events/${eventId}/cost`).catch(() => null),
     ]);
     if (evRes.status === 404) { setNotFound(true); setLoading(false); return; }
     const ev = await evRes.json();
@@ -1192,10 +355,17 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setOwnerId(ev.ownerId ?? null);
     setIsAdmin(!!ev.isAdmin);
     setTimezone(ev.timezone || "UTC");
+    setEventLocation(ev.location ?? "");
+    setEventLat(ev.latitude ?? null);
+    setEventLng(ev.longitude ?? null);
     setEventPlayers((ev.players ?? []).map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
     setHistory(hist.data);
     setNextCursor(hist.nextCursor);
     setHasMore(hist.hasMore);
+    if (costRes && costRes.ok) {
+      const costJson = await costRes.json();
+      setCost(costJson);
+    }
     setLoading(false);
 
     // Fetch known players (historical) and ratings in parallel (non-blocking)
@@ -1309,10 +479,30 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
             ) : (
               <>
                 {history.map((entry) => (
-                  <HistoryCardFull key={entry.id} entry={entry} eventId={eventId} timezone={timezone} onUpdate={handleUpdate}
-                    onDelete={handleDelete} isAuthenticated={isAuthenticated} knownPlayers={knownPlayers}
-                    playerRatings={playerRatings} isOwner={isOwner || isAdmin}
-                    userName={session?.user?.name ?? null} eventPlayers={eventPlayers} />
+                  <HistoryCardFull
+                    key={entry.id}
+                    entry={entry}
+                    eventId={eventId}
+                    event={{
+                      id: eventId,
+                      title,
+                      location: eventLocation,
+                      latitude: eventLat,
+                      longitude: eventLng,
+                      timezone,
+                      ownerId,
+                    }}
+                    cost={cost}
+                    onUpdate={handleUpdate}
+                    onDelete={handleDelete}
+                    isAuthenticated={isAuthenticated}
+                    isOwner={isOwner}
+                    isAdmin={isAdmin}
+                    knownPlayers={knownPlayers}
+                    playerRatings={playerRatings}
+                    userName={session?.user?.name ?? null}
+                    eventPlayers={eventPlayers}
+                  />
                 ))}
                 {hasMore && (
                   <Box sx={{ display: "flex", justifyContent: "center", pt: 2 }}>
