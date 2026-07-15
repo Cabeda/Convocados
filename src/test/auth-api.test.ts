@@ -880,7 +880,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const user = await seedUser();
     mockAuth(user.id);
     const id = await seedEvent();
-    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 30000) });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3 }));
     expect(res.status).toBe(403);
   });
@@ -1111,7 +1111,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const owner = await seedUser();
     mockAuth(owner.id);
     const id = await seedEvent({ ownerId: owner.id });
-    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 30000) });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -1124,7 +1124,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const other = await seedUser({ name: "Outsider" });
     mockAuth(other.id, "Outsider");
     const id = await seedEvent({ ownerId: owner.id });
-    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 30000) });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
     expect(res.status).toBe(403);
   });
@@ -1132,7 +1132,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
   it("returns 401 when unauthenticated user tries to unlock", async () => {
     mockAnonymous();
     const id = await seedEvent();
-    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 1000) });
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 30000) });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
     expect(res.status).toBe(401);
   });
@@ -1163,7 +1163,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const owner = await seedUser();
     mockAuth(owner.id);
     const id = await seedEvent({ ownerId: owner.id });
-    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 10000) });
+    const history = await seedHistory(id, { editableUntil: new Date(Date.now() - 30000) });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, {
       paymentsSnapshot: [{ playerName: "Alice", amount: 10, status: "paid" }],
     }));
