@@ -185,7 +185,9 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     });
   }
 
-  if (entry.editableUntil <= new Date()) {
+  // Owners/admins bypass the 7-day editableUntil window. Regular users
+  // (incl. participants) lose edit access after the window.
+  if (entry.editableUntil <= new Date() && !isOwner && !isAdmin) {
     return Response.json({ error: "This result can no longer be edited." }, { status: 403 });
   }
 
