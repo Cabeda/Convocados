@@ -353,6 +353,81 @@ describe("POST /api/events/[id]/players", () => {
     expect(players.find((p) => p.name === "Dave")?.order).toBe(0);
     expect(players.find((p) => p.name === "Alice")?.order).toBe(1);
   });
+
+  it("auto-randomizes teams when active player count reaches maxPlayers", async () => {
+    // Create event with maxPlayers = 4 (small for test speed)
+    const event = await prisma.event.create({
+      data: { title: "Auto Rand", location: "Field", dateTime: new Date(Date.now() + 86400_000), teamOneName: "A", teamTwoName: "B", maxPlayers: 4 },
+    });
+    const id = event.id;
+
+    // Add 3 players — no teams should exist yet
+    await addPlayer(ctx({ id }, { name: "P1" }));
+    await addPlayer(ctx({ id }, { name: "P2" }));
+    await addPlayer(ctx({ id }, { name: "P3" }));
+    let teams = await prisma.teamResult.findMany({ where: { eventId: id }, include: { members: true } });
+    expect(teams).toHaveLength(0);
+
+    // Add 4th player — should auto-randomize
+    await addPlayer(ctx({ id }, { name: "P4" }));
+    teams = await prisma.teamResult.findMany({ where: { eventId: id }, include: { members: true } });
+    expect(teams).toHaveLength(2);
+    const allMembers = teams.flatMap(t => t.members.map(m => m.name)).sort();
+    expect(allMembers).toEqual(["P1", "P2", "P3", "P4"]);
+  });
+
+  it("does not auto-randomize if teams already exist", async () => {
+    const event = await prisma.event.create({
+      data: { title: "No Re-auto", location: "Field", dateTime: new Date(Date.now() + 86400_000), teamOneName: "A", teamTwoName: "B", maxPlayers: 3 },
+    });
+    const id = event.id;
+
+    // Add 2 players and manually randomize
+    await addPlayer(ctx({ id }, { name: "P1" }));
+    await addPlayer(ctx({ id }, { name: "P2" }));
+    await randomize(ctx({ id }, {}));
+
+    // Teams exist now
+    let teams = await prisma.teamResult.findMany({ where: { eventId: id }, include: { members: true } });
+    expect(teams).toHaveLength(2);
+    const membersBefore = teams.flatMap(t => t.members.map(m => m.name)).sort();
+
+    // Add 3rd player (fills to maxPlayers) — should NOT re-randomize, just add to smaller team
+    await addPlayer(ctx({ id }, { name: "P3" }));
+    teams = await prisma.teamResult.findMany({ where: { eventId: id }, include: { members: true } });
+    const membersAfter = teams.flatMap(t => t.members.map(m => m.name)).sort();
+    expect(membersAfter).toEqual(["P1", "P2", "P3"]);
+    // Original members should still be on their original teams
+    expect(membersBefore.every(m => membersAfter.includes(m))).toBe(true);
+  });
+
+  it("re-activated player is added to existing teams", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Re-add Teams", location: "Field", dateTime: new Date(Date.now() + 86400_000), teamOneName: "A", teamTwoName: "B", maxPlayers: 4 },
+    });
+    const id = event.id;
+
+    // Add 3 players and randomize
+    await addPlayer(ctx({ id }, { name: "P1" }));
+    await addPlayer(ctx({ id }, { name: "P2" }));
+    await addPlayer(ctx({ id }, { name: "P3" }));
+    await randomize(ctx({ id }, {}));
+
+    // Archive P3
+    await prisma.player.updateMany({ where: { eventId: id, name: "P3" }, data: { archivedAt: new Date() } });
+    // Remove P3 from teams
+    await prisma.teamMember.deleteMany({ where: { name: "P3" } });
+
+    // Re-add P3 — should be placed back into teams
+    const res = await addPlayer(ctx({ id }, { name: "P3" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.reactivated).toBe(true);
+
+    const teams = await prisma.teamResult.findMany({ where: { eventId: id }, include: { members: true } });
+    const allMembers = teams.flatMap(t => t.members.map(m => m.name));
+    expect(allMembers).toContain("P3");
+  });
 });
 
 // ─── DELETE /api/events/[id]/players ────────────────────────────────────────
