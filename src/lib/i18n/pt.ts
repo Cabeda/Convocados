@@ -303,6 +303,18 @@ const pt: TranslationKeys = {
   initialRatingSaved: "Rating inicial guardado.",
   initialRatingNeedsRecalculate: "Rating inicial guardado. Recalcula as classificações para aplicar ao histórico.",
   editRating: "Editar",
+  eloHowItWorks: "Como funciona o ELO",
+  eloExplainer: "As classificações atualizam após cada jogo usando o sistema ELO. Ganhas mais pontos ao vencer adversários mais fortes e perdes mais ao perder contra mais fracos. Novos jogadores (K=48) estabilizam após 6 jogos (K=32).",
+  eloTooltipRating: "O teu rating: {rating}",
+  eloTooltipOpponent: "Média adversário: {rating}",
+  eloTooltipExpected: "Probabilidade de vitória: {pct}%",
+  eloTooltipOutcome: "Resultado: {outcome}",
+  eloTooltipK: "Fator K: {k}",
+  eloTooltipFormula: "K × (resultado − esperado) = {delta}",
+  eloOutcomeWin: "Vitória",
+  eloOutcomeDraw: "Empate",
+  eloOutcomeLoss: "Derrota",
+  eloMvpBonus: "+{bonus} bónus MVP",
 
   // Public events
   publicGames: "Jogos Públicos",

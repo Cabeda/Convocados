@@ -33,9 +33,9 @@ import EventIcon from "@mui/icons-material/Event";
 import LoginIcon from "@mui/icons-material/Login";
 import HistoryIcon from "@mui/icons-material/History";
 import { useT } from "~/lib/useT";
-import { detectLocale } from "~/lib/i18n";
+import { detectLocale, type TFunction } from "~/lib/i18n";
 import { matchesWithName } from "~/lib/stringMatch";
-import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
+import { computeGameUpdates, expectedScore, kFactor, type EloUpdate } from "~/lib/elo";
 import { formatDateInTz } from "~/lib/timezones";
 
 type PlayerOption =
@@ -115,6 +115,46 @@ function mapsUrl(location: string, lat: number | null, lng: number | null): stri
   return /^https?:\/\//i.test(location)
     ? location
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+}
+
+/** Build a multiline ELO breakdown tooltip string for a player's delta. */
+function eloTooltipText(
+  t: TFunction,
+  playerName: string,
+  delta: number,
+  teams: TeamSnapshot[],
+  playerRatings: { name: string; rating: number; gamesPlayed: number }[],
+  scoreOne: number | null,
+  scoreTwo: number | null,
+): string {
+  if (teams.length !== 2 || scoreOne === null || scoreTwo === null) {
+    return `${delta >= 0 ? "+" : ""}${delta}`;
+  }
+
+  const ratingMap = new Map(playerRatings.map((p) => [p.name, p]));
+  const getInfo = (name: string) => ratingMap.get(name) ?? { rating: 1000, gamesPlayed: 0 };
+
+  const isTeamOne = teams[0].players.some((p) => p.name === playerName);
+  const oppTeamNames = isTeamOne ? teams[1].players.map((p) => p.name) : teams[0].players.map((p) => p.name);
+
+  const playerInfo = getInfo(playerName);
+  const oppAvg = oppTeamNames.reduce((sum, n) => sum + getInfo(n).rating, 0) / (oppTeamNames.length || 1);
+  const expected = expectedScore(playerInfo.rating, oppAvg);
+  const k = kFactor(playerInfo.gamesPlayed);
+
+  const ownScore = isTeamOne ? scoreOne : scoreTwo;
+  const oppScore = isTeamOne ? scoreTwo : scoreOne;
+  const outcome = ownScore > oppScore ? 1 : ownScore < oppScore ? 0 : 0.5;
+  const outcomeLabel = outcome === 1 ? t("eloOutcomeWin") : outcome === 0 ? t("eloOutcomeLoss") : t("eloOutcomeDraw");
+
+  return [
+    t("eloTooltipRating", { rating: Math.round(playerInfo.rating) }),
+    t("eloTooltipOpponent", { rating: Math.round(oppAvg) }),
+    t("eloTooltipExpected", { pct: Math.round(expected * 100) }),
+    t("eloTooltipOutcome", { outcome: outcomeLabel }),
+    t("eloTooltipK", { k }),
+    t("eloTooltipFormula", { delta: `${delta >= 0 ? "+" : ""}${delta}` }),
+  ].join("\n");
 }
 
 export function HistoryCardFull({
@@ -925,10 +965,12 @@ export function HistoryCardFull({
                                 sx={{ height: 22, fontSize: "0.8rem", color: "text.disabled", borderColor: "divider" }} />
                             </Tooltip>
                           ) : elo !== null ? (
-                            <Chip size="small" label={elo >= 0 ? `+${elo}` : `${elo}`}
-                              color={eloColor as "success" | "error" | "default"}
-                              variant={elo === 0 ? "outlined" : "filled"}
-                              sx={{ height: 22, fontSize: "0.8rem", fontWeight: 700 }} />
+                            <Tooltip title={eloTooltipText(t, row.name, elo, teams, playerRatings, entry.scoreOne, entry.scoreTwo)} slotProps={{ tooltip: { sx: { whiteSpace: "pre-line" } } }}>
+                              <Chip size="small" label={elo >= 0 ? `+${elo}` : `${elo}`}
+                                color={eloColor as "success" | "error" | "default"}
+                                variant={elo === 0 ? "outlined" : "filled"}
+                                sx={{ height: 22, fontSize: "0.8rem", fontWeight: 700 }} />
+                            </Tooltip>
                           ) : (
                             <Box /> /* keep grid alignment */
                           )}
