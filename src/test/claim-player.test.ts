@@ -114,4 +114,26 @@ describe("POST /api/events/[id]/claim-player", () => {
     expect(updated!.userId).toBe(user.id);
     expect(updated!.name).toBe("User");
   });
+
+  // ADR 0016 regression: the event GET returns EventPlayer ids, so the Rankings
+  // page sends an EventPlayer id here. Resolve it via name-match.
+  it("successfully claims when given an EventPlayer id", async () => {
+    const user = await prisma.user.create({
+      data: { id: "u1", name: "User", email: "u@t.com", emailVerified: true },
+    });
+    const event = await prisma.event.create({
+      data: { title: "Game", location: "L", dateTime: new Date(), maxPlayers: 10 },
+    });
+    const anon = await prisma.player.create({ data: { name: "Anon", eventId: event.id } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Anon" } });
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const res = await POST(ctx(event.id, { playerId: ep.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+
+    const updated = await prisma.player.findUnique({ where: { id: anon.id } });
+    expect(updated!.userId).toBe(user.id);
+    expect(updated!.name).toBe("User");
+  });
 });
