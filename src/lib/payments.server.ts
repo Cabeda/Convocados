@@ -117,10 +117,13 @@ export async function recordPerGameShare(
   }
 
   // Per-game share in cents (rounded to whole cents).
-  const maxPlayers = (await prisma.event.findUnique({
+  const eventData = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { maxPlayers: true },
-  }))?.maxPlayers ?? 1;
+    select: { maxPlayers: true, currentGameId: true },
+  });
+  const maxPlayers = eventData?.maxPlayers ?? 1;
+  // ADR 0019: use Game.id as eventInstanceId (not Event.id)
+  const gameId = eventData?.currentGameId ?? eventId;
   const baseShareCents = Math.round((eventCost.totalAmount / maxPlayers) * 100);
 
   // 1. Is there an active subscription that covers this date?
@@ -186,7 +189,7 @@ export async function recordPerGameShare(
       direction: "debit",
       gameUnits: 0,
       reason: "per_game_share",
-      eventInstanceId: eventId,
+      eventInstanceId: gameId,
     },
   });
 
@@ -201,7 +204,7 @@ export async function recordPerGameShare(
         direction: "credit",
         gameUnits: -1,
         reason: "credit_redeemed",
-        eventInstanceId: eventId,
+        eventInstanceId: gameId,
       },
     });
   }
@@ -275,8 +278,9 @@ export async function recordSelfReported(args: RecordSelfReportedArgs): Promise<
   const eventCost = await findEventCost(eventId);
   if (!eventCost) throw new Error(`No EventCost for event ${eventId}`);
 
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { maxPlayers: true } });
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { maxPlayers: true, currentGameId: true } });
   const maxPlayers = event?.maxPlayers ?? 1;
+  const gameId = event?.currentGameId ?? eventId;
   const shareCents = Math.round((eventCost.totalAmount / maxPlayers) * 100);
 
   await prisma.walletTransaction.create({
@@ -289,7 +293,7 @@ export async function recordSelfReported(args: RecordSelfReportedArgs): Promise<
       gameUnits: 0,
       reason: "payment_self_reported",
       statusAfter: "sent",
-      eventInstanceId: eventId,
+      eventInstanceId: gameId,
     },
   });
 }
@@ -307,7 +311,9 @@ export async function recordReceived(args: RecordReceivedArgs): Promise<void> {
 
   const player = await findPlayerByName(eventId, playerName);
   const userId = player?.userId ?? (await ensureSystemUserId(eventId, playerName, null));
-  const maxPlayers = (await prisma.event.findUnique({ where: { id: eventId }, select: { maxPlayers: true } }))?.maxPlayers ?? 1;
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { maxPlayers: true, currentGameId: true } });
+  const maxPlayers = event?.maxPlayers ?? 1;
+  const gameId = event?.currentGameId ?? eventId;
   const shareCents = Math.round((eventCost.totalAmount / maxPlayers) * 100);
 
   await prisma.walletTransaction.create({
@@ -320,7 +326,7 @@ export async function recordReceived(args: RecordReceivedArgs): Promise<void> {
       gameUnits: 0,
       reason: "payment_received",
       statusAfter: "paid",
-      eventInstanceId: eventId,
+      eventInstanceId: gameId,
       markedById,
     },
   });

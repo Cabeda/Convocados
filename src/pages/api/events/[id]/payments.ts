@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
+import { recordSelfReported, recordReceived } from "../../../../lib/payments.server";
 
 const VALID_STATUSES = ["pending", "sent", "paid"];
 
@@ -114,6 +115,14 @@ export const PUT: APIRoute = async ({ params, request }) => {
       ...(method !== undefined && { method }),
     },
   });
+
+  // ADR 0019: Write ledger row alongside PlayerPayment update
+  if (isSelfReport && status === "sent" && session?.user) {
+    await recordSelfReported({ eventId, userId: session.user.id, playerName });
+  } else if (status === "paid" && !isSelfReport) {
+    const markedById = session?.user?.id ?? event.ownerId ?? "unknown";
+    await recordReceived({ eventId, playerName, markedById });
+  }
 
   // ADR 0017: Notify the player when their payment is confirmed (via queue, respects tier + overrides)
   if (status === "paid" && !isSelfReport) {

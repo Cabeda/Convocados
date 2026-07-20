@@ -1,8 +1,27 @@
+/**
+ * Balance computation — reads from WalletTransaction ledger (ADR 0019).
+ *
+ * Two projections of the same ledger:
+ * - getGateBalance: "sent" clears the gate (uses MONEY_CLEARING_REASONS)
+ * - getOutstandingBalance: "sent" does NOT clear (uses OUTSTANDING_CLEARING_REASONS)
+ *
+ * For anonymous players (no userId linked), falls back to legacy PlayerPayment
+ * reads since the ledger requires a userId.
+ */
+
 import { prisma } from "./db.server";
+import {
+  computeMoneyBalance,
+  computeMoneyBalanceForGame,
+  MONEY_CLEARING_REASONS,
+  OUTSTANDING_CLEARING_REASONS,
+  type WalletTx,
+  type WalletTxReason,
+} from "./wallet";
 
 export interface PlayerBalance {
   playerName: string;
-  amount: number; // total owed (pending + sent)
+  amount: number; // total owed (euros, 2dp) — per getOutstandingBalance semantics
   gamesOwed: number; // number of games with unpaid amounts
   streak: number; // consecutive games paid in a row (most recent first)
 }
@@ -13,21 +32,116 @@ export interface BalanceSummary {
   balances: PlayerBalance[];
 }
 
+// ─── Internal helpers ──────────────────────────────────────────────────────
+
+/** Resolve a playerName to a userId for ledger queries. Returns null if unlinked. */
+async function resolveUserId(eventId: string, playerName: string): Promise<string | null> {
+  // Try EventPlayer first (ADR 0016 model)
+  const ep = await prisma.eventPlayer.findUnique({
+    where: { eventId_name: { eventId, name: playerName } },
+    select: { userId: true },
+  });
+  if (ep?.userId) return ep.userId;
+
+  // Fallback to legacy Player model
+  const player = await prisma.player.findFirst({
+    where: { eventId, name: playerName },
+    select: { userId: true },
+  });
+  return player?.userId ?? null;
+}
+
+/** Fetch ledger rows for a (eventId, userId) pair, projected to WalletTx shape. */
+async function fetchLedger(eventId: string, userId: string): Promise<WalletTx[]> {
+  const rows = await prisma.walletTransaction.findMany({
+    where: { eventId, userId },
+    select: {
+      direction: true,
+      reason: true,
+      gameUnits: true,
+      amountCents: true,
+      createdAt: true,
+      eventInstanceId: true,
+      idempotencyKey: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  return rows.map((r) => ({
+    direction: r.direction as WalletTx["direction"],
+    reason: r.reason as WalletTx["reason"],
+    gameUnits: r.gameUnits,
+    amountCents: r.amountCents,
+    createdAt: r.createdAt,
+    eventInstanceId: r.eventInstanceId,
+    idempotencyKey: r.idempotencyKey,
+  }));
+}
+
+/** Count games with a per_game_share or cost_adjustment debit that hasn't been fully cleared. */
+function countGamesOwed(txs: readonly WalletTx[], clearingReasons: ReadonlySet<WalletTxReason>): number {
+  // Group by eventInstanceId — each one is a "game"
+  const gameDebits = new Map<string, number>();
+  const gameCredits = new Map<string, number>();
+
+  for (const tx of txs) {
+    const key = tx.eventInstanceId ?? "__unknown__";
+    if ((tx.reason === "per_game_share" || tx.reason === "cost_adjustment") && tx.direction === "debit") {
+      gameDebits.set(key, (gameDebits.get(key) ?? 0) + tx.amountCents);
+    }
+    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
+      gameCredits.set(key, (gameCredits.get(key) ?? 0) + tx.amountCents);
+    }
+  }
+
+  let count = 0;
+  for (const [key, debited] of gameDebits) {
+    const credited = gameCredits.get(key) ?? 0;
+    if (debited > credited) count++;
+  }
+  return count;
+}
+
+/** Compute consecutive paid-game streak (most recent first). */
+function computeStreak(txs: readonly WalletTx[], clearingReasons: ReadonlySet<WalletTxReason>): number {
+  // Build per-game net balance, ordered by most recent first
+  const games = new Map<string, { debit: number; credit: number; latest: Date }>();
+
+  for (const tx of txs) {
+    const key = tx.eventInstanceId ?? "__unknown__";
+    if (!games.has(key)) games.set(key, { debit: 0, credit: 0, latest: tx.createdAt });
+    const g = games.get(key)!;
+    if ((tx.reason === "per_game_share" || tx.reason === "cost_adjustment") && tx.direction === "debit") {
+      g.debit += tx.amountCents;
+    }
+    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
+      g.credit += tx.amountCents;
+    }
+    if (tx.createdAt > g.latest) g.latest = tx.createdAt;
+  }
+
+  // Sort by date descending
+  const sorted = [...games.entries()]
+    .filter(([key]) => key !== "__unknown__")
+    .sort((a, b) => b[1].latest.getTime() - a[1].latest.getTime());
+
+  let streak = 0;
+  for (const [, g] of sorted) {
+    if (g.debit === 0) continue; // no charge for this game (monthly-covered)
+    if (g.credit >= g.debit) streak++;
+    else break;
+  }
+  return streak;
+}
+
+// ─── Legacy fallback for anonymous players ─────────────────────────────────
+
 interface SnapshotEntry {
   playerName: string;
   amount: number;
   status: string;
 }
 
-/**
- * Compute the outstanding balance for a single player within an event.
- * Sums unpaid (pending/sent) from history snapshots + live PlayerPayment.
- * Cancelled histories are excluded.
- */
-export async function getOutstandingBalance(
-  eventId: string,
-  playerName: string,
-): Promise<PlayerBalance> {
+async function legacyGetOutstandingBalance(eventId: string, playerName: string): Promise<PlayerBalance> {
   const [histories, eventCost] = await Promise.all([
     prisma.gameHistory.findMany({
       where: { eventId, status: { not: "cancelled" } },
@@ -45,17 +159,14 @@ export async function getOutstandingBalance(
   let streak = 0;
   let streakBroken = false;
 
-  // Build ordered list: live game (newest) then history entries (desc)
   type GameEntry = { status: string; amt: number };
   const timeline: GameEntry[] = [];
 
-  // Live game first (it's the current/newest)
   if (eventCost?.payments.length) {
     const live = eventCost.payments[0];
     timeline.push({ status: live.status, amt: live.amount });
   }
 
-  // History entries (already desc by dateTime)
   for (const h of histories) {
     if (!h.paymentsSnapshot) continue;
     try {
@@ -80,84 +191,7 @@ export async function getOutstandingBalance(
   return { playerName, amount: Math.round(amount * 100) / 100, gamesOwed, streak };
 }
 
-/**
- * Compute balances for all players + aggregate for latest game.
- */
-export async function getEventBalanceSummary(eventId: string): Promise<BalanceSummary> {
-  const [histories, eventCost] = await Promise.all([
-    prisma.gameHistory.findMany({
-      where: { eventId, status: { not: "cancelled" } },
-      select: { paymentsSnapshot: true, dateTime: true },
-      orderBy: { dateTime: "desc" },
-    }),
-    prisma.eventCost.findUnique({
-      where: { eventId },
-      include: { payments: true },
-    }),
-  ]);
-
-  // Accumulate debts per player
-  const debts = new Map<string, { amount: number; gamesOwed: number }>();
-
-  for (const h of histories) {
-    if (!h.paymentsSnapshot) continue;
-    try {
-      const entries: SnapshotEntry[] = JSON.parse(h.paymentsSnapshot);
-      for (const e of entries) {
-        if (e.status === "pending" || e.status === "sent") {
-          const d = debts.get(e.playerName) ?? { amount: 0, gamesOwed: 0 };
-          d.amount += e.amount;
-          d.gamesOwed++;
-          debts.set(e.playerName, d);
-        }
-      }
-    } catch { /* skip */ }
-  }
-
-  if (eventCost) {
-    for (const p of eventCost.payments) {
-      if (p.status === "pending" || p.status === "sent") {
-        const d = debts.get(p.playerName) ?? { amount: 0, gamesOwed: 0 };
-        d.amount += p.amount;
-        d.gamesOwed++;
-        debts.set(p.playerName, d);
-      }
-    }
-  }
-
-  const balances: PlayerBalance[] = [...debts.entries()].map(([playerName, { amount, gamesOwed }]) => ({
-    playerName,
-    amount: Math.round(amount * 100) / 100,
-    gamesOwed,
-    streak: 0, // computed on-demand per player via getOutstandingBalance
-  }));
-
-  // Aggregate for latest game
-  let paidCount = 0;
-  let totalCount = 0;
-  const latest = histories[0];
-  if (latest?.paymentsSnapshot) {
-    try {
-      const entries: SnapshotEntry[] = JSON.parse(latest.paymentsSnapshot);
-      totalCount = entries.length;
-      paidCount = entries.filter((e) => e.status === "paid").length;
-    } catch { /* skip */ }
-  } else if (eventCost) {
-    totalCount = eventCost.payments.length;
-    paidCount = eventCost.payments.filter((p) => p.status === "paid").length;
-  }
-
-  return { paidCount, totalCount, balances };
-}
-
-/**
- * Compute the "gate-blocking" balance for enforcement — only pending amounts
- * count toward gating, since `sent` clears the gate per ADR 0006.
- */
-export async function getGateBalance(
-  eventId: string,
-  playerName: string,
-): Promise<number> {
+async function legacyGetGateBalance(eventId: string, playerName: string): Promise<number> {
   const [histories, eventCost] = await Promise.all([
     prisma.gameHistory.findMany({
       where: { eventId, status: { not: "cancelled" } },
@@ -190,4 +224,233 @@ export async function getGateBalance(
   }
 
   return Math.round(amount * 100) / 100;
+}
+
+// ─── Public API ────────────────────────────────────────────────────────────
+
+/**
+ * Compute the outstanding balance for a single player within an event.
+ * "Sent" does NOT clear — player still owes until organizer confirms.
+ * Returns amount in euros (2dp).
+ */
+export async function getOutstandingBalance(
+  eventId: string,
+  playerName: string,
+): Promise<PlayerBalance> {
+  const userId = await resolveUserId(eventId, playerName);
+  if (!userId) return legacyGetOutstandingBalance(eventId, playerName);
+
+  const txs = await fetchLedger(eventId, userId);
+  if (txs.length === 0) {
+    // No ledger rows — might be a legacy player. Fall back.
+    return legacyGetOutstandingBalance(eventId, playerName);
+  }
+
+  const balanceCents = computeMoneyBalance(txs, OUTSTANDING_CLEARING_REASONS);
+  const gamesOwed = countGamesOwed(txs, OUTSTANDING_CLEARING_REASONS);
+  const streak = computeStreak(txs, OUTSTANDING_CLEARING_REASONS);
+
+  return {
+    playerName,
+    amount: Math.round(balanceCents) / 100,
+    gamesOwed,
+    streak,
+  };
+}
+
+/**
+ * Compute the "gate-blocking" balance for enforcement.
+ * "Sent" clears the gate (ADR 0006). Returns amount in euros (2dp).
+ */
+export async function getGateBalance(
+  eventId: string,
+  playerName: string,
+): Promise<number> {
+  const userId = await resolveUserId(eventId, playerName);
+  if (!userId) return legacyGetGateBalance(eventId, playerName);
+
+  const txs = await fetchLedger(eventId, userId);
+  if (txs.length === 0) return legacyGetGateBalance(eventId, playerName);
+
+  const balanceCents = computeMoneyBalance(txs, MONEY_CLEARING_REASONS);
+  return Math.round(balanceCents) / 100;
+}
+
+/**
+ * Compute balances for all players + aggregate for latest game.
+ * Used for the event balance page and social-proof display.
+ */
+export async function getEventBalanceSummary(eventId: string): Promise<BalanceSummary> {
+  // Get the current game for per-game aggregates
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { currentGameId: true },
+  });
+
+  // Fetch all ledger rows for this event
+  const allTxs = await prisma.walletTransaction.findMany({
+    where: { eventId },
+    select: {
+      userId: true,
+      direction: true,
+      reason: true,
+      gameUnits: true,
+      amountCents: true,
+      createdAt: true,
+      eventInstanceId: true,
+      idempotencyKey: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // Group by userId
+  const byUser = new Map<string, WalletTx[]>();
+  for (const r of allTxs) {
+    const tx: WalletTx = {
+      direction: r.direction as WalletTx["direction"],
+      reason: r.reason as WalletTx["reason"],
+      gameUnits: r.gameUnits,
+      amountCents: r.amountCents,
+      createdAt: r.createdAt,
+      eventInstanceId: r.eventInstanceId,
+      idempotencyKey: r.idempotencyKey,
+    };
+    const list = byUser.get(r.userId) ?? [];
+    list.push(tx);
+    byUser.set(r.userId, list);
+  }
+
+  // Resolve userId → playerName for display
+  const userIds = [...byUser.keys()];
+  const eventPlayers = await prisma.eventPlayer.findMany({
+    where: { eventId, userId: { in: userIds } },
+    select: { userId: true, name: true },
+  });
+  const userToName = new Map(eventPlayers.map((ep) => [ep.userId!, ep.name]));
+
+  // Fallback for users not in EventPlayer (legacy Player table)
+  const missingUserIds = userIds.filter((uid) => !userToName.has(uid));
+  if (missingUserIds.length > 0) {
+    const legacyPlayers = await prisma.player.findMany({
+      where: { eventId, userId: { in: missingUserIds } },
+      select: { userId: true, name: true },
+    });
+    for (const p of legacyPlayers) {
+      if (p.userId) userToName.set(p.userId, p.name);
+    }
+  }
+
+  // Compute per-player balances
+  let balances: PlayerBalance[] = [];
+
+  if (byUser.size > 0) {
+    // Ledger-based balances
+    for (const [userId, txs] of byUser) {
+      const balanceCents = computeMoneyBalance(txs, OUTSTANDING_CLEARING_REASONS);
+      if (balanceCents === 0) continue; // no debt
+      const gamesOwed = countGamesOwed(txs, OUTSTANDING_CLEARING_REASONS);
+      const playerName = userToName.get(userId) ?? userId;
+      balances.push({
+        playerName,
+        amount: Math.round(balanceCents) / 100,
+        gamesOwed,
+        streak: 0, // computed on-demand per player via getOutstandingBalance
+      });
+    }
+  } else {
+    // Legacy fallback: compute debts from GameHistory + PlayerPayment
+    const histories = await prisma.gameHistory.findMany({
+      where: { eventId, status: { not: "cancelled" } },
+      select: { paymentsSnapshot: true },
+    });
+    const eventCostForDebts = await prisma.eventCost.findUnique({
+      where: { eventId },
+      include: { payments: true },
+    });
+
+    const debts = new Map<string, { amount: number; gamesOwed: number }>();
+
+    for (const h of histories) {
+      if (!h.paymentsSnapshot) continue;
+      try {
+        const entries: SnapshotEntry[] = JSON.parse(h.paymentsSnapshot);
+        for (const e of entries) {
+          if (e.status === "pending" || e.status === "sent") {
+            const d = debts.get(e.playerName) ?? { amount: 0, gamesOwed: 0 };
+            d.amount += e.amount;
+            d.gamesOwed++;
+            debts.set(e.playerName, d);
+          }
+        }
+      } catch { /* skip */ }
+    }
+
+    if (eventCostForDebts) {
+      for (const p of eventCostForDebts.payments) {
+        if (p.status === "pending" || p.status === "sent") {
+          const d = debts.get(p.playerName) ?? { amount: 0, gamesOwed: 0 };
+          d.amount += p.amount;
+          d.gamesOwed++;
+          debts.set(p.playerName, d);
+        }
+      }
+    }
+
+    balances = [...debts.entries()].map(([playerName, { amount, gamesOwed }]) => ({
+      playerName,
+      amount: Math.round(amount * 100) / 100,
+      gamesOwed,
+      streak: 0,
+    }));
+  }
+
+  // Per-game aggregate for social proof (paidCount/totalCount for current game)
+  let paidCount = 0;
+  let totalCount = 0;
+  const currentGameId = event?.currentGameId;
+
+  if (currentGameId) {
+    for (const [, txs] of byUser) {
+      // Check if this user has a charge for the current game
+      const hasCharge = txs.some(
+        (tx) => tx.eventInstanceId === currentGameId &&
+          (tx.reason === "per_game_share" || tx.reason === "cost_adjustment") &&
+          tx.direction === "debit",
+      );
+      if (!hasCharge) continue;
+      totalCount++;
+      const gameBalance = computeMoneyBalanceForGame(txs, currentGameId, OUTSTANDING_CLEARING_REASONS);
+      if (gameBalance === 0) paidCount++;
+    }
+  }
+
+  // If no ledger data for current game, fall back to legacy PlayerPayment
+  if (totalCount === 0) {
+    const eventCost = await prisma.eventCost.findUnique({
+      where: { eventId },
+      include: { payments: true },
+    });
+    if (eventCost && eventCost.payments.length > 0) {
+      totalCount = eventCost.payments.length;
+      paidCount = eventCost.payments.filter((p) => p.status === "paid").length;
+    }
+  }
+
+  // If still no data, fall back to latest GameHistory.paymentsSnapshot
+  if (totalCount === 0) {
+    const latest = await prisma.gameHistory.findFirst({
+      where: { eventId, status: { not: "cancelled" } },
+      orderBy: { dateTime: "desc" },
+      select: { paymentsSnapshot: true },
+    });
+    if (latest?.paymentsSnapshot) {
+      try {
+        const entries: SnapshotEntry[] = JSON.parse(latest.paymentsSnapshot);
+        totalCount = entries.length;
+        paidCount = entries.filter((e) => e.status === "paid").length;
+      } catch { /* skip malformed */ }
+    }
+  }
+
+  return { paidCount, totalCount, balances };
 }

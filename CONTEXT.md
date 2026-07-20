@@ -260,7 +260,16 @@ The abstract denomination of Wallet credit. 1 unit = 1 missed non-cancelled Even
 _Avoid_: credit, token
 
 ## Transaction
-An immutable row in the per-Event ledger recording a money or Game-Unit movement on behalf of a player. `amountCents` (in Event currency), `direction` (`debit` | `credit`), `reason` (enum: `per_game_share`, `monthly_fee`, `missed_game_credit`, `credit_redeemed`, `credit_expired`, `extras_declare`, `payment_received`, `payment_self_reported`), references to the source (`eventInstanceId`, `subscriptionId`, `extrasId`). The ledger is the single source of truth for balances, the join gate, and per-player history. `PlayerPayment.status` becomes a *projection* of the ledger.
+An immutable row in the per-Event ledger recording a money or Game-Unit movement on behalf of a player. `amountCents` (in Event currency), `direction` (`debit` | `credit`), `reason` (enum: `per_game_share`, `cost_adjustment`, `monthly_fee`, `missed_game_credit`, `credit_redeemed`, `credit_expired`, `extras_declare`, `payment_received`, `payment_self_reported`), references to the source (`eventInstanceId`, `subscriptionId`, `extrasId`). The ledger is the single source of truth for balances, the join gate, and per-player history. `PlayerPayment.status` becomes a *projection* of the ledger.
+
+`eventInstanceId` stores the `Game.id` of the occurrence the transaction applies to. For legacy rows (pre-ADR-0019), the value is the `Event.id` — treated as "game unknown" in per-game aggregates.
+
+### Cost change scope
+When an organizer changes the event cost, two scopes are offered:
+- **This game only** — sets a per-Game cost override (`Game.costTotalAmount`). The template (`EventCost.totalAmount`) is unchanged; the next occurrence inherits the template.
+- **This and all future** — updates the template. Past games are unaffected.
+
+No retroactive bulk change. Individual past-game corrections are handled via the history edit UI, which writes `cost_adjustment` correction rows to the ledger (for post-migration games only).
 _Avoid_: payment, ledger entry, journal line
 
 ## Extras Pot
