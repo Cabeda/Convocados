@@ -530,7 +530,7 @@ export const POST: APIRoute = async ({ params, request }) => {
             ...(resolvedUser && !existing.userId ? { userId: resolvedUser.id } : {}),
           },
         });
-        if (reactivatedUserId && event.currentGameId) {
+        if (event.currentGameId) {
           const ep = await prisma.eventPlayer.upsert({
             where: { eventId_name: { eventId, name: trimmed } },
             create: { eventId, name: trimmed, userId: reactivatedUserId },
@@ -541,17 +541,15 @@ export const POST: APIRoute = async ({ params, request }) => {
             create: { eventPlayerId: ep.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
             update: { status: "yes", respondedAt: new Date() },
           });
-        } else if (!reactivatedUserId && event.currentGameId) {
-          // Guest re-add: reset their RSVP to "yes" on the current game
-          const ep = await prisma.eventPlayer.upsert({
-            where: { eventId_name: { eventId, name: trimmed } },
-            create: { eventId, name: trimmed },
-            update: {},
+          // Restore the GameParticipant too — a previous leave archived it, and
+          // without this the re-added player stays invisible on the game list.
+          const gpCount = await prisma.gameParticipant.count({
+            where: { gameId: event.currentGameId, archivedAt: null },
           });
-          await prisma.rsvp.upsert({
-            where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
-            create: { eventPlayerId: ep.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
-            update: { status: "yes", respondedAt: new Date() },
+          await prisma.gameParticipant.upsert({
+            where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: ep.id } },
+            create: { gameId: event.currentGameId, eventPlayerId: ep.id, order: gpCount },
+            update: { archivedAt: null, order: gpCount },
           });
         }
         return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
@@ -568,6 +566,35 @@ export const POST: APIRoute = async ({ params, request }) => {
         const alreadyInGame = await prisma.gameParticipant.findUnique({
           where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
         });
+        if (alreadyInGame && alreadyInGame.archivedAt) {
+          // Re-join after a leave: the GameParticipant was soft-archived by the
+          // leave flow. Un-archive it (at the end of the list) instead of
+          // falling through to the 409 "already in the list" error.
+          const gpCount = await prisma.gameParticipant.count({
+            where: { gameId: event.currentGameId, archivedAt: null },
+          });
+          await prisma.gameParticipant.update({
+            where: { id: alreadyInGame.id },
+            data: { archivedAt: null, order: gpCount },
+          });
+          // Move player to end of list — same rule as a fresh re-join
+          const maxOrder = await prisma.player.aggregate({
+            where: { eventId, archivedAt: null },
+            _max: { order: true },
+          });
+          const newOrder = (maxOrder._max.order ?? -1) + 1;
+          await prisma.player.update({
+            where: { id: existing.id },
+            data: { order: newOrder, ...(linkedUserId && !existing.userId ? { userId: linkedUserId } : {}) },
+          });
+          // Reset stale RSVP — the leave wrote "no", the re-join means "yes"
+          await prisma.rsvp.upsert({
+            where: { eventPlayerId_gameId: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId } },
+            create: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
+            update: { status: "yes", respondedAt: new Date() },
+          });
+          return Response.json({ ok: true, invited: null, resolvedName: trimmed });
+        }
         if (!alreadyInGame) {
           const gpCount = await prisma.gameParticipant.count({
             where: { gameId: event.currentGameId, archivedAt: null },
@@ -646,7 +673,9 @@ export const POST: APIRoute = async ({ params, request }) => {
     await prisma.gameParticipant.upsert({
       where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
       create: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: event.players.length },
-      update: {},
+      // Clear archivedAt: an archived GameParticipant can linger (e.g. after a
+      // merge removed the Player row) — joining must make the player visible.
+      update: { archivedAt: null },
     });
   }
 
