@@ -88,12 +88,18 @@ describe("GET /api/events/[id]/rsvp/guests", () => {
     const res = await guestsGet(ctx(ev.id));
     expect(res.status).toBe(200);
     const body = await res.json();
+    // ADR 0016: keyed by BOTH Player.id and EventPlayer.id (the event GET returns
+    // EventPlayer ids, so the UI looks up by those).
     expect(body.guests).toEqual({
       [g1.id]: "yes",
       [g2.id]: "no",
+      [epG1.id]: "yes",
+      [epG2.id]: "no",
       // archived and linked are NOT in the response
     });
     expect(body.guests[archived.id]).toBeUndefined();
     expect(body.guests[linkedPlayer.id]).toBeUndefined();
+    expect(body.guests[epArch.id]).toBeUndefined();
+    expect(body.guests[epLinked.id]).toBeUndefined();
   });
 });
