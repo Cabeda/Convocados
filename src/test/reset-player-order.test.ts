@@ -112,4 +112,36 @@ describe("POST /api/events/[id]/reset-player-order", () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
   });
+
+  // ADR 0016: the UI renders GameParticipant.order, so a reset that only touches
+  // Player.order is invisible. Both tracks must be synced.
+  it("syncs GameParticipant order with the reset", async () => {
+    const owner = await seedUser("owner-4");
+    const event = await seedEvent(owner.id, "evt-rpo-4");
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+
+    // Players created Alice→Bob→Charlie but ordered in reverse
+    const p1 = await prisma.player.create({ data: { name: "Alice", eventId: event.id, order: 2 } });
+    const p2 = await prisma.player.create({ data: { name: "Bob", eventId: event.id, order: 1 } });
+    const p3 = await prisma.player.create({ data: { name: "Charlie", eventId: event.id, order: 0 } });
+    const ep1 = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice" } });
+    const ep2 = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob" } });
+    const ep3 = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Charlie" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep1.id, order: 2 } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep2.id, order: 1 } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep3.id, order: 0 } });
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+
+    const res = await POST(ctx(event.id));
+    expect(res.status).toBe(200);
+
+    const gps = await prisma.gameParticipant.findMany({
+      where: { gameId: game.id },
+      orderBy: { order: "asc" },
+      include: { eventPlayer: true },
+    });
+    expect(gps.map((g) => g.eventPlayer.name)).toEqual(["Alice", "Bob", "Charlie"]);
+  });
 });

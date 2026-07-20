@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { validateTeams } from "./players";
+import { syncGameParticipantOrder } from "../../../../lib/playerOrder.server";
 
 /** POST — reset player order to original signup order (createdAt). Owner-only. */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -22,6 +23,11 @@ export const POST: APIRoute = async ({ params, request }) => {
   await prisma.$transaction(
     players.map((p, i) => prisma.player.update({ where: { id: p.id }, data: { order: i } }))
   );
+
+  // ADR 0016: mirror onto GameParticipant.order — the event GET renders that track.
+  if (event.currentGameId) {
+    await syncGameParticipantOrder(eventId, event.currentGameId, players.map((p) => p.name));
+  }
 
   // Validate teams after order change — removes any bench players from teams
   const teamsCleared = await validateTeams(eventId, event.maxPlayers, event.currentGameId);
