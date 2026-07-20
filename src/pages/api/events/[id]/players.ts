@@ -15,6 +15,7 @@ import { createLogger } from "../../../../lib/logger.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
 import { archiveAndLeave } from "../../../../lib/leave.server";
 import { balanceTeams } from "../../../../lib/elo.server";
+import { Randomize } from "../../../../lib/random";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 import {
   IDEMPOTENCY_HEADER,
@@ -288,6 +289,57 @@ async function tryBalancedSwap(eventId: string, promotedName: string, promotedTe
   });
 }
 
+/**
+ * Auto-randomize teams when the game becomes full (active players === maxPlayers)
+ * and no teams have been generated yet. The manual "Randomize" button remains
+ * available at all times for re-randomization.
+ */
+async function autoRandomizeIfFull(eventId: string, maxPlayers: number, currentGameId?: string | null): Promise<void> {
+  // Only trigger when no teams exist yet
+  const existingTeams = await prisma.teamResult.count({ where: { eventId } });
+  if (existingTeams > 0) return;
+
+  // Count active players
+  const activeNames = await getActivePlayerNames(eventId, maxPlayers, currentGameId);
+  if (activeNames.size < maxPlayers) return;
+
+  // Game is full and no teams — auto-generate
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { balanced: true, teamOneName: true, teamTwoName: true },
+  });
+  if (!event) return;
+
+  const players = [...activeNames];
+  let matches;
+
+  if (event.balanced) {
+    const ratings = await prisma.playerRating.findMany({ where: { eventId } });
+    const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
+    const playersWithRatings = players.map((name) => ({
+      name,
+      rating: ratingMap.get(name) ?? 1000,
+    }));
+    matches = balanceTeams(playersWithRatings, [event.teamOneName, event.teamTwoName]);
+  } else {
+    matches = Randomize(players, [event.teamOneName, event.teamTwoName]);
+  }
+
+  await prisma.$transaction([
+    ...matches.map((match) =>
+      prisma.teamResult.create({
+        data: {
+          name: match.team,
+          eventId,
+          members: { create: match.players.map((p) => ({ name: p.name, order: p.order })) },
+        },
+      })
+    ),
+  ]);
+
+  logEvent(eventId, "teams_randomized", null, null, { balanced: event.balanced, playerCount: players.length, auto: true }).catch(() => {});
+}
+
 // ── Invite email rate-limit stores ────────────────────────────────────────────
 // Per-event: max 10 unique invite emails per event per 24h
 // Per-sender: max 20 invite emails per authenticated user per 24h across all events
@@ -552,6 +604,12 @@ export const POST: APIRoute = async ({ params, request }) => {
             update: { archivedAt: null, order: gpCount },
           });
         }
+        // Bug fix: re-activated players must be added to teams if within active range
+        const readdIsOnBench = newOrder >= event.maxPlayers;
+        if (!readdIsOnBench) {
+          await addPlayerToTeams(eventId, trimmed, event.currentGameId);
+          await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
+        }
         return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
       }
       // ── ADR 0016: game-scoped re-join after recurring reset ─────────────
@@ -618,6 +676,12 @@ export const POST: APIRoute = async ({ params, request }) => {
             create: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
             update: { status: "yes", respondedAt: new Date() },
           });
+          // Bug fix: re-joining players must be added to teams if within active range
+          const rejoinIsOnBench = newOrder >= event.maxPlayers;
+          if (!rejoinIsOnBench) {
+            await addPlayerToTeams(eventId, trimmed, event.currentGameId);
+            await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
+          }
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
         // Already in the current game — fall through to duplicate error
@@ -691,6 +755,11 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   await validateTeams(eventId, event.maxPlayers, event.currentGameId);
+
+  // Auto-randomize: first randomization triggers when game is full
+  if (!isOnBench) {
+    await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
+  }
 
   if (isOnBench) {
     // ADR 0018: Include bench position in notification body

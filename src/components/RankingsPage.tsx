@@ -13,6 +13,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
 import MergeIcon from "@mui/icons-material/MergeType";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -372,6 +373,10 @@ export default function RankingsPage({ eventId }: { eventId: string }) {
                 </Button>
               )}
             </Box>
+
+            <Alert icon={<InfoOutlinedIcon fontSize="small" />} severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
+              <Typography variant="body2">{t("eloExplainer")}</Typography>
+            </Alert>
 
             {tableRows.length === 0 ? (
               <Paper elevation={2} sx={{ borderRadius: 3, p: 4, textAlign: "center" }}>
