@@ -51,6 +51,34 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
 
+  # ── Seed smoke: catches dev-script breakage fast ────────────────────────
+  # Runs against a throwaway DB so the seed script can't pass by reusing
+  # stale state. pnpm + tsx resolution has bitten us before — keep this
+  # under 3 min so it stays cheap on the free tier.
+  seed-smoke:
+    name: DB Seed Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare throwaway DB
+        env:
+          DATABASE_URL: file:./seed-smoke.db
+          BETTER_AUTH_URL: http://localhost:4321
+        run: pnpm prisma migrate deploy
+      - name: Run seed
+        env:
+          DATABASE_URL: file:./seed-smoke.db
+          BETTER_AUTH_URL: http://localhost:4321
+        run: pnpm db:seed
+
   # ── Unit + integration tests ────────────────────────────────────────────
   # Coverage is only run on push to main — on PRs we skip coverage to halve
   # the test runtime (~205s → ~80s on this codebase).
@@ -254,7 +282,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [typecheck, lint, test, build, e2e]
+    needs: [typecheck, lint, test, build, e2e, seed-smoke]
     steps:
       - name: Check results
         run: |
