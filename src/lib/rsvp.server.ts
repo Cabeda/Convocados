@@ -98,6 +98,31 @@ export async function getRsvpForUser(eventId: string, userId: string) {
   });
 }
 
+/** Resolve a guest Player from either a Player.id or an EventPlayer.id.
+ *  ADR 0016: the event GET returns EventPlayer ids (game-scoped player list), so
+ *  callers may send either. Falls back to a name-matched Player (active row first);
+ *  if no Player row exists at all, synthesizes one from the EventPlayer. */
+async function resolveGuestPlayer(eventId: string, playerId: string) {
+  const player = await prisma.player.findUnique({
+    where: { id: playerId },
+    select: { eventId: true, userId: true, name: true },
+  });
+  if (player) return player;
+
+  const ep = await prisma.eventPlayer.findFirst({
+    where: { id: playerId, eventId },
+    select: { name: true, userId: true },
+  });
+  if (!ep) return null;
+
+  const byName = await prisma.player.findFirst({
+    where: { eventId, name: ep.name },
+    orderBy: { archivedAt: "asc" }, // NULL (active) sorts first
+    select: { eventId: true, userId: true, name: true },
+  });
+  return byName ?? { eventId, userId: ep.userId, name: ep.name };
+}
+
 /** Idempotent RSVP upsert for a guest Player. Admin/owner acts on the guest's behalf. */
 export async function upsertGuestRsvp(
   eventId: string,
@@ -105,10 +130,7 @@ export async function upsertGuestRsvp(
   status: RsvpStatus,
   actorUserId: string,
 ) {
-  const player = await prisma.player.findUnique({
-    where: { id: playerId },
-    select: { eventId: true, userId: true, name: true },
-  });
+  const player = await resolveGuestPlayer(eventId, playerId);
   if (!player) throw new Error("Player not found.");
   if (player.eventId !== eventId) throw new Error("Player does not belong to this event.");
   if (player.userId) throw new Error("Player is linked to a User — that user must self-RSVP.");
@@ -131,7 +153,7 @@ export async function upsertGuestRsvp(
 }
 
 export async function getRsvpForGuest(eventId: string, playerId: string) {
-  const player = await prisma.player.findUnique({ where: { id: playerId }, select: { name: true } });
+  const player = await resolveGuestPlayer(eventId, playerId);
   if (!player) return null;
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
   if (!event?.currentGameId) return null;
@@ -167,11 +189,15 @@ export async function getGuestRsvpMap(eventId: string): Promise<Record<string, R
   });
   const rsvpByEpId = new Map(rsvps.map((r) => [r.eventPlayerId, r.status as RsvpStatus]));
 
-  // Map back to playerId for the UI (PlayerList renders by playerId)
+  // Map back to playerId for the UI. ADR 0016: the event GET returns EventPlayer
+  // ids, so key by BOTH Player.id and EventPlayer.id — the UI pill looks up by
+  // whichever id its player list carries.
   const map: Record<string, RsvpStatus> = {};
   for (const g of guests) {
     const epId = epByName.get(g.name);
-    map[g.id] = epId ? (rsvpByEpId.get(epId) ?? null) : null;
+    const status = epId ? (rsvpByEpId.get(epId) ?? null) : null;
+    map[g.id] = status;
+    if (epId) map[epId] = status;
   }
   return map;
 }
