@@ -13,10 +13,11 @@ import { prisma } from "./db.server";
 import {
   computeMoneyBalance,
   computeMoneyBalanceForGame,
+  countGamesOwed,
+  computeStreak,
   MONEY_CLEARING_REASONS,
   OUTSTANDING_CLEARING_REASONS,
   type WalletTx,
-  type WalletTxReason,
 } from "./wallet";
 
 export interface PlayerBalance {
@@ -75,62 +76,6 @@ async function fetchLedger(eventId: string, userId: string): Promise<WalletTx[]>
     eventInstanceId: r.eventInstanceId,
     idempotencyKey: r.idempotencyKey,
   }));
-}
-
-/** Count games with a per_game_share or cost_adjustment debit that hasn't been fully cleared. */
-function countGamesOwed(txs: readonly WalletTx[], clearingReasons: ReadonlySet<WalletTxReason>): number {
-  // Group by eventInstanceId — each one is a "game"
-  const gameDebits = new Map<string, number>();
-  const gameCredits = new Map<string, number>();
-
-  for (const tx of txs) {
-    const key = tx.eventInstanceId ?? "__unknown__";
-    if ((tx.reason === "per_game_share" || tx.reason === "cost_adjustment") && tx.direction === "debit") {
-      gameDebits.set(key, (gameDebits.get(key) ?? 0) + tx.amountCents);
-    }
-    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
-      gameCredits.set(key, (gameCredits.get(key) ?? 0) + tx.amountCents);
-    }
-  }
-
-  let count = 0;
-  for (const [key, debited] of gameDebits) {
-    const credited = gameCredits.get(key) ?? 0;
-    if (debited > credited) count++;
-  }
-  return count;
-}
-
-/** Compute consecutive paid-game streak (most recent first). */
-function computeStreak(txs: readonly WalletTx[], clearingReasons: ReadonlySet<WalletTxReason>): number {
-  // Build per-game net balance, ordered by most recent first
-  const games = new Map<string, { debit: number; credit: number; latest: Date }>();
-
-  for (const tx of txs) {
-    const key = tx.eventInstanceId ?? "__unknown__";
-    if (!games.has(key)) games.set(key, { debit: 0, credit: 0, latest: tx.createdAt });
-    const g = games.get(key)!;
-    if ((tx.reason === "per_game_share" || tx.reason === "cost_adjustment") && tx.direction === "debit") {
-      g.debit += tx.amountCents;
-    }
-    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
-      g.credit += tx.amountCents;
-    }
-    if (tx.createdAt > g.latest) g.latest = tx.createdAt;
-  }
-
-  // Sort by date descending
-  const sorted = [...games.entries()]
-    .filter(([key]) => key !== "__unknown__")
-    .sort((a, b) => b[1].latest.getTime() - a[1].latest.getTime());
-
-  let streak = 0;
-  for (const [, g] of sorted) {
-    if (g.debit === 0) continue; // no charge for this game (monthly-covered)
-    if (g.credit >= g.debit) streak++;
-    else break;
-  }
-  return streak;
 }
 
 // ─── Legacy fallback for anonymous players ─────────────────────────────────
@@ -247,12 +192,16 @@ export async function getOutstandingBalance(
   }
 
   const balanceCents = computeMoneyBalance(txs, OUTSTANDING_CLEARING_REASONS);
-  const gamesOwed = countGamesOwed(txs, OUTSTANDING_CLEARING_REASONS);
-  const streak = computeStreak(txs, OUTSTANDING_CLEARING_REASONS);
+  // ADR 0019 §3: exclude legacy rows where eventInstanceId = eventId from per-game aggregates
+  // Only apply when the event uses Game-based recurrence (has currentGameId)
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  const legacyIds = event?.currentGameId ? new Set([eventId]) : undefined;
+  const gamesOwed = countGamesOwed(txs, OUTSTANDING_CLEARING_REASONS, legacyIds);
+  const streak = computeStreak(txs, OUTSTANDING_CLEARING_REASONS, legacyIds);
 
   return {
     playerName,
-    amount: Math.round(balanceCents) / 100,
+    amount: Math.round(Math.max(0, balanceCents)) / 100,
     gamesOwed,
     streak,
   };
@@ -273,7 +222,7 @@ export async function getGateBalance(
   if (txs.length === 0) return legacyGetGateBalance(eventId, playerName);
 
   const balanceCents = computeMoneyBalance(txs, MONEY_CLEARING_REASONS);
-  return Math.round(balanceCents) / 100;
+  return Math.round(Math.max(0, balanceCents)) / 100;
 }
 
 /**
@@ -345,10 +294,11 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
 
   if (byUser.size > 0) {
     // Ledger-based balances
+    const legacyIds = event?.currentGameId ? new Set([eventId]) : undefined;
     for (const [userId, txs] of byUser) {
       const balanceCents = computeMoneyBalance(txs, OUTSTANDING_CLEARING_REASONS);
-      if (balanceCents === 0) continue; // no debt
-      const gamesOwed = countGamesOwed(txs, OUTSTANDING_CLEARING_REASONS);
+      if (balanceCents <= 0) continue; // no debt
+      const gamesOwed = countGamesOwed(txs, OUTSTANDING_CLEARING_REASONS, legacyIds);
       const playerName = userToName.get(userId) ?? userId;
       balances.push({
         playerName,
@@ -420,7 +370,7 @@ export async function getEventBalanceSummary(eventId: string): Promise<BalanceSu
       if (!hasCharge) continue;
       totalCount++;
       const gameBalance = computeMoneyBalanceForGame(txs, currentGameId, OUTSTANDING_CLEARING_REASONS);
-      if (gameBalance === 0) paidCount++;
+      if (gameBalance <= 0) paidCount++;
     }
   }
 

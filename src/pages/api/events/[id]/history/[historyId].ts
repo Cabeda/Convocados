@@ -265,49 +265,68 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
     // Update Game.costTotalAmount if this is a Game-backed entry
     if (game) {
-      await prisma.game.update({
-        where: { id: game.id },
-        data: { costTotalAmount: newTotal, costCurrency },
-      });
-
-      // ADR 0019: Write cost_adjustment correction rows for post-migration games
-      // Check if ledger rows exist for this game
-      const existingDebits = await prisma.walletTransaction.findMany({
-        where: { eventId: params.id, eventInstanceId: game.id, reason: "per_game_share", direction: "debit" },
-        select: { userId: true, amountCents: true },
-      });
-
-      if (existingDebits.length > 0) {
-        // Post-migration game — write cost_adjustment rows for the delta
-        for (const debit of existingDebits) {
-          const delta = newShareCents - debit.amountCents;
-          if (delta === 0) continue;
-          await prisma.walletTransaction.create({
-            data: {
-              eventId: params.id!,
-              userId: debit.userId,
-              amountCents: Math.abs(delta),
-              currency: costCurrency,
-              direction: delta > 0 ? "debit" : "credit",
-              gameUnits: 0,
-              reason: "cost_adjustment",
-              eventInstanceId: game.id,
-              markedById: session.user.id,
-            },
-          });
-        }
-      }
-
-      // Also update GamePayment rows if they exist
-      const gamePayments = await prisma.gamePayment.findMany({
-        where: { gameId: game.id },
-      });
-      for (const gp of gamePayments) {
-        await prisma.gamePayment.update({
-          where: { id: gp.id },
-          data: { amount: newShare },
+      await prisma.$transaction(async (tx) => {
+        await tx.game.update({
+          where: { id: game.id },
+          data: { costTotalAmount: newTotal, costCurrency },
         });
-      }
+
+        // ADR 0019: Write cost_adjustment correction rows for post-migration games
+        const existingDebits = await tx.walletTransaction.findMany({
+          where: { eventId: params.id, eventInstanceId: game.id, reason: "per_game_share", direction: "debit" },
+          select: { userId: true, amountCents: true },
+        });
+
+        if (existingDebits.length > 0) {
+          for (const debit of existingDebits) {
+            const delta = newShareCents - debit.amountCents;
+            if (delta === 0) continue;
+            await tx.walletTransaction.create({
+              data: {
+                eventId: params.id!,
+                userId: debit.userId,
+                amountCents: Math.abs(delta),
+                currency: costCurrency,
+                direction: delta > 0 ? "debit" : "credit",
+                gameUnits: 0,
+                reason: "cost_adjustment",
+                eventInstanceId: game.id,
+                markedById: session.user.id,
+              },
+            });
+          }
+        } else {
+          // ADR 0019 §6: Unlinked players — resolve from GameParticipant and write corrections
+          const participants = await tx.gameParticipant.findMany({
+            where: { gameId: game.id, archivedAt: null },
+            include: { eventPlayer: { select: { userId: true, name: true } } },
+          });
+          for (const gp of participants) {
+            const userId = gp.eventPlayer.userId;
+            if (!userId) continue; // truly anonymous — no ledger possible
+            // No original debit exists, so the full newShareCents is the adjustment
+            await tx.walletTransaction.create({
+              data: {
+                eventId: params.id!,
+                userId,
+                amountCents: newShareCents,
+                currency: costCurrency,
+                direction: "debit",
+                gameUnits: 0,
+                reason: "cost_adjustment",
+                eventInstanceId: game.id,
+                markedById: session.user.id,
+              },
+            });
+          }
+        }
+
+        // Update GamePayment rows
+        const gamePayments = await tx.gamePayment.findMany({ where: { gameId: game.id } });
+        for (const gp of gamePayments) {
+          await tx.gamePayment.update({ where: { id: gp.id }, data: { amount: newShare } });
+        }
+      });
     }
 
     // Update PlayerPayment rows (legacy/dual-write compat)
