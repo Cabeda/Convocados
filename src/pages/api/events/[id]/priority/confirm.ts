@@ -41,16 +41,23 @@ export const POST: APIRoute = async ({ params, request }) => {
       });
     }
 
-    // ADR 0016: also add to current game via GameParticipant
+    // ADR 0016: also add to current game via GameParticipant — appended at the
+    // end of the list (same queue rule as a normal join; order=0 would jump
+    // them to the top and duplicate an existing slot). max(order)+1, not count:
+    // archived participants leave gaps that a count would collide with.
     if (event.currentGameId) {
       const eventPlayer = await prisma.eventPlayer.upsert({
         where: { eventId_name: { eventId: event.id, name: session.user.name } },
         create: { eventId: event.id, name: session.user.name, userId: session.user.id },
         update: {},
       });
+      const maxOrder = await prisma.gameParticipant.aggregate({
+        where: { gameId: event.currentGameId },
+        _max: { order: true },
+      });
       await prisma.gameParticipant.upsert({
         where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
-        create: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: 0 },
+        create: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: (maxOrder._max.order ?? -1) + 1 },
         update: {},
       });
     }

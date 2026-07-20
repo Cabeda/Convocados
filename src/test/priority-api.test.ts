@@ -368,6 +368,55 @@ describe("POST /api/events/:id/priority/confirm", () => {
     expect(eventPlayer!.name).toBe("Player");
   });
 
+  // Regression: confirmed priority players must join the END of the game list,
+  // not order 0 (which jumped them to the top and duplicated existing order 0).
+  it("appends the confirmed player's GameParticipant at the end of the game list", async () => {
+    const owner = await seedUser();
+    const player = await seedUser({ name: "Priority" });
+    const gameDate = new Date(Date.now() + 7 * 86400_000);
+    const event = await seedEvent(owner.id, { priorityEnabled: true, dateTime: gameDate });
+    const game = await testPrisma.game.create({ data: { eventId: event.id, dateTime: gameDate } });
+    await testPrisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+
+    // Two players already in the game (orders 0 and 1), plus one archived
+    // participant whose order 2 must NOT be reused (count-based append would collide)
+    const epA = await testPrisma.eventPlayer.create({ data: { eventId: event.id, name: "A" } });
+    const epB = await testPrisma.eventPlayer.create({ data: { eventId: event.id, name: "B" } });
+    const epOld = await testPrisma.eventPlayer.create({ data: { eventId: event.id, name: "Old" } });
+    await testPrisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: epA.id, order: 0 } });
+    await testPrisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: epB.id, order: 1 } });
+    await testPrisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: epOld.id, order: 2, archivedAt: new Date() },
+    });
+
+    await testPrisma.priorityEnrollment.create({
+      data: { eventId: event.id, userId: player.id, source: "auto" },
+    });
+    await testPrisma.priorityConfirmation.create({
+      data: {
+        eventId: event.id,
+        userId: player.id,
+        gameDate,
+        status: "pending",
+        notifiedAt: new Date(),
+        deadline: new Date(gameDate.getTime() - 48 * 3600_000),
+      },
+    });
+
+    mockAuth(player.id);
+    mockGetSession.mockResolvedValue({ user: { id: player.id, name: "Priority" }, session: { id: "s1" } });
+    const res = await confirmPriority(ctx({ id: event.id }, {}));
+    expect(res.status).toBe(200);
+
+    const gps = await testPrisma.gameParticipant.findMany({
+      where: { gameId: game.id, archivedAt: null },
+      orderBy: { order: "asc" },
+      include: { eventPlayer: true },
+    });
+    expect(gps.map((g) => g.eventPlayer.name)).toEqual(["A", "B", "Priority"]);
+    expect(gps[2].order).toBe(3); // max(existing order) + 1 — no collision with archived order 2
+  });
+
   it("returns 401 for unauthenticated", async () => {
     const owner = await seedUser();
     const event = await seedEvent(owner.id);
