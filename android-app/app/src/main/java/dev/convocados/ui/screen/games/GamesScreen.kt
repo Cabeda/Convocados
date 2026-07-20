@@ -359,3 +359,16 @@ fun formatRelativeDate(iso: String): String = runCatching {
         .withZone(ZoneId.systemDefault())
     formatter.format(instant)
 }.getOrDefault(iso)
+
+/**
+ * Format an ISO instant in the event's IANA timezone (not the device timezone),
+ * so shared text reflects the time the game actually happens. Falls back to the
+ * device timezone when the event timezone is blank or invalid.
+ */
+fun formatEventDateInTz(iso: String, timezone: String): String = runCatching {
+    val instant = Instant.parse(iso)
+    val zone = runCatching { ZoneId.of(timezone) }.getOrDefault(ZoneId.systemDefault())
+    val formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+        .withZone(zone)
+    formatter.format(instant)
+}.getOrDefault(iso)

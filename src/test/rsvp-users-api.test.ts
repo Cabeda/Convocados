@@ -45,7 +45,7 @@ function ctx(eventId: string, session: { user: { id: string; name: string } } | 
 }
 
 async function seedEvent(ownerId: string | null) {
-  return testPrisma.event.create({
+  const event = await testPrisma.event.create({
     data: {
       title: "Game",
       location: "Pitch",
@@ -53,6 +53,9 @@ async function seedEvent(ownerId: string | null) {
       ownerId,
     },
   });
+  const game = await testPrisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+  await testPrisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  return { ...event, currentGameId: game.id };
 }
 
 describe("GET /api/events/[id]/rsvp/users", () => {
@@ -65,7 +68,8 @@ describe("GET /api/events/[id]/rsvp/users", () => {
     const owner = await testPrisma.user.create({ data: { id: "owner", name: "O", email: "o@t.com", emailVerified: true } });
     const other = await testPrisma.user.create({ data: { id: "other", name: "X", email: "x@t.com", emailVerified: true } });
     const ev = await seedEvent(owner.id);
-    await testPrisma.rsvp.create({ data: { eventId: ev.id, userId: other.id, status: "yes", respondedAt: new Date() } });
+    const epOther = await testPrisma.eventPlayer.create({ data: { eventId: ev.id, name: "X", userId: other.id } });
+    await testPrisma.rsvp.create({ data: { eventPlayerId: epOther.id, gameId: ev.currentGameId!, status: "yes", respondedAt: new Date() } });
 
     const res = await usersGet(ctx(ev.id, null));
     expect(res.status).toBe(200);
@@ -78,8 +82,10 @@ describe("GET /api/events/[id]/rsvp/users", () => {
     const a = await testPrisma.user.create({ data: { id: "a", name: "A", email: "a@t.com", emailVerified: true } });
     const b = await testPrisma.user.create({ data: { id: "b", name: "B", email: "b@t.com", emailVerified: true } });
     const ev = await seedEvent(owner.id);
-    await testPrisma.rsvp.create({ data: { eventId: ev.id, userId: a.id, status: "yes", respondedAt: new Date() } });
-    await testPrisma.rsvp.create({ data: { eventId: ev.id, userId: b.id, status: "maybe", respondedAt: new Date() } });
+    const epA = await testPrisma.eventPlayer.create({ data: { eventId: ev.id, name: "A", userId: a.id } });
+    const epB = await testPrisma.eventPlayer.create({ data: { eventId: ev.id, name: "B", userId: b.id } });
+    await testPrisma.rsvp.create({ data: { eventPlayerId: epA.id, gameId: ev.currentGameId!, status: "yes", respondedAt: new Date() } });
+    await testPrisma.rsvp.create({ data: { eventPlayerId: epB.id, gameId: ev.currentGameId!, status: "maybe", respondedAt: new Date() } });
 
     const res = await usersGet(ctx(ev.id, { user: { id: owner.id, name: "O" } }));
     expect(res.status).toBe(200);
@@ -90,8 +96,9 @@ describe("GET /api/events/[id]/rsvp/users", () => {
   it("excludes guest (playerId-keyed) RSVPs from the user map", async () => {
     const owner = await testPrisma.user.create({ data: { id: "owner", name: "O", email: "o@t.com", emailVerified: true } });
     const ev = await seedEvent(owner.id);
-    const guest = await testPrisma.player.create({ data: { eventId: ev.id, name: "G", order: 0 } });
-    await testPrisma.rsvp.create({ data: { eventId: ev.id, playerId: guest.id, status: "yes", respondedAt: new Date() } });
+    const _guest = await testPrisma.player.create({ data: { eventId: ev.id, name: "G", order: 0 } });
+    const epGuest = await testPrisma.eventPlayer.create({ data: { eventId: ev.id, name: "G" } });
+    await testPrisma.rsvp.create({ data: { eventPlayerId: epGuest.id, gameId: ev.currentGameId!, status: "yes", respondedAt: new Date() } });
 
     const res = await usersGet(ctx(ev.id, { user: { id: owner.id, name: "O" } }));
     expect(res.status).toBe(200);

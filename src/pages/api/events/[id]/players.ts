@@ -15,6 +15,7 @@ import { createLogger } from "../../../../lib/logger.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
 import { archiveAndLeave } from "../../../../lib/leave.server";
 import { balanceTeams } from "../../../../lib/elo.server";
+import { Randomize } from "../../../../lib/random";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 import {
   IDEMPOTENCY_HEADER,
@@ -288,6 +289,57 @@ async function tryBalancedSwap(eventId: string, promotedName: string, promotedTe
   });
 }
 
+/**
+ * Auto-randomize teams when the game becomes full (active players === maxPlayers)
+ * and no teams have been generated yet. The manual "Randomize" button remains
+ * available at all times for re-randomization.
+ */
+async function autoRandomizeIfFull(eventId: string, maxPlayers: number, currentGameId?: string | null): Promise<void> {
+  // Only trigger when no teams exist yet
+  const existingTeams = await prisma.teamResult.count({ where: { eventId } });
+  if (existingTeams > 0) return;
+
+  // Count active players
+  const activeNames = await getActivePlayerNames(eventId, maxPlayers, currentGameId);
+  if (activeNames.size < maxPlayers) return;
+
+  // Game is full and no teams — auto-generate
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { balanced: true, teamOneName: true, teamTwoName: true },
+  });
+  if (!event) return;
+
+  const players = [...activeNames];
+  let matches;
+
+  if (event.balanced) {
+    const ratings = await prisma.playerRating.findMany({ where: { eventId } });
+    const ratingMap = new Map(ratings.map((r) => [r.name, r.rating]));
+    const playersWithRatings = players.map((name) => ({
+      name,
+      rating: ratingMap.get(name) ?? 1000,
+    }));
+    matches = balanceTeams(playersWithRatings, [event.teamOneName, event.teamTwoName]);
+  } else {
+    matches = Randomize(players, [event.teamOneName, event.teamTwoName]);
+  }
+
+  await prisma.$transaction([
+    ...matches.map((match) =>
+      prisma.teamResult.create({
+        data: {
+          name: match.team,
+          eventId,
+          members: { create: match.players.map((p) => ({ name: p.name, order: p.order })) },
+        },
+      })
+    ),
+  ]);
+
+  logEvent(eventId, "teams_randomized", null, null, { balanced: event.balanced, playerCount: players.length, auto: true }).catch(() => {});
+}
+
 // ── Invite email rate-limit stores ────────────────────────────────────────────
 // Per-event: max 10 unique invite emails per event per 24h
 // Per-sender: max 20 invite emails per authenticated user per 24h across all events
@@ -490,7 +542,12 @@ export const POST: APIRoute = async ({ params, request }) => {
   const invitedByUserId = (session?.user && linkToAccount !== true) ? session.user.id : null;
 
   try {
-    const nextOrder = event.players.length;
+    // ponytail: use max(order)+1 to avoid landing in gaps from past removals/reorders
+    const maxOrder = await prisma.player.aggregate({
+      where: { eventId, archivedAt: null },
+      _max: { order: true },
+    });
+    const nextOrder = (maxOrder._max.order ?? -1) + 1;
     await prisma.player.create({
       data: {
         name: trimmed,
@@ -525,18 +582,33 @@ export const POST: APIRoute = async ({ params, request }) => {
             ...(resolvedUser && !existing.userId ? { userId: resolvedUser.id } : {}),
           },
         });
-        if (reactivatedUserId) {
+        if (event.currentGameId) {
+          const ep = await prisma.eventPlayer.upsert({
+            where: { eventId_name: { eventId, name: trimmed } },
+            create: { eventId, name: trimmed, userId: reactivatedUserId },
+            update: { ...(reactivatedUserId ? { userId: reactivatedUserId } : {}) },
+          });
           await prisma.rsvp.upsert({
-            where: { userId_eventId: { userId: reactivatedUserId, eventId } },
-            create: { eventId, userId: reactivatedUserId, status: "yes", respondedAt: new Date() },
+            where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
+            create: { eventPlayerId: ep.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
             update: { status: "yes", respondedAt: new Date() },
           });
-        } else {
-          // Guest re-add: reset their guest Rsvp to "yes" if it was "no".
-          await prisma.rsvp.updateMany({
-            where: { playerId: existing.id, status: "no" },
-            data: { status: "yes", respondedAt: new Date() },
+          // Restore the GameParticipant too — a previous leave archived it, and
+          // without this the re-added player stays invisible on the game list.
+          const gpCount = await prisma.gameParticipant.count({
+            where: { gameId: event.currentGameId, archivedAt: null },
           });
+          await prisma.gameParticipant.upsert({
+            where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: ep.id } },
+            create: { gameId: event.currentGameId, eventPlayerId: ep.id, order: gpCount },
+            update: { archivedAt: null, order: gpCount },
+          });
+        }
+        // Bug fix: re-activated players must be added to teams if within active range
+        const readdIsOnBench = newOrder >= event.maxPlayers;
+        if (!readdIsOnBench) {
+          await addPlayerToTeams(eventId, trimmed, event.currentGameId);
+          await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
         }
         return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
       }
@@ -552,6 +624,35 @@ export const POST: APIRoute = async ({ params, request }) => {
         const alreadyInGame = await prisma.gameParticipant.findUnique({
           where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
         });
+        if (alreadyInGame && alreadyInGame.archivedAt) {
+          // Re-join after a leave: the GameParticipant was soft-archived by the
+          // leave flow. Un-archive it (at the end of the list) instead of
+          // falling through to the 409 "already in the list" error.
+          const gpCount = await prisma.gameParticipant.count({
+            where: { gameId: event.currentGameId, archivedAt: null },
+          });
+          await prisma.gameParticipant.update({
+            where: { id: alreadyInGame.id },
+            data: { archivedAt: null, order: gpCount },
+          });
+          // Move player to end of list — same rule as a fresh re-join
+          const maxOrder = await prisma.player.aggregate({
+            where: { eventId, archivedAt: null },
+            _max: { order: true },
+          });
+          const newOrder = (maxOrder._max.order ?? -1) + 1;
+          await prisma.player.update({
+            where: { id: existing.id },
+            data: { order: newOrder, ...(linkedUserId && !existing.userId ? { userId: linkedUserId } : {}) },
+          });
+          // Reset stale RSVP — the leave wrote "no", the re-join means "yes"
+          await prisma.rsvp.upsert({
+            where: { eventPlayerId_gameId: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId } },
+            create: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
+            update: { status: "yes", respondedAt: new Date() },
+          });
+          return Response.json({ ok: true, invited: null, resolvedName: trimmed });
+        }
         if (!alreadyInGame) {
           const gpCount = await prisma.gameParticipant.count({
             where: { gameId: event.currentGameId, archivedAt: null },
@@ -559,9 +660,27 @@ export const POST: APIRoute = async ({ params, request }) => {
           await prisma.gameParticipant.create({
             data: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: gpCount },
           });
-          // Link user if not already linked
-          if (linkedUserId && !existing.userId) {
-            await prisma.player.update({ where: { id: existing.id }, data: { userId: linkedUserId } });
+          // Move player to end of list — their old order is stale from the previous game
+          const maxOrder = await prisma.player.aggregate({
+            where: { eventId, archivedAt: null },
+            _max: { order: true },
+          });
+          const newOrder = (maxOrder._max.order ?? -1) + 1;
+          await prisma.player.update({
+            where: { id: existing.id },
+            data: { order: newOrder, ...(linkedUserId && !existing.userId ? { userId: linkedUserId } : {}) },
+          });
+          // Reset stale RSVP from previous game occurrence — write "yes" on the new game
+          await prisma.rsvp.upsert({
+            where: { eventPlayerId_gameId: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId } },
+            create: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
+            update: { status: "yes", respondedAt: new Date() },
+          });
+          // Bug fix: re-joining players must be added to teams if within active range
+          const rejoinIsOnBench = newOrder >= event.maxPlayers;
+          if (!rejoinIsOnBench) {
+            await addPlayerToTeams(eventId, trimmed, event.currentGameId);
+            await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
           }
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
@@ -618,7 +737,9 @@ export const POST: APIRoute = async ({ params, request }) => {
     await prisma.gameParticipant.upsert({
       where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
       create: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: event.players.length },
-      update: {},
+      // Clear archivedAt: an archived GameParticipant can linger (e.g. after a
+      // merge removed the Player row) — joining must make the player visible.
+      update: { archivedAt: null },
     });
   }
 
@@ -634,6 +755,11 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   await validateTeams(eventId, event.maxPlayers, event.currentGameId);
+
+  // Auto-randomize: first randomization triggers when game is full
+  if (!isOnBench) {
+    await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
+  }
 
   if (isOnBench) {
     // ADR 0018: Include bench position in notification body

@@ -34,84 +34,200 @@ export type PushPromptState = "default" | "granted" | "dismissed" | "denied";
 
 // ─── RSVP upsert + read ────────────────────────────────────────────────────
 
-/** Idempotent RSVP upsert for a linked user. status ∈ {"yes", "no", "maybe"} — null is "pending" and represented as a missing row. */
+/** Resolve the EventPlayer for a linked user on an event. Creates one if missing (lazy). */
+export async function resolveEventPlayerId(eventId: string, userId: string): Promise<string> {
+  // Try finding by userId first
+  const ep = await prisma.eventPlayer.findFirst({
+    where: { eventId, userId },
+    select: { id: true },
+  });
+  if (ep) return ep.id;
+  // Fallback: find a Player row with this userId, match by name
+  const player = await prisma.player.findFirst({
+    where: { eventId, userId, archivedAt: null },
+    select: { name: true },
+  });
+  if (player) {
+    const created = await prisma.eventPlayer.upsert({
+      where: { eventId_name: { eventId, name: player.name } },
+      create: { eventId, name: player.name, userId },
+      update: { userId },
+    });
+    return created.id;
+  }
+  // Last resort: find by user's display name
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  if (!user) throw new Error("User not found.");
+  const created = await prisma.eventPlayer.upsert({
+    where: { eventId_name: { eventId, name: user.name } },
+    create: { eventId, name: user.name, userId },
+    update: { userId },
+  });
+  return created.id;
+}
+
+/** Idempotent RSVP upsert for a linked user. Resolves EventPlayer + currentGameId internally. */
 export async function upsertRsvp(eventId: string, userId: string, status: RsvpStatusValue) {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (!event?.currentGameId) throw new Error("Event has no active game.");
+  const eventPlayerId = await resolveEventPlayerId(eventId, userId);
   return prisma.rsvp.upsert({
-    where: { userId_eventId: { userId, eventId } },
-    create: { eventId, userId, status, respondedAt: new Date() },
+    where: { eventPlayerId_gameId: { eventPlayerId, gameId: event.currentGameId } },
+    create: { eventPlayerId, gameId: event.currentGameId, status, respondedAt: new Date() },
     update: { status, respondedAt: new Date() },
   });
 }
 
-export async function getRsvpForUser(eventId: string, userId: string) {
-  return prisma.rsvp.findUnique({
-    where: { userId_eventId: { userId, eventId } },
+/** Upsert RSVP when you already have the eventPlayerId and gameId (avoids extra lookups). */
+export async function upsertRsvpDirect(eventPlayerId: string, gameId: string, status: RsvpStatusValue | null, respondedByUserId?: string) {
+  const respondedAt = status === null ? null : new Date();
+  return prisma.rsvp.upsert({
+    where: { eventPlayerId_gameId: { eventPlayerId, gameId } },
+    create: { eventPlayerId, gameId, status, respondedAt, respondedByUserId },
+    update: { status, respondedAt, ...(respondedByUserId ? { respondedByUserId } : {}) },
   });
 }
 
-/** Idempotent RSVP upsert for a guest Player. Admin/owner acts on the guest's behalf — `actorUserId` is recorded for audit. Refuses if the player is linked to a User (linked users self-RSVP via upsertRsvp). */
+export async function getRsvpForUser(eventId: string, userId: string) {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (!event?.currentGameId) return null;
+  const ep = await prisma.eventPlayer.findFirst({ where: { eventId, userId }, select: { id: true } });
+  if (!ep) return null;
+  return prisma.rsvp.findUnique({
+    where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
+  });
+}
+
+/** Resolve a guest Player from either a Player.id or an EventPlayer.id.
+ *  ADR 0016: the event GET returns EventPlayer ids (game-scoped player list), so
+ *  callers may send either. Falls back to a name-matched Player (active row first);
+ *  if no Player row exists at all, synthesizes one from the EventPlayer. */
+async function resolveGuestPlayer(eventId: string, playerId: string) {
+  const player = await prisma.player.findUnique({
+    where: { id: playerId },
+    select: { eventId: true, userId: true, name: true },
+  });
+  if (player) return player;
+
+  const ep = await prisma.eventPlayer.findFirst({
+    where: { id: playerId, eventId },
+    select: { name: true, userId: true },
+  });
+  if (!ep) return null;
+
+  const byName = await prisma.player.findFirst({
+    where: { eventId, name: ep.name },
+    orderBy: { archivedAt: "asc" }, // NULL (active) sorts first
+    select: { eventId: true, userId: true, name: true },
+  });
+  return byName ?? { eventId, userId: ep.userId, name: ep.name };
+}
+
+/** Idempotent RSVP upsert for a guest Player. Admin/owner acts on the guest's behalf. */
 export async function upsertGuestRsvp(
   eventId: string,
   playerId: string,
   status: RsvpStatus,
   actorUserId: string,
 ) {
-  const player = await prisma.player.findUnique({
-    where: { id: playerId },
-    select: { eventId: true, userId: true },
-  });
+  const player = await resolveGuestPlayer(eventId, playerId);
   if (!player) throw new Error("Player not found.");
   if (player.eventId !== eventId) throw new Error("Player does not belong to this event.");
   if (player.userId) throw new Error("Player is linked to a User — that user must self-RSVP.");
 
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (!event?.currentGameId) throw new Error("Event has no active game.");
+
+  const ep = await prisma.eventPlayer.upsert({
+    where: { eventId_name: { eventId, name: player.name } },
+    create: { eventId, name: player.name },
+    update: {},
+  });
+
   const respondedAt = status === null ? null : new Date();
   return prisma.rsvp.upsert({
-    where: { playerId_eventId: { playerId, eventId } },
-    create: { eventId, playerId, status, respondedAt, respondedByUserId: actorUserId },
+    where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
+    create: { eventPlayerId: ep.id, gameId: event.currentGameId, status, respondedAt, respondedByUserId: actorUserId },
     update: { status, respondedAt, respondedByUserId: actorUserId },
   });
 }
 
 export async function getRsvpForGuest(eventId: string, playerId: string) {
+  const player = await resolveGuestPlayer(eventId, playerId);
+  if (!player) return null;
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (!event?.currentGameId) return null;
+  const ep = await prisma.eventPlayer.findFirst({ where: { eventId, name: player.name }, select: { id: true } });
+  if (!ep) return null;
   return prisma.rsvp.findUnique({
-    where: { playerId_eventId: { playerId, eventId } },
+    where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
   });
 }
 
-/** Map of playerId → status for all active (non-archived) guest Players in the event. Public — used to render the read-only pill on the player list for everyone (incl. anonymous viewers). */
+/** Map of playerId → RSVP status for all active guest Players in the current game. */
 export async function getGuestRsvpMap(eventId: string): Promise<Record<string, RsvpStatus>> {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (!event?.currentGameId) return {};
+
   const guests = await prisma.player.findMany({
     where: { eventId, userId: null, archivedAt: null },
-    select: { id: true },
+    select: { id: true, name: true },
   });
+  if (guests.length === 0) return {};
+
+  // Resolve EventPlayer IDs for these guests
+  const eventPlayers = await prisma.eventPlayer.findMany({
+    where: { eventId, name: { in: guests.map((g) => g.name) } },
+    select: { id: true, name: true },
+  });
+  const epByName = new Map(eventPlayers.map((ep) => [ep.name, ep.id]));
+
+  const epIds = eventPlayers.map((ep) => ep.id);
   const rsvps = await prisma.rsvp.findMany({
-    where: { eventId, playerId: { in: guests.map((g) => g.id) } },
-    select: { playerId: true, status: true },
+    where: { gameId: event.currentGameId, eventPlayerId: { in: epIds } },
+    select: { eventPlayerId: true, status: true },
   });
+  const rsvpByEpId = new Map(rsvps.map((r) => [r.eventPlayerId, r.status as RsvpStatus]));
+
+  // Map back to playerId for the UI. ADR 0016: the event GET returns EventPlayer
+  // ids, so key by BOTH Player.id and EventPlayer.id — the UI pill looks up by
+  // whichever id its player list carries.
   const map: Record<string, RsvpStatus> = {};
-  for (const g of guests) map[g.id] = null;
-  for (const r of rsvps) {
-    if (r.playerId) map[r.playerId] = (r.status as RsvpStatus) ?? null;
+  for (const g of guests) {
+    const epId = epByName.get(g.name);
+    const status = epId ? (rsvpByEpId.get(epId) ?? null) : null;
+    map[g.id] = status;
+    if (epId) map[epId] = status;
   }
   return map;
 }
 
-/**
- * Map of userId → RSVP status for every linked User who has an RSVP row on this event
- * (owner, followers, linked players). When `viewerIsLogged` is false (anonymous viewer)
- * the function returns an empty map to enforce one-way privacy — anonymous viewers
- * must not see logged users' answers. The caller is responsible for passing the
- * viewer's auth state; the server-side guard is here, not just the UI.
- */
+/** Map of userId → RSVP status for linked Users in the current game. */
 export async function getUserRsvpMap(eventId: string, viewerIsLogged: boolean): Promise<Record<string, RsvpStatus>> {
   if (!viewerIsLogged) return {};
-  const rsvps = await prisma.rsvp.findMany({
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (!event?.currentGameId) return {};
+
+  // Get all EventPlayers with a userId for this event
+  const eventPlayers = await prisma.eventPlayer.findMany({
     where: { eventId, userId: { not: null } },
-    select: { userId: true, status: true },
+    select: { id: true, userId: true },
   });
+  if (eventPlayers.length === 0) return {};
+
+  const epIds = eventPlayers.map((ep) => ep.id);
+  const rsvps = await prisma.rsvp.findMany({
+    where: { gameId: event.currentGameId, eventPlayerId: { in: epIds } },
+    select: { eventPlayerId: true, status: true },
+  });
+  const rsvpByEpId = new Map(rsvps.map((r) => [r.eventPlayerId, r.status as RsvpStatus]));
+
+  // Map back to userId for the UI
   const map: Record<string, RsvpStatus> = {};
-  for (const r of rsvps) {
-    if (r.userId) map[r.userId] = (r.status as RsvpStatus) ?? null;
+  for (const ep of eventPlayers) {
+    if (ep.userId && rsvpByEpId.has(ep.id)) {
+      map[ep.userId] = rsvpByEpId.get(ep.id) ?? null;
+    }
   }
   return map;
 }
@@ -152,44 +268,54 @@ async function getActiveGuestPlayers(eventId: string): Promise<{ id: string }[]>
 }
 
 export async function getRsvpSummary(eventId: string): Promise<RsvpSummary> {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+  if (!event?.currentGameId) return { yes: 0, no: 0, pending: 0, yesUserIds: [], noUserIds: [], pendingUserIds: [] };
+
   const recipientIds = await getRsvpRecipients(eventId);
   const guestPlayers = await getActiveGuestPlayers(eventId);
-  const guestIds = guestPlayers.map((p) => p.id);
 
-  const rsvps = await prisma.rsvp.findMany({
-    where: {
-      eventId,
-      OR: [
-        { userId: { in: recipientIds } },
-        { playerId: { in: guestIds } },
-      ],
-    },
-    select: { userId: true, playerId: true, status: true },
+  // Resolve EventPlayer IDs for recipients (linked users)
+  const linkedEps = await prisma.eventPlayer.findMany({
+    where: { eventId, userId: { in: recipientIds } },
+    select: { id: true, userId: true },
+  });
+  // Resolve EventPlayer IDs for guests
+  const guestNames = await prisma.player.findMany({
+    where: { id: { in: guestPlayers.map((g) => g.id) } },
+    select: { id: true, name: true },
+  });
+  const guestEps = await prisma.eventPlayer.findMany({
+    where: { eventId, name: { in: guestNames.map((g) => g.name) } },
+    select: { id: true, name: true },
   });
 
-  const respondedUser = new Map<string, RsvpStatusValue>();
-  const respondedGuest = new Map<string, RsvpStatusValue>();
-  for (const r of rsvps) {
-    if (r.status !== "yes" && r.status !== "no" && r.status !== "maybe") continue;
-    if (r.userId) respondedUser.set(r.userId, r.status);
-    else if (r.playerId) respondedGuest.set(r.playerId, r.status);
-  }
+  const allEpIds = [...linkedEps.map((e) => e.id), ...guestEps.map((e) => e.id)];
+  const rsvps = await prisma.rsvp.findMany({
+    where: { gameId: event.currentGameId, eventPlayerId: { in: allEpIds } },
+    select: { eventPlayerId: true, status: true },
+  });
+  const rsvpByEpId = new Map(rsvps.map((r) => [r.eventPlayerId, r.status]));
 
+  // Map linked user RSVPs back to userId
   const yesUserIds: string[] = [];
   const noUserIds: string[] = [];
   const pendingUserIds: string[] = [];
   for (const uid of recipientIds) {
-    const s = respondedUser.get(uid);
+    const ep = linkedEps.find((e) => e.userId === uid);
+    const s = ep ? rsvpByEpId.get(ep.id) : undefined;
     if (s === "yes") yesUserIds.push(uid);
     else if (s === "no") noUserIds.push(uid);
     else pendingUserIds.push(uid);
   }
 
+  // Map guest RSVPs
+  const guestEpByName = new Map(guestEps.map((e) => [e.name, e.id]));
   let yesGuestCount = 0;
   let noGuestCount = 0;
   let pendingGuestCount = 0;
-  for (const gid of guestIds) {
-    const s = respondedGuest.get(gid);
+  for (const gn of guestNames) {
+    const epId = guestEpByName.get(gn.name);
+    const s = epId ? rsvpByEpId.get(epId) : undefined;
     if (s === "yes") yesGuestCount++;
     else if (s === "no") noGuestCount++;
     else pendingGuestCount++;
@@ -199,9 +325,9 @@ export async function getRsvpSummary(eventId: string): Promise<RsvpSummary> {
     yes: yesUserIds.length + yesGuestCount,
     no: noUserIds.length + noGuestCount,
     pending: pendingUserIds.length + pendingGuestCount,
-    yesUserIds: yesUserIds,
-    noUserIds: noUserIds,
-    pendingUserIds: pendingUserIds,
+    yesUserIds,
+    noUserIds,
+    pendingUserIds,
   };
 }
 
@@ -333,10 +459,16 @@ export async function countAppOpenDays(userId: string, lookbackDays: number = AP
   });
 }
 
-/** Does the user have at least one pending RSVP (status=null) for a future event? */
+/** Does the user have at least one pending RSVP (status=null) for a future game? */
 export async function userHasPendingRsvp(userId: string, now: Date = new Date()): Promise<boolean> {
+  // Find EventPlayers for this user, then check if any have a pending RSVP on a future game
+  const eps = await prisma.eventPlayer.findMany({
+    where: { userId },
+    select: { id: true },
+  });
+  if (eps.length === 0) return false;
   const row = await prisma.rsvp.findFirst({
-    where: { userId, status: null, event: { dateTime: { gt: now } } },
+    where: { eventPlayerId: { in: eps.map((e) => e.id) }, status: null, game: { dateTime: { gt: now } } },
     select: { id: true },
   });
   return !!row;

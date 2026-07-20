@@ -62,6 +62,9 @@ describe("GET /api/events/[id]/rsvp/guests", () => {
     const ev = await testPrisma.event.create({
       data: { title: "G", location: "P", dateTime: new Date(Date.now() + 86400_000), ownerId: owner.id },
     });
+    const game = await testPrisma.game.create({ data: { eventId: ev.id, dateTime: ev.dateTime } });
+    await testPrisma.event.update({ where: { id: ev.id }, data: { currentGameId: game.id } });
+    Object.assign(ev, { currentGameId: game.id });
 
     const g1 = await testPrisma.player.create({ data: { eventId: ev.id, name: "G1", order: 0 } });
     const g2 = await testPrisma.player.create({ data: { eventId: ev.id, name: "G2", order: 1 } });
@@ -72,20 +75,31 @@ describe("GET /api/events/[id]/rsvp/guests", () => {
       data: { eventId: ev.id, name: "L", userId: linked.id, order: 3 },
     });
 
-    await testPrisma.rsvp.create({ data: { eventId: ev.id, playerId: g1.id, status: "yes", respondedAt: new Date() } });
-    await testPrisma.rsvp.create({ data: { eventId: ev.id, playerId: g2.id, status: "no", respondedAt: new Date() } });
-    await testPrisma.rsvp.create({ data: { eventId: ev.id, playerId: archived.id, status: "yes", respondedAt: new Date() } });
-    await testPrisma.rsvp.create({ data: { eventId: ev.id, userId: linked.id, status: "yes", respondedAt: new Date() } });
+    const epG1 = await testPrisma.eventPlayer.create({ data: { eventId: ev.id, name: "G1" } });
+    const epG2 = await testPrisma.eventPlayer.create({ data: { eventId: ev.id, name: "G2" } });
+    const epArch = await testPrisma.eventPlayer.create({ data: { eventId: ev.id, name: "Arch" } });
+    const epLinked = await testPrisma.eventPlayer.create({ data: { eventId: ev.id, name: "L", userId: linked.id } });
+
+    await testPrisma.rsvp.create({ data: { eventPlayerId: epG1.id, gameId: ev.currentGameId!, status: "yes", respondedAt: new Date() } });
+    await testPrisma.rsvp.create({ data: { eventPlayerId: epG2.id, gameId: ev.currentGameId!, status: "no", respondedAt: new Date() } });
+    await testPrisma.rsvp.create({ data: { eventPlayerId: epArch.id, gameId: ev.currentGameId!, status: "yes", respondedAt: new Date() } });
+    await testPrisma.rsvp.create({ data: { eventPlayerId: epLinked.id, gameId: ev.currentGameId!, status: "yes", respondedAt: new Date() } });
 
     const res = await guestsGet(ctx(ev.id));
     expect(res.status).toBe(200);
     const body = await res.json();
+    // ADR 0016: keyed by BOTH Player.id and EventPlayer.id (the event GET returns
+    // EventPlayer ids, so the UI looks up by those).
     expect(body.guests).toEqual({
       [g1.id]: "yes",
       [g2.id]: "no",
+      [epG1.id]: "yes",
+      [epG2.id]: "no",
       // archived and linked are NOT in the response
     });
     expect(body.guests[archived.id]).toBeUndefined();
     expect(body.guests[linkedPlayer.id]).toBeUndefined();
+    expect(body.guests[epArch.id]).toBeUndefined();
+    expect(body.guests[epLinked.id]).toBeUndefined();
   });
 });

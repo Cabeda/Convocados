@@ -9,6 +9,59 @@ import { createLogger } from "../../../../../lib/logger.server";
 
 const log = createLogger("history-patch");
 
+/**
+ * Build a GameHistory row from a "played" live Game. The live Game model does
+ * not store team assignments, so we reconstruct them from the event-level
+ * teamResults (the canonical source for the current occurrence) and the
+ * payments from the current EventCost. Used when the history PATCH is hit with
+ * a Game id that has no GameHistory snapshot yet (ADR 0016).
+ */
+async function buildSnapshotForGame(eventId: string, game: { id: string; dateTime: Date; status: string; scoreOne: number | null; scoreTwo: number | null; teamOneName: string | null; teamTwoName: string | null; isFriendly: boolean }) {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: {
+      teamResults: { include: { members: { orderBy: { order: "asc" } } } },
+      eventCost: { include: { payments: true } },
+    },
+  });
+
+  const teamsSnapshot = event?.teamResults.length
+    ? JSON.stringify(
+        event.teamResults.map((tr) => ({
+          team: tr.name,
+          players: tr.members.map((m) => ({ name: m.name, order: m.order })),
+        })),
+      )
+    : null;
+
+  const paymentsSnapshot = event?.eventCost?.payments.length
+    ? JSON.stringify(
+        event.eventCost.payments.map((p) => ({
+          playerName: p.playerName,
+          amount: p.amount,
+          status: p.status,
+          method: p.method,
+        })),
+      )
+    : null;
+
+  return {
+    eventId,
+    dateTime: game.dateTime,
+    status: "played" as const,
+    scoreOne: game.scoreOne,
+    scoreTwo: game.scoreTwo,
+    teamOneName: game.teamOneName ?? event?.teamOneName ?? "Team 1",
+    teamTwoName: game.teamTwoName ?? event?.teamTwoName ?? "Team 2",
+    teamsSnapshot,
+    paymentsSnapshot,
+    editableUntil: new Date(game.dateTime.getTime() + 7 * 86400_000),
+    isFriendly: game.isFriendly,
+    source: "live" as const,
+    eloProcessed: false,
+  };
+}
+
 // PATCH /api/events/[id]/history/[historyId]
 export const PATCH: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
@@ -22,9 +75,25 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, params.id);
 
-  const entry = await prisma.gameHistory.findUnique({
+  let entry = await prisma.gameHistory.findUnique({
     where: { id: params.historyId, eventId: params.id },
   });
+
+  // ADR 0016: a "played" live Game may not yet have a GameHistory snapshot
+  // (e.g. the game just ended but the recurrence reset hasn't run, or the
+  // history entry was loaded directly). Materialise one so the score/teams
+  // can be edited through the same path.
+  let historyId = params.historyId;
+  if (!entry) {
+    const game = await prisma.game.findUnique({
+      where: { id: params.historyId, eventId: params.id },
+    });
+    if (game && game.status === "played") {
+      const snap = await buildSnapshotForGame(params.id ?? "", game);
+      entry = await prisma.gameHistory.create({ data: snap });
+      historyId = entry.id;
+    }
+  }
   if (!entry) return Response.json({ error: "Not found." }, { status: 404 });
 
   const body = await request.json();
@@ -36,7 +105,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     }
     const newEditableUntil = new Date(Date.now() + 7 * 86400_000);
     const unlocked = await prisma.gameHistory.update({
-      where: { id: params.historyId },
+      where: { id: historyId },
       data: { editableUntil: newEditableUntil },
     });
 
@@ -49,6 +118,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
     return Response.json({
       ...unlocked,
+      id: params.historyId, // ponytail: use original requested id so client can match state (materialized entries get a new cuid)
       dateTime: unlocked.dateTime.toISOString(),
       editableUntil: unlocked.editableUntil.toISOString(),
       createdAt: unlocked.createdAt.toISOString(),
@@ -64,7 +134,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     }
     const newEditableUntil = new Date(Date.now() - 1000);
     const locked = await prisma.gameHistory.update({
-      where: { id: params.historyId },
+      where: { id: historyId },
       data: { editableUntil: newEditableUntil },
     });
 
@@ -77,6 +147,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
     return Response.json({
       ...locked,
+      id: params.historyId, // ponytail: use original requested id so client can match state
       dateTime: locked.dateTime.toISOString(),
       editableUntil: locked.editableUntil.toISOString(),
       createdAt: locked.createdAt.toISOString(),
@@ -91,7 +162,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       return Response.json({ error: "Only the event owner or admin can toggle friendly." }, { status: 403 });
     }
     const updated = await prisma.gameHistory.update({
-      where: { id: params.historyId },
+      where: { id: historyId },
       data: { isFriendly: body.isFriendly },
     });
 
@@ -107,6 +178,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
     return Response.json({
       ...updated,
+      id: params.historyId, // ponytail: use original requested id so client can match state
       dateTime: updated.dateTime.toISOString(),
       editableUntil: updated.editableUntil.toISOString(),
       createdAt: updated.createdAt.toISOString(),
@@ -116,7 +188,9 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     });
   }
 
-  if (entry.editableUntil <= new Date()) {
+  // Owners/admins bypass the 7-day editableUntil window. Regular users
+  // (incl. participants) lose edit access after the window.
+  if (entry.editableUntil <= new Date() && !isOwner && !isAdmin) {
     return Response.json({ error: "This result can no longer be edited." }, { status: 403 });
   }
 
@@ -165,7 +239,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     : undefined;
 
   const updated = await prisma.gameHistory.update({
-    where: { id: params.historyId },
+    where: { id: historyId },
     data: {
       ...(status !== undefined && { status }),
       ...(scoreOne !== undefined && { scoreOne: isNaN(scoreOne as number) ? null : scoreOne }),
@@ -220,7 +294,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
           },
         });
       } catch (err) {
-        log.error(`Failed to auto-sync payments after team update: eventId=${params.id} historyId=${params.historyId} error=${String(err)}`);
+        log.error(`Failed to auto-sync payments after team update: eventId=${params.id} historyId=${historyId} error=${String(err)}`);
       }
     }
   }
@@ -278,7 +352,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       // Add MVP ELO bonus to displayed deltas
       if (event.mvpEloEnabled) {
         const votes = await prisma.mvpVote.findMany({
-          where: { gameHistoryId: params.historyId },
+          where: { gameHistoryId: historyId },
           select: { votedForName: true },
         });
         if (votes.length > 0) {
@@ -304,6 +378,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
   return Response.json({
     ...updated,
+    id: params.historyId, // ponytail: use original requested id so client can match state
     dateTime: updated.dateTime.toISOString(),
     editableUntil: updated.editableUntil.toISOString(),
     createdAt: updated.createdAt.toISOString(),
@@ -327,15 +402,32 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Only the event owner or admin can delete history entries." }, { status: 403 });
   }
 
-  const entry = await prisma.gameHistory.findUnique({
+  let entry = await prisma.gameHistory.findUnique({
     where: { id: params.historyId, eventId: params.id },
   });
+  let deleteHistoryId = params.historyId;
+
+  // ADR 0016: a "played" live Game may not yet have a GameHistory snapshot.
+  // Materialise one, then delete it. The source Game keeps its "played" status
+  // so it can be re-derived on demand — marking it "cancelled" would be wrong
+  // (cancelled means a skipped game) and would leak into the post-game banner
+  // and ELO skip filters.
+  if (!entry) {
+    const game = await prisma.game.findUnique({
+      where: { id: params.historyId, eventId: params.id },
+    });
+    if (game && game.status === "played") {
+      const snap = await buildSnapshotForGame(params.id ?? "", game);
+      entry = await prisma.gameHistory.create({ data: snap });
+      deleteHistoryId = entry.id;
+    }
+  }
   if (!entry) return Response.json({ error: "Not found." }, { status: 404 });
 
   // If ELO was already processed, recalculate ratings after deletion
   const needsRecalc = entry.eloProcessed;
 
-  await prisma.gameHistory.delete({ where: { id: params.historyId } });
+  await prisma.gameHistory.delete({ where: { id: deleteHistoryId } });
 
   if (needsRecalc) {
     await recalculateAllRatings((params.id ?? ""));
@@ -343,7 +435,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   const actor = session.user.name ?? session.user.email ?? "Unknown";
   logEvent((params.id ?? ""), "history_status_updated", actor, session.user.id, {
-    historyId: params.historyId,
+    historyId: deleteHistoryId,
     action: "deleted",
   });
 
