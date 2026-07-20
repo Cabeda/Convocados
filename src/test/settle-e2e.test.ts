@@ -182,6 +182,31 @@ describe("E2E — Settle Up lifecycle", () => {
       }
     }
 
+    // ADR 0019: Mark games 1-3 as paid for per-game players (Diana, Elena,
+    // Fábio, Gonçalo, Helena, Igor, Joana) so the ledger reflects settled debts.
+    // The 4th game (latest) stays unpaid — that's the "live" debt.
+    const perGamePlayers = players.filter((p) => !p.monthly);
+    for (let g = 0; g < 3; g++) {
+      for (const p of perGamePlayers) {
+        if (juneAttendance[p.name][g]) {
+          await prisma.walletTransaction.create({
+            data: {
+              eventId: event.id,
+              userId: p.id,
+              amountCents: 550, // same as the per_game_share debit
+              currency: cost.currency,
+              direction: "credit",
+              gameUnits: 0,
+              reason: "payment_received",
+              statusAfter: "paid",
+              eventInstanceId: event.id,
+              markedById: "owner-e2e",
+            },
+          });
+        }
+      }
+    }
+
     // ── Invariant 1: monthly players' ledger has the right number of rows.
     // Alice: 2 attended (per_game debits) + 2 missed (credits) = 4 rows.
     // (Per OI-1, no per-attendance rows for monthly — just the debits. Wait
@@ -197,12 +222,15 @@ describe("E2E — Settle Up lifecycle", () => {
     const carlosTxs = await prisma.walletTransaction.findMany({ where: { eventId: event.id, userId: "u-carlos" } });
     expect(carlosTxs).toHaveLength(0);
 
-    // ── Invariant 2: per-game Diana has 4 per_game_share debits (no missed).
+    // ── Invariant 2: per-game Diana has 4 per_game_share debits + 3 payment_received credits.
     const dianaTxs = await prisma.walletTransaction.findMany({ where: { eventId: event.id, userId: "u-diana" } });
-    expect(dianaTxs).toHaveLength(4);
-    expect(dianaTxs.every((t) => t.reason === "per_game_share" && t.direction === "debit")).toBe(true);
+    expect(dianaTxs).toHaveLength(7);
+    const dianaDebits = dianaTxs.filter((t) => t.reason === "per_game_share" && t.direction === "debit");
+    expect(dianaDebits).toHaveLength(4);
     // Each row includes the €0.50 surcharge: 500 + 50 = 550 cents.
-    expect(dianaTxs.every((t) => t.amountCents === 550)).toBe(true);
+    expect(dianaDebits.every((t) => t.amountCents === 550)).toBe(true);
+    const dianaCredits = dianaTxs.filter((t) => t.reason === "payment_received" && t.direction === "credit");
+    expect(dianaCredits).toHaveLength(3);
 
     // ── Invariant 3: balance.server.ts sees Alice as 0/paid (covered by monthly).
     const alicePayment = await prisma.playerPayment.findUnique({

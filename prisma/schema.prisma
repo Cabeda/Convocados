@@ -283,6 +283,9 @@ model Game {
   teamTwoName     String?
   eloProcessed    Boolean   @default(false)
   rsvpCutoffSent  Boolean   @default(false)
+  // ADR 0019: per-Game cost override (null = inherit from EventCost template)
+  costTotalAmount Float?
+  costCurrency    String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -488,7 +491,7 @@ model PlayerPayment {
   eventCost   EventCost @relation(fields: [eventCostId], references: [id], onDelete: Cascade)
   playerName  String
   amount      Float
-  status      String    @default("pending") // "pending" | "paid"
+  status      String    @default("pending") // "pending" | "sent" | "paid"
   method      String? // free text: cash, revolut, mbway, transfer, etc.
   paidAt      DateTime?
   markedBy    String? // userId who marked it

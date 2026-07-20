@@ -22,8 +22,21 @@ export const MONEY_CLEARING_REASONS = new Set<WalletTxReason>([
   "credit_redeemed",
 ]);
 
+/** Reasons that create a money debt for the player (debits). ADR 0019. */
+export const MONEY_CHARGING_REASONS = new Set<WalletTxReason>([
+  "per_game_share",
+  "cost_adjustment",
+]);
+
+/** Clearing reasons that reduce outstanding balance (excludes self-reported). ADR 0019. */
+export const OUTSTANDING_CLEARING_REASONS = new Set<WalletTxReason>([
+  "payment_received",
+  "credit_redeemed",
+]);
+
 export type WalletTxReason =
   | "per_game_share"
+  | "cost_adjustment"
   | "monthly_fee"
   | "missed_game_credit"
   | "credit_redeemed"
@@ -123,4 +136,50 @@ export function sumTransactionAmountCents(txs: readonly WalletTx[]): number {
     else total -= tx.amountCents;
   }
   return total;
+}
+
+/**
+ * Compute money balance from ledger rows using configurable clearing reasons.
+ * ADR 0019 — shared core for getGateBalance and getOutstandingBalance.
+ *
+ * - Sums debits where reason ∈ MONEY_CHARGING_REASONS
+ * - Subtracts credits where reason ∈ the provided clearingReasons set
+ * - Returns cents owed (≥ 0; clamped — overpay returns 0)
+ */
+export function computeMoneyBalance(
+  txs: readonly WalletTx[],
+  clearingReasons: ReadonlySet<WalletTxReason>,
+): number {
+  let balance = 0;
+  for (const tx of txs) {
+    if (MONEY_CHARGING_REASONS.has(tx.reason) && tx.direction === "debit") {
+      balance += tx.amountCents;
+    }
+    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
+      balance -= tx.amountCents;
+    }
+  }
+  return Math.max(0, balance);
+}
+
+/**
+ * Compute money balance scoped to a specific game (by eventInstanceId).
+ * Returns cents owed for that game only. Used for per-game paid/total aggregates.
+ */
+export function computeMoneyBalanceForGame(
+  txs: readonly WalletTx[],
+  gameId: string,
+  clearingReasons: ReadonlySet<WalletTxReason>,
+): number {
+  let balance = 0;
+  for (const tx of txs) {
+    if (tx.eventInstanceId !== gameId) continue;
+    if (MONEY_CHARGING_REASONS.has(tx.reason) && tx.direction === "debit") {
+      balance += tx.amountCents;
+    }
+    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
+      balance -= tx.amountCents;
+    }
+  }
+  return Math.max(0, balance);
 }

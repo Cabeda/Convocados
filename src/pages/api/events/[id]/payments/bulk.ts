@@ -1,8 +1,9 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
-import { checkOwnership } from "~/lib/auth.helpers.server";
+import { checkOwnership, getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
+import { recordReceived } from "~/lib/payments.server";
 
 /** PUT — bulk mark all pending/sent payments as paid. Owner/Admin only. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -34,6 +35,15 @@ export const PUT: APIRoute = async ({ params, request }) => {
     },
     data: { status: "paid", paidAt: new Date() },
   });
+
+  // ADR 0019: Write ledger rows for each player whose payment was bulk-confirmed
+  if (pendingPayments.length > 0) {
+    const session = await getSession(request);
+    const markedById = session?.user?.id ?? event.ownerId ?? "unknown";
+    for (const p of pendingPayments) {
+      await recordReceived({ eventId, playerName: p.playerName, markedById });
+    }
+  }
 
   // ADR 0017: Notify each player whose payment was confirmed (via queue, respects tier + overrides)
   if (pendingPayments.length > 0) {
