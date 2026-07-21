@@ -230,6 +230,145 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     }
   }
 
+  // ADR 0019: Handle per-game cost edit on a past game
+  if (body.costTotalAmount !== undefined) {
+    if (!isOwner && !isAdmin) {
+      return Response.json({ error: "Only the event owner or admin can edit game cost." }, { status: 403 });
+    }
+
+    const newTotal = Number(body.costTotalAmount);
+    if (!newTotal || newTotal <= 0) {
+      return Response.json({ error: "costTotalAmount must be a positive number." }, { status: 400 });
+    }
+    const costCurrency = String(body.costCurrency ?? "EUR").trim().slice(0, 10) || "EUR";
+
+    // Try to find the corresponding Game for this history entry
+    const game = await prisma.game.findUnique({ where: { id: params.historyId } });
+
+    // Determine old share amount from existing payments
+    const eventCost = await prisma.eventCost.findUnique({
+      where: { eventId: params.id },
+      include: { payments: true },
+    });
+
+    // Get player list from the teamsSnapshot
+    let playerNames: string[] = [];
+    if (entry.teamsSnapshot) {
+      try {
+        const teams = JSON.parse(entry.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
+        playerNames = teams.flatMap((t) => t.players.map((p) => p.name));
+      } catch { /* skip */ }
+    }
+
+    const newShare = playerNames.length > 0 ? newTotal / playerNames.length : 0;
+    const newShareCents = Math.round(newShare * 100);
+
+    // Update Game.costTotalAmount if this is a Game-backed entry
+    if (game) {
+      await prisma.$transaction(async (tx) => {
+        await tx.game.update({
+          where: { id: game.id },
+          data: { costTotalAmount: newTotal, costCurrency },
+        });
+
+        // ADR 0019: Write cost_adjustment correction rows for post-migration games
+        const existingDebits = await tx.walletTransaction.findMany({
+          where: { eventId: params.id, eventInstanceId: game.id, reason: "per_game_share", direction: "debit" },
+          select: { userId: true, amountCents: true },
+        });
+
+        if (existingDebits.length > 0) {
+          for (const debit of existingDebits) {
+            const delta = newShareCents - debit.amountCents;
+            if (delta === 0) continue;
+            await tx.walletTransaction.create({
+              data: {
+                eventId: params.id!,
+                userId: debit.userId,
+                amountCents: Math.abs(delta),
+                currency: costCurrency,
+                direction: delta > 0 ? "debit" : "credit",
+                gameUnits: 0,
+                reason: "cost_adjustment",
+                eventInstanceId: game.id,
+                markedById: session.user.id,
+              },
+            });
+          }
+        } else {
+          // ADR 0019 §6: Unlinked players — resolve from GameParticipant and write corrections
+          const participants = await tx.gameParticipant.findMany({
+            where: { gameId: game.id, archivedAt: null },
+            include: { eventPlayer: { select: { userId: true, name: true } } },
+          });
+          for (const gp of participants) {
+            const userId = gp.eventPlayer.userId;
+            if (!userId) continue; // truly anonymous — no ledger possible
+            // No original debit exists, so the full newShareCents is the adjustment
+            await tx.walletTransaction.create({
+              data: {
+                eventId: params.id!,
+                userId,
+                amountCents: newShareCents,
+                currency: costCurrency,
+                direction: "debit",
+                gameUnits: 0,
+                reason: "cost_adjustment",
+                eventInstanceId: game.id,
+                markedById: session.user.id,
+              },
+            });
+          }
+        }
+
+        // Update GamePayment rows
+        const gamePayments = await tx.gamePayment.findMany({ where: { gameId: game.id } });
+        for (const gp of gamePayments) {
+          await tx.gamePayment.update({ where: { id: gp.id }, data: { amount: newShare } });
+        }
+      });
+    }
+
+    // Update PlayerPayment rows (legacy/dual-write compat)
+    if (eventCost && playerNames.length > 0) {
+      for (const name of playerNames) {
+        await prisma.playerPayment.upsert({
+          where: { eventCostId_playerName: { eventCostId: eventCost.id, playerName: name } },
+          create: { eventCostId: eventCost.id, playerName: name, amount: newShare },
+          update: { amount: newShare },
+        });
+      }
+    }
+
+    // Update the paymentsSnapshot in GameHistory to reflect new amounts
+    if (entry.paymentsSnapshot) {
+      try {
+        const payments = JSON.parse(entry.paymentsSnapshot) as Array<{ playerName: string; amount: number; status: string; method?: string }>;
+        const updatedPayments = payments.map((p) => ({ ...p, amount: newShare }));
+        await prisma.gameHistory.update({
+          where: { id: historyId },
+          data: { paymentsSnapshot: JSON.stringify(updatedPayments) },
+        });
+      } catch { /* skip malformed */ }
+    }
+
+    logEvent(params.id ?? "", "history_cost_updated", session.user.name ?? session.user.email ?? "Unknown", session.user.id, {
+      historyId: entry.id, date: entry.dateTime.toISOString().slice(0, 10), newTotal, newShare,
+    });
+
+    const refreshed = await prisma.gameHistory.findUnique({ where: { id: historyId } });
+    return Response.json({
+      ...refreshed,
+      id: params.historyId,
+      dateTime: refreshed!.dateTime.toISOString(),
+      editableUntil: refreshed!.editableUntil.toISOString(),
+      createdAt: refreshed!.createdAt.toISOString(),
+      editable: refreshed!.editableUntil > new Date(),
+      costUpdated: true,
+      eloUpdates: null,
+    });
+  }
+
   const status = ["played", "cancelled"].includes(body.status) ? body.status : undefined;
   const scoreOne = body.scoreOne !== undefined ? (body.scoreOne === null ? null : parseInt(String(body.scoreOne), 10)) : undefined;
   const scoreTwo = body.scoreTwo !== undefined ? (body.scoreTwo === null ? null : parseInt(String(body.scoreTwo), 10)) : undefined;
