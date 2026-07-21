@@ -22,8 +22,21 @@ export const MONEY_CLEARING_REASONS = new Set<WalletTxReason>([
   "credit_redeemed",
 ]);
 
+/** Reasons that create a money debt for the player (debits). ADR 0019. */
+export const MONEY_CHARGING_REASONS = new Set<WalletTxReason>([
+  "per_game_share",
+  "cost_adjustment",
+]);
+
+/** Clearing reasons that reduce outstanding balance (excludes self-reported). ADR 0019. */
+export const OUTSTANDING_CLEARING_REASONS = new Set<WalletTxReason>([
+  "payment_received",
+  "credit_redeemed",
+]);
+
 export type WalletTxReason =
   | "per_game_share"
+  | "cost_adjustment"
   | "monthly_fee"
   | "missed_game_credit"
   | "credit_redeemed"
@@ -123,4 +136,121 @@ export function sumTransactionAmountCents(txs: readonly WalletTx[]): number {
     else total -= tx.amountCents;
   }
   return total;
+}
+
+/**
+ * Compute money balance from ledger rows using configurable clearing reasons.
+ * ADR 0019 — shared core for getGateBalance and getOutstandingBalance.
+ *
+ * - Sums debits where reason ∈ MONEY_CHARGING_REASONS
+ * - Subtracts credits where reason ∈ the provided clearingReasons set
+ * - Returns cents owed (positive = debt, negative = overpay/credit)
+ */
+export function computeMoneyBalance(
+  txs: readonly WalletTx[],
+  clearingReasons: ReadonlySet<WalletTxReason>,
+): number {
+  let balance = 0;
+  for (const tx of txs) {
+    if (MONEY_CHARGING_REASONS.has(tx.reason) && tx.direction === "debit") {
+      balance += tx.amountCents;
+    }
+    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
+      balance -= tx.amountCents;
+    }
+  }
+  return balance;
+}
+
+/**
+ * Compute money balance scoped to a specific game (by eventInstanceId).
+ * Excludes legacy rows where eventInstanceId matches the eventId (ADR 0019 §3).
+ * Returns cents owed for that game only. Used for per-game paid/total aggregates.
+ */
+export function computeMoneyBalanceForGame(
+  txs: readonly WalletTx[],
+  gameId: string,
+  clearingReasons: ReadonlySet<WalletTxReason>,
+): number {
+  let balance = 0;
+  for (const tx of txs) {
+    if (tx.eventInstanceId !== gameId) continue;
+    if (MONEY_CHARGING_REASONS.has(tx.reason) && tx.direction === "debit") {
+      balance += tx.amountCents;
+    }
+    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
+      balance -= tx.amountCents;
+    }
+  }
+  return balance;
+}
+
+// ─── Per-game aggregates (moved from balance.server.ts — ADR 0019 review) ──
+
+/** Internal: build per-game debit/credit map, excluding legacy eventInstanceId values. */
+function buildPerGameAggregates(
+  txs: readonly WalletTx[],
+  clearingReasons: ReadonlySet<WalletTxReason>,
+  excludeInstanceIds?: ReadonlySet<string>,
+): Map<string, { debit: number; credit: number; latest: Date }> {
+  const games = new Map<string, { debit: number; credit: number; latest: Date }>();
+
+  for (const tx of txs) {
+    const key = tx.eventInstanceId;
+    if (!key) continue;
+    // ADR 0019 §3: skip legacy rows where eventInstanceId = eventId
+    if (excludeInstanceIds?.has(key)) continue;
+
+    if (!games.has(key)) games.set(key, { debit: 0, credit: 0, latest: tx.createdAt });
+    const g = games.get(key)!;
+    if (MONEY_CHARGING_REASONS.has(tx.reason) && tx.direction === "debit") {
+      g.debit += tx.amountCents;
+    }
+    if (clearingReasons.has(tx.reason) && tx.direction === "credit") {
+      g.credit += tx.amountCents;
+    }
+    if (tx.createdAt > g.latest) g.latest = tx.createdAt;
+  }
+  return games;
+}
+
+/**
+ * Count games with outstanding debt (debit > credit for that game).
+ * Excludes legacy eventInstanceId values via excludeInstanceIds.
+ */
+export function countGamesOwed(
+  txs: readonly WalletTx[],
+  clearingReasons: ReadonlySet<WalletTxReason>,
+  excludeInstanceIds?: ReadonlySet<string>,
+): number {
+  const games = buildPerGameAggregates(txs, clearingReasons, excludeInstanceIds);
+  let count = 0;
+  for (const [, g] of games) {
+    if (g.debit > g.credit) count++;
+  }
+  return count;
+}
+
+/**
+ * Compute consecutive paid-game streak (most recent first).
+ * Games with no charge (monthly-covered) are skipped.
+ * Excludes legacy eventInstanceId values via excludeInstanceIds.
+ */
+export function computeStreak(
+  txs: readonly WalletTx[],
+  clearingReasons: ReadonlySet<WalletTxReason>,
+  excludeInstanceIds?: ReadonlySet<string>,
+): number {
+  const games = buildPerGameAggregates(txs, clearingReasons, excludeInstanceIds);
+
+  const sorted = [...games.entries()]
+    .sort((a, b) => b[1].latest.getTime() - a[1].latest.getTime());
+
+  let streak = 0;
+  for (const [, g] of sorted) {
+    if (g.debit === 0) continue; // no charge for this game (monthly-covered)
+    if (g.credit >= g.debit) streak++;
+    else break;
+  }
+  return streak;
 }

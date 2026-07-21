@@ -13,7 +13,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    include: { players: { orderBy: { order: "asc" } } },
+    include: { players: { where: { archivedAt: null }, orderBy: { order: "asc" } } },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -75,6 +75,78 @@ export const PUT: APIRoute = async ({ params, request }) => {
   // Active players only (not bench)
   const activePlayers = event.players.slice(0, event.maxPlayers);
   const share = activePlayers.length > 0 ? totalAmount / activePlayers.length : 0;
+
+  // ADR 0019: Cost change scope — "this_game" sets per-Game override, "all_future" (default) updates template
+  const scope = String(body.scope ?? "all_future");
+
+  if (scope === "this_game") {
+    // Per-Game cost override — only affects the current Game
+    if (!event.currentGameId) {
+      return Response.json({ error: "No active game to override cost for." }, { status: 400 });
+    }
+
+    await prisma.game.update({
+      where: { id: event.currentGameId },
+      data: { costTotalAmount: totalAmount, costCurrency: currency },
+    });
+
+    // Still need an EventCost for payment tracking (create if missing, don't update amount)
+    let eventCost = await prisma.eventCost.findUnique({ where: { eventId } });
+    if (!eventCost) {
+      eventCost = await prisma.eventCost.create({
+        data: {
+          eventId,
+          totalAmount, // use the provided amount as initial template too
+          currency,
+          paymentDetails: paymentDetails ?? null,
+          paymentMethods: paymentMethodsJson ?? null,
+        },
+      });
+    }
+
+    // Recalculate PlayerPayment shares based on the per-game override amount
+    for (const player of activePlayers) {
+      const isEventOwner = event.ownerId && player.userId === event.ownerId;
+      await prisma.playerPayment.upsert({
+        where: {
+          eventCostId_playerName: { eventCostId: eventCost.id, playerName: player.name },
+        },
+        create: {
+          eventCostId: eventCost.id,
+          playerName: player.name,
+          amount: share,
+          ...(isEventOwner && { status: "paid", paidAt: new Date() }),
+        },
+        update: { amount: share },
+      });
+    }
+
+    const activeNames = new Set(activePlayers.map((p) => p.name));
+    await prisma.playerPayment.deleteMany({
+      where: { eventCostId: eventCost.id, playerName: { notIn: [...activeNames] } },
+    });
+
+    const payments = await prisma.playerPayment.findMany({
+      where: { eventCostId: eventCost.id },
+      orderBy: { playerName: "asc" },
+    });
+
+    return Response.json({
+      ...eventCost,
+      scope: "this_game",
+      gameOverride: { costTotalAmount: totalAmount, costCurrency: currency },
+      createdAt: eventCost.createdAt.toISOString(),
+      updatedAt: eventCost.updatedAt.toISOString(),
+      payments: payments.map((p) => ({
+        ...p,
+        paidAt: p.paidAt?.toISOString() ?? null,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+      })),
+    });
+  }
+
+  // scope === "all_future" (default) — update the EventCost template
 
   // Upsert EventCost
   const existing = await prisma.eventCost.findUnique({ where: { eventId } });
