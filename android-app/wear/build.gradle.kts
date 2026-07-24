@@ -206,7 +206,7 @@ dependencies {
     androidTestImplementation("androidx.test:rules:1.6.1")
     androidTestImplementation("androidx.room:room-testing:${libs.versions.room.get()}")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
-    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.4.0")
 }
 
 kotlin {
