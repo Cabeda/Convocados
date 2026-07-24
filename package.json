@@ -41,7 +41,7 @@
     "@mui/icons-material": "^9.2.0",
     "@mui/material": "^9.2.0",
     "@prisma/client": "^6.19.3",
-    "astro": "^7.0.6",
+    "astro": "^7.1.0",
     "better-auth": "^1.6.23",
     "leaflet": "^1.9.4",
     "p-limit": "^7.3.0",
