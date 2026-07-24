@@ -124,6 +124,12 @@ test.describe("Post-game experience — banner, score, payments", () => {
     expect(createRes.status()).toBe(200);
     const { id: eventId } = await createRes.json();
 
+    // Disable MVP so bannerMvpComplete doesn't block allComplete
+    const mvpRes = await api.put(`/api/events/${eventId}/mvp-enabled`, {
+      data: { mvpEnabled: false },
+    });
+    expect(mvpRes.status()).toBe(200);
+
     // ── Step 3: Add 4 players ──
     const players = ["Alice", "Bob", "Charlie", "Diana"];
     for (const name of players) {
