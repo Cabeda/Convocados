@@ -7,9 +7,7 @@ import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 // Use a separate Prisma client for test data setup (avoids mock interference)
-const testPrisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
+const testPrisma = new PrismaClient();
 
 // Mock auth helpers to simulate authenticated sessions
 const mockGetSession = vi.fn();
@@ -21,9 +19,9 @@ vi.mock("~/lib/auth.helpers.server", () => ({
 }));
 
 // Ensure route handlers use the same prisma client
-vi.mock("~/lib/db.server", () => {
-  const { PrismaClient: PC } = require("@prisma/client");
-  const p = new PC({ datasources: { db: { url: process.env.DATABASE_URL } } });
+vi.mock("~/lib/db.server", async () => {
+  const { PrismaClient: PC } = await import("~/lib/prisma-client");
+  const p = new PC();
   return { prisma: p };
 });
 

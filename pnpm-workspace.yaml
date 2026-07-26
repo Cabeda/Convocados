@@ -4,6 +4,7 @@ packages:
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
+  better-sqlite3: true
   esbuild: true
   prisma: true
   sharp: true
@@ -21,6 +22,10 @@ minimumReleaseAgeExclude:
   - eslint-plugin-react-rsc@5.17.3
   - eslint-plugin-react-web-api@5.17.3
   - eslint-plugin-react-x@5.17.3
+  - '@playwright/test@1.62.0'
+  - eslint@10.8.0
+  - playwright-core@1.62.0
+  - playwright@1.62.0
 overrides:
   basic-ftp@<=5.2.2: '>=5.3.0'
   basic-ftp@<=5.3.0: '>=5.3.1'
