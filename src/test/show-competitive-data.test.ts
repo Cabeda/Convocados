@@ -3,9 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
-const prisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
+const prisma = new PrismaClient();
 
 import { PUT as updateShowCompetitiveData } from "~/pages/api/events/[id]/show-competitive-data";
 import { GET as getRatings } from "~/pages/api/events/[id]/ratings/index";

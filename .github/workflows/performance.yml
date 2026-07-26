@@ -43,6 +43,8 @@ jobs:
 
       - name: Generate Prisma client
         run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
 
       - name: Build
         run: pnpm build

@@ -1,5 +1,5 @@
 import { readdirSync } from "fs";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "./__generated__/prisma/client";
 import { createLogger } from "./logger.server";
 
 const log = createLogger("schema-check");

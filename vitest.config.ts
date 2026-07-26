@@ -3,9 +3,9 @@ import path from "path";
 
 export default defineConfig({
   resolve: {
-    alias: {
-      "~": path.resolve(__dirname, "./src"),
-    },
+    alias: [
+      { find: "~", replacement: path.resolve(__dirname, "./src") },
+    ],
   },
   test: {
     globals: true,
@@ -48,9 +48,10 @@ export default defineConfig({
     projects: [
       {
         resolve: {
-          alias: {
-            "~": path.resolve(__dirname, "./src"),
-          },
+          alias: [
+            { find: "~", replacement: path.resolve(__dirname, "./src") },
+            { find: /^@prisma\/client$/, replacement: path.resolve(__dirname, "./src/lib/prisma-client") },
+          ],
         },
         test: {
           name: "node",
@@ -77,9 +78,10 @@ export default defineConfig({
       },
       {
         resolve: {
-          alias: {
-            "~": path.resolve(__dirname, "./src"),
-          },
+          alias: [
+            { find: "~", replacement: path.resolve(__dirname, "./src") },
+            { find: /^@prisma\/client$/, replacement: path.resolve(__dirname, "./src/lib/prisma-client") },
+          ],
         },
         test: {
           name: "jsdom",

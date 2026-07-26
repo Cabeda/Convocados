@@ -1,15 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 
-const testPrisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
+const testPrisma = new PrismaClient();
 
 // Ensure route handlers and logEvent use the same prisma client
-const _sharedPrisma = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
-vi.mock("~/lib/db.server", () => {
-  const { PrismaClient: PC } = require("@prisma/client");
-  const p = new PC({ datasources: { db: { url: process.env.DATABASE_URL } } });
+const _sharedPrisma = new PrismaClient();
+vi.mock("~/lib/db.server", async () => {
+  const { PrismaClient: PC } = await import("~/lib/prisma-client");
+  const p = new PC();
   return { prisma: p };
 });
 
