@@ -2,9 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "better-auth/crypto";
 
-const testPrisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
+const testPrisma = new PrismaClient();
 
 // Mock auth helpers
 const mockGetSession = vi.fn();
@@ -20,7 +18,7 @@ vi.mock("~/lib/logger.server", () => ({
 // Ensure route handlers use the same prisma client
 vi.mock("~/lib/db.server", () => {
   const { PrismaClient: PC } = require("@prisma/client");
-  const p = new PC({ datasources: { db: { url: process.env.DATABASE_URL } } });
+  const p = new PC();
   return { prisma: p };
 });
 

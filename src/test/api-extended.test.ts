@@ -3,9 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
-const prisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
+const prisma = new PrismaClient();
 
 // Import route handlers
 import { GET as getHealth } from "~/pages/api/health";

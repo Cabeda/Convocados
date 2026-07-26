@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 
-const testPrisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
+const testPrisma = new PrismaClient();
 
 const mockGetSession = vi.fn();
 const mockAuthenticateRequest = vi.fn();
@@ -18,7 +16,7 @@ vi.mock("~/lib/authenticate.server", () => ({
 
 vi.mock("~/lib/db.server", () => {
   const { PrismaClient: PC } = require("@prisma/client");
-  const p = new PC({ datasources: { db: { url: process.env.DATABASE_URL } } });
+  const p = new PC();
   return { prisma: p };
 });
 
