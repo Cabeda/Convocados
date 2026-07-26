@@ -4,8 +4,8 @@ import { PrismaClient } from "@prisma/client";
 const testPrisma = new PrismaClient();
 
 // Ensure route handlers use the same prisma client
-vi.mock("~/lib/db.server", () => {
-  const { PrismaClient: PC } = require("@prisma/client");
+vi.mock("~/lib/db.server", async () => {
+  const { PrismaClient: PC } = await import("~/lib/prisma-client");
   const p = new PC();
   return { prisma: p };
 });
