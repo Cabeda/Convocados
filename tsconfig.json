@@ -2,7 +2,8 @@
   "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
     "paths": {
-      "~/*": ["./src/*"]
+      "~/*": ["./src/*"],
+      "@prisma/client": ["./src/lib/__generated__/prisma/index"]
     },
     "jsx": "react-jsx",
     "jsxImportSource": "react",
