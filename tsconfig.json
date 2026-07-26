@@ -3,7 +3,7 @@
   "compilerOptions": {
     "paths": {
       "~/*": ["./src/*"],
-      "@prisma/client": ["./src/lib/__generated__/prisma/index"]
+      "@prisma/client": ["./src/lib/prisma-client"]
     },
     "jsx": "react-jsx",
     "jsxImportSource": "react",

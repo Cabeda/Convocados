@@ -50,7 +50,7 @@ export default defineConfig({
         resolve: {
           alias: [
             { find: "~", replacement: path.resolve(__dirname, "./src") },
-            { find: /^@prisma\/client$/, replacement: path.resolve(__dirname, "./src/lib/__generated__/prisma/index") },
+            { find: /^@prisma\/client$/, replacement: path.resolve(__dirname, "./src/lib/prisma-client") },
           ],
         },
         test: {
@@ -80,7 +80,7 @@ export default defineConfig({
         resolve: {
           alias: [
             { find: "~", replacement: path.resolve(__dirname, "./src") },
-            { find: /^@prisma\/client$/, replacement: path.resolve(__dirname, "./src/lib/__generated__/prisma/index") },
+            { find: /^@prisma\/client$/, replacement: path.resolve(__dirname, "./src/lib/prisma-client") },
           ],
         },
         test: {
