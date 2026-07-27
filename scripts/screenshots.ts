@@ -33,8 +33,29 @@ interface Route {
   requiresAuth: boolean;
 }
 
-/** Resolve routes, optionally with event IDs discovered from the API. */
-async function resolveRoutes(): Promise<Route[]> {
+async function fetchJson<T>(url: string): Promise<T | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json() as T;
+  } catch {
+    return null;
+  }
+}
+
+/** Find an event ID that has at least one game history entry. */
+async function findEventWithHistory(eventIds: string[]): Promise<string | null> {
+  for (const id of eventIds) {
+    const data = await fetchJson<{ data?: unknown[] }>(`${BASE_URL}/api/events/${id}/history?limit=1`);
+    if (data && data.data && data.data.length > 0) {
+      return id;
+    }
+  }
+  return null;
+}
+
+/** Resolve routes, picking an event with game history for dynamic routes. */
+async function resolveRoutes(signedIn: boolean): Promise<Route[]> {
   const staticRoutes: Route[] = [
     { path: "/", name: "landing", requiresAuth: false },
     { path: "/auth/signin", name: "auth-signin", requiresAuth: false },
@@ -48,23 +69,14 @@ async function resolveRoutes(): Promise<Route[]> {
     { path: `/users/${DEMO_USER_ID}`, name: "user-profile", requiresAuth: true },
   ];
 
-  let eventIds: string[] = [];
-  try {
-    const res = await fetch(`${BASE_URL}/api/events/public`);
-    if (res.ok) {
-      const body = await res.json() as { data?: { id: string }[] };
-      if (body.data) {
-        eventIds = body.data.map((e) => e.id);
-      }
-    }
-  } catch {
-    // API unreachable — skip event-specific routes
-  }
+  // Collect public event IDs
+  const publicData = await fetchJson<{ data?: { id: string }[] }>(`${BASE_URL}/api/events/public`);
+  const publicEventIds = publicData?.data?.map((e) => e.id) ?? [];
 
-  if (eventIds.length === 0) {
+  if (publicEventIds.length === 0) {
     try {
-      const res = await fetch(`${BASE_URL}/api/health`);
-      if (res.ok) {
+      const health = await fetchJson<{ status: string }>(`${BASE_URL}/api/health`);
+      if (health) {
         console.warn("  ⚠  Public events API returned no data — event pages will be skipped");
       } else {
         console.warn(`  ⚠  Server at ${BASE_URL} is not healthy — pages may fail`);
@@ -75,14 +87,26 @@ async function resolveRoutes(): Promise<Route[]> {
     return staticRoutes;
   }
 
-  const firstEventId = eventIds[0];
+  // Also collect events the demo user owns (signed-in only)
+  let ownedEventIds: string[] = [];
+  if (signedIn) {
+    const meData = await fetchJson<{ owned?: { id: string }[] }>(`${BASE_URL}/api/me/games`);
+    if (meData?.owned) {
+      ownedEventIds = meData.owned.map((e) => e.id);
+    }
+  }
+
+  // Find an event with game history — prefer owned, fall back to public
+  const allCandidateIds = [...new Set([...ownedEventIds, ...publicEventIds])];
+  const eventId = await findEventWithHistory(allCandidateIds) ?? publicEventIds[0];
+
   const eventRoutes: Route[] = [
-    { path: `/events/${firstEventId}`, name: "event-detail", requiresAuth: false },
-    { path: `/events/${firstEventId}/settings`, name: "event-settings", requiresAuth: true },
-    { path: `/events/${firstEventId}/history`, name: "event-history", requiresAuth: true },
-    { path: `/events/${firstEventId}/rankings`, name: "event-rankings", requiresAuth: true },
-    { path: `/events/${firstEventId}/settle`, name: "event-settle", requiresAuth: true },
-    { path: `/events/${firstEventId}/attendance`, name: "event-attendance", requiresAuth: true },
+    { path: `/events/${eventId}`, name: "event-detail", requiresAuth: false },
+    { path: `/events/${eventId}/settings`, name: "event-settings", requiresAuth: true },
+    { path: `/events/${eventId}/history`, name: "event-history", requiresAuth: true },
+    { path: `/events/${eventId}/rankings`, name: "event-rankings", requiresAuth: true },
+    { path: `/events/${eventId}/settle`, name: "event-settle", requiresAuth: true },
+    { path: `/events/${eventId}/attendance`, name: "event-attendance", requiresAuth: true },
   ];
 
   return [...staticRoutes, ...eventRoutes];
@@ -129,32 +153,30 @@ async function takeScreenshots() {
 
   fs.mkdirSync(OUTPUT_ROOT, { recursive: true });
 
-  const routes = await resolveRoutes();
-  console.log(`  Routes: ${routes.length} (${routes.filter((r) => r.requiresAuth).length} require auth)\n`);
-
+  // Try signing in before resolving routes so we can discover owned events
   const browser: Browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: VIEWPORT });
   const page = await context.newPage();
 
-  let signedIn = false;
+  console.log(`→ Signing in as ${DEMO_EMAIL} to discover event routes...`);
+  const signedIn = await signIn(page);
+  if (signedIn) {
+    console.log(`  ✓ Signed in\n`);
+  } else {
+    console.warn(`  ⚠  Sign-in failed — event pages may use public events without history\n`);
+  }
+
+  // Resolve routes now that we know auth state
+  const routes = await resolveRoutes(signedIn);
+
+  // Back to a neutral page after sign-in
+  if (signedIn) {
+    try { await page.goto(`${BASE_URL}/`, { timeout: 10_000 }); } catch { /* ignore */ }
+  }
+
+  console.log(`  Routes: ${routes.length} (${routes.filter((r) => r.requiresAuth).length} require auth)\n`);
 
   for (const route of routes) {
-    if (route.requiresAuth && !signedIn) {
-      console.log(`→ Signing in as ${DEMO_EMAIL}...`);
-      signedIn = await signIn(page);
-      if (signedIn) {
-        console.log(`  ✓ Signed in\n`);
-      } else {
-        console.warn(`  → Continuing without auth — signed pages will show login\n`);
-        // Reset page state after failed sign-in
-        try {
-          await page.goto(`${BASE_URL}/`, { timeout: 10_000 });
-        } catch {
-          // ignore
-        }
-      }
-    }
-
     const url = `${BASE_URL}${route.path}`;
     const filename = `${route.name}.png`;
     const filepath = path.join(OUTPUT_ROOT, filename);
