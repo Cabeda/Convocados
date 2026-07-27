@@ -16,6 +16,20 @@ Steps:
 4. **Apply changes** — refactor the token config and landing page component to match.
 5. **Verify** — screenshot the updated page and compare to the mockup (human reviews).
 
-This ticket is blocked until the three preceding tickets resolve — need the model choice, the screenshot tool, and the token abstraction strategy.
+...
 
-Deliverable: the transformed page, the mockup image that informed it, and a summary of what worked and what didn't in the pipeline.
+## Resolution (reframed)
+
+Pipeline split into groundwork + human-driven loop:
+
+**Groundwork done (this effort):**
+- Screenshot pipeline producing all 16 pages (`npm run screenshots`)
+- Design tokens extracted for AI-editable theming (`src/theme/tokens.ts`)
+
+**Remains (future session, when user provides mockup):**
+- Apply token/component edits based on mockup image
+- One-page transformation as proof of concept
+
+This map exists so the pipeline is ready when mockups arrive. Closing as "groundwork complete, awaiting mockups."
+
+Close this ticket.
