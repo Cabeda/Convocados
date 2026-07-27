@@ -8,14 +8,16 @@
 
 How should the current MUI theme be refactored to expose clean design tokens that an AI can modify without touching individual component files?
 
-Current state: theme lives inline in `ThemeModeProvider.tsx` via `createTheme()`. Components use `sx` prop with hardcoded values (e.g., `borderRadius: 2`, `p: 2`) rather than theme tokens.
+...
 
-Decisions to make:
+## Resolution
 
-1. **Token format** — extract to a standalone `theme/` config file (e.g., `theme/tokens.ts` exporting color palette, spacing scale, typography, shape, shadows)? Or keep in `createTheme()` but make it more structured?
-2. **What gets extracted** — just the palette? Or spacing, typography, breakpoints, z-index, transitions?
-3. **Token adoption** — how to migrate components from hardcoded `sx` values to theme token references without rewriting everything at once?
-4. **AI interface** — what does the AI need to know to modify the tokens? A schema file? A JSON config?
-5. **Dark mode** — the current theme supports dark/light switching. How do tokens compose with palette modes?
+Implemented:
+- `src/theme/tokens.ts` — typed `DesignTokens` with palette (light + dark), typography, shape, and component tokens
+- `src/theme/index.ts` — `buildThemeOptions(mode)` constructs MUI `ThemeOptions` from tokens
+- `ThemeModeProvider.tsx` — refactored to single `createTheme(buildThemeOptions(mode))` call
+- `src/test/theme-tokens.test.ts` — 7 tests verifying light/dark palette and component overrides match original values
 
-Deliverable: a concrete plan (not code, a decision) for how to structure the token abstraction so an AI agent can modify it safely and the changes propagate to all components.
+Result: AI agent reads `tokens.ts`, edits token values, and theme propagates globally. No need for AI to touch component files for most design changes. TypeScript types serve as the AI-facing schema.
+
+Close this ticket.
