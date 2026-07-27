@@ -90,15 +90,22 @@ async function resolveRoutes(): Promise<Route[]> {
 
 async function signIn(page: Page): Promise<boolean> {
   try {
-    await page.goto(`${BASE_URL}/auth/signin`, { waitUntil: "networkidle", timeout: 15_000 });
-    await page.waitForSelector('input[type="email"], input[name="email"], input', { timeout: 10_000 });
-    await page.waitForTimeout(500);
+    // Sign-in page is a React island (client:only) — wait for hydration
+    await page.goto(`${BASE_URL}/auth/signin`, { waitUntil: "networkidle", timeout: 20_000 });
+    await page.waitForTimeout(2000);
 
-    const emailInput = page.locator('input[type="email"], input[name="email"]').first();
-    const passwordInput = page.locator('input[type="password"], input[name="password"]').first();
+    // Default tab is Magic Link (email-only). Switch to Password tab.
+    const passwordTab = page.locator('button[role="tab"]:has-text("Password")');
+    if (await passwordTab.isVisible({ timeout: 5_000 })) {
+      await passwordTab.click();
+      await page.waitForTimeout(500);
+    }
+
+    const emailInput = page.locator('input[type="email"]').first();
+    const passwordInput = page.locator('input[type="password"]').first();
     const submitButton = page.locator('button[type="submit"]').first();
 
-    if (!(await emailInput.isVisible())) {
+    if (!(await emailInput.isVisible({ timeout: 5_000 }))) {
       console.warn("  ⚠  Sign-in form not visible");
       return false;
     }
@@ -139,6 +146,12 @@ async function takeScreenshots() {
         console.log(`  ✓ Signed in\n`);
       } else {
         console.warn(`  → Continuing without auth — signed pages will show login\n`);
+        // Reset page state after failed sign-in
+        try {
+          await page.goto(`${BASE_URL}/`, { timeout: 10_000 });
+        } catch {
+          // ignore
+        }
       }
     }
 
@@ -148,17 +161,12 @@ async function takeScreenshots() {
 
     process.stdout.write(`  ${route.path}`);
     try {
-      await page.goto(url, { waitUntil: "networkidle", timeout: 20_000 });
+      await page.goto(url, { waitUntil: "networkidle", timeout: 15_000 });
       await page.waitForTimeout(1000);
       await page.screenshot({ path: filepath, fullPage: false });
       process.stdout.write(` → ${filename}\n`);
     } catch (err) {
       process.stdout.write(` ⚠ ${err instanceof Error ? err.message : "error"}\n`);
-      try {
-        await page.screenshot({ path: filepath });
-      } catch {
-        // ignore
-      }
     }
   }
 
