@@ -6,6 +6,7 @@ import { MVP_ELO_BONUS } from "../../../../../lib/mvp.constants";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
+import { isHistoryParticipant } from "../../../../../lib/snapshotParticipants";
 
 const log = createLogger("history-patch");
 
@@ -194,25 +195,12 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "This result can no longer be edited." }, { status: 403 });
   }
 
-  // Allow owner, admin, or any player who participated in this game
-  let isParticipant = false;
-
-  // Check 1: match user's display name against the teamsSnapshot
-  if (entry.teamsSnapshot && session.user.name) {
-    try {
-      const teams = JSON.parse(entry.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
-      const allNames = teams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
-      isParticipant = allNames.includes(session.user.name.toLowerCase());
-    } catch { /* ignore parse errors */ }
-  }
-
-  // Check 2: match user's ID against claimed player spots in the event
-  if (!isParticipant) {
-    const claimedPlayer = await prisma.player.findFirst({
-      where: { eventId: params.id, userId: session.user.id, archivedAt: null },
-    });
-    if (claimedPlayer) isParticipant = true;
-  }
+  // Allow owner, admin, or any player who participated in this game.
+  // Participants are matched by name against this game's teamsSnapshot only —
+  // claiming a spot in a later game does NOT grant edit rights (issue #658).
+  const isParticipant = session.user.name
+    ? isHistoryParticipant(entry, session.user.name)
+    : false;
 
   if (event.ownerId && !isOwner && !isAdmin && !isParticipant) {
     return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });

@@ -931,7 +931,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(body.scoreOne).toBe(2);
   });
 
-  it("allows a claimed player to edit even if name doesn't match teamsSnapshot", async () => {
+  it("rejects a claimed player whose name doesn't match the teamsSnapshot (issue #658)", async () => {
     const owner = await seedUser();
     const claimedUser = await seedUser({ name: "Different Name" });
     mockAuth(claimedUser.id, "Different Name");
@@ -946,9 +946,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     ];
     const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3, scoreTwo: 1 }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.scoreOne).toBe(3);
+    expect(res.status).toBe(403);
   });
 
   it("allows participant to edit teams", async () => {

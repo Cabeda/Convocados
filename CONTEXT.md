@@ -1,5 +1,20 @@
 # Convocados — Domain Glossary
 
+## Post-game wrap-up
+The settlement checklist presented after a **Game** ends: score entry, payment confirmation, MVP voting. Rendered as a banner on the event page. Visible **only** to people involved in settling that specific Game:
+- **Owner** and **Admin** — always, regardless of whether they played.
+- **Participants** — anyone on the settled Game's teams or payment roll.
+- **Debtors** — anyone with an unpaid entry on the settled Game's payment roll.
+
+Hidden from everyone else (spectators, followers who didn't play); they read results on the history page. The banner disappears once the wrap-up is complete (score + payments + MVP).
+_Avoid_: post-game banner (UI name only), wrap-up card
+
+## Participant (of a Game)
+A person present on a specific Game's teams or payment roll, as captured for that Game (a `GameHistory` snapshot's `teamsSnapshot`/`paymentsSnapshot`, or the played **Game**'s participants when no snapshot exists yet). The gating condition for the Post-game wrap-up and MVP voting.
+
+Distinct from **Player** (the current/live game list): a Player of next week's Game is *not* a Participant of last week's settled Game. "Participated in the game" always means the settled Game, never the live list.
+_Avoid_: attended, was on the list
+
 ## Event
 A recurring series or one-off template. Holds configuration (title, location, sport, maxPlayers, recurrence rule, payment settings, priority settings). The container for one or more Games. URL: `/events/:id`.
 _Avoid_: game (when referring to the series)

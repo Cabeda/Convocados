@@ -38,6 +38,7 @@ import { detectLocale, type TFunction } from "~/lib/i18n";
 import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, expectedScore, kFactor, type EloUpdate } from "~/lib/elo";
 import { formatDateInTz } from "~/lib/timezones";
+import { isNameInTeamsSnapshot } from "~/lib/snapshotParticipants";
 
 type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
@@ -261,13 +262,11 @@ export function HistoryCardFull({
   }, [eventId, entry.id, mvp]);
 
   // Permissions
-  const isParticipantInGame = (() => {
-    if (isPlayAdmin) return true;
-    if (!userName) return false;
-    const allNames = teams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
-    if (allNames.includes(userName.toLowerCase())) return true;
-    return (entry.participants ?? []).some((n) => n.toLowerCase() === userName.toLowerCase());
-  })();
+  const isParticipantInGame = isPlayAdmin
+    || (!!userName && (
+      isNameInTeamsSnapshot(entry.teamsSnapshot, userName)
+      || (entry.participants ?? []).some((n) => n.toLowerCase() === userName.toLowerCase())
+    ));
   // Owners/admins bypass the 7-day editable window. Regular players
   // (incl. participants) lose edit access after the window.
   const inEditWindow = entry.editable || isPlayAdmin;

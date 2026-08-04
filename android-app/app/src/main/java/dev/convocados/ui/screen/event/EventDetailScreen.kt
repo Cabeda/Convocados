@@ -701,7 +701,7 @@ fun EventDetailScreen(
                         // upcoming game's UI below. Hidden once everything is
                         // settled (allComplete) so it disappears when fulfilled.
                         state.postGame?.let { pg ->
-                            val showBanner = !pg.allComplete &&
+                            val showBanner = pg.isParticipant && !pg.allComplete &&
                                 (pg.gameEnded || pg.hasPendingPastPayments || (pg.mvpEnabled && !pg.mvpComplete))
                             if (showBanner) {
                                 val scoreDone = pg.hasScore
