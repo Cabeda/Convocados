@@ -266,7 +266,7 @@ describe("sendPushToUser (FCM app tokens)", () => {
 
       // FCM message send happens (token may be cached from a prior test)
       const urls = fetchMock.mock.calls.map((c) => String(c[0]));
-      expect(urls.some((u) => u.includes("fcm.googleapis.com"))).toBe(true);
+      expect(urls.some((u) => new URL(u).host === "fcm.googleapis.com")).toBe(true);
       expect(fetchMock).toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
