@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - name: Enable corepack and install pnpm
@@ -43,6 +43,8 @@ jobs:
 
       - name: Generate Prisma client
         run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
 
       - name: Build
         run: pnpm build

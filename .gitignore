@@ -83,3 +83,9 @@ reports/
 .stryker-tmp/
 
 test-results.json
+
+# Prisma generated client
+src/lib/__generated__/
+
+# AI review pipeline screenshots
+/screenshots/

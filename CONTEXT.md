@@ -1,5 +1,20 @@
 # Convocados — Domain Glossary
 
+## Post-game wrap-up
+The settlement checklist presented after a **Game** ends: score entry, payment confirmation, MVP voting. Rendered as a banner on the event page. Visible **only** to people involved in settling that specific Game:
+- **Owner** and **Admin** — always, regardless of whether they played.
+- **Participants** — anyone on the settled Game's teams or payment roll.
+- **Debtors** — anyone with an unpaid entry on the settled Game's payment roll.
+
+Hidden from everyone else (spectators, followers who didn't play); they read results on the history page. The banner disappears once the wrap-up is complete (score + payments + MVP).
+_Avoid_: post-game banner (UI name only), wrap-up card
+
+## Participant (of a Game)
+A person present on a specific Game's teams or payment roll, as captured for that Game (a `GameHistory` snapshot's `teamsSnapshot`/`paymentsSnapshot`, or the played **Game**'s participants when no snapshot exists yet). The gating condition for the Post-game wrap-up and MVP voting.
+
+Distinct from **Player** (the current/live game list): a Player of next week's Game is *not* a Participant of last week's settled Game. "Participated in the game" always means the settled Game, never the live list.
+_Avoid_: attended, was on the list
+
 ## Event
 A recurring series or one-off template. Holds configuration (title, location, sport, maxPlayers, recurrence rule, payment settings, priority settings). The container for one or more Games. URL: `/events/:id`.
 _Avoid_: game (when referring to the series)
@@ -260,7 +275,16 @@ The abstract denomination of Wallet credit. 1 unit = 1 missed non-cancelled Even
 _Avoid_: credit, token
 
 ## Transaction
-An immutable row in the per-Event ledger recording a money or Game-Unit movement on behalf of a player. `amountCents` (in Event currency), `direction` (`debit` | `credit`), `reason` (enum: `per_game_share`, `monthly_fee`, `missed_game_credit`, `credit_redeemed`, `credit_expired`, `extras_declare`, `payment_received`, `payment_self_reported`), references to the source (`eventInstanceId`, `subscriptionId`, `extrasId`). The ledger is the single source of truth for balances, the join gate, and per-player history. `PlayerPayment.status` becomes a *projection* of the ledger.
+An immutable row in the per-Event ledger recording a money or Game-Unit movement on behalf of a player. `amountCents` (in Event currency), `direction` (`debit` | `credit`), `reason` (enum: `per_game_share`, `cost_adjustment`, `monthly_fee`, `missed_game_credit`, `credit_redeemed`, `credit_expired`, `extras_declare`, `payment_received`, `payment_self_reported`), references to the source (`eventInstanceId`, `subscriptionId`, `extrasId`). The ledger is the single source of truth for balances, the join gate, and per-player history. `PlayerPayment.status` becomes a *projection* of the ledger.
+
+`eventInstanceId` stores the `Game.id` of the occurrence the transaction applies to. For legacy rows (pre-ADR-0019), the value is the `Event.id` — treated as "game unknown" in per-game aggregates.
+
+### Cost change scope
+When an organizer changes the event cost, two scopes are offered:
+- **This game only** — sets a per-Game cost override (`Game.costTotalAmount`). The template (`EventCost.totalAmount`) is unchanged; the next occurrence inherits the template.
+- **This and all future** — updates the template. Past games are unaffected.
+
+No retroactive bulk change. Individual past-game corrections are handled via the history edit UI, which writes `cost_adjustment` correction rows to the ledger (for post-migration games only).
 _Avoid_: payment, ledger entry, journal line
 
 ## Extras Pot

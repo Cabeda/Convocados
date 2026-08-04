@@ -387,7 +387,7 @@ jobs:
         with:
           ref: v${{ needs.release.outputs.version }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -409,6 +409,8 @@ jobs:
 
       - name: Generate Prisma client
         run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
 
       - name: Build app
         run: pnpm build
@@ -426,7 +428,7 @@ jobs:
       - name: Check if base image needs rebuild
         id: base-check
         run: |
-          BASE_HASH=$(cat pnpm-lock.yaml prisma/schema.prisma | sha256sum | cut -c1-12)
+          BASE_HASH=$(cat pnpm-lock.yaml prisma/schema.prisma Dockerfile.base | sha256sum | cut -c1-12)
           echo "hash=$BASE_HASH" >> $GITHUB_OUTPUT
 
       - uses: actions/cache@v6

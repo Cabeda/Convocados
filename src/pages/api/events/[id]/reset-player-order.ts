@@ -24,7 +24,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   );
 
   // Validate teams after order change — removes any bench players from teams
-  const teamsCleared = await validateTeams(eventId, event.maxPlayers);
+  const teamsCleared = await validateTeams(eventId, event.maxPlayers, event.currentGameId);
 
   if (teamsCleared) {
     return Response.json({

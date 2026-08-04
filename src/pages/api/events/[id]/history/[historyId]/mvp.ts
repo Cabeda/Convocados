@@ -2,6 +2,10 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { getSession } from "../../../../../../lib/auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../../../lib/mvp.constants";
+import {
+  isHistoryParticipant,
+  namesFromTeamsSnapshot,
+} from "../../../../../../lib/snapshotParticipants";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
@@ -60,28 +64,27 @@ export const GET: APIRoute = async ({ params, request }) => {
   let hasVoted: boolean | null = null;
   const session = await getSession(request);
   if (session?.user?.id) {
-    // Only participants (players in teamsSnapshot) can have hasVoted !== null
+    // Only participants (players in teamsSnapshot) can have hasVoted !== null.
+    // Players-only: owners/admins who didn't play cannot vote.
     let isParticipant = false;
     let playerIds: string[] = [];
 
     const participantName = session.user?.name;
-    if (history.teamsSnapshot && participantName) {
-      const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
-      const allSnapshotPlayers = teams.flatMap((t) => t.players);
-      const nameMatch = allSnapshotPlayers.find(
-        (p) => p.name.toLowerCase() === participantName.toLowerCase(),
-      );
-      if (nameMatch) {
-        isParticipant = true;
-        const userPlayers = await prisma.player.findMany({
-          where: { eventId: params.id, userId: session.user.id },
-          select: { id: true },
-        });
-        playerIds = userPlayers.map((p) => p.id);
+    if (isHistoryParticipant(history, participantName)) {
+      isParticipant = true;
+      const userPlayers = await prisma.player.findMany({
+        where: { eventId: params.id, userId: session.user.id },
+        select: { id: true },
+      });
+      playerIds = userPlayers.map((p) => p.id);
 
-        if (playerIds.length === 0) {
+      if (playerIds.length === 0) {
+        const matchName = namesFromTeamsSnapshot(history.teamsSnapshot).find(
+          (n) => n.toLowerCase() === participantName!.toLowerCase(),
+        );
+        if (matchName) {
           const playerByName = await prisma.player.findFirst({
-            where: { eventId: params.id, name: nameMatch.name },
+            where: { eventId: params.id, name: matchName },
             select: { id: true },
           });
           if (playerByName) playerIds = [playerByName.id];

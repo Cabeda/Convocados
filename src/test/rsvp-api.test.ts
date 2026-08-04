@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 
-const testPrisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
+const testPrisma = new PrismaClient();
 
-vi.mock("~/lib/db.server", () => {
-  const { PrismaClient: PC } = require("@prisma/client");
-  const p = new PC({ datasources: { db: { url: process.env.DATABASE_URL } } });
+vi.mock("~/lib/db.server", async () => {
+  const { PrismaClient: PC } = await import("~/lib/prisma-client");
+  const p = new PC();
   return { prisma: p };
 });
 
@@ -63,7 +61,7 @@ function getCtx(eventId: string, session: { user: { id: string; name: string } }
 }
 
 async function seedEvent(dateOffsetMs: number) {
-  return testPrisma.event.create({
+  const event = await testPrisma.event.create({
     data: {
       title: "Game",
       location: "Pitch",
@@ -71,6 +69,9 @@ async function seedEvent(dateOffsetMs: number) {
       ownerId: null,
     },
   });
+  const game = await testPrisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+  await testPrisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  return { ...event, currentGameId: game.id };
 }
 
 describe("POST /api/events/[id]/rsvp", () => {
@@ -116,7 +117,7 @@ describe("POST /api/events/[id]/rsvp", () => {
     const res = await rsvpPost(ctx(ev.id, { status: "no" }, user));
     const body = await res.json();
     expect(body.status).toBe("no");
-    const count = await testPrisma.rsvp.count({ where: { eventId: ev.id, userId: "u1" } });
+    const count = await testPrisma.rsvp.count({ where: { gameId: ev.currentGameId! } });
     expect(count).toBe(1);
   });
 
@@ -169,8 +170,9 @@ describe("POST /api/events/[id]/rsvp", () => {
     const firstBody = await firstRes.json();
 
     // Manually flip the DB row to a different status — replay should still return the original.
+    const rsvpRow = await testPrisma.rsvp.findFirst({ where: { gameId: ev.currentGameId! } });
     await testPrisma.rsvp.update({
-      where: { userId_eventId: { userId: "u1", eventId: ev.id } },
+      where: { id: rsvpRow!.id },
       data: { status: "no" },
     });
 
@@ -198,7 +200,8 @@ describe("GET /api/events/[id]/rsvp", () => {
   it("returns stored status", async () => {
     const ev = await seedEvent(7 * 86400_000);
     await testPrisma.user.create({ data: { id: "u1", name: "U", email: "u1@t.com", emailVerified: true } });
-    await testPrisma.rsvp.create({ data: { eventId: ev.id, userId: "u1", status: "yes", respondedAt: new Date() } });
+    const ep = await testPrisma.eventPlayer.create({ data: { eventId: ev.id, name: "U", userId: "u1" } });
+    await testPrisma.rsvp.create({ data: { eventPlayerId: ep.id, gameId: ev.currentGameId!, status: "yes", respondedAt: new Date() } });
     const res = await rsvpGet(getCtx(ev.id, { user: { id: "u1", name: "U" } }));
     const body = await res.json();
     expect(body.status).toBe("yes");

@@ -96,8 +96,9 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
     }
   }, [status?.paymentsSnapshot, editablePayments.length]);
 
-  // Don't show if game hasn't ended (unless there are unsettled past payments or pending MVP votes) or everything is complete
-  if (!status || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || status.allComplete) return null;
+  // Only show to people involved in settling this game: participants (teams or
+  // payment roll), debtors, and the Owner/Admin. Spectators get nothing.
+  if (!status || !status.isParticipant || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || status.allComplete) return null;
 
   const completedCount = (status.hasScore ? 1 : 0) + (status.allPaid ? 1 : 0);
   const progressPct = (completedCount / 2) * 100;

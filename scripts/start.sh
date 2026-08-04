@@ -28,38 +28,54 @@ fi
 #
 # This is intentionally aggressive because the alternative is the app being
 # permanently down. The failed-migration is logged loudly for post-mortem.
+#
+# Uses better-sqlite3 directly instead of @prisma/client: the Prisma 7
+# prisma-client generator emits a custom module in src/lib/__generated__/prisma,
+# so the old require("@prisma/client") default .prisma/client/default no longer
+# exists in the image. These queries only touch raw SQL, so better-sqlite3 is
+# the right tool and is already a production dependency.
 if [ -f /data/db.sqlite ]; then
   echo "[startup] Checking for failed migrations and recovering in one shot..."
   node -e '
-    const { PrismaClient } = require("/app/node_modules/@prisma/client");
-    const p = new PrismaClient();
-    (async () => {
-      try {
-        const failed = await p.$queryRawUnsafe(
-          "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND started_at < (strftime(\"%s\", \"now\") - 300)"
-        );
-        if (failed.length > 0) {
-          console.log(`[startup] WARNING: detected ${failed.length} failed migration(s) from a previous deploy`);
-          console.log("[startup] Auto-resolving as applied (tables likely exist from partial execution)...");
-          for (const m of failed) {
-            try {
-              await p.$executeRawUnsafe(
-                "UPDATE _prisma_migrations SET finished_at = CURRENT_TIMESTAMP WHERE migration_name = ?",
-                m.migration_name
-              );
-              console.log(`[startup] Marked ${m.migration_name} as applied (recovery)`);
-            } catch (e) {
-              console.error(`[startup] Failed to mark ${m.migration_name} as applied:`, e.message);
-            }
-          }
-        } else {
-          console.log("[startup] No failed migrations detected.");
+    const Database = require("/app/node_modules/better-sqlite3");
+    const db = new Database("/data/db.sqlite", { readonly: false });
+    const cutoff = new Date(Date.now() - 120000).toISOString();
+    try {
+      const failed = db.prepare(
+        "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL AND started_at < ?"
+      ).all(cutoff);
+      if (failed.length > 0) {
+        console.log(`[startup] WARNING: detected ${failed.length} failed migration(s) from a previous deploy`);
+        console.log("[startup] Restoring database from pre-migration backup and marking as rolled back...");
+        db.close();
+        // Restore from backup first to get a clean schema state
+        const fs = require("fs");
+        if (fs.existsSync("/data/db.sqlite.pre-migrate-backup")) {
+          fs.copyFileSync("/data/db.sqlite.pre-migrate-backup", "/data/db.sqlite");
+          console.log("[startup] Database restored from pre-migrate backup");
         }
-      } catch (e) {
-        console.error("[startup] Failed-migration check failed (non-fatal):", e.message);
+        // Mark failed migrations as rolled back so prisma migrate deploy retries them
+        const db2 = new Database("/data/db.sqlite", { readonly: false });
+        const markRolledBack = db2.prepare(
+          "UPDATE _prisma_migrations SET rolled_back_at = CURRENT_TIMESTAMP WHERE migration_name = ? AND finished_at IS NULL"
+        );
+        for (const m of failed) {
+          try {
+            markRolledBack.run(m.migration_name);
+            console.log(`[startup] Marked ${m.migration_name} as rolled back`);
+          } catch (e) {
+            console.error(`[startup] Failed to mark ${m.migration_name} as rolled back:`, e.message);
+          }
+        }
+        db2.close();
+      } else {
+        console.log("[startup] No failed migrations detected.");
       }
-      await p.$disconnect();
-    })();
+    } catch (e) {
+      console.error("[startup] Failed-migration check failed (non-fatal):", e.message);
+    } finally {
+      if (db.open) db.close();
+    }
   '
 fi
 

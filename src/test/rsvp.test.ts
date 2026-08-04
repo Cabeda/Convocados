@@ -8,6 +8,7 @@ import {
   getRsvpSummary,
   getRsvpRecipients,
   getUserRsvpMap,
+  getGuestRsvpMap,
   markRsvpCutoffSent,
   isRsvpCutoffSent,
   getEventsNeedingRsvpPing,
@@ -56,7 +57,7 @@ async function seedUser(overrides: Record<string, unknown> = {}) {
 }
 
 async function seedEvent(ownerId: string | null, overrides: Record<string, unknown> = {}) {
-  return prisma.event.create({
+  const event = await prisma.event.create({
     data: {
       id: `e-${Math.random().toString(36).slice(2, 8)}`,
       title: "Game",
@@ -66,6 +67,12 @@ async function seedEvent(ownerId: string | null, overrides: Record<string, unkno
       ...overrides,
     },
   });
+  // ADR 0016: create a Game so RSVP operations work (game-scoped)
+  const game = await prisma.game.create({
+    data: { eventId: event.id, dateTime: event.dateTime },
+  });
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  return { ...event, currentGameId: game.id };
 }
 
 describe("upsertRsvp", () => {
@@ -84,7 +91,7 @@ describe("upsertRsvp", () => {
     const rsvp = await upsertRsvp(event.id, user.id, "no");
     expect(rsvp.status).toBe("no");
 
-    const count = await prisma.rsvp.count({ where: { userId: user.id, eventId: event.id } });
+    const count = await prisma.rsvp.count({ where: { gameId: event.currentGameId } });
     expect(count).toBe(1);
   });
 
@@ -224,8 +231,8 @@ describe("upsertGuestRsvp", () => {
     const rsvp = await upsertGuestRsvp(event.id, guest.id, "yes", owner.id);
     expect(rsvp.status).toBe("yes");
     expect(rsvp.respondedAt).not.toBeNull();
-    expect(rsvp.playerId).toBe(guest.id);
-    expect(rsvp.userId).toBeNull();
+    expect(rsvp.eventPlayerId).toBeTruthy();
+    expect(rsvp.gameId).toBe(event.currentGameId);
     expect(rsvp.respondedByUserId).toBe(owner.id);
   });
 
@@ -240,7 +247,7 @@ describe("upsertGuestRsvp", () => {
     const rsvp = await upsertGuestRsvp(event.id, guest.id, "no", owner.id);
     expect(rsvp.status).toBe("no");
 
-    const count = await prisma.rsvp.count({ where: { playerId: guest.id, eventId: event.id } });
+    const count = await prisma.rsvp.count({ where: { gameId: event.currentGameId } });
     expect(count).toBe(1);
   });
 
@@ -268,6 +275,41 @@ describe("upsertGuestRsvp", () => {
     await expect(upsertGuestRsvp(event.id, linkedPlayer.id, "yes", owner.id))
       .rejects.toThrow(/linked/i);
   });
+
+  // ADR 0016 regression: the event GET returns EventPlayer ids (game-scoped player
+  // list), so the UI sends an EventPlayer id to the guest RSVP endpoint. The lib
+  // must resolve it (via name) instead of throwing "Player not found".
+  it("accepts an EventPlayer id (what the UI sends after ADR 0016)", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+    await prisma.player.create({ data: { eventId: event.id, name: "Guest", order: 0 } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Guest" } });
+
+    const rsvp = await upsertGuestRsvp(event.id, ep.id, "yes", owner.id);
+    expect(rsvp.status).toBe("yes");
+    expect(rsvp.eventPlayerId).toBe(ep.id);
+    expect(rsvp.respondedByUserId).toBe(owner.id);
+  });
+
+  it("rejects an EventPlayer id linked to a user", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const linked = await seedUser({ name: "Linked" });
+    const event = await seedEvent(owner.id);
+    await prisma.player.create({ data: { eventId: event.id, name: linked.name, userId: linked.id, order: 0 } });
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: linked.name, userId: linked.id },
+    });
+
+    await expect(upsertGuestRsvp(event.id, ep.id, "yes", owner.id))
+      .rejects.toThrow(/linked/i);
+  });
+
+  it("throws 'Player not found' for an unknown id", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+    await expect(upsertGuestRsvp(event.id, "no-such-id", "yes", owner.id))
+      .rejects.toThrow(/not found/i);
+  });
 });
 
 describe("getRsvpForGuest", () => {
@@ -291,6 +333,44 @@ describe("getRsvpForGuest", () => {
 
     const rsvp = await getRsvpForGuest(event.id, guest.id);
     expect(rsvp?.status).toBe("yes");
+  });
+
+  it("accepts an EventPlayer id (ADR 0016)", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+    await prisma.player.create({ data: { eventId: event.id, name: "Guest", order: 0 } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Guest" } });
+    await upsertGuestRsvp(event.id, ep.id, "maybe", owner.id);
+
+    const rsvp = await getRsvpForGuest(event.id, ep.id);
+    expect(rsvp?.status).toBe("maybe");
+  });
+});
+
+describe("getGuestRsvpMap", () => {
+  // ADR 0016 regression: the UI keys pills by EventPlayer id, so the map must
+  // include those keys (kept Player.id keys too for the no-currentGame payload).
+  it("keys statuses by both Player id and EventPlayer id", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+    const guest = await prisma.player.create({ data: { eventId: event.id, name: "G", order: 0 } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "G" } });
+    await prisma.rsvp.create({
+      data: { eventPlayerId: ep.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
+    });
+
+    const map = await getGuestRsvpMap(event.id);
+    expect(map[ep.id]).toBe("yes");
+    expect(map[guest.id]).toBe("yes");
+  });
+
+  it("returns null for guests without an RSVP row", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const event = await seedEvent(owner.id);
+    const guest = await prisma.player.create({ data: { eventId: event.id, name: "G", order: 0 } });
+
+    const map = await getGuestRsvpMap(event.id);
+    expect(map[guest.id]).toBeNull();
   });
 });
 
@@ -421,10 +501,11 @@ describe("getEventsNeedingRsvpSummary", () => {
 });
 
 describe("userHasPendingRsvp", () => {
-  it("returns true when user has a null-status row on a future event", async () => {
+  it("returns true when user has a null-status row on a future game", async () => {
     const user = await seedUser();
     const ev = await seedEvent(null, { dateTime: new Date(Date.now() + 86400_000) });
-    await prisma.rsvp.create({ data: { userId: user.id, eventId: ev.id, status: null } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: user.name, userId: user.id } });
+    await prisma.rsvp.create({ data: { eventPlayerId: ep.id, gameId: ev.currentGameId!, status: null } });
     expect(await userHasPendingRsvp(user.id)).toBe(true);
   });
 
@@ -436,14 +517,16 @@ describe("userHasPendingRsvp", () => {
   it("returns false for an answered (yes) row", async () => {
     const user = await seedUser();
     const ev = await seedEvent(null, { dateTime: new Date(Date.now() + 86400_000) });
-    await prisma.rsvp.create({ data: { userId: user.id, eventId: ev.id, status: "yes", respondedAt: new Date() } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: user.name, userId: user.id } });
+    await prisma.rsvp.create({ data: { eventPlayerId: ep.id, gameId: ev.currentGameId!, status: "yes", respondedAt: new Date() } });
     expect(await userHasPendingRsvp(user.id)).toBe(false);
   });
 
-  it("returns false for a pending row on a past event", async () => {
+  it("returns false for a pending row on a past game", async () => {
     const user = await seedUser();
     const ev = await seedEvent(null, { dateTime: new Date(Date.now() - 86400_000) });
-    await prisma.rsvp.create({ data: { userId: user.id, eventId: ev.id, status: null } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: user.name, userId: user.id } });
+    await prisma.rsvp.create({ data: { eventPlayerId: ep.id, gameId: ev.currentGameId!, status: null } });
     expect(await userHasPendingRsvp(user.id)).toBe(false);
   });
 });
@@ -530,7 +613,8 @@ describe("push prompt state machine", () => {
       await recordAppOpen(user.id, new Date(Date.now() - i * 86400_000));
     }
     // pending RSVP = row exists with status=null OR no row. We'll insert null-status row.
-    await prisma.rsvp.create({ data: { userId: user.id, eventId: e.id, status: null } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: e.id, name: user.name, userId: user.id } });
+    await prisma.rsvp.create({ data: { eventPlayerId: ep.id, gameId: e.currentGameId!, status: null } });
     expect(await shouldShowPushPrompt(user.id, true)).toBe(true);
   });
 

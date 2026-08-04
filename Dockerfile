@@ -1,6 +1,6 @@
-FROM node:22-alpine AS base
+FROM node:23-alpine AS base
 
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl python3 make g++
 RUN corepack enable && corepack prepare pnpm@10 --activate
 
 WORKDIR /app
@@ -33,6 +33,7 @@ RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
 COPY package.json ./
 COPY public ./public
 COPY litestream.yml ./litestream.yml

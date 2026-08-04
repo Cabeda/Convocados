@@ -12,7 +12,7 @@ async function seedUser(name: string, id?: string) {
 }
 
 async function seedEvent(ownerId: string | null = null, overrides: Record<string, unknown> = {}) {
-  return prisma.event.create({
+  const event = await prisma.event.create({
     data: {
       title: "Weekly Futsal",
       location: "Pitch A",
@@ -24,6 +24,9 @@ async function seedEvent(ownerId: string | null = null, overrides: Record<string
       ...overrides,
     },
   });
+  const game = await prisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  return { ...event, currentGameId: game.id };
 }
 
 beforeEach(async () => {
@@ -201,7 +204,7 @@ describe("Auto-confirm attendance", () => {
     const applied = await applyAutoConfirm(event.id);
     expect(applied).toContain(user.id);
 
-    const rsvp = await prisma.rsvp.findUnique({ where: { userId_eventId: { userId: user.id, eventId: event.id } } });
+    const rsvp = await prisma.rsvp.findFirst({ where: { gameId: event.currentGameId! } });
     expect(rsvp?.status).toBe("yes");
   });
 });

@@ -27,7 +27,16 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const target = event.players.find((p: Player) => p.id === playerId);
+  // ADR 0016: the event GET returns EventPlayer ids. Fall back to a name-based
+  // lookup (active Player row) when playerId is an EventPlayer id.
+  let target = event.players.find((p: Player) => p.id === playerId);
+  if (!target) {
+    const ep = await prisma.eventPlayer.findFirst({ where: { id: playerId, eventId } });
+    if (ep) {
+      target = event.players.find((p: Player) => p.name === ep.name && !p.archivedAt)
+        ?? event.players.find((p: Player) => p.name === ep.name);
+    }
+  }
   if (!target) return Response.json({ error: "Player not found." }, { status: 404 });
 
   if (target.userId) {
@@ -48,7 +57,7 @@ export const POST: APIRoute = async ({ params, request }) => {
       // Replace the anonymous player: set name to user's name and link userId
       // Use updateMany with userId: null guard for atomicity (race protection)
       const claimed = await tx.player.updateMany({
-        where: { id: playerId, eventId, userId: null },
+        where: { id: target.id, eventId, userId: null },
         data: { userId: session.user.id, name: userName },
       });
       if (claimed.count === 0) {
@@ -120,6 +129,6 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   return Response.json({
     ok: true,
-    claimedPlayerId: playerId,
+    claimedPlayerId: target.id,
   });
 };

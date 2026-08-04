@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
-import { checkOwnership } from "~/lib/auth.helpers.server";
+import { checkOwnership, getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 
@@ -34,6 +34,49 @@ export const PUT: APIRoute = async ({ params, request }) => {
     },
     data: { status: "paid", paidAt: new Date() },
   });
+
+  // ADR 0019: Write ledger rows for each player whose payment was bulk-confirmed
+  if (pendingPayments.length > 0) {
+    const session = await getSession(request);
+    const markedById = session?.user?.id ?? event.ownerId ?? "unknown";
+    const eventData = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { maxPlayers: true, currentGameId: true },
+    });
+    const maxPlayers = eventData?.maxPlayers ?? 1;
+    const gameId = eventData?.currentGameId ?? eventId;
+    const shareCents = Math.round((eventCost.totalAmount / maxPlayers) * 100);
+
+    await prisma.$transaction(async (tx) => {
+      for (const p of pendingPayments) {
+        // Resolve userId
+        const ep = await tx.eventPlayer.findUnique({
+          where: { eventId_name: { eventId, name: p.playerName } },
+          select: { userId: true },
+        });
+        const player = !ep?.userId
+          ? await tx.player.findFirst({ where: { eventId, name: p.playerName }, select: { userId: true } })
+          : null;
+        const userId = ep?.userId ?? player?.userId;
+        if (!userId) continue; // anonymous — no ledger possible
+
+        await tx.walletTransaction.create({
+          data: {
+            eventId,
+            userId,
+            amountCents: shareCents,
+            currency: eventCost.currency ?? "EUR",
+            direction: "credit",
+            gameUnits: 0,
+            reason: "payment_received",
+            statusAfter: "paid",
+            eventInstanceId: gameId,
+            markedById,
+          },
+        });
+      }
+    });
+  }
 
   // ADR 0017: Notify each player whose payment was confirmed (via queue, respects tier + overrides)
   if (pendingPayments.length > 0) {

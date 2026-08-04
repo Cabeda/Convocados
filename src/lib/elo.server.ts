@@ -12,6 +12,7 @@ interface TeamSnapshot {
 /**
  * Process a single game history entry and update player ratings.
  * Returns the ELO deltas for each player.
+ * Skips friendly games — they don't affect ratings.
  */
 export async function processGame(
   eventId: string,
@@ -20,6 +21,12 @@ export async function processGame(
   scoreOne: number,
   scoreTwo: number,
 ): Promise<EloUpdate[]> {
+  // Defensive: never apply ELO to a friendly game, even if a caller forgets.
+  const entry = await prisma.gameHistory.findUnique({
+    where: { id: historyId },
+    select: { isFriendly: true, eloProcessed: true },
+  });
+  if (entry?.isFriendly || entry?.eloProcessed) return [];
   if (teamsSnapshot.length !== 2) return [];
 
   const teamOnePlayers = teamsSnapshot[0].players.map((p) => p.name);
@@ -154,11 +161,12 @@ export async function recalculateAllRatings(eventId: string): Promise<number> {
     });
   }
 
-  // Process all played games with scores in chronological order
+  // Process all played, non-friendly games with scores in chronological order
   const games = await prisma.gameHistory.findMany({
     where: {
       eventId,
       status: "played",
+      isFriendly: false,
       scoreOne: { not: null },
       scoreTwo: { not: null },
       teamsSnapshot: { not: null },

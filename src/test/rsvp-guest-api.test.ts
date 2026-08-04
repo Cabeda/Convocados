@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 
-const testPrisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
+const testPrisma = new PrismaClient();
 
-vi.mock("~/lib/db.server", () => {
-  const { PrismaClient: PC } = require("@prisma/client");
-  const p = new PC({ datasources: { db: { url: process.env.DATABASE_URL } } });
+vi.mock("~/lib/db.server", async () => {
+  const { PrismaClient: PC } = await import("~/lib/prisma-client");
+  const p = new PC();
   return { prisma: p };
 });
 
@@ -57,7 +55,7 @@ function ctx(eventId: string, playerId: string, body: unknown, session: { user: 
 }
 
 async function seedEvent(ownerId: string | null, dateOffsetMs = 7 * 86400_000) {
-  return testPrisma.event.create({
+  const event = await testPrisma.event.create({
     data: {
       title: "Game",
       location: "Pitch",
@@ -65,6 +63,9 @@ async function seedEvent(ownerId: string | null, dateOffsetMs = 7 * 86400_000) {
       ownerId,
     },
   });
+  const game = await testPrisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+  await testPrisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  return { ...event, currentGameId: game.id };
 }
 
 describe("POST /api/events/[id]/players/[playerId]/rsvp", () => {
@@ -114,9 +115,9 @@ describe("POST /api/events/[id]/players/[playerId]/rsvp", () => {
     expect(body.status).toBe("yes");
     expect(body.respondedByUserId).toBe("owner");
 
-    const row = await testPrisma.rsvp.findFirst({ where: { eventId: ev.id, playerId: guest.id } });
+    const row = await testPrisma.rsvp.findFirst({ where: { gameId: ev.currentGameId! } });
     expect(row?.status).toBe("yes");
-    expect(row?.userId).toBeNull();
+    expect(row?.eventPlayerId).toBeTruthy();
   });
 
   it("admin (non-owner) can set guest attendance", async () => {
@@ -204,7 +205,7 @@ describe("POST /api/events/[id]/players/[playerId]/rsvp", () => {
     await guestRsvpPost(ctx(ev.id, guest.id, { status: "yes" }, { user: { id: "owner", name: "O" } }));
     await guestRsvpPost(ctx(ev.id, guest.id, { status: "no" }, { user: { id: "owner", name: "O" } }));
 
-    const count = await testPrisma.rsvp.count({ where: { eventId: ev.id, playerId: guest.id } });
+    const count = await testPrisma.rsvp.count({ where: { gameId: ev.currentGameId! } });
     expect(count).toBe(1);
   });
 });

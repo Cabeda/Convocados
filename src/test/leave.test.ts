@@ -47,7 +47,7 @@ async function seedUser(name = "Alice", id?: string) {
 }
 
 async function seedEvent(ownerId: string | null, dateOffsetMs = 7 * 86400_000) {
-  return prisma.event.create({
+  const event = await prisma.event.create({
     data: {
       title: "Game",
       location: "Pitch",
@@ -56,6 +56,9 @@ async function seedEvent(ownerId: string | null, dateOffsetMs = 7 * 86400_000) {
       maxPlayers: 5,
     },
   });
+  const game = await prisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+  await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  return { ...event, currentGameId: game.id };
 }
 
 describe("isWithin48hBeforeKickoff", () => {
@@ -87,6 +90,9 @@ describe("archiveAndLeave — self-leave", () => {
     const player = await prisma.player.create({
       data: { eventId: event.id, name: "Alice", userId: user.id, order: 0 },
     });
+    await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Alice", userId: user.id },
+    });
 
     const result = await archiveAndLeave({
       eventId: event.id,
@@ -97,8 +103,8 @@ describe("archiveAndLeave — self-leave", () => {
     expect(result.ok).toBe(true);
     const updated = await prisma.player.findUnique({ where: { id: player.id } });
     expect(updated?.archivedAt).not.toBeNull();
-    const rsvp = await prisma.rsvp.findUnique({
-      where: { userId_eventId: { userId: user.id, eventId: event.id } },
+    const rsvp = await prisma.rsvp.findFirst({
+      where: { gameId: event.currentGameId! },
     });
     expect(rsvp?.status).toBe("no");
   });
@@ -152,6 +158,9 @@ describe("archiveAndLeave — admin decline guest (organizer path)", () => {
     const guest = await prisma.player.create({
       data: { eventId: event.id, name: "Guest", order: 0 },
     });
+    await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Guest" },
+    });
 
     await archiveAndLeave({
       eventId: event.id,
@@ -163,8 +172,8 @@ describe("archiveAndLeave — admin decline guest (organizer path)", () => {
     expect(updated?.archivedAt).not.toBeNull();
     // The organizer + guest branch writes Rsvp.status="no" with the respondedByUserId audit field,
     // so the summary chips reflect the decline even though the guest can't self-RSVP.
-    const rsvp = await prisma.rsvp.findUnique({
-      where: { playerId_eventId: { playerId: guest.id, eventId: event.id } },
+    const rsvp = await prisma.rsvp.findFirst({
+      where: { gameId: event.currentGameId! },
     });
     expect(rsvp?.status).toBe("no");
     expect(rsvp?.respondedByUserId).toBe(owner.id);

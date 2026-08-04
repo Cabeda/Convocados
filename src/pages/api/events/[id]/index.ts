@@ -107,18 +107,26 @@ export const GET: APIRoute = async ({ params, request }) => {
 
         // ADR 0016: keep GameHistory for backward compat (read-only fallback),
         // but NO destructive deletes. Players/Teams/RSVPs stay intact on the old Game.
+        // Guard against a duplicate snapshot: one may already exist if a score was
+        // saved on the played Game before the reset ran (history PATCH materialises
+        // a GameHistory on demand).
+        const existingSnapshot = await prisma.gameHistory.findFirst({
+          where: { eventId: event.id, dateTime: event.dateTime },
+        });
         await prisma.$transaction([
-          prisma.gameHistory.create({
-            data: {
-              eventId: event.id,
-              dateTime: event.dateTime,
-              teamOneName: event.teamOneName,
-              teamTwoName: event.teamTwoName,
-              teamsSnapshot,
-              paymentsSnapshot,
-              editableUntil,
-            },
-          }),
+          ...(existingSnapshot
+            ? []
+            : [prisma.gameHistory.create({
+                data: {
+                  eventId: event.id,
+                  dateTime: event.dateTime,
+                  teamOneName: event.teamOneName,
+                  teamTwoName: event.teamTwoName,
+                  teamsSnapshot,
+                  paymentsSnapshot,
+                  editableUntil,
+                },
+              })]),
           // Clear per-occurrence payments (PlayerPayment is still current-game-scoped until GamePayment migration)
           ...(eventCost ? [
             prisma.playerPayment.deleteMany({ where: { eventCostId: eventCost.id } }),

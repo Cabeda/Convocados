@@ -1,13 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 
-const testPrisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
+const testPrisma = new PrismaClient();
 
-vi.mock("~/lib/db.server", () => {
-  const { PrismaClient: PC } = require("@prisma/client");
-  const p = new PC({ datasources: { db: { url: process.env.DATABASE_URL } } });
+vi.mock("~/lib/db.server", async () => {
+  const { PrismaClient: PC } = await import("~/lib/prisma-client");
+  const p = new PC();
   return { prisma: p };
 });
 
@@ -38,9 +36,12 @@ function ctx(eventId: string) {
 }
 
 async function seedEvent(ownerId: string | null) {
-  return testPrisma.event.create({
+  const event = await testPrisma.event.create({
     data: { title: "Game", location: "Pitch", dateTime: new Date(Date.now() + 86400_000), ownerId },
   });
+  const game = await testPrisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime } });
+  await testPrisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+  return { ...event, currentGameId: game.id };
 }
 
 beforeEach(async () => {
