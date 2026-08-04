@@ -26,6 +26,9 @@ echo "→ Running tests with coverage..."
 npx vitest run --coverage
 if [ $? -ne 0 ]; then
   echo "✗ Tests failed. Push aborted."
+  echo ""
+  echo "Coverage detail (files below 94% line threshold):"
+  sh "$(dirname "$0")/coverage-report.sh" 94
   exit 1
 fi
 
