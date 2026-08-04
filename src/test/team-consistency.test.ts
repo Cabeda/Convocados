@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "../lib/db.server";
 import { resetApiRateLimitStore } from "../lib/apiRateLimit.server";
-import { validateTeams, removePlayerFromTeams } from "../pages/api/events/[id]/players";
+import { validateTeams, removePlayerFromTeams, addPlayerToTeams } from "../pages/api/events/[id]/players";
 
 // Helper to create test user
 async function seedUser(email: string, name: string) {
@@ -11,13 +11,13 @@ async function seedUser(email: string, name: string) {
 }
 
 // Helper to create test event
-async function seedEvent(opts: { ownerId?: string; balanced?: boolean } = {}) {
+async function seedEvent(opts: { ownerId?: string; balanced?: boolean; maxPlayers?: number } = {}) {
   return prisma.event.create({
     data: {
       title: "Test Event",
       location: "Test Location",
       dateTime: new Date(Date.now() + 86400_000),
-      maxPlayers: 10,
+      maxPlayers: opts.maxPlayers ?? 10,
       teamOneName: "Ninjas",
       teamTwoName: "Gunas",
       balanced: opts.balanced ?? false,
@@ -479,5 +479,75 @@ describe("Team Roster Mutations: Minimal Movements", () => {
 
     // P10 should stay in Ninjas (no ELO balancing when balanced=false)
     expect(ninjas.members.map(m => m.name)).toContain("P10");
+  });
+
+  it("addPlayerToTeams with balanced event full-rebalances when player is in active range", async () => {
+    const event = await seedEvent({ balanced: true });
+
+    for (let i = 0; i < 10; i++) {
+      await prisma.player.create({
+        data: { name: `P${i}`, eventId: event.id, order: i },
+      });
+    }
+    // Skewed ratings: Ninjas strong, Gunas weak → rebalance should redistribute
+    const ratings = [1500, 1400, 1300, 1200, 1100, 900, 800, 700, 600, 500];
+    for (let i = 0; i < 10; i++) {
+      await prisma.playerRating.create({
+        data: { eventId: event.id, name: `P${i}`, rating: ratings[i] },
+      });
+    }
+
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    // Add an active-range player (order < maxPlayers) → triggers full rebalance
+    await addPlayerToTeams(event.id, "P3");
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+    expect(teams).toHaveLength(2);
+    for (const t of teams) {
+      expect(t.members).toHaveLength(5);
+    }
+  });
+
+  it("addPlayerToTeams with balanced event skips rebalance when player is on bench", async () => {
+    const event = await seedEvent({ balanced: true, maxPlayers: 10 });
+
+    for (let i = 0; i < 12; i++) {
+      await prisma.player.create({
+        data: { name: `P${i}`, eventId: event.id, order: i },
+      });
+    }
+    for (let i = 0; i < 12; i++) {
+      await prisma.playerRating.create({
+        data: { eventId: event.id, name: `P${i}`, rating: 1000 },
+      });
+    }
+    await seedTeams(event.id, ["P0", "P1", "P2", "P3", "P4"], ["P5", "P6", "P7", "P8", "P9"]);
+
+    // Bench player (order >= maxPlayers) → falls through to smaller-team append
+    await addPlayerToTeams(event.id, "P11");
+
+    const teams = await prisma.teamResult.findMany({
+      where: { eventId: event.id },
+      include: { members: { orderBy: { order: "asc" } } },
+    });
+    // P11 appended to the smaller team; team counts 5/6 (no full rebalance)
+    const counts = teams.map(t => t.members.length).sort();
+    expect(counts).toEqual([5, 6]);
+    const allNames = teams.flatMap(t => t.members.map(m => m.name));
+    expect(allNames).toContain("P11");
+  });
+
+  it("addPlayerToTeams is a no-op when no teams exist yet", async () => {
+    const event = await seedEvent({ balanced: true });
+    await prisma.player.create({ data: { name: "P0", eventId: event.id, order: 0 } });
+
+    // No teamResults → addPlayerToTeams returns without creating anything
+    await addPlayerToTeams(event.id, "P0");
+    const teams = await prisma.teamResult.findMany({ where: { eventId: event.id } });
+    expect(teams).toHaveLength(0);
   });
 });
