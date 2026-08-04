@@ -3,6 +3,8 @@ import { prisma } from "../../../../../lib/db.server";
 import { getSession } from "../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { confirmSpot } from "../../../../../lib/priority.server";
+import { grantActiveSpot } from "../../../../../lib/game.server";
+import { addPlayerToTeams, validateTeams } from "../players";
 
 /** POST — player confirms their priority spot */
 export const POST: APIRoute = async ({ params, request }) => {
@@ -14,7 +16,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const event = await prisma.event.findUnique({
     where: { id: params.id },
-    select: { id: true, dateTime: true, currentGameId: true },
+    select: { id: true, dateTime: true, currentGameId: true, maxPlayers: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -41,18 +43,26 @@ export const POST: APIRoute = async ({ params, request }) => {
       });
     }
 
-    // ADR 0016: also add to current game via GameParticipant
+    // ADR 0016/0020: guaranteed active spot via GameParticipant. Confirming a
+    // priority spot always yields an active slot — if the game is full, the
+    // last non-priority active player is evicted to the bench.
     if (event.currentGameId) {
       const eventPlayer = await prisma.eventPlayer.upsert({
         where: { eventId_name: { eventId: event.id, name: session.user.name } },
         create: { eventId: event.id, name: session.user.name, userId: session.user.id },
         update: {},
       });
-      await prisma.gameParticipant.upsert({
-        where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
-        create: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: 0 },
-        update: {},
-      });
+      const result = await grantActiveSpot(
+        event.id,
+        event.currentGameId,
+        eventPlayer.id,
+        event.maxPlayers,
+      );
+      // Resync teams after the roster changed (eviction or promotion).
+      await validateTeams(event.id, event.maxPlayers, event.currentGameId);
+      if (result.active) {
+        await addPlayerToTeams(event.id, session.user.name, event.currentGameId);
+      }
     }
   }
 
