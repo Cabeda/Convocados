@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { isGameEnded } from "../../../../lib/gameStatus";
-import { getSession } from "../../../../lib/auth.helpers.server";
+import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../lib/mvp.constants";
 
 /**
@@ -13,7 +13,9 @@ import { MVP_VOTING_WINDOW_DAYS } from "../../../../lib/mvp.constants";
  * - hasCost: whether an EventCost record exists with totalAmount > 0
  * - allPaid: whether all payments are paid (or no cost set)
  * - allComplete: hasScore && allPaid
- * - isParticipant: whether the current user is a participant (name match or claimed spot)
+ * - isParticipant: whether the current user is involved in settling the game
+ *   (Owner/Admin, or name on the settled game's teams/payment roll, or the
+ *   played Game's participants when no snapshot exists yet)
  */
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
@@ -201,30 +203,63 @@ export const GET: APIRoute = async ({ params, request }) => {
     }));
   }
 
-  // Check if the current user is a participant
+  // Check if the current user is a participant of the settled game.
+  // Owner/Admin always count (settlement role: confirm payments, set score).
+  // Otherwise a user counts if their name appears on the settled game's teams
+  // or payment roll (snapshot), or — when no snapshot exists yet for a
+  // just-ended game — on the played Game's participant list or its live
+  // payment roll. The live/next-game player list never counts on its own.
   let isParticipant = false;
   const session = await getSession(request);
   if (session?.user) {
-    // Owner/admin is always a participant
-    if (event.ownerId && session.user.id === event.ownerId) {
+    const ownership = await checkOwnership(request, event.ownerId, session, params.id);
+    if (ownership?.isOwner || ownership?.isAdmin) {
       isParticipant = true;
     }
 
-    // Check name match against latest history teamsSnapshot
-    if (!isParticipant && latestHistory?.teamsSnapshot && session.user.name) {
-      try {
-        const teams = JSON.parse(latestHistory.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
-        const allNames = teams.flatMap((t) => t.players.map((p) => p.name.toLowerCase()));
-        isParticipant = allNames.includes(session.user.name.toLowerCase());
-      } catch { /* ignore */ }
-    }
+    if (!isParticipant && session.user.name) {
+      const userName = session.user.name.toLowerCase();
+      const participantNames = new Set<string>();
+      const addName = (n: string) => participantNames.add(n.toLowerCase());
 
-    // Check claimed player spot
-    if (!isParticipant) {
-      const claimed = await prisma.player.findFirst({
-        where: { eventId: params.id, userId: session.user.id, archivedAt: null },
-      });
-      if (claimed) isParticipant = true;
+      if (latestHistory?.teamsSnapshot) {
+        try {
+          const teams = JSON.parse(latestHistory.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
+          teams.forEach((t) => t.players.forEach((p) => addName(p.name)));
+        } catch { /* ignore */ }
+      }
+      if (latestHistory?.paymentsSnapshot) {
+        try {
+          const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ playerName: string }>;
+          snapshot.forEach((p) => addName(p.playerName));
+        } catch { /* ignore */ }
+      }
+
+      // No snapshot for the settled game yet (one-off just ended, or the reset
+      // hasn't materialised a snapshot) → fall back to the settled Game's own
+      // participants and its live payment roll, which still belong to that game.
+      const noSnapshotForSettledGame = !latestHistory
+        || latestHistory.dateTime.getTime() === event.dateTime.getTime();
+      if (participantNames.size === 0 && noSnapshotForSettledGame) {
+        const settledGame = await prisma.game.findFirst({
+          where: { eventId: event.id, dateTime: event.dateTime },
+          include: {
+            participants: {
+              where: { archivedAt: null },
+              include: { eventPlayer: { select: { name: true, userId: true } } },
+            },
+          },
+        });
+        settledGame?.participants.forEach((p) => {
+          addName(p.eventPlayer.name);
+          if (p.eventPlayer.userId === session.user?.id) isParticipant = true;
+        });
+        if (pastGameSource === "live" && eventCost?.payments) {
+          eventCost.payments.forEach((p) => addName(p.playerName));
+        }
+      }
+
+      if (participantNames.has(userName)) isParticipant = true;
     }
   }
 
