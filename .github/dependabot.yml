@@ -28,6 +28,11 @@ updates:
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 3
+    ignore:
+      # better-sqlite3 ships no musl prebuilds for Node >=24 (build fails in
+      # alpine without python/make/g++); node 25 also drops bundled corepack.
+      - dependency-name: "node"
+        versions: [">=24"]
 
   - package-ecosystem: "gradle"
     directory: "/android-app"

@@ -121,6 +121,9 @@ function mockNoAuth() {
 
 beforeEach(async () => {
   mockGetSession.mockReset();
+  await testPrisma.gameParticipant.deleteMany();
+  await testPrisma.eventPlayer.deleteMany();
+  await testPrisma.game.deleteMany();
   await testPrisma.priorityConfirmation.deleteMany();
   await testPrisma.priorityEnrollment.deleteMany();
   await testPrisma.gameHistory.deleteMany();
@@ -383,6 +386,148 @@ describe("POST /api/events/:id/priority/confirm", () => {
 
     const res = await confirmPriority(ctx({ id: event.id }, {}));
     expect(res.status).toBe(404);
+  });
+
+  // ── Guaranteed spot (ADR 0020) ────────────────────────────────────────────
+
+  async function seedGame(event: { id: string }, maxPlayers = 8) {
+    const game = await testPrisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(Date.now() + 7 * 86400_000), status: "upcoming" },
+    });
+    await testPrisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id, maxPlayers } });
+    return game;
+  }
+
+  async function seedEnrollment(eventId: string, user: { id: string }) {
+    await testPrisma.priorityEnrollment.create({
+      data: { eventId, userId: user.id, source: "auto" },
+    });
+  }
+
+  async function seedPendingConfirmation(eventId: string, user: { id: string }, gameDate: Date) {
+    await testPrisma.priorityConfirmation.create({
+      data: {
+        eventId,
+        userId: user.id,
+        gameDate,
+        status: "pending",
+        notifiedAt: new Date(),
+        deadline: new Date(gameDate.getTime() - 48 * 3600_000),
+      },
+    });
+  }
+
+  async function seedParticipant(eventId: string, gameId: string, name: string, order: number, opts: { userId?: string } = {}) {
+    const ep = await testPrisma.eventPlayer.upsert({
+      where: { eventId_name: { eventId, name } },
+      create: { eventId, name, userId: opts.userId },
+      update: { ...(opts.userId ? { userId: opts.userId } : {}) },
+    });
+    return testPrisma.gameParticipant.create({ data: { gameId, eventPlayerId: ep.id, order } });
+  }
+
+  async function activeOrders(eventId: string, gameId: string, maxPlayers: number) {
+    const eps = await testPrisma.eventPlayer.findMany({ where: { eventId }, select: { id: true, name: true } });
+    const gps = await testPrisma.gameParticipant.findMany({
+      where: { gameId, archivedAt: null, order: { lt: maxPlayers } },
+      orderBy: { order: "asc" },
+    });
+    return gps.map((gp) => {
+      const ep = eps.find((e) => e.id === gp.eventPlayerId);
+      return { name: ep?.name, order: gp.order };
+    });
+  }
+
+  it("appends a confirmed priority player at the end of the queue when the game has room", async () => {
+    const owner = await seedUser();
+    const player = await seedUser({ name: "PriorityPlayer" });
+    const event = await seedEvent(owner.id, { priorityEnabled: true });
+    const game = await seedGame(event, 8);
+
+    // 3 regular players already in the game at orders 0,1,2
+    await seedParticipant(event.id, game.id, "Ana", 0);
+    await seedParticipant(event.id, game.id, "Bia", 1);
+    await seedParticipant(event.id, game.id, "Carlos", 2);
+
+    await seedEnrollment(event.id, player);
+    await seedPendingConfirmation(event.id, player, event.dateTime);
+    mockAuth(player.id);
+    mockGetSession.mockResolvedValue({ user: { id: player.id, name: "PriorityPlayer" }, session: { id: "s1" } });
+
+    const res = await confirmPriority(ctx({ id: event.id }, {}));
+    expect(res.status).toBe(200);
+
+    const list = await activeOrders(event.id, game.id, 8);
+    expect(list).toEqual([
+      { name: "Ana", order: 0 },
+      { name: "Bia", order: 1 },
+      { name: "Carlos", order: 2 },
+      { name: "PriorityPlayer", order: 3 },
+    ]);
+  });
+
+  it("gives a confirmed priority player an active spot by evicting the last non-priority player to the bench when full", async () => {
+    const owner = await seedUser();
+    const player = await seedUser({ name: "PriorityPlayer" });
+    const event = await seedEvent(owner.id, { priorityEnabled: true });
+    const game = await seedGame(event, 4); // 4 active spots
+
+    // Full game: orders 0-3 occupied. Player at order 3 is the last non-priority active.
+    await seedParticipant(event.id, game.id, "Ana", 0);
+    await seedParticipant(event.id, game.id, "Bia", 1);
+    await seedParticipant(event.id, game.id, "Carlos", 2);
+    await seedParticipant(event.id, game.id, "Duda", 3);
+
+    await seedEnrollment(event.id, player);
+    await seedPendingConfirmation(event.id, player, event.dateTime);
+    mockAuth(player.id);
+    mockGetSession.mockResolvedValue({ user: { id: player.id, name: "PriorityPlayer" }, session: { id: "s1" } });
+
+    const res = await confirmPriority(ctx({ id: event.id }, {}));
+    expect(res.status).toBe(200);
+
+    const list = await activeOrders(event.id, game.id, 4);
+    // Priority player takes the last active slot; the previous occupant (Duda) is evicted to the bench.
+    const names = list.map((p) => p.name);
+    expect(names).toContain("PriorityPlayer");
+    const priorityOrder = list.find((p) => p.name === "PriorityPlayer")!.order;
+    expect(priorityOrder).toBeLessThan(4);
+    expect(names).not.toContain("Duda");
+    const duda = await testPrisma.gameParticipant.findFirst({
+      where: { gameId: game.id, eventPlayer: { name: "Duda" } },
+    });
+    expect(duda!.archivedAt).toBeNull();
+    expect(duda!.order).toBeGreaterThanOrEqual(4);
+  });
+
+  it("does not evict another priority player to make room", async () => {
+    const owner = await seedUser();
+    const player = await seedUser({ name: "PriorityPlayer" });
+    const otherPriority = await seedUser({ name: "OtherPriority" });
+    const event = await seedEvent(owner.id, { priorityEnabled: true });
+    const game = await seedGame(event, 4);
+
+    await seedParticipant(event.id, game.id, "Ana", 0);
+    await seedParticipant(event.id, game.id, "Bia", 1);
+    await seedParticipant(event.id, game.id, "Carlos", 2);
+    await seedParticipant(event.id, game.id, "OtherPriority", 3, { userId: otherPriority.id });
+    await seedEnrollment(event.id, otherPriority);
+
+    await seedEnrollment(event.id, player);
+    await seedPendingConfirmation(event.id, player, event.dateTime);
+    mockAuth(player.id);
+    mockGetSession.mockResolvedValue({ user: { id: player.id, name: "PriorityPlayer" }, session: { id: "s1" } });
+
+    const res = await confirmPriority(ctx({ id: event.id }, {}));
+    expect(res.status).toBe(200);
+
+    const list = await activeOrders(event.id, game.id, 4);
+    // OtherPriority is priority too — must not be evicted. Instead Carlos
+    // (highest-order non-priority active) is displaced to the bench.
+    const names = list.map((p) => p.name);
+    expect(names).toContain("OtherPriority");
+    expect(names).toContain("PriorityPlayer");
+    expect(names).not.toContain("Carlos");
   });
 });
 
