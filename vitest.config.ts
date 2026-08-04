@@ -103,7 +103,6 @@ export default defineConfig({
         "src/lib/auth.client.ts",
         "src/lib/auth.server.ts",
         "src/lib/__generated__/**",
-        "src/lib/push.server.ts",
         "src/lib/notificationQueue.server.ts",
         "src/lib/calendarToken.server.ts",
         "src/lib/email.server.ts",
