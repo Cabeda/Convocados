@@ -241,20 +241,24 @@ export interface RsvpSummary {
   pendingUserIds: string[];
 }
 
-/** User-recipient set: EventFollow ∪ active Player.userId ∪ Owner. Unlinked guests excluded (they have their own Rsvp keyed on playerId). Archived linked players excluded — see #XXX off-by-one fix. */
+/**
+ * User-recipient set: active linked Player.userId ∪ Owner. Unlinked guests
+ * excluded (they have their own Rsvp keyed on playerId). Archived linked
+ * players excluded. Followers are NOT included — the "Are you coming" confirm
+ * ping (#656) and its summary are for game participants only, not spectators
+ * (ADR 0017: game reminders are players-only).
+ */
 export async function getRsvpRecipients(eventId: string): Promise<string[]> {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: {
       ownerId: true,
-      followers: { select: { userId: true } },
       players: { where: { archivedAt: null }, select: { userId: true } },
     },
   });
   if (!event) return [];
   const set = new Set<string>();
   if (event.ownerId) set.add(event.ownerId);
-  for (const f of event.followers) if (f.userId) set.add(f.userId);
   for (const p of event.players) if (p.userId) set.add(p.userId);
   return [...set];
 }

@@ -121,7 +121,7 @@ describe("getRsvpForUser", () => {
 });
 
 describe("getRsvpSummary", () => {
-  it("counts yes/no/pending correctly across followers + players + owner", async () => {
+  it("counts yes/no/pending across players + owner, excluding followers", async () => {
     const owner = await seedUser({ name: "Owner" });
     const follower = await seedUser({ name: "Follower" });
     const playerUser = await seedUser({ name: "PlayerUser" });
@@ -129,23 +129,21 @@ describe("getRsvpSummary", () => {
 
     const event = await seedEvent(owner.id);
 
-    // follower follows
+    // follower + stranger follow the event but are not players
     await prisma.eventFollow.create({ data: { eventId: event.id, userId: follower.id } });
+    await prisma.eventFollow.create({ data: { eventId: event.id, userId: stranger.id } });
     // player linked to event
     await prisma.player.create({ data: { eventId: event.id, name: playerUser.name, userId: playerUser.id, order: 0 } });
-    // stranger is a "linked" user via implicit follow? No — they need an EventFollow or Player link.
-    // Add a stranger who follows
-    await prisma.eventFollow.create({ data: { eventId: event.id, userId: stranger.id } });
 
     await upsertRsvp(event.id, follower.id, "yes");
     await upsertRsvp(event.id, playerUser.id, "no");
-    // owner and stranger are pending (no row)
+    // owner is pending (no row)
 
     const summary = await getRsvpSummary(event.id);
-    expect(summary.yes).toBe(1);
+    // #656: followers are excluded — only player + owner are counted
+    expect(summary.yes).toBe(0);
     expect(summary.no).toBe(1);
-    // pending = 2 (owner + stranger)
-    expect(summary.pending).toBe(2);
+    expect(summary.pending).toBe(1);
   });
 });
 
@@ -183,7 +181,7 @@ describe("getUserRsvpMap", () => {
 });
 
 describe("getRsvpRecipients", () => {
-  it("resolves followers + linked players + owner, skipping unlinked guests", async () => {
+  it("resolves owner + linked players, excluding followers and unlinked guests", async () => {
     const owner = await seedUser({ name: "Owner" });
     const follower = await seedUser({ name: "Follower" });
     const playerUser = await seedUser({ name: "PlayerUser" });
@@ -198,7 +196,10 @@ describe("getRsvpRecipients", () => {
     await ghost;
 
     const recipients = await getRsvpRecipients(event.id);
-    expect(recipients.sort()).toEqual([owner.id, follower.id, playerUser.id].sort());
+    // #656: "Are you coming" confirm ping is for players only — followers are excluded
+    expect(recipients.sort()).toEqual([owner.id, playerUser.id].sort());
+    expect(recipients).not.toContain(follower.id);
+    expect(recipients).not.toContain(ghost.id);
   });
 
   it("excludes soft-archived players from the recipient set (#XXX off-by-one fix)", async () => {
@@ -385,14 +386,14 @@ describe("getRsvpSummary (with guests)", () => {
     const guest1 = await prisma.player.create({ data: { eventId: event.id, name: "G1", order: 0 } });
     const guest2 = await prisma.player.create({ data: { eventId: event.id, name: "G2", order: 1 } });
 
-    // User RSVPs: 1 yes, 1 pending (owner)
+    // User RSVPs: 0 (follower not a player, excluded per #656), 1 pending (owner)
     await upsertRsvp(event.id, follower.id, "yes");
     // Guest RSVPs: 1 yes, 1 no, owner pending
     await upsertGuestRsvp(event.id, guest1.id, "yes", owner.id);
     await upsertGuestRsvp(event.id, guest2.id, "no", owner.id);
 
     const summary = await getRsvpSummary(event.id);
-    expect(summary.yes).toBe(2);          // follower + guest1
+    expect(summary.yes).toBe(1);          // guest1 (follower excluded)
     expect(summary.no).toBe(1);           // guest2
     expect(summary.pending).toBe(1);      // owner (no userId-guests not in recipient set)
   });
