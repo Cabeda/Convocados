@@ -16,6 +16,7 @@ import { normalizeForMatch } from "../../../../lib/stringMatch";
 import { archiveAndLeave } from "../../../../lib/leave.server";
 import { balanceTeams } from "../../../../lib/elo.server";
 import { Randomize } from "../../../../lib/random";
+import { nextGameParticipantOrder } from "../../../../lib/game.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 import {
   IDEMPOTENCY_HEADER,
@@ -595,13 +596,11 @@ export const POST: APIRoute = async ({ params, request }) => {
           });
           // Restore the GameParticipant too — a previous leave archived it, and
           // without this the re-added player stays invisible on the game list.
-          const gpCount = await prisma.gameParticipant.count({
-            where: { gameId: event.currentGameId, archivedAt: null },
-          });
+          const gpOrder = await nextGameParticipantOrder(event.currentGameId);
           await prisma.gameParticipant.upsert({
             where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: ep.id } },
-            create: { gameId: event.currentGameId, eventPlayerId: ep.id, order: gpCount },
-            update: { archivedAt: null, order: gpCount },
+            create: { gameId: event.currentGameId, eventPlayerId: ep.id, order: gpOrder },
+            update: { archivedAt: null, order: gpOrder },
           });
         }
         // Bug fix: re-activated players must be added to teams if within active range
@@ -628,12 +627,10 @@ export const POST: APIRoute = async ({ params, request }) => {
           // Re-join after a leave: the GameParticipant was soft-archived by the
           // leave flow. Un-archive it (at the end of the list) instead of
           // falling through to the 409 "already in the list" error.
-          const gpCount = await prisma.gameParticipant.count({
-            where: { gameId: event.currentGameId, archivedAt: null },
-          });
+          const gpOrder = await nextGameParticipantOrder(event.currentGameId);
           await prisma.gameParticipant.update({
             where: { id: alreadyInGame.id },
-            data: { archivedAt: null, order: gpCount },
+            data: { archivedAt: null, order: gpOrder },
           });
           // Move player to end of list — same rule as a fresh re-join
           const maxOrder = await prisma.player.aggregate({
@@ -654,11 +651,9 @@ export const POST: APIRoute = async ({ params, request }) => {
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
         if (!alreadyInGame) {
-          const gpCount = await prisma.gameParticipant.count({
-            where: { gameId: event.currentGameId, archivedAt: null },
-          });
+          const gpOrder = await nextGameParticipantOrder(event.currentGameId);
           await prisma.gameParticipant.create({
-            data: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: gpCount },
+            data: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: gpOrder },
           });
           // Move player to end of list — their old order is stale from the previous game
           const maxOrder = await prisma.player.aggregate({
@@ -734,9 +729,10 @@ export const POST: APIRoute = async ({ params, request }) => {
       create: { eventId, name: trimmed, userId: linkedUserId },
       update: {},
     });
+    const gpOrder = await nextGameParticipantOrder(event.currentGameId);
     await prisma.gameParticipant.upsert({
       where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
-      create: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: event.players.length },
+      create: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: gpOrder },
       // Clear archivedAt: an archived GameParticipant can linger (e.g. after a
       // merge removed the Player row) — joining must make the player visible.
       update: { archivedAt: null },
