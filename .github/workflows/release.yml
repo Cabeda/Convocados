@@ -428,7 +428,7 @@ jobs:
       - name: Check if base image needs rebuild
         id: base-check
         run: |
-          BASE_HASH=$(cat pnpm-lock.yaml prisma/schema.prisma | sha256sum | cut -c1-12)
+          BASE_HASH=$(cat pnpm-lock.yaml prisma/schema.prisma Dockerfile.base | sha256sum | cut -c1-12)
           echo "hash=$BASE_HASH" >> $GITHUB_OUTPUT
 
       - uses: actions/cache@v6
