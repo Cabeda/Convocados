@@ -1,5 +1,5 @@
 import type { PaletteMode, ThemeOptions } from "@mui/material/styles";
-import { tokens, type PaletteTokens, type DesignTokens } from "./tokens";
+import { tokens, type DesignTokens } from "./tokens";
 
 export { tokens } from "./tokens";
 export type { DesignTokens, PaletteTokens } from "./tokens";
