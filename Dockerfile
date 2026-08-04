@@ -33,6 +33,7 @@ RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
 COPY package.json ./
 COPY public ./public
 COPY litestream.yml ./litestream.yml
