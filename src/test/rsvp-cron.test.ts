@@ -31,7 +31,7 @@ async function seedEvent(dateTime: Date, ownerId: string | null) {
 }
 
 describe("RSVP 48h tick windowing", () => {
-  it("fanout resolves exactly the expected recipients", async () => {
+  it("fanout resolves exactly the expected recipients (players only)", async () => {
     const owner = await seedUser("Owner");
     const follower = await seedUser("Follower");
     const linked = await seedUser("Linked");
@@ -42,12 +42,14 @@ describe("RSVP 48h tick windowing", () => {
     await prisma.player.create({ data: { eventId: ev.id, name: "Guest", order: 1 } });
 
     const recipients = await getRsvpRecipients(ev.id);
-    expect(recipients.sort()).toEqual([owner.id, follower.id, linked.id].sort());
+    // #656: follower is not a player → excluded from the "Are you coming" ping
+    expect(recipients.sort()).toEqual([owner.id, linked.id].sort());
     // ghost has no follow + no player link
     expect(recipients).not.toContain(ghost.id);
+    expect(recipients).not.toContain(follower.id);
   });
 
-  it("summary counts yes/no/pending across recipients", async () => {
+  it("summary counts yes/no/pending across game participants only", async () => {
     const owner = await seedUser("Owner");
     const follower = await seedUser("Follower");
     const linked = await seedUser("Linked");
@@ -59,10 +61,10 @@ describe("RSVP 48h tick windowing", () => {
     await upsertRsvp(ev.id, linked.id, "no");
 
     const summary = await getRsvpSummary(ev.id);
-    expect(summary.yes).toBe(1);
+    // #656: follower is not a game participant → their RSVP is ignored
+    expect(summary.yes).toBe(0);
     expect(summary.no).toBe(1);
     expect(summary.pending).toBe(1);
-    expect(summary.yesUserIds).toEqual([follower.id]);
     expect(summary.noUserIds).toEqual([linked.id]);
     expect(summary.pendingUserIds).toEqual([owner.id]);
   });
