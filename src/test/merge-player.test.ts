@@ -234,4 +234,66 @@ describe("POST /api/events/[id]/merge-player", () => {
     });
     expect(targetEp).not.toBeNull();
   });
+
+  it("reassigns source children to target and drops overlapping game rows", async () => {
+    const user = await prisma.user.create({ data: { id: "u1", name: "Gonçalo Silva", email: "g@t.com", emailVerified: true } });
+    const event = await seedEvent();
+    await prisma.event.update({ where: { id: event.id }, data: { ownerId: null } });
+    await prisma.playerRating.create({ data: { eventId: event.id, name: "Gonçalo", rating: 1000 } });
+    await prisma.playerRating.create({ data: { eventId: event.id, name: "Gonçalo Silva", userId: user.id, rating: 1000 } });
+
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: new Date() } });
+    const otherGame = await prisma.game.create({ data: { eventId: event.id, dateTime: new Date(Date.now() + 86400_000) } });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+
+    const sourceEp = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Gonçalo" } });
+    const targetEp = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Gonçalo Silva", userId: user.id } });
+
+    // Source participates in both games; target already in `game` → overlap
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: sourceEp.id, order: 0 } });
+    await prisma.gameParticipant.create({ data: { gameId: otherGame.id, eventPlayerId: sourceEp.id, order: 0 } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: targetEp.id, order: 1 } });
+    // Source has an RSVP answer to move + a payment to move + an overlapping RSVP to drop
+    await prisma.rsvp.create({ data: { eventPlayerId: sourceEp.id, gameId: otherGame.id, status: "yes" } });
+    await prisma.rsvp.create({ data: { eventPlayerId: sourceEp.id, gameId: game.id, status: "no" } });
+    // Target already answered on `game` → source's overlapping rsvp is dropped
+    await prisma.rsvp.create({ data: { eventPlayerId: targetEp.id, gameId: game.id, status: "yes" } });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: sourceEp.id, playerName: "Gonçalo", amount: 5, status: "paid" },
+    });
+
+    const res = await POST(ctx(event.id, { sourceName: "Gonçalo", targetName: "Gonçalo Silva" }, { isOwner: true, isAdmin: false }));
+    expect(res.status).toBe(200);
+
+    // Overlapping game: source row dropped, target's row kept
+    const gameParticipants = await prisma.gameParticipant.findMany({
+      where: { gameId: game.id },
+      include: { eventPlayer: { select: { name: true } } },
+    });
+    expect(gameParticipants).toHaveLength(1);
+    expect(gameParticipants[0].eventPlayer.name).toBe("Gonçalo Silva");
+
+    // Non-overlapping game: source participant moved to target
+    const otherParticipants = await prisma.gameParticipant.findMany({
+      where: { gameId: otherGame.id },
+      include: { eventPlayer: { select: { name: true } } },
+    });
+    expect(otherParticipants).toHaveLength(1);
+    expect(otherParticipants[0].eventPlayer.name).toBe("Gonçalo Silva");
+
+    // RSVP moved to target
+    const rsvp = await prisma.rsvp.findFirst({ where: { gameId: otherGame.id } });
+    expect(rsvp?.eventPlayerId).toBe(targetEp.id);
+    expect(rsvp?.status).toBe("yes");
+
+    // Payment moved to target
+    const payment = await prisma.gamePayment.findFirst({ where: { gameId: game.id } });
+    expect(payment?.eventPlayerId).toBe(targetEp.id);
+
+    // Ghost EventPlayer removed
+    const ghost = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId: event.id, name: "Gonçalo" } },
+    });
+    expect(ghost).toBeNull();
+  });
 });
