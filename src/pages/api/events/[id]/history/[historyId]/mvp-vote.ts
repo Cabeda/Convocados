@@ -3,6 +3,10 @@ import { prisma } from "../../../../../../lib/db.server";
 import { getSession } from "../../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../../lib/apiRateLimit.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../../../lib/mvp.constants";
+import {
+  isHistoryParticipant,
+  namesFromTeamsSnapshot,
+} from "../../../../../../lib/snapshotParticipants";
 
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -62,18 +66,16 @@ export const POST: APIRoute = async ({ params, request }) => {
   let voterPlayerId: string | undefined;
 
   const voterNameFromSession = session.user?.name;
-  if (history.teamsSnapshot && voterNameFromSession) {
-    const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
-    const allPlayers = teams.flatMap((t) => t.players);
-    const match = allPlayers.find((p) => p.name.toLowerCase() === voterNameFromSession.toLowerCase());
-    if (match) {
-      voterName = match.name;
-      // Try to find the Player record for this user (may exist if they signed up)
-      const voterPlayer = await prisma.player.findFirst({
-        where: { eventId: params.id, userId },
-      });
-      voterPlayerId = voterPlayer?.id ?? `name:${match.name}`;
-    }
+  if (isHistoryParticipant(history, voterNameFromSession)) {
+    const matchName = namesFromTeamsSnapshot(history.teamsSnapshot).find(
+      (n) => n.toLowerCase() === voterNameFromSession!.toLowerCase(),
+    );
+    voterName = matchName;
+    // Try to find the Player record for this user (may exist if they signed up)
+    const voterPlayer = await prisma.player.findFirst({
+      where: { eventId: params.id, userId },
+    });
+    voterPlayerId = voterPlayer?.id ?? `name:${matchName}`;
   }
 
   if (!voterPlayerId || !voterName) {
@@ -116,9 +118,9 @@ export const POST: APIRoute = async ({ params, request }) => {
     if (!nameToVoteFor || !history.teamsSnapshot) {
       return Response.json({ error: "Target player not found." }, { status: 400 });
     }
-    const teams = JSON.parse(history.teamsSnapshot) as Array<{ team: string; players: Array<{ name: string }> }>;
-    const allNames = teams.flatMap((t) => t.players.map((p) => p.name));
-    const match = allNames.find((n) => n.toLowerCase() === nameToVoteFor.toLowerCase());
+    const match = namesFromTeamsSnapshot(history.teamsSnapshot).find(
+      (n) => n.toLowerCase() === nameToVoteFor.toLowerCase(),
+    );
     if (!match) {
       return Response.json({ error: "Target player not found in this game." }, { status: 400 });
     }

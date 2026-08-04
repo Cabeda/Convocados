@@ -3,11 +3,15 @@ import { prisma } from "~/lib/db.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { GET as getPostGameStatus } from "~/pages/api/events/[id]/post-game-status";
+import { getSession, checkOwnership } from "~/lib/auth.helpers.server";
 
 vi.mock("~/lib/auth.helpers.server", () => ({
   getSession: vi.fn().mockResolvedValue(null),
   checkOwnership: vi.fn(),
 }));
+
+const mockGetSession = vi.mocked(getSession);
+const mockCheckOwnership = vi.mocked(checkOwnership);
 
 function ctx(params: Record<string, string>, queryString?: string) {
   const urlStr = `http://localhost/api/test${queryString ? `?${queryString}` : ""}`;
@@ -965,3 +969,148 @@ describe("GET /api/events/:id/post-game-status", () => {
     expect(json.mvpComplete).toBe(true);
     expect(json.allComplete).toBe(true);
   });
+
+describe("isParticipant visibility rules (issue #658)", () => {
+  const pastDateTime = new Date(Date.now() - 2 * 60 * 60 * 1000);
+
+  async function endedEvent(overrides: Record<string, unknown> = {}) {
+    return prisma.event.create({
+      data: {
+        title: "Past Game",
+        location: "Pitch",
+        dateTime: pastDateTime,
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+        ...overrides,
+      },
+    });
+  }
+
+  async function settledHistory(eventId: string, opts: { teams?: string; payments?: string; dateTime?: Date } = {}) {
+    return prisma.gameHistory.create({
+      data: {
+        eventId,
+        dateTime: opts.dateTime ?? pastDateTime,
+        teamOneName: "A",
+        teamTwoName: "B",
+        ...(opts.teams ? { teamsSnapshot: opts.teams } : {}),
+        ...(opts.payments ? { paymentsSnapshot: opts.payments } : {}),
+        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
+
+  async function login(userId: string, name: string, ownership: { isOwner: boolean; isAdmin: boolean }) {
+    mockGetSession.mockResolvedValue({ user: { id: userId, name } } as any);
+    mockCheckOwnership.mockResolvedValue(ownership as any);
+  }
+
+  it("returns isParticipant=true when the user's name is in the settled game's teamsSnapshot", async () => {
+    await login("u-alice", "Alice", { isOwner: false, isAdmin: false });
+    const event = await endedEvent();
+    await settledHistory(event.id, { teams: JSON.stringify([
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ]) });
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isParticipant).toBe(true);
+  });
+
+  it("returns isParticipant=true for an unpaid player on the settled game's payment roll even when not in the teams", async () => {
+    await login("u-carol", "Carol", { isOwner: false, isAdmin: false });
+    const event = await endedEvent();
+    await settledHistory(event.id, {
+      teams: JSON.stringify([
+        { team: "A", players: [{ name: "Alice", order: 0 }] },
+        { team: "B", players: [{ name: "Bob", order: 0 }] },
+      ]),
+      payments: JSON.stringify([{ playerName: "Carol", amount: 25, status: "pending", method: null }]),
+    });
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isParticipant).toBe(true);
+  });
+
+  it("returns isParticipant=false for a player only on the NEXT game's list (not in the settled snapshot)", async () => {
+    // Recurring event that already reset: event.dateTime moved forward, the settled
+    // game lives in GameHistory. Charlie is a claimed spot on the CURRENT (next) game.
+    await login("u-charlie", "Charlie", { isOwner: false, isAdmin: false });
+    const event = await endedEvent({ isRecurring: true, dateTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) });
+    await settledHistory(event.id, {
+      dateTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      teams: JSON.stringify([
+        { team: "A", players: [{ name: "Alice", order: 0 }] },
+        { team: "B", players: [{ name: "Bob", order: 0 }] },
+      ]),
+    });
+    await prisma.user.create({ data: { id: "u-charlie", name: "Charlie", email: "charlie@test.com", emailVerified: false } });
+    await prisma.player.create({ data: { name: "Charlie", eventId: event.id, userId: "u-charlie", order: 0 } });
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isParticipant).toBe(false);
+  });
+
+  it("returns isParticipant=true for an Owner who did not play the settled game", async () => {
+    await login("u-owner", "Owner", { isOwner: true, isAdmin: false });
+    await prisma.user.create({ data: { id: "u-owner", name: "Owner", email: "owner@test.com", emailVerified: false } });
+    const event = await endedEvent({ ownerId: "u-owner" });
+    await settledHistory(event.id, { teams: JSON.stringify([
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ]) });
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isParticipant).toBe(true);
+  });
+
+  it("returns isParticipant=true for an Admin who did not play the settled game", async () => {
+    await login("u-admin", "Admin", { isOwner: false, isAdmin: true });
+    const event = await endedEvent();
+    await settledHistory(event.id, { teams: JSON.stringify([
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ]) });
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isParticipant).toBe(true);
+  });
+
+  it("returns isParticipant=true for a participant of a just-ended game with no snapshot (fallback)", async () => {
+    // One-off game ended with no GameHistory yet — fall back to the played Game's participants.
+    await login("u-alice", "Alice", { isOwner: false, isAdmin: false });
+    const event = await endedEvent();
+    const eventPlayer = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Alice", userId: "u-alice" },
+    });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime, status: "played" },
+    });
+    await prisma.gameParticipant.create({
+      data: { gameId: game.id, eventPlayerId: eventPlayer.id, order: 0 },
+    });
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isParticipant).toBe(true);
+  });
+
+  it("returns isParticipant=false for a spectator who neither played, owes, nor manages", async () => {
+    await login("u-dave", "Dave", { isOwner: false, isAdmin: false });
+    const event = await endedEvent();
+    await settledHistory(event.id, { teams: JSON.stringify([
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ]) });
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isParticipant).toBe(false);
+  });
+});
