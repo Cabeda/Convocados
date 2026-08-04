@@ -22,10 +22,28 @@ import fs from "fs";
 
 const BASE_URL = process.env.UI_REVIEW_URL ?? "http://localhost:4321";
 const OUTPUT_ROOT = path.resolve(process.env.UI_REVIEW_DIR ?? "./screenshots");
-const VIEWPORT = { width: 1440, height: 900 };
 const DEMO_EMAIL = "demo@convocados.app";
 const DEMO_PASSWORD = "demo123";
 const DEMO_USER_ID = "demo-organizer-001";
+
+interface DeviceProfile {
+  name: string;
+  viewport: { width: number; height: number };
+  context: { isMobile?: boolean; hasTouch?: boolean; userAgent?: string };
+}
+
+const DEVICES: DeviceProfile[] = [
+  {
+    name: "desktop",
+    viewport: { width: 1440, height: 900 },
+    context: {},
+  },
+  {
+    name: "mobile",
+    viewport: { width: 390, height: 844 },
+    context: { isMobile: true, hasTouch: true, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1" },
+  },
+];
 
 interface Route {
   path: string;
@@ -158,11 +176,16 @@ async function signIn(page: Page): Promise<boolean> {
 }
 
 /** Capture one full set of screenshots into outputDir, signed in or not. */
-async function captureSet(browser: Browser, opts: { outputDir: string; signedIn: boolean; label: string }) {
-  const { outputDir, signedIn, label } = opts;
+async function captureSet(browser: Browser, opts: { outputDir: string; signedIn: boolean; label: string; device: DeviceProfile }) {
+  const { outputDir, signedIn, label, device } = opts;
   fs.mkdirSync(outputDir, { recursive: true });
 
-  const context = await browser.newContext({ viewport: VIEWPORT });
+  const context = await browser.newContext({
+    viewport: device.viewport,
+    isMobile: device.context.isMobile,
+    hasTouch: device.context.hasTouch,
+    userAgent: device.context.userAgent,
+  });
   const page = await context.newPage();
 
   let authed = signedIn;
@@ -221,23 +244,29 @@ async function takeScreenshots() {
   console.log(`\n=== UI Review Screenshot Pipeline ===`);
   console.log(`  Target:  ${BASE_URL}`);
   console.log(`  Output:  ${OUTPUT_ROOT}`);
-  console.log(`  Viewport: ${VIEWPORT.width}x${VIEWPORT.height}\n`);
+  console.log(`  Devices: ${DEVICES.map((d) => `${d.name} (${d.viewport.width}x${d.viewport.height})`).join(", ")}\n`);
 
   const browser: Browser = await chromium.launch({ headless: true });
 
-  // Anonymous pass — no cookies, genuinely logged out
-  await captureSet(browser, {
-    outputDir: path.join(OUTPUT_ROOT, "anonymous"),
-    signedIn: false,
-    label: "Anonymous",
-  });
+  for (const device of DEVICES) {
+    const deviceRoot = path.join(OUTPUT_ROOT, device.name);
 
-  // Authenticated pass — signed in as demo user
-  await captureSet(browser, {
-    outputDir: path.join(OUTPUT_ROOT, "auth"),
-    signedIn: true,
-    label: "Authenticated",
-  });
+    // Anonymous pass — no cookies, genuinely logged out
+    await captureSet(browser, {
+      outputDir: path.join(deviceRoot, "anonymous"),
+      signedIn: false,
+      label: `${device.name} anonymous`,
+      device,
+    });
+
+    // Authenticated pass — signed in as demo user
+    await captureSet(browser, {
+      outputDir: path.join(deviceRoot, "auth"),
+      signedIn: true,
+      label: `${device.name} authenticated`,
+      device,
+    });
+  }
 
   await browser.close();
 }
