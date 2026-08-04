@@ -16,8 +16,14 @@ export DATABASE_URL
 # exists in the image. These queries only touch raw SQL, so better-sqlite3 is
 # the right tool and is already a production dependency.
 echo "[release] Checking for failed migrations and recovering in one shot..."
+mkdir -p /data
 node -e '
+  const fs = require("fs");
   const Database = require("/app/node_modules/better-sqlite3");
+  if (!fs.existsSync("/data/db.sqlite")) {
+    console.log("[release] No database present yet — skipping failed-migration recovery.");
+    process.exit(0);
+  }
   const db = new Database("/data/db.sqlite", { readonly: false });
   const cutoff = new Date(Date.now() - 300000).toISOString();
   try {
