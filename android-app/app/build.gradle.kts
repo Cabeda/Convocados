@@ -29,7 +29,7 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "dev.convocados"
-    compileSdk = 35
+    compileSdk = 37
 
     signingConfigs {
         create("release") {
