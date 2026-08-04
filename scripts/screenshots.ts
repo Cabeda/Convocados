@@ -193,8 +193,19 @@ async function captureSet(browser: Browser, opts: { outputDir: string; signedIn:
     try {
       await page.goto(url, { waitUntil: "networkidle", timeout: 15_000 });
       await page.waitForTimeout(1000);
+
+      const signedInOnPage = await page.evaluate(async () => {
+        try {
+          const res = await fetch("/api/auth/get-session");
+          const s = await res.json();
+          return Boolean(s && s.user);
+        } catch {
+          return false;
+        }
+      });
+
       await page.screenshot({ path: filepath, fullPage: true });
-      process.stdout.write(` → ${filename}\n`);
+      process.stdout.write(` → ${filename} [${signedInOnPage ? "signed-in" : "signed-out"}]\n`);
     } catch (err) {
       process.stdout.write(` ⚠ ${err instanceof Error ? err.message : "error"}\n`);
     }
