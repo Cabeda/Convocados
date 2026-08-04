@@ -34,7 +34,7 @@ val wearEnv = Properties().apply {
 
 android {
     namespace = "dev.convocados.wear"
-    compileSdk = 35
+    compileSdk = 37
 
     signingConfigs {
         create("release") {
