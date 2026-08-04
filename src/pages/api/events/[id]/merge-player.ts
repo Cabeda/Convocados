@@ -112,6 +112,13 @@ export const POST: APIRoute = async ({ params, request }) => {
       : [prisma.playerRating.create({ data: { eventId, name: targetName, userId: mergedUserId } })]),
   ]);
 
+  // ADR 0016: merge game-scoped identity. A source EventPlayer row (with its
+  // GameParticipant/Rsvp/GamePayment children) would otherwise linger as a ghost
+  // on the live game list after the legacy Player row is deleted. Reassign
+  // children to the target EventPlayer (or rename source → target when the
+  // target has no EventPlayer yet).
+  await mergeEventPlayer(eventId, sourceName, targetName, mergedUserId);
+
   // 4. Recalculate ELO from scratch (history now has all games under targetName)
   if (event.eloEnabled) {
     await recalculateAllRatings(eventId);
@@ -133,3 +140,80 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   return Response.json({ ok: true, mergedInto: targetName, userId: mergedUserId });
 };
+
+/**
+ * Merge game-scoped identity (ADR 0016) when two player names are collapsed:
+ * - If a target EventPlayer exists, reassign the source's GameParticipant,
+ *   Rsvp and GamePayment children to it, then delete the source EventPlayer.
+ * - If only the source EventPlayer exists, rename it to the target name and
+ *   adopt the merged userId.
+ *
+ * Without this, the source name stays visible on the live game list even though
+ * its legacy Player row was deleted (ghost participant).
+ */
+async function mergeEventPlayer(eventId: string, sourceName: string, targetName: string, mergedUserId: string | null): Promise<void> {
+  const [sourceEp, targetEp] = await Promise.all([
+    prisma.eventPlayer.findUnique({ where: { eventId_name: { eventId, name: sourceName } } }),
+    prisma.eventPlayer.findUnique({ where: { eventId_name: { eventId, name: targetName } } }),
+  ]);
+  if (!sourceEp) return;
+
+  if (!targetEp) {
+    await prisma.eventPlayer.update({
+      where: { id: sourceEp.id },
+      data: { name: targetName, ...(mergedUserId ? { userId: mergedUserId } : {}) },
+    });
+    return;
+  }
+
+  // Reassign children from source → target. GameParticipant is unique on
+  // (gameId, eventPlayerId), so when the target already participates in the
+  // same game, drop the source's row instead of colliding.
+  const [sourceParticipants, sourceRsvps, sourcePayments, targetParticipantGameIds, targetRsvpRows] = await Promise.all([
+    prisma.gameParticipant.findMany({ where: { eventPlayerId: sourceEp.id }, select: { id: true, gameId: true } }),
+    prisma.rsvp.findMany({ where: { eventPlayerId: sourceEp.id }, select: { id: true, gameId: true } }),
+    prisma.gamePayment.findMany({ where: { eventPlayerId: sourceEp.id }, select: { id: true } }),
+    prisma.gameParticipant.findMany({ where: { eventPlayerId: targetEp.id }, select: { gameId: true } }),
+    prisma.rsvp.findMany({ where: { eventPlayerId: targetEp.id }, select: { gameId: true } }),
+  ]);
+  const targetGameIds = new Set(targetParticipantGameIds.map((g) => g.gameId));
+  const targetRsvpGameIds = new Set(targetRsvpRows.map((r) => r.gameId));
+
+  const participantMoves = sourceParticipants
+    .filter((p) => !targetGameIds.has(p.gameId))
+    .map((p) =>
+      prisma.gameParticipant.update({
+        where: { id: p.id },
+        data: { eventPlayerId: targetEp.id },
+      }),
+    );
+  const participantDrops = sourceParticipants
+    .filter((p) => targetGameIds.has(p.gameId))
+    .map((p) => prisma.gameParticipant.delete({ where: { id: p.id } }));
+
+  // Move the source's RSVP answer to the target (re-key on the unique pair).
+  // When the target already answered on the same game, prefer the target's row.
+  const rsvpMoves = sourceRsvps
+    .filter((r) => !targetRsvpGameIds.has(r.gameId))
+    .map((r) => prisma.rsvp.update({ where: { id: r.id }, data: { eventPlayerId: targetEp.id } }));
+  const rsvpDrops = sourceRsvps
+    .filter((r) => targetRsvpGameIds.has(r.gameId))
+    .map((r) => prisma.rsvp.delete({ where: { id: r.id } }));
+
+  const paymentMoves = sourcePayments.map((p) =>
+    prisma.gamePayment.update({ where: { id: p.id }, data: { eventPlayerId: targetEp.id } }),
+  );
+
+  await prisma.$transaction([
+    ...participantMoves,
+    ...participantDrops,
+    ...rsvpMoves,
+    ...rsvpDrops,
+    ...paymentMoves,
+    prisma.eventPlayer.update({
+      where: { id: targetEp.id },
+      data: { ...(mergedUserId ? { userId: mergedUserId } : {}) },
+    }),
+    prisma.eventPlayer.delete({ where: { id: sourceEp.id } }),
+  ]);
+}

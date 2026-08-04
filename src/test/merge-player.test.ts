@@ -172,4 +172,66 @@ describe("POST /api/events/[id]/merge-player", () => {
     const sourcePlayer = await prisma.player.findFirst({ where: { eventId: event.id, name: "Gonçalo" } });
     expect(sourcePlayer).toBeNull();
   });
+
+  it("does not leave ghost EventPlayer/GameParticipant for the source name", async () => {
+    const user = await prisma.user.create({ data: { id: "u1", name: "Gonçalo Silva", email: "g@t.com", emailVerified: true } });
+    const event = await seedEvent();
+    await prisma.event.update({ where: { id: event.id }, data: { ownerId: null } });
+
+    await prisma.playerRating.create({ data: { eventId: event.id, name: "Gonçalo", rating: 1000 } });
+    await prisma.playerRating.create({ data: { eventId: event.id, name: "Gonçalo Silva", userId: user.id, rating: 1000 } });
+
+    // Source is an active player in the current game (EventPlayer + GameParticipant)
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: new Date() } });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+
+    const sourceEp = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Gonçalo" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: sourceEp.id, order: 0 } });
+
+    const res = await POST(ctx(event.id, { sourceName: "Gonçalo", targetName: "Gonçalo Silva" }, { isOwner: true, isAdmin: false }));
+    expect(res.status).toBe(200);
+
+    // No ghost EventPlayer for source name
+    const ghostEp = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId: event.id, name: "Gonçalo" } },
+    });
+    expect(ghostEp).toBeNull();
+
+    // Target EventPlayer absorbs the GameParticipant
+    const targetEp = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId: event.id, name: "Gonçalo Silva" } },
+    });
+    expect(targetEp).not.toBeNull();
+    expect(targetEp!.userId).toBe(user.id);
+
+    const participant = await prisma.gameParticipant.findFirst({
+      where: { gameId: game.id },
+      include: { eventPlayer: { select: { name: true } } },
+    });
+    expect(participant).not.toBeNull();
+    expect(participant!.eventPlayer.name).toBe("Gonçalo Silva");
+  });
+
+  it("renames source EventPlayer to target when target has no EventPlayer yet", async () => {
+    const event = await seedEvent();
+    await prisma.playerRating.create({ data: { eventId: event.id, name: "Gonçalo", rating: 1000 } });
+    await prisma.playerRating.create({ data: { eventId: event.id, name: "Gonçalo Silva", rating: 1000 } });
+
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: new Date() } });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Gonçalo" } });
+
+    const res = await POST(ctx(event.id, { sourceName: "Gonçalo", targetName: "Gonçalo Silva" }, { isOwner: true, isAdmin: false }));
+    expect(res.status).toBe(200);
+
+    const ghostEp = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId: event.id, name: "Gonçalo" } },
+    });
+    expect(ghostEp).toBeNull();
+
+    const targetEp = await prisma.eventPlayer.findUnique({
+      where: { eventId_name: { eventId: event.id, name: "Gonçalo Silva" } },
+    });
+    expect(targetEp).not.toBeNull();
+  });
 });
