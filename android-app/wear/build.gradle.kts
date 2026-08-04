@@ -149,7 +149,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.wear)
-    implementation("androidx.wear:wear-input:1.2.0-alpha02")
+    implementation("androidx.wear:wear-input:1.2.0")
 
     // Hilt DI
     implementation(libs.hilt.android)
