@@ -185,7 +185,7 @@ async function takeScreenshots() {
     try {
       await page.goto(url, { waitUntil: "networkidle", timeout: 15_000 });
       await page.waitForTimeout(1000);
-      await page.screenshot({ path: filepath, fullPage: false });
+      await page.screenshot({ path: filepath, fullPage: true });
       process.stdout.write(` → ${filename}\n`);
     } catch (err) {
       process.stdout.write(` ⚠ ${err instanceof Error ? err.message : "error"}\n`);

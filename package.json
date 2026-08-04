@@ -29,7 +29,7 @@
     "k6:stress": "k6 run k6/scripts/stress.js",
     "k6:spike": "k6 run k6/scripts/spike.js",
     "k6:sse": "k6 run k6/scripts/sse.js",
-    "screenshots": "tsx scripts/screenshots.ts",
+    "screenshots": "sh -c 'PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx scripts/screenshots.ts'",
     "sync:i18n": "tsx scripts/generate-android-strings.ts",
     "sync:feature-parity-docs": "tsx scripts/generate-feature-parity-docs.ts"
   },
