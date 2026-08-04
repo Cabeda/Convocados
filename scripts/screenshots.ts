@@ -137,8 +137,20 @@ async function signIn(page: Page): Promise<boolean> {
     await emailInput.fill(DEMO_EMAIL);
     await passwordInput.fill(DEMO_PASSWORD);
     await submitButton.click();
-    await page.waitForURL(/\/dashboard|\//, { timeout: 15_000 });
-    return true;
+
+    // Wait for the session cookie to actually land (redirect alone is racy)
+    for (let i = 0; i < 15; i++) {
+      const session = await page.evaluate(async () => {
+        const res = await fetch("/api/auth/get-session");
+        return res.ok ? res.json() : null;
+      }).catch(() => null);
+      if (session) {
+        await page.waitForTimeout(500);
+        return true;
+      }
+      await page.waitForTimeout(1000);
+    }
+    return false;
   } catch (err) {
     console.warn(`  ⚠  Sign-in failed: ${err instanceof Error ? err.message : err}`);
     return false;
