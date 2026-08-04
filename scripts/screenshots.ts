@@ -145,41 +145,37 @@ async function signIn(page: Page): Promise<boolean> {
   }
 }
 
-async function takeScreenshots() {
-  console.log(`\n=== UI Review Screenshot Pipeline ===`);
-  console.log(`  Target:  ${BASE_URL}`);
-  console.log(`  Output:  ${OUTPUT_ROOT}`);
-  console.log(`  Viewport: ${VIEWPORT.width}x${VIEWPORT.height}\n`);
+/** Capture one full set of screenshots into outputDir, signed in or not. */
+async function captureSet(browser: Browser, opts: { outputDir: string; signedIn: boolean; label: string }) {
+  const { outputDir, signedIn, label } = opts;
+  fs.mkdirSync(outputDir, { recursive: true });
 
-  fs.mkdirSync(OUTPUT_ROOT, { recursive: true });
-
-  // Try signing in before resolving routes so we can discover owned events
-  const browser: Browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: VIEWPORT });
   const page = await context.newPage();
 
-  console.log(`→ Signing in as ${DEMO_EMAIL} to discover event routes...`);
-  const signedIn = await signIn(page);
+  let authed = signedIn;
   if (signedIn) {
-    console.log(`  ✓ Signed in\n`);
-  } else {
-    console.warn(`  ⚠  Sign-in failed — event pages may use public events without history\n`);
+    console.log(`\n→ ${label}: signing in as ${DEMO_EMAIL}...`);
+    authed = await signIn(page);
+    if (authed) {
+      console.log(`  ✓ Signed in`);
+    } else {
+      console.warn(`  ⚠  Sign-in failed — event pages may use public events without history`);
+    }
   }
 
-  // Resolve routes now that we know auth state
-  const routes = await resolveRoutes(signedIn);
+  const routes = await resolveRoutes(authed);
 
-  // Back to a neutral page after sign-in
-  if (signedIn) {
+  if (authed) {
     try { await page.goto(`${BASE_URL}/`, { timeout: 10_000 }); } catch { /* ignore */ }
   }
 
-  console.log(`  Routes: ${routes.length} (${routes.filter((r) => r.requiresAuth).length} require auth)\n`);
+  console.log(`  Routes: ${routes.length} (${routes.filter((r) => r.requiresAuth).length} require auth)`);
 
   for (const route of routes) {
     const url = `${BASE_URL}${route.path}`;
     const filename = `${route.name}.png`;
-    const filepath = path.join(OUTPUT_ROOT, filename);
+    const filepath = path.join(outputDir, filename);
 
     process.stdout.write(`  ${route.path}`);
     try {
@@ -192,14 +188,35 @@ async function takeScreenshots() {
     }
   }
 
-  await browser.close();
+  await context.close();
 
-  const files = fs.readdirSync(OUTPUT_ROOT).filter((f) => f.endsWith(".png"));
-  console.log(`\n✓ Done — ${files.length} screenshots in ${OUTPUT_ROOT}/`);
-  for (const f of files.sort()) {
-    const stat = fs.statSync(path.join(OUTPUT_ROOT, f));
-    console.log(`  ${f} (${(stat.size / 1024).toFixed(0)} KB)`);
-  }
+  const files = fs.readdirSync(outputDir).filter((f) => f.endsWith(".png"));
+  console.log(`  ✓ ${files.length} screenshots in ${outputDir}`);
+}
+
+async function takeScreenshots() {
+  console.log(`\n=== UI Review Screenshot Pipeline ===`);
+  console.log(`  Target:  ${BASE_URL}`);
+  console.log(`  Output:  ${OUTPUT_ROOT}`);
+  console.log(`  Viewport: ${VIEWPORT.width}x${VIEWPORT.height}\n`);
+
+  const browser: Browser = await chromium.launch({ headless: true });
+
+  // Anonymous pass — no cookies, genuinely logged out
+  await captureSet(browser, {
+    outputDir: path.join(OUTPUT_ROOT, "anonymous"),
+    signedIn: false,
+    label: "Anonymous",
+  });
+
+  // Authenticated pass — signed in as demo user
+  await captureSet(browser, {
+    outputDir: path.join(OUTPUT_ROOT, "auth"),
+    signedIn: true,
+    label: "Authenticated",
+  });
+
+  await browser.close();
 }
 
 takeScreenshots().catch((err) => {
