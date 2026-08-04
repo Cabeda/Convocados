@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { isGameEnded } from "../../../../lib/gameStatus";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../lib/mvp.constants";
+import { isSettledGameParticipant } from "../../../../lib/participants.server";
 
 /**
  * GET /api/events/:id/post-game-status
@@ -205,61 +206,21 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   // Check if the current user is a participant of the settled game.
   // Owner/Admin always count (settlement role: confirm payments, set score).
-  // Otherwise a user counts if their name appears on the settled game's teams
-  // or payment roll (snapshot), or — when no snapshot exists yet for a
-  // just-ended game — on the played Game's participant list or its live
-  // payment roll. The live/next-game player list never counts on its own.
+  // Otherwise use the shared settled-game participant check.
   let isParticipant = false;
   const session = await getSession(request);
   if (session?.user) {
     const ownership = await checkOwnership(request, event.ownerId, session, params.id);
     if (ownership?.isOwner || ownership?.isAdmin) {
       isParticipant = true;
-    }
-
-    if (!isParticipant && session.user.name) {
-      const userName = session.user.name.toLowerCase();
-      const participantNames = new Set<string>();
-      const addName = (n: string) => participantNames.add(n.toLowerCase());
-
-      if (latestHistory?.teamsSnapshot) {
-        try {
-          const teams = JSON.parse(latestHistory.teamsSnapshot) as Array<{ players: Array<{ name: string }> }>;
-          teams.forEach((t) => t.players.forEach((p) => addName(p.name)));
-        } catch { /* ignore */ }
-      }
-      if (latestHistory?.paymentsSnapshot) {
-        try {
-          const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ playerName: string }>;
-          snapshot.forEach((p) => addName(p.playerName));
-        } catch { /* ignore */ }
-      }
-
-      // No snapshot for the settled game yet (one-off just ended, or the reset
-      // hasn't materialised a snapshot) → fall back to the settled Game's own
-      // participants and its live payment roll, which still belong to that game.
-      const noSnapshotForSettledGame = !latestHistory
-        || latestHistory.dateTime.getTime() === event.dateTime.getTime();
-      if (participantNames.size === 0 && noSnapshotForSettledGame) {
-        const settledGame = await prisma.game.findFirst({
-          where: { eventId: event.id, dateTime: event.dateTime },
-          include: {
-            participants: {
-              where: { archivedAt: null },
-              include: { eventPlayer: { select: { name: true, userId: true } } },
-            },
-          },
-        });
-        settledGame?.participants.forEach((p) => {
-          addName(p.eventPlayer.name);
-          if (p.eventPlayer.userId === session.user?.id) isParticipant = true;
-        });
-        if (pastGameSource === "live" && eventCost?.payments) {
-          eventCost.payments.forEach((p) => addName(p.playerName));
-        }
-      }
-
-      if (participantNames.has(userName)) isParticipant = true;
+    } else {
+      isParticipant = await isSettledGameParticipant({
+        sessionUser: session.user,
+        event,
+        latestHistory,
+        pastGameSource,
+        eventCost,
+      });
     }
   }
 
