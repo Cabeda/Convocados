@@ -1122,6 +1122,14 @@ const en = {
   paymentsFailed: "Something went wrong. Try again.",
   paymentsUntrackedNote: "Each player pays their own share — no tracking for this game.",
   paymentsUnassignedPayer: "No payer set yet",
+  // Event-page payment surface (replaces the split-the-cost accordion)
+  youOwe: "You owe {amount}",
+  pay: "Pay",
+  costAndMethods: "Cost & payment methods",
+  editPrice: "Edit price",
+  setPrice: "Set price",
+  scopeThisGame: "This game only",
+  scopeAllFuture: "This and all future games",
 
   // Admin role notifications
   adminRoleAddedSubject: "You're now an admin for {title}",

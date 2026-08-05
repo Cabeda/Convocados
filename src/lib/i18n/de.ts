@@ -1055,6 +1055,13 @@ const de: TranslationKeys = {
   paymentsFailed: "Etwas ist schiefgelaufen. Versuche es erneut.",
   paymentsUntrackedNote: "Jeder Spieler zahlt seinen Anteil — keine Erfassung für dieses Spiel.",
   paymentsUnassignedPayer: "Zahler nicht festgelegt",
+  youOwe: "Du schuldest {amount}",
+  pay: "Zahlen",
+  costAndMethods: "Kosten & Zahlungsmethoden",
+  editPrice: "Preis bearbeiten",
+  setPrice: "Preis festlegen",
+  scopeThisGame: "Nur dieses Spiel",
+  scopeAllFuture: "Dieses und alle kommenden Spiele",
 
   adminDeleteUser: "Benutzer löschen",
   adminDeleteUserConfirm: "Sind Sie sicher, dass Sie diesen Benutzer dauerhaft löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",

@@ -1055,6 +1055,13 @@ const it: TranslationKeys = {
   paymentsFailed: "Qualcosa è andato storto. Riprova.",
   paymentsUntrackedNote: "Ogni giocatore paga la propria quota — nessun tracciamento per questa partita.",
   paymentsUnassignedPayer: "Pagatore da definire",
+  youOwe: "Devi {amount}",
+  pay: "Paga",
+  costAndMethods: "Costo e metodi di pagamento",
+  editPrice: "Modifica prezzo",
+  setPrice: "Imposta prezzo",
+  scopeThisGame: "Solo questa partita",
+  scopeAllFuture: "Questa e tutte le prossime partite",
 
   adminDeleteUser: "Elimina utente",
   adminDeleteUserConfirm: "Sei sicuro di voler eliminare definitivamente questo utente? Questa azione non può essere annullata.",

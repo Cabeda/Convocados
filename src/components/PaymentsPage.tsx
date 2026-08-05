@@ -9,6 +9,7 @@ import type { TranslationKey } from "~/lib/i18n";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
+import { CostSection } from "./CostSection";
 
 const STATUS_LABEL: Record<string, TranslationKey> = {
   pending: "paymentsStatusPending",
@@ -145,6 +146,9 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
       {data && data.games.length === 0 && (
         <Alert severity="success" sx={{ my: 2 }}>{t("paymentsNoUnsettled")}</Alert>
       )}
+
+      {/* ── Cost & payment methods (manager of price/methods) ──────── */}
+      <CostSection eventId={eventId} isManager={data?.viewerRole === "owner" || data?.viewerRole === "admin"} playerCount={0} />
 
       {/* ── People rollup ─────────────────────────────────────────── */}
       {data && data.people.length > 0 && (
