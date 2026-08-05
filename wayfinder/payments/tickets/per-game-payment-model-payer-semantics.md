@@ -3,6 +3,7 @@
 **Type:** grilling (HITL)
 **Labels:** wayfinder:grilling
 **Blocked by:** none
+**Status:** claimed (2026-08-05) — in progress
 
 ## Question
 
