@@ -305,6 +305,11 @@ export interface RecordReceivedArgs {
   eventId: string;
   playerName: string;
   markedById: string;
+  /** Optional exact share in euros (2dp). When set, overrides the maxPlayers-derived share
+   *  so the ledger credit matches the actual GamePayment share (settlement dual-write). */
+  amount?: number;
+  /** Optional game id the money movement applies to (eventInstanceId). Defaults to current game. */
+  gameId?: string;
 }
 
 export async function recordReceived(args: RecordReceivedArgs): Promise<void> {
@@ -314,7 +319,9 @@ export async function recordReceived(args: RecordReceivedArgs): Promise<void> {
 
   const player = await findPlayerByName(eventId, playerName);
   const userId = player?.userId ?? (await ensureSystemUserId(eventId, playerName, null));
-  const { gameId, shareCents } = await resolveShareInfo(eventId, eventCost.totalAmount);
+  const { gameId: resolvedGameId, shareCents: derivedShareCents } = await resolveShareInfo(eventId, eventCost.totalAmount);
+  const gameId = args.gameId ?? resolvedGameId;
+  const shareCents = args.amount !== undefined ? Math.round(args.amount * 100) : derivedShareCents;
 
   await prisma.walletTransaction.create({
     data: {

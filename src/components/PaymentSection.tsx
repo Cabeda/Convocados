@@ -373,12 +373,21 @@ export function PaymentSection({
           expandIcon={<ExpandMoreIcon />}
           sx={{ px: 0, minHeight: 0, "& .MuiAccordionSummary-content": { my: 0.5 } }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, width: "100%" }}>
-            <PaymentsIcon fontSize="small" color="action" />
-            <Typography variant="body2" color="text.secondary">
-              {t("splitTheCost")}
-            </Typography>
-            {hasCost && costData.summary && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, width: "100%" }}>
+              <PaymentsIcon fontSize="small" color="action" />
+              <Typography variant="body2" color="text.secondary">
+                {t("splitTheCost")}
+              </Typography>
+              <Button
+                size="small"
+                sx={{ minWidth: 0, ml: 1 }}
+                onClick={() => {
+                  window.location.href = `/events/${eventId}/payments`;
+                }}
+              >
+                {t("postGameGoToPayments")}
+              </Button>
+              {hasCost && costData.summary && (
               <Chip
                 label={t("paymentSummary", {
                   paid: String(costData.summary.paidCount),
