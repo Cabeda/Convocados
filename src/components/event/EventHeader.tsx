@@ -32,6 +32,7 @@ import type { EventData } from "./types";
 import type { Imatch } from "~/lib/random";
 import { ShareBar } from "./ShareBar";
 import { NotifyButton } from "./NotifyButton";
+import { PaymentSurface } from "../PaymentSurface";
 import { MyNotificationsDialog } from "./MyNotificationsDialog";
 import LocationAutocomplete from "../LocationAutocomplete";
 import CourtAlternatives from "../CourtAlternatives";
@@ -447,6 +448,16 @@ export function EventHeader({
                   </Button>
                 )}
               </Box>
+            )}
+
+            {/* ── Payments row: price + pay CTA (event details, at the beginning) ── */}
+            {!editMode && isAuthenticated && (
+              <PaymentSurface
+                eventId={eventId}
+                canEdit={canEditSettings}
+                isAuthenticated={isAuthenticated}
+                playerCount={event.players.length}
+              />
             )}
 
             <Divider />

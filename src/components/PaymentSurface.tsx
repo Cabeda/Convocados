@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  Box, Typography, Button, Stack, Chip, Paper, alpha, useTheme, Alert,
+  Box, Typography, Button, Stack, Chip, alpha, useTheme, Alert,
 } from "@mui/material";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
@@ -105,7 +105,7 @@ export function PaymentSurface({
   };
 
   return (
-    <Paper id="payment-surface" elevation={0} variant="outlined" sx={{ borderRadius: 3, p: 1.5, mb: 2, borderColor: alpha(theme.palette.divider, 0.5) }}>
+    <Box sx={{ pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.4)}` }}>
       <Stack spacing={1}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
           <PaymentsIcon fontSize="small" color="action" />
@@ -150,6 +150,6 @@ export function PaymentSurface({
 
         {error && <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>}
       </Stack>
-    </Paper>
+    </Box>
   );
 }

@@ -8,7 +8,6 @@ import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
-import { PaymentSurface } from "./PaymentSurface";
 import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
@@ -900,16 +899,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 window.location.href = `/events/${eventId}/payments`;
               }}
             />
-            )}
-
-            {/* Payment surface — price line + targeted "you owe" CTA; management lives on the payments page */}
-            {isAuthenticated && (event.splitCostsEnabled !== false) && (
-              <PaymentSurface
-                eventId={eventId}
-                canEdit={canEditSettings}
-                isAuthenticated={isAuthenticated}
-                playerCount={Math.min(event.players.length, event.maxPlayers)}
-              />
             )}
 
             {/* Players — single merged component (name+email+contacts+pills).
