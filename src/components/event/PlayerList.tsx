@@ -190,12 +190,6 @@ export function PlayerList({
   const active = players.slice(0, maxPlayers);
   const bench = players.slice(maxPlayers);
 
-  // #XXX Attendance — the user's own player record (null if not on the list).
-  // Drives the "Join this game" vs "Going" copy on the AttendanceCta.
-  const _myPlayer: Player | undefined = currentUserId
-    ? players.find((p) => p.userId === currentUserId)
-    : undefined;
-
   // #XXX Attendance — guest pill opens a small menu (set Going / Declined / No response / Clear).
   // The previous cycle (Pending → Yes → No → Pending) was error-prone; the menu makes the action
   // explicit and supports clearing back to null.
