@@ -4,6 +4,7 @@ import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { validatePaymentMethods, normalizePaymentMethod } from "../../../../lib/paymentMethods";
 import type { PaymentMethod } from "../../../../lib/paymentMethods";
+import { syncGamePayments } from "../../../../lib/settlement.server";
 
 /** PUT — set or update event cost. Creates/recalculates player payment records. */
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -126,6 +127,11 @@ export const PUT: APIRoute = async ({ params, request }) => {
       where: { eventCostId: eventCost.id, playerName: { notIn: [...activeNames] } },
     });
 
+    // Payment overhaul: keep per-game payment rows in sync once a cost exists.
+    if (event.currentGameId) {
+      await syncGamePayments(event.currentGameId, eventId);
+    }
+
     const payments = await prisma.playerPayment.findMany({
       where: { eventCostId: eventCost.id },
       orderBy: { playerName: "asc" },
@@ -210,6 +216,11 @@ export const PUT: APIRoute = async ({ params, request }) => {
       playerName: { notIn: [...activeNames] },
     },
   });
+
+  // Payment overhaul: keep per-game payment rows in sync once a cost exists.
+  if (event.currentGameId) {
+    await syncGamePayments(event.currentGameId, eventId);
+  }
 
   const payments = await prisma.playerPayment.findMany({
     where: { eventCostId: eventCost.id },
