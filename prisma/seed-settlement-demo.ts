@@ -129,6 +129,71 @@ async function main() {
   });
   await syncGamePayments(ended.game.id, ended.event.id);
 
+  // 3. Post-game wrap-up demo owned by the real user (jecabeda@gmail.com):
+  //    played game + score + a designated payer + a mix of paid/pending, so the
+  //    wrap-up banner shows the "who paid" line and settleable payment pills.
+  const realUser = await prisma.user.findUnique({ where: { email: "jecabeda@gmail.com" } });
+  if (realUser) {
+    const wrapPlayers = ["José Cabeda", "Ricardo", "Nuno", "Pedro", "Miguel", "André", "Tiago", "João"];
+    const wrap = await prisma.event.create({
+      data: {
+        title: "Just Ended — Post-game Demo",
+        location: "Riverside Astro, Pitch 1",
+        dateTime: new Date(now - 75 * 60 * 1000),
+        maxPlayers: 8,
+        sport: "football-5v5",
+        durationMinutes: 60,
+        isPublic: true,
+        teamOneName: "Ninjas",
+        teamTwoName: "Gunas",
+        ownerId: realUser.id,
+      },
+    });
+    const wrapGame = await prisma.game.create({
+      data: { eventId: wrap.id, dateTime: wrap.dateTime, status: "played", scoreOne: 5, scoreTwo: 3 },
+    });
+    await prisma.event.update({ where: { id: wrap.id }, data: { currentGameId: wrapGame.id } });
+    for (let i = 0; i < wrapPlayers.length; i++) {
+      const ep = await prisma.eventPlayer.create({
+        data: { eventId: wrap.id, name: wrapPlayers[i], userId: wrapPlayers[i] === "José Cabeda" ? realUser.id : null },
+      });
+      await prisma.gameParticipant.create({ data: { gameId: wrapGame.id, eventPlayerId: ep.id, order: i } });
+    }
+    await prisma.eventCost.create({ data: { eventId: wrap.id, totalAmount: 80, currency: "EUR" } });
+    await syncGamePayments(wrapGame.id, wrap.id);
+    const josé = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: wrap.id, name: "José Cabeda" } });
+    await prisma.game.update({
+      where: { id: wrapGame.id },
+      data: { paymentMode: "tracked", payerEventPlayerId: josé.id },
+    });
+    await syncGamePayments(wrapGame.id, wrap.id); // re-sync to auto-settle José as payer
+    const richard = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: wrap.id, name: "Ricardo" } });
+    const nuno = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: wrap.id, name: "Nuno" } });
+    await prisma.gamePayment.updateMany({
+      where: { gameId: wrapGame.id, eventPlayerId: richard.id },
+      data: { status: "paid", paidAt: new Date(), markedBy: realUser.id },
+    });
+    await prisma.gamePayment.updateMany({
+      where: { gameId: wrapGame.id, eventPlayerId: nuno.id },
+      data: { status: "sent" },
+    });
+    await prisma.gameHistory.create({
+      data: {
+        eventId: wrap.id,
+        dateTime: wrap.dateTime,
+        status: "played",
+        scoreOne: 5,
+        scoreTwo: 3,
+        teamOneName: "Ninjas",
+        teamTwoName: "Gunas",
+        editableUntil: new Date(now + 7 * 86400_000),
+      },
+    });
+    console.log(`\n  ** POST-GAME WRAP-UP DEMO (owned by jecabeda@gmail.com):`);
+    console.log(`     ${wrap.id}  "${wrap.title}"`);
+    console.log(`     URL: /events/${wrap.id}`);
+  }
+
   console.log(`\n  ** PAYMENT SETTLEMENT DEMO EVENTS:`);
   console.log(`     Upcoming:  ${upcoming.event.id}  "${upcoming.event.title}"`);
   console.log(`       URL: /events/${upcoming.event.id}/payments`);
