@@ -7,13 +7,16 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -30,8 +33,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.SubcomposeAsyncImage
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.convocados.R
 import androidx.lifecycle.ViewModel
@@ -973,6 +978,7 @@ fun EventDetailScreen(
                             currentUserId = user?.id,
                             isOwner = isOwner,
                             onRemove = { viewModel.removePlayer(eventId, it) },
+                            onUserClick = onUserClick,
                         )
 
                         if (benchPlayers.isNotEmpty()) {
@@ -983,6 +989,7 @@ fun EventDetailScreen(
                                 isOwner = isOwner,
                                 isBench = true,
                                 onRemove = { viewModel.removePlayer(eventId, it) },
+                                onUserClick = onUserClick,
                             )
                         }
 
@@ -1300,6 +1307,7 @@ fun PlayerListCard(
     currentUserId: String?,
     isOwner: Boolean,
     onRemove: (playerId: String) -> Unit,
+    onUserClick: (userId: String) -> Unit = {},
     modifier: Modifier = Modifier,
     isBench: Boolean = false,
 ) {
@@ -1311,6 +1319,7 @@ fun PlayerListCard(
                     isMe = p.userId == currentUserId,
                     isBench = isBench,
                     onRemove = { onRemove(p.id) },
+                    onUserClick = p.userId?.let { { onUserClick(it) } } ?: {},
                     canRemove = isOwner || p.userId == currentUserId || p.userId == null,
                 )
                 if (i < players.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1335,12 +1344,59 @@ private fun EventHeaderPreview() {
     }
 }
 
+/** Round profile avatar for an account-linked player: profile image when set, else first-initial
+ *  placeholder. The image is best-effort — on load failure (or while loading) the initial
+ *  placeholder shows, so avatars never block the roster. Clickable → the user's profile screen. */
+@Composable
+fun PlayerAvatar(
+    name: String,
+    image: String?,
+    isMe: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val bg = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val fg = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Box(
+        modifier = modifier
+            .size(24.dp)
+            .clip(CircleShape)
+            .background(bg)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (image != null) {
+            SubcomposeAsyncImage(
+                model = image,
+                contentDescription = name,
+                modifier = Modifier.fillMaxSize(),
+                loading = { PlayerInitial(name, fg) },
+                error = { PlayerInitial(name, fg) },
+            )
+        } else {
+            PlayerInitial(name, fg)
+        }
+    }
+}
+
+@Composable
+private fun PlayerInitial(name: String, color: Color) {
+    Text(
+        name.trim().take(1).uppercase(),
+        color = color,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerRow(
     player: Player, isMe: Boolean = false, isBench: Boolean = false,
     canRemove: Boolean = false,
     onRemove: () -> Unit = {},
+    onUserClick: () -> Unit = {},
 ) {
     ListItem(
         headlineContent = {
@@ -1354,9 +1410,19 @@ fun PlayerRow(
         },
         leadingContent = {
             if (player.userId != null) {
-                Icon(Icons.Default.Person, stringResource(R.string.linked), tint = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                PlayerAvatar(
+                    name = player.name,
+                    image = player.image,
+                    isMe = isMe,
+                    onClick = onUserClick,
+                )
             } else {
-                Spacer(Modifier.size(20.dp))
+                Icon(
+                    Icons.Outlined.Person,
+                    contentDescription = stringResource(R.string.anonymous_player),
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(20.dp),
+                )
             }
         },
         trailingContent = if (canRemove) {{ IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, stringResource(R.string.remove), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp)) } }} else null,

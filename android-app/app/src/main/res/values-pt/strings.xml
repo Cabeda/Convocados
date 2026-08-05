@@ -152,6 +152,7 @@
     <string name="removed_tap_undo">%1$s removido — toca para anular</string>
     <string name="vs">VS</string>
     <string name="linked">Associado</string>
+    <string name="anonymous_player">Jogador anónimo</string>
     <string name="player_moved">%1$s movido</string>
     <string name="undo">Anular</string>
     <string name="add_score">+ Resultado</string>

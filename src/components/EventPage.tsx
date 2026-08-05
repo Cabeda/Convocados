@@ -212,6 +212,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
         name: p.name,
         gamesPlayed: p.gamesPlayed ?? 1,
         userId: p.userId ?? null,
+        image: p.image ?? null,
       }))
       .sort((a, b) => {
         if (qjName && a.name.toLowerCase() === qjName.toLowerCase()) return -1;

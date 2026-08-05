@@ -1,9 +1,9 @@
 import React from "react";
 import { TextField, Autocomplete, InputAdornment, IconButton, Tooltip, Box } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import ShieldIcon from "@mui/icons-material/Shield";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
+import { PlayerAvatar, AnonymousPlayerIcon } from "./PlayerIdentity";
 import type { PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 
@@ -14,7 +14,7 @@ interface Props {
   onAdd: (name: string) => void;
   /** Confirm-required add (dropdown row tap). Optional — falls back to onAdd. */
   onRequestAdd?: (intent: AddPlayerIntent) => void;
-  suggestions: { name: string; gamesPlayed: number; userId?: string | null }[];
+  suggestions: { name: string; gamesPlayed: number; userId?: string | null; image?: string | null }[];
   disabled?: boolean;
   label?: string;
 }
@@ -39,6 +39,7 @@ export function PlayerAutocomplete({ value, onChange, onAdd, onRequestAdd, sugge
             name: s.name,
             gamesPlayed: s.gamesPlayed,
             userId: s.userId ?? null,
+            image: s.image ?? null,
           }));
         if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
           filtered.push({ type: "create" as const, name: trimmed });
@@ -116,9 +117,13 @@ export function PlayerAutocomplete({ value, onChange, onAdd, onRequestAdd, sugge
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, overflow: "hidden" }}>
               {option.userId ? (
                 <Tooltip title={t("protectedPlayer")}>
-                  <ShieldIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
+                  <span><PlayerAvatar userId={option.userId} name={option.name} image={option.image} size={20} clickable={false} /></span>
                 </Tooltip>
-              ) : null}
+              ) : (
+                <Tooltip title={t("anonymousPlayer")}>
+                  <span><AnonymousPlayerIcon /></span>
+                </Tooltip>
+              )}
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{option.name}</span>
             </Box>
             {option.gamesPlayed > 0 && (

@@ -152,6 +152,7 @@
     <string name="removed_tap_undo">%1$s entfernt — tippen zum Rückgängigmachen</string>
     <string name="vs">VS</string>
     <string name="linked">Verknüpft</string>
+    <string name="anonymous_player">Anonymer Spieler</string>
     <string name="player_moved">%1$s verschoben</string>
     <string name="undo">Rückgängig</string>
     <string name="add_score">+ Ergebnis</string>
