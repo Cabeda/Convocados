@@ -3,6 +3,7 @@ import {
   Container, Paper, Typography, Box, Stack, Button, Chip, Alert,
   Divider, List, ListItem, ListItemText, CircularProgress,
 } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
@@ -131,6 +132,9 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
     <ThemeModeProvider>
       <ResponsiveLayout>
         <Container maxWidth="md" sx={{ py: 4 }}>
+          <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => { window.location.href = `/events/${eventId}`; }} sx={{ mb: 1 }}>
+            {t("backToGame")}
+          </Button>
           <Typography variant="h5" gutterBottom>{t("paymentsPageTitle")}</Typography>
           <Typography variant="body2" color="text.secondary" gutterBottom>{t("paymentsIntro")}</Typography>
 
