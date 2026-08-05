@@ -1,4 +1,3 @@
-import React from "react";
 import { Avatar, Link } from "@mui/material";
 import Person2OutlinedIcon from "@mui/icons-material/Person2Outlined";
 

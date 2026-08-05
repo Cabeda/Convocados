@@ -1,6 +1,6 @@
 /* eslint-disable @eslint-react/purity -- React Compiler hint, not a bug. Date objects during render are common and necessary for time-based UI (countdown, past detection, etc.) */
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button, Chip,
   CircularProgress, Alert, TextField,
@@ -15,7 +15,6 @@ import AddCircleIcon from "@mui/icons-material/AddCircle";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
-import { detectLocale } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
 import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
 import { ScoreRoller } from "./event/ScoreRoller";
@@ -315,7 +314,6 @@ function AddHistoricalGameDialog({
 
 export default function HistoryPage({ eventId }: { eventId: string }) {
   const t = useT();
-  const _locale = detectLocale();
   const { data: session } = useSession();
   const isAuthenticated = !!session?.user;
   const [title, setTitle] = useState("");

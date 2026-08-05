@@ -1,7 +1,4 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { PrismaClient } from "@prisma/client";
-
-const _testPrisma = new PrismaClient();
 
 // Track magic link emails sent
 const sentEmails: { to: string; url: string }[] = [];

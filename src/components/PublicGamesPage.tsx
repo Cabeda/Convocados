@@ -1,8 +1,8 @@
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Chip, Button,
-  CircularProgress, useTheme, Grid, ToggleButtonGroup, ToggleButton,
+  CircularProgress, Grid, ToggleButtonGroup, ToggleButton,
   FormControlLabel, Switch, FormControl, Select, MenuItem, InputLabel,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert,
 } from "@mui/material";
@@ -335,7 +335,6 @@ ${events.length > 1 ? `map.fitBounds([${events.map((e) => `[${e.lat},${e.lng}]`)
 
 export default function PublicGamesPage() {
   const t = useT();
-  const _theme = useTheme();
   const locale = detectLocale();
 
   // Read initial state from URL params

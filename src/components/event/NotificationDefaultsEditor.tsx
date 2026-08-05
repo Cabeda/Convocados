@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Stack, Switch, FormControlLabel, Typography, Snackbar, Box, alpha, useTheme } from "@mui/material";
 import { useT } from "~/lib/useT";
 
