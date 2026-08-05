@@ -36,6 +36,7 @@ data class Player(
     val name: String,
     val order: Int,
     val userId: String? = null,
+    val image: String? = null,
     val createdAt: String = "",
 )
 

@@ -152,6 +152,7 @@
     <string name="removed_tap_undo">%1$s eliminado — toca para deshacer</string>
     <string name="vs">VS</string>
     <string name="linked">Vinculado</string>
+    <string name="anonymous_player">Jugador anónimo</string>
     <string name="player_moved">%1$s movido</string>
     <string name="undo">Deshacer</string>
     <string name="add_score">+ Resultado</string>

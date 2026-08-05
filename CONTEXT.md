@@ -43,6 +43,14 @@ EventPlayer.name is mutable (owner/admin can rename for typo fixes or disambigua
 
 _Avoid_: PlayerRating (absorbed into EventPlayer), series player
 
+## Account-linked Player
+An **EventPlayer** whose `userId` is set — the person has a Convocados **User** account. Represented in the player list by that user's profile identity (avatar, or first-initial placeholder when no image) rather than a badge: having an account is an *identity* statement, not a *protection* statement.
+
+Its complement is the **Anonymous** EventPlayer — an unlinked, name-keyed guest, shown with an anonymous glyph.
+
+Distinct from the **account-link protection rule** (a behavior, not a display): an Account-linked Player can only be removed from the list by themselves or the Event Owner/Admin.
+_Avoid_: protected player (implies a security status rather than an identity)
+
 ## Owner
 The User who created the Game or to whom ownership was transferred. Has full management control. A Game has exactly zero or one Owner.
 

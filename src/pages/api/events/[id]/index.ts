@@ -11,7 +11,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
     where: { id: params.id },
     include: {
-      players: { where: { archivedAt: null }, orderBy: { order: "asc" } },
+      players: { where: { archivedAt: null }, orderBy: { order: "asc" }, include: { user: { select: { image: true } } } },
       teamResults: { include: { members: { orderBy: { order: "asc" } } } },
       owner: { select: { id: true, name: true } },
     },
@@ -203,16 +203,33 @@ export const GET: APIRoute = async ({ params, request }) => {
         .map((p) => [p.name, p.userId]),
     );
 
-    playersPayload = participants.map((gp) => ({
-      id: gp.eventPlayer.id,
-      name: gp.eventPlayer.name,
-      order: gp.order,
-      eventId: gp.eventPlayer.eventId,
-      userId: gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name) ?? null,
-      createdAt: gp.createdAt.toISOString(),
-    }));
+    // EventPlayer has no Prisma relation to User, so resolve profile images in
+    // one batch query keyed by the resolved userId (account-linked identity).
+    const linkedUserIds = [...new Set(participants.map((gp) => gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name)))].filter((u): u is string => !!u);
+    const linkedUsers = linkedUserIds.length
+      ? await prisma.user.findMany({ where: { id: { in: linkedUserIds } }, select: { id: true, image: true } })
+      : [];
+    const imageByUserId = new Map(linkedUsers.map((u) => [u.id, u.image]));
+
+    playersPayload = participants.map((gp) => {
+      const userId = gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name) ?? null;
+      return {
+        id: gp.eventPlayer.id,
+        name: gp.eventPlayer.name,
+        order: gp.order,
+        eventId: gp.eventPlayer.eventId,
+        userId,
+        image: userId ? (imageByUserId.get(userId) ?? null) : null,
+        createdAt: gp.createdAt.toISOString(),
+      };
+    });
   } else {
-    playersPayload = event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() }));
+    playersPayload = event.players.map(({ user, ...p }) => ({
+      ...p,
+      userId: p.userId ?? null,
+      image: user?.image ?? null,
+      createdAt: p.createdAt.toISOString(),
+    }));
   }
 
   // ADR 0016: include current game status for the UI
