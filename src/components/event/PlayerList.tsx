@@ -10,7 +10,6 @@ import ShuffleIcon from "@mui/icons-material/Shuffle";
 import CloseIcon from "@mui/icons-material/Close";
 import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatReclineNormal";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import ShieldIcon from "@mui/icons-material/Shield";
 import ContactsIcon from "@mui/icons-material/Contacts";
 import HowToRegIcon from "@mui/icons-material/HowToReg";
 import CancelIcon from "@mui/icons-material/Cancel";
@@ -19,6 +18,7 @@ import BackspaceIcon from "@mui/icons-material/Backspace";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
+import { PlayerAvatar, AnonymousPlayerIcon } from "./PlayerIdentity";
 import type { Player, PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 import { ConfirmLeaveDialog, type LeaveContext } from "./ConfirmLeaveDialog";
@@ -52,6 +52,7 @@ interface PlayerSuggestion {
   name: string;
   gamesPlayed: number;
   userId?: string | null;
+  image?: string | null;
 }
 
 interface Props {
@@ -189,12 +190,6 @@ export function PlayerList({
   const active = players.slice(0, maxPlayers);
   const bench = players.slice(maxPlayers);
 
-  // #XXX Attendance — the user's own player record (null if not on the list).
-  // Drives the "Join this game" vs "Going" copy on the AttendanceCta.
-  const _myPlayer: Player | undefined = currentUserId
-    ? players.find((p) => p.userId === currentUserId)
-    : undefined;
-
   // #XXX Attendance — guest pill opens a small menu (set Going / Declined / No response / Clear).
   // The previous cycle (Pending → Yes → No → Pending) was error-prone; the menu makes the action
   // explicit and supports clearing back to null.
@@ -328,6 +323,7 @@ export function PlayerList({
                   name: s.name,
                   gamesPlayed: s.gamesPlayed,
                   userId: s.userId ?? null,
+                  image: s.image ?? null,
                 }));
               // Add "Create new player" option when input doesn't exactly match an existing suggestion
               if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
@@ -445,9 +441,13 @@ export function PlayerList({
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0, overflow: "hidden" }}>
                     {option.userId ? (
                       <Tooltip title={t("protectedPlayer")}>
-                        <ShieldIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
+                        <span><PlayerAvatar userId={option.userId} name={option.name} image={option.image} size={20} clickable={false} /></span>
                       </Tooltip>
-                    ) : null}
+                    ) : (
+                      <Tooltip title={t("anonymousPlayer")}>
+                        <span><AnonymousPlayerIcon /></span>
+                      </Tooltip>
+                    )}
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{option.name}</span>
                   </Box>
                   {option.gamesPlayed > 0 && (
@@ -502,7 +502,9 @@ export function PlayerList({
               {availableSuggestions.slice(0, 12).map((s) => (
                 <Chip
                   key={s.name}
-                  icon={s.userId ? <ShieldIcon sx={{ color: "primary.main !important" }} /> : undefined}
+                  icon={s.userId
+                    ? <PlayerAvatar userId={s.userId} name={s.name} image={s.image} size={18} clickable={false} />
+                    : <AnonymousPlayerIcon size={18} />}
                   label={s.name}
                   variant="outlined"
                   size="small"
@@ -513,7 +515,7 @@ export function PlayerList({
                       onAddPlayer(s.name);
                     }
                   }}
-                  title={s.userId ? t("protectedPlayer") : undefined}
+                  title={s.userId ? t("protectedPlayer") : t("anonymousPlayer")}
                   sx={{
                     cursor: "pointer",
                     "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
@@ -577,10 +579,18 @@ export function PlayerList({
                     <DragIndicatorIcon fontSize="small" sx={{ color: "text.disabled", mr: 0.5, flexShrink: 0 }} />
                   )}
                   {player.userId ? (
-                     <Tooltip title={t("protectedPlayer")}>
-                       <ShieldIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5, flexShrink: 0 }} />
-                     </Tooltip>
-                   ) : null}
+                    <Tooltip title={t("protectedPlayer")}>
+                      <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
+                        <PlayerAvatar userId={player.userId} name={player.name} image={player.image} />
+                      </span>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip title={t("anonymousPlayer")}>
+                      <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
+                        <AnonymousPlayerIcon />
+                      </span>
+                    </Tooltip>
+                  )}
                    <ListItemText
                      primary={player.userId ? (
                        <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>
@@ -643,9 +653,17 @@ export function PlayerList({
                       )}
                       {player.userId ? (
                         <Tooltip title={t("protectedPlayer")}>
-                          <ShieldIcon fontSize="small" sx={{ color: "warning.main", mr: 0.5, flexShrink: 0 }} />
+                          <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
+                            <PlayerAvatar userId={player.userId} name={player.name} image={player.image} />
+                          </span>
                         </Tooltip>
-                      ) : null}
+                      ) : (
+                        <Tooltip title={t("anonymousPlayer")}>
+                          <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
+                            <AnonymousPlayerIcon />
+                          </span>
+                        </Tooltip>
+                      )}
                       <ListItemText
                         primary={player.userId ? (
                           <a href={`/users/${player.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>

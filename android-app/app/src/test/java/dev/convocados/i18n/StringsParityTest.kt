@@ -16,6 +16,7 @@ class StringsParityTest {
         "add_player_confirm_desc_bench",
         "add_player_confirm_desc_both",
         "add_player_in_flight",
+        "anonymous_player",
     )
 
     @Test

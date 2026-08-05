@@ -371,6 +371,7 @@ const de: TranslationKeys = {
   undoRemoveDesc: "{name} entfernt",
   undoExpired: "Rückgängig-Zeitfenster abgelaufen.",
   protectedPlayer: "Kontogebundener Spieler",
+  anonymousPlayer: "Anonymer Spieler",
   ownerOnly: "Nur der Event-Eigentümer kann dies tun.",
   relinquishOwnership: "Als Eigentümer zurücktreten",
   relinquishOwnershipDesc: "Das Event wird eigentümerlos und jeder kann es beanspruchen.",

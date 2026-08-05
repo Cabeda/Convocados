@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Box, Paper, Stack, Tabs, Tab, Typography, Alert, Chip,
   Table, TableBody, TableCell, TableHead, TableRow, TextField, Button,

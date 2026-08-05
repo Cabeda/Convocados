@@ -1,6 +1,6 @@
 /* eslint-disable @eslint-react/purity -- React Compiler hint, not a bug. Date objects during render are common and necessary for time-based UI (countdown, past detection, etc.) */
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button, Chip,
   CircularProgress, Alert, TextField,
@@ -15,7 +15,6 @@ import AddCircleIcon from "@mui/icons-material/AddCircle";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
-import { detectLocale } from "~/lib/i18n";
 import { useSession } from "~/lib/auth.client";
 import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
 import { ScoreRoller } from "./event/ScoreRoller";
@@ -30,7 +29,7 @@ interface AddHistoricalGameDialogProps {
   eventId: string;
   defaultTeamOneName: string;
   defaultTeamTwoName: string;
-  knownPlayers: { name: string; gamesPlayed: number; userId?: string | null }[];
+  knownPlayers: { name: string; gamesPlayed: number; userId?: string | null; image?: string | null }[];
   playerRatings: { name: string; rating: number; gamesPlayed: number }[];
   onSuccess: (entry: HistoryEntry) => void;
 }
@@ -315,7 +314,6 @@ function AddHistoricalGameDialog({
 
 export default function HistoryPage({ eventId }: { eventId: string }) {
   const t = useT();
-  const _locale = detectLocale();
   const { data: session } = useSession();
   const isAuthenticated = !!session?.user;
   const [title, setTitle] = useState("");
@@ -327,7 +325,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [knownPlayers, setKnownPlayers] = useState<{ name: string; gamesPlayed: number; userId?: string | null }[]>([]);
+  const [knownPlayers, setKnownPlayers] = useState<{ name: string; gamesPlayed: number; userId?: string | null; image?: string | null }[]>([]);
   const [playerRatings, setPlayerRatings] = useState<{ name: string; rating: number; gamesPlayed: number }[]>([]);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -370,19 +368,19 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
 
     // Fetch known players (historical) and ratings in parallel (non-blocking)
     // Combine current event players with historical players for suggestions
-    const currentPlayers = (ev.players ?? []).map((p: { name: string }) => ({ name: p.name, gamesPlayed: -1, userId: null })); // -1 indicates current player
+    const currentPlayers = (ev.players ?? []).map((p: { name: string; image?: string | null }) => ({ name: p.name, gamesPlayed: -1, userId: null, image: p.image ?? null })); // -1 indicates current player
     Promise.all([
       fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).catch(() => ({ players: [] })),
       fetch(`/api/events/${eventId}/ratings`).then((r) => r.json()).catch(() => ({ data: [] })),
     ]).then(([kp, ratings]) => {
       // Combine current players with historical players, deduping by name
-      const allPlayersMap = new Map<string, { name: string; gamesPlayed: number; userId: string | null }>();
+      const allPlayersMap = new Map<string, { name: string; gamesPlayed: number; userId: string | null; image: string | null }>();
       // Current players first (they get priority)
-      currentPlayers.forEach((p: { name: string; gamesPlayed: number; userId: string | null }) => allPlayersMap.set(p.name.toLowerCase(), p));
+      currentPlayers.forEach((p: { name: string; gamesPlayed: number; userId: string | null; image: string | null }) => allPlayersMap.set(p.name.toLowerCase(), p));
       // Historical players (only if not already in current)
-      (kp.players ?? []).forEach((p: { name: string; gamesPlayed: number; userId?: string | null }) => {
+      (kp.players ?? []).forEach((p: { name: string; gamesPlayed: number; userId?: string | null; image?: string | null }) => {
         if (!allPlayersMap.has(p.name.toLowerCase())) {
-          allPlayersMap.set(p.name.toLowerCase(), { name: p.name, gamesPlayed: p.gamesPlayed, userId: p.userId ?? null });
+          allPlayersMap.set(p.name.toLowerCase(), { name: p.name, gamesPlayed: p.gamesPlayed, userId: p.userId ?? null, image: p.image ?? null });
         }
       });
       setKnownPlayers(Array.from(allPlayersMap.values()));
