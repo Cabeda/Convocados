@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import React from "react";
 import { screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
