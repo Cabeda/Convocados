@@ -36,9 +36,19 @@ const baseStatus: PostGameStatus = {
 };
 
 function mockFetchStatus(status: PostGameStatus | null) {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => status,
+  vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
+    const u = String(url);
+    // Current-game settlement endpoint returns a benign payload in tests.
+    if (u.includes("/payments/game")) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }),
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      json: async () => status,
+    });
   }));
 }
 
@@ -55,14 +65,14 @@ describe("PostGameBanner participant gating (issue #658)", () => {
   it("renders nothing for a non-participant even when wrap-up tasks are pending", async () => {
     mockFetchStatus({ ...baseStatus, isParticipant: false });
     renderWithTheme(<PostGameBanner eventId="evt1" />);
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
   });
 
   it("renders nothing for an anonymous user", async () => {
     mockFetchStatus({ ...baseStatus, isParticipant: false, hasScore: false });
     renderWithTheme(<PostGameBanner eventId="evt1" />);
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
   });
 });

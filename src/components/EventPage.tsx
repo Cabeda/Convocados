@@ -897,6 +897,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               eventId={eventId}
               onStatusChange={setPostGameStatus}
               refreshKey={bannerRefreshKey}
+              isManager={isOwner || isAdmin}
               onScrollToScore={() => {
                 window.location.href = `/events/${eventId}/history`;
               }}

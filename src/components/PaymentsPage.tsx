@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button, Chip, Alert,
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  Select, MenuItem, FormControl, InputLabel, RadioGroup, FormControlLabel,
-  Radio,   Divider, List, ListItem, ListItemText, CircularProgress,
+  Divider, List, ListItem, ListItemText, CircularProgress,
 } from "@mui/material";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
+import { PaymentConfigDialog } from "./PaymentConfigDialog";
 
 const STATUS_LABEL: Record<string, TranslationKey> = {
   pending: "paymentsStatusPending",
@@ -280,7 +279,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
         </Paper>
       )}
 
-      <ConfigDialog
+      <PaymentConfigDialog
         open={!!configGame}
         eventId={eventId}
         game={configGame}
@@ -291,128 +290,5 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
         }}
       />
     </Container>
-  );
-}
-
-function ConfigDialog({
-  open, eventId, game, onClose, onSaved,
-}: {
-  open: boolean;
-  eventId: string;
-  game: SettlementGame | null;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-}) {
-  const t = useT();
-  const [mode, setMode] = useState<"tracked" | "untracked">("tracked");
-  const [payerKind, setPayerKind] = useState<"player" | "external">("player");
-  const [payerEventPlayerId, setPayerEventPlayerId] = useState("");
-  const [payerExternalName, setPayerExternalName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!game) return;
-    setMode(game.mode);
-    const playerPayer = game.rows.find((r) => r.isPayer);
-    if (playerPayer) {
-      setPayerKind("player");
-      setPayerEventPlayerId(playerPayer.eventPlayerId);
-      setPayerExternalName("");
-    } else if (game.payerName) {
-      setPayerKind("external");
-      setPayerExternalName(game.payerName);
-      setPayerEventPlayerId("");
-    } else {
-      setPayerKind("player");
-      setPayerEventPlayerId("");
-      setPayerExternalName("");
-    }
-    setErr(null);
-  }, [game]);
-
-  if (!game) return null;
-
-  const playerOptions = game.rows.filter((r) => !r.isPayer || (r.eventPlayerId === payerEventPlayerId));
-
-  const save = async () => {
-    setSaving(true);
-    setErr(null);
-    try {
-      const body: Record<string, unknown> = { gameId: game.gameId, mode };
-      if (mode === "tracked") {
-        if (payerKind === "player") {
-          body.payerEventPlayerId = payerEventPlayerId;
-        } else {
-          body.payerExternalName = payerExternalName.trim();
-        }
-      }
-      const res = await fetch(`/api/events/${eventId}/payments/config`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => null);
-        setErr(j?.error ?? "failed");
-        return;
-      }
-      await onSaved();
-    } catch {
-      setErr("failed");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{t("paymentsConfigTitle")}</DialogTitle>
-      <DialogContent>
-        <Typography variant="body2" color="text.secondary" mb={2}>{t("paymentsConfigHint")}</Typography>
-
-        <RadioGroup value={mode} onChange={(e) => setMode(e.target.value as "tracked" | "untracked")}>
-          <FormControlLabel value="tracked" control={<Radio />} label={t("paymentsModeTracked")} />
-          <FormControlLabel value="untracked" control={<Radio />} label={t("paymentsModeUntracked")} />
-        </RadioGroup>
-
-        {mode === "tracked" && (
-          <Stack spacing={2} sx={{ mt: 2 }}>
-            <RadioGroup value={payerKind} onChange={(e) => setPayerKind(e.target.value as "player" | "external")}>
-              <FormControlLabel value="player" control={<Radio />} label={t("paymentsPayerPlayer")} />
-              <FormControlLabel value="external" control={<Radio />} label={t("paymentsPayerExternal")} />
-            </RadioGroup>
-
-            {payerKind === "player" ? (
-              <FormControl fullWidth>
-                <InputLabel>{t("paymentsPayerPlayer")}</InputLabel>
-                <Select
-                  value={payerEventPlayerId}
-                  label={t("paymentsPayerPlayer")}
-                  onChange={(e) => setPayerEventPlayerId(e.target.value as string)}
-                >
-                  {playerOptions.map((r) => (
-                    <MenuItem key={r.eventPlayerId} value={r.eventPlayerId}>{r.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            ) : (
-              <TextField
-                fullWidth
-                label={t("paymentsPayerExternalPlaceholder")}
-                value={payerExternalName}
-                onChange={(e) => setPayerExternalName(e.target.value)}
-              />
-            )}
-          </Stack>
-        )}
-
-        {err && <Alert severity="error" sx={{ mt: 2 }}>{err === "failed" ? t("paymentsFailed") : err}</Alert>}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t("paymentsCancel")}</Button>
-        <Button variant="contained" disabled={saving} onClick={save}>{t("paymentsSave")}</Button>
-      </DialogActions>
-    </Dialog>
   );
 }

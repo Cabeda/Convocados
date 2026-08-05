@@ -17,6 +17,7 @@ import PhoneIcon from "@mui/icons-material/Phone";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
+import { PaymentConfigDialog, type PaymentConfigGame } from "./PaymentConfigDialog";
 import {
   type PaymentMethod,
   type PaymentMethodType,
@@ -132,6 +133,24 @@ export function PaymentSection({
     return () => clearInterval(id);
   }, [fetchCost]);
 
+  // Payment overhaul: current-game payment rows (GamePayment) for the pills.
+  const [gameSettlement, setGameSettlement] = useState<PaymentConfigGame | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+
+  const fetchGameSettlement = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/events/${eventId}/payments/game`);
+      if (r.ok) setGameSettlement(await r.json());
+    } catch { /* ignore */ }
+  }, [eventId]);
+
+  useEffect(() => { fetchGameSettlement(); }, [fetchGameSettlement, activePlayerCount]);
+
+  useEffect(() => {
+    const id = setInterval(fetchGameSettlement, 10_000);
+    return () => clearInterval(id);
+  }, [fetchGameSettlement]);
+
   const storageKey = `splitCosts_expanded_${eventId}`;
   const [accordionOpen, setAccordionOpen] = useState(() => {
     try { return localStorage.getItem(storageKey) === "true"; } catch { return false; }
@@ -218,6 +237,28 @@ export function PaymentSection({
   const handleBulkMarkPaid = async () => {
     await fetch(`/api/events/${eventId}/payments/bulk`, { method: "PUT" });
     fetchCost();
+    onPaymentChange?.();
+  };
+
+  // Payment overhaul: settle a GamePayment row (owner confirms; player self-reports own pending).
+  const handleToggleSettlement = async (row: { eventPlayerId: string; name: string; status: string }) => {
+    if (!gameSettlement) return;
+    try {
+      if (canEdit) {
+        await fetch(`/api/events/${eventId}/payments/settlement`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ gameId: gameSettlement.gameId, eventPlayerId: row.eventPlayerId }),
+        });
+      } else if (currentUserName && row.name.toLowerCase() === currentUserName.toLowerCase() && row.status === "pending") {
+        await fetch(`/api/events/${eventId}/payments/settlement/self-report`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ gameId: gameSettlement.gameId, eventPlayerId: row.eventPlayerId }),
+        });
+      }
+    } catch { /* ignore */ }
+    fetchGameSettlement();
     onPaymentChange?.();
   };
 
@@ -791,28 +832,69 @@ export function PaymentSection({
                   </Paper>
                 )}
 
-                {/* Per-player payment chips */}
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                  {costData.payments.map((p) => (
-                    <Chip
-                      key={p.playerName}
-                      label={`${p.playerName} — ${p.amount.toFixed(2)}`}
-                      color={statusColor(p.status)}
-                      variant={p.status === "pending" ? "outlined" : "filled"}
-                      size="small"
-                      onClick={canEdit ? () => handleTogglePayment(p.playerName, p.status) : undefined}
-                      sx={{
-                        cursor: canEdit ? "pointer" : "default",
-                        ...(canEdit && {
-                          "&:hover": { opacity: 0.85 },
-                        }),
-                      }}
-                    />
-                  ))}
-                </Box>
+                {/* Per-player payment chips (new model: GamePayment rows) */}
+                {gameSettlement?.hasCost && gameSettlement.rows.length > 0 ? (
+                  <>
+                    {gameSettlement.mode === "untracked" && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t("paymentsUntrackedNote")}
+                      </Typography>
+                    )}
+                    {gameSettlement.mode !== "untracked" && (
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                        {gameSettlement.rows.map((r) => (
+                          <Chip
+                            key={r.eventPlayerId}
+                            label={`${r.name} — ${r.amount.toFixed(2)}${r.isPayer ? ` · ${t("paymentsPayer")}` : ""}`}
+                            color={statusColor(r.status)}
+                            variant={r.status === "pending" ? "outlined" : "filled"}
+                            size="small"
+                            onClick={
+                              canEdit || (currentUserName && r.name.toLowerCase() === currentUserName.toLowerCase())
+                                ? () => handleToggleSettlement(r)
+                                : undefined
+                            }
+                            sx={{
+                              cursor: canEdit || (currentUserName && r.name.toLowerCase() === currentUserName.toLowerCase()) ? "pointer" : "default",
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    )}
+                  </>
+                ) : (
+                  /* Legacy fallback (events without a current Game) */
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                    {costData.payments.map((p) => (
+                      <Chip
+                        key={p.playerName}
+                        label={`${p.playerName} — ${p.amount.toFixed(2)}`}
+                        color={statusColor(p.status)}
+                        variant={p.status === "pending" ? "outlined" : "filled"}
+                        size="small"
+                        onClick={canEdit ? () => handleTogglePayment(p.playerName, p.status) : undefined}
+                        sx={{
+                          cursor: canEdit ? "pointer" : "default",
+                          ...(canEdit && {
+                            "&:hover": { opacity: 0.85 },
+                          }),
+                        }}
+                      />
+                    ))}
+                  </Box>
+                )}
 
-                {/* Bulk mark all as paid */}
-                {canEdit && costData.payments.some((p) => p.status !== "paid") && (
+                {/* Payment overhaul: config control (owner) */}
+                {canEdit && gameSettlement?.hasCost && (
+                  <Button size="small" variant="text" onClick={() => setConfigOpen(true)}>
+                    {gameSettlement.payerName
+                      ? `${t("paymentsConfigTitle")} · ${gameSettlement.payerName}`
+                      : t("paymentsConfigTitle")}
+                  </Button>
+                )}
+
+                {/* Bulk mark all as paid — legacy path only; new model settles via payments page */}
+                {canEdit && !gameSettlement?.hasCost && costData.payments.some((p) => p.status !== "paid") && (
                   <Button
                     size="small"
                     variant="outlined"
@@ -864,13 +946,23 @@ export function PaymentSection({
       <Dialog open={confirmClearOverride} onClose={() => setConfirmClearOverride(false)}>
         <DialogTitle>{t("clearOverride")}</DialogTitle>
         <DialogContent>
-          <DialogContentText>{t("clearOverrideConfirm")}</DialogContentText>
-        </DialogContent>
+          <DialogContentText>{t("clearOverrideConfirm")}</DialogContentText>        </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmClearOverride(false)}>{t("cancel")}</Button>
           <Button onClick={handleClearOverride} color="warning" variant="contained">{t("clearOverride")}</Button>
         </DialogActions>
       </Dialog>
+      <PaymentConfigDialog
+        open={configOpen}
+        eventId={eventId}
+        game={gameSettlement}
+        onClose={() => setConfigOpen(false)}
+        onSaved={async () => {
+          setConfigOpen(false);
+          await fetchGameSettlement();
+          fetchCost();
+        }}
+      />
     </Paper>
   );
 }
