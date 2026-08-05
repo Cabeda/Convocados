@@ -6,6 +6,8 @@ import {
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
+import { ThemeModeProvider } from "./ThemeModeProvider";
+import { ResponsiveLayout } from "./ResponsiveLayout";
 
 const STATUS_LABEL: Record<string, TranslationKey> = {
   pending: "paymentsStatusPending",
@@ -126,9 +128,11 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
   const isManager = data?.viewerRole === "owner" || data?.viewerRole === "admin";
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h5" gutterBottom>{t("paymentsPageTitle")}</Typography>
-      <Typography variant="body2" color="text.secondary" gutterBottom>{t("paymentsIntro")}</Typography>
+    <ThemeModeProvider>
+      <ResponsiveLayout>
+        <Container maxWidth="md" sx={{ py: 4 }}>
+          <Typography variant="h5" gutterBottom>{t("paymentsPageTitle")}</Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>{t("paymentsIntro")}</Typography>
 
       {error === "failed" && (
         <Alert severity="error" sx={{ my: 2 }}>{t("paymentsFailed")}</Alert>
@@ -289,6 +293,8 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
           await load();
         }}
       />
-    </Container>
+        </Container>
+      </ResponsiveLayout>
+    </ThemeModeProvider>
   );
 }
