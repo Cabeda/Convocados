@@ -14,6 +14,8 @@ vi.mock("~/lib/auth.helpers.server", () => ({
   checkEventAdmin: vi.fn().mockResolvedValue(false),
 }));
 
+import { checkOwnership } from "~/lib/auth.helpers.server";
+
 import {
   syncGamePayments,
   setPaymentConfig,
@@ -57,7 +59,7 @@ async function seedEvent(opts: { players?: string[]; cost?: number; ownerId?: st
       ownerId,
     },
   });
-  const game = await prisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime, status: "played" } });
+  const game = await prisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime, status: "upcoming" } });
   await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
 
   const names = opts.players ?? ["Ana", "Bruno", "Carla"];
@@ -86,6 +88,7 @@ async function linkUser(name: string, userId: string) {
 
 beforeEach(async () => {
   mockGetSession.mockResolvedValue(null);
+  vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null });
   await resetRateLimitStore();
   await resetApiRateLimitStore();
   await prisma.gamePayment.deleteMany();
@@ -190,9 +193,26 @@ describe("setPaymentConfig", () => {
     expect(await prisma.gamePayment.count({ where: { gameId: game.id } })).toBe(0);
   });
 
-  it("rejects tracked without a payer", async () => {
+  it("allows tracked without a payer (awaiting-payer state) and clears the payer", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
-    await expect(setPaymentConfig(event.id, game.id, { mode: "tracked" })).rejects.toThrow(/exactly one payer/);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+
+    await setPaymentConfig(event.id, game.id, { mode: "tracked" });
+    const g = await prisma.game.findUniqueOrThrow({ where: { id: game.id } });
+    expect(g.paymentMode).toBe("tracked");
+    expect(g.payerEventPlayerId).toBeNull();
+    expect(g.payerExternalName).toBeNull();
+    // Clearing the payer reverts their auto-settled row.
+    const anaRow = await prisma.gamePayment.findFirstOrThrow({ where: { gameId: game.id, eventPlayerId: ana.id } });
+    expect(anaRow.status).toBe("pending");
+  });
+
+  it("rejects both a player and an external payer at once", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await expect(setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id, payerExternalName: "Venue" }))
+      .rejects.toThrow(/at most one payer/);
   });
 
   it("accepts an external payer name", async () => {
@@ -230,10 +250,15 @@ describe("setPaymentConfig", () => {
     expect(brunoExternal.method).toBeNull();
   });
 
-  it("rejects a blank external payer name", async () => {
+  it("treats a blank external payer name as awaiting-payer (clears payer)", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
-    await expect(setPaymentConfig(event.id, game.id, { mode: "tracked", payerExternalName: "  " }))
-      .rejects.toThrow(/exactly one payer/);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerExternalName: "  " });
+    const g = await prisma.game.findUniqueOrThrow({ where: { id: game.id } });
+    expect(g.payerEventPlayerId).toBeNull();
+    expect(g.payerExternalName).toBeNull();
   });
 
   it("rejects a payer from a different event", async () => {
@@ -378,6 +403,70 @@ describe("getSettlementSummary (privacy)", () => {
   });
 });
 
+describe("spec alignment", () => {
+  it("caps the share denominator at maxPlayers (bench players don't lower it)", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await prisma.event.update({ where: { id: event.id }, data: { maxPlayers: 2 } });
+    await syncGamePayments(game.id, event.id);
+    const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(rows).toHaveLength(3); // 3 participants, only 2 count for the split
+    expect(rows.every((r) => r.amount === 30)).toBe(true); // 60 / min(3,2)
+  });
+
+  it("freezes a played game's share amounts (leave does not rewrite them)", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id); // 3 rows @ 20
+    await prisma.game.update({ where: { id: game.id }, data: { status: "played" } });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await prisma.gameParticipant.updateMany({
+      where: { gameId: game.id, eventPlayerId: ana.id },
+      data: { archivedAt: new Date() },
+    });
+    await syncGamePayments(game.id, event.id);
+
+    const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id, archivedAt: null } });
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.amount === 20)).toBe(true); // frozen, not recomputed to 30
+  });
+
+  it("does not leak other debtors' rows to a player", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+    await linkUser("Bruno", "user-bruno");
+
+    const s = await getSettlementSummary(event.id, { role: "player", userId: "user-bruno" });
+    expect(s.games[0].rows.map((r) => r.name)).toEqual(["Bruno"]); // only own row
+    expect(s.games[0].debtorNames).toEqual([]);
+  });
+
+  it("settleShare rejects double-settling an already-paid share", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await settleShare(event.id, game.id, ana.id, "owner-settlement");
+    await expect(settleShare(event.id, game.id, ana.id, "owner-settlement")).rejects.toThrow(/already settled/);
+    expect(await prisma.walletTransaction.count({ where: { eventId: event.id, reason: "payment_received" } })).toBe(1);
+  });
+
+  it("settlement GET denies a logged-in non-participant", async () => {
+    const { event } = await seedEvent({ cost: 60 });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    mockGetSession.mockResolvedValue({ user: { id: "stranger", name: "Stranger" } });
+    const res = await getSummary(ctx({ id: event.id }));
+    expect(res.status).toBe(403);
+  });
+
+  it("payments/game GET denies a logged-in non-participant", async () => {
+    const { event } = await seedEvent({ cost: 60 });
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    mockGetSession.mockResolvedValue({ user: { id: "stranger", name: "Stranger" } });
+    const res = await getCurrentGame(ctx({ id: event.id }));
+    expect(res.status).toBe(403);
+  });
+});
+
 describe("error paths", () => {
   it("settleShare rejects an unknown payment", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
@@ -401,11 +490,11 @@ describe("settlement API routes", () => {
     expect(res.status).toBe(401);
   });
 
-  it("PATCH config rejects tracked without a payer", async () => {
+  it("PATCH config allows tracked without a payer (awaiting-payer)", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
     mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
     const res = await setConfig(ctx({ id: event.id }, { gameId: game.id, mode: "tracked" }, "PATCH"));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
   });
 
   it("PATCH config sets an external payer and GET reflects it", async () => {

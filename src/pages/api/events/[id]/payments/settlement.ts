@@ -2,12 +2,12 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
-import { getSettlementSummary, settleShare, unsettleShare } from "../../../../../lib/settlement.server";
+import { getSettlementSummary, settleShare, unsettleShare, isEventParticipant } from "../../../../../lib/settlement.server";
 
 /**
  * GET  /api/events/[id]/payments/settlement — people-first settlement summary.
- *      Receivers (payers) public to logged-in players; debtor names owner/admin-only;
- *      a player sees only their own debt. Anonymous denied.
+ *      Receivers (payers) public to event players; debtor names owner/admin-only;
+ *      a player sees only their own debt. Owner/admin or event player required.
  * PUT  /api/events/[id]/payments/settlement — settle one share (owner/admin).
  *      Body: { gameId, eventPlayerId }
  * DELETE /api/events/[id]/payments/settlement — revert a settled share (owner/admin).
@@ -25,6 +25,11 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
   const role = isOwner ? "owner" : isAdmin ? "admin" : "player";
+
+  // Only event players (or owners/admins) may view the event's payments.
+  if (role === "player" && !(await isEventParticipant(eventId, session.user.id))) {
+    return Response.json({ error: "Only event players can view payments." }, { status: 403 });
+  }
 
   try {
     const summary = await getSettlementSummary(eventId, { role, userId: session.user.id });

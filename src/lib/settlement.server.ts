@@ -18,22 +18,34 @@ import { recordReceived } from "./payments.server";
 
 export type PaymentMode = "tracked" | "untracked";
 
+/** One player's payment row in a game view. */
+export interface SettlementRow {
+  eventPlayerId: string;
+  name: string;
+  amount: number;
+  status: string;
+  isPayer: boolean;
+}
+
 export interface EffectiveCost {
   total: number;
   currency: string;
   mode: PaymentMode;
+  maxPlayers: number;
 }
 
 /** Effective cost + mode for a game. mode defaults to tracked (null column). */
 export async function effectiveGameCost(gameId: string, eventId: string): Promise<EffectiveCost> {
-  const [game, eventCost] = await Promise.all([
+  const [game, eventCost, event] = await Promise.all([
     prisma.game.findUnique({ where: { id: gameId }, select: { costTotalAmount: true, costCurrency: true, paymentMode: true } }),
     prisma.eventCost.findUnique({ where: { eventId }, select: { totalAmount: true, currency: true } }),
+    prisma.event.findUnique({ where: { id: eventId }, select: { maxPlayers: true } }),
   ]);
   return {
     total: game?.costTotalAmount ?? eventCost?.totalAmount ?? 0,
     currency: game?.costCurrency ?? eventCost?.currency ?? "EUR",
     mode: (game?.paymentMode as PaymentMode | null) ?? "tracked",
+    maxPlayers: event?.maxPlayers ?? 1,
   };
 }
 
@@ -46,10 +58,25 @@ export async function activeParticipants(gameId: string) {
   });
 }
 
-/** Per-participant share in euros (2dp). 0 when no cost or no participants. */
-export function shareFor(total: number, participantsCount: number): number {
-  return participantsCount > 0 ? Math.round((total / participantsCount) * 100) / 100 : 0;
+/** Whether a user is an event player (has an EventPlayer linked to the event). */
+export async function isEventParticipant(eventId: string, userId: string): Promise<boolean> {
+  const ep = await prisma.eventPlayer.findFirst({ where: { eventId, userId }, select: { id: true } });
+  return !!ep;
 }
+
+/**
+ * Per-participant share in euros (2dp), 0 when no cost or no participants.
+ * The denominator is the active participant count capped at maxPlayers (bench
+ * players don't lower the per-active-player share).
+ */
+export function shareFor(total: number, participantsCount: number, maxPlayers = participantsCount): number {
+  if (participantsCount <= 0) return 0;
+  const denominator = Math.max(1, Math.min(participantsCount, maxPlayers));
+  return Math.round((total / denominator) * 100) / 100;
+}
+
+/** Minimal client shape the sync routine needs — a `prisma` instance or a tx client. */
+type DbClient = Prisma.TransactionClient | typeof prisma;
 
 /**
  * Reconcile GamePayment rows for a game against its active participants.
@@ -57,30 +84,57 @@ export function shareFor(total: number, participantsCount: number): number {
  * - Archives rows for participants no longer active (soft, keeps history).
  * - Untracked games get no rows.
  * - Re-applies payer auto-settlement when the payer is an active participant.
+ * - Played games: amounts/rows are frozen — only payer auto-settle/revert applies.
  */
-export async function syncGamePayments(gameId: string, eventId: string): Promise<void> {
-  const { total, mode } = await effectiveGameCost(gameId, eventId);
-  const participants = await activeParticipants(gameId);
-  const share = shareFor(total, participants.length);
+async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: string): Promise<void> {
+  const [effective, game, participants] = await Promise.all([
+    effectiveGameCost(gameId, eventId),
+    db.game.findUnique({ where: { id: gameId }, select: { payerEventPlayerId: true, status: true } }),
+    db.gameParticipant.findMany({
+      where: { gameId, archivedAt: null },
+      include: { eventPlayer: { select: { id: true, name: true, userId: true } } },
+      orderBy: { order: "asc" },
+    }),
+  ]);
+  const { total, mode, maxPlayers } = effective;
+  const share = shareFor(total, participants.length, maxPlayers);
 
-  const game = await prisma.game.findUnique({
-    where: { id: gameId },
-    select: { payerEventPlayerId: true },
-  });
+  // Revert rows auto-settled as payer that are no longer the payer, then settle
+  // the current player-payer. Runs for played games too (payer changes post-game).
+  const applyPayer = async () => {
+    await db.gamePayment.updateMany({
+      where: {
+        gameId,
+        method: "payer",
+        ...(game?.payerEventPlayerId ? { eventPlayerId: { not: game.payerEventPlayerId } } : {}),
+      },
+      data: { status: "pending", paidAt: null, method: null },
+    });
+    if (game?.payerEventPlayerId) {
+      await db.gamePayment.updateMany({
+        where: { gameId, eventPlayerId: game.payerEventPlayerId },
+        data: { status: "paid", paidAt: new Date(), method: "payer" },
+      });
+    }
+  };
 
   if (mode === "untracked" || total <= 0) {
-    await prisma.gamePayment.deleteMany({ where: { gameId } });
+    await db.gamePayment.deleteMany({ where: { gameId } });
     return;
   }
 
   const activeIds = participants.map((p) => p.eventPlayer.id);
-  await prisma.gamePayment.updateMany({
+  await db.gamePayment.updateMany({
     where: { gameId, eventPlayerId: { notIn: activeIds } },
     data: { archivedAt: new Date() },
   });
 
+  // Played games: shares are frozen once the game ends (spec point 4) — rows
+  // are created/revived at the frozen share but amounts never change, so a
+  // post-game roster mutation can't rewrite what the group already settled.
+  const amountUpdate = game?.status === "played" ? {} : { amount: share };
   for (const p of participants) {
-    await prisma.gamePayment.upsert({
+    await db.gamePayment.upsert({
       where: { gameId_eventPlayerId: { gameId, eventPlayerId: p.eventPlayer.id } },
       create: {
         gameId,
@@ -89,27 +143,19 @@ export async function syncGamePayments(gameId: string, eventId: string): Promise
         amount: share,
         status: "pending",
       },
-      update: { amount: share, archivedAt: null, playerName: p.eventPlayer.name },
+      update: { archivedAt: null, playerName: p.eventPlayer.name, ...amountUpdate },
     });
   }
 
-  // Revert rows that were auto-settled as payer but are no longer the payer
-  // (payer changed to someone else, or to an external person / unassigned).
-  await prisma.gamePayment.updateMany({
-    where: {
-      gameId,
-      method: "payer",
-      ...(game?.payerEventPlayerId ? { eventPlayerId: { not: game.payerEventPlayerId } } : {}),
-    },
-    data: { status: "pending", paidAt: null, method: null },
-  });
+  await applyPayer();
+}
 
-  if (game?.payerEventPlayerId) {
-    await prisma.gamePayment.updateMany({
-      where: { gameId, eventPlayerId: game.payerEventPlayerId },
-      data: { status: "paid", paidAt: new Date(), method: "payer" },
-    });
-  }
+export async function syncGamePayments(gameId: string, eventId: string): Promise<void> {
+  await syncGamePaymentsCore(prisma, gameId, eventId);
+}
+
+export async function syncGamePaymentsTx(tx: Prisma.TransactionClient, gameId: string, eventId: string): Promise<void> {
+  await syncGamePaymentsCore(tx, gameId, eventId);
 }
 
 export interface PaymentConfig {
@@ -144,8 +190,8 @@ export async function setPaymentConfig(
 
   const hasPlayerPayer = !!config.payerEventPlayerId;
   const hasExternal = !!config.payerExternalName?.trim();
-  if (hasPlayerPayer === hasExternal) {
-    throw new Error("Tracked games require exactly one payer (a player or an external name).");
+  if (hasPlayerPayer && hasExternal) {
+    throw new Error("A tracked game has at most one payer (a player or an external name).");
   }
   if (hasPlayerPayer) {
     const payer = await prisma.eventPlayer.findUnique({ where: { id: config.payerEventPlayerId! } });
@@ -164,60 +210,6 @@ export async function setPaymentConfig(
     await syncGamePaymentsTx(tx, gameId, eventId);
   });
 }
-
-/** tx-aware variant of syncGamePayments for transactional callers. */
-export async function syncGamePaymentsTx(tx: Prisma.TransactionClient, gameId: string, eventId: string): Promise<void> {
-  const { total, mode } = await effectiveGameCost(gameId, eventId);
-  const participants = await tx.gameParticipant.findMany({
-    where: { gameId, archivedAt: null },
-    include: { eventPlayer: { select: { id: true, name: true } } },
-    orderBy: { order: "asc" },
-  });
-  const game = await tx.game.findUnique({ where: { id: gameId }, select: { payerEventPlayerId: true } });
-  const share = shareFor(total, participants.length);
-
-  if (mode === "untracked" || total <= 0) {
-    await tx.gamePayment.deleteMany({ where: { gameId } });
-    return;
-  }
-
-  const activeIds = participants.map((p) => p.eventPlayer.id);
-  await tx.gamePayment.updateMany({
-    where: { gameId, eventPlayerId: { notIn: activeIds } },
-    data: { archivedAt: new Date() },
-  });
-
-  for (const p of participants) {
-    await tx.gamePayment.upsert({
-      where: { gameId_eventPlayerId: { gameId, eventPlayerId: p.eventPlayer.id } },
-      create: {
-        gameId,
-        eventPlayerId: p.eventPlayer.id,
-        playerName: p.eventPlayer.name,
-        amount: share,
-        status: "pending",
-      },
-      update: { amount: share, archivedAt: null, playerName: p.eventPlayer.name },
-    });
-  }
-
-  await tx.gamePayment.updateMany({
-    where: {
-      gameId,
-      method: "payer",
-      ...(game?.payerEventPlayerId ? { eventPlayerId: { not: game.payerEventPlayerId } } : {}),
-    },
-    data: { status: "pending", paidAt: null, method: null },
-  });
-
-  if (game?.payerEventPlayerId) {
-    await tx.gamePayment.updateMany({
-      where: { gameId, eventPlayerId: game.payerEventPlayerId },
-      data: { status: "paid", paidAt: new Date(), method: "payer" },
-    });
-  }
-}
-
 // ─── Settle actions ─────────────────────────────────────────────────────────
 
 /** Mark one share paid (owner/admin). Dual-writes the ledger credit. */
@@ -232,6 +224,8 @@ export async function settleShare(
   });
   if (!payment) throw new Error("Payment not found for this game and player.");
   if (payment.archivedAt) throw new Error("Payment is archived.");
+  if (payment.status === "paid") throw new Error("Share is already settled.");
+  if (payment.method === "payer") throw new Error("The payer's share is auto-settled and cannot be re-settled.");
 
   await prisma.$transaction(async (tx) => {
     await tx.gamePayment.update({
@@ -340,7 +334,7 @@ export interface SettlementGameView {
   paidCount: number;
   debtorCount: number;
   debtorNames: string[]; // owner/admin only; [] for players (privacy)
-  rows: Array<{ eventPlayerId: string; name: string; amount: number; status: string; isPayer: boolean }>;
+  rows: SettlementRow[];
 }
 
 export interface SettlementPersonView {
@@ -441,13 +435,17 @@ export async function getSettlementSummary(
       paidCount: activeRows.filter((r) => r.status === "paid").length,
       debtorCount: debtors.length,
       debtorNames: isManager ? debtorNames : [],
-      rows: activeRows.map((r) => ({
-        eventPlayerId: r.eventPlayerId,
-        name: r.eventPlayer.name,
-        amount: r.amount,
-        status: r.status,
-        isPayer: payerEventPlayerId === r.eventPlayerId,
-      })),
+      // Privacy: a non-manager never sees other debtors' names/amounts — only
+      // their own row (receivers/payers stay public via `payerName`).
+      rows: activeRows
+        .filter((r) => isManager || r.eventPlayerId === viewerEventPlayerId)
+        .map((r) => ({
+          eventPlayerId: r.eventPlayerId,
+          name: r.eventPlayer.name,
+          amount: r.amount,
+          status: r.status,
+          isPayer: payerEventPlayerId === r.eventPlayerId,
+        })),
     });
 
     // Payer is owed the sum of unpaid shares.
@@ -473,11 +471,12 @@ export async function getSettlementSummary(
   } else {
     const key = viewerEventPlayerName ? personKey(viewerEventPlayerName, true) : null;
     people = [...peopleMap.values()].filter((p) => p.isPayer || key === personKey(p.name, p.isPlayer));
-    // Recompute amounts to drop other people's debtor amounts.
+    // Other people's debtor lines are private — show only their public "receiver"
+    // (payer) side. The viewer's own person keeps ALL lines (they may be both a
+    // payer in one game and a debtor in another).
     people = people.map((p) => {
-      if (p.isPayer) {
+      if (p.isPayer && key !== personKey(p.name, p.isPlayer)) {
         p.lines = p.lines.filter((l) => l.role === "payer");
-        return p;
       }
       return p;
     });
@@ -505,7 +504,7 @@ export interface CurrentGameSettlement {
   payerName: string | null;
   payerIsPlayer: boolean;
   hasCost: boolean;
-  rows: Array<{ eventPlayerId: string; name: string; amount: number; status: string; isPayer: boolean }>;
+  rows: SettlementRow[];
 }
 
 /**
@@ -558,12 +557,14 @@ export async function getCurrentGameSettlement(eventId: string): Promise<Current
     hasCost: total > 0,
     rows: participants.map((gp) => {
       const row = paymentByPlayer.get(gp.eventPlayer.id);
+      const isPayer = payerId === gp.eventPlayer.id;
       return {
         eventPlayerId: gp.eventPlayer.id,
         name: gp.eventPlayer.name,
         amount: row?.amount ?? share,
-        status: row?.status ?? "pending",
-        isPayer: payerId === gp.eventPlayer.id,
+        // A player-payer's computed row reads as auto-settled even before rows sync.
+        status: row?.status ?? (isPayer ? "paid" : "pending"),
+        isPayer,
       };
     }),
   };
@@ -576,7 +577,7 @@ export interface WrapUpGameSettlement {
   mode: PaymentMode;
   payerName: string | null;
   payerIsPlayer: boolean;
-  rows: Array<{ eventPlayerId: string; name: string; amount: number; status: string; isPayer: boolean }>;
+  rows: SettlementRow[];
 }
 
 /**
