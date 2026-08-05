@@ -6,6 +6,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
+import { formatMoney, formatShortDate } from "~/lib/money";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
@@ -53,12 +54,9 @@ interface SettlementSummary {
   currentGameId: string | null;
   viewerRole: "owner" | "admin" | "player";
   viewerEventPlayerId: string | null;
+  activePlayerCount: number;
   totals: { unsettledGames: number; totalOwed: number; totalOwedTo: number };
 }
-
-const fmtMoney = (n: number) => `${n.toFixed(2)}€`;
-const fmtDate = (iso: string) =>
-  new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" }).format(new Date(iso));
 
 export default function PaymentsPage({ eventId }: { eventId: string }) {
   const t = useT();
@@ -74,6 +72,9 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
       const res = await fetch(`/api/events/${eventId}/payments/settlement`);
       if (res.status === 401) {
         setError("signin");
+        setData(null);
+      } else if (res.status === 403) {
+        setError("forbidden");
         setData(null);
       } else if (!res.ok) {
         setError("failed");
@@ -127,6 +128,21 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
     );
   }
 
+  if (error === "forbidden") {
+    return (
+      <ThemeModeProvider>
+        <ResponsiveLayout>
+          <Container maxWidth="md" sx={{ py: 4 }}>
+            <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => { window.location.href = `/events/${eventId}`; }} sx={{ mb: 1 }}>
+              {t("backToGame")}
+            </Button>
+            <Alert severity="info">{t("paymentsPlayersOnly")}</Alert>
+          </Container>
+        </ResponsiveLayout>
+      </ThemeModeProvider>
+    );
+  }
+
   const isManager = data?.viewerRole === "owner" || data?.viewerRole === "admin";
 
   return (
@@ -148,7 +164,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
       )}
 
       {/* ── Cost & payment methods (manager of price/methods) ──────── */}
-      <CostSection eventId={eventId} isManager={data?.viewerRole === "owner" || data?.viewerRole === "admin"} playerCount={0} />
+      <CostSection eventId={eventId} isManager={data?.viewerRole === "owner" || data?.viewerRole === "admin"} playerCount={data?.activePlayerCount ?? 0} />
 
       {/* ── People rollup ─────────────────────────────────────────── */}
       {data && data.people.length > 0 && (
@@ -158,7 +174,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
             {data.people.filter((p) => p.isPayer).map((p) => (
               <ListItem key={`r-${p.name}`} divider>
                 <ListItemText
-                  primary={t("paymentsIsOwed", { name: p.name, amount: fmtMoney(p.owedToAmount) })}
+                  primary={t("paymentsIsOwed", { name: p.name, amount: formatMoney(p.owedToAmount, "EUR") })}
                   secondary={p.lines.length > 0 ? `${t("paymentsUnsettledGames")} · ${p.lines.length}` : ""}
                 />
               </ListItem>
@@ -170,7 +186,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
             {data.people.filter((p) => !p.isPayer).map((p) => (
               <ListItem key={`d-${p.name}`} divider>
                 <ListItemText
-                  primary={t("paymentsOwes", { name: p.name, amount: fmtMoney(p.owedAmount) })}
+                  primary={t("paymentsOwes", { name: p.name, amount: formatMoney(p.owedAmount, "EUR") })}
                 />
               </ListItem>
             ))}
@@ -187,7 +203,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
               <Box key={g.gameId}>
                 <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
                   <Typography variant="subtitle1">
-                    {t("paymentsGameDate", { date: fmtDate(g.dateTime) })}
+                    {t("paymentsGameDate", { date: formatShortDate(g.dateTime) })}
                   </Typography>
                   <Box>
                     {isManager && (
@@ -210,7 +226,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
                 <Box ml={1}>
                   <Typography variant="body2" color="text.secondary">
                     {g.payerName
-                      ? t("paymentsIsOwed", { name: g.payerName, amount: fmtMoney(g.total) })
+                      ? t("paymentsIsOwed", { name: g.payerName, amount: formatMoney(g.total, "EUR") })
                       : t("paymentsUnassignedPayer")}
                     {g.payerIsPlayer ? ` · ${t("paymentsPayer")}` : ""}
                   </Typography>
@@ -251,7 +267,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
           <List dense>
             {data.people.filter((p) => p.isPlayer && p.owedAmount > 0).map((p) => (
               <ListItem key={p.name} divider>
-                <ListItemText primary={t("paymentsOwes", { name: p.name, amount: fmtMoney(p.owedAmount) })} />
+                <ListItemText primary={t("paymentsOwes", { name: p.name, amount: formatMoney(p.owedAmount, "EUR") })} />
               </ListItem>
             ))}
           </List>

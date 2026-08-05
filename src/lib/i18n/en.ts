@@ -1117,6 +1117,7 @@ const en = {
   paymentsStatusSent: "Sent",
   paymentsStatusPaid: "Paid",
   paymentsSignInRequired: "Sign in to view payments.",
+  paymentsPlayersOnly: "Payments are only available to players of this game.",
   paymentsPayer: "payer",
   paymentsUpdated: "Payments updated",
   paymentsFailed: "Something went wrong. Try again.",
@@ -1124,7 +1125,6 @@ const en = {
   paymentsUnassignedPayer: "No payer set yet",
   // Event-page payment surface (replaces the split-the-cost accordion)
   youOwe: "You owe {amount}",
-  pay: "Pay",
   costAndMethods: "Cost & payment methods",
   editPrice: "Edit price",
   setPrice: "Set price",
