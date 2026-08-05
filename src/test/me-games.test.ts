@@ -91,9 +91,9 @@ describe("GET /api/me/games", () => {
     const user = await seedUser();
     mockAuthenticateRequest.mockResolvedValue(null);
     mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
-    const _event1 = await seedEvent(user.id, { title: "Game 1" });
+    await seedEvent(user.id, { title: "Game 1" });
     const event2 = await seedEvent(user.id, { title: "Game 2" });
-    const _event3 = await seedEvent(user.id, { title: "Game 3" });
+    await seedEvent(user.id, { title: "Game 3" });
 
     const resAll = await GET(ctx(`?limit=10`));
     const bodyAll = await resAll.json();
