@@ -2,13 +2,15 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
-import { getSettlementSummary, settleShare } from "../../../../../lib/settlement.server";
+import { getSettlementSummary, settleShare, unsettleShare } from "../../../../../lib/settlement.server";
 
 /**
  * GET  /api/events/[id]/payments/settlement — people-first settlement summary.
  *      Receivers (payers) public to logged-in players; debtor names owner/admin-only;
  *      a player sees only their own debt. Anonymous denied.
  * PUT  /api/events/[id]/payments/settlement — settle one share (owner/admin).
+ *      Body: { gameId, eventPlayerId }
+ * DELETE /api/events/[id]/payments/settlement — revert a settled share (owner/admin).
  *      Body: { gameId, eventPlayerId }
  */
 export const GET: APIRoute = async ({ params, request }) => {
@@ -59,6 +61,36 @@ export const PUT: APIRoute = async ({ params, request }) => {
     await settleShare(eventId, gameId, eventPlayerId, markedBy);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to settle share.";
+    return Response.json({ error: message }, { status: 400 });
+  }
+
+  return Response.json({ ok: true, gameId, eventPlayerId });
+};
+
+export const DELETE: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
+
+  const eventId = params.id ?? "";
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+  if (event.ownerId && !isOwner && !isAdmin) {
+    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const gameId = String(body.gameId ?? "");
+  const eventPlayerId = String(body.eventPlayerId ?? "");
+  if (!gameId || !eventPlayerId) {
+    return Response.json({ error: "gameId and eventPlayerId are required." }, { status: 400 });
+  }
+
+  try {
+    await unsettleShare(eventId, gameId, eventPlayerId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to revert share.";
     return Response.json({ error: message }, { status: 400 });
   }
 

@@ -177,6 +177,9 @@ async function main() {
       where: { gameId: wrapGame.id, eventPlayerId: nuno.id },
       data: { status: "sent" },
     });
+    const half = Math.ceil(wrapPlayers.length / 2);
+    const teamOne = wrapPlayers.slice(0, half);
+    const teamTwo = wrapPlayers.slice(half);
     await prisma.gameHistory.create({
       data: {
         eventId: wrap.id,
@@ -186,6 +189,10 @@ async function main() {
         scoreTwo: 3,
         teamOneName: "Ninjas",
         teamTwoName: "Gunas",
+        teamsSnapshot: JSON.stringify([
+          { team: "Ninjas", players: teamOne.map((name, order) => ({ name, order })) },
+          { team: "Gunas", players: teamTwo.map((name, order) => ({ name, order })) },
+        ]),
         editableUntil: new Date(now + 7 * 86400_000),
       },
     });

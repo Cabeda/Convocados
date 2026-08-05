@@ -248,6 +248,44 @@ export async function settleShare(
   });
 }
 
+/**
+ * Revert a settled share back to pending (owner/admin undo a mistaken settle).
+ * Only manually-settled rows (not auto-settled payer rows) can be reverted.
+ * Also removes the `payment_received` ledger credit so the join-gate balance
+ * stays consistent with the reverted state.
+ */
+export async function unsettleShare(
+  eventId: string,
+  gameId: string,
+  eventPlayerId: string,
+): Promise<void> {
+  const payment = await prisma.gamePayment.findUnique({
+    where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
+  });
+  if (!payment) throw new Error("Payment not found for this game and player.");
+  if (payment.method === "payer") {
+    throw new Error("The payer's share is auto-settled and cannot be reverted.");
+  }
+
+  const ep = await prisma.eventPlayer.findUnique({ where: { id: eventPlayerId } });
+
+  // Resolve the ledger userId the same way recordReceived does: the player's
+  // linked user, else the per-(event,player) system user.
+  const ledgerUserId = ep?.userId ?? (payment.playerName ? `system:${eventId}:${payment.playerName}` : null);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.gamePayment.update({
+      where: { id: payment.id },
+      data: { status: "pending", paidAt: null, method: null, markedBy: null },
+    });
+    if (ledgerUserId) {
+      await tx.walletTransaction.deleteMany({
+        where: { eventId, eventInstanceId: gameId, reason: "payment_received", userId: ledgerUserId },
+      });
+    }
+  });
+}
+
 /** Mark all debtor shares of a game paid (owner/admin). Dual-writes each ledger credit. */
 export async function bulkSettleGame(eventId: string, gameId: string, markedBy: string): Promise<number> {
   const payments = await prisma.gamePayment.findMany({
