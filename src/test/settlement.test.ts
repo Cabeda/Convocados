@@ -105,6 +105,30 @@ describe("shareFor", () => {
   });
 });
 
+describe("effectiveGameCost overrides", () => {
+  it("per-game cost override wins over the EventCost template", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await prisma.game.update({ where: { id: game.id }, data: { costTotalAmount: 90, costCurrency: "USD" } });
+    await syncGamePayments(game.id, event.id);
+    const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.amount === 30)).toBe(true);
+  });
+
+  it("no cost → no payment rows", async () => {
+    const { event, game } = await seedEvent();
+    await syncGamePayments(game.id, event.id);
+    expect(await prisma.gamePayment.count({ where: { gameId: game.id } })).toBe(0);
+  });
+
+  it("untracked mode → no rows even with a cost", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await setPaymentConfig(event.id, game.id, { mode: "untracked" });
+    await syncGamePayments(game.id, event.id);
+    expect(await prisma.gamePayment.count({ where: { gameId: game.id } })).toBe(0);
+  });
+});
+
 describe("syncGamePayments", () => {
   it("creates a pending row per participant at the share", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
@@ -173,6 +197,20 @@ describe("setPaymentConfig", () => {
     const g = await prisma.game.findUniqueOrThrow({ where: { id: game.id } });
     expect(g.payerExternalName).toBe("Venue Staff");
     expect(g.paymentMode).toBe("tracked");
+  });
+
+  it("rejects a blank external payer name", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await expect(setPaymentConfig(event.id, game.id, { mode: "tracked", payerExternalName: "  " }))
+      .rejects.toThrow(/exactly one payer/);
+  });
+
+  it("rejects a payer from a different event", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    const other = await prisma.event.create({ data: { title: "Other", location: "X", dateTime: new Date() } });
+    const otherPlayer = await prisma.eventPlayer.create({ data: { eventId: other.id, name: "Z" } });
+    await expect(setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: otherPlayer.id }))
+      .rejects.toThrow(/not a participant/);
   });
 });
 
@@ -262,6 +300,41 @@ describe("getSettlementSummary (privacy)", () => {
     const s = await getSettlementSummary(event.id, { role: "owner", userId: "owner-settlement" });
     expect(s.games).toHaveLength(0);
     expect(s.totals.unsettledGames).toBe(0);
+  });
+
+  it("untracked games are excluded from the summary", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await setPaymentConfig(event.id, game.id, { mode: "untracked" });
+    const s = await getSettlementSummary(event.id, { role: "owner", userId: "owner-settlement" });
+    expect(s.games).toHaveLength(0);
+    expect(s.people).toHaveLength(0);
+  });
+
+  it("external payer appears as a receiver", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerExternalName: "Venue" });
+    const s = await getSettlementSummary(event.id, { role: "owner", userId: "owner-settlement" });
+    const venue = s.people.find((p) => p.name === "Venue");
+    expect(venue?.isPayer).toBe(true);
+    expect(venue?.isPlayer).toBe(false);
+    expect(venue?.owedToAmount).toBe(60);
+  });
+});
+
+describe("error paths", () => {
+  it("settleShare rejects an unknown payment", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await expect(settleShare(event.id, game.id, "missing-id", "owner-settlement"))
+      .rejects.toThrow(/Payment not found/);
+  });
+
+  it("selfReportSent rejects when not pending", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await settleShare(event.id, game.id, ana.id, "owner-settlement");
+    await expect(selfReportSent(game.id, ana.id)).rejects.toThrow(/when status is pending/);
   });
 });
 
