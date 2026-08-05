@@ -166,6 +166,7 @@
     <string name="removed_tap_undo">%1$s removed — tap to undo</string>
     <string name="vs">VS</string>
     <string name="linked">Linked</string>
+    <string name="anonymous_player">Anonymous player</string>
     <string name="player_moved">%1$s moved</string>
     <string name="added_player_confirm">Added %1$s ✓</string>
     <string name="undo">Undo</string>

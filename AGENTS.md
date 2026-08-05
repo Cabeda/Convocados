@@ -55,6 +55,12 @@ Every change must include tests that prove the functionality works:
 - Bug fixes → Regression tests
 - Refactoring → Ensure existing tests still pass
 
+### 4. Platform Parity
+Web and the Android apps (`:app`, `:wear`) stay in sync for user-facing features. A feature
+that ships on one platform ships on the others in the **same PR** or an explicitly linked
+follow-up ticket (Wear included where the affordance exists). No "web-only" or "app-only"
+UI drift.
+
 ## Development Workflow
 
 ### First-time setup
@@ -396,6 +402,7 @@ Before submitting a PR:
 - [ ] All tests pass (`npm run test`)
 - [ ] Type checking passes (`npm run typecheck`)
 - [ ] i18n strings added to all 6 locales
+- [ ] Platform parity considered (web ↔ Android apps)
 - [ ] Database migrations included (if schema changed)
 - [ ] Documentation updated (if API changed)
 - [ ] No console errors in browser

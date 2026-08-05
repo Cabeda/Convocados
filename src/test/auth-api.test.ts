@@ -431,7 +431,7 @@ describe("GET /api/me/games (authenticated)", () => {
   it("returns owned, admin, and followed games", async () => {
     const user = await seedUser();
     mockAuth(user.id);
-    const _ownedId = await seedEvent({ ownerId: user.id });
+    await seedEvent({ ownerId: user.id });
     const adminId = await seedEvent({ title: "Admin Game" });
     const followId = await seedEvent({ title: "Followed Game" });
     await testPrisma.eventAdmin.create({ data: { eventId: adminId, userId: user.id } });

@@ -371,6 +371,7 @@ const es: TranslationKeys = {
   undoRemoveDesc: "{name} eliminado",
   undoExpired: "Tiempo para deshacer expirado.",
   protectedPlayer: "Jugador con cuenta",
+  anonymousPlayer: "Jugador anónimo",
   ownerOnly: "Solo el dueño del evento puede hacer esto.",
   relinquishOwnership: "Dejar de ser dueño",
   relinquishOwnershipDesc: "El evento quedará sin dueño y cualquiera podrá reclamarlo.",

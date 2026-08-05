@@ -71,5 +71,18 @@ export const GET: APIRoute = async ({ params, request }) => {
     .sort((a, b) => b.gamesPlayed - a.gamesPlayed)
     .slice(0, 30);
 
-  return Response.json({ players });
+  // Resolve profile images for account-linked suggestions in one batch query
+  // (EventPlayer has no Prisma relation to User).
+  const linkedIds = [...new Set(players.map((p) => p.userId).filter((u): u is string => !!u))];
+  const users = linkedIds.length
+    ? await prisma.user.findMany({ where: { id: { in: linkedIds } }, select: { id: true, image: true } })
+    : [];
+  const imageByUserId = new Map(users.map((u) => [u.id, u.image]));
+
+  const payload = players.map((p) => ({
+    ...p,
+    image: p.userId ? (imageByUserId.get(p.userId) ?? null) : null,
+  }));
+
+  return Response.json({ players: payload });
 };

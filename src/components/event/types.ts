@@ -2,6 +2,7 @@ export interface Player {
   id: string;
   name: string;
   userId?: string | null;
+  image?: string | null;
 }
 
 export interface TeamMember {
@@ -56,9 +57,11 @@ export interface KnownPlayer {
   gamesPlayed?: number;
   /** When non-null, the suggestion matches a registered user account by name. */
   userId?: string | null;
+  /** Profile image of the linked user account, if any. */
+  image?: string | null;
 }
 
 /** Option type for the player Autocomplete: either an existing player or a "create new" action. */
 export type PlayerOption =
-  | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
+  | { type: "existing"; name: string; gamesPlayed: number; userId: string | null; image?: string | null }
   | { type: "create"; name: string };

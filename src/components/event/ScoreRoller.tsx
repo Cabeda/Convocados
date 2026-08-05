@@ -1,7 +1,6 @@
 // ponytail: inline +/- stepper for score input. Sits next to the number so
 // taps land close to the digits — the vertical +/pill/- layout was wasting
 // vertical space and burying the controls far from the number.
-import React from "react";
 import { Box, IconButton, Typography, useTheme } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";

@@ -106,7 +106,7 @@ beforeAll(async () => {
   await ensureTrustedClientInDB();
 
   // Sign up via better-auth to create User + Account (with hashed password)
-  const _signUpRes = await authFetch(`${BASE}/api/auth/sign-up/email`, {
+  await authFetch(`${BASE}/api/auth/sign-up/email`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: BASE },
     body: JSON.stringify({

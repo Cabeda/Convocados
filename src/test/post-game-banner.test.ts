@@ -623,7 +623,7 @@ describe("GET /api/events/:id/post-game-status", () => {
         durationMinutes: 60,
       },
     });
-    const _cost = await prisma.eventCost.create({
+    await prisma.eventCost.create({
       data: { eventId: event.id, totalAmount: 50, currency: "EUR" },
     });
     // Snapshot captures the advance payment as "paid"
