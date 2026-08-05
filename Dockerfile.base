@@ -1,7 +1,7 @@
 # Base image: runtime dependencies that rarely change.
 # Rebuilt only when pnpm-lock.yaml or prisma/schema.prisma change.
 # Tagged as registry.fly.io/convocados:base
-FROM node:23-alpine
+FROM node:24-alpine
 
 RUN apk add --no-cache openssl python3 make g++
 RUN corepack enable && corepack prepare pnpm@10 --activate
