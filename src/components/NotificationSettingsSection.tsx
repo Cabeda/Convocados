@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Paper, Typography, Stack, Switch, FormControlLabel,
   Divider, Snackbar, CircularProgress,

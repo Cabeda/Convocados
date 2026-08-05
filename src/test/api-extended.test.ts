@@ -515,7 +515,7 @@ describe("GET /api/push/vapid-public-key", () => {
 describe("GET /api/users/[id]", () => {
   it("returns user profile with games", async () => {
     const user = await seedUser();
-    const _id = await seedEvent({ ownerId: user.id, isPublic: true });
+    await seedEvent({ ownerId: user.id, isPublic: true });
     const res = await getUserProfile(ctx({ id: user.id }));
     expect(res.status).toBe(200);
     const body = await res.json();

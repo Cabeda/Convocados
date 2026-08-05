@@ -99,7 +99,7 @@ describe("POST /api/events/[id]/reset-player-order", () => {
     const team = await prisma.teamResult.create({
       data: { eventId: event.id, name: "Team A" },
     });
-    const _players = await prisma.player.findMany({ where: { eventId: event.id } });
+    await prisma.player.findMany({ where: { eventId: event.id } });
     // Add a player beyond maxPlayers to team (should be cleared)
     await prisma.teamMember.create({
       data: { teamResultId: team.id, name: "P4", order: 3 },
