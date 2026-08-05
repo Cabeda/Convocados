@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   Paper, Typography, Box, Stack, Button, Dialog, DialogTitle, DialogContent,
   DialogActions, TextField, Select, MenuItem, FormControl, InputLabel,
@@ -14,18 +14,11 @@ import {
   parsePaymentMethods,
   getDisplayValue,
 } from "~/lib/paymentMethods";
+import { useEventCost, type EventCostData } from "~/lib/useEventCost";
+import { formatMoney } from "~/lib/money";
 import { PaymentMethodsList } from "./PaymentMethodsList";
 
-interface CostData {
-  totalAmount: number;
-  currency: string;
-  paymentMethods: string | null;
-  effectivePaymentMethods: string | null;
-  hasOverride: boolean;
-}
-
 const CURRENCIES = ["EUR", "USD", "GBP", "BRL", "CHF"];
-const fmt = (n: number, c: string) => `${n.toFixed(2)}${c}`;
 
 /**
  * Cost & payment-methods manager for the payments page. Owners edit the price
@@ -34,17 +27,8 @@ const fmt = (n: number, c: string) => `${n.toFixed(2)}${c}`;
  */
 export function CostSection({ eventId, isManager, playerCount }: { eventId: string; isManager: boolean; playerCount: number }) {
   const t = useT();
-  const [cost, setCost] = useState<CostData | null>(null);
+  const { cost, load } = useEventCost(eventId);
   const [open, setOpen] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/events/${eventId}/cost`);
-      if (res.ok) setCost(await res.json());
-    } catch { /* ignore */ }
-  }, [eventId]);
-
-  useEffect(() => { load(); }, [load]);
 
   if (!cost) return null;
 
@@ -64,16 +48,13 @@ export function CostSection({ eventId, isManager, playerCount }: { eventId: stri
       <Stack spacing={1} sx={{ mt: 1 }}>
         {cost.totalAmount > 0 ? (
           <Typography variant="body1" fontWeight={600}>
-            {fmt(cost.totalAmount, cost.currency)}
-            {share ? ` · ${t("perPlayer", { amount: fmt(share, cost.currency) })}` : ""}
+            {formatMoney(cost.totalAmount, cost.currency)}
+            {share ? ` · ${t("perPlayer", { amount: formatMoney(share, cost.currency) })}` : ""}
           </Typography>
         ) : (
           <Typography variant="body2" color="text.secondary">{t("postGameNoCostSet")}</Typography>
         )}
         {methods.length > 0 && <PaymentMethodsList methods={methods} />}
-        {cost.totalAmount === 0 && !isManager && (
-          <Typography variant="caption" color="text.secondary">{t("postGameNoCostSet")}</Typography>
-        )}
       </Stack>
 
       <CostEditorDialog
@@ -95,7 +76,7 @@ function CostEditorDialog({
 }: {
   open: boolean;
   eventId: string;
-  cost: CostData;
+  cost: EventCostData;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {

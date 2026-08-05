@@ -352,6 +352,8 @@ export interface SettlementSummaryView {
   currentGameId: string | null;
   viewerRole: ViewerRole;
   viewerEventPlayerId: string | null;
+  /** Active participants of the current game — used for the per-share display. */
+  activePlayerCount: number;
   totals: { unsettledGames: number; totalOwed: number; totalOwedTo: number };
 }
 
@@ -482,12 +484,21 @@ export async function getSettlementSummary(
     });
   }
 
+  // Active participant count of the current game — drives the per-share display.
+  let activePlayerCount = 0;
+  if (event.currentGameId) {
+    activePlayerCount = await prisma.gameParticipant.count({
+      where: { gameId: event.currentGameId, archivedAt: null },
+    });
+  }
+
   return {
     games: gameViews,
     people: people.sort((a, b) => b.owedToAmount - a.owedToAmount),
     currentGameId: event.currentGameId,
     viewerRole: viewer.role,
     viewerEventPlayerId,
+    activePlayerCount,
     totals: {
       unsettledGames: gameViews.length,
       totalOwed: people.reduce((s, p) => s + p.owedAmount, 0),

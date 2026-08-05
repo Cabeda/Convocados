@@ -5,18 +5,14 @@ import {
 import PaymentsIcon from "@mui/icons-material/Payments";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { useT } from "~/lib/useT";
-
-interface CostData {
-  totalAmount: number;
-  currency: string;
-  effectivePaymentMethods: string | null;
-}
+import { useEventCost } from "~/lib/useEventCost";
+import { formatMoney, formatShortDate, type PaymentStatus } from "~/lib/money";
 
 interface DebtorLine {
   gameId: string;
   dateTime: string;
   amount: number;
-  status: string;
+  status: PaymentStatus;
   role: "debtor" | "payer";
 }
 
@@ -32,10 +28,6 @@ interface SettlementSummary {
   viewerEventPlayerId: string | null;
   viewerRole: string;
 }
-
-const fmt = (n: number, currency: string) => `${n.toFixed(2)}${currency || "€"}`;
-const fmtDate = (iso: string) =>
-  new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" }).format(new Date(iso));
 
 /**
  * The event page's payment surface (replaces the old "Split the cost" accordion).
@@ -55,15 +47,13 @@ export function PaymentSurface({
 }) {
   const t = useT();
   const theme = useTheme();
-  const [cost, setCost] = useState<CostData | null>(null);
+  const { cost } = useEventCost(eventId);
   const [summary, setSummary] = useState<SettlementSummary | null>(null);
   const [reporting, setReporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const costRes = await fetch(`/api/events/${eventId}/cost`);
-      if (costRes.ok) setCost(await costRes.json());
       const sumRes = await fetch(`/api/events/${eventId}/payments/settlement`);
       if (sumRes.ok) setSummary(await sumRes.json());
     } catch { /* ignore */ }
@@ -111,8 +101,8 @@ export function PaymentSurface({
           <PaymentsIcon fontSize="small" color="action" />
           {hasCost ? (
             <Typography variant="body2" fontWeight={600}>
-              {fmt(cost.totalAmount, cost.currency)}
-              {share ? ` · ${t("perPlayer", { amount: fmt(share, cost.currency) })}` : ""}
+              {formatMoney(cost.totalAmount, cost.currency)}
+              {share ? ` · ${t("perPlayer", { amount: formatMoney(share, cost.currency) })}` : ""}
             </Typography>
           ) : canEdit ? (
             <Button size="small" onClick={goToPayments}>{t("setPrice")}</Button>
@@ -130,11 +120,11 @@ export function PaymentSurface({
         {!canEdit && myDebt && (
           <Box sx={{ px: 0.5, pb: 0.5 }}>
             <Typography variant="body2" color="warning.main" fontWeight={600}>
-              {t("youOwe", { amount: fmt(myDebt.owedAmount, cost?.currency ?? "EUR") })}
+              {t("youOwe", { amount: formatMoney(myDebt.owedAmount, cost?.currency ?? "EUR") })}
             </Typography>
             {pendingLines.map((line) => (
               <Box key={line.gameId} sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5, flexWrap: "wrap" }}>
-                <Chip size="small" variant="outlined" color="warning" label={`${fmtDate(line.dateTime)} · ${fmt(line.amount, cost?.currency ?? "EUR")}`} />
+                <Chip size="small" variant="outlined" color="warning" label={`${formatShortDate(line.dateTime)} · ${formatMoney(line.amount, cost?.currency ?? "EUR")}`} />
                 <Button size="small" variant="outlined" disabled={reporting} onClick={() => reportSent(line)}>
                   {t("paymentsReportSent")}
                 </Button>
@@ -142,7 +132,7 @@ export function PaymentSurface({
             ))}
             {sentLines.length > 0 && (
               <Typography variant="caption" color="text.secondary">
-                {sentLines.map((l) => fmtDate(l.dateTime)).join(", ")} · {t("paymentsStatusSent")}
+                {sentLines.map((l) => formatShortDate(l.dateTime)).join(", ")} · {t("paymentsStatusSent")}
               </Typography>
             )}
           </Box>

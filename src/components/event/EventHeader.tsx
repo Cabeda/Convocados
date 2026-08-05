@@ -451,12 +451,12 @@ export function EventHeader({
             )}
 
             {/* ── Payments row: price + pay CTA (event details, at the beginning) ── */}
-            {!editMode && isAuthenticated && (
+            {!editMode && (
               <PaymentSurface
                 eventId={eventId}
                 canEdit={canEditSettings}
                 isAuthenticated={isAuthenticated}
-                playerCount={event.players.length}
+                playerCount={Math.min(event.players.length, event.maxPlayers)}
               />
             )}
 
