@@ -530,3 +530,63 @@ export async function getCurrentGameSettlement(eventId: string): Promise<Current
     }),
   };
 }
+
+// ─── Wrap-up game payments (post-game banner) ───────────────────────────────
+
+export interface WrapUpGameSettlement {
+  gameId: string;
+  mode: PaymentMode;
+  payerName: string | null;
+  payerIsPlayer: boolean;
+  rows: Array<{ eventPlayerId: string; name: string; amount: number; status: string; isPayer: boolean }>;
+}
+
+/**
+ * The game the post-game banner settles: the event's current game when it has
+ * ended (not yet reset), otherwise the most recent played game. Returns its
+ * GamePayment rows + config, or null when there is nothing to settle (no game,
+ * untracked, or no payment rows). Used by post-game-status so the banner pills
+ * reflect the durable per-game model.
+ */
+export async function getWrapUpGameSettlement(eventId: string): Promise<WrapUpGameSettlement | null> {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { currentGameId: true, dateTime: true },
+  });
+  if (!event) return null;
+
+  const endedNow = event.currentGameId
+    ? await prisma.game.findFirst({
+        where: { id: event.currentGameId, status: "played" },
+        include: { payments: { include: { eventPlayer: { select: { name: true } } } }, payerEventPlayer: { select: { id: true, name: true } } },
+      })
+    : null;
+
+  const game = endedNow ?? (await prisma.game.findFirst({
+    where: { eventId, status: "played" },
+    orderBy: { dateTime: "desc" },
+    include: { payments: { include: { eventPlayer: { select: { name: true } } } }, payerEventPlayer: { select: { id: true, name: true } } },
+  }));
+
+  if (!game) return null;
+  const mode = (game.paymentMode as PaymentMode | null) ?? "tracked";
+  if (mode === "untracked") return null;
+
+  const payerId = game.payerEventPlayerId;
+  const activeRows = game.payments.filter((p) => !p.archivedAt);
+  if (activeRows.length === 0) return null;
+
+  return {
+    gameId: game.id,
+    mode,
+    payerName: game.payerEventPlayer?.name ?? game.payerExternalName,
+    payerIsPlayer: !!game.payerEventPlayer,
+    rows: activeRows.map((p) => ({
+      eventPlayerId: p.eventPlayerId,
+      name: p.eventPlayer.name,
+      amount: p.amount,
+      status: p.status,
+      isPayer: payerId === p.eventPlayerId,
+    })),
+  };
+}
