@@ -44,14 +44,13 @@ export interface PostGameStatus {
 
 interface Props {
   eventId: string;
-  canEdit?: boolean;
   onScrollToScore?: () => void;
   onScrollToPayments?: () => void;
   onStatusChange?: (status: PostGameStatus | null) => void;
   refreshKey?: number;
 }
 
-export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey }: Props) {
+export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey }: Props) {
   const t = useT();
   const theme = useTheme();
   const [status, setStatus] = useState<PostGameStatus | null>(null);
@@ -98,6 +97,8 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
 
   // Only show to people involved in settling this game: participants (teams or
   // payment roll), debtors, and the Owner/Admin. Spectators get nothing.
+  // Everyone who sees the banner can settle it — toggling who paid and the
+  // score are shared wrap-up tasks between the players and the admin.
   if (!status || !status.isParticipant || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || status.allComplete) return null;
 
   const completedCount = (status.hasScore ? 1 : 0) + (status.allPaid ? 1 : 0);
@@ -312,17 +313,17 @@ export function PostGameBanner({ eventId, canEdit, onScrollToScore, onScrollToPa
                           variant={isPaid ? "filled" : "outlined"}
                           color={chipColor}
                           label={`${p.playerName}  ${p.amount.toFixed(2)}`}
-                          onClick={canEdit ? () => cyclePaymentStatus(idx) : undefined}
+                          onClick={() => cyclePaymentStatus(idx)}
                           sx={{
                             borderRadius: 2,
                             fontWeight: isPaid ? 600 : 400,
-                            ...(canEdit ? { cursor: "pointer" } : {}),
+                            cursor: "pointer",
                           }}
                         />
                       );
                     })}
                   </Box>
-                  {canEdit && paymentsDirty && (
+                  {paymentsDirty && (
                     <Box sx={{ mt: 1, display: "flex", justifyContent: "flex-end" }}>
                       <Button
                         size="small"
