@@ -1055,6 +1055,13 @@ const fr: TranslationKeys = {
   paymentsFailed: "Une erreur est survenue. Réessayez.",
   paymentsUntrackedNote: "Chaque joueur paie sa part — aucun suivi pour ce match.",
   paymentsUnassignedPayer: "Payeur à définir",
+  youOwe: "Vous devez {amount}",
+  pay: "Payer",
+  costAndMethods: "Coût et moyens de paiement",
+  editPrice: "Modifier le prix",
+  setPrice: "Définir le prix",
+  scopeThisGame: "Ce match uniquement",
+  scopeAllFuture: "Ce match et tous les prochains",
 
   adminDeleteUser: "Supprimer l'utilisateur",
   adminDeleteUserConfirm: "Êtes-vous sûr de vouloir supprimer définitivement cet utilisateur ? Cette action est irréversible.",
