@@ -199,6 +199,33 @@ describe("setPaymentConfig", () => {
     expect(g.paymentMode).toBe("tracked");
   });
 
+  it("reverts the old player-payer's auto-paid row when the payer changes", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    const bruno = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Bruno" } });
+
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+    const anaRow = await prisma.gamePayment.findFirstOrThrow({ where: { gameId: game.id, eventPlayerId: ana.id } });
+    expect(anaRow.status).toBe("paid");
+    expect(anaRow.method).toBe("payer");
+
+    // Switch payer to Bruno → Ana reverts to pending debtor.
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: bruno.id });
+    const anaAfter = await prisma.gamePayment.findFirstOrThrow({ where: { gameId: game.id, eventPlayerId: ana.id } });
+    const brunoAfter = await prisma.gamePayment.findFirstOrThrow({ where: { gameId: game.id, eventPlayerId: bruno.id } });
+    expect(anaAfter.status).toBe("pending");
+    expect(anaAfter.method).toBeNull();
+    expect(brunoAfter.status).toBe("paid");
+    expect(brunoAfter.method).toBe("payer");
+
+    // Switch to an external payer → Bruno also reverts to pending.
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerExternalName: "Venue" });
+    const brunoExternal = await prisma.gamePayment.findFirstOrThrow({ where: { gameId: game.id, eventPlayerId: bruno.id } });
+    expect(brunoExternal.status).toBe("pending");
+    expect(brunoExternal.method).toBeNull();
+  });
+
   it("rejects a blank external payer name", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
     await expect(setPaymentConfig(event.id, game.id, { mode: "tracked", payerExternalName: "  " }))

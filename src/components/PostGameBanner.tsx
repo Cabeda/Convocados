@@ -13,6 +13,7 @@ import HowToRegIcon from "@mui/icons-material/HowToReg";
 import SaveIcon from "@mui/icons-material/Save";
 import { useT } from "~/lib/useT";
 import { MvpVotingCard } from "./MvpVotingCard";
+import { PaymentConfigDialog, type PaymentConfigGame } from "./PaymentConfigDialog";
 
 interface PaymentEntry {
   playerName: string;
@@ -48,9 +49,10 @@ interface Props {
   onScrollToPayments?: () => void;
   onStatusChange?: (status: PostGameStatus | null) => void;
   refreshKey?: number;
+  isManager?: boolean;
 }
 
-export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey }: Props) {
+export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey, isManager = false }: Props) {
   const t = useT();
   const theme = useTheme();
   const [status, setStatus] = useState<PostGameStatus | null>(null);
@@ -58,6 +60,8 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
   const [paymentsDirty, setPaymentsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [gameSettlement, setGameSettlement] = useState<PaymentConfigGame | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
 
   const onStatusChangeRef = useRef(onStatusChange);
   useEffect(() => {
@@ -87,6 +91,16 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
   useEffect(() => {
     if (refreshKey !== undefined && refreshKey > 0) fetchStatus();
   }, [refreshKey, fetchStatus]);
+
+  // Payment overhaul: current-game config for the "who paid this game?" prompt.
+  const fetchGameSettlement = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/events/${eventId}/payments/game`);
+      if (r.ok) setGameSettlement(await r.json());
+    } catch { /* ignore */ }
+  }, [eventId]);
+
+  useEffect(() => { fetchGameSettlement(); }, [fetchGameSettlement]);
 
   // Sync editable payments when status loads for the first time
   useEffect(() => {
@@ -297,7 +311,38 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
                     {t("postGameSetCost")}
                   </Button>
                 )}
+                {gameSettlement?.mode === "untracked" && status.hasCost && (
+                  <Typography variant="caption" color="text.secondary">
+                    {t("paymentsUntrackedNote")}
+                  </Typography>
+                )}
               </Box>
+
+              {/* Payment overhaul: config summary / prompt */}
+              {gameSettlement?.hasCost && gameSettlement.mode === "tracked" && status.hasCost && (
+                <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}`, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                  {gameSettlement.payerName ? (
+                    <Typography variant="body2" fontWeight={600}>
+                      {t("paymentsIsOwed", {
+                        name: gameSettlement.payerName,
+                        amount: gameSettlement.rows
+                          .filter((r) => r.status !== "paid")
+                          .reduce((s, r) => s + r.amount, 0)
+                          .toFixed(2),
+                      })}
+                    </Typography>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      {t("paymentsUnassignedPayer")}
+                    </Typography>
+                  )}
+                  {isManager && (
+                    <Button size="small" variant="text" onClick={() => setConfigOpen(true)} sx={{ ml: "auto" }}>
+                      {t("paymentsConfigTitle")}
+                    </Button>
+                  )}
+                </Box>
+              )}
 
               {/* Inline payment chips */}
               {hasPayments && !status.allPaid && (
@@ -377,6 +422,17 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
           </Typography>
         </Stack>
       </Box>
+      <PaymentConfigDialog
+        open={configOpen}
+        eventId={eventId}
+        game={gameSettlement}
+        onClose={() => setConfigOpen(false)}
+        onSaved={async () => {
+          setConfigOpen(false);
+          await fetchGameSettlement();
+          fetchStatus();
+        }}
+      />
     </Paper>
   );
 }

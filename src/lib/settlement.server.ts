@@ -93,6 +93,17 @@ export async function syncGamePayments(gameId: string, eventId: string): Promise
     });
   }
 
+  // Revert rows that were auto-settled as payer but are no longer the payer
+  // (payer changed to someone else, or to an external person / unassigned).
+  await prisma.gamePayment.updateMany({
+    where: {
+      gameId,
+      method: "payer",
+      ...(game?.payerEventPlayerId ? { eventPlayerId: { not: game.payerEventPlayerId } } : {}),
+    },
+    data: { status: "pending", paidAt: null, method: null },
+  });
+
   if (game?.payerEventPlayerId) {
     await prisma.gamePayment.updateMany({
       where: { gameId, eventPlayerId: game.payerEventPlayerId },
@@ -189,6 +200,15 @@ export async function syncGamePaymentsTx(tx: Prisma.TransactionClient, gameId: s
       update: { amount: share, archivedAt: null, playerName: p.eventPlayer.name },
     });
   }
+
+  await tx.gamePayment.updateMany({
+    where: {
+      gameId,
+      method: "payer",
+      ...(game?.payerEventPlayerId ? { eventPlayerId: { not: game.payerEventPlayerId } } : {}),
+    },
+    data: { status: "pending", paidAt: null, method: null },
+  });
 
   if (game?.payerEventPlayerId) {
     await tx.gamePayment.updateMany({
@@ -436,5 +456,59 @@ export async function getSettlementSummary(
       totalOwed: people.reduce((s, p) => s + p.owedAmount, 0),
       totalOwedTo: people.reduce((s, p) => s + p.owedToAmount, 0),
     },
+  };
+}
+
+// ─── Current-game settlement (event page pills) ─────────────────────────────
+
+export interface CurrentGameSettlement {
+  gameId: string;
+  mode: PaymentMode;
+  payerName: string | null;
+  payerIsPlayer: boolean;
+  hasCost: boolean;
+  rows: Array<{ eventPlayerId: string; name: string; amount: number; status: string; isPayer: boolean }>;
+}
+
+/**
+ * The event's current game payment state — all rows (paid/sent/pending), mode,
+ * and payer. Used by the event-page payment section to render pills and the
+ * "who paid this game?" config. Null when the event has no current game.
+ */
+export async function getCurrentGameSettlement(eventId: string): Promise<CurrentGameSettlement | null> {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { currentGameId: true },
+  });
+  if (!event?.currentGameId) return null;
+
+  const game = await prisma.game.findUnique({
+    where: { id: event.currentGameId },
+    include: {
+      payments: {
+        where: { archivedAt: null },
+        include: { eventPlayer: { select: { name: true } } },
+        orderBy: { playerName: "asc" },
+      },
+      payerEventPlayer: { select: { id: true, name: true } },
+    },
+  });
+  if (!game) return null;
+
+  const { total } = await effectiveGameCost(game.id, eventId);
+  const payerId = game.payerEventPlayerId;
+  return {
+    gameId: game.id,
+    mode: (game.paymentMode as PaymentMode | null) ?? "tracked",
+    payerName: game.payerEventPlayer?.name ?? game.payerExternalName,
+    payerIsPlayer: !!game.payerEventPlayer,
+    hasCost: total > 0,
+    rows: game.payments.map((p) => ({
+      eventPlayerId: p.eventPlayerId,
+      name: p.eventPlayer.name,
+      amount: p.amount,
+      status: p.status,
+      isPayer: payerId === p.eventPlayerId,
+    })),
   };
 }
