@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
-import { screen, cleanup, waitFor } from "@testing-library/react";
+import { screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import { PostGameBanner, type PostGameStatus } from "~/components/PostGameBanner";
@@ -64,5 +64,32 @@ describe("PostGameBanner participant gating (issue #658)", () => {
     renderWithTheme(<PostGameBanner eventId="evt1" />);
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
+  });
+});
+
+describe("PostGameBanner participant wrap-up editing (issue #679)", () => {
+  beforeEach(() => {
+    mockFetchStatus(baseStatus);
+  });
+
+  it("lets a participant toggle payment chips and reveal the save button", async () => {
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+
+    const chip = screen.getByText(/Alice\s+25\.00/);
+    expect(chip).toBeInTheDocument();
+
+    // Toggling the chip marks the payment paid and surfaces the save control —
+    // no owner/admin canEdit flag is required (issue #679).
+    fireEvent.click(chip);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save payments" })).toBeInTheDocument());
+  });
+
+  it("keeps chips read-only only when there is nothing pending to settle", async () => {
+    mockFetchStatus({ ...baseStatus, allPaid: true });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+    // All paid → inline chips hidden entirely
+    expect(screen.queryByText(/Alice\s+25\.00/)).not.toBeInTheDocument();
   });
 });

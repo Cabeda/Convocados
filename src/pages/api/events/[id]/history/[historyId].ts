@@ -6,7 +6,7 @@ import { MVP_ELO_BONUS } from "../../../../../lib/mvp.constants";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
-import { isHistoryParticipant } from "../../../../../lib/snapshotParticipants";
+import { isSettledGameParticipant } from "../../../../../lib/participants.server";
 
 const log = createLogger("history-patch");
 
@@ -195,21 +195,39 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "This result can no longer be edited." }, { status: 403 });
   }
 
-  // Allow owner, admin, or any player who participated in this game.
-  // Participants are matched by name against this game's teamsSnapshot only —
-  // claiming a spot in a later game does NOT grant edit rights (issue #658).
+  // Allow owner, admin, or any player who participated in the settled game.
+  // Participants are matched against this game's teams AND payment roll (the
+  // same rule the post-game banner uses), with a fallback to the played Game's
+  // participants when no snapshot has materialised yet. Claiming a spot in a
+  // later game does NOT grant edit rights (issue #658).
+  const participantEventCost = await prisma.eventCost.findUnique({
+    where: { eventId: params.id },
+    select: { totalAmount: true, payments: { select: { playerName: true } } },
+  });
   const isParticipant = session.user.name
-    ? isHistoryParticipant(entry, session.user.name)
+    ? await isSettledGameParticipant({
+        sessionUser: session.user,
+        event,
+        latestHistory: entry,
+        pastGameSource: entry.paymentsSnapshot
+          ? "snapshot"
+          : participantEventCost && participantEventCost.totalAmount > 0
+            ? "live"
+            : "none",
+        eventCost: participantEventCost,
+      })
     : false;
 
   if (event.ownerId && !isOwner && !isAdmin && !isParticipant) {
     return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });
   }
 
-  // Restrict team edits to owner/admin/participant; payment edits to owner/admin only
+  // Settling the game (score, who paid) is shared between admins and the
+  // players who played in it — participants may record payments like they may
+  // set the score. Unrelated users are still blocked.
   if (body.paymentsSnapshot !== undefined) {
-    if (!isOwner && !isAdmin) {
-      return Response.json({ error: "Only the event owner or admin can edit payments." }, { status: 403 });
+    if (!isOwner && !isAdmin && !isParticipant) {
+      return Response.json({ error: "Only the event owner, admin, or a participant can edit payments." }, { status: 403 });
     }
   }
   if (body.teamsSnapshot !== undefined) {

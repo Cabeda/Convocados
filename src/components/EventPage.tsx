@@ -895,7 +895,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {isAuthenticated && (
             <PostGameBanner
               eventId={eventId}
-              canEdit={canEditSettings}
               onStatusChange={setPostGameStatus}
               refreshKey={bannerRefreshKey}
               onScrollToScore={() => {
