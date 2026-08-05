@@ -201,6 +201,61 @@ async function main() {
     console.log(`     URL: /events/${wrap.id}`);
   }
 
+  // 4. Complex multi-game settlement demo: two played games, different payers,
+  //    overlapping debtors — Ana paid game 1 but owes game 2; Bruno paid both;
+  //    Diogo owes both. No netting, so the payments page shows gross amounts.
+  const multiOwner = realUser ?? user;
+  {
+    const multiNames = ["Ana", "Bruno", "Carla", "Diogo", "Elena", "Filipe"];
+    const multi = await prisma.event.create({
+      data: {
+        title: "Multi-game Settlement Demo",
+        location: "Riverside Astro, Pitch 3",
+        dateTime: new Date(now - 7 * 86400_000),
+        maxPlayers: 6,
+        sport: "football-5v5",
+        durationMinutes: 60,
+        isPublic: true,
+        ownerId: multiOwner.id,
+      },
+    });
+    const multiPlayers: { id: string }[] = [];
+    for (let i = 0; i < multiNames.length; i++) {
+      const ep = await prisma.eventPlayer.create({ data: { eventId: multi.id, name: multiNames[i], userId: null } });
+      multiPlayers.push(ep);
+    }
+    await prisma.eventCost.create({ data: { eventId: multi.id, totalAmount: 60, currency: "EUR" } });
+
+    // Game 1 — 14 days ago, Ana is the payer; Diogo + Elena owe.
+    const g1 = await prisma.game.create({ data: { eventId: multi.id, dateTime: new Date(now - 14 * 86400_000), status: "played" } });
+    for (let i = 0; i < multiPlayers.length; i++) {
+      await prisma.gameParticipant.create({ data: { gameId: g1.id, eventPlayerId: multiPlayers[i].id, order: i } });
+    }
+    await prisma.game.update({ where: { id: g1.id }, data: { paymentMode: "tracked", payerEventPlayerId: multiPlayers[0].id } }); // Ana
+    await syncGamePayments(g1.id, multi.id);
+    await prisma.gamePayment.updateMany({ where: { gameId: g1.id, eventPlayerId: multiPlayers[1].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // Bruno
+    await prisma.gamePayment.updateMany({ where: { gameId: g1.id, eventPlayerId: multiPlayers[2].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // Carla
+
+    // Game 2 — 7 days ago, Bruno is the payer; Ana + Diogo + Filipe owe.
+    const g2 = await prisma.game.create({ data: { eventId: multi.id, dateTime: new Date(now - 7 * 86400_000), status: "played" } });
+    for (let i = 0; i < multiPlayers.length; i++) {
+      await prisma.gameParticipant.create({ data: { gameId: g2.id, eventPlayerId: multiPlayers[i].id, order: i } });
+    }
+    await prisma.game.update({ where: { id: g2.id }, data: { paymentMode: "tracked", payerEventPlayerId: multiPlayers[1].id } }); // Bruno
+    await syncGamePayments(g2.id, multi.id);
+    await prisma.gamePayment.updateMany({ where: { gameId: g2.id, eventPlayerId: multiPlayers[2].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // Carla
+    await prisma.gamePayment.updateMany({ where: { gameId: g2.id, eventPlayerId: multiPlayers[4].id }, data: { status: "paid", paidAt: new Date(), markedBy: multiOwner.id } }); // Elena
+
+    await prisma.event.update({ where: { id: multi.id }, data: { currentGameId: g2.id } });
+
+    console.log(`\n  ** MULTI-GAME SETTLEMENT DEMO (${multiOwner.id === realUser?.id ? "owned by jecabeda@gmail.com" : "owned by demo user"}):`);
+    console.log(`     ${multi.id}  "${multi.title}"`);
+    console.log(`       URL: /events/${multi.id}/payments`);
+    console.log(`     Game 1 (14d ago) payer Ana — Diogo, Elena owe`);
+    console.log(`     Game 2 (7d ago)  payer Bruno — Ana, Diogo, Filipe owe`);
+    console.log(`     People: Ana owes game 2 (no netting vs. what she's owed); Diogo owes both`);
+  }
+
   console.log(`\n  ** PAYMENT SETTLEMENT DEMO EVENTS:`);
   console.log(`     Upcoming:  ${upcoming.event.id}  "${upcoming.event.title}"`);
   console.log(`       URL: /events/${upcoming.event.id}/payments`);
