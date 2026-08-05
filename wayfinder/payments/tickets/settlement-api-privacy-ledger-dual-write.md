@@ -2,7 +2,7 @@
 
 **Type:** grilling (HITL)
 **Labels:** wayfinder:grilling
-**Blocked by:** per-game-payment-model-payer-semantics
+**Blocked by:** per-game-payment-model-payer-semantics (closed 2026-08-05 — unblocked)
 
 ## Question
 

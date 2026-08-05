@@ -34,4 +34,15 @@ Deliverable: a decision summary that the settlement API ticket can build on, plu
 
 ## Resolution
 
-<!-- Fill on resolution. End with "Close this ticket." -->
+Model decided (all 8 points):
+
+1. **Row lifecycle** — `GamePayment` mirrors `GameParticipant`: created/upserted at join (tracked game) at the current share; archived on leave; frozen forever on the old game at recurrence reset; untracked games have no rows (flip tracked→untracked clears them); amounts update on cost edits.
+2. **Mode + payer location** — game-level columns on `Game`: `paymentMode` (`"tracked" | "untracked"`, default tracked), `payerEventPlayerId` (FK → EventPlayer, player-payer) OR `payerExternalName` (bare label, external payer). Exactly one set when tracked; neither = tracked awaiting payer.
+3. **Payer identity robustness** — rename: id-based, no action. Merge: repoint `Game.payerEventPlayerId` to target (extend `merge-player.ts`). Purge: snapshot name into `payerExternalName`, null the FK.
+4. **Share math** — share = effective game cost ÷ actual active participants at game end (capped at `maxPlayers`). Payer counts in the denominator (receives (N−1)×C/N). No-shows count as participants. Join-time ledger debits stay provisional; `cost_adjustment` reconciles drift. Resolves the existing `maxPlayers` vs participant-count inconsistency.
+5. **Status semantics** — state machine unchanged (`pending → sent → paid`); only owner/admin may set `paid`; `sent` self-report stays. Player-payer row = `paid` (auto-settled at config time), UI tags the pill by comparing payment's `eventPlayerId` to `Game.payerEventPlayerId`. No new status values.
+6. **Recurrence carry-over** — `paymentMode` inherits unconditionally; `payer` inherits only if the previous payer is an active participant in the next game; otherwise tracked + payer unassigned (prompted at wrap-up/config).
+7. **Settlement threshold** — auto: settled when every debtor row is `paid`; payer's own pill never gates; untracked games never appear; the current/upcoming game's unpaid shares DO appear on the payments page.
+8. **Cost per game** — effective cost = `Game.costTotalAmount` ?? `EventCost.totalAmount`; template or per-game edits never change past games (rows frozen); only explicit history-UI edits (`cost_adjustment`) touch a past game. **Behaviour change:** the legacy owner-auto-paid in `cost.ts:186` is deleted — only the designated payer is auto-settled.
+
+Close this ticket.

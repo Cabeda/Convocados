@@ -223,6 +223,17 @@ A `PlayerPayment` (and each entry in a `GameHistory.paymentsSnapshot`) moves thr
 
 The Owner/Admin remains the single source of truth for money actually received; `sent` is a courtesy signal that gives the payer closure and gives the organizer a "confirm received" worklist. It never auto-promotes to `paid`.
 
+## Payer
+The person who fronted the cost of a specific **Game** (paid the venue/field upfront). Designated per Game by the Owner/Admin. Either an **EventPlayer** (player-payer) or an **external** person (name only, no account). Money owed for a tracked Game flows to the Payer, not the Event. A player-payer's own share is auto-settled — their payment pill shows `paid` by virtue of having fronted the cost; the pill is tagged as "payer" by matching the Game's payer reference. Distinct from the Owner, who may or may not be the Payer. See Payment mode.
+_Avoid_: payer-as-owner (implicit), collector
+
+## Payment mode
+A per-**Game** setting controlling how that Game's cost is settled. Two values:
+- **tracked** — a Payer is designated; every other participant owes their share (effective cost ÷ active participants) to the Payer. Payment pills are shown; the Game appears on the payments page until all debtor shares are `paid` (auto-settlement).
+- **untracked** — "each player pays their own share" directly (e.g. to the venue); no Payer, no pills, no amounts; the Game is invisible to the payments page.
+
+Default is tracked. Mode inherits to the next occurrence of a recurring Event; the Payer inherits only if the previous Payer is an active participant in the next Game.
+
 ## Manager-initiated add
 A Player record created by the Event Owner or an Admin acting on behalf of someone else — typically a guest with no Convocados account, or a registered user the organizer is adding. Distinct from a self-initiated add (Quick Join, Claim), where the player themselves triggered the action.
 

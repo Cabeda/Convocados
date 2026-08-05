@@ -17,12 +17,12 @@ Web-app change to the payment system: durable per-game payment rows (each player
 
 <!-- index of CLOSED tickets; one line each, gist + link. Empty at charting. -->
 
+- [Per-game payment model & payer semantics](tickets/per-game-payment-model-payer-semantics.md) — `GamePayment` mirrors `GameParticipant` (join/leave/reset); mode + payer as `Game` columns (`paymentMode`, `payerEventPlayerId`/`payerExternalName`); share = effective cost ÷ active participants (payer counts, no-shows count); state machine unchanged, owner/admin confirms, player-payer = auto-`paid` row tagged by id; mode inherits + payer inherits only if participating; auto-settlement incl. current game; legacy owner-auto-paid in `cost.ts` deleted.
+
 ## Not yet specified
 
 - **Android parity** — the payments page and payer flow are web-first. Whether the Android app mirrors them is deferred; don't chart until web is done.
-- **Recurrence carry-over of payer/mode** — whether a recurring event reuses the previous game's payer/mode as a default or asks fresh each occurrence. Partly asked inside the model ticket; graduates if it splits further.
 - **Nudges & notifications** — the existing Payment Nudge Escalation and reminder flows may need to reference the payer/receivable model later. Not sharp enough to ticket yet.
-- **"sent" self-report in payer mode** — whether the `pending → sent` self-report step still applies when a payer is designated. Surface as a question inside the model ticket.
 
 ## Out of scope
 
