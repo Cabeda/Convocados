@@ -405,4 +405,36 @@ describe("settlement API routes", () => {
     const json = await res.json();
     expect(json.updated).toBe(3);
   });
+
+  it("config route rejects a game from another event", async () => {
+    const { event } = await seedEvent({ cost: 60 });
+    const other = await prisma.event.create({ data: { title: "Other", location: "X", dateTime: new Date() } });
+    const otherGame = await prisma.game.create({ data: { eventId: other.id, dateTime: new Date() } });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+
+    const res = await setConfig(
+      ctx({ id: event.id }, { gameId: otherGame.id, mode: "tracked", payerExternalName: "X" }, "PATCH"),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("config route rejects when no active game", async () => {
+    const { event } = await seedEvent({ cost: 60 });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: null } });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+    const res = await setConfig(ctx({ id: event.id }, { mode: "tracked", payerExternalName: "X" }, "PATCH"));
+    expect(res.status).toBe(400);
+  });
+
+  it("settle route rejects missing ids", async () => {
+    const { event } = await seedEvent({ cost: 60 });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+    const res = await settle(ctx({ id: event.id }, { gameId: "", eventPlayerId: "" }, "PUT"));
+    expect(res.status).toBe(400);
+  });
+
+  it("settlement GET returns 404 for a missing event", async () => {
+    const res = await getSummary(ctx({ id: "does-not-exist" }));
+    expect(res.status).toBe(404);
+  });
 });
