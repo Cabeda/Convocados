@@ -78,6 +78,19 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     }),
   ]);
 
+  // Payment overhaul: if the purged player was the payer of any game, snapshot
+  // their name as an external payer so "who paid" survives the removal.
+  const purgedEventPlayer = await prisma.eventPlayer.findUnique({
+    where: { eventId_name: { eventId, name } },
+    select: { id: true },
+  });
+  if (purgedEventPlayer) {
+    await prisma.game.updateMany({
+      where: { eventId, payerEventPlayerId: purgedEventPlayer.id },
+      data: { payerExternalName: name, payerEventPlayerId: null },
+    });
+  }
+
   // 6. Recalculate ELO only if enabled for this event
   if (event.eloEnabled) {
     await recalculateAllRatings(eventId);

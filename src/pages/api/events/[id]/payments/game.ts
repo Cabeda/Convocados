@@ -1,11 +1,11 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
-import { getSession } from "../../../../../lib/auth.helpers.server";
-import { getCurrentGameSettlement } from "../../../../../lib/settlement.server";
+import { getSession, checkOwnership } from "../../../../../lib/auth.helpers.server";
+import { getCurrentGameSettlement, isEventParticipant } from "../../../../../lib/settlement.server";
 
 /**
  * GET /api/events/[id]/payments/game — the event's current game payment state
- * (mode, payer, all rows). Login required; any participant may view.
+ * (mode, payer, all rows). Owner/admin or an event player may view.
  */
 export const GET: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
@@ -15,6 +15,11 @@ export const GET: APIRoute = async ({ params, request }) => {
   const session = await getSession(request);
   if (!session?.user) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
+  if (!isOwner && !isAdmin && !(await isEventParticipant(eventId, session.user.id))) {
+    return Response.json({ error: "Only event players can view payments." }, { status: 403 });
   }
 
   try {

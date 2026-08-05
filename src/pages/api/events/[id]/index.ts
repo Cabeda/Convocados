@@ -129,6 +129,12 @@ export const GET: APIRoute = async ({ params, request }) => {
           data: { currentGameId: newGame.id },
         });
 
+        // Payment overhaul: reconcile the new game's payment rows (no-op until
+        // the roster is populated, but keeps carried-over payments in sync).
+        import("../../../../lib/settlement.server")
+          .then(({ syncGamePayments }) => syncGamePayments(newGame.id, event.id))
+          .catch(() => {});
+
         // ADR 0016: keep GameHistory for backward compat (read-only fallback),
         // but NO destructive deletes. Players/Teams/RSVPs stay intact on the old Game.
         // Guard against a duplicate snapshot: one may already exist if a score was
