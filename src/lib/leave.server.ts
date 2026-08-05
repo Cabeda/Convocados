@@ -11,6 +11,7 @@ import { prisma } from "./db.server";
 import { enqueueNotification, drainNotificationQueue } from "./notificationQueue.server";
 import { fireWebhooks } from "./webhook.server";
 import { syncPaymentsForEvent } from "./payments.server";
+import { syncGamePayments } from "./settlement.server";
 import { logEvent } from "./eventLog.server";
 import { createLogger } from "./logger.server";
 import { removePlayerFromTeams, validateTeams } from "../pages/api/events/[id]/players";
@@ -101,6 +102,8 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
         where: { gameId: currentGameId, eventPlayerId: ep.id },
         data: { archivedAt: new Date() },
       });
+      // Payment overhaul: drop the leaver's payment row from the active list.
+      await syncGamePayments(currentGameId, eventId);
     }
   }
 
