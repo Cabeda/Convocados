@@ -969,7 +969,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(body.teamsSnapshot).toBeDefined();
   });
 
-  it("returns 403 when participant tries to edit payments", async () => {
+  it("allows participant to edit payments (settled-game wrap-up)", async () => {
     const owner = await seedUser();
     const participant = await seedUser({ name: "Alice" });
     mockAuth(participant.id, "Alice");
@@ -982,9 +982,43 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, {
       paymentsSnapshot: [{ playerName: "Alice", amount: 10, status: "paid" }],
     }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.paymentsSnapshot).toBeDefined();
+  });
+
+  it("allows participant on the payment roll (no teams snapshot) to edit score", async () => {
+    const owner = await seedUser();
+    const participant = await seedUser({ name: "Luis Lopes" });
+    mockAuth(participant.id, "Luis Lopes");
+    const id = await seedEvent({ ownerId: owner.id });
+    // Only a payment roll exists — no teams were ever assigned. This mirrors the
+    // reported bug: the banner shows the player via the payment roll, but score
+    // editing was gated to teamsSnapshot-only participants.
+    const history = await seedHistory(id, {
+      teamsSnapshot: null,
+      paymentsSnapshot: JSON.stringify([{ playerName: "Luis Lopes", amount: 10, status: "pending" }]),
+    });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3, scoreTwo: 1 }));
+    expect(res.status).toBe(200);
+  });
+
+  it("returns 403 when a non-participant tries to edit payments", async () => {
+    const owner = await seedUser();
+    const outsider = await seedUser({ name: "Charlie" });
+    mockAuth(outsider.id, "Charlie");
+    const id = await seedEvent({ ownerId: owner.id });
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, { teamsSnapshot: JSON.stringify(teams) });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, {
+      paymentsSnapshot: [{ playerName: "Alice", amount: 10, status: "paid" }],
+    }));
     expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body.error).toContain("owner or admin");
+    expect(body.error).toContain("owner or a participant");
   });
 
   it("allows owner to edit teams", async () => {

@@ -427,7 +427,7 @@ class EventDetailViewModel @Inject constructor(
     /**
      * Persist the edited past-game payment snapshot to the GameHistory entry.
      * Mirrors the web PostGameBanner save (PATCH .../history/{id} with
-     * paymentsSnapshot). Owner/admin only — surfaces a clear error otherwise.
+     * paymentsSnapshot). Settled-game participants and admins may edit.
      */
     fun savePostGamePayments(eventId: String) {
         val historyId = _state.value.postGame?.latestHistoryId ?: return
@@ -786,7 +786,8 @@ fun EventDetailScreen(
                                             Text(payLabel, color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                         }
                                         // Inline per-player payment chips, editing the
-                                        // history snapshot (owner/admin only — server enforces).
+                                        // history snapshot (settled-game participants and
+                                        // admins — server enforces).
                                         if (pg.hasCost && !paysDone && snapshot != null && snapshot.isNotEmpty()) {
                                             Text(stringResource(R.string.post_game_payments_hint), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
                                             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

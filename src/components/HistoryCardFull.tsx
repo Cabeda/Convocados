@@ -38,7 +38,7 @@ import { detectLocale, type TFunction } from "~/lib/i18n";
 import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, expectedScore, kFactor, type EloUpdate } from "~/lib/elo";
 import { formatDateInTz } from "~/lib/timezones";
-import { isNameInTeamsSnapshot } from "~/lib/snapshotParticipants";
+import { isNameInPaymentsSnapshot, isNameInTeamsSnapshot } from "~/lib/snapshotParticipants";
 
 type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
@@ -261,10 +261,14 @@ export function HistoryCardFull({
     return () => { cancelled = true; };
   }, [eventId, entry.id, mvp]);
 
-  // Permissions
+  // Permissions. A settled-game participant is someone whose name is on this
+  // game's teams OR payment roll — playing is not required for settling score
+  // and payments, matching the post-game banner rule. Claiming a spot in a
+  // later game does NOT grant edit rights (issue #658).
   const isParticipantInGame = isPlayAdmin
     || (!!userName && (
       isNameInTeamsSnapshot(entry.teamsSnapshot, userName)
+      || isNameInPaymentsSnapshot(entry.paymentsSnapshot, userName)
       || (entry.participants ?? []).some((n) => n.toLowerCase() === userName.toLowerCase())
     ));
   // Owners/admins bypass the 7-day editable window. Regular players
@@ -272,7 +276,7 @@ export function HistoryCardFull({
   const inEditWindow = entry.editable || isPlayAdmin;
   const canEditScore = isAuthenticated && isParticipantInGame && inEditWindow;
   const canEditTeams = isAuthenticated && (isPlayAdmin || isParticipantInGame) && inEditWindow;
-  const canEditPayments = isAuthenticated && isPlayAdmin && inEditWindow;
+  const canEditPayments = isAuthenticated && isParticipantInGame && inEditWindow;
 
   const [unlocking, setUnlocking] = useState(false);
   const [togglingFriendly, setTogglingFriendly] = useState(false);
