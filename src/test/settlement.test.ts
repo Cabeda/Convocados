@@ -27,6 +27,8 @@ import { PATCH as setConfig } from "~/pages/api/events/[id]/payments/config";
 import { GET as getSummary, PUT as settle } from "~/pages/api/events/[id]/payments/settlement";
 import { PUT as bulkSettle } from "~/pages/api/events/[id]/payments/settlement/bulk";
 import { POST as selfReport } from "~/pages/api/events/[id]/payments/settlement/self-report";
+import { GET as getCurrentGame } from "~/pages/api/events/[id]/payments/game";
+import { PUT as setCost } from "~/pages/api/events/[id]/cost";
 
 function ctx(params: Record<string, string>, body?: unknown, method = "GET") {
   const request = new Request("http://localhost/api/test", {
@@ -463,5 +465,30 @@ describe("settlement API routes", () => {
   it("settlement GET returns 404 for a missing event", async () => {
     const res = await getSummary(ctx({ id: "does-not-exist" }));
     expect(res.status).toBe(404);
+  });
+
+  it("setting a cost creates payment rows for existing participants", async () => {
+    const { event } = await seedEvent({ players: ["Ana", "Bruno"] }); // no cost yet
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+
+    const res = await setCost(ctx({ id: event.id }, { totalAmount: 60, currency: "EUR" }, "PUT"));
+    expect(res.status).toBe(200);
+
+    const game = await prisma.game.findFirstOrThrow({ where: { eventId: event.id } });
+    const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.amount === 30)).toBe(true);
+  });
+
+  it("current-game settlement derives rows from participants (picker never empty)", async () => {
+    const { event } = await seedEvent({ players: ["Ana", "Bruno"] }); // no cost, no payment rows
+    mockGetSession.mockResolvedValue({ user: { id: "owner-settlement", name: "Owner" } });
+
+    const res = await getCurrentGame(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.hasCost).toBe(false);
+    expect(json.rows.map((r: { name: string }) => r.name)).toEqual(["Ana", "Bruno"]);
+    expect(json.rows.every((r: { status: string }) => r.status === "pending")).toBe(true);
   });
 });

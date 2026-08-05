@@ -497,18 +497,36 @@ export async function getCurrentGameSettlement(eventId: string): Promise<Current
 
   const { total } = await effectiveGameCost(game.id, eventId);
   const payerId = game.payerEventPlayerId;
+
+  // Rows are derived from ACTIVE PARTICIPANTS so the payer picker always lists
+  // everyone on the roster — even before payment rows are synced (e.g. a cost
+  // set after players joined). Each participant gets their synced payment row
+  // when one exists, else a computed pending share.
+  const participants = await prisma.gameParticipant.findMany({
+    where: { gameId: game.id, archivedAt: null },
+    include: { eventPlayer: { select: { id: true, name: true } } },
+    orderBy: { order: "asc" },
+  });
+  const share = shareFor(total, participants.length);
+  const paymentByPlayer = new Map(
+    game.payments.map((p) => [p.eventPlayerId, p]),
+  );
+
   return {
     gameId: game.id,
     mode: (game.paymentMode as PaymentMode | null) ?? "tracked",
     payerName: game.payerEventPlayer?.name ?? game.payerExternalName,
     payerIsPlayer: !!game.payerEventPlayer,
     hasCost: total > 0,
-    rows: game.payments.map((p) => ({
-      eventPlayerId: p.eventPlayerId,
-      name: p.eventPlayer.name,
-      amount: p.amount,
-      status: p.status,
-      isPayer: payerId === p.eventPlayerId,
-    })),
+    rows: participants.map((gp) => {
+      const row = paymentByPlayer.get(gp.eventPlayer.id);
+      return {
+        eventPlayerId: gp.eventPlayer.id,
+        name: gp.eventPlayer.name,
+        amount: row?.amount ?? share,
+        status: row?.status ?? "pending",
+        isPayer: payerId === gp.eventPlayer.id,
+      };
+    }),
   };
 }
