@@ -406,6 +406,7 @@ const en = {
   undoRemoveDesc: "{name} removed",
   undoExpired: "Undo window expired.",
   protectedPlayer: "Account-linked player",
+  anonymousPlayer: "Anonymous player",
   ownerOnly: "Only the event owner can do this.",
   relinquishOwnership: "Leave as owner",
   relinquishOwnershipDesc: "The event will become ownerless and anyone can claim it.",

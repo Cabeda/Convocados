@@ -184,6 +184,9 @@ dependencies {
     // Accompanist (Permissions)
     implementation(libs.accompanist.permissions)
 
+    // Image loading (profile avatars)
+    implementation(libs.coil.compose)
+
     // OSM Maps
     implementation(libs.osmdroid)
 
@@ -206,5 +209,6 @@ dependencies {
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)
     testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.coil.test)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
