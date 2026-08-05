@@ -158,7 +158,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   // ponytail: allComplete gates banner dismissal — score + payments + MVP (24h ceiling).
   // After 24h the banner hides even if not everyone voted; voting stays open on history page.
-  const allComplete = hasScore && allPaid && bannerMvpComplete;
+  let allComplete = hasScore && allPaid && bannerMvpComplete;
 
   // Check if there are unsettled payments from a past game in history,
   // even when the current event hasn't ended yet (post-reset scenario).
@@ -244,6 +244,8 @@ export const GET: APIRoute = async ({ params, request }) => {
       paidCount: wrapUpSettlement.rows.filter((r) => r.status === "paid").length,
       totalCount: wrapUpSettlement.rows.length,
     };
+    // Recompute the wrap-up completion gate — allPaid may have flipped.
+    allComplete = hasScore && allPaid && bannerMvpComplete;
   }
 
   return Response.json({

@@ -18,6 +18,7 @@ import {
   syncGamePayments,
   setPaymentConfig,
   settleShare,
+  unsettleShare,
   bulkSettleGame,
   selfReportSent,
   getSettlementSummary,
@@ -259,6 +260,31 @@ describe("settleShare + ledger dual-write", () => {
     const tx = await prisma.walletTransaction.findFirstOrThrow({ where: { eventId: event.id, reason: "payment_received" } });
     expect(tx.amountCents).toBe(2000);
     expect(tx.statusAfter).toBe("paid");
+  });
+
+  it("reverts a settled share and removes the ledger credit", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    await settleShare(event.id, game.id, ana.id, "owner-settlement");
+    expect(await prisma.walletTransaction.count({ where: { eventId: event.id, reason: "payment_received" } })).toBe(1);
+
+    await unsettleShare(event.id, game.id, ana.id);
+
+    const row = await prisma.gamePayment.findUniqueOrThrow({ where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: ana.id } } });
+    expect(row.status).toBe("pending");
+    expect(row.paidAt).toBeNull();
+    expect(await prisma.walletTransaction.count({ where: { eventId: event.id, reason: "payment_received" } })).toBe(0);
+  });
+
+  it("rejects reverting the payer's auto-settled share", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+
+    await expect(unsettleShare(event.id, game.id, ana.id)).rejects.toThrow(/auto-settled/);
   });
 });
 

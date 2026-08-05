@@ -24,6 +24,10 @@ beforeEach(async () => {
   await resetRateLimitStore();
   await resetApiRateLimitStore();
   await prisma.mvpVote.deleteMany();
+  await prisma.gamePayment.deleteMany();
+  await prisma.gameParticipant.deleteMany();
+  await prisma.game.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.gameHistory.deleteMany();
@@ -37,6 +41,40 @@ describe("GET /api/events/:id/post-game-status", () => {
   it("returns 404 for non-existent event", async () => {
     const res = await getPostGameStatus(ctx({ id: "nonexistent" }));
     expect(res.status).toBe(404);
+  });
+
+  it("flags a new-model game with pending GamePayment rows as not complete", async () => {
+    const owner = await prisma.user.create({ data: { id: "owner-pgb", name: "Owner", email: "owner-pgb@test.com" } });
+    const event = await prisma.event.create({
+      data: {
+        title: "Just Ended", location: "Pitch", dateTime: new Date(Date.now() - 3600_000),
+        ownerId: owner.id, mvpEnabled: false, teamOneName: "A", teamTwoName: "B",
+      },
+    });
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime, status: "played", scoreOne: 2, scoreTwo: 1 } });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, order: 0 } });
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 20, currency: "EUR" } });
+    await prisma.gamePayment.create({ data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Ana", amount: 20, status: "pending" } });
+    await prisma.gameHistory.create({
+      data: { eventId: event.id, dateTime: event.dateTime, status: "played", scoreOne: 2, scoreTwo: 1, teamOneName: "A", teamTwoName: "B", editableUntil: new Date(Date.now() + 86400_000) },
+    });
+
+    mockGetSession.mockResolvedValue({ user: { id: owner.id, name: "Owner" } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: owner.id, name: "Owner" } } } as any);
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.isParticipant).toBe(true);
+    expect(json.hasScore).toBe(true);
+    expect(json.allPaid).toBe(false);
+    expect(json.allComplete).toBe(false); // banner must show while a share is unpaid
+    expect(json.gamePayments).toHaveLength(1);
+    expect(json.gamePayments[0].status).toBe("pending");
+
+    mockCheckOwnership.mockReset(); // don't leak the owner implementation to later tests
   });
 
   it("returns gameEnded=false for future event", async () => {

@@ -93,13 +93,14 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
     if (refreshKey !== undefined && refreshKey > 0) fetchStatus();
   }, [refreshKey, fetchStatus]);
 
-  // Payment overhaul: settle a GamePayment share from the banner (owner).
-  const handleSettleShare = async (row: { eventPlayerId: string }) => {
+  // Payment overhaul: settle / revert a GamePayment share from the banner (owner).
+  const handleToggleShare = async (row: { eventPlayerId: string; status: string; isPayer: boolean }) => {
     if (!status?.gameConfig) return;
+    if (row.isPayer) return;
     setSaving(true);
     try {
       const res = await fetch(`/api/events/${eventId}/payments/settlement`, {
-        method: "PUT",
+        method: row.status === "paid" ? "DELETE" : "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gameId: status.gameConfig.gameId, eventPlayerId: row.eventPlayerId }),
       });
@@ -358,17 +359,21 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
               {status.gamePayments ? (
                 <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}` }}>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                    {status.gamePayments.filter((r) => r.status !== "paid").map((r) => (
-                      <Chip
-                        key={r.eventPlayerId}
-                        size="small"
-                        variant={r.status === "pending" ? "outlined" : "filled"}
-                        color={r.status === "pending" ? "warning" : "info"}
-                        label={`${r.name}  ${r.amount.toFixed(2)}`}
-                        onClick={isManager ? () => handleSettleShare(r) : undefined}
-                        sx={{ borderRadius: 2, fontWeight: 500, cursor: isManager ? "pointer" : "default" }}
-                      />
-                    ))}
+                    {status.gamePayments.map((r) => {
+                      const isPaid = r.status === "paid";
+                      const chipColor = isPaid ? "success" : r.status === "sent" ? "info" : "warning";
+                      return (
+                        <Chip
+                          key={r.eventPlayerId}
+                          size="small"
+                          variant={isPaid ? "filled" : "outlined"}
+                          color={chipColor}
+                          label={`${r.name}  ${r.amount.toFixed(2)}${r.isPayer ? ` · ${t("paymentsPayer")}` : ""}`}
+                          onClick={isManager && !r.isPayer ? () => handleToggleShare(r) : undefined}
+                          sx={{ borderRadius: 2, fontWeight: isPaid ? 600 : 500, cursor: isManager && !r.isPayer ? "pointer" : "default" }}
+                        />
+                      );
+                    })}
                   </Box>
                 </Box>
               ) : hasPayments && !status.allPaid ? (
