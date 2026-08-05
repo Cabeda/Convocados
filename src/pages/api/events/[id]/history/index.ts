@@ -61,7 +61,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     where: { eventId: params.id },
     orderBy: { dateTime: "asc" },
   });
-  const eloMap = computeHistoryDeltas(params.id ?? "", allHistory);
+  const eloMap = computeHistoryDeltas(allHistory);
 
   // Merge legacy GameHistory + new Game rows into a unified response
   const legacyMapped = history.map((h) => ({
@@ -134,7 +134,6 @@ export const GET: APIRoute = async ({ params, request }) => {
 
 /** Replay ELO from scratch in memory to get per-game deltas without touching the DB */
 function computeHistoryDeltas(
-  eventId: string,
   history: { id: string; status: string; scoreOne: number | null; scoreTwo: number | null; teamsSnapshot: string | null; dateTime: Date }[],
 ): Map<string, { name: string; delta: number }[]> {
   const result = new Map<string, { name: string; delta: number }[]>();
