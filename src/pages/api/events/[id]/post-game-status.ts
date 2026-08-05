@@ -4,6 +4,7 @@ import { isGameEnded } from "../../../../lib/gameStatus";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../lib/mvp.constants";
 import { isSettledGameParticipant } from "../../../../lib/participants.server";
+import { getWrapUpGameSettlement } from "../../../../lib/settlement.server";
 
 /**
  * GET /api/events/:id/post-game-status
@@ -233,6 +234,18 @@ export const GET: APIRoute = async ({ params, request }) => {
     };
   }
 
+  // Payment overhaul: the durable per-game payment view for the wrap-up banner.
+  // When present, the banner renders these rows and settles via the settlement API.
+  const wrapUpSettlement = await getWrapUpGameSettlement(event.id);
+  if (wrapUpSettlement) {
+    hasCost = true;
+    allPaid = wrapUpSettlement.rows.length === 0 || wrapUpSettlement.rows.every((r) => r.status === "paid");
+    paidAggregate = {
+      paidCount: wrapUpSettlement.rows.filter((r) => r.status === "paid").length,
+      totalCount: wrapUpSettlement.rows.length,
+    };
+  }
+
   return Response.json({
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
@@ -242,5 +255,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     scoreTwo: latestHistory?.scoreTwo ?? null,
     teamOneName: event.teamOneName,
     teamTwoName: event.teamTwoName,
+    gamePayments: wrapUpSettlement?.rows ?? null,
+    gameConfig: wrapUpSettlement
+      ? { gameId: wrapUpSettlement.gameId, mode: wrapUpSettlement.mode, payerName: wrapUpSettlement.payerName, payerIsPlayer: wrapUpSettlement.payerIsPlayer }
+      : null,
   });
 };

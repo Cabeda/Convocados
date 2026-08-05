@@ -32,6 +32,8 @@ const baseStatus: PostGameStatus = {
   scoreTwo: null,
   teamOneName: "A",
   teamTwoName: "B",
+  gamePayments: null,
+  gameConfig: null,
 };
 
 function mockFetchStatus(status: PostGameStatus | null) {
@@ -64,14 +66,14 @@ describe("PostGameBanner participant gating (issue #658)", () => {
   it("renders nothing for a non-participant even when wrap-up tasks are pending", async () => {
     mockFetchStatus({ ...baseStatus, isParticipant: false });
     renderWithTheme(<PostGameBanner eventId="evt1" />);
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
   });
 
   it("renders nothing for an anonymous user", async () => {
     mockFetchStatus({ ...baseStatus, isParticipant: false, hasScore: false });
     renderWithTheme(<PostGameBanner eventId="evt1" />);
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
   });
 });

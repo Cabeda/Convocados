@@ -21,6 +21,7 @@ import {
   bulkSettleGame,
   selfReportSent,
   getSettlementSummary,
+  getWrapUpGameSettlement,
   shareFor,
 } from "~/lib/settlement.server";
 import { PATCH as setConfig } from "~/pages/api/events/[id]/payments/config";
@@ -490,5 +491,30 @@ describe("settlement API routes", () => {
     expect(json.hasCost).toBe(false);
     expect(json.rows.map((r: { name: string }) => r.name)).toEqual(["Ana", "Bruno"]);
     expect(json.rows.every((r: { status: string }) => r.status === "pending")).toBe(true);
+  });
+});
+
+describe("getWrapUpGameSettlement", () => {
+  it("returns the played game's payment rows for the wrap-up banner", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await prisma.game.update({ where: { id: game.id }, data: { status: "played" } });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+
+    const wrap = await getWrapUpGameSettlement(event.id);
+    expect(wrap?.gameId).toBe(game.id);
+    expect(wrap?.payerName).toBe("Ana");
+    expect(wrap?.rows).toHaveLength(3);
+    expect(wrap?.rows.find((r) => r.name === "Ana")?.isPayer).toBe(true);
+  });
+
+  it("returns null for an untracked game", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await prisma.game.update({ where: { id: game.id }, data: { status: "played" } });
+    await setPaymentConfig(event.id, game.id, { mode: "untracked" });
+
+    const wrap = await getWrapUpGameSettlement(event.id);
+    expect(wrap).toBeNull();
   });
 });

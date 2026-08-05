@@ -13,7 +13,7 @@ import HowToRegIcon from "@mui/icons-material/HowToReg";
 import SaveIcon from "@mui/icons-material/Save";
 import { useT } from "~/lib/useT";
 import { MvpVotingCard } from "./MvpVotingCard";
-import { PaymentConfigDialog, type PaymentConfigGame } from "./PaymentConfigDialog";
+import { PaymentConfigDialog } from "./PaymentConfigDialog";
 
 interface PaymentEntry {
   playerName: string;
@@ -41,6 +41,8 @@ export interface PostGameStatus {
   scoreTwo: number | null;
   teamOneName: string;
   teamTwoName: string;
+  gamePayments: Array<{ eventPlayerId: string; name: string; amount: number; status: string; isPayer: boolean }> | null;
+  gameConfig: { gameId: string; mode: "tracked" | "untracked"; payerName: string | null; payerIsPlayer: boolean } | null;
 }
 
 interface Props {
@@ -60,7 +62,6 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
   const [paymentsDirty, setPaymentsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [gameSettlement, setGameSettlement] = useState<PaymentConfigGame | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
 
   const onStatusChangeRef = useRef(onStatusChange);
@@ -92,15 +93,24 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
     if (refreshKey !== undefined && refreshKey > 0) fetchStatus();
   }, [refreshKey, fetchStatus]);
 
-  // Payment overhaul: current-game config for the "who paid this game?" prompt.
-  const fetchGameSettlement = useCallback(async () => {
+  // Payment overhaul: settle a GamePayment share from the banner (owner).
+  const handleSettleShare = async (row: { eventPlayerId: string }) => {
+    if (!status?.gameConfig) return;
+    setSaving(true);
     try {
-      const r = await fetch(`/api/events/${eventId}/payments/game`);
-      if (r.ok) setGameSettlement(await r.json());
-    } catch { /* ignore */ }
-  }, [eventId]);
-
-  useEffect(() => { fetchGameSettlement(); }, [fetchGameSettlement]);
+      const res = await fetch(`/api/events/${eventId}/payments/settlement`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gameId: status.gameConfig.gameId, eventPlayerId: row.eventPlayerId }),
+      });
+      if (!res.ok) setSaveError(t("somethingWentWrong"));
+    } catch {
+      setSaveError(t("somethingWentWrong"));
+    } finally {
+      setSaving(false);
+      fetchStatus();
+    }
+  };
 
   // Sync editable payments when status loads for the first time
   useEffect(() => {
@@ -311,21 +321,21 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
                     {t("postGameSetCost")}
                   </Button>
                 )}
-                {gameSettlement?.mode === "untracked" && status.hasCost && (
+                {status.gameConfig?.mode === "untracked" && status.hasCost && (
                   <Typography variant="caption" color="text.secondary">
                     {t("paymentsUntrackedNote")}
                   </Typography>
                 )}
               </Box>
 
-              {/* Payment overhaul: config summary / prompt */}
-              {gameSettlement?.hasCost && gameSettlement.mode === "tracked" && status.hasCost && (
+              {/* Payment overhaul: config summary / prompt (new-model games) */}
+              {status.gamePayments && status.gameConfig?.mode === "tracked" && status.hasCost && (
                 <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}`, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                  {gameSettlement.payerName ? (
+                  {status.gameConfig.payerName ? (
                     <Typography variant="body2" fontWeight={600}>
                       {t("paymentsIsOwed", {
-                        name: gameSettlement.payerName,
-                        amount: gameSettlement.rows
+                        name: status.gameConfig.payerName,
+                        amount: status.gamePayments
                           .filter((r) => r.status !== "paid")
                           .reduce((s, r) => s + r.amount, 0)
                           .toFixed(2),
@@ -344,8 +354,24 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
                 </Box>
               )}
 
-              {/* Inline payment chips */}
-              {hasPayments && !status.allPaid && (
+              {/* Inline payment chips — new-model rows when present, else legacy snapshot */}
+              {status.gamePayments ? (
+                <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}` }}>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                    {status.gamePayments.filter((r) => r.status !== "paid").map((r) => (
+                      <Chip
+                        key={r.eventPlayerId}
+                        size="small"
+                        variant={r.status === "pending" ? "outlined" : "filled"}
+                        color={r.status === "pending" ? "warning" : "info"}
+                        label={`${r.name}  ${r.amount.toFixed(2)}`}
+                        onClick={isManager ? () => handleSettleShare(r) : undefined}
+                        sx={{ borderRadius: 2, fontWeight: 500, cursor: isManager ? "pointer" : "default" }}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              ) : hasPayments && !status.allPaid ? (
                 <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}` }}>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
                     {editablePayments.map((p, idx) => {
@@ -390,7 +416,7 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
                     </Alert>
                   )}
                 </Box>
-              )}
+              ) : null}
             </Box>
 
             {/* MVP voting task */}
@@ -425,11 +451,14 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
       <PaymentConfigDialog
         open={configOpen}
         eventId={eventId}
-        game={gameSettlement}
+        game={
+          status?.gameConfig && status.gamePayments
+            ? { ...status.gameConfig, rows: status.gamePayments }
+            : null
+        }
         onClose={() => setConfigOpen(false)}
         onSaved={async () => {
           setConfigOpen(false);
-          await fetchGameSettlement();
           fetchStatus();
         }}
       />
