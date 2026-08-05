@@ -139,7 +139,7 @@ class EventRepository @Inject constructor(
     )
 
     private fun PlayerEntity.toDomain() = Player(
-        id = id, name = name, order = order, userId = userId
+        id = id, name = name, order = order, userId = userId, image = image
     )
 
     private fun GameHistoryEntity.toDomain() = GameHistory(

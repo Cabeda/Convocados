@@ -30,7 +30,7 @@ interface AddHistoricalGameDialogProps {
   eventId: string;
   defaultTeamOneName: string;
   defaultTeamTwoName: string;
-  knownPlayers: { name: string; gamesPlayed: number; userId?: string | null }[];
+  knownPlayers: { name: string; gamesPlayed: number; userId?: string | null; image?: string | null }[];
   playerRatings: { name: string; rating: number; gamesPlayed: number }[];
   onSuccess: (entry: HistoryEntry) => void;
 }
@@ -327,7 +327,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [knownPlayers, setKnownPlayers] = useState<{ name: string; gamesPlayed: number; userId?: string | null }[]>([]);
+  const [knownPlayers, setKnownPlayers] = useState<{ name: string; gamesPlayed: number; userId?: string | null; image?: string | null }[]>([]);
   const [playerRatings, setPlayerRatings] = useState<{ name: string; rating: number; gamesPlayed: number }[]>([]);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -370,19 +370,19 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
 
     // Fetch known players (historical) and ratings in parallel (non-blocking)
     // Combine current event players with historical players for suggestions
-    const currentPlayers = (ev.players ?? []).map((p: { name: string }) => ({ name: p.name, gamesPlayed: -1, userId: null })); // -1 indicates current player
+    const currentPlayers = (ev.players ?? []).map((p: { name: string; image?: string | null }) => ({ name: p.name, gamesPlayed: -1, userId: null, image: p.image ?? null })); // -1 indicates current player
     Promise.all([
       fetch(`/api/events/${eventId}/known-players`).then((r) => r.json()).catch(() => ({ players: [] })),
       fetch(`/api/events/${eventId}/ratings`).then((r) => r.json()).catch(() => ({ data: [] })),
     ]).then(([kp, ratings]) => {
       // Combine current players with historical players, deduping by name
-      const allPlayersMap = new Map<string, { name: string; gamesPlayed: number; userId: string | null }>();
+      const allPlayersMap = new Map<string, { name: string; gamesPlayed: number; userId: string | null; image: string | null }>();
       // Current players first (they get priority)
-      currentPlayers.forEach((p: { name: string; gamesPlayed: number; userId: string | null }) => allPlayersMap.set(p.name.toLowerCase(), p));
+      currentPlayers.forEach((p: { name: string; gamesPlayed: number; userId: string | null; image: string | null }) => allPlayersMap.set(p.name.toLowerCase(), p));
       // Historical players (only if not already in current)
-      (kp.players ?? []).forEach((p: { name: string; gamesPlayed: number; userId?: string | null }) => {
+      (kp.players ?? []).forEach((p: { name: string; gamesPlayed: number; userId?: string | null; image?: string | null }) => {
         if (!allPlayersMap.has(p.name.toLowerCase())) {
-          allPlayersMap.set(p.name.toLowerCase(), { name: p.name, gamesPlayed: p.gamesPlayed, userId: p.userId ?? null });
+          allPlayersMap.set(p.name.toLowerCase(), { name: p.name, gamesPlayed: p.gamesPlayed, userId: p.userId ?? null, image: p.image ?? null });
         }
       });
       setKnownPlayers(Array.from(allPlayersMap.values()));

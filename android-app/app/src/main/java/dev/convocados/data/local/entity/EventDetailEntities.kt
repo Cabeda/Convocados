@@ -47,7 +47,8 @@ data class PlayerEntity(
     val eventId: String,
     val name: String,
     val order: Int,
-    val userId: String?
+    val userId: String?,
+    val image: String?,
 )
 
 @Entity(
@@ -92,7 +93,8 @@ fun Player.toEntity(eventId: String) = PlayerEntity(
     eventId = eventId,
     name = name,
     order = order,
-    userId = userId
+    userId = userId,
+    image = image,
 )
 
 fun GameHistory.toEntity(eventId: String) = GameHistoryEntity(

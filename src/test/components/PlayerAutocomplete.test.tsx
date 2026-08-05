@@ -93,3 +93,33 @@ describe("PlayerAutocomplete — confirmation dialog trigger", () => {
     expect(onAdd).toHaveBeenCalledWith("Alice");
   });
 });
+
+describe("PlayerAutocomplete — player identity (avatar / anonymous icon)", () => {
+  interface IdentityHarnessProps {
+    onAdd: (name: string) => void;
+    suggestions: { name: string; gamesPlayed: number; userId?: string | null; image?: string | null }[];
+  }
+  function IdentityHarness({ onAdd, suggestions }: IdentityHarnessProps) {
+    const [value, setValue] = useState("");
+    return <PlayerAutocomplete value={value} onChange={setValue} onAdd={onAdd} suggestions={suggestions} />;
+  }
+
+  it("renders the profile avatar for a linked suggestion and the anonymous icon for a guest", async () => {
+    const user = userEvent.setup();
+    const onAdd = vi.fn();
+    const suggestions = [
+      { name: "Linked", gamesPlayed: 2, userId: "u-x", image: "https://example.com/linked.jpg" },
+      { name: "Anon", gamesPlayed: 1, userId: null, image: null },
+    ];
+    renderWithTheme(<IdentityHarness onAdd={onAdd} suggestions={suggestions} />);
+    const input = screen.getByPlaceholderText(/add player name/i);
+    await user.click(input);
+    await user.type(input, "Lin");
+    const option = await screen.findByRole("option", { name: /Linked/ });
+    expect(option.querySelector("img")).toHaveAttribute("src", "https://example.com/linked.jpg");
+    await user.clear(input);
+    await user.type(input, "Anon");
+    const anonOption = await screen.findByRole("option", { name: /Anon/ });
+    expect(anonOption.querySelector('[data-testid="Person2OutlinedIcon"]')).not.toBeNull();
+  });
+});
