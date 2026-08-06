@@ -218,7 +218,6 @@ describe("Ratings API — initial rating", () => {
           { team: "T1", players: [{ name: "Alice", order: 0 }] },
           { team: "T2", players: [{ name: "Bob", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 86400_000),
         eloProcessed: true,
       },
     });

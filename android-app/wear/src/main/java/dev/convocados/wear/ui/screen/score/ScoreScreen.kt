@@ -104,17 +104,6 @@ fun ScoreScreen(
                         }
                     }
                 }
-                state.history?.editable == false -> {
-                    ScoreEditor(
-                        state = state,
-                        onIncrementOne = {},
-                        onDecrementOne = {},
-                        onIncrementTwo = {},
-                        onDecrementTwo = {},
-                        onTeams = onTeams,
-                        readOnly = true,
-                    )
-                }
                 else -> {
                     if (isAmbient) {
                         AmbientScoreDisplay(state = state)
@@ -142,7 +131,6 @@ private fun ScoreEditor(
     onIncrementTwo: () -> Unit,
     onDecrementTwo: () -> Unit,
     onTeams: () -> Unit,
-    readOnly: Boolean = false,
 ) {
     // Single 1s ticker drives both the edge progress and the clock.
     var now by remember { mutableStateOf(Instant.now()) }
@@ -179,7 +167,7 @@ private fun ScoreEditor(
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 onIncrement = onIncrementOne,
                 onDecrement = onDecrementOne,
-                enabled = !readOnly,
+                enabled = true,
                 modifier = Modifier.weight(1f),
             )
             TeamScoreButton(
@@ -189,7 +177,7 @@ private fun ScoreEditor(
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                 onIncrement = onIncrementTwo,
                 onDecrement = onDecrementTwo,
-                enabled = !readOnly,
+                enabled = true,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -217,19 +205,17 @@ private fun ScoreEditor(
             }
         }
 
-        if (!readOnly) {
-            // Show the next-alarm countdown when armed, otherwise the Teams hint.
-            val nextSec = state.nextAlarmAtMs?.let { (it - now.toEpochMilli()) / 1000 }?.takeIf { it > 0 }
-            Text(
-                text = if (nextSec != null) "⏰ %d:%02d".format(nextSec / 60, nextSec % 60)
-                else stringResource(R.string.teams_hint),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 14.dp),
-            )
-        }
+        // Show the next-alarm countdown when armed, otherwise the Teams hint.
+        val nextSec = state.nextAlarmAtMs?.let { (it - now.toEpochMilli()) / 1000 }?.takeIf { it > 0 }
+        Text(
+            text = if (nextSec != null) "⏰ %d:%02d".format(nextSec / 60, nextSec % 60)
+            else stringResource(R.string.teams_hint),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 14.dp),
+        )
 
         if (state.isOfflineQueued) {
             Text(

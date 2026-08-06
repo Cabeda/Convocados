@@ -68,7 +68,6 @@ async function seedGameHistory(eventId: string, dateTime: Date, players: string[
       teamTwoName: "Team 2",
       teamsSnapshot,
       status,
-      editableUntil: new Date(dateTime.getTime() + 7 * 24 * 60 * 60 * 1000),
     },
   });
 }

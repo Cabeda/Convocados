@@ -193,7 +193,6 @@ async function main() {
           { team: "Ninjas", players: teamOne.map((name, order) => ({ name, order })) },
           { team: "Gunas", players: teamTwo.map((name, order) => ({ name, order })) },
         ]),
-        editableUntil: new Date(now + 7 * 86400_000),
       },
     });
     console.log(`\n  ** POST-GAME WRAP-UP DEMO (owned by jecabeda@gmail.com):`);

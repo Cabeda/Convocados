@@ -17,8 +17,6 @@ import {
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
-import LockIcon from "@mui/icons-material/Lock";
-import LockOpenIcon from "@mui/icons-material/LockOpen";
 import SportsIcon from "@mui/icons-material/Sports";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
@@ -55,7 +53,6 @@ export interface HistoryCardFullEntry {
   teamTwoName: string;
   teamsSnapshot: string | null;
   paymentsSnapshot: string | null;
-  editableUntil: string;
   editable: boolean;
   source: string;
   eloProcessed: boolean;
@@ -233,7 +230,6 @@ export function HistoryCardFull({
   const payments: PaymentSnapshotEntry[] = entry.paymentsSnapshot ? JSON.parse(entry.paymentsSnapshot) : [];
   const [editablePayments, setEditablePayments] = useState<PaymentSnapshotEntry[]>(payments);
   const date = new Date(entry.dateTime);
-  const editableUntil = new Date(entry.editableUntil);
   const isCancelled = entry.status === "cancelled";
 
   // Drag state
@@ -271,14 +267,13 @@ export function HistoryCardFull({
       || isNameInPaymentsSnapshot(entry.paymentsSnapshot, userName)
       || (entry.participants ?? []).some((n) => n.toLowerCase() === userName.toLowerCase())
     ));
-  // Owners/admins bypass the 7-day editable window. Regular players
-  // (incl. participants) lose edit access after the window.
-  const inEditWindow = entry.editable || isPlayAdmin;
-  const canEditScore = isAuthenticated && isParticipantInGame && inEditWindow;
-  const canEditTeams = isAuthenticated && (isPlayAdmin || isParticipantInGame) && inEditWindow;
-  const canEditPayments = isAuthenticated && isParticipantInGame && inEditWindow;
+  // Edits are governed only by role: owner/admin or a participant of this game.
+  // There is no edit window — past results stay editable for the people who
+  // played them (issue #691).
+  const canEditScore = isAuthenticated && isParticipantInGame;
+  const canEditTeams = isAuthenticated && isParticipantInGame;
+  const canEditPayments = isAuthenticated && isParticipantInGame;
 
-  const [unlocking, setUnlocking] = useState(false);
   const [togglingFriendly, setTogglingFriendly] = useState(false);
   const [approvingElo, setApprovingElo] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -330,21 +325,7 @@ export function HistoryCardFull({
     await patch({ status: newStatus });
   };
 
-  // ── Lock / friendly / approve-elo / delete ─────────────────────────────────
-  const handleToggleLock = async () => {
-    setUnlocking(true);
-    setError(null);
-    const action = entry.editable ? { lock: true } : { unlock: true };
-    const res = await fetch(`/api/events/${eventId}/history/${entry.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(action),
-    });
-    setUnlocking(false);
-    if (!res.ok) { const j = await res.json(); setError(j.error); return; }
-    onUpdate(await res.json());
-  };
-
+  // ── Friendly / approve-elo / delete ────────────────────────────────────────
   const handleToggleFriendly = async () => {
     setTogglingFriendly(true);
     setError(null);
@@ -594,20 +575,6 @@ export function HistoryCardFull({
           <Stack direction="row" spacing={0.25} alignItems="center">
             {isPlayAdmin && (
               <>
-                {/* ponytail: direct lock toggle gives immediate visual feedback — the kebab menu version remains for discoverability */}
-                <Tooltip title={entry.editable ? t("lockAction") : t("unlockAction")}>
-                  <span>
-                    <IconButton
-                      data-testid="lock-toggle-inline"
-                      size="small"
-                      color={entry.editable ? "default" : "warning"}
-                      onClick={handleToggleLock}
-                      disabled={unlocking}
-                    >
-                      {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
-                    </IconButton>
-                  </span>
-                </Tooltip>
                 <Tooltip title={entry.isFriendly ? t("markCompetitive") : t("markFriendly")}>
                   <span>
                     <IconButton
@@ -636,16 +603,6 @@ export function HistoryCardFull({
                   onClose={() => setMoreMenuAnchor(null)}
                 >
                   <MenuItem
-                    data-testid="lock-toggle"
-                    onClick={() => { setMoreMenuAnchor(null); handleToggleLock(); }}
-                    disabled={unlocking}
-                  >
-                    <ListItemIcon>
-                      {entry.editable ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
-                    </ListItemIcon>
-                    <ListItemText>{entry.editable ? t("lockAction") : t("unlockAction")}</ListItemText>
-                  </MenuItem>
-                  <MenuItem
                     data-testid="delete-action"
                     onClick={() => { setMoreMenuAnchor(null); setConfirmDelete(true); }}
                     disabled={deleting}
@@ -658,11 +615,6 @@ export function HistoryCardFull({
                   </MenuItem>
                 </Menu>
               </>
-            )}
-            {!isPlayAdmin && !entry.editable && (
-              <Tooltip title={t("notEditable")}>
-                <LockIcon fontSize="small" color="disabled" />
-              </Tooltip>
             )}
           </Stack>
         </Stack>
@@ -830,13 +782,13 @@ export function HistoryCardFull({
             data-testid="status-chip"
             variant="caption"
             component="span"
-            onClick={entry.editable && isAuthenticated ? (e) => setStatusMenuAnchor(e.currentTarget) : undefined}
+            onClick={canEditScore ? (e) => setStatusMenuAnchor(e.currentTarget) : undefined}
             sx={{
               color: isCancelled ? "error.main" : "success.main",
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: 0.5,
-              cursor: entry.editable && isAuthenticated ? "pointer" : "default",
+              cursor: canEditScore ? "pointer" : "default",
               userSelect: "none",
             }}
           >
@@ -1148,20 +1100,7 @@ export function HistoryCardFull({
           </Box>
         )}
 
-        {/* ── Editable info footer ── */}
-        {canEditScore && (
-          <Box sx={{ px: 3, py: 2 }}>
-            <Typography variant="caption" color="text.disabled" sx={{ display: "block", textAlign: "right" }}>
-              {t("editableUntil", {
-                date: formatDateInTz(editableUntil, localeStr, event.timezone, {
-                  day: "numeric", month: "short", year: "numeric",
-                }),
-              })}
-            </Typography>
-          </Box>
-        )}
-
-        {entry.editable && !isAuthenticated && (
+        {!isAuthenticated && (
           <Box sx={{ px: 3, py: 2 }}>
             <Alert severity="info" icon={<LoginIcon />} sx={{ borderRadius: 2 }}>
               {t("loginRequiredToEdit")}

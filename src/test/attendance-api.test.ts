@@ -46,7 +46,6 @@ async function seedHistory(eventId: string, dateTime: string, teamOne: string[],
       teamOneName: "Team A",
       teamTwoName: "Team B",
       teamsSnapshot: makeSnapshot(teamOne, teamTwo),
-      editableUntil: new Date(Date.now() + 86400_000),
     },
   });
 }

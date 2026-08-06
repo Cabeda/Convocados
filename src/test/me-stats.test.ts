@@ -168,7 +168,7 @@ describe("GET /api/me/stats", () => {
       },
     });
     const history = await prisma.gameHistory.create({
-      data: { eventId: event.id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B", editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+      data: { eventId: event.id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B" },
     });
     await prisma.mvpVote.create({
       data: {

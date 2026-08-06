@@ -314,7 +314,6 @@ async function main() {
             method: null,
           })),
         ),
-        editableUntil: new Date(date.getTime() + 7 * 86400_000),
         eloProcessed: true,
       },
     });

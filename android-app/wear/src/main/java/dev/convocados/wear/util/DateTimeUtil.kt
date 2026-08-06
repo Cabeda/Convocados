@@ -1,7 +1,9 @@
 package dev.convocados.wear.util
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -12,6 +14,17 @@ fun parseInstant(dateTime: String): Instant? = try {
     ZonedDateTime.parse(dateTime, DateTimeFormatter.ISO_DATE_TIME).toInstant()
 } catch (_: Exception) {
     try { Instant.parse(dateTime) } catch (_: Exception) { null }
+}
+
+/** ISO-8601 UTC (with millis) bounds of the device-local "today". Mirrors the
+ *  watch API's today-scoped events query (issue #691). */
+fun todayBoundsIso(): Pair<String, String> {
+    val zone = ZoneId.systemDefault()
+    val today = LocalDate.now(zone)
+    val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC)
+    val start = today.atStartOfDay(zone).toInstant()
+    val end = today.plusDays(1).atStartOfDay(zone).toInstant()
+    return fmt.format(start) to fmt.format(end)
 }
 
 /** Whether a game can be scored: within 1 hour before start, or any time after. */

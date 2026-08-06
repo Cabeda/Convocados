@@ -236,7 +236,7 @@ describe("GET /api/events/[id]", () => {
     expect(actualResetAt.getTime()).toBe(expectedResetAt.getTime());
   });
 
-  it("creates history entry with editableUntil based on now, not old dateTime", async () => {
+  it("creates a history snapshot on reset without an edit-window field", async () => {
     const oldDateTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
     const event = await prisma.event.create({
       data: {
@@ -255,12 +255,7 @@ describe("GET /api/events/[id]", () => {
 
     const history = await prisma.gameHistory.findFirst({ where: { eventId: event.id } });
     expect(history).toBeTruthy();
-    // editableUntil should be ~7 days from now, not 7 days from oldDateTime (which would be ~now)
-    const sevenDaysFromNow = Date.now() + 7 * 24 * 60 * 60 * 1000;
-    const editableUntil = history?.editableUntil.getTime() ?? 0;
-    expect(editableUntil).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
-    expect(editableUntil).toBeLessThanOrEqual(sevenDaysFromNow + 5000);
-    expect(editableUntil > Date.now()).toBe(true);
+    expect(history?.dateTime.toISOString()).toBe(oldDateTime.toISOString());
   });
 
   it("includes user image on linked players and null for guests (legacy branch)", async () => {
