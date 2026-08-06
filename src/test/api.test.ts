@@ -11,8 +11,16 @@ vi.mock("~/lib/auth.helpers.server", () => ({
   checkEventAdmin: vi.fn().mockResolvedValue(false),
 }));
 
+// Mock geocoding — event creation calls resolveLocation() for the location
+// text, which would otherwise make a real network request to Nominatim on
+// every handler call. Tests must be offline and deterministic.
+vi.mock("~/lib/geocode", () => ({
+  resolveLocation: vi.fn(),
+}));
+
 // Import route handlers directly — they're plain async functions
 import { POST as createEvent } from "~/pages/api/events/index";
+import { resolveLocation } from "~/lib/geocode";
 import { GET as getEvent } from "~/pages/api/events/[id]/index";
 import { POST as addPlayer, DELETE as deletePlayer } from "~/pages/api/events/[id]/players";
 import { POST as randomize } from "~/pages/api/events/[id]/randomize";
@@ -61,6 +69,7 @@ async function seedEvent(overrides: Partial<{
 
 beforeEach(async () => {
   mockGetSession.mockResolvedValue(null);
+  vi.mocked(resolveLocation).mockResolvedValue(null);
   await resetRateLimitStore();
   await resetApiRateLimitStore();
   await prisma.gameHistory.deleteMany();
