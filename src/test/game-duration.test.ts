@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
@@ -11,6 +11,13 @@ import { isGameEnded } from "~/lib/gameStatus";
 import { POST as createEvent } from "~/pages/api/events/index";
 import { GET as getEvent } from "~/pages/api/events/[id]/index";
 import { PUT as updateDuration } from "~/pages/api/events/[id]/duration";
+
+// Mock geocoding — event creation calls resolveLocation() for the location
+// text, which would otherwise make a real network request to Nominatim on
+// every handler call. Tests must be offline and deterministic.
+vi.mock("~/lib/geocode", () => ({
+  resolveLocation: vi.fn().mockResolvedValue(null),
+}));
 
 // Minimal Astro APIContext factory
 function ctx(params: Record<string, string>, body?: unknown, queryString?: string) {
