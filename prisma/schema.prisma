@@ -286,6 +286,11 @@ model Game {
   // ADR 0019: per-Game cost override (null = inherit from EventCost template)
   costTotalAmount Float?
   costCurrency    String?
+  // Payment settlement (payment overhaul): tracked requires a payer; untracked = each pays own share
+  paymentMode      String?   @default("tracked") // "tracked" | "untracked" (null = tracked)
+  payerEventPlayerId String?
+  payerEventPlayer   EventPlayer? @relation("GamePayer", fields: [payerEventPlayerId], references: [id], onDelete: SetNull)
+  payerExternalName  String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -295,6 +300,7 @@ model Game {
 
   @@index([eventId, dateTime])
   @@index([eventId, status])
+  @@index([payerEventPlayerId])
 }
 
 model EventPlayer {
@@ -314,6 +320,7 @@ model EventPlayer {
   participations GameParticipant[]
   payments       GamePayment[]
   rsvps          Rsvp[]
+  paidGames      Game[]          @relation("GamePayer")
 
   @@unique([eventId, name])
   @@index([userId])
@@ -346,10 +353,12 @@ model GamePayment {
   method        String?
   paidAt        DateTime?
   markedBy      String?
+  archivedAt    DateTime? // soft-archive when the participant leaves; keeps history
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
   @@unique([gameId, eventPlayerId])
+  @@index([eventPlayerId])
 }
 
 model TeamResult {

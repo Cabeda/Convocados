@@ -90,9 +90,33 @@ export const GET: APIRoute = async ({ params, request }) => {
           : null;
 
         // ADR 0016: mark old Game as played + create new Game + swap pointer
+        // Payment overhaul: carry paymentMode to the next occurrence; carry the
+        // payer only if they were an active participant of the previous game.
         const oldGameId = event.currentGameId;
+        let inheritMode: string | null = null;
+        let inheritPayerId: string | null = null;
+        if (oldGameId) {
+          const oldGame = await prisma.game.findUnique({
+            where: { id: oldGameId },
+            select: { paymentMode: true, payerEventPlayerId: true },
+          });
+          inheritMode = oldGame?.paymentMode ?? null;
+          if (oldGame?.payerEventPlayerId) {
+            const payerStillActive = await prisma.gameParticipant.findFirst({
+              where: { gameId: oldGameId, eventPlayerId: oldGame.payerEventPlayerId, archivedAt: null },
+              select: { id: true },
+            });
+            if (payerStillActive) inheritPayerId = oldGame.payerEventPlayerId;
+          }
+        }
         const newGame = await prisma.game.create({
-          data: { eventId: event.id, dateTime: newDateTime, status: "upcoming" },
+          data: {
+            eventId: event.id,
+            dateTime: newDateTime,
+            status: "upcoming",
+            paymentMode: inheritMode,
+            payerEventPlayerId: inheritPayerId,
+          },
         });
         if (oldGameId) {
           await prisma.game.update({
@@ -104,6 +128,12 @@ export const GET: APIRoute = async ({ params, request }) => {
           where: { id: event.id },
           data: { currentGameId: newGame.id },
         });
+
+        // Payment overhaul: reconcile the new game's payment rows (no-op until
+        // the roster is populated, but keeps carried-over payments in sync).
+        import("../../../../lib/settlement.server")
+          .then(({ syncGamePayments }) => syncGamePayments(newGame.id, event.id))
+          .catch(() => {});
 
         // ADR 0016: keep GameHistory for backward compat (read-only fallback),
         // but NO destructive deletes. Players/Teams/RSVPs stay intact on the old Game.

@@ -1,0 +1,13 @@
+---
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import PaymentsPage from "../../../components/PaymentsPage";
+
+const { id } = Astro.params;
+---
+
+<BaseLayout
+  title="Payments — Convocados"
+  mainTransitionName={`page-event-${id}`}
+>
+  <PaymentsPage client:only="react" eventId={id!} />
+</BaseLayout>
