@@ -33,7 +33,7 @@ interface Props {
 
 /**
  * Reusable list of payment methods with deep-links, copy buttons, and MB WAY app-open.
- * Used in PaymentSection (admin view) and QuickJoin interstitial (player view).
+ * Used in CostSection (payments page) and QuickJoin interstitial (player view).
  */
 export function PaymentMethodsList({ methods, amount, currency }: Props) {
   const t = useT();
