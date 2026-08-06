@@ -211,7 +211,6 @@ describe("Approve ELO for Historical Game API", () => {
         ]),
         source: "historical",
         eloProcessed: false,
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 
@@ -253,7 +252,6 @@ describe("Approve ELO for Historical Game API", () => {
         ]),
         source: "historical",
         eloProcessed: true, // Already processed
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 
@@ -283,7 +281,6 @@ describe("Approve ELO for Historical Game API", () => {
         ]),
         source: "historical",
         eloProcessed: false,
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 
@@ -308,7 +305,6 @@ describe("Approve ELO for Historical Game API", () => {
         ]),
         source: "live", // Not historical
         eloProcessed: false,
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 
@@ -343,7 +339,6 @@ describe("Approve ELO for Historical Game API", () => {
         teamsSnapshot: null, // Missing snapshot
         source: "historical",
         eloProcessed: false,
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 
@@ -388,7 +383,6 @@ describe("Delete Historical Game API", () => {
         ]),
         source: "historical",
         eloProcessed: false,
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 
@@ -416,7 +410,6 @@ describe("Delete Historical Game API", () => {
         ]),
         source: "historical",
         eloProcessed: true, // Already processed
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 
@@ -449,7 +442,6 @@ describe("Delete Historical Game API", () => {
         ]),
         source: "historical",
         eloProcessed: false,
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 
@@ -520,7 +512,6 @@ describe("Played live Game resolves to editable GameHistory (regression)", () =>
           { team: "A", players: [{ name: "Alice", order: 0 }] },
           { team: "B", players: [{ name: "Bob", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 
@@ -658,7 +649,6 @@ describe("Played live Game resolves to editable GameHistory (regression)", () =>
           { team: "A", players: [{ name: "Alice", order: 0 }] },
           { team: "B", players: [{ name: "Bob", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
     await prisma.gameHistory.create({
@@ -669,7 +659,6 @@ describe("Played live Game resolves to editable GameHistory (regression)", () =>
         teamOneName: "A",
         teamTwoName: "B",
         teamsSnapshot: null,
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 
@@ -719,7 +708,6 @@ describe("Played live Game resolves to editable GameHistory (regression)", () =>
           { team: "A", players: [{ name: "Keep Me", order: 0 }] },
           { team: "B", players: [] },
         ]),
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 

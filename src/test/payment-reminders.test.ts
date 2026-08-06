@@ -66,7 +66,6 @@ async function seedGameHistory(eventId: string, id = "gh-pay-1") {
     create: {
       id, eventId, dateTime, status: "played",
       teamOneName: "Team A", teamTwoName: "Team B",
-      editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       createdAt: new Date(),
     },
   });
@@ -219,7 +218,6 @@ describe("getPlayersWithPendingPayments", () => {
       data: {
         eventId, dateTime: new Date(Date.now() - 24 * 60 * 60 * 1000),
         status: "cancelled", teamOneName: "A", teamTwoName: "B",
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     await seedPlayer(eventId, "Pay User", userId);

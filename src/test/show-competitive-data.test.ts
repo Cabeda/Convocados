@@ -118,7 +118,7 @@ describe("GET /api/events/[id]/history with showCompetitiveData", () => {
   it("returns scores when showCompetitiveData is true", async () => {
     const id = await seedEvent({ showCompetitiveData: true });
     await prisma.gameHistory.create({
-      data: { eventId: id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B", scoreOne: 3, scoreTwo: 1, editableUntil: new Date(Date.now() + 86400_000) },
+      data: { eventId: id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B", scoreOne: 3, scoreTwo: 1 },
     });
     const res = await getHistory(ctx({ id }));
     expect(res.status).toBe(200);
@@ -131,7 +131,7 @@ describe("GET /api/events/[id]/history with showCompetitiveData", () => {
     const userId = await seedUser();
     const id = await seedEvent({ ownerId: userId, showCompetitiveData: false });
     await prisma.gameHistory.create({
-      data: { eventId: id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B", scoreOne: 3, scoreTwo: 1, editableUntil: new Date(Date.now() + 86400_000) },
+      data: { eventId: id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B", scoreOne: 3, scoreTwo: 1 },
     });
     const res = await getHistory(ctx({ id }));
     expect(res.status).toBe(200);
@@ -145,7 +145,7 @@ describe("GET /api/events/[id]/history with showCompetitiveData", () => {
     const userId = await seedUser();
     const id = await seedEvent({ ownerId: userId, showCompetitiveData: false });
     await prisma.gameHistory.create({
-      data: { eventId: id, dateTime: new Date(), teamOneName: "Tigers", teamTwoName: "Bears", scoreOne: 2, scoreTwo: 2, editableUntil: new Date(Date.now() + 86400_000) },
+      data: { eventId: id, dateTime: new Date(), teamOneName: "Tigers", teamTwoName: "Bears", scoreOne: 2, scoreTwo: 2 },
     });
     const res = await getHistory(ctx({ id }));
     const body = await res.json();
