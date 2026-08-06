@@ -49,7 +49,7 @@ android {
     defaultConfig {
         applicationId = "com.cabeda.Convocados"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = (System.currentTimeMillis() / 1000 / 60).toInt()
         versionName = "1.2.0"
         manifestPlaceholders["appAuthRedirectScheme"] = "convocados"
@@ -102,6 +102,25 @@ play {
         serviceAccountCredentials.set(credFile)
     }
 }
+
+// Google Play requires apps to target a recent API level (Android 16 / API 36 as of 2026)
+// or they can no longer be updated. Guard against accidental regression.
+val googlePlayMinTargetSdk = 36
+
+tasks.register("validateTargetSdk") {
+    doLast {
+        val target = android.defaultConfig.targetSdk
+        if (target == null || target < googlePlayMinTargetSdk) {
+            throw GradleException(
+                "targetSdk ($target) is below the Google Play minimum ($googlePlayMinTargetSdk). " +
+                "Bump targetSdk in build.gradle.kts before publishing."
+            )
+        }
+    }
+}
+
+tasks.matching { it.name.contains("Release") && it.name.startsWith("assemble") || it.name.startsWith("bundle") }
+    .configureEach { dependsOn("validateTargetSdk") }
 
 // Kotlin 2.0+ compilerOptions DSL — replaces the deprecated
 // `android { kotlinOptions { jvmTarget = "..." } }` pattern.
