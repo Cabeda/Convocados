@@ -63,7 +63,6 @@ describe("Regression: wrap-up must show completed game players, not next game pl
           { team: "B", players: [{ name: "Bob", order: 0 }] },
         ]),
         // NO paymentsSnapshot — this is the key regression trigger
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
 
@@ -123,7 +122,6 @@ describe("Regression: wrap-up must show completed game players, not next game pl
           { team: "A", players: [{ name: "Alice", order: 0 }] },
           { team: "B", players: [{ name: "Bob", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
 
@@ -171,7 +169,6 @@ describe("Regression: wrap-up must show completed game players, not next game pl
           { team: "A", players: [{ name: "OldPlayer1", order: 0 }] },
           { team: "B", players: [{ name: "OldPlayer2", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
 
@@ -221,7 +218,6 @@ describe("Regression: wrap-up must show completed game players, not next game pl
         teamTwoName: "B",
         scoreOne: 1,
         scoreTwo: 1,
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
 

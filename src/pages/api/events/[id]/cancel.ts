@@ -55,7 +55,6 @@ export const PUT: APIRoute = async ({ params, request }) => {
   });
 
   // Create GameHistory entry
-  const editableUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   await prisma.gameHistory.create({
     data: {
       eventId: event.id,
@@ -64,7 +63,6 @@ export const PUT: APIRoute = async ({ params, request }) => {
       isFriendly: game.isFriendly,
       teamOneName: event.teamOneName,
       teamTwoName: event.teamTwoName,
-      editableUntil,
     },
   });
 

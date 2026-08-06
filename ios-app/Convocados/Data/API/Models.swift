@@ -99,9 +99,7 @@ struct GameHistory: Codable, Identifiable {
     var teamTwoName: String = ""
     var teamsSnapshot: String?
     var paymentsSnapshot: String?
-    var editableUntil: String = ""
     var createdAt: String = ""
-    var editable: Bool = false
     var source: String = "live"
     var eloUpdates: [EloUpdate]?
 }

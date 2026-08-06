@@ -194,7 +194,7 @@ async function main() {
 
     // ── Past events: add game history, teams, elo, and payments ──────────
     // Recurring events get multiple game history entries (simulating weeks of play)
-    // Public events always get a recent game (yesterday) so editableUntil is in the future
+    // Public events always get a recent game (yesterday) so a past result shows
     const needsRecentGame = isPublic && playerNames.length >= 4;
     const gameCount = isPast && playerNames.length >= 4
       ? isRecurring ? randInt(4, 12) : 1
@@ -212,7 +212,7 @@ async function main() {
 
       for (let g = 0; g < gameCount; g++) {
         // Each game is 7 days apart going back in time
-        // For public events, the most recent game (g===0) is yesterday so editableUntil is in the future
+        // For public events, the most recent game (g===0) is yesterday
         const gameDateTime = needsRecentGame && g === 0
           ? new Date(now - 86400000)
           : new Date(dateTime.getTime() - g * 7 * 86400000);
@@ -280,7 +280,6 @@ async function main() {
         }
 
         // Game history
-        const editableUntil = new Date(gameDateTime.getTime() + 7 * 86400000);
         await prisma.gameHistory.create({
           data: {
             eventId: event.id,
@@ -292,7 +291,6 @@ async function main() {
             teamTwoName: "Gunas",
             teamsSnapshot,
             paymentsSnapshot,
-            editableUntil,
             eloProcessed: true,
           },
         });
@@ -494,7 +492,6 @@ async function main() {
         teamOneName: "Ninjas",
         teamTwoName: "Gunas",
         teamsSnapshot,
-        editableUntil: new Date(now + 7 * 86400_000),
       },
     });
 
