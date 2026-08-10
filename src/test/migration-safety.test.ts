@@ -15,6 +15,13 @@ vi.mock("~/lib/auth.helpers.server", () => ({
   checkEventAdmin: vi.fn().mockResolvedValue(false),
 }));
 
+// Mock geocoding — event creation calls resolveLocation() for the location
+// text, which would otherwise make a real network request to Nominatim on
+// every handler call. Tests must be offline and deterministic.
+vi.mock("~/lib/geocode", () => ({
+  resolveLocation: vi.fn().mockResolvedValue(null),
+}));
+
 import { GET as getEvent } from "~/pages/api/events/[id]/index";
 import { POST as addPlayer } from "~/pages/api/events/[id]/players";
 import { GET as getKnownPlayers } from "~/pages/api/events/[id]/known-players";
