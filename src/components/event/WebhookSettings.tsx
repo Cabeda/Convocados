@@ -64,23 +64,27 @@ export function WebhookSettings({ eventId }: Props) {
       if (res.ok) {
         const data = await res.json();
         setWebhooks(data.webhooks ?? []);
+      } else {
+        setError(t("webhookAddError"));
       }
-    } catch { /* ignore */ }
+    } catch {
+      setError(t("webhookAddError"));
+    }
     setLoading(false);
-  }, [eventId]);
+  }, [eventId, t]);
 
   useEffect(() => { fetchWebhooks(); }, [fetchWebhooks]);
 
   const handleAdd = async () => {
     setError(null);
+    if (!url.trim()) {
+      setError(t("webhookUrlRequired"));
+      return;
+    }
     try {
       new URL(url);
     } catch {
       setError(t("webhookInvalidUrl"));
-      return;
-    }
-    if (!url.trim()) {
-      setError(t("webhookUrlRequired"));
       return;
     }
     setSaving(true);
@@ -106,17 +110,24 @@ export function WebhookSettings({ eventId }: Props) {
   };
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/events/${eventId}/webhooks/${id}`, { method: "DELETE" });
+    if (!window.confirm(t("webhookDeleteConfirm"))) return;
+    try {
+      await fetch(`/api/events/${eventId}/webhooks/${id}`, { method: "DELETE" });
+    } catch {
+      setError(t("webhookAddError"));
+    }
     await fetchWebhooks();
   };
 
   const handleTest = async (id: string) => {
-    setTestResult((r) => ({ ...r, [id]: r[id] ? { ...r[id], status: "pending" } : r[id] }));
+    setTestResult((r) => ({ ...r, [id]: { id: "", eventType: "test", status: "pending", attempts: 0, error: null, deliveredAt: null, createdAt: "" } }));
     try {
       const res = await fetch(`/api/events/${eventId}/webhooks/${id}/test`, { method: "POST" });
       const data = await res.json();
       if (data.delivery) setTestResult((r) => ({ ...r, [id]: data.delivery }));
-    } catch { /* ignore */ }
+    } catch {
+      setTestResult((r) => ({ ...r, [id]: { ...r[id], status: "failed", error: "Network error" } }));
+    }
   };
 
   const handleToggleEvent = (ev: string) => {
@@ -153,6 +164,8 @@ export function WebhookSettings({ eventId }: Props) {
           <TextField
             size="small"
             fullWidth
+            type="password"
+            autoComplete="off"
             label={t("webhookSecret")}
             placeholder={t("webhookSecretPlaceholder")}
             value={secret}

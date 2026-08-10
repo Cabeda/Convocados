@@ -139,6 +139,7 @@ describe("WebhookSettings", () => {
   });
 
   it("deletes a webhook", async () => {
+    vi.stubGlobal("confirm", vi.fn(() => true));
     const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
       if (init?.method === "DELETE") {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
