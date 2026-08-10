@@ -19,6 +19,13 @@ vi.mock("~/lib/notificationQueue.server", () => ({
   drainNotificationQueue: vi.fn().mockResolvedValue(0),
 }));
 
+// Mock geocoding — event creation calls resolveLocation() for the location
+// text, which would otherwise make a real network request to Nominatim on
+// every handler call. Tests must be offline and deterministic.
+vi.mock("~/lib/geocode", () => ({
+  resolveLocation: vi.fn().mockResolvedValue(null),
+}));
+
 beforeEach(async () => {
   await prisma.scheduledJob.deleteMany();
   await prisma.reminderLog.deleteMany();
