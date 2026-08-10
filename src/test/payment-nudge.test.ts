@@ -42,7 +42,6 @@ async function seedEventWithHistory(opts: {
           teamOneName: "A",
           teamTwoName: "B",
           paymentsSnapshot: JSON.stringify(opts.snapshots[i]),
-          editableUntil: new Date(Date.now() + 86400_000),
         },
       });
     }
@@ -151,7 +150,6 @@ describe("getOutstandingBalance", () => {
         teamTwoName: "B",
         status: "cancelled",
         paymentsSnapshot: JSON.stringify([{ playerName: "Alice", amount: 10, status: "pending" }]),
-        editableUntil: new Date(),
       },
     });
     const balance = await getOutstandingBalance(event.id, "Alice");

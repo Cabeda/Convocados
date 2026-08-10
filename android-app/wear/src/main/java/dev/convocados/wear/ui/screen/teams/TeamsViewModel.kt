@@ -57,8 +57,9 @@ class TeamsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
-            // Check if there's an active (editable) history with a teams snapshot
-            val activeHistory = gameRepository.getLatestEditableHistory(eventId)
+            // Check if there's an active history for today (a played game session)
+            // with a teams snapshot.
+            val activeHistory = gameRepository.getLatestTodayHistory(eventId)
             val snapshot = activeHistory?.teamsSnapshot
 
             if (snapshot != null) {

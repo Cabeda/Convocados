@@ -56,7 +56,6 @@ async function buildSnapshotForGame(eventId: string, game: { id: string; dateTim
     teamTwoName: game.teamTwoName ?? event?.teamTwoName ?? "Team 2",
     teamsSnapshot,
     paymentsSnapshot,
-    editableUntil: new Date(game.dateTime.getTime() + 7 * 86400_000),
     isFriendly: game.isFriendly,
     source: "live" as const,
     eloProcessed: false,
@@ -99,64 +98,6 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
   const body = await request.json();
 
-  // Handle unlock request — owner/admin only, bypasses editableUntil check
-  if (body.unlock === true) {
-    if (!isOwner && !isAdmin) {
-      return Response.json({ error: "Only the event owner or admin can unlock history." }, { status: 403 });
-    }
-    const newEditableUntil = new Date(Date.now() + 7 * 86400_000);
-    const unlocked = await prisma.gameHistory.update({
-      where: { id: historyId },
-      data: { editableUntil: newEditableUntil },
-    });
-
-    const actor = session.user.name ?? session.user.email ?? "Unknown";
-    const actorId = session.user.id;
-    const historyDate = entry.dateTime.toISOString().slice(0, 10);
-    logEvent((params.id ?? ""), "history_unlocked", actor, actorId, {
-      historyId: entry.id, date: historyDate,
-    });
-
-    return Response.json({
-      ...unlocked,
-      id: params.historyId, // ponytail: use original requested id so client can match state (materialized entries get a new cuid)
-      dateTime: unlocked.dateTime.toISOString(),
-      editableUntil: unlocked.editableUntil.toISOString(),
-      createdAt: unlocked.createdAt.toISOString(),
-      editable: unlocked.editableUntil > new Date(),
-      eloUpdates: null,
-    });
-  }
-
-  // Handle lock request — owner/admin only, sets editableUntil to the past
-  if (body.lock === true) {
-    if (!isOwner && !isAdmin) {
-      return Response.json({ error: "Only the event owner or admin can lock history." }, { status: 403 });
-    }
-    const newEditableUntil = new Date(Date.now() - 1000);
-    const locked = await prisma.gameHistory.update({
-      where: { id: historyId },
-      data: { editableUntil: newEditableUntil },
-    });
-
-    const actor = session.user.name ?? session.user.email ?? "Unknown";
-    const actorId = session.user.id;
-    const historyDate = entry.dateTime.toISOString().slice(0, 10);
-    logEvent((params.id ?? ""), "history_locked", actor, actorId, {
-      historyId: entry.id, date: historyDate,
-    });
-
-    return Response.json({
-      ...locked,
-      id: params.historyId, // ponytail: use original requested id so client can match state
-      dateTime: locked.dateTime.toISOString(),
-      editableUntil: locked.editableUntil.toISOString(),
-      createdAt: locked.createdAt.toISOString(),
-      editable: locked.editableUntil > new Date(),
-      eloUpdates: null,
-    });
-  }
-
   // Handle isFriendly toggle — owner/admin only
   if (typeof body.isFriendly === "boolean") {
     if (!isOwner && !isAdmin) {
@@ -181,18 +122,11 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       ...updated,
       id: params.historyId, // ponytail: use original requested id so client can match state
       dateTime: updated.dateTime.toISOString(),
-      editableUntil: updated.editableUntil.toISOString(),
       createdAt: updated.createdAt.toISOString(),
-      editable: updated.editableUntil > new Date(),
+      editable: true,
       isFriendly: updated.isFriendly,
       eloUpdates: null,
     });
-  }
-
-  // Owners/admins bypass the 7-day editableUntil window. Regular users
-  // (incl. participants) lose edit access after the window.
-  if (entry.editableUntil <= new Date() && !isOwner && !isAdmin) {
-    return Response.json({ error: "This result can no longer be edited." }, { status: 403 });
   }
 
   // Allow owner, admin, or any player who participated in the settled game.
@@ -367,9 +301,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       ...refreshed,
       id: params.historyId,
       dateTime: refreshed!.dateTime.toISOString(),
-      editableUntil: refreshed!.editableUntil.toISOString(),
       createdAt: refreshed!.createdAt.toISOString(),
-      editable: refreshed!.editableUntil > new Date(),
+      editable: true,
       costUpdated: true,
       eloUpdates: null,
     });
@@ -525,9 +458,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     ...updated,
     id: params.historyId, // ponytail: use original requested id so client can match state
     dateTime: updated.dateTime.toISOString(),
-    editableUntil: updated.editableUntil.toISOString(),
     createdAt: updated.createdAt.toISOString(),
-    editable: updated.editableUntil > new Date(),
+    editable: true,
     eloUpdates,
   });
 };

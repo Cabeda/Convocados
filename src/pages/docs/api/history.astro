@@ -5,7 +5,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
 
 <DocsLayout title="History API" description="Record and update game results.">
   <h1>History API</h1>
-  <p class="subtitle">Endpoints for listing past game results and editing scores while they are still editable.</p>
+  <p class="subtitle">Endpoints for listing past game results and editing scores.</p>
 
   <h2><span class="endpoint method-get">GET</span> /api/events/[id]/history</h2>
   <p>List all history entries for an event, ordered by date descending.</p>
@@ -20,7 +20,6 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
     "scoreOne": 3,
     "scoreTwo": 2,
     "teamsSnapshot": "{\\"teamOne\\":[...],\\"teamTwo\\":[...]}",
-    "editableUntil": "2026-03-14T19:00:00.000Z",
     "createdAt": "2026-03-13T21:00:00.000Z",
     "editable": true
   }
@@ -37,13 +36,12 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
       <tr><td><code>scoreOne</code></td><td>number | null</td><td>Team one score</td></tr>
       <tr><td><code>scoreTwo</code></td><td>number | null</td><td>Team two score</td></tr>
       <tr><td><code>teamsSnapshot</code></td><td>string</td><td>JSON snapshot of team assignments at game time</td></tr>
-      <tr><td><code>editableUntil</code></td><td>string</td><td>Deadline for editing this entry (ISO 8601)</td></tr>
-      <tr><td><code>editable</code></td><td>boolean</td><td>Whether the entry can still be modified</td></tr>
+      <tr><td><code>editable</code></td><td>boolean</td><td>Always <code>true</code> — kept for client compatibility</td></tr>
     </tbody>
   </table>
 
   <h2><span class="endpoint method-patch">PATCH</span> /api/events/[id]/history/[historyId]</h2>
-  <p>Update a history entry. Only works while <code>editable</code> is <code>true</code> (before <code>editableUntil</code>). Returns <code>403</code> if the edit window has closed.</p>
+  <p>Update a history entry. Edits are governed only by role: the event owner, an admin, or a participant of that game (matching the settled-game roll). Returns <code>403</code> for users outside those roles.</p>
 
   <h3>Request body</h3>
   <table>
@@ -69,7 +67,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
     <thead><tr><th>Status</th><th>Reason</th></tr></thead>
     <tbody>
       <tr><td><code>404</code></td><td>History entry not found</td></tr>
-      <tr><td><code>403</code></td><td>Edit window has expired</td></tr>
+      <tr><td><code>403</code></td><td>Caller is not the owner, admin, or a participant of the game</td></tr>
     </tbody>
   </table>
 </DocsLayout>
