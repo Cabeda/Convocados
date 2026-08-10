@@ -103,7 +103,6 @@ async function seedGameHistory(eventId: string, playerNames: string[], dateTime:
       teamOneName: "A",
       teamTwoName: "B",
       teamsSnapshot: JSON.stringify(teams),
-      editableUntil: new Date(dateTime.getTime() + 7 * 86400_000),
       status: "played",
     },
   });

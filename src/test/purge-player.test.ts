@@ -108,7 +108,6 @@ describe("DELETE /api/events/[id]/purge-player", () => {
         eventId: "e-purge", dateTime: new Date(), status: "played",
         teamOneName: "A", teamTwoName: "B",
         teamsSnapshot: snapshot,
-        editableUntil: new Date(Date.now() + 86400000),
       },
     });
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: "owner-purge", name: "Owner" } } } as any);
@@ -136,7 +135,6 @@ describe("DELETE /api/events/[id]/purge-player", () => {
         eventId: "e-purge", dateTime: new Date(), status: "played",
         teamOneName: "A", teamTwoName: "B",
         teamsSnapshot: snapshot,
-        editableUntil: new Date(Date.now() + 86400000),
       },
     });
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: "owner-purge", name: "Owner" } } } as any);
@@ -160,7 +158,6 @@ describe("DELETE /api/events/[id]/purge-player", () => {
         eventId: "e-purge", dateTime: new Date(), status: "played",
         teamOneName: "A", teamTwoName: "B",
         paymentsSnapshot: payments,
-        editableUntil: new Date(Date.now() + 86400000),
       },
     });
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: "owner-purge", name: "Owner" } } } as any);

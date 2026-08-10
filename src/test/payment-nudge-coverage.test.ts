@@ -140,7 +140,6 @@ async function seedHistory(eventId: string, snapshot: Array<{ playerName: string
       dateTime: new Date(Date.now() - 7 * 86400_000),
       teamOneName: "A", teamTwoName: "B",
       paymentsSnapshot: JSON.stringify(snapshot),
-      editableUntil: new Date(Date.now() + 86400_000),
     },
   });
 }
@@ -157,7 +156,6 @@ describe("balance.server.ts", () => {
         data: {
           eventId: event.id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B",
           paymentsSnapshot: "NOT VALID JSON{{{",
-          editableUntil: new Date(),
         },
       });
       const balance = await getOutstandingBalance(event.id, "Alice");
@@ -170,7 +168,6 @@ describe("balance.server.ts", () => {
         data: {
           eventId: event.id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B",
           paymentsSnapshot: null,
-          editableUntil: new Date(),
         },
       });
       const balance = await getOutstandingBalance(event.id, "Alice");
@@ -209,7 +206,6 @@ describe("balance.server.ts", () => {
             dateTime: new Date(Date.now() - (i + 1) * 86400_000),
             teamOneName: "A", teamTwoName: "B",
             paymentsSnapshot: JSON.stringify([{ playerName: "Alice", amount: 5, status: "paid" }]),
-            editableUntil: new Date(),
           },
         });
       }
@@ -235,7 +231,6 @@ describe("balance.server.ts", () => {
         data: {
           eventId: event.id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B",
           paymentsSnapshot: "BROKEN",
-          editableUntil: new Date(),
         },
       });
       const summary = await getEventBalanceSummary(event.id);
@@ -280,7 +275,6 @@ describe("balance.server.ts", () => {
           dateTime: new Date(Date.now() - 14 * 86400_000),
           teamOneName: "A", teamTwoName: "B",
           paymentsSnapshot: JSON.stringify([{ playerName: "Alice", amount: 3, status: "pending" }]),
-          editableUntil: new Date(),
         },
       });
       const gate = await getGateBalance(event.id, "Alice");
@@ -293,7 +287,6 @@ describe("balance.server.ts", () => {
         data: {
           eventId: event.id, dateTime: new Date(), teamOneName: "A", teamTwoName: "B",
           paymentsSnapshot: "{{bad",
-          editableUntil: new Date(),
         },
       });
       const gate = await getGateBalance(event.id, "Alice");
