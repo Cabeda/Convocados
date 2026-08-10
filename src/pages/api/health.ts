@@ -1,5 +1,10 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../lib/db.server";
+import { SCHEDULER_HEARTBEAT_ID } from "../../lib/scheduler.server";
+
+/** Scheduler polls every 5–30s; anything older than 3min means it's down.
+ * (3min tolerates maintenance timeouts + rotating deploys without false alarms.) */
+const SCHEDULER_STALE_MS = 3 * 60 * 1000;
 
 export const GET: APIRoute = async () => {
   try {
@@ -30,6 +35,18 @@ export const GET: APIRoute = async () => {
         // pgrep exits non-zero when no process matches
       }
       response.litestream = { running };
+
+      // Check the scheduler heartbeat — a stale one means reminders are stuck
+      const heartbeat = await prisma.schedulerHeartbeat.findUnique({
+        where: { id: SCHEDULER_HEARTBEAT_ID },
+      });
+      const schedulerRunning =
+        !!heartbeat && Date.now() - heartbeat.lastSeenAt.getTime() < SCHEDULER_STALE_MS;
+      response.scheduler = { running: schedulerRunning };
+      if (!schedulerRunning) {
+        response.status = "error";
+        return Response.json(response, { status: 503 });
+      }
     }
 
     return Response.json(response);
