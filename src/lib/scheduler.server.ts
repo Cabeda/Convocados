@@ -8,6 +8,17 @@ const log = createLogger("scheduler");
 
 const APP_URL = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev";
 
+export const SCHEDULER_HEARTBEAT_ID = "scheduler";
+
+/** Upsert the scheduler liveness heartbeat. Called on every due-jobs poll. */
+export async function recordSchedulerHeartbeat(): Promise<void> {
+  await prisma.schedulerHeartbeat.upsert({
+    where: { id: SCHEDULER_HEARTBEAT_ID },
+    create: { id: SCHEDULER_HEARTBEAT_ID, lastSeenAt: new Date() },
+    update: { lastSeenAt: new Date() },
+  });
+}
+
 /** Reminder offsets in milliseconds */
 const REMINDER_OFFSETS = {
   reminder_24h: 24 * 60 * 60 * 1000,
