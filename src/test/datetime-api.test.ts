@@ -1,9 +1,16 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 import { PUT as updateDateTime } from "~/pages/api/events/[id]/datetime";
 import { POST as createEvent } from "~/pages/api/events/index";
+
+// Mock geocoding — event creation calls resolveLocation() for the location
+// text, which would otherwise make a real network request to Nominatim on
+// every handler call. Tests must be offline and deterministic.
+vi.mock("~/lib/geocode", () => ({
+  resolveLocation: vi.fn().mockResolvedValue(null),
+}));
 
 function putCtx(params: Record<string, string>, body: unknown, _userId?: string) {
   const headers: Record<string, string> = { "content-type": "application/json" };
