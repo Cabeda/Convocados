@@ -1443,8 +1443,8 @@ fun HistoryCard(
             Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
             if (h.scoreOne != null && h.scoreTwo != null) {
                 Text("${h.teamOneName} ${h.scoreOne} - ${h.scoreTwo} ${h.teamTwoName}", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall,
-                    modifier = if (h.editable) Modifier.clickable(onClick = onEditScore) else Modifier)
-            } else if (h.editable) {
+                    modifier = Modifier.clickable(onClick = onEditScore))
+            } else {
                 if (editingScoreId == h.id) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                         OutlinedTextField(value = scoreOne, onValueChange = onScoreOneChange, modifier = Modifier.width(50.dp), singleLine = true)
@@ -1455,8 +1455,6 @@ fun HistoryCard(
                 } else {
                     TextButton(onClick = onEditScore) { Text(stringResource(R.string.add_score), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold) }
                 }
-            } else {
-                Text(h.status, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
             h.eloUpdates?.takeIf { it.isNotEmpty() }?.let { updates ->
                 Row(modifier = Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

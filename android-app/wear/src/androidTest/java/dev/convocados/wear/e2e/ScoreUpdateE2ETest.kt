@@ -131,7 +131,7 @@ class ScoreUpdateE2ETest {
      * 2. Exchange session for OAuth access token via mobile-callback
      * 3. Fetch games → verify at least one exists
      * 4. Refresh games into local Room DB → verify cached
-     * 5. Pick a game, fetch its history → find an editable entry
+     * 5. Pick a game, fetch its history → find an entry to edit
      * 6. Update the score via PATCH
      * 7. Re-fetch history → verify the score was persisted on the backend
      * 8. Verify the local Room DB was updated optimistically
@@ -216,14 +216,14 @@ class ScoreUpdateE2ETest {
         val targetGame = allGames.first()
         val historyResponse: PaginatedHistory = apiClient.get("/api/events/${targetGame.id}/history")
 
-        // Find a history entry to edit
-        val editableEntry = historyResponse.data.firstOrNull { it.editable }
+        // Find a history entry to edit (all entries are editable — no window field)
+        val firstEntry = historyResponse.data.firstOrNull()
         assumeTrue(
-            "No editable history entry found for event '${targetGame.title}' (${targetGame.id}). " +
-                "The event needs at least one history entry (the API reports editable: true for all).",
-            editableEntry != null,
+            "No history entry found for event '${targetGame.title}' (${targetGame.id}). " +
+                "The event needs at least one history entry.",
+            firstEntry != null,
         )
-        val historyEntry = editableEntry!!
+        val historyEntry = firstEntry!!
 
         // Cache history locally
         val historyRefresh = repository.refreshHistory(targetGame.id)

@@ -44,7 +44,6 @@ const baseEntry: HistoryCardFullEntry = {
     { playerName: "Gonçalo", amount: 5, status: "paid" },
     { playerName: "TF", amount: 5, status: "paid" },
   ]),
-  editable: true,
   source: "live",
   eloProcessed: true,
   isFriendly: false,
@@ -271,13 +270,13 @@ describe("HistoryCardFull — score", () => {
     expect(screen.getByText(/Gunas/)).toBeInTheDocument();
   });
 
-  it("participant can still edit score when editable flag is false (role-only gating, issue #691)", async () => {
+  it("participant can always edit score (role-only gating, issue #691)", async () => {
     const fetchMock = mockFetchSequence({
-      "PATCH /api/events/evt-1/history/h-1": { ...baseEntry, editable: false, scoreOne: 12 },
+      "PATCH /api/events/evt-1/history/h-1": { ...baseEntry, scoreOne: 12 },
     });
     globalThis.fetch = fetchMock as unknown as typeof fetch;
     // Session user is João Fernandes — a participant on the teamsSnapshot.
-    renderCard({ editable: false });
+    renderCard();
     const plusButtons = screen.getAllByTestId("score-plus");
     expect(plusButtons).toHaveLength(1);
     await userEvent.setup().click(plusButtons[0]);
