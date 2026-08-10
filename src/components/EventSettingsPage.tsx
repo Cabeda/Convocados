@@ -16,7 +16,6 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
 import IntegrationInstructionsIcon from "@mui/icons-material/IntegrationInstructions";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import LogoutIcon from "@mui/icons-material/Logout";
 import LockIcon from "@mui/icons-material/Lock";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
@@ -30,6 +29,7 @@ import { SPORT_PRESETS } from "~/lib/sports";
 import { useSession } from "~/lib/auth.client";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
+import { WebhookSettings } from "./event/WebhookSettings";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -129,9 +129,6 @@ export default function EventSettingsPage({ eventId }: Props) {
   const [priorityData, setPriorityData] = useState<PriorityData | null>(null);
   const [localPriority, setLocalPriority] = useState<PrioritySettings | null>(null);
   const [savingPriority, setSavingPriority] = useState(false);
-
-  // Webhook copy
-  const [webhookCopied, setWebhookCopied] = useState(false);
 
   // Access control
   const [hasPassword, setHasPassword] = useState(false);
@@ -369,13 +366,6 @@ export default function EventSettingsPage({ eventId }: Props) {
       setMessage({ type: "success", text: t("priorityOptedInMsg") });
       await fetchPriority();
     }
-  };
-
-  const handleCopyWebhook = async () => {
-    const url = `${window.location.origin}/api/events/${eventId}/webhooks`;
-    await navigator.clipboard.writeText(url);
-    setWebhookCopied(true);
-    setTimeout(() => setWebhookCopied(false), 2500);
   };
 
   // ── Access control handlers ───────────────────────────────────────────────
@@ -1067,24 +1057,7 @@ export default function EventSettingsPage({ eventId }: Props) {
 
       {/* ── Integrations ── */}
       <SectionCard title={t("integrations")} icon={<IntegrationInstructionsIcon color="action" />}>
-        <Stack spacing={1}>
-          <Typography variant="caption" color="text.secondary">
-            {t("webhookHelp")}
-          </Typography>
-          <Paper variant="outlined" sx={{ borderRadius: 2, p: 1, display: "flex", alignItems: "center", gap: 1 }}>
-            <Typography variant="body2" sx={{
-              flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              fontFamily: "monospace", fontSize: "0.75rem", minWidth: 0,
-            }}>
-              {typeof window !== "undefined" ? `${window.location.origin}/api/events/${eventId}/webhooks` : ""}
-            </Typography>
-            <Tooltip title={webhookCopied ? t("webhookCopied") : t("copyLink")}>
-              <IconButton size="small" onClick={handleCopyWebhook}>
-                <ContentCopyIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Paper>
-        </Stack>
+        <WebhookSettings eventId={eventId} />
       </SectionCard>
 
       {/* ── Archive ── */}
