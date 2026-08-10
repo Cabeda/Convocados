@@ -899,7 +899,6 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.scoreOne).toBe(2);
-    expect(body.editable).toBe(true);
   });
 
   it("triggers ELO processing when scores are set", async () => {
@@ -1156,7 +1155,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(body.paymentsSnapshot).toBeNull();
   });
 
-  it("PATCH responses always expose editable: true and never editableUntil", async () => {
+  it("PATCH responses no longer expose editable or editableUntil", async () => {
     const owner = await seedUser();
     mockAuth(owner.id);
     const id = await seedEvent({ ownerId: owner.id });
@@ -1164,7 +1163,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 1, scoreTwo: 1 }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.editable).toBe(true);
+    expect(body.editable).toBeUndefined();
     expect(body.editableUntil).toBeUndefined();
   });
 
