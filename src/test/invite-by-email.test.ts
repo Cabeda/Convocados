@@ -192,7 +192,7 @@ describe("POST /api/events/[id]/players — invite by email", () => {
   it("P2002 reject: existing player linked to different user", async () => {
     const owner = await prisma.user.create({ data: { id: "u-owner", name: "Owner", email: "owner@t.com", emailVerified: true } });
     const other = await prisma.user.create({ data: { id: "u-other", name: "Bob", email: "bob@t.com", emailVerified: true } });
-    const _friend = await prisma.user.create({ data: { id: "u-friend", name: "Bob", email: "bob2@t.com", emailVerified: true } });
+    await prisma.user.create({ data: { id: "u-friend", name: "Bob", email: "bob2@t.com", emailVerified: true } });
     const event = await seedEvent(owner.id);
 
     // Pre-existing player "Bob" linked to "u-other"

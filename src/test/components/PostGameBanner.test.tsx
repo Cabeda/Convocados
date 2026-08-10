@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import React from "react";
 import { screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
@@ -33,12 +32,24 @@ const baseStatus: PostGameStatus = {
   scoreTwo: null,
   teamOneName: "A",
   teamTwoName: "B",
+  gamePayments: null,
+  gameConfig: null,
 };
 
 function mockFetchStatus(status: PostGameStatus | null) {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => status,
+  vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
+    const u = String(url);
+    // Current-game settlement endpoint returns a benign payload in tests.
+    if (u.includes("/payments/game")) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }),
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      json: async () => status,
+    });
   }));
 }
 

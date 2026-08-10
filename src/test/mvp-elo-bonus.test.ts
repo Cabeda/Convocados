@@ -45,7 +45,6 @@ async function seedHistory(eventId: string, overrides: Record<string, unknown> =
       ]),
       scoreOne: 3,
       scoreTwo: 1,
-      editableUntil: new Date(Date.now() + 86400_000),
       ...overrides,
     },
   });

@@ -24,6 +24,10 @@ beforeEach(async () => {
   await resetRateLimitStore();
   await resetApiRateLimitStore();
   await prisma.mvpVote.deleteMany();
+  await prisma.gamePayment.deleteMany();
+  await prisma.gameParticipant.deleteMany();
+  await prisma.game.deleteMany();
+  await prisma.eventPlayer.deleteMany();
   await prisma.playerPayment.deleteMany();
   await prisma.eventCost.deleteMany();
   await prisma.gameHistory.deleteMany();
@@ -37,6 +41,40 @@ describe("GET /api/events/:id/post-game-status", () => {
   it("returns 404 for non-existent event", async () => {
     const res = await getPostGameStatus(ctx({ id: "nonexistent" }));
     expect(res.status).toBe(404);
+  });
+
+  it("flags a new-model game with pending GamePayment rows as not complete", async () => {
+    const owner = await prisma.user.create({ data: { id: "owner-pgb", name: "Owner", email: "owner-pgb@test.com" } });
+    const event = await prisma.event.create({
+      data: {
+        title: "Just Ended", location: "Pitch", dateTime: new Date(Date.now() - 3600_000),
+        ownerId: owner.id, mvpEnabled: false, teamOneName: "A", teamTwoName: "B",
+      },
+    });
+    const game = await prisma.game.create({ data: { eventId: event.id, dateTime: event.dateTime, status: "played", scoreOne: 2, scoreTwo: 1 } });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, order: 0 } });
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 20, currency: "EUR" } });
+    await prisma.gamePayment.create({ data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Ana", amount: 20, status: "pending" } });
+    await prisma.gameHistory.create({
+      data: { eventId: event.id, dateTime: event.dateTime, status: "played", scoreOne: 2, scoreTwo: 1, teamOneName: "A", teamTwoName: "B" },
+    });
+
+    mockGetSession.mockResolvedValue({ user: { id: owner.id, name: "Owner" } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: owner.id, name: "Owner" } } } as any);
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.isParticipant).toBe(true);
+    expect(json.hasScore).toBe(true);
+    expect(json.allPaid).toBe(false);
+    expect(json.allComplete).toBe(false); // banner must show while a share is unpaid
+    expect(json.gamePayments).toHaveLength(1);
+    expect(json.gamePayments[0].status).toBe("pending");
+
+    mockCheckOwnership.mockReset(); // don't leak the owner implementation to later tests
   });
 
   it("returns gameEnded=false for future event", async () => {
@@ -106,7 +144,6 @@ describe("GET /api/events/:id/post-game-status", () => {
         teamTwoName: "B",
         scoreOne: 3,
         scoreTwo: 2,
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -131,7 +168,6 @@ describe("GET /api/events/:id/post-game-status", () => {
         dateTime: event.dateTime,
         teamOneName: "A",
         teamTwoName: "B",
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -159,7 +195,6 @@ describe("GET /api/events/:id/post-game-status", () => {
         teamTwoName: "B",
         scoreOne: 2,
         scoreTwo: 1,
-        editableUntil: new Date(Date.now() - 1000),
       },
     });
     // Latest game without score
@@ -169,7 +204,6 @@ describe("GET /api/events/:id/post-game-status", () => {
         dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
         teamOneName: "A",
         teamTwoName: "B",
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -262,7 +296,6 @@ describe("GET /api/events/:id/post-game-status", () => {
         teamTwoName: "B",
         scoreOne: 1,
         scoreTwo: 1,
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     // No cost set → allPaid=true
@@ -369,7 +402,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { playerName: "Alice", amount: 25, status: "paid", method: null },
           { playerName: "Bob", amount: 25, status: "pending", method: null },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -402,7 +434,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { playerName: "Alice", amount: 25, status: "paid", method: null },
           { playerName: "Bob", amount: 25, status: "paid", method: null },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -443,7 +474,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { playerName: "Alice", amount: 25, status: "pending", method: null },
           { playerName: "Bob", amount: 25, status: "paid", method: null },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -486,7 +516,6 @@ describe("GET /api/events/:id/post-game-status", () => {
         teamTwoName: "B",
         scoreOne: 3,
         scoreTwo: 2,
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -554,7 +583,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { playerName: "Alice", amount: 25, status: "paid", method: null },
           { playerName: "Bob", amount: 25, status: "pending", method: null },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -600,7 +628,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { playerName: "Alice", amount: 25, status: "paid", method: null },
           { playerName: "Bob", amount: 25, status: "paid", method: null },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -623,7 +650,7 @@ describe("GET /api/events/:id/post-game-status", () => {
         durationMinutes: 60,
       },
     });
-    const _cost = await prisma.eventCost.create({
+    await prisma.eventCost.create({
       data: { eventId: event.id, totalAmount: 50, currency: "EUR" },
     });
     // Snapshot captures the advance payment as "paid"
@@ -639,7 +666,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { playerName: "Alice", amount: 25, status: "paid", method: null },
           { playerName: "Bob", amount: 25, status: "paid", method: null },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -710,7 +736,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { playerName: "Alice", amount: 25, status: "paid", method: null },
           { playerName: "Bob", amount: 25, status: "pending", method: null },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -748,7 +773,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { playerName: "Alice", amount: 25, status: "paid", method: null },
           { playerName: "Bob", amount: 25, status: "paid", method: null },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -789,7 +813,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { team: "A", players: [{ name: "Alice", order: 0 }] },
           { team: "B", players: [{ name: "Bob", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -821,7 +844,6 @@ describe("GET /api/events/:id/post-game-status", () => {
         scoreOne: 1,
         scoreTwo: 1,
         status: "played",
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -855,7 +877,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { team: "A", players: [{ name: "Alice", order: 0 }] },
           { team: "B", players: [{ name: "Bob", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     // Newer game exists — voting window for old game is closed
@@ -872,7 +893,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { team: "A", players: [{ name: "Alice", order: 0 }] },
           { team: "B", players: [{ name: "Bob", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -917,7 +937,6 @@ describe("GET /api/events/:id/post-game-status", () => {
         ]),
         // Created 10 days ago — beyond 7-day window
         createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-        editableUntil: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
       },
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
@@ -954,7 +973,6 @@ describe("GET /api/events/:id/post-game-status", () => {
           { team: "A", players: [{ name: "Alice", order: 0 }] },
           { team: "B", players: [{ name: "Bob", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
     // Both eligible voters have voted
@@ -996,7 +1014,6 @@ describe("isParticipant visibility rules (issue #658)", () => {
         teamTwoName: "B",
         ...(opts.teams ? { teamsSnapshot: opts.teams } : {}),
         ...(opts.payments ? { paymentsSnapshot: opts.payments } : {}),
-        editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
   }

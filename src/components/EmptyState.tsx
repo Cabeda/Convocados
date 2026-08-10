@@ -1,4 +1,3 @@
-import React from "react";
 import { Box, Typography, Button, Paper } from "@mui/material";
 import type { SvgIconComponent } from "@mui/icons-material";
 

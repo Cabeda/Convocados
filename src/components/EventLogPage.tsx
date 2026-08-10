@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button,
-  CircularProgress, Alert, Chip, useTheme,
+  CircularProgress, Alert, Chip,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import HistoryIcon from "@mui/icons-material/History";
@@ -129,7 +129,6 @@ const ACTION_I18N: Record<string, TranslationKey> = {
 
 function LogEntryRow({ entry, currentUserId }: { entry: LogEntry; currentUserId?: string }) {
   const t = useT();
-  const _theme = useTheme();
   const color = ACTION_COLORS[entry.action] ?? "default";
   const icon = ACTION_ICONS[entry.action] ?? <HistoryIcon fontSize="small" />;
   const i18nKey = ACTION_I18N[entry.action];

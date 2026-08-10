@@ -116,7 +116,6 @@ describe("Backward compat: events without currentGameId", () => {
           { team: "A", players: [{ name: "X", order: 0 }] },
           { team: "B", players: [{ name: "Y", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 

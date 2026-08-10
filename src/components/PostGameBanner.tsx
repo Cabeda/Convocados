@@ -1,5 +1,5 @@
 /* eslint-disable @eslint-react/set-state-in-effect, react-hooks/set-state-in-effect -- Sync-from-server pattern: server data initializes local state, async fetch responses set state. Common in this codebase. */
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Paper, Typography, Stack, Box, Button, alpha, useTheme,
   LinearProgress, Chip, Alert,
@@ -13,6 +13,7 @@ import HowToRegIcon from "@mui/icons-material/HowToReg";
 import SaveIcon from "@mui/icons-material/Save";
 import { useT } from "~/lib/useT";
 import { MvpVotingCard } from "./MvpVotingCard";
+import { PaymentConfigDialog } from "./PaymentConfigDialog";
 
 interface PaymentEntry {
   playerName: string;
@@ -40,6 +41,8 @@ export interface PostGameStatus {
   scoreTwo: number | null;
   teamOneName: string;
   teamTwoName: string;
+  gamePayments: Array<{ eventPlayerId: string; name: string; amount: number; status: string; isPayer: boolean }> | null;
+  gameConfig: { gameId: string; mode: "tracked" | "untracked"; payerName: string | null; payerIsPlayer: boolean } | null;
 }
 
 interface Props {
@@ -48,9 +51,10 @@ interface Props {
   onScrollToPayments?: () => void;
   onStatusChange?: (status: PostGameStatus | null) => void;
   refreshKey?: number;
+  isManager?: boolean;
 }
 
-export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey }: Props) {
+export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey, isManager = false }: Props) {
   const t = useT();
   const theme = useTheme();
   const [status, setStatus] = useState<PostGameStatus | null>(null);
@@ -58,6 +62,7 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
   const [paymentsDirty, setPaymentsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
 
   const onStatusChangeRef = useRef(onStatusChange);
   useEffect(() => {
@@ -87,6 +92,26 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
   useEffect(() => {
     if (refreshKey !== undefined && refreshKey > 0) fetchStatus();
   }, [refreshKey, fetchStatus]);
+
+  // Payment overhaul: settle / revert a GamePayment share from the banner (owner).
+  const handleToggleShare = async (row: { eventPlayerId: string; status: string; isPayer: boolean }) => {
+    if (!status?.gameConfig) return;
+    if (row.isPayer) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/payments/settlement`, {
+        method: row.status === "paid" ? "DELETE" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gameId: status.gameConfig.gameId, eventPlayerId: row.eventPlayerId }),
+      });
+      if (!res.ok) setSaveError(t("somethingWentWrong"));
+    } catch {
+      setSaveError(t("somethingWentWrong"));
+    } finally {
+      setSaving(false);
+      fetchStatus();
+    }
+  };
 
   // Sync editable payments when status loads for the first time
   useEffect(() => {
@@ -297,10 +322,61 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
                     {t("postGameSetCost")}
                   </Button>
                 )}
+                {status.gameConfig?.mode === "untracked" && status.hasCost && (
+                  <Typography variant="caption" color="text.secondary">
+                    {t("paymentsUntrackedNote")}
+                  </Typography>
+                )}
               </Box>
 
-              {/* Inline payment chips */}
-              {hasPayments && !status.allPaid && (
+              {/* Payment overhaul: config summary / prompt (new-model games) */}
+              {status.gamePayments && status.gameConfig?.mode === "tracked" && status.hasCost && (
+                <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}`, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                  {status.gameConfig.payerName ? (
+                    <Typography variant="body2" fontWeight={600}>
+                      {t("paymentsIsOwed", {
+                        name: status.gameConfig.payerName,
+                        amount: status.gamePayments
+                          .filter((r) => r.status !== "paid")
+                          .reduce((s, r) => s + r.amount, 0)
+                          .toFixed(2),
+                      })}
+                    </Typography>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      {t("paymentsUnassignedPayer")}
+                    </Typography>
+                  )}
+                  {isManager && (
+                    <Button size="small" variant="text" onClick={() => setConfigOpen(true)} sx={{ ml: "auto" }}>
+                      {t("paymentsConfigTitle")}
+                    </Button>
+                  )}
+                </Box>
+              )}
+
+              {/* Inline payment chips — new-model rows when present, else legacy snapshot */}
+              {status.gamePayments ? (
+                <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}` }}>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                    {status.gamePayments.map((r) => {
+                      const isPaid = r.status === "paid";
+                      const chipColor = isPaid ? "success" : r.status === "sent" ? "info" : "warning";
+                      return (
+                        <Chip
+                          key={r.eventPlayerId}
+                          size="small"
+                          variant={isPaid ? "filled" : "outlined"}
+                          color={chipColor}
+                          label={`${r.name}  ${r.amount.toFixed(2)}${r.isPayer ? ` · ${t("paymentsPayer")}` : ""}`}
+                          onClick={isManager && !r.isPayer ? () => handleToggleShare(r) : undefined}
+                          sx={{ borderRadius: 2, fontWeight: isPaid ? 600 : 500, cursor: isManager && !r.isPayer ? "pointer" : "default" }}
+                        />
+                      );
+                    })}
+                  </Box>
+                </Box>
+              ) : hasPayments && !status.allPaid ? (
                 <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}` }}>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
                     {editablePayments.map((p, idx) => {
@@ -345,7 +421,7 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
                     </Alert>
                   )}
                 </Box>
-              )}
+              ) : null}
             </Box>
 
             {/* MVP voting task */}
@@ -377,6 +453,20 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
           </Typography>
         </Stack>
       </Box>
+      <PaymentConfigDialog
+        open={configOpen}
+        eventId={eventId}
+        game={
+          status?.gameConfig && status.gamePayments
+            ? { ...status.gameConfig, rows: status.gamePayments }
+            : null
+        }
+        onClose={() => setConfigOpen(false)}
+        onSaved={async () => {
+          setConfigOpen(false);
+          fetchStatus();
+        }}
+      />
     </Paper>
   );
 }

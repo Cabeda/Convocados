@@ -61,7 +61,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     where: { eventId: params.id },
     orderBy: { dateTime: "asc" },
   });
-  const eloMap = computeHistoryDeltas(params.id ?? "", allHistory);
+  const eloMap = computeHistoryDeltas(allHistory);
 
   // Merge legacy GameHistory + new Game rows into a unified response
   const legacyMapped = history.map((h) => ({
@@ -74,9 +74,8 @@ export const GET: APIRoute = async ({ params, request }) => {
     teamTwoName: h.teamTwoName,
     teamsSnapshot: h.teamsSnapshot,
     paymentsSnapshot: h.paymentsSnapshot,
-    editableUntil: h.editableUntil.toISOString(),
     createdAt: h.createdAt.toISOString(),
-    editable: h.editableUntil > new Date(),
+    editable: true,
     source: h.source,
     eloUpdates: hideCompetitive ? null : (eloMap.get(h.id) ?? null),
     isFriendly: h.isFriendly,
@@ -92,9 +91,8 @@ export const GET: APIRoute = async ({ params, request }) => {
     teamTwoName: g.teamTwoName,
     teamsSnapshot: teamsSnapshotForGame, // reconstructed from event teamResults
     paymentsSnapshot: null,
-    editableUntil: new Date(g.dateTime.getTime() + 7 * 86400_000).toISOString(),
     createdAt: g.createdAt.toISOString(),
-    editable: g.dateTime.getTime() + 7 * 86400_000 > Date.now(),
+    editable: true,
     source: "live" as const,
     eloUpdates: null,
     isFriendly: g.isFriendly,
@@ -134,7 +132,6 @@ export const GET: APIRoute = async ({ params, request }) => {
 
 /** Replay ELO from scratch in memory to get per-game deltas without touching the DB */
 function computeHistoryDeltas(
-  eventId: string,
   history: { id: string; status: string; scoreOne: number | null; scoreTwo: number | null; teamsSnapshot: string | null; dateTime: Date }[],
 ): Map<string, { name: string; delta: number }[]> {
   const result = new Map<string, { name: string; delta: number }[]>();
@@ -242,7 +239,6 @@ export const POST: APIRoute = async ({ params, request }) => {
       status: "played",
       source: "historical",
       eloProcessed: false,
-      editableUntil: new Date(Date.now() + 7 * 86400_000), // 7 days to approve/reject
     },
   });
 
@@ -263,9 +259,8 @@ export const POST: APIRoute = async ({ params, request }) => {
       teamOneName: history.teamOneName,
       teamTwoName: history.teamTwoName,
       teamsSnapshot: history.teamsSnapshot,
-      editableUntil: history.editableUntil.toISOString(),
       createdAt: history.createdAt.toISOString(),
-      editable: history.editableUntil > new Date(),
+      editable: true,
       source: history.source,
       eloProcessed: history.eloProcessed,
     },

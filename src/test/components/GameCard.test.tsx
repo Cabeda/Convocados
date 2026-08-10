@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach } from "vitest";
-import React from "react";
 import { screen, cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";

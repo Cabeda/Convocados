@@ -216,11 +216,11 @@ class ScoreUpdateE2ETest {
         val targetGame = allGames.first()
         val historyResponse: PaginatedHistory = apiClient.get("/api/events/${targetGame.id}/history")
 
-        // Find an editable history entry
+        // Find a history entry to edit
         val editableEntry = historyResponse.data.firstOrNull { it.editable }
         assumeTrue(
             "No editable history entry found for event '${targetGame.title}' (${targetGame.id}). " +
-                "The event needs at least one history entry with editableUntil in the future.",
+                "The event needs at least one history entry (the API reports editable: true for all).",
             editableEntry != null,
         )
         val historyEntry = editableEntry!!

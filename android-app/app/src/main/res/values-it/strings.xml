@@ -152,6 +152,7 @@
     <string name="removed_tap_undo">%1$s rimosso — tocca per annullare</string>
     <string name="vs">VS</string>
     <string name="linked">Collegato</string>
+    <string name="anonymous_player">Giocatore anonimo</string>
     <string name="player_moved">%1$s spostato</string>
     <string name="undo">Annulla</string>
     <string name="add_score">+ Punteggio</string>

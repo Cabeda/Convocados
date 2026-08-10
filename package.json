@@ -1,6 +1,6 @@
 {
   "name": "convocados",
-  "version": "3.122.3",
+  "version": "3.124.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,7 @@
     "lint": "eslint src/",
     "typecheck": "tsc",
     "test": "vitest run",
-    "test:mutation": "npx stryker run",
+    "test:mutation": "VITEST_SINGLE_THREAD=1 npx stryker run",
     "test:route-coverage": "bash scripts/route-coverage.sh",
     "test:e2e": "npx playwright test",
     "db:generate": "prisma generate",
@@ -31,7 +31,8 @@
     "k6:sse": "k6 run k6/scripts/sse.js",
     "screenshots": "sh -c 'PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx scripts/screenshots.ts'",
     "sync:i18n": "tsx scripts/generate-android-strings.ts",
-    "sync:feature-parity-docs": "tsx scripts/generate-feature-parity-docs.ts"
+    "sync:feature-parity-docs": "tsx scripts/generate-feature-parity-docs.ts",
+    "db:seed:settlement": "sh -c 'set -a; [ -f ./.env ] && . ./.env; set +a; PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx prisma/seed-settlement-demo.ts'"
   },
   "dependencies": {
     "@astrojs/node": "^11.0.3",

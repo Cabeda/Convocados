@@ -204,12 +204,19 @@ async function mergeEventPlayer(eventId: string, sourceName: string, targetName:
     prisma.gamePayment.update({ where: { id: p.id }, data: { eventPlayerId: targetEp.id } }),
   );
 
+  // Payment overhaul: any game the source was payer of now points at the target.
+  const payerRepoint = prisma.game.updateMany({
+    where: { payerEventPlayerId: sourceEp.id },
+    data: { payerEventPlayerId: targetEp.id },
+  });
+
   await prisma.$transaction([
     ...participantMoves,
     ...participantDrops,
     ...rsvpMoves,
     ...rsvpDrops,
     ...paymentMoves,
+    payerRepoint,
     prisma.eventPlayer.update({
       where: { id: targetEp.id },
       data: { ...(mergedUserId ? { userId: mergedUserId } : {}) },

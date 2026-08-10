@@ -64,7 +64,6 @@ async function seedHistory(eventId: string, overrides: Record<string, unknown> =
         { team: "Ninjas", players: [{ name: "Alice", order: 0 }, { name: "Bob", order: 1 }] },
         { team: "Gunas", players: [{ name: "Charlie", order: 0 }, { name: "Dave", order: 1 }] },
       ]),
-      editableUntil: new Date(Date.now() + 86400_000),
       ...overrides,
     },
   });
@@ -596,7 +595,6 @@ describe("GET mvp", () => {
         teamOneName: "A",
         teamTwoName: "B",
         status: "played",
-        editableUntil: new Date(Date.now() + 7 * 86400_000),
       },
     });
     const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));
@@ -658,7 +656,6 @@ describe("GET mvp", () => {
         dateTime: new Date(),
         teamOneName: "A",
         teamTwoName: "B",
-        editableUntil: new Date(Date.now() + 7 * 86400_000),
       },
     });
     const res = await getMvp(getCtx({ id: event.id, historyId: history.id }));

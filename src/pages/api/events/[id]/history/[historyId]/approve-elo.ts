@@ -81,9 +81,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     teamOneName: updated.teamOneName,
     teamTwoName: updated.teamTwoName,
     teamsSnapshot: updated.teamsSnapshot,
-    editableUntil: updated.editableUntil.toISOString(),
     createdAt: updated.createdAt.toISOString(),
-    editable: updated.editableUntil > new Date(),
+    editable: true,
     source: updated.source,
     eloProcessed: updated.eloProcessed,
   });

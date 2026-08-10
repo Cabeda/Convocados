@@ -86,7 +86,6 @@ describe("POST /api/events/[id]/merge-player", () => {
           { team: "A", players: [{ name: "Gonçalo", order: 0 }, { name: "Other", order: 1 }] },
           { team: "B", players: [{ name: "Rival", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 86400_000),
         eloProcessed: true,
       },
     });
@@ -145,7 +144,6 @@ describe("POST /api/events/[id]/merge-player", () => {
           { team: "A", players: [{ name: "Gonçalo", order: 0 }] },
           { team: "B", players: [{ name: "Voter", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 
