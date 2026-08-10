@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import React from "react";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
@@ -102,6 +101,79 @@ describe("PlayerList — confirmation dialog trigger", () => {
     const chip = screen.getByText("Charlie");
     await user.click(chip);
     expect(baseProps.onAddPlayer).toHaveBeenCalledWith("Charlie");
+  });
+});
+
+describe("PlayerList — player identity (avatar / anonymous icon)", () => {
+  const linkedWithImage: Player = { id: "p-img", name: "Alice", userId: "u-1", image: "https://example.com/alice.jpg" };
+  const linkedNoImage: Player = { id: "p-nimg", name: "Bob", userId: "u-2", image: null };
+  const guest: Player = { id: "p-guest", name: "Carol", userId: null };
+
+  it("renders the profile avatar with image for a linked player", () => {
+    renderWithTheme(<PlayerList {...baseProps} players={[linkedWithImage]} availableSuggestions={[]} />);
+    const img = screen.getByRole("img", { name: "Alice" });
+    expect(img).toHaveAttribute("src", "https://example.com/alice.jpg");
+    expect(screen.queryByTestId("Person2OutlinedIcon")).toBeNull();
+  });
+
+  it("links the avatar to the user's profile page", () => {
+    renderWithTheme(<PlayerList {...baseProps} players={[linkedWithImage]} availableSuggestions={[]} />);
+    const img = screen.getByRole("img", { name: "Alice" });
+    expect(img.closest("a")).toHaveAttribute("href", "/users/u-1");
+  });
+
+  it("renders an initial-letter avatar for a linked player without image", () => {
+    renderWithTheme(<PlayerList {...baseProps} players={[linkedNoImage]} availableSuggestions={[]} />);
+    expect(screen.getByText("B")).toBeInTheDocument();
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
+  it("renders the anonymous icon for a guest player", () => {
+    renderWithTheme(<PlayerList {...baseProps} players={[guest]} availableSuggestions={[]} />);
+    expect(screen.getByTestId("Person2OutlinedIcon")).toBeInTheDocument();
+  });
+
+  it("renders identity markers in the bench list", () => {
+    const players: Player[] = [];
+    for (let i = 0; i < 11; i++) {
+      players.push({
+        id: `p${i}`,
+        name: `P${i}`,
+        userId: i === 10 ? "u-10" : null,
+        image: i === 10 ? "https://example.com/p10.jpg" : null,
+      });
+    }
+    renderWithTheme(<PlayerList {...baseProps} players={players} />);
+    expect(screen.getByRole("img", { name: "P10" })).toBeInTheDocument();
+    expect(screen.getAllByTestId("Person2OutlinedIcon").length).toBeGreaterThan(0);
+  });
+
+  it("renders avatar/anonymous markers in the recent-players chips", () => {
+    const suggestions = [
+      { name: "Linked", gamesPlayed: 2, userId: "u-x", image: "https://example.com/linked.jpg" },
+      { name: "Anon", gamesPlayed: 1, userId: null, image: null },
+    ];
+    renderWithTheme(<PlayerList {...baseProps} players={[]} availableSuggestions={suggestions} />);
+    expect(screen.getByRole("img", { name: "Linked" })).toBeInTheDocument();
+    expect(screen.getByTestId("Person2OutlinedIcon")).toBeInTheDocument();
+  });
+
+  it("renders avatar/anonymous markers in the add-player dropdown options", async () => {
+    const user = userEvent.setup();
+    const suggestions = [
+      { name: "Linked", gamesPlayed: 2, userId: "u-x", image: "https://example.com/linked.jpg" },
+      { name: "Anon", gamesPlayed: 1, userId: null, image: null },
+    ];
+    renderWithTheme(<PlayerList {...baseProps} players={[]} availableSuggestions={suggestions} />);
+    const input = screen.getByPlaceholderText(/add player/i);
+    await user.click(input);
+    await user.type(input, "Lin");
+    const option = await screen.findByRole("option", { name: /Linked/ });
+    expect(option.querySelector("img")).toHaveAttribute("src", "https://example.com/linked.jpg");
+    await user.clear(input);
+    await user.type(input, "Anon");
+    const anonOption = await screen.findByRole("option", { name: /Anon/ });
+    expect(anonOption.querySelector('[data-testid="Person2OutlinedIcon"]')).not.toBeNull();
   });
 });
 

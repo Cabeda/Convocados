@@ -9,6 +9,7 @@ import { fireWebhooks } from "../../../../lib/webhook.server";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { syncPaymentsForEvent } from "../../../../lib/payments.server";
+import { syncGamePayments } from "../../../../lib/settlement.server";
 import { getOutstandingBalance, getGateBalance } from "../../../../lib/balance.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
@@ -737,6 +738,8 @@ export const POST: APIRoute = async ({ params, request }) => {
       // merge removed the Player row) — joining must make the player visible.
       update: { archivedAt: null },
     });
+    // Payment overhaul: keep per-game payment rows in sync with the roster.
+    await syncGamePayments(event.currentGameId, eventId);
   }
 
   // spotsLeft after adding

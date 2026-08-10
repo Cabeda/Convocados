@@ -91,7 +91,6 @@ async function seedHistory(eventId: string, overrides: Record<string, unknown> =
       status: "played",
       teamOneName: "Ninjas",
       teamTwoName: "Gunas",
-      editableUntil: new Date(Date.now() + 86400_000),
       ...overrides,
     },
   });
@@ -379,16 +378,15 @@ describe("GET /api/events/[id]/history", () => {
     expect(res.status).toBe(404);
   });
 
-  it("handles cancelled games in history", async () => {
+  it("handles cancelled games in history (always editable: true, no window)", async () => {
     const id = await seedEvent();
     await seedHistory(id, {
       status: "cancelled",
-      editableUntil: new Date(Date.now() - 1000),
     });
     const res = await getHistory(ctx({ id }));
     const body = await res.json();
     expect(body.data).toHaveLength(1);
-    expect(body.data[0].editable).toBe(false);
+    expect(body.data[0].editable).toBe(true);
   });
 });
 
@@ -515,7 +513,7 @@ describe("GET /api/push/vapid-public-key", () => {
 describe("GET /api/users/[id]", () => {
   it("returns user profile with games", async () => {
     const user = await seedUser();
-    const _id = await seedEvent({ ownerId: user.id, isPublic: true });
+    await seedEvent({ ownerId: user.id, isPublic: true });
     const res = await getUserProfile(ctx({ id: user.id }));
     expect(res.status).toBe(200);
     const body = await res.json();

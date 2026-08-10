@@ -678,7 +678,6 @@ describe("History endpoint includes Game rows with status=played", () => {
           { team: "A", players: [{ name: "Alice", order: 0 }] },
           { team: "B", players: [{ name: "Bob", order: 0 }] },
         ]),
-        editableUntil: new Date(Date.now() + 86400_000),
       },
     });
 

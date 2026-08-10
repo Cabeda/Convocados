@@ -11,7 +11,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
     where: { id: params.id },
     include: {
-      players: { where: { archivedAt: null }, orderBy: { order: "asc" } },
+      players: { where: { archivedAt: null }, orderBy: { order: "asc" }, include: { user: { select: { image: true } } } },
       teamResults: { include: { members: { orderBy: { order: "asc" } } } },
       owner: { select: { id: true, name: true } },
     },
@@ -67,7 +67,6 @@ export const GET: APIRoute = async ({ params, request }) => {
       });
 
       if (claimed.count === 1) {
-        const editableUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
         const teamsSnapshot = event.teamResults.length > 0
           ? JSON.stringify(event.teamResults.map((tr) => ({
               team: tr.name,
@@ -90,9 +89,33 @@ export const GET: APIRoute = async ({ params, request }) => {
           : null;
 
         // ADR 0016: mark old Game as played + create new Game + swap pointer
+        // Payment overhaul: carry paymentMode to the next occurrence; carry the
+        // payer only if they were an active participant of the previous game.
         const oldGameId = event.currentGameId;
+        let inheritMode: string | null = null;
+        let inheritPayerId: string | null = null;
+        if (oldGameId) {
+          const oldGame = await prisma.game.findUnique({
+            where: { id: oldGameId },
+            select: { paymentMode: true, payerEventPlayerId: true },
+          });
+          inheritMode = oldGame?.paymentMode ?? null;
+          if (oldGame?.payerEventPlayerId) {
+            const payerStillActive = await prisma.gameParticipant.findFirst({
+              where: { gameId: oldGameId, eventPlayerId: oldGame.payerEventPlayerId, archivedAt: null },
+              select: { id: true },
+            });
+            if (payerStillActive) inheritPayerId = oldGame.payerEventPlayerId;
+          }
+        }
         const newGame = await prisma.game.create({
-          data: { eventId: event.id, dateTime: newDateTime, status: "upcoming" },
+          data: {
+            eventId: event.id,
+            dateTime: newDateTime,
+            status: "upcoming",
+            paymentMode: inheritMode,
+            payerEventPlayerId: inheritPayerId,
+          },
         });
         if (oldGameId) {
           await prisma.game.update({
@@ -104,6 +127,12 @@ export const GET: APIRoute = async ({ params, request }) => {
           where: { id: event.id },
           data: { currentGameId: newGame.id },
         });
+
+        // Payment overhaul: reconcile the new game's payment rows (no-op until
+        // the roster is populated, but keeps carried-over payments in sync).
+        import("../../../../lib/settlement.server")
+          .then(({ syncGamePayments }) => syncGamePayments(newGame.id, event.id))
+          .catch(() => {});
 
         // ADR 0016: keep GameHistory for backward compat (read-only fallback),
         // but NO destructive deletes. Players/Teams/RSVPs stay intact on the old Game.
@@ -124,7 +153,6 @@ export const GET: APIRoute = async ({ params, request }) => {
                   teamTwoName: event.teamTwoName,
                   teamsSnapshot,
                   paymentsSnapshot,
-                  editableUntil,
                 },
               })]),
           // Clear per-occurrence payments (PlayerPayment is still current-game-scoped until GamePayment migration)
@@ -203,16 +231,33 @@ export const GET: APIRoute = async ({ params, request }) => {
         .map((p) => [p.name, p.userId]),
     );
 
-    playersPayload = participants.map((gp) => ({
-      id: gp.eventPlayer.id,
-      name: gp.eventPlayer.name,
-      order: gp.order,
-      eventId: gp.eventPlayer.eventId,
-      userId: gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name) ?? null,
-      createdAt: gp.createdAt.toISOString(),
-    }));
+    // EventPlayer has no Prisma relation to User, so resolve profile images in
+    // one batch query keyed by the resolved userId (account-linked identity).
+    const linkedUserIds = [...new Set(participants.map((gp) => gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name)))].filter((u): u is string => !!u);
+    const linkedUsers = linkedUserIds.length
+      ? await prisma.user.findMany({ where: { id: { in: linkedUserIds } }, select: { id: true, image: true } })
+      : [];
+    const imageByUserId = new Map(linkedUsers.map((u) => [u.id, u.image]));
+
+    playersPayload = participants.map((gp) => {
+      const userId = gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name) ?? null;
+      return {
+        id: gp.eventPlayer.id,
+        name: gp.eventPlayer.name,
+        order: gp.order,
+        eventId: gp.eventPlayer.eventId,
+        userId,
+        image: userId ? (imageByUserId.get(userId) ?? null) : null,
+        createdAt: gp.createdAt.toISOString(),
+      };
+    });
   } else {
-    playersPayload = event.players.map((p) => ({ ...p, userId: p.userId ?? null, createdAt: p.createdAt.toISOString() }));
+    playersPayload = event.players.map(({ user, ...p }) => ({
+      ...p,
+      userId: p.userId ?? null,
+      image: user?.image ?? null,
+      createdAt: p.createdAt.toISOString(),
+    }));
   }
 
   // ADR 0016: include current game status for the UI

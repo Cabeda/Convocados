@@ -35,7 +35,6 @@ async function seedGameHistory(eventId: string, status = "played", dateTime = ne
       status,
       teamOneName: "A",
       teamTwoName: "B",
-      editableUntil: new Date(Date.now() + 86400000),
     },
   });
 }

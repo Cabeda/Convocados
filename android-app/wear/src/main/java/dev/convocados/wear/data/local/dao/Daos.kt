@@ -37,11 +37,13 @@ interface WearHistoryDao {
     @Query("SELECT * FROM wear_history WHERE eventId = :eventId ORDER BY dateTime DESC LIMIT 1")
     suspend fun getLatestHistory(eventId: String): WearHistoryEntity?
 
-    @Query("SELECT * FROM wear_history WHERE eventId = :eventId AND editable = 1 ORDER BY dateTime DESC LIMIT 1")
-    suspend fun getLatestEditableHistory(eventId: String): WearHistoryEntity?
+    /** Latest history entry whose dateTime falls within [startOfDayIso, endOfDayIso) — the active game (issue #691). */
+    @Query("SELECT * FROM wear_history WHERE eventId = :eventId AND dateTime >= :startOfDayIso AND dateTime < :endOfDayIso ORDER BY dateTime DESC LIMIT 1")
+    suspend fun getLatestTodayHistory(eventId: String, startOfDayIso: String, endOfDayIso: String): WearHistoryEntity?
 
-    @Query("SELECT * FROM wear_history WHERE eventId = :eventId AND editable = 1 ORDER BY dateTime DESC LIMIT 1")
-    fun observeLatestHistory(eventId: String): Flow<WearHistoryEntity?>
+    /** Observe the latest history entry whose dateTime falls within [startOfDayIso, endOfDayIso). */
+    @Query("SELECT * FROM wear_history WHERE eventId = :eventId AND dateTime >= :startOfDayIso AND dateTime < :endOfDayIso ORDER BY dateTime DESC LIMIT 1")
+    fun observeLatestTodayHistory(eventId: String, startOfDayIso: String, endOfDayIso: String): Flow<WearHistoryEntity?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(history: List<WearHistoryEntity>)

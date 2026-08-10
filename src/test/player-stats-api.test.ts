@@ -68,7 +68,6 @@ async function seedGameHistory(eventId: string, dateTime: Date, players: string[
       teamTwoName: "Team 2",
       teamsSnapshot,
       status,
-      editableUntil: new Date(dateTime.getTime() + 7 * 24 * 60 * 60 * 1000),
     },
   });
 }
@@ -135,7 +134,7 @@ describe("GET /api/me/stats", () => {
   it("includes per-event breakdown with event title", async () => {
     await seedUser("user1", "Test User", "test@test.com");
 
-    const _event = await seedEventWithRatings(null, "Friday Footy", "user1", "Test User", {
+    await seedEventWithRatings(null, "Friday Footy", "user1", "Test User", {
       rating: 1200, gamesPlayed: 8, wins: 5, draws: 1, losses: 2,
     });
 

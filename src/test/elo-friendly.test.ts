@@ -26,7 +26,6 @@ async function makePlayedGame(isFriendly: boolean, scoreOne = 3, scoreTwo = 1) {
       scoreTwo,
       status: "played",
       isFriendly,
-      editableUntil: new Date(Date.now() + 86400_000),
       teamsSnapshot: JSON.stringify([
         { team: "Ninjas", players: [{ name: "Alice", order: 0 }] },
         { team: "Gunas", players: [{ name: "Bob", order: 0 }] },

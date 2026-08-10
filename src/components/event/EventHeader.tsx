@@ -1,5 +1,5 @@
 /* eslint-disable @eslint-react/purity -- React Compiler hint, not a bug. Date objects during render are common and necessary for time-based UI (countdown, past detection, etc.) */
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Paper, Typography, Box, Stack, Chip, Button, IconButton,
   TextField, Tooltip, alpha, useTheme, useMediaQuery, Menu, MenuItem,
@@ -8,6 +8,7 @@ import {
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import HistoryIcon from "@mui/icons-material/History";
+import PaymentsIcon from "@mui/icons-material/Payments";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SportsSoccerIcon from "@mui/icons-material/SportsSoccer";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
@@ -31,6 +32,7 @@ import type { EventData } from "./types";
 import type { Imatch } from "~/lib/random";
 import { ShareBar } from "./ShareBar";
 import { NotifyButton } from "./NotifyButton";
+import { PaymentSurface } from "../PaymentSurface";
 import { MyNotificationsDialog } from "./MyNotificationsDialog";
 import LocationAutocomplete from "../LocationAutocomplete";
 import CourtAlternatives from "../CourtAlternatives";
@@ -448,6 +450,16 @@ export function EventHeader({
               </Box>
             )}
 
+            {/* ── Payments row: price + pay CTA (event details, at the beginning) ── */}
+            {!editMode && (
+              <PaymentSurface
+                eventId={eventId}
+                canEdit={canEditSettings}
+                isAuthenticated={isAuthenticated}
+                playerCount={Math.min(event.players.length, event.maxPlayers)}
+              />
+            )}
+
             <Divider />
 
             {/* ── Row 6: Actions — hide share/notify/calendar in past phase ── */}
@@ -492,6 +504,10 @@ export function EventHeader({
                 <MenuItem component="a" href={`/events/${eventId}/history`} onClick={() => setAnchorEl(null)}>
                   <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
                   <ListItemText>{t("history")}</ListItemText>
+                </MenuItem>
+                <MenuItem component="a" href={`/events/${eventId}/payments`} onClick={() => setAnchorEl(null)}>
+                  <ListItemIcon><PaymentsIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText>{t("paymentsPageTitle")}</ListItemText>
                 </MenuItem>
                 {(isPast || event.isRecurring) && (
                   <MenuItem component="a" href={`/events/${eventId}/attendance`} onClick={() => setAnchorEl(null)}>

@@ -245,7 +245,7 @@ describe("GET /api/events/[id]", () => {
     expect(actualResetAt.getTime()).toBe(expectedResetAt.getTime());
   });
 
-  it("creates history entry with editableUntil based on now, not old dateTime", async () => {
+  it("creates a history snapshot on reset without an edit-window field", async () => {
     const oldDateTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
     const event = await prisma.event.create({
       data: {
@@ -264,12 +264,42 @@ describe("GET /api/events/[id]", () => {
 
     const history = await prisma.gameHistory.findFirst({ where: { eventId: event.id } });
     expect(history).toBeTruthy();
-    // editableUntil should be ~7 days from now, not 7 days from oldDateTime (which would be ~now)
-    const sevenDaysFromNow = Date.now() + 7 * 24 * 60 * 60 * 1000;
-    const editableUntil = history?.editableUntil.getTime() ?? 0;
-    expect(editableUntil).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
-    expect(editableUntil).toBeLessThanOrEqual(sevenDaysFromNow + 5000);
-    expect(editableUntil > Date.now()).toBe(true);
+    expect(history?.dateTime.toISOString()).toBe(oldDateTime.toISOString());
+  });
+
+  it("includes user image on linked players and null for guests (legacy branch)", async () => {
+    const id = await seedEvent();
+    await prisma.user.create({
+      data: { id: "u-img", name: "Alice", email: "alice-img@t.com", emailVerified: true, image: "https://example.com/alice.jpg" },
+    });
+    await prisma.player.createMany({
+      data: [
+        { name: "Alice", eventId: id, userId: "u-img", order: 0 },
+        { name: "Guest", eventId: id, userId: null, order: 1 },
+      ],
+    });
+    const res = await getEvent(ctx({ id }));
+    const body = await res.json();
+    const byName = Object.fromEntries(body.players.map((p: any) => [p.name, p]));
+    expect(byName["Alice"].image).toBe("https://example.com/alice.jpg");
+    expect(byName["Guest"].image).toBeNull();
+  });
+
+  it("includes user image on players in the currentGameId (GameParticipant) branch", async () => {
+    const id = await seedEvent();
+    await prisma.user.create({
+      data: { id: "u-gp", name: "Carol", email: "carol-gp@t.com", emailVerified: true, image: "https://example.com/carol.jpg" },
+    });
+    const game = await prisma.game.create({
+      data: { eventId: id, dateTime: new Date(Date.now() + 86400_000), status: "upcoming" },
+    });
+    await prisma.event.update({ where: { id }, data: { currentGameId: game.id } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: id, name: "Carol", userId: "u-gp" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, order: 0 } });
+    const res = await getEvent(ctx({ id }));
+    const body = await res.json();
+    const byName = Object.fromEntries(body.players.map((p: any) => [p.name, p]));
+    expect(byName["Carol"].image).toBe("https://example.com/carol.jpg");
   });
 });
 
@@ -870,6 +900,38 @@ describe("GET /api/events/[id]/known-players", () => {
     const res = await getKnownPlayers(ctx({ id }));
     const body = await res.json();
     expect(body.players[0].userId).toBeNull();
+  });
+
+  it("annotates suggestions with profile image for linked EventPlayers", async () => {
+    const id = await seedEvent();
+    await prisma.user.create({
+      data: { id: "u-kp", name: "Gonçalo", email: "kp-img@t.com", emailVerified: true, image: "https://example.com/goncalo.jpg" },
+    });
+    await seedEventPlayer(id, "Gonçalo", 1, "u-kp");
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    expect(body.players[0].image).toBe("https://example.com/goncalo.jpg");
+  });
+
+  it("leaves image null for anonymous suggestions", async () => {
+    const id = await seedEvent();
+    await seedEventPlayer(id, "Bob");
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    expect(body.players[0].userId).toBeNull();
+    expect(body.players[0].image).toBeNull();
+  });
+
+  it("annotates suggestions with profile image for follower-derived names", async () => {
+    const id = await seedEvent();
+    await prisma.user.create({
+      data: { id: "u-fol", name: "Follower", email: "fol-img@t.com", emailVerified: true, image: "https://example.com/follower.jpg" },
+    });
+    await prisma.eventFollow.create({ data: { eventId: id, userId: "u-fol" } });
+    const res = await getKnownPlayers(ctx({ id }));
+    const body = await res.json();
+    const byName = Object.fromEntries(body.players.map((p: any) => [p.name, p]));
+    expect(byName["Follower"].image).toBe("https://example.com/follower.jpg");
   });
 });
 
