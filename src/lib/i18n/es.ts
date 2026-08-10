@@ -259,6 +259,7 @@ const es: TranslationKeys = {
   webhookEventType_game_reset: "Reinicio del juego",
   webhookTest: "Enviar payload de prueba",
   webhookDelete: "Eliminar",
+  webhookDeleteConfirm: "¿Estás seguro de que quieres eliminar este webhook?",
   webhookTestOk: "Entregado {at}",
   webhookTestFailed: "Falló: {error}",
   webhookDeliveryStatus_success: "entregado",

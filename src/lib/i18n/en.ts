@@ -285,6 +285,7 @@ const en = {
   webhookEventType_game_reset: "Game reset",
   webhookTest: "Send test payload",
   webhookDelete: "Delete",
+  webhookDeleteConfirm: "Are you sure you want to delete this webhook?",
   webhookTestOk: "Delivered {at}",
   webhookTestFailed: "Failed: {error}",
   webhookDeliveryStatus_success: "delivered",
