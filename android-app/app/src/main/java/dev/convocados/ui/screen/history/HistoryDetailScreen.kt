@@ -142,7 +142,7 @@ fun HistoryDetailScreen(
                 title = { Text(stringResource(R.string.game_details)) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
-                    if (history?.editable == true) {
+                    if (history != null) {
                         IconButton(onClick = {
                             if (editing) {
                                 val s1 = scoreOneText.toIntOrNull()

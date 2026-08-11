@@ -5,6 +5,7 @@ import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 beforeEach(async () => {
+  await prisma.schedulerHeartbeat.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
   await prisma.session.deleteMany();
@@ -79,6 +80,74 @@ describe("GET /api/health", () => {
     } finally {
       process.env.NODE_ENV = oldNodeEnv;
       vi.doUnmock("node:child_process");
+    }
+  });
+
+  it("omits scheduler field in non-production env", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+    try {
+      const res = await GET(ctx());
+      const body = await res.json();
+      expect(body.scheduler).toBeUndefined();
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+    }
+  });
+
+  it("reports scheduler running=true when heartbeat is fresh in production", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      await prisma.schedulerHeartbeat.upsert({
+        where: { id: "scheduler" },
+        create: { id: "scheduler", lastSeenAt: new Date() },
+        update: { lastSeenAt: new Date() },
+      });
+      const res = await GET(ctx());
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.scheduler).toEqual({ running: true });
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+    }
+  });
+
+  it("reports scheduler running=false but stays healthy when heartbeat is stale (deadlock prevention)", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      await prisma.schedulerHeartbeat.upsert({
+        where: { id: "scheduler" },
+        create: { id: "scheduler", lastSeenAt: new Date(Date.now() - 10 * 60 * 1000) },
+        update: { lastSeenAt: new Date(Date.now() - 10 * 60 * 1000) },
+      });
+      const res = await GET(ctx());
+      // 200 (not 503): a 503 would remove the instance from the load balancer,
+      // and the scheduler — which polls via the public URL — could never reach
+      // it again to refresh the heartbeat, deadlocking the app.
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.status).toBe("ok");
+      expect(body.scheduler).toEqual({ running: false });
+      expect(body.degraded).toBe(true);
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+    }
+  });
+
+  it("reports scheduler running=false but stays healthy when no heartbeat exists", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      await prisma.schedulerHeartbeat.deleteMany();
+      const res = await GET(ctx());
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.scheduler).toEqual({ running: false });
+      expect(body.degraded).toBe(true);
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
     }
   });
 

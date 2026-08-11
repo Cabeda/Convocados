@@ -123,7 +123,6 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       id: params.historyId, // ponytail: use original requested id so client can match state
       dateTime: updated.dateTime.toISOString(),
       createdAt: updated.createdAt.toISOString(),
-      editable: true,
       isFriendly: updated.isFriendly,
       eloUpdates: null,
     });
@@ -302,7 +301,6 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       id: params.historyId,
       dateTime: refreshed!.dateTime.toISOString(),
       createdAt: refreshed!.createdAt.toISOString(),
-      editable: true,
       costUpdated: true,
       eloUpdates: null,
     });
@@ -459,7 +457,6 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     id: params.historyId, // ponytail: use original requested id so client can match state
     dateTime: updated.dateTime.toISOString(),
     createdAt: updated.createdAt.toISOString(),
-    editable: true,
     eloUpdates,
   });
 };

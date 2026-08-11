@@ -116,6 +116,9 @@ class WearGameRepository @Inject constructor(
             teamOneName = teamOneName,
             teamTwoName = teamTwoName,
             teamsSnapshot = teamsSnapshot,
-            editable = editable,
+            // The API no longer sends `editable`; the Room column is kept (inert)
+            // because WearDatabase uses fallbackToDestructiveMigration, and dropping
+            // the column would wipe offline-queued scores on upgrade.
+            editable = true,
         )
 }

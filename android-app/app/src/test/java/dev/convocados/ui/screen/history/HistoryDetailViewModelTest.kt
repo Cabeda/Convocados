@@ -45,7 +45,7 @@ class HistoryDetailViewModelTest {
 
     @Test
     fun `updateScore calls API and updates state`() = runTest {
-        val history = GameHistory(id = "h1", dateTime = "2024-01-01T10:00:00Z", scoreOne = 0, scoreTwo = 0, editable = true)
+        val history = GameHistory(id = "h1", dateTime = "2024-01-01T10:00:00Z", scoreOne = 0, scoreTwo = 0)
         val updated = history.copy(scoreOne = 5, scoreTwo = 3)
         coEvery { api.fetchHistory("e1", null) } returns PaginatedHistory(data = listOf(history))
         coEvery { api.updateScore("e1", "h1", 5, 3) } returns updated
