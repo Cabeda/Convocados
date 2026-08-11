@@ -47,8 +47,9 @@ export function PaymentNudgeDialog({ eventId, open, onClose, onJoin }: Props) {
           const methods = parsePaymentMethods(cost.effectivePaymentMethods);
           setPaymentMethods(methods);
           setCostCurrency(cost.currency ?? "EUR");
-          const playerCount = cost.payments?.length ?? 1;
-          setPerPlayer(playerCount > 0 ? cost.totalAmount / playerCount : 0);
+          // Per-player price = total / required playing slots (maxPlayers).
+          const maxPlayers = cost.maxPlayers ?? 1;
+          setPerPlayer(maxPlayers > 0 ? cost.totalAmount / maxPlayers : 0);
         }
       }
     } catch { /* ignore */ }
