@@ -199,7 +199,9 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       } catch { /* skip */ }
     }
 
-    const newShare = playerNames.length > 0 ? newTotal / playerNames.length : 0;
+    // Per-player share = total / required playing slots (maxPlayers), NOT the
+    // roster size in the snapshot — the per-player price is fixed for the event.
+    const newShare = event.maxPlayers > 0 ? newTotal / event.maxPlayers : 0;
     const newShareCents = Math.round(newShare * 100);
 
     // Update Game.costTotalAmount if this is a Game-backed entry
@@ -350,7 +352,9 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       try {
         const newTeams = JSON.parse(updated.teamsSnapshot ?? "[]") as Array<{ players: Array<{ name: string }> }>;
         const newPlayerNames = newTeams.flatMap((t) => t.players.map((p) => p.name));
-        const share = newPlayerNames.length > 0 ? eventCost.totalAmount / newPlayerNames.length : 0;
+        // Per-player share = total / required playing slots (maxPlayers), NOT
+        // the roster size in the new teams — the per-player price is fixed.
+        const share = event.maxPlayers > 0 ? eventCost.totalAmount / event.maxPlayers : 0;
 
         // Upsert payments for current players
         for (const name of newPlayerNames) {

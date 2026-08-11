@@ -25,14 +25,16 @@ const CURRENCIES = ["EUR", "USD", "GBP", "BRL", "CHF"];
  * (with this-game / all-future scope) and the payment methods; everyone else
  * sees the price, per-player share and where to send the money.
  */
-export function CostSection({ eventId, isManager, playerCount }: { eventId: string; isManager: boolean; playerCount: number }) {
+export function CostSection({ eventId, isManager, maxPlayers }: { eventId: string; isManager: boolean; maxPlayers: number }) {
   const t = useT();
   const { cost, load } = useEventCost(eventId);
   const [open, setOpen] = useState(false);
 
   if (!cost) return null;
 
-  const share = cost.totalAmount > 0 && playerCount > 0 ? cost.totalAmount / playerCount : null;
+  // Per-player price = total / required playing slots (maxPlayers). Fixed for
+  // the event — it does not change with the number of players in the list.
+  const share = cost.totalAmount > 0 && maxPlayers > 0 ? cost.totalAmount / maxPlayers : null;
   const methods = parsePaymentMethods(cost.effectivePaymentMethods);
 
   return (

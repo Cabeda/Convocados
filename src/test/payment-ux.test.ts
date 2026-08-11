@@ -68,7 +68,7 @@ describe("syncPaymentsForEvent — owner auto-paid", () => {
     const payments = await prisma.playerPayment.findMany({ where: { eventCostId: cost.id } });
     const regular = payments.find((p) => p.playerName === "Regular");
     expect(regular?.status).toBe("sent"); // Preserved, not reset to pending
-    expect(regular?.amount).toBe(25); // Amount updated to new share
+    expect(regular?.amount).toBe(5); // Amount updated to new share (50 / maxPlayers(10))
   });
 });
 
