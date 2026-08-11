@@ -742,7 +742,7 @@ describe("Played live Game resolves to editable GameHistory (regression)", () =>
       payerName: null,
       payerIsPlayer: false,
       hasCost: true,
-      rows: [{ eventPlayerId: ep.id, name: "Ana", amount: 30, status: "pending", isPayer: false }],
+      rows: [{ eventPlayerId: ep.id, name: "Ana", amount: 3, status: "pending", isPayer: false }],
     });
   });
 });
