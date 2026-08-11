@@ -62,7 +62,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       payerName: g.payerEventPlayer?.name ?? g.payerExternalName,
       payerIsPlayer: !!g.payerEventPlayer,
       hasCost: totalFor(g) > 0,
-      rows: buildSettlementRows(g, g.participants, totalFor(g)),
+      rows: buildSettlementRows(g, g.participants, totalFor(g), event.maxPlayers),
     });
   }
 
