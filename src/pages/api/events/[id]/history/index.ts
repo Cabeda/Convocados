@@ -75,7 +75,6 @@ export const GET: APIRoute = async ({ params, request }) => {
     teamsSnapshot: h.teamsSnapshot,
     paymentsSnapshot: h.paymentsSnapshot,
     createdAt: h.createdAt.toISOString(),
-    editable: true,
     source: h.source,
     eloUpdates: hideCompetitive ? null : (eloMap.get(h.id) ?? null),
     isFriendly: h.isFriendly,
@@ -92,7 +91,6 @@ export const GET: APIRoute = async ({ params, request }) => {
     teamsSnapshot: teamsSnapshotForGame, // reconstructed from event teamResults
     paymentsSnapshot: null,
     createdAt: g.createdAt.toISOString(),
-    editable: true,
     source: "live" as const,
     eloUpdates: null,
     isFriendly: g.isFriendly,
@@ -260,7 +258,6 @@ export const POST: APIRoute = async ({ params, request }) => {
       teamTwoName: history.teamTwoName,
       teamsSnapshot: history.teamsSnapshot,
       createdAt: history.createdAt.toISOString(),
-      editable: true,
       source: history.source,
       eloProcessed: history.eloProcessed,
     },

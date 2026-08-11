@@ -4,6 +4,8 @@
  * data integrity during recurrence advancement, and edge cases.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { prisma } from "~/lib/db.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
@@ -399,5 +401,53 @@ describe("Player removal reflected in Event GET (E2E parity)", () => {
     const names = body.players.map((p: any) => p.name);
     expect(names).toContain("KeepBeta");
     expect(names).not.toContain("RemoveBeta");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Regression: DateTime storage format (20260811000000_datetime_integer_storage)
+// Prisma 7's better-sqlite3 adapter defaults to iso8601 TEXT, but rows written
+// by Prisma 6's built-in connector are INTEGER epoch-ms. Any DateTime filter
+// then mismatches the opposite format (the recurrence reset CAS claims 0 rows).
+// The migration must normalize TEXT rows to INTEGER, matching the adapter.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("DateTime storage normalization", () => {
+  it("migration converts TEXT datetime rows to INTEGER epoch-ms and reads stay intact", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Mixed Format", location: "Pitch",
+        dateTime: new Date("2026-09-08T10:00:00.000Z"),
+        teamOneName: "A", teamTwoName: "B",
+      },
+    });
+    // Mimic a row written by the iso8601 adapter (TEXT "…+00:00").
+    const isoText = "2026-09-08T10:00:00.000+00:00";
+    await prisma.$executeRawUnsafe("UPDATE Event SET dateTime = ? WHERE id = ?", isoText, event.id);
+    const before = await prisma.$queryRawUnsafe(
+      "SELECT typeof(dateTime) AS t FROM Event WHERE id = ?",
+      event.id,
+    );
+    expect((before as any)[0].t).toBe("text");
+    // TEXT rows must still read back correctly.
+    expect((await prisma.event.findUnique({ where: { id: event.id } }))!.dateTime.toISOString()).toBe("2026-09-08T10:00:00.000Z");
+
+    // Apply the real migration file (same UPDATEs that run on production deploy).
+    const migrationSql = fs.readFileSync(
+      path.resolve(process.cwd(), "prisma/migrations/20260811000000_datetime_integer_storage/migration.sql"),
+      "utf8",
+    );
+    for (const stmt of migrationSql.split(";").map((s) => s.trim()).filter(Boolean)) {
+      await prisma.$executeRawUnsafe(stmt);
+    }
+
+    const after = await prisma.$queryRawUnsafe(
+      "SELECT typeof(dateTime) AS t, dateTime AS v FROM Event WHERE id = ?",
+      event.id,
+    );
+    expect((after as any)[0].t).toBe("integer");
+    expect((after as any)[0].v).toBeInstanceOf(Date);
+    expect((after as any)[0].v.toISOString()).toBe("2026-09-08T10:00:00.000Z");
+    expect((await prisma.event.findUnique({ where: { id: event.id } }))!.dateTime.toISOString()).toBe("2026-09-08T10:00:00.000Z");
   });
 });
