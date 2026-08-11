@@ -77,6 +77,45 @@ describe("GET /api/events/:id/post-game-status", () => {
     mockCheckOwnership.mockReset(); // don't leak the owner implementation to later tests
   });
 
+  it("treats an untracked game (each one pays own share) as fully paid", async () => {
+    const owner = await prisma.user.create({ data: { id: "owner-pgb-untracked", name: "Owner", email: "owner-pgb-untracked@test.com" } });
+    const event = await prisma.event.create({
+      data: {
+        title: "Just Ended", location: "Pitch", dateTime: new Date(Date.now() - 3600_000),
+        ownerId: owner.id, mvpEnabled: false, teamOneName: "A", teamTwoName: "B",
+      },
+    });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime, status: "played", scoreOne: 2, scoreTwo: 1, paymentMode: "untracked" },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, order: 0 } });
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 20, currency: "EUR" } });
+    // Stale history snapshot from a previously tracked mode must not override the
+    // live untracked mode — the banner should treat it as all paid.
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id, dateTime: event.dateTime, status: "played", scoreOne: 2, scoreTwo: 1,
+        teamOneName: "A", teamTwoName: "B",
+        paymentsSnapshot: JSON.stringify([{ playerName: "Ana", amount: 20, status: "pending", method: null }]),
+      },
+    });
+
+    mockGetSession.mockResolvedValue({ user: { id: owner.id, name: "Owner" } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: true, isAdmin: false, session: { user: { id: owner.id, name: "Owner" } } } as any);
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.allPaid).toBe(true);
+    expect(json.allComplete).toBe(true); // banner dismisses — nothing left to settle
+    expect(json.gameConfig?.mode).toBe("untracked");
+    expect(json.gamePayments).toEqual([]);
+
+    mockCheckOwnership.mockReset();
+  });
+
   it("returns gameEnded=false for future event", async () => {
     const event = await prisma.event.create({
       data: {
