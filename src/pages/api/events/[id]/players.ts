@@ -396,6 +396,21 @@ export function resetInviteRateLimitStores(): void {
   invitePerSenderStore.clear();
 }
 
+/**
+ * Fire player_joined (+ game_full when the roster fills) webhooks and log the
+ * player_added activity for ANY join path. The re-join paths (after a leave or
+ * a recurring reset) used to return early and silently skipped both — the
+ * external gateway (e.g. a WhatsApp bridge) never heard about returning players.
+ */
+function notifyPlayerJoined(event: { id: string; maxPlayers: number }, playerName: string, order: number) {
+  const isActive = order < event.maxPlayers;
+  const spotsLeft = isActive ? Math.max(0, event.maxPlayers - order - 1) : 0;
+  const data = { playerName, isActive, spotsLeft };
+  fireWebhooks(event.id, "player_joined", data).catch(() => {});
+  if (spotsLeft === 0) fireWebhooks(event.id, "game_full", data).catch(() => {});
+  logEvent(event.id, "player_added", null, null, { playerName }).catch(() => {});
+}
+
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
@@ -610,6 +625,7 @@ export const POST: APIRoute = async ({ params, request }) => {
           await addPlayerToTeams(eventId, trimmed, event.currentGameId);
           await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
         }
+        notifyPlayerJoined(event, trimmed, newOrder);
         return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
       }
       // ── ADR 0016: game-scoped re-join after recurring reset ─────────────
@@ -649,6 +665,7 @@ export const POST: APIRoute = async ({ params, request }) => {
             create: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
             update: { status: "yes", respondedAt: new Date() },
           });
+          notifyPlayerJoined(event, trimmed, newOrder);
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
         if (!alreadyInGame) {
@@ -678,6 +695,7 @@ export const POST: APIRoute = async ({ params, request }) => {
             await addPlayerToTeams(eventId, trimmed, event.currentGameId);
             await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
           }
+          notifyPlayerJoined(event, trimmed, newOrder);
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
         // Already in the current game — fall through to duplicate error
