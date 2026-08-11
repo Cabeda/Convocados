@@ -414,6 +414,41 @@ describe("HistoryCardFull — admin controls", () => {
     expect(screen.queryByTestId("friendly-toggle")).not.toBeInTheDocument();
     expect(screen.queryByTestId("more-actions")).not.toBeInTheDocument();
   });
+
+  it("shows the 'Who paid' config control for a manager when the game has a cost", () => {
+    renderWithTheme(
+      <HistoryCardFull
+        entry={{ ...baseEntry, paymentConfig: { gameId: "g-1", mode: "untracked", payerName: null, payerIsPlayer: false, hasCost: true, rows: [] } }}
+        eventId="evt-1"
+        event={event}
+        cost={cost}
+        mvp={mvp}
+        isOwner={true}
+        isAdmin={false}
+        isAuthenticated={true}
+        userName="Owner"
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        knownPlayers={[]}
+        playerRatings={[]}
+      />,
+    );
+    expect(screen.getByText("Who paid this game?")).toBeInTheDocument();
+  });
+
+  it("hides the 'Who paid' config control when there is no cost", () => {
+    renderCard({
+      paymentConfig: {
+        gameId: "g-1",
+        mode: "untracked",
+        payerName: null,
+        payerIsPlayer: false,
+        hasCost: false,
+        rows: [],
+      },
+    });
+    expect(screen.queryByText("Who paid this game?")).not.toBeInTheDocument();
+  });
 });
 
 describe("HistoryCardFull — typography floor", () => {

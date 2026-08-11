@@ -4,6 +4,7 @@ import { parsePaginationParams, buildPaginatedResponse } from "../../../../../li
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
+import { buildSettlementRows, type PaymentMode } from "../../../../../lib/settlement.server";
 
 // GET /api/events/[id]/history — paginated history entries
 export const GET: APIRoute = async ({ params, request }) => {
@@ -33,12 +34,37 @@ export const GET: APIRoute = async ({ params, request }) => {
     include: {
       participants: {
         where: { archivedAt: null },
-        include: { eventPlayer: { select: { name: true } } },
+        include: { eventPlayer: { select: { id: true, name: true } } },
         orderBy: { order: "asc" },
       },
+      payments: {
+        where: { archivedAt: null },
+        include: { eventPlayer: { select: { name: true } } },
+      },
+      payerEventPlayer: { select: { id: true, name: true } },
     },
     orderBy: { dateTime: "desc" },
   });
+
+  // Per-game payment config (mode + payer + participant rows) so the history
+  // page can re-open the "who paid this game?" dialog and switch the mode back
+  // (e.g. an accidental "each one" → tracked) on a past game.
+  const eventCost = await prisma.eventCost.findUnique({
+    where: { eventId: params.id },
+    select: { totalAmount: true, currency: true },
+  });
+  const totalFor = (g: (typeof playedGames)[number]) => g.costTotalAmount ?? eventCost?.totalAmount ?? 0;
+  const paymentConfigByDate = new Map<string, unknown>();
+  for (const g of playedGames) {
+    paymentConfigByDate.set(g.dateTime.toISOString(), {
+      gameId: g.id,
+      mode: (g.paymentMode as PaymentMode | null) ?? "tracked",
+      payerName: g.payerEventPlayer?.name ?? g.payerExternalName,
+      payerIsPlayer: !!g.payerEventPlayer,
+      hasCost: totalFor(g) > 0,
+      rows: buildSettlementRows(g, g.participants, totalFor(g)),
+    });
+  }
 
   // ADR 0016: live Games store team membership in the event-level teamResults
   // (not in the Game row). Snapshot them so the UI can render the players that
@@ -123,7 +149,8 @@ export const GET: APIRoute = async ({ params, request }) => {
   const legacyDateTimes = new Set(dedupedLegacy.map((h) => h.dateTime));
   const dedupedGames = gameMapped.filter((g) => !legacyDateTimes.has(g.dateTime));
   const merged = [...dedupedLegacy, ...dedupedGames]
-    .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
+    .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime())
+    .map((entry) => ({ ...entry, paymentConfig: paymentConfigByDate.get(entry.dateTime) ?? null }));
 
   return Response.json(buildPaginatedResponse(merged.slice(0, limit + 1), limit));
 };

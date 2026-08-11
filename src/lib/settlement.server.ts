@@ -519,19 +519,36 @@ export interface CurrentGameSettlement {
 }
 
 /**
- * The event's current game payment state — all rows (paid/sent/pending), mode,
- * and payer. Used by the event-page payment section to render pills and the
- * "who paid this game?" config. Null when the event has no current game.
+ * Build settlement rows for a game from its ACTIVE PARTICIPANTS, using synced
+ * GamePayment rows when present. Derived from participants so the payer picker
+ * always lists everyone on the roster — even before payment rows are synced
+ * (e.g. a cost set after players joined, or an untracked game switching back).
  */
-export async function getCurrentGameSettlement(eventId: string): Promise<CurrentGameSettlement | null> {
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { currentGameId: true },
+export function buildSettlementRows(
+  game: { payerEventPlayerId: string | null; payments: Array<{ eventPlayerId: string; amount: number; status: string }> },
+  participants: Array<{ eventPlayer: { id: string; name: string } }>,
+  total: number,
+): SettlementRow[] {
+  const share = shareFor(total, participants.length);
+  const paymentByPlayer = new Map(game.payments.map((p) => [p.eventPlayerId, p]));
+  return participants.map((gp) => {
+    const row = paymentByPlayer.get(gp.eventPlayer.id);
+    const isPayer = game.payerEventPlayerId === gp.eventPlayer.id;
+    return {
+      eventPlayerId: gp.eventPlayer.id,
+      name: gp.eventPlayer.name,
+      amount: row?.amount ?? share,
+      // A player-payer's computed row reads as auto-settled even before rows sync.
+      status: row?.status ?? (isPayer ? "paid" : "pending"),
+      isPayer,
+    };
   });
-  if (!event?.currentGameId) return null;
+}
 
+/** Payment config + rows for any single game (current, played, or untracked). */
+export async function getGameSettlement(eventId: string, gameId: string): Promise<CurrentGameSettlement | null> {
   const game = await prisma.game.findUnique({
-    where: { id: event.currentGameId },
+    where: { id: gameId },
     include: {
       payments: {
         where: { archivedAt: null },
@@ -544,21 +561,11 @@ export async function getCurrentGameSettlement(eventId: string): Promise<Current
   if (!game) return null;
 
   const { total } = await effectiveGameCost(game.id, eventId);
-  const payerId = game.payerEventPlayerId;
-
-  // Rows are derived from ACTIVE PARTICIPANTS so the payer picker always lists
-  // everyone on the roster — even before payment rows are synced (e.g. a cost
-  // set after players joined). Each participant gets their synced payment row
-  // when one exists, else a computed pending share.
   const participants = await prisma.gameParticipant.findMany({
     where: { gameId: game.id, archivedAt: null },
     include: { eventPlayer: { select: { id: true, name: true } } },
     orderBy: { order: "asc" },
   });
-  const share = shareFor(total, participants.length);
-  const paymentByPlayer = new Map(
-    game.payments.map((p) => [p.eventPlayerId, p]),
-  );
 
   return {
     gameId: game.id,
@@ -566,19 +573,22 @@ export async function getCurrentGameSettlement(eventId: string): Promise<Current
     payerName: game.payerEventPlayer?.name ?? game.payerExternalName,
     payerIsPlayer: !!game.payerEventPlayer,
     hasCost: total > 0,
-    rows: participants.map((gp) => {
-      const row = paymentByPlayer.get(gp.eventPlayer.id);
-      const isPayer = payerId === gp.eventPlayer.id;
-      return {
-        eventPlayerId: gp.eventPlayer.id,
-        name: gp.eventPlayer.name,
-        amount: row?.amount ?? share,
-        // A player-payer's computed row reads as auto-settled even before rows sync.
-        status: row?.status ?? (isPayer ? "paid" : "pending"),
-        isPayer,
-      };
-    }),
+    rows: buildSettlementRows(game, participants, total),
   };
+}
+
+/**
+ * The event's current game payment state — all rows (paid/sent/pending), mode,
+ * and payer. Used by the event-page payment section to render pills and the
+ * "who paid this game?" config. Null when the event has no current game.
+ */
+export async function getCurrentGameSettlement(eventId: string): Promise<CurrentGameSettlement | null> {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { currentGameId: true },
+  });
+  if (!event?.currentGameId) return null;
+  return getGameSettlement(eventId, event.currentGameId);
 }
 
 // ─── Wrap-up game payments (post-game banner) ───────────────────────────────
@@ -620,7 +630,16 @@ export async function getWrapUpGameSettlement(eventId: string): Promise<WrapUpGa
 
   if (!game) return null;
   const mode = (game.paymentMode as PaymentMode | null) ?? "tracked";
-  if (mode === "untracked") return null;
+
+  // Untracked ("each one pays their own share"): everyone is settled by
+  // definition — the banner must show payments as done instead of asking to
+  // settle each player. Only reported when the game has a cost; otherwise
+  // there is nothing to settle and the old null behaviour applies.
+  if (mode === "untracked") {
+    const { total } = await effectiveGameCost(game.id, eventId);
+    if (total <= 0) return null;
+    return { gameId: game.id, mode, payerName: null, payerIsPlayer: false, rows: [] };
+  }
 
   const payerId = game.payerEventPlayerId;
   const activeRows = game.payments.filter((p) => !p.archivedAt);
