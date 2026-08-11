@@ -44,8 +44,6 @@ const baseEntry: HistoryCardFullEntry = {
     { playerName: "Gonçalo", amount: 5, status: "paid" },
     { playerName: "TF", amount: 5, status: "paid" },
   ]),
-  editableUntil: new Date(2026, 6, 20, 19, 0).toISOString(),
-  editable: true,
   source: "live",
   eloProcessed: true,
   isFriendly: false,
@@ -271,6 +269,23 @@ describe("HistoryCardFull — score", () => {
     expect(screen.getByText(/Ninjas/)).toBeInTheDocument();
     expect(screen.getByText(/Gunas/)).toBeInTheDocument();
   });
+
+  it("participant can always edit score (role-only gating, issue #691)", async () => {
+    const fetchMock = mockFetchSequence({
+      "PATCH /api/events/evt-1/history/h-1": { ...baseEntry, scoreOne: 12 },
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    // Session user is João Fernandes — a participant on the teamsSnapshot.
+    renderCard();
+    const plusButtons = screen.getAllByTestId("score-plus");
+    expect(plusButtons).toHaveLength(1);
+    await userEvent.setup().click(plusButtons[0]);
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls as Array<[string, RequestInit]>;
+      const patchCall = calls.find(([u, i]) => u.includes("/history/h-1") && (i?.method ?? "GET") === "PATCH");
+      expect(patchCall).toBeDefined();
+    }, { timeout: 2000 });
+  });
 });
 
 describe("HistoryCardFull — Players stream", () => {
@@ -365,11 +380,11 @@ describe("HistoryCardFull — admin controls", () => {
     );
     expect(screen.getByTestId("friendly-toggle")).toBeInTheDocument();
     expect(screen.getByTestId("more-actions")).toBeInTheDocument();
-    // Lock + Delete are inside the kebab menu, not in the header
+    // Lock toggle was removed with the edit-lock mechanism (issue #691)
     expect(screen.queryByTestId("lock-toggle")).not.toBeInTheDocument();
   });
 
-  it("kebab menu reveals Lock and Delete actions for owner", async () => {
+  it("kebab menu reveals Delete action for owner (no lock toggle)", async () => {
     const user = userEvent.setup();
     cleanup();
     renderWithTheme(
@@ -390,7 +405,7 @@ describe("HistoryCardFull — admin controls", () => {
       />,
     );
     await user.click(screen.getByTestId("more-actions"));
-    expect(screen.getByTestId("lock-toggle")).toBeInTheDocument();
+    expect(screen.queryByTestId("lock-toggle")).not.toBeInTheDocument();
     expect(screen.getByTestId("delete-action")).toBeInTheDocument();
   });
 

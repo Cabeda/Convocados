@@ -91,7 +91,6 @@ async function seedHistory(eventId: string, overrides: Record<string, unknown> =
       status: "played",
       teamOneName: "Ninjas",
       teamTwoName: "Gunas",
-      editableUntil: new Date(Date.now() + 86400_000),
       ...overrides,
     },
   });
@@ -371,7 +370,7 @@ describe("GET /api/events/[id]/history", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toHaveLength(1);
-    expect(body.data[0].editable).toBe(true);
+    expect(body.data[0].editable).toBeUndefined();
   });
 
   it("returns 404 for unknown event", async () => {
@@ -379,16 +378,16 @@ describe("GET /api/events/[id]/history", () => {
     expect(res.status).toBe(404);
   });
 
-  it("handles cancelled games in history", async () => {
+  it("handles cancelled games in history (no edit-window field)", async () => {
     const id = await seedEvent();
     await seedHistory(id, {
       status: "cancelled",
-      editableUntil: new Date(Date.now() - 1000),
     });
     const res = await getHistory(ctx({ id }));
     const body = await res.json();
     expect(body.data).toHaveLength(1);
-    expect(body.data[0].editable).toBe(false);
+    expect(body.data[0].editable).toBeUndefined();
+    expect(body.data[0].editableUntil).toBeUndefined();
   });
 });
 

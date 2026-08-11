@@ -296,7 +296,6 @@ describe("GET /api/users/[id]/stats", () => {
         teamOneName: "Team A",
         teamTwoName: "Team B",
         status: "played",
-        editableUntil: new Date(Date.now() + 86400_000 * 7),
         teamsSnapshot: JSON.stringify([
           { team: "Team A", players: [{ name: user.name, order: 0 }] },
           { team: "Team B", players: [{ name: "Other", order: 0 }] },

@@ -73,7 +73,6 @@ export const POST: APIRoute = async ({ request }) => {
       scoreTwo: existingToday.scoreTwo ?? 0,
       teamOneName: existingToday.teamOneName,
       teamTwoName: existingToday.teamTwoName,
-      editable: existingToday.editableUntil > new Date(),
       created: false,
     });
   }
@@ -86,8 +85,6 @@ export const POST: APIRoute = async ({ request }) => {
     }))
   );
 
-  const editableUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
   const history = await prisma.gameHistory.create({
     data: {
       eventId: event.id,
@@ -95,7 +92,6 @@ export const POST: APIRoute = async ({ request }) => {
       teamOneName: event.teamOneName,
       teamTwoName: event.teamTwoName,
       teamsSnapshot,
-      editableUntil,
     },
   });
 
@@ -105,7 +101,6 @@ export const POST: APIRoute = async ({ request }) => {
     scoreTwo: history.scoreTwo ?? 0,
     teamOneName: history.teamOneName,
     teamTwoName: history.teamTwoName,
-    editable: history.editableUntil > new Date(),
     created: true,
   });
 };
@@ -173,7 +168,6 @@ export const GET: APIRoute = async ({ request }) => {
           scoreTwo: true,
           teamOneName: true,
           teamTwoName: true,
-          editableUntil: true,
         },
       },
     },
@@ -202,7 +196,6 @@ export const GET: APIRoute = async ({ request }) => {
             scoreTwo: e.history[0].scoreTwo ?? 0,
             teamOneName: e.history[0].teamOneName,
             teamTwoName: e.history[0].teamTwoName,
-            editable: e.history[0].editableUntil > new Date(),
           }
         : null,
     };
@@ -246,7 +239,6 @@ async function getSingleEvent(eventId: string) {
           scoreTwo: true,
           teamOneName: true,
           teamTwoName: true,
-          editableUntil: true,
         },
       },
     },
@@ -278,7 +270,6 @@ async function getSingleEvent(eventId: string) {
           scoreTwo: event.history[0].scoreTwo ?? 0,
           teamOneName: event.history[0].teamOneName,
           teamTwoName: event.history[0].teamTwoName,
-          editable: event.history[0].editableUntil > new Date(),
         }
       : null,
   });

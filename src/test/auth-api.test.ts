@@ -110,7 +110,6 @@ async function seedHistory(eventId: string, overrides: Record<string, unknown> =
       status: "played",
       teamOneName: "Ninjas",
       teamTwoName: "Gunas",
-      editableUntil: new Date(Date.now() + 86400_000),
       ...overrides,
     },
   });
@@ -642,7 +641,6 @@ describe("POST /api/events/[id]/claim-player", () => {
         teamOneName: "Ninjas",
         teamTwoName: "Gunas",
         teamsSnapshot: snapshot,
-        editableUntil: new Date(Date.now() + 86400_000),
         scoreOne: 3,
         scoreTwo: 1,
         eloProcessed: true,
@@ -678,7 +676,6 @@ describe("POST /api/events/[id]/claim-player", () => {
         teamOneName: "Ninjas",
         teamTwoName: "Gunas",
         teamsSnapshot: snapshot,
-        editableUntil: new Date(Date.now() + 86400_000),
         scoreOne: 3,
         scoreTwo: 1,
         eloProcessed: true,
@@ -874,13 +871,34 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 403 when entry is no longer editable", async () => {
+  it("returns 403 for an authenticated non-owner non-participant on an old entry", async () => {
+    const owner = await seedUser();
     const user = await seedUser();
     mockAuth(user.id);
-    const id = await seedEvent();
-    const history = await seedHistory(id, { editableUntil: new Date("2000-01-01T00:00:00.000Z") });
+    const id = await seedEvent({ ownerId: owner.id });
+    // Old entry — no edit window exists anymore (issue #691), so gating is purely role-based.
+    const history = await seedHistory(id, { dateTime: new Date("2000-01-01T00:00:00.000Z") });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3 }));
     expect(res.status).toBe(403);
+  });
+
+  it("allows a participant to edit a very old entry (no edit window)", async () => {
+    const owner = await seedUser();
+    const participant = await seedUser({ name: "Alice" });
+    mockAuth(participant.id, "Alice");
+    const id = await seedEvent({ ownerId: owner.id });
+    const teams = [
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ];
+    const history = await seedHistory(id, {
+      dateTime: new Date("2020-01-01T00:00:00.000Z"),
+      teamsSnapshot: JSON.stringify(teams),
+    });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 2, scoreTwo: 1 }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scoreOne).toBe(2);
   });
 
   it("triggers ELO processing when scores are set", async () => {
@@ -1137,64 +1155,23 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(body.paymentsSnapshot).toBeNull();
   });
 
-  it("allows owner to unlock an expired history entry", async () => {
-    const owner = await seedUser();
-    mockAuth(owner.id);
-    const id = await seedEvent({ ownerId: owner.id });
-    const history = await seedHistory(id, { editableUntil: new Date("2000-01-01T00:00:00.000Z") });
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.editable).toBe(true);
-    expect(new Date(body.editableUntil).getTime()).toBeGreaterThan(Date.now());
-  });
-
-  it("returns 403 when non-owner tries to unlock", async () => {
-    const owner = await seedUser();
-    const other = await seedUser({ name: "Outsider" });
-    mockAuth(other.id, "Outsider");
-    const id = await seedEvent({ ownerId: owner.id });
-    const history = await seedHistory(id, { editableUntil: new Date("2000-01-01T00:00:00.000Z") });
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
-    expect(res.status).toBe(403);
-  });
-
-  it("returns 401 when unauthenticated user tries to unlock", async () => {
-    mockAnonymous();
-    const id = await seedEvent();
-    const history = await seedHistory(id, { editableUntil: new Date("2000-01-01T00:00:00.000Z") });
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { unlock: true }));
-    expect(res.status).toBe(401);
-  });
-
-  it("allows owner to lock an editable history entry", async () => {
+  it("PATCH responses no longer expose editable or editableUntil", async () => {
     const owner = await seedUser();
     mockAuth(owner.id);
     const id = await seedEvent({ ownerId: owner.id });
     const history = await seedHistory(id);
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { lock: true }));
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 1, scoreTwo: 1 }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.editable).toBe(false);
-    expect(new Date(body.editableUntil).getTime()).toBeLessThan(Date.now());
+    expect(body.editable).toBeUndefined();
+    expect(body.editableUntil).toBeUndefined();
   });
 
-  it("returns 403 when non-owner tries to lock", async () => {
-    const owner = await seedUser();
-    const other = await seedUser({ name: "Outsider" });
-    mockAuth(other.id, "Outsider");
-    const id = await seedEvent({ ownerId: owner.id });
-    const history = await seedHistory(id);
-    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { lock: true }));
-    expect(res.status).toBe(403);
-  });
-
-it("allows owner to edit paymentsSnapshot on locked entry", async () => {
+  it("owner can still edit payments on an old entry (no lock mechanism)", async () => {
     const owner = await seedUser();
     mockAuth(owner.id);
     const id = await seedEvent({ ownerId: owner.id });
-    // Use a date far in the past with explicit UTC to avoid any timezone/parsing issues
-    const history = await seedHistory(id, { editableUntil: new Date("1970-01-01T00:00:00.000Z") });
+    const history = await seedHistory(id, { dateTime: new Date("1970-01-01T00:00:00.000Z") });
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, {
       paymentsSnapshot: [{ playerName: "Alice", amount: 10, status: "paid" }],
     }));

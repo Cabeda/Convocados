@@ -51,13 +51,34 @@ class WearHistoryDaoTest {
     }
 
     @Test
-    fun observeLatestHistory_emits_updates() = runTest {
-        dao.observeLatestHistory("e1").test {
+    fun getLatestTodayHistory_returns_today_entry() = runTest {
+        dao.insertAll(listOf(
+            makeHistory("h1", "e1", "2025-01-01T10:00:00Z", 1, 0),
+            makeHistory("h2", "e1", "2025-01-02T10:00:00Z", 3, 2),
+        ))
+
+        // "Today" = 2025-01-02 device-local; h2 is the only entry in range.
+        val latest = dao.getLatestTodayHistory("e1", "2025-01-02T00:00:00.000Z", "2025-01-03T00:00:00.000Z")
+        assertNotNull(latest)
+        assertEquals("h2", latest!!.id)
+    }
+
+    @Test
+    fun getLatestTodayHistory_returns_null_outside_today() = runTest {
+        dao.insertAll(listOf(makeHistory("h1", "e1", "2025-01-01T10:00:00Z", 1, 0)))
+
+        val latest = dao.getLatestTodayHistory("e1", "2025-01-02T00:00:00.000Z", "2025-01-03T00:00:00.000Z")
+        assertNull(latest)
+    }
+
+    @Test
+    fun observeLatestTodayHistory_emits_updates() = runTest {
+        dao.observeLatestTodayHistory("e1", "2025-01-02T00:00:00.000Z", "2025-01-03T00:00:00.000Z").test {
             // Initially null
             assertNull(awaitItem())
 
-            // Insert history
-            dao.insertAll(listOf(makeHistory("h1", "e1", "2025-01-01T10:00:00Z", 1, 0)))
+            // Insert history within today's range
+            dao.insertAll(listOf(makeHistory("h1", "e1", "2025-01-02T10:00:00Z", 1, 0)))
             val item = awaitItem()
             assertNotNull(item)
             assertEquals(1, item!!.scoreOne)

@@ -11,8 +11,16 @@ vi.mock("~/lib/auth.helpers.server", () => ({
   checkEventAdmin: vi.fn().mockResolvedValue(false),
 }));
 
+// Mock geocoding — event creation calls resolveLocation() for the location
+// text, which would otherwise make a real network request to Nominatim on
+// every handler call. Tests must be offline and deterministic.
+vi.mock("~/lib/geocode", () => ({
+  resolveLocation: vi.fn(),
+}));
+
 // Import route handlers directly — they're plain async functions
 import { POST as createEvent } from "~/pages/api/events/index";
+import { resolveLocation } from "~/lib/geocode";
 import { GET as getEvent } from "~/pages/api/events/[id]/index";
 import { POST as addPlayer, DELETE as deletePlayer } from "~/pages/api/events/[id]/players";
 import { POST as randomize } from "~/pages/api/events/[id]/randomize";
@@ -61,6 +69,7 @@ async function seedEvent(overrides: Partial<{
 
 beforeEach(async () => {
   mockGetSession.mockResolvedValue(null);
+  vi.mocked(resolveLocation).mockResolvedValue(null);
   await resetRateLimitStore();
   await resetApiRateLimitStore();
   await prisma.gameHistory.deleteMany();
@@ -236,7 +245,34 @@ describe("GET /api/events/[id]", () => {
     expect(actualResetAt.getTime()).toBe(expectedResetAt.getTime());
   });
 
-  it("creates history entry with editableUntil based on now, not old dateTime", async () => {
+  it("resets a recurring event whose DateTime columns are stored as INTEGER (legacy pre-better-sqlite3 rows)", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Legacy Recurring", location: "Pitch",
+        dateTime: new Date(Date.now() - 7200_000),
+        teamOneName: "A", teamTwoName: "B",
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
+        nextResetAt: new Date(Date.now() - 3600_000),
+      },
+    });
+    // Simulate legacy storage: rows written by Prisma 6's built-in SQLite
+    // connector hold DateTime as INTEGER epoch-ms. If the reset CAS binds the
+    // comparison value in a different format (ISO8601 text), updateMany claims
+    // 0 rows and the lazy reset silently no-ops.
+    const rewritten = await prisma.$executeRawUnsafe(
+      "UPDATE Event SET dateTime = ?, nextResetAt = ? WHERE id = ?",
+      event.dateTime.getTime(), event.nextResetAt!.getTime(), event.id,
+    );
+    expect(rewritten).toBe(1);
+    const res = await getEvent(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.wasReset).toBe(true);
+    expect(new Date(body.dateTime).getTime()).toBeGreaterThan(event.dateTime.getTime());
+  });
+
+  it("creates a history snapshot on reset without an edit-window field", async () => {
     const oldDateTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
     const event = await prisma.event.create({
       data: {
@@ -255,12 +291,7 @@ describe("GET /api/events/[id]", () => {
 
     const history = await prisma.gameHistory.findFirst({ where: { eventId: event.id } });
     expect(history).toBeTruthy();
-    // editableUntil should be ~7 days from now, not 7 days from oldDateTime (which would be ~now)
-    const sevenDaysFromNow = Date.now() + 7 * 24 * 60 * 60 * 1000;
-    const editableUntil = history?.editableUntil.getTime() ?? 0;
-    expect(editableUntil).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
-    expect(editableUntil).toBeLessThanOrEqual(sevenDaysFromNow + 5000);
-    expect(editableUntil > Date.now()).toBe(true);
+    expect(history?.dateTime.toISOString()).toBe(oldDateTime.toISOString());
   });
 
   it("includes user image on linked players and null for guests (legacy branch)", async () => {

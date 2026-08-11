@@ -7,6 +7,7 @@ import dev.convocados.wear.data.local.dao.WearHistoryDao
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearTeamRepository
+import dev.convocados.wear.util.todayBoundsIso
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,8 +26,10 @@ class WearGameRepository @Inject constructor(
     fun observeArchivedGames(): Flow<List<WearGameEntity>> = gameDao.getArchivedGames()
 
     /** Observable latest history for a game. */
-    fun observeLatestHistory(eventId: String): Flow<WearHistoryEntity?> =
-        historyDao.observeLatestHistory(eventId)
+    fun observeLatestHistory(eventId: String): Flow<WearHistoryEntity?> {
+        val (start, end) = todayBoundsIso()
+        return historyDao.observeLatestTodayHistory(eventId, start, end)
+    }
 
     /** Refresh games from the API, falling back to cache on failure. Also pre-fetches teams for active games. */
     suspend fun refreshGames(): Result<Unit> = try {
@@ -66,9 +69,11 @@ class WearGameRepository @Inject constructor(
     suspend fun getLatestHistory(eventId: String): WearHistoryEntity? =
         historyDao.getLatestHistory(eventId)
 
-    /** Get the latest editable history entry (active game session). */
-    suspend fun getLatestEditableHistory(eventId: String): WearHistoryEntity? =
-        historyDao.getLatestEditableHistory(eventId)
+    /** Get the latest history entry whose dateTime is today (active game session). */
+    suspend fun getLatestTodayHistory(eventId: String): WearHistoryEntity? {
+        val (start, end) = todayBoundsIso()
+        return historyDao.getLatestTodayHistory(eventId, start, end)
+    }
 
     /**
      * Start score tracking for an event (creates today's history record if
@@ -111,6 +116,9 @@ class WearGameRepository @Inject constructor(
             teamOneName = teamOneName,
             teamTwoName = teamTwoName,
             teamsSnapshot = teamsSnapshot,
-            editable = editable,
+            // The API no longer sends `editable`; the Room column is kept (inert)
+            // because WearDatabase uses fallbackToDestructiveMigration, and dropping
+            // the column would wipe offline-queued scores on upgrade.
+            editable = true,
         )
 }

@@ -210,7 +210,6 @@ model GameHistory {
   teamTwoName      String
   teamsSnapshot    String? // JSON: [{team, players:[{name,order}]}]
   paymentsSnapshot String? // JSON: [{playerName, amount, status, method}]
-  editableUntil    DateTime
   eloProcessed     Boolean  @default(false)
   isFriendly       Boolean  @default(false)
   source           String   @default("live") // "live" | "historical"
@@ -441,6 +440,11 @@ model ScheduledJob {
 
   @@index([runAt, processedAt])
   @@index([eventId])
+}
+
+model SchedulerHeartbeat {
+  id         String   @id // fixed "scheduler" — single row, upserted on each poll
+  lastSeenAt DateTime
 }
 
 model CalendarToken {
