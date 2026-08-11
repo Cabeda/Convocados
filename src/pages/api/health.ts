@@ -36,7 +36,11 @@ export const GET: APIRoute = async () => {
       }
       response.litestream = { running };
 
-      // Check the scheduler heartbeat — a stale one means reminders are stuck
+      // Check the scheduler heartbeat — a stale one means reminders are stuck.
+      // Report it as degraded but DON'T fail the check: the scheduler polls the
+      // app via its public URL, so a 503 here removes the instance from the load
+      // balancer, which the scheduler can then never reach to refresh the
+      // heartbeat — the app stays down until manual DB intervention (deadlock).
       const heartbeat = await prisma.schedulerHeartbeat.findUnique({
         where: { id: SCHEDULER_HEARTBEAT_ID },
       });
@@ -44,8 +48,7 @@ export const GET: APIRoute = async () => {
         !!heartbeat && Date.now() - heartbeat.lastSeenAt.getTime() < SCHEDULER_STALE_MS;
       response.scheduler = { running: schedulerRunning };
       if (!schedulerRunning) {
-        response.status = "error";
-        return Response.json(response, { status: 503 });
+        response.degraded = true;
       }
     }
 
