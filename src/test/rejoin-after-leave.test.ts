@@ -222,4 +222,41 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
       expect.objectContaining({ playerName: "Prucha" }),
     );
   });
+
+  it("does NOT fire game_full when legacy Player rows exceed maxPlayers but the game roster has room", async () => {
+    // Prod repro (event cmmkfrx8b0000o2ixrix1yp2m): the legacy Player table
+    // accumulates rows across recurring occurrences (19 active here), while the
+    // current game's GameParticipant roster has only 4/10. A join used to derive
+    // spotsLeft from the legacy count → wrongly fired game_full on a 4/10 game.
+    const event = await seedRecurringEvent();
+
+    // 19 legacy Player rows — accumulated occurrences, NOT the current roster
+    for (let i = 0; i < 19; i++) {
+      await prisma.player.create({
+        data: { eventId: event.id, name: `Legacy ${i}`, order: i },
+      });
+    }
+    // 4 active GameParticipants in the current game
+    for (let i = 1; i <= 4; i++) {
+      const ep = await prisma.eventPlayer.create({
+        data: { eventId: event.id, name: `Active ${i}` },
+      });
+      await prisma.gameParticipant.create({
+        data: { gameId: event.currentGameId!, eventPlayerId: ep.id, order: i },
+      });
+    }
+
+    const res = await POST(
+      ctx(event.id, { name: "Fresh Guy" }, null),
+    );
+
+    expect(res.status).toBe(200);
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "player_joined",
+      expect.objectContaining({ playerName: "Fresh Guy", isActive: true, spotsLeft: 5 }),
+    );
+    const gameFullCalls = vi.mocked(fireWebhooks).mock.calls.filter(([id, type]) => id === event.id && type === "game_full");
+    expect(gameFullCalls).toHaveLength(0);
+  });
 });
