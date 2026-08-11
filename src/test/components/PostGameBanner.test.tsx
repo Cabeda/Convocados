@@ -104,3 +104,28 @@ describe("PostGameBanner participant wrap-up editing (issue #679)", () => {
     expect(screen.queryByText(/Alice\s+25\.00/)).not.toBeInTheDocument();
   });
 });
+
+describe("PostGameBanner untracked mode (each one pays own share)", () => {
+  beforeEach(() => {
+    mockFetchStatus({
+      ...baseStatus,
+      hasScore: true,
+      allPaid: true,
+      allComplete: true,
+      gamePayments: [],
+      gameConfig: { gameId: "g1", mode: "untracked", payerName: null, payerIsPlayer: false },
+    });
+  });
+
+  it("renders the banner even when allComplete is true (payments done by definition)", async () => {
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+  });
+
+  it("shows the untracked note and no per-player chips", async () => {
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+    expect(screen.getByText(/pays their own share/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Alice\s+25\.00/)).not.toBeInTheDocument();
+  });
+});
