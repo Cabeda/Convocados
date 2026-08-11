@@ -75,7 +75,9 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
   // Active players only (not bench)
   const activePlayers = event.players.slice(0, event.maxPlayers);
-  const share = activePlayers.length > 0 ? totalAmount / activePlayers.length : 0;
+  // Per-player share = total / required playing slots (maxPlayers), NOT the
+  // current roster size — the per-player price is fixed for the event.
+  const share = event.maxPlayers > 0 ? totalAmount / event.maxPlayers : 0;
 
   // ADR 0019: Cost change scope — "this_game" sets per-Game override, "all_future" (default) updates template
   const scope = String(body.scope ?? "all_future");
@@ -263,6 +265,7 @@ export const GET: APIRoute = async ({ params }) => {
   return Response.json({
     ...eventCost,
     hasOverride,
+    maxPlayers: event.maxPlayers,
     effectivePaymentMethods: eventCost.tempPaymentMethods ?? eventCost.paymentMethods ?? null,
     effectivePaymentDetails: eventCost.tempPaymentDetails ?? eventCost.paymentDetails ?? null,
     createdAt: eventCost.createdAt.toISOString(),

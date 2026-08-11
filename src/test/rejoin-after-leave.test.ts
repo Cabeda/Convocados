@@ -10,6 +10,12 @@ vi.mock("~/lib/auth.helpers.server", () => ({
   getSession: vi.fn(),
 }));
 
+vi.mock("~/lib/webhook.server", () => ({
+  fireWebhooks: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { fireWebhooks } from "~/lib/webhook.server";
+
 const mockGetSession = vi.mocked(getSession);
 
 function ctx(eventId: string, body: any, session: { user: { id: string; name: string } } | null) {
@@ -187,5 +193,33 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
     );
 
     expect(res.status).toBe(409);
+  });
+
+  it("fires the player_joined webhook when a returning player joins the current game", async () => {
+    // Prod repro (event cmmkfrx8b0000o2ixrix1yp2m): players who re-joined after
+    // the recurring reset were added to the game list but no player_joined
+    // webhook fired — the WhatsApp bridge received 0 messages for 4 players.
+    const user = await seedUser("Prucha", "u-prucha");
+    const event = await seedRecurringEvent();
+
+    // Existing Player + EventPlayer from a previous occurrence, not yet in the
+    // current game → the P2002 re-join branch (players.ts:654) handles the join.
+    await prisma.player.create({
+      data: { eventId: event.id, name: "Prucha", userId: user.id, order: 5 },
+    });
+    await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Prucha", userId: user.id },
+    });
+
+    const res = await POST(
+      ctx(event.id, { name: "Prucha", linkToAccount: true }, { user: { id: user.id, name: user.name } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "player_joined",
+      expect.objectContaining({ playerName: "Prucha" }),
+    );
   });
 });

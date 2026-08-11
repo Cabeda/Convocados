@@ -55,6 +55,7 @@ interface SettlementSummary {
   viewerRole: "owner" | "admin" | "player";
   viewerEventPlayerId: string | null;
   activePlayerCount: number;
+  maxPlayers: number;
   totals: { unsettledGames: number; totalOwed: number; totalOwedTo: number };
 }
 
@@ -164,7 +165,7 @@ export default function PaymentsPage({ eventId }: { eventId: string }) {
       )}
 
       {/* ── Cost & payment methods (manager of price/methods) ──────── */}
-      <CostSection eventId={eventId} isManager={data?.viewerRole === "owner" || data?.viewerRole === "admin"} playerCount={data?.activePlayerCount ?? 0} />
+      <CostSection eventId={eventId} isManager={data?.viewerRole === "owner" || data?.viewerRole === "admin"} maxPlayers={data?.maxPlayers ?? 0} />
 
       {/* ── People rollup ─────────────────────────────────────────── */}
       {data && data.people.length > 0 && (

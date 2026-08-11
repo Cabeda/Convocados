@@ -8,7 +8,8 @@
  * their own share; no rows, no tracking).
  *
  * Share = effective game cost (Game.costTotalAmount ?? EventCost.totalAmount) ÷
- * active participants (capped by maxPlayers; payer + no-shows count).
+ * maxPlayers (the required playing slots). The per-player price is fixed — the
+ * current roster size (or bench overflow) does not change it.
  *
  * Settle actions dual-write to the WalletTransaction ledger (recordReceived) so
  * the join-gate / outstanding-balance stays consistent.
@@ -66,13 +67,14 @@ export async function isEventParticipant(eventId: string, userId: string): Promi
 
 /**
  * Per-participant share in euros (2dp), 0 when no cost or no participants.
- * The denominator is the active participant count capped at maxPlayers (bench
- * players don't lower the per-active-player share).
+ * The denominator is maxPlayers (the required playing slots) — the per-player
+ * price is a fixed attribute of the event and does not change with how many
+ * players are currently on the roster. Callers without a maxPlayers value
+ * fall back to the participant count.
  */
 export function shareFor(total: number, participantsCount: number, maxPlayers = participantsCount): number {
   if (participantsCount <= 0) return 0;
-  const denominator = Math.max(1, Math.min(participantsCount, maxPlayers));
-  return Math.round((total / denominator) * 100) / 100;
+  return Math.round((total / Math.max(1, maxPlayers)) * 100) / 100;
 }
 
 /** Minimal client shape the sync routine needs — a `prisma` instance or a tx client. */
@@ -352,8 +354,10 @@ export interface SettlementSummaryView {
   currentGameId: string | null;
   viewerRole: ViewerRole;
   viewerEventPlayerId: string | null;
-  /** Active participants of the current game — used for the per-share display. */
+  /** Active participants of the current game — informational. */
   activePlayerCount: number;
+  /** Required playing slots — drives the fixed per-player share display. */
+  maxPlayers: number;
   totals: { unsettledGames: number; totalOwed: number; totalOwedTo: number };
 }
 
@@ -368,7 +372,7 @@ export async function getSettlementSummary(
 ): Promise<SettlementSummaryView> {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, currentGameId: true },
+    select: { id: true, currentGameId: true, maxPlayers: true },
   });
   if (!event) throw new Error("Event not found.");
 
@@ -499,6 +503,7 @@ export async function getSettlementSummary(
     viewerRole: viewer.role,
     viewerEventPlayerId,
     activePlayerCount,
+    maxPlayers: event.maxPlayers,
     totals: {
       unsettledGames: gameViews.length,
       totalOwed: people.reduce((s, p) => s + p.owedAmount, 0),
@@ -528,8 +533,9 @@ export function buildSettlementRows(
   game: { payerEventPlayerId: string | null; payments: Array<{ eventPlayerId: string; amount: number; status: string }> },
   participants: Array<{ eventPlayer: { id: string; name: string } }>,
   total: number,
+  maxPlayers: number,
 ): SettlementRow[] {
-  const share = shareFor(total, participants.length);
+  const share = shareFor(total, participants.length, maxPlayers);
   const paymentByPlayer = new Map(game.payments.map((p) => [p.eventPlayerId, p]));
   return participants.map((gp) => {
     const row = paymentByPlayer.get(gp.eventPlayer.id);
@@ -560,7 +566,7 @@ export async function getGameSettlement(eventId: string, gameId: string): Promis
   });
   if (!game) return null;
 
-  const { total } = await effectiveGameCost(game.id, eventId);
+  const { total, maxPlayers } = await effectiveGameCost(game.id, eventId);
   const participants = await prisma.gameParticipant.findMany({
     where: { gameId: game.id, archivedAt: null },
     include: { eventPlayer: { select: { id: true, name: true } } },
@@ -573,7 +579,7 @@ export async function getGameSettlement(eventId: string, gameId: string): Promis
     payerName: game.payerEventPlayer?.name ?? game.payerExternalName,
     payerIsPlayer: !!game.payerEventPlayer,
     hasCost: total > 0,
-    rows: buildSettlementRows(game, participants, total),
+    rows: buildSettlementRows(game, participants, total, maxPlayers),
   };
 }
 

@@ -96,7 +96,7 @@ describe("PUT /api/events/[id]/cost", () => {
     expect(body.totalAmount).toBe(60);
     expect(body.currency).toBe("EUR");
     expect(body.payments).toHaveLength(3);
-    expect(body.payments[0].amount).toBeCloseTo(20);
+    expect(body.payments[0].amount).toBeCloseTo(6); // 60 / maxPlayers(10)
     expect(body.payments[0].status).toBe("pending");
   });
 
@@ -108,7 +108,7 @@ describe("PUT /api/events/[id]/cost", () => {
     const body = await res.json();
     expect(body.totalAmount).toBe(60);
     expect(body.payments).toHaveLength(2);
-    expect(body.payments[0].amount).toBeCloseTo(30);
+    expect(body.payments[0].amount).toBeCloseTo(6); // 60 / maxPlayers(10)
   });
 
   it("saves payment details text", async () => {
@@ -150,7 +150,7 @@ describe("PUT /api/events/[id]/cost", () => {
     const body = await res.json();
     const alice = body.payments.find((p: any) => p.playerName === "Alice");
     expect(alice.status).toBe("paid");
-    expect(alice.amount).toBeCloseTo(30);
+    expect(alice.amount).toBeCloseTo(6); // 60 / maxPlayers(10)
   });
 
   it("only creates payments for active players (not bench)", async () => {
@@ -197,7 +197,7 @@ describe("GET /api/events/[id]/cost", () => {
     expect(body.payments).toHaveLength(2);
     expect(body.summary.paidCount).toBe(1);
     expect(body.summary.totalCount).toBe(2);
-    expect(body.summary.paidAmount).toBeCloseTo(20);
+    expect(body.summary.paidAmount).toBeCloseTo(4); // 40 / maxPlayers(10)
   });
 
   it("returns 404 for non-existent event", async () => {
@@ -307,7 +307,7 @@ describe("GET /api/events/[id]/payments", () => {
     expect(body.payments).toHaveLength(3);
     expect(body.summary.paidCount).toBe(1);
     expect(body.summary.pendingCount).toBe(2);
-    expect(body.summary.paidAmount).toBeCloseTo(20);
+    expect(body.summary.paidAmount).toBeCloseTo(6); // 60 / maxPlayers(10)
   });
 
   it("returns empty when no cost set", async () => {
@@ -323,47 +323,45 @@ describe("GET /api/events/[id]/payments", () => {
 // ─── Auto-recalculate shares on player changes ──────────────────────────────
 
 describe("Auto-recalculate payment shares on player changes", () => {
-  it("recalculates shares when a player is added", async () => {
+  it("keeps the per-player share fixed when a player is added (total / maxPlayers)", async () => {
     const eventId = await seedEvent(["Alice", "Bob"]);
     await setCost(ctx({ id: eventId }, { totalAmount: 60 }));
 
-    // 60 / 2 = 30 each
+    // 60 / maxPlayers(10) = 6 each
     let costRes = await getCost(ctx({ id: eventId }));
     let cost = await costRes.json();
     expect(cost.payments).toHaveLength(2);
-    expect(cost.payments[0].amount).toBeCloseTo(30);
+    expect(cost.payments[0].amount).toBeCloseTo(6);
 
-    // Add a third player
+    // Add a third player — the per-player price does not change
     await addPlayer(postCtx({ id: eventId }, { name: "Charlie" }));
 
-    // 60 / 3 = 20 each
     costRes = await getCost(ctx({ id: eventId }));
     cost = await costRes.json();
     expect(cost.payments).toHaveLength(3);
-    expect(cost.payments[0].amount).toBeCloseTo(20);
+    expect(cost.payments[0].amount).toBeCloseTo(6);
     expect(cost.payments.find((p: any) => p.playerName === "Charlie")).toBeTruthy();
   });
 
-  it("recalculates shares when a player is removed", async () => {
+  it("keeps the per-player share fixed when a player is removed (total / maxPlayers)", async () => {
     const eventId = await seedEvent(["Alice", "Bob", "Charlie"]);
     await setCost(ctx({ id: eventId }, { totalAmount: 60 }));
 
-    // 60 / 3 = 20 each
+    // 60 / maxPlayers(10) = 6 each
     let costRes = await getCost(ctx({ id: eventId }));
     let cost = await costRes.json();
     expect(cost.payments).toHaveLength(3);
-    expect(cost.payments[0].amount).toBeCloseTo(20);
+    expect(cost.payments[0].amount).toBeCloseTo(6);
 
-    // Remove Charlie
+    // Remove Charlie — the per-player price does not change
     const players = await prisma.player.findMany({ where: { eventId } });
     const charlie = players.find((p) => p.name === "Charlie")!;
     await removePlayer(deleteCtx({ id: eventId }, { playerId: charlie.id }));
 
-    // 60 / 2 = 30 each
     costRes = await getCost(ctx({ id: eventId }));
     cost = await costRes.json();
     expect(cost.payments).toHaveLength(2);
-    expect(cost.payments[0].amount).toBeCloseTo(30);
+    expect(cost.payments[0].amount).toBeCloseTo(6);
     expect(cost.payments.find((p: any) => p.playerName === "Charlie")).toBeFalsy();
   });
 
@@ -379,7 +377,7 @@ describe("Auto-recalculate payment shares on player changes", () => {
     const cost = await costRes.json();
     const alice = cost.payments.find((p: any) => p.playerName === "Alice");
     expect(alice.status).toBe("paid");
-    expect(alice.amount).toBeCloseTo(20);
+    expect(alice.amount).toBeCloseTo(6); // 60 / maxPlayers(10)
   });
 
   it("does nothing when no cost is set and player is added", async () => {
@@ -518,8 +516,8 @@ describe("Cost persistence across recurring event resets", () => {
     expect(cost.currency).toBe("USD");
     expect(cost.paymentDetails).toBe("Revolut @jose");
     expect(cost.payments).toHaveLength(3);
-    // 50 / 3 ≈ 16.67 each
-    expect(cost.payments[0].amount).toBeCloseTo(50 / 3);
+    // 50 / maxPlayers(10) = 5 each — fixed per-player price
+    expect(cost.payments[0].amount).toBeCloseTo(5);
     expect(cost.payments.every((p: any) => p.status === "pending")).toBe(true);
   });
 
@@ -557,7 +555,7 @@ describe("Cost persistence across recurring event resets", () => {
     const alice = snapshot.find((p: any) => p.playerName === "Alice");
     expect(alice.status).toBe("paid");
     expect(alice.method).toBe("revolut");
-    expect(alice.amount).toBeCloseTo(20);
+    expect(alice.amount).toBeCloseTo(4); // 40 / maxPlayers(10)
   });
 });
 

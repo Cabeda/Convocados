@@ -384,7 +384,9 @@ export async function syncPaymentsForEvent(eventId: string): Promise<void> {
     });
     activePlayers = players;
   }
-  const share = activePlayers.length > 0 ? eventCost.totalAmount / activePlayers.length : 0;
+  // Per-player share = total / required playing slots (maxPlayers), NOT the
+  // current roster size — the per-player price is fixed for the event.
+  const share = event.maxPlayers > 0 ? eventCost.totalAmount / event.maxPlayers : 0;
 
   for (const player of activePlayers) {
     const isOwner = event.ownerId && player.userId === event.ownerId;

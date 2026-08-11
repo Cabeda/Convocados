@@ -110,6 +110,14 @@ describe("shareFor", () => {
     expect(shareFor(60, 0)).toBe(0);
     expect(shareFor(10, 3)).toBe(3.33);
   });
+
+  it("uses maxPlayers (required slots) as the denominator — not the current roster size", () => {
+    // 50 total, 5-5 game (10 required), only 3 signed up → €5 each, not 50/3.
+    expect(shareFor(50, 3, 10)).toBe(5);
+    expect(shareFor(50, 8, 10)).toBe(5);
+    expect(shareFor(60, 3, 2)).toBe(30); // bench doesn't lower the share
+    expect(shareFor(50, 0, 10)).toBe(0);
+  });
 });
 
 describe("effectiveGameCost overrides", () => {
@@ -119,7 +127,7 @@ describe("effectiveGameCost overrides", () => {
     await syncGamePayments(game.id, event.id);
     const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
     expect(rows).toHaveLength(3);
-    expect(rows.every((r) => r.amount === 30)).toBe(true);
+    expect(rows.every((r) => r.amount === 9)).toBe(true); // 90 / maxPlayers(10)
   });
 
   it("no cost → no payment rows", async () => {
@@ -144,7 +152,15 @@ describe("syncGamePayments", () => {
     const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id }, orderBy: { playerName: "asc" } });
     expect(rows).toHaveLength(3);
     expect(rows.every((r) => r.status === "pending")).toBe(true);
-    expect(rows.every((r) => r.amount === 20)).toBe(true);
+    expect(rows.every((r) => r.amount === 6)).toBe(true); // 60 / maxPlayers(10)
+  });
+
+  it("splits by maxPlayers, not the current roster size (3 of 10 → 50/10 each)", async () => {
+    const { event, game } = await seedEvent({ cost: 50 }); // 3 players, maxPlayers 10
+    await syncGamePayments(game.id, event.id);
+    const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.amount === 5)).toBe(true); // 50 / 10, not 50 / 3
   });
 
   it("auto-settles the payer's own row", async () => {
@@ -175,7 +191,7 @@ describe("syncGamePayments", () => {
     const archived = await prisma.gamePayment.findMany({ where: { gameId: game.id, archivedAt: { not: null } } });
     expect(active).toHaveLength(2);
     expect(archived).toHaveLength(1);
-    expect(active.every((r) => r.amount === 30)).toBe(true); // 60 / 2 remaining
+    expect(active.every((r) => r.amount === 6)).toBe(true); // 60 / maxPlayers(10) — roster shrink doesn't change it
   });
 });
 
@@ -283,7 +299,7 @@ describe("settleShare + ledger dual-write", () => {
     expect(row.markedBy).toBe("owner-settlement");
 
     const tx = await prisma.walletTransaction.findFirstOrThrow({ where: { eventId: event.id, reason: "payment_received" } });
-    expect(tx.amountCents).toBe(2000);
+    expect(tx.amountCents).toBe(600); // €6 = 60 / maxPlayers(10)
     expect(tx.statusAfter).toBe("paid");
   });
 
@@ -349,7 +365,7 @@ describe("getSettlementSummary (privacy)", () => {
     expect(s.games).toHaveLength(1);
     expect(s.games[0].debtorNames.sort()).toEqual(["Bruno", "Carla"]);
     expect(s.games[0].payerName).toBe("Ana");
-    expect(s.totals.totalOwedTo).toBe(40);
+    expect(s.totals.totalOwedTo).toBe(12); // Bruno + Carla owe €6 each
     expect(s.people.some((p) => p.name === "Ana" && p.isPayer)).toBe(true);
   });
 
@@ -363,7 +379,7 @@ describe("getSettlementSummary (privacy)", () => {
     const s = await getSettlementSummary(event.id, { role: "player", userId: "user-bruno" });
     expect(s.games[0].debtorNames).toEqual([]);
     const brunoPerson = s.people.find((p) => p.name === "Bruno");
-    expect(brunoPerson?.owedAmount).toBe(20);
+    expect(brunoPerson?.owedAmount).toBe(6); // 60 / maxPlayers(10)
     expect(brunoPerson?.isPayer).toBe(false);
     const anaPerson = s.people.find((p) => p.name === "Ana");
     expect(anaPerson?.isPayer).toBe(true);
@@ -399,34 +415,29 @@ describe("getSettlementSummary (privacy)", () => {
     const venue = s.people.find((p) => p.name === "Venue");
     expect(venue?.isPayer).toBe(true);
     expect(venue?.isPlayer).toBe(false);
-    expect(venue?.owedToAmount).toBe(60);
+    expect(venue?.owedToAmount).toBe(18); // 3 debtors × €6 = 60 / maxPlayers(10)
   });
 });
 
 describe("spec alignment", () => {
-  it("caps the share denominator at maxPlayers (bench players don't lower it)", async () => {
+  it("shares by maxPlayers — bench overflow doesn't lower the per-player price", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
     await prisma.event.update({ where: { id: event.id }, data: { maxPlayers: 2 } });
     await syncGamePayments(game.id, event.id);
     const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
-    expect(rows).toHaveLength(3); // 3 participants, only 2 count for the split
-    expect(rows.every((r) => r.amount === 30)).toBe(true); // 60 / min(3,2)
+    expect(rows).toHaveLength(3); // 3 participants, share uses maxPlayers(2)
+    expect(rows.every((r) => r.amount === 30)).toBe(true); // 60 / maxPlayers(2)
   });
 
-  it("freezes a played game's share amounts (leave does not rewrite them)", async () => {
+  it("freezes a played game's share amounts (cost override does not rewrite them)", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
-    await syncGamePayments(game.id, event.id); // 3 rows @ 20
-    await prisma.game.update({ where: { id: game.id }, data: { status: "played" } });
-    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
-    await prisma.gameParticipant.updateMany({
-      where: { gameId: game.id, eventPlayerId: ana.id },
-      data: { archivedAt: new Date() },
-    });
+    await syncGamePayments(game.id, event.id); // 3 rows @ €6 (60 / maxPlayers 10)
+    await prisma.game.update({ where: { id: game.id }, data: { status: "played", costTotalAmount: 90 } });
     await syncGamePayments(game.id, event.id);
 
     const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id, archivedAt: null } });
-    expect(rows).toHaveLength(2);
-    expect(rows.every((r) => r.amount === 20)).toBe(true); // frozen, not recomputed to 30
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.amount === 6)).toBe(true); // frozen — not recomputed to 9
   });
 
   it("does not leak other debtors' rows to a player", async () => {
@@ -593,7 +604,7 @@ describe("settlement API routes", () => {
     const game = await prisma.game.findFirstOrThrow({ where: { eventId: event.id } });
     const rows = await prisma.gamePayment.findMany({ where: { gameId: game.id } });
     expect(rows).toHaveLength(2);
-    expect(rows.every((r) => r.amount === 30)).toBe(true);
+    expect(rows.every((r) => r.amount === 6)).toBe(true); // 60 / maxPlayers(10)
   });
 
   it("current-game settlement derives rows from participants (picker never empty)", async () => {

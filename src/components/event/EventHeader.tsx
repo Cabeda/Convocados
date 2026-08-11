@@ -456,7 +456,7 @@ export function EventHeader({
                 eventId={eventId}
                 canEdit={canEditSettings}
                 isAuthenticated={isAuthenticated}
-                playerCount={Math.min(event.players.length, event.maxPlayers)}
+                maxPlayers={event.maxPlayers}
               />
             )}
 
