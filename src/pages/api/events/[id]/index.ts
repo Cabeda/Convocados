@@ -273,11 +273,15 @@ export const GET: APIRoute = async ({ params, request }) => {
   // ADR 0016: filter teamResults to only include members in the current game's player list.
   // After a recurrence reset, old team members linger in TeamResult but the player list
   // is now game-scoped via GameParticipant. Only show team members who are active players.
+  // Teams that end up with no active members are dropped entirely: a Teams section with
+  // empty rosters is never meaningful, and UIs use this array to decide whether teams exist.
   const activePlayerNames = new Set(playersPayload.map((p: { name: string }) => p.name));
-  const filteredTeamResults = event.teamResults.map((tr) => ({
-    ...tr,
-    members: tr.members.filter((m) => activePlayerNames.has(m.name)),
-  }));
+  const filteredTeamResults = event.teamResults
+    .map((tr) => ({
+      ...tr,
+      members: tr.members.filter((m) => activePlayerNames.has(m.name)),
+    }))
+    .filter((tr) => tr.members.length > 0);
 
   return Response.json({
     wasReset,
