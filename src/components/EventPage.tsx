@@ -818,41 +818,19 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onSnackbar={setSnackbar}
             />
 
-
-
-            {/* Location card — prominent when game is <24h away (the "where do I go?" moment) */}
-            {/* eslint-disable-next-line react-hooks/purity -- Date.now() is fine here; re-render is triggered by state changes */}
-            {event.location && gameDate.getTime() - Date.now() > 0 && gameDate.getTime() - Date.now() < 24 * 60 * 60 * 1000 && (
-              <Paper
-                elevation={1}
-                component="a"
-                href={/^https?:\/\//i.test(event.location)
-                  ? event.location
-                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{
-                  borderRadius: 3, p: 2,
-                  display: "flex", alignItems: "center", gap: 1.5,
-                  textDecoration: "none", color: "inherit",
-                  bgcolor: (theme) => `${theme.palette.primary.main}08`,
-                  border: (theme) => `1px solid ${theme.palette.primary.main}30`,
-                  "&:hover": { bgcolor: (theme) => `${theme.palette.primary.main}12` },
-                  transition: "background-color 0.15s",
-                }}
-              >
-                <Box sx={{ width: 40, height: 40, borderRadius: 2, bgcolor: "primary.main", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <Typography sx={{ color: "white", fontSize: 20 }}>📍</Typography>
-                </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" fontWeight={700} noWrap>
-                    {t("getDirections")}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" noWrap>
-                    {event.location}
-                  </Typography>
-                </Box>
-              </Paper>
+            {/* Post-game banner — only for authenticated users who can act on it */}
+            {isAuthenticated && (
+            <PostGameBanner
+              eventId={eventId}
+              onStatusChange={setPostGameStatus}
+              isManager={isOwner || isAdmin}
+              onScrollToScore={() => {
+                window.location.href = `/events/${eventId}/history`;
+              }}
+              onScrollToPayments={() => {
+                window.location.href = `/events/${eventId}/payments`;
+              }}
+            />
             )}
 
             {/* RSVP CTA — above the fold, the primary action for every visitor */}
@@ -884,21 +862,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   {t("signInToJoin")}
                 </Button>
               </Paper>
-            )}
-
-            {/* Post-game banner — only for authenticated users who can act on it */}
-            {isAuthenticated && (
-            <PostGameBanner
-              eventId={eventId}
-              onStatusChange={setPostGameStatus}
-              isManager={isOwner || isAdmin}
-              onScrollToScore={() => {
-                window.location.href = `/events/${eventId}/history`;
-              }}
-              onScrollToPayments={() => {
-                window.location.href = `/events/${eventId}/payments`;
-              }}
-            />
             )}
 
             {/* Players — single merged component (name+email+contacts+pills).

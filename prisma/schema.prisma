@@ -442,6 +442,11 @@ model ScheduledJob {
   @@index([eventId])
 }
 
+model SchedulerHeartbeat {
+  id         String   @id // fixed "scheduler" — single row, upserted on each poll
+  lastSeenAt DateTime
+}
+
 model CalendarToken {
   id        String   @id @default(cuid())
   token     String   @unique

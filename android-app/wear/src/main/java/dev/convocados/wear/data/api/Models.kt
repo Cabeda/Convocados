@@ -38,7 +38,6 @@ data class GameHistory(
     val teamOneName: String = "",
     val teamTwoName: String = "",
     val teamsSnapshot: String? = null,
-    val editable: Boolean = false,
 )
 
 @Serializable

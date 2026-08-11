@@ -73,7 +73,6 @@ export const POST: APIRoute = async ({ request }) => {
       scoreTwo: existingToday.scoreTwo ?? 0,
       teamOneName: existingToday.teamOneName,
       teamTwoName: existingToday.teamTwoName,
-      editable: true,
       created: false,
     });
   }
@@ -102,7 +101,6 @@ export const POST: APIRoute = async ({ request }) => {
     scoreTwo: history.scoreTwo ?? 0,
     teamOneName: history.teamOneName,
     teamTwoName: history.teamTwoName,
-    editable: true,
     created: true,
   });
 };
@@ -198,7 +196,6 @@ export const GET: APIRoute = async ({ request }) => {
             scoreTwo: e.history[0].scoreTwo ?? 0,
             teamOneName: e.history[0].teamOneName,
             teamTwoName: e.history[0].teamTwoName,
-            editable: true,
           }
         : null,
     };
@@ -273,7 +270,6 @@ async function getSingleEvent(eventId: string) {
           scoreTwo: event.history[0].scoreTwo ?? 0,
           teamOneName: event.history[0].teamOneName,
           teamTwoName: event.history[0].teamTwoName,
-          editable: true,
         }
       : null,
   });
