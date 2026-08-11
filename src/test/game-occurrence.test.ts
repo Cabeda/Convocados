@@ -656,6 +656,60 @@ describe("Recurrence advancement preserves legacy data (no destructive reset)", 
   });
 });
 
+describe("Event GET hides empty teams (Teams section hidden until randomized/full)", () => {
+  it("drops teamResults with no active members after a recurrence reset", async () => {
+    const pastDate = new Date(Date.now() - 2 * 86400_000);
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly", location: "Pitch", dateTime: pastDate,
+        isRecurring: true,
+        recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1, byDay: "FR" }),
+        nextResetAt: new Date(pastDate.getTime() + 60 * 60 * 1000),
+        durationMinutes: 60,
+        teamOneName: "A", teamTwoName: "B",
+      },
+    });
+    const game1 = await prisma.game.create({ data: { eventId: event.id, dateTime: pastDate } });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game1.id } });
+
+    // Teams were generated for the previous occurrence, then the reset cleared their members.
+    await prisma.teamResult.create({
+      data: { eventId: event.id, name: "A", members: { create: [{ name: "Old Player", order: 0 }] } },
+    });
+    await prisma.teamResult.create({ data: { eventId: event.id, name: "B" } });
+
+    const res = await getEvent(ctx({ id: event.id }));
+    const body = await res.json();
+    expect(body.wasReset).toBe(true);
+
+    // teamResult rows still exist in the DB (non-destructive reset)…
+    const dbTeams = await prisma.teamResult.findMany({ where: { eventId: event.id } });
+    expect(dbTeams).toHaveLength(2);
+    // …but the API response omits empty teams so no UI shows a blank Teams section.
+    expect(body.teamResults).toEqual([]);
+  });
+
+  it("returns teams with members once they have active players", async () => {
+    const future = new Date(Date.now() + 86400_000);
+    const event = await prisma.event.create({
+      data: { title: "Footy", location: "Pitch", dateTime: future, teamOneName: "A", teamTwoName: "B" },
+    });
+    await prisma.teamResult.create({
+      data: { eventId: event.id, name: "A", members: { create: [{ name: "Alice", order: 0 }] } },
+    });
+    await prisma.teamResult.create({
+      data: { eventId: event.id, name: "B", members: { create: [{ name: "Bob", order: 0 }] } },
+    });
+    await prisma.player.create({ data: { eventId: event.id, name: "Alice", order: 0 } });
+    await prisma.player.create({ data: { eventId: event.id, name: "Bob", order: 1 } });
+
+    const res = await getEvent(ctx({ id: event.id }));
+    const body = await res.json();
+    expect(body.teamResults.map((tr: any) => tr.name)).toEqual(["A", "B"]);
+    expect(body.teamResults[0].members).toHaveLength(1);
+  });
+});
+
 
 // ─── Phase 2 Slice 4: History endpoint reads from Game rows ──────────────────
 

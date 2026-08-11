@@ -104,9 +104,7 @@ data class GameHistory(
     val teamTwoName: String = "",
     val teamsSnapshot: String? = null,
     val paymentsSnapshot: String? = null,
-    val editableUntil: String = "",
     val createdAt: String = "",
-    val editable: Boolean = false,
     val source: String = "live",
     val eloUpdates: List<EloUpdate>? = null,
 )

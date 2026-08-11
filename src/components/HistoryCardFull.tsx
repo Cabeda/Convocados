@@ -53,7 +53,6 @@ export interface HistoryCardFullEntry {
   teamTwoName: string;
   teamsSnapshot: string | null;
   paymentsSnapshot: string | null;
-  editable: boolean;
   source: string;
   eloProcessed: boolean;
   isFriendly: boolean;
