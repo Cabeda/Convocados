@@ -38,12 +38,12 @@ export function PaymentSurface({
   eventId,
   canEdit,
   isAuthenticated,
-  playerCount,
+  maxPlayers,
 }: {
   eventId: string;
   canEdit: boolean;
   isAuthenticated: boolean;
-  playerCount: number;
+  maxPlayers: number;
 }) {
   const t = useT();
   const theme = useTheme();
@@ -64,7 +64,9 @@ export function PaymentSurface({
   if (!isAuthenticated) return null;
 
   const hasCost = !!cost && cost.totalAmount > 0;
-  const share = hasCost && playerCount > 0 ? cost.totalAmount / playerCount : null;
+  // Per-player price = total / required playing slots (maxPlayers). Fixed for
+  // the event — it does not change with the number of players in the list.
+  const share = hasCost && maxPlayers > 0 ? cost.totalAmount / maxPlayers : null;
 
   // The viewer's own debtor person (summary is role-trimmed for players).
   const myDebt = !canEdit
