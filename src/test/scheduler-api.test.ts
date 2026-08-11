@@ -26,6 +26,7 @@ const OLD_SCHEDULER_SECRET = process.env.SCHEDULER_SECRET;
 
 beforeEach(async () => {
   process.env.SCHEDULER_SECRET = "test-scheduler-secret";
+  await prisma.schedulerHeartbeat.deleteMany();
   await prisma.scheduledJob.deleteMany();
   await prisma.reminderLog.deleteMany();
   await prisma.player.deleteMany();
@@ -93,6 +94,23 @@ describe("GET /api/internal/jobs/due", () => {
   it("returns 401 without valid scheduler secret", async () => {
     const res = await getDueJobs(ctx("GET", "/api/internal/jobs/due", { authorization: "Bearer wrong" }));
     expect(res.status).toBe(401);
+  });
+
+  it("records a scheduler heartbeat on each poll", async () => {
+    const before = new Date();
+    const res = await getDueJobs(ctx("GET", "/api/internal/jobs/due", { authorization: "Bearer test-scheduler-secret" }));
+    expect(res.status).toBe(200);
+
+    const heartbeat = await prisma.schedulerHeartbeat.findUnique({
+      where: { id: "scheduler" },
+    });
+    expect(heartbeat).not.toBeNull();
+    expect(heartbeat!.lastSeenAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+  });
+
+  it("does not record a heartbeat when unauthorized", async () => {
+    await getDueJobs(ctx("GET", "/api/internal/jobs/due", { authorization: "Bearer wrong" }));
+    expect(await prisma.schedulerHeartbeat.count()).toBe(0);
   });
 
   it("returns empty array when no jobs are due", async () => {

@@ -5,6 +5,7 @@ import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 beforeEach(async () => {
+  await prisma.schedulerHeartbeat.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
   await prisma.session.deleteMany();
@@ -79,6 +80,68 @@ describe("GET /api/health", () => {
     } finally {
       process.env.NODE_ENV = oldNodeEnv;
       vi.doUnmock("node:child_process");
+    }
+  });
+
+  it("omits scheduler field in non-production env", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+    try {
+      const res = await GET(ctx());
+      const body = await res.json();
+      expect(body.scheduler).toBeUndefined();
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+    }
+  });
+
+  it("reports scheduler running=true when heartbeat is fresh in production", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      await prisma.schedulerHeartbeat.upsert({
+        where: { id: "scheduler" },
+        create: { id: "scheduler", lastSeenAt: new Date() },
+        update: { lastSeenAt: new Date() },
+      });
+      const res = await GET(ctx());
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.scheduler).toEqual({ running: true });
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+    }
+  });
+
+  it("returns 503 when scheduler heartbeat is stale in production", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      await prisma.schedulerHeartbeat.upsert({
+        where: { id: "scheduler" },
+        create: { id: "scheduler", lastSeenAt: new Date(Date.now() - 10 * 60 * 1000) },
+        update: { lastSeenAt: new Date(Date.now() - 10 * 60 * 1000) },
+      });
+      const res = await GET(ctx());
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body.scheduler).toEqual({ running: false });
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+    }
+  });
+
+  it("returns 503 when no scheduler heartbeat exists in production", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      await prisma.schedulerHeartbeat.deleteMany();
+      const res = await GET(ctx());
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body.scheduler).toEqual({ running: false });
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
     }
   });
 
