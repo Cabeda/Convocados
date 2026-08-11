@@ -109,7 +109,7 @@ describe("GET /api/events/:id/post-game-status", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.allPaid).toBe(true);
-    expect(json.allComplete).toBe(true); // banner dismisses — nothing left to settle
+    expect(json.allComplete).toBe(true); // API says nothing left to settle; the banner component keeps rendering untracked games (issue #658)
     expect(json.gameConfig?.mode).toBe("untracked");
     expect(json.gamePayments).toEqual([]);
 

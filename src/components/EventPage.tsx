@@ -13,6 +13,7 @@ import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { addKnownName, getQjName } from "~/lib/knownNames";
 import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
+import { isGameEnded } from "~/lib/gameStatus";
 import { useSession } from "~/lib/auth.client";
 import type { RsvpStatus } from "~/lib/rsvp";
 
@@ -117,6 +118,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [lockedEvent, setLockedEvent] = useState<{ id: string; title: string } | null>(null);
 
+  // Roster is frozen once the game has ended — players can no longer be added
+  // from the event page (server gate in POST /players; UI hides add surfaces).
+  const gameEnded = useMemo(
+    () => (event ? isGameEnded(event.dateTime, event.durationMinutes) : false),
+    [event],
+  );
+
   const fetchEvent = useCallback(async () => {
     try {
       const r = await fetch(`/api/events/${eventId}`);
@@ -181,7 +189,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   }, [eventId]);
 
   useEffect(() => {
-    if (autoOpenPay) {
+    if (autoOpenPay && !gameEnded) {
       refreshBalance();
       setPaymentNudgeOpen(true);
     }
@@ -197,7 +205,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     if (deepLinkAction === "confirm-payment" && deepLinkPlayer) {
       window.location.href = `/events/${eventId}/payments`;
     }
-  }, [autoOpenPay, deepLinkAction, deepLinkPlayer, refreshBalance, eventId]);
+  }, [autoOpenPay, deepLinkAction, deepLinkPlayer, refreshBalance, eventId, gameEnded]);
 
   const mergedSuggestions = useMemo(() => {
     const qjName = getQjName().trim();
@@ -387,11 +395,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ADR 0018: Auto-join deep link (needs handleQuickJoinPillClick to be defined)
   useEffect(() => {
-    if (deepLinkAction === "join" && session?.user?.name) {
+    if (deepLinkAction === "join" && session?.user?.name && !gameEnded) {
       setTimeout(() => handleQuickJoinPillClick(session.user!.name), 500);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deepLinkAction, session?.user?.name]);
+  }, [deepLinkAction, session?.user?.name, gameEnded]);
 
   const removePlayer = async (playerId: string) => {
     // Optimistic update
@@ -833,8 +841,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
             />
             )}
 
-            {/* RSVP CTA — above the fold, the primary action for every visitor */}
-            {isAuthenticated ? (
+            {/* RSVP CTA — above the fold, the primary action for every visitor.
+                Hidden once the game has ended — the roster is frozen. */}
+            {!gameEnded && (isAuthenticated ? (
               <AttendanceCta
                 myRsvpStatus={myRsvpStatus ?? null}
                 isOnList={!!(session?.user?.id && event.players.some((p) => p.userId === session.user!.id))}
@@ -862,7 +871,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   {t("signInToJoin")}
                 </Button>
               </Paper>
-            )}
+            ))}
 
             {/* Players — single merged component (name+email+contacts+pills).
                 The Quick Join pill is the first pill in the row when authenticated. */}
@@ -894,6 +903,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 ? () => handleQuickJoinPillClick(session.user!.name)
                 : undefined}
               eventDateTime={event.dateTime}
+              rosterLocked={gameEnded}
               />
             </div>
 

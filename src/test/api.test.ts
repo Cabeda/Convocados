@@ -360,6 +360,15 @@ describe("POST /api/events/[id]/players", () => {
     expect(res.status).toBe(409);
   });
 
+  it("returns 403 when the game has already ended (roster locked on the event page)", async () => {
+    // One-off event whose kickoff + duration are in the past — the roster is frozen.
+    const id = await seedEvent({ dateTime: new Date(Date.now() - 7200_000) });
+    const res = await addPlayer(ctx({ id }, { name: "Alice" }));
+    expect(res.status).toBe(403);
+    const players = await prisma.player.findMany({ where: { eventId: id } });
+    expect(players).toHaveLength(0);
+  });
+
   it("re-adding a soft-archived player un-archives them and places them at the end of the list", async () => {
     const id = await seedEvent();
     // Add three players: Alice (order 0), Bob (order 1), Charlie (order 2)
