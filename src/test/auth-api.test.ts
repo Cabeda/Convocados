@@ -1103,8 +1103,8 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(names).toContain("Diana");
     expect(names).not.toContain("Bob");
 
-    // Each should have equal share: 40/3
-    const expectedShare = Math.round((40 / 3) * 100) / 100;
+    // Each should have equal share: 40 / maxPlayers(10) = 4
+    const expectedShare = 4;
     // Alice's existing "paid" status should be preserved
     const alice = payments.find((p) => p.playerName === "Alice")!;
     expect(alice.status).toBe("paid");
