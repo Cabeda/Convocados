@@ -293,6 +293,13 @@ test.describe("Post-game experience — banner, score, payments", () => {
     expect(s1.allPaid).toBe(true);
     expect(s1.allComplete).toBe(false);
 
+    // Add players while the event is still upcoming — the roster is frozen
+    // once the game has ended (POST /players returns 403 after kickoff).
+    for (const name of ["P1", "P2"]) {
+      const addRes = await api.post(`/api/events/${id}/players`, { data: { name } });
+      expect(addRes.status()).toBe(200);
+    }
+
     // Move to past
     const pastDate = new Date(Date.now() - 2 * 60 * 60 * 1000);
     await api.put(`/api/events/${id}/datetime`, {
@@ -306,10 +313,6 @@ test.describe("Post-game experience — banner, score, payments", () => {
     expect(s2.allPaid).toBe(true);
     expect(s2.allComplete).toBe(false);
 
-    // Add players and cost
-    for (const name of ["P1", "P2"]) {
-      await api.post(`/api/events/${id}/players`, { data: { name } });
-    }
     await api.put(`/api/events/${id}/cost`, {
       data: { totalAmount: 20, currency: "EUR" },
     });

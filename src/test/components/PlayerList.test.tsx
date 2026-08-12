@@ -627,3 +627,20 @@ describe.skip("PlayerList — attendance UI (You row + guest pill)", () => {
     expect(screen.queryByText(/attendance/i)).toBeNull();
   });
 });
+
+describe("PlayerList — roster locked after game end (issue #716)", () => {
+  it("hides the add-player input, submit button and recent chips when rosterLocked", async () => {
+    renderWithTheme(<PlayerList {...baseProps} rosterLocked />);
+    expect(screen.queryByPlaceholderText(/add player/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("add-player-submit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Charlie")).not.toBeInTheDocument();
+    // The roster itself still renders
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+  });
+
+  it("never dispatches add intents when rosterLocked", async () => {
+    renderWithTheme(<PlayerList {...baseProps} rosterLocked />);
+    expect(baseProps.onRequestAdd).not.toHaveBeenCalled();
+    expect(baseProps.onAddPlayer).not.toHaveBeenCalled();
+  });
+});
