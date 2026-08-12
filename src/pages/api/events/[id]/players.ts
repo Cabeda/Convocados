@@ -403,9 +403,12 @@ export function resetInviteRateLimitStores(): void {
  * a recurring reset) used to return early and silently skipped both — the
  * external gateway (e.g. a WhatsApp bridge) never heard about returning players.
  */
-function notifyPlayerJoined(event: { id: string; maxPlayers: number }, playerName: string, order: number) {
-  const isActive = order < event.maxPlayers;
-  const spotsLeft = isActive ? Math.max(0, event.maxPlayers - order - 1) : 0;
+function notifyPlayerJoined(event: { id: string; maxPlayers: number }, playerName: string, activeBefore: number) {
+  // activeBefore is the ACTIVE roster count BEFORE this join (game-scoped under
+  // ADR 0016). Legacy Player order must not be used here: it accumulates across
+  // recurring occurrences and would wrongly fire game_full on a 4/10 roster.
+  const isActive = activeBefore < event.maxPlayers;
+  const spotsLeft = isActive ? Math.max(0, event.maxPlayers - activeBefore - 1) : 0;
   const data = { playerName, isActive, spotsLeft };
   fireWebhooks(event.id, "player_joined", data).catch(() => {});
   if (spotsLeft === 0) fireWebhooks(event.id, "game_full", data).catch(() => {});
@@ -465,6 +468,16 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
   }
 
+  // ADR 0016: the authoritative roster is the current game's GameParticipant
+  // rows, NOT the legacy Player rows (which accumulate across recurring
+  // occurrences — 19 active rows here while the game has 4 players). Snapshot
+  // the ACTIVE count BEFORE this join so spotsLeft/bench logic sees the real
+  // roster and game_full fires only when the current game actually fills.
+  const activeBefore = (await getActivePlayerNames(eventId, event.maxPlayers, event.currentGameId)).size;
+  const rosterCount = event.currentGameId
+    ? await prisma.gameParticipant.count({ where: { gameId: event.currentGameId, archivedAt: null } })
+    : event.players.length;
+
   // Optional email — used to notify a registered user or invite an unregistered
   // one to join Convocados. Validated loosely; ignored if malformed.
   const normalizedEmail = typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
@@ -498,7 +511,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   // Bench cap: max bench size equals maxPlayers (total players = 2 * maxPlayers)
   const maxTotal = event.maxPlayers * 2;
-  if (event.players.length >= maxTotal) {
+  if (rosterCount >= maxTotal) {
     return Response.json(
       { error: `The bench is full (maximum ${event.maxPlayers} bench players).` },
       { status: 400 },
@@ -631,12 +644,12 @@ export const POST: APIRoute = async ({ params, request }) => {
           });
         }
         // Bug fix: re-activated players must be added to teams if within active range
-        const readdIsOnBench = newOrder >= event.maxPlayers;
+        const readdIsOnBench = activeBefore >= event.maxPlayers;
         if (!readdIsOnBench) {
           await addPlayerToTeams(eventId, trimmed, event.currentGameId);
           await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
         }
-        notifyPlayerJoined(event, trimmed, newOrder);
+        notifyPlayerJoined(event, trimmed, activeBefore);
         return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
       }
       // ── ADR 0016: game-scoped re-join after recurring reset ─────────────
@@ -676,7 +689,7 @@ export const POST: APIRoute = async ({ params, request }) => {
             create: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
             update: { status: "yes", respondedAt: new Date() },
           });
-          notifyPlayerJoined(event, trimmed, newOrder);
+          notifyPlayerJoined(event, trimmed, activeBefore);
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
         if (!alreadyInGame) {
@@ -701,12 +714,12 @@ export const POST: APIRoute = async ({ params, request }) => {
             update: { status: "yes", respondedAt: new Date() },
           });
           // Bug fix: re-joining players must be added to teams if within active range
-          const rejoinIsOnBench = newOrder >= event.maxPlayers;
+          const rejoinIsOnBench = activeBefore >= event.maxPlayers;
           if (!rejoinIsOnBench) {
             await addPlayerToTeams(eventId, trimmed, event.currentGameId);
             await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
           }
-          notifyPlayerJoined(event, trimmed, newOrder);
+          notifyPlayerJoined(event, trimmed, activeBefore);
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
         // Already in the current game — fall through to duplicate error
@@ -771,9 +784,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     await syncGamePayments(event.currentGameId, eventId);
   }
 
-  // spotsLeft after adding
-  const activeBefore = Math.min(event.players.length, event.maxPlayers);
-  const isOnBench = event.players.length >= event.maxPlayers;
+  // spotsLeft after adding (activeBefore snapshot from the top of the handler)
+  const isOnBench = activeBefore >= event.maxPlayers;
   const spotsLeft = isOnBench ? 0 : Math.max(0, event.maxPlayers - activeBefore - 1);
   const url = `${origin}/events/${eventId}`;
 
@@ -791,7 +803,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   if (isOnBench) {
     // ADR 0018: Include bench position in notification body
-    const benchPosition = event.players.length - event.maxPlayers + 1;
+    const benchPosition = rosterCount - event.maxPlayers + 1;
     await enqueueNotification(eventId, "player_joined_bench", { title: event.title, key: "notifyPlayerJoinedBench", params: { name: trimmed, position: String(benchPosition) }, url, spotsLeft }, senderClientId);
   } else {
     await enqueueNotification(eventId, "player_joined", { title: event.title, key: "notifyPlayerJoined", params: { name: trimmed }, url, spotsLeft }, senderClientId);
