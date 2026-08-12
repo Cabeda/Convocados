@@ -124,7 +124,10 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
   // payment roll), debtors, and the Owner/Admin. Spectators get nothing.
   // Everyone who sees the banner can settle it — toggling who paid and the
   // score are shared wrap-up tasks between the players and the admin.
-  if (!status || !status.isParticipant || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || status.allComplete) return null;
+  // Untracked games (each one pays their own share) never reach a "nothing left
+  // to settle" state — allPaid is true by definition — so the allComplete
+  // dismissal must not hide the wrap-up banner for them.
+  if (!status || !status.isParticipant || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || (status.allComplete && status.gameConfig?.mode !== "untracked")) return null;
 
   const completedCount = (status.hasScore ? 1 : 0) + (status.allPaid ? 1 : 0);
   const progressPct = (completedCount / 2) * 100;
@@ -356,7 +359,7 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
               )}
 
               {/* Inline payment chips — new-model rows when present, else legacy snapshot */}
-              {status.gamePayments ? (
+              {status.gamePayments && status.gamePayments.length > 0 ? (
                 <Box sx={{ mt: 1.5, pt: 1, borderTop: `1px dashed ${alpha(theme.palette.divider, 0.3)}` }}>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
                     {status.gamePayments.map((r) => {

@@ -14,6 +14,7 @@ import { getOutstandingBalance, getGateBalance } from "../../../../lib/balance.s
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
+import { isGameEnded } from "../../../../lib/gameStatus";
 import { archiveAndLeave } from "../../../../lib/leave.server";
 import { balanceTeams } from "../../../../lib/elo.server";
 import { Randomize } from "../../../../lib/random";
@@ -435,6 +436,16 @@ export const POST: APIRoute = async ({ params, request }) => {
     include: { players: { where: { archivedAt: null }, orderBy: { order: "asc" } } },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  // Once the game has ended, the roster is frozen on the event page — players
+  // must not be added after kickoff. Post-game roster fixes go through the
+  // game history (PATCH /history) instead.
+  if (isGameEnded(event.dateTime, event.durationMinutes)) {
+    return Response.json(
+      { error: "The game has already ended — players can no longer be added." },
+      { status: 403 },
+    );
+  }
 
   const { name, linkToAccount, email } = await request.json();
 
