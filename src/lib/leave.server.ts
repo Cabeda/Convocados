@@ -53,6 +53,21 @@ export function isWithin48hBeforeKickoff(dateTime: Date, now: Date = new Date())
   return hoursUntil > 0 && hoursUntil <= RSVP_WINDOW_HOURS;
 }
 
+/** Name of whoever performed the leave/removal, for the webhook payload.
+ *  Self-leave → the player's own name. Organizer removal → the organizer's
+ *  user name when identifiable, otherwise "anonymous". */
+export async function resolveActorName(playerName: string, actor: LeaveActor): Promise<string> {
+  if (actor.kind === "self") return playerName;
+  if (actor.userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: actor.userId },
+      select: { name: true },
+    });
+    if (user?.name) return user.name;
+  }
+  return "anonymous";
+}
+
 export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<ArchiveAndLeaveResult> {
   const { eventId, playerId, actor } = input;
   const origin = input.origin ?? "https://convocados.cabeda.dev";
@@ -271,7 +286,8 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   }
 
   // Fire webhooks
-  fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft }).catch(() => {});
+  const webhookActor = await resolveActorName(player.name, actor);
+  fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft, actor: webhookActor }).catch(() => {});
 
   // Recalculate payment shares if a cost is set
   await syncPaymentsForEvent(eventId);
