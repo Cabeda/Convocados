@@ -97,7 +97,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
     <thead><tr><th>Event type</th><th>data fields</th></tr></thead>
     <tbody>
       <tr><td><code>player_joined</code></td><td><code>playerName</code>, <code>isActive</code>, <code>spotsLeft</code></td></tr>
-      <tr><td><code>player_left</code></td><td><code>playerName</code>, <code>spotsLeft</code></td></tr>
+      <tr><td><code>player_left</code></td><td><code>playerName</code>, <code>spotsLeft</code>, <code>actor</code> (who removed them: a player/user name or <code>"anonymous"</code>)</td></tr>
       <tr><td><code>game_full</code></td><td><code>playerName</code>, <code>isActive</code>, <code>spotsLeft</code> (always 0)</td></tr>
       <tr><td><code>game_reset</code></td><td><code>newDateTime</code> (ISO 8601)</td></tr>
     </tbody>

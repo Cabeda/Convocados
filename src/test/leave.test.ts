@@ -374,7 +374,7 @@ describe("archiveAndLeave — webhook spotsLeft payload (#722)", () => {
     expect(fireWebhooks).toHaveBeenCalledWith(
       event.id,
       "player_left",
-      expect.objectContaining({ playerName: "João Fernandes", spotsLeft: 7 }),
+      expect.objectContaining({ playerName: "João Fernandes", spotsLeft: 7, actor: "João Fernandes" }),
     );
   });
 
@@ -419,7 +419,7 @@ describe("archiveAndLeave — webhook spotsLeft payload (#722)", () => {
     expect(fireWebhooks).toHaveBeenCalledWith(
       event.id,
       "player_left",
-      expect.objectContaining({ playerName: "João Fernandes", spotsLeft: 7 }),
+      expect.objectContaining({ playerName: "João Fernandes", spotsLeft: 7, actor: "João Fernandes" }),
     );
   });
 
@@ -451,7 +451,62 @@ describe("archiveAndLeave — webhook spotsLeft payload (#722)", () => {
     expect(fireWebhooks).toHaveBeenCalledWith(
       event.id,
       "player_left",
-      expect.objectContaining({ playerName: "Alice", spotsLeft: 0 }),
+      expect.objectContaining({ playerName: "Alice", spotsLeft: 0, actor: "Alice" }),
+    );
+  });
+
+  it("reports the organizer's user name as actor when an organizer removes a player", async () => {
+    const owner = await seedUser("José Cabeda", "u-owner");
+    const event = await prisma.event.create({
+      data: {
+        title: "Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() + 7 * 86400_000),
+        ownerId: owner.id,
+        maxPlayers: 5,
+      },
+    });
+    const guest = await prisma.player.create({
+      data: { eventId: event.id, name: "Guest", order: 0 },
+    });
+
+    await archiveAndLeave({
+      eventId: event.id,
+      actor: { kind: "organizer", userId: owner.id },
+      playerId: guest.id,
+    });
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "player_left",
+      expect.objectContaining({ playerName: "Guest", actor: "José Cabeda" }),
+    );
+  });
+
+  it("reports actor 'anonymous' when the remover has no known identity", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() + 7 * 86400_000),
+        ownerId: null,
+        maxPlayers: 5,
+      },
+    });
+    const guest = await prisma.player.create({
+      data: { eventId: event.id, name: "Guest", order: 0 },
+    });
+
+    await archiveAndLeave({
+      eventId: event.id,
+      actor: { kind: "organizer", userId: null },
+      playerId: guest.id,
+    });
+
+    expect(fireWebhooks).toHaveBeenCalledWith(
+      event.id,
+      "player_left",
+      expect.objectContaining({ playerName: "Guest", actor: "anonymous" }),
     );
   });
 });
