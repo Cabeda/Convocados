@@ -4,6 +4,7 @@ import { isGameEnded } from "../../../../lib/gameStatus";
 import { getSession, checkOwnership } from "../../../../lib/auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "../../../../lib/mvp.constants";
 import { isSettledGameParticipant } from "../../../../lib/participants.server";
+import { isHistoryParticipant } from "../../../../lib/snapshotParticipants";
 import { getWrapUpGameSettlement } from "../../../../lib/settlement.server";
 
 /**
@@ -41,7 +42,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   if (latestHistory?.status === "cancelled") {
     return Response.json({
       gameEnded: false, hasScore: false, hasCost: false, allPaid: true,
-      allComplete: true, isParticipant: false, latestHistoryId: null,
+      allComplete: true, isParticipant: false, isPlayer: false, latestHistoryId: null,
       paymentsSnapshot: null, costCurrency: null, costAmount: null,
       hasPendingPastPayments: false, mvpEnabled: false, mvpComplete: true,
       bannerMvpComplete: true, paidAggregate: { paidCount: 0, totalCount: 0 },
@@ -231,6 +232,12 @@ export const GET: APIRoute = async ({ params, request }) => {
     }
   }
 
+  // Whether the current user actually PLAYED the settled game (players-only).
+  // Unlike isParticipant, the Owner/Admin settlement override does NOT apply —
+  // MVP voting is restricted to players, so an admin who didn't play must not
+  // be offered the Vote MVP task nor have the banner held open by MVP state.
+  const isPlayer = session?.user ? isHistoryParticipant(latestHistory, session.user.name) : false;
+
   // Compute aggregate payment info for social proof
   let paidAggregate = { paidCount: 0, totalCount: 0 };
   if (paymentsSnapshot && paymentsSnapshot.length > 0) {
@@ -252,7 +259,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   }
 
   return Response.json({
-    gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant,
+    gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant, isPlayer,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
     hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete, bannerMvpComplete,
     paidAggregate,
