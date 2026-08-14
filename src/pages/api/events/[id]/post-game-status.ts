@@ -160,12 +160,18 @@ export const GET: APIRoute = async ({ params, request }) => {
   // After 24h the banner hides even if not everyone voted; voting stays open on history page.
   let allComplete = hasScore && allPaid && bannerMvpComplete;
 
+  // Payment overhaul: the durable per-game payment view for the wrap-up banner.
+  // When present, the banner renders these rows and settles via the settlement API.
+  const wrapUpSettlement = await getWrapUpGameSettlement(event.id);
+
   // Check if there are unsettled payments from a past game in history,
   // even when the current event hasn't ended yet (post-reset scenario).
   // This allows the banner to show for recurring events that have already
   // reset to the next occurrence but still have unpaid past game payments.
+  // Untracked games ("each one pays their own share") are settled by
+  // definition, so stale legacy snapshot rows must not count as pending.
   let hasPendingPastPayments = false;
-  if (!gameEnded && latestHistory?.paymentsSnapshot) {
+  if (!gameEnded && latestHistory?.paymentsSnapshot && wrapUpSettlement?.mode !== "untracked") {
     try {
       const snapshot = JSON.parse(latestHistory.paymentsSnapshot) as Array<{ status: string }>;
       if (snapshot.length > 0) {
@@ -234,9 +240,6 @@ export const GET: APIRoute = async ({ params, request }) => {
     };
   }
 
-  // Payment overhaul: the durable per-game payment view for the wrap-up banner.
-  // When present, the banner renders these rows and settles via the settlement API.
-  const wrapUpSettlement = await getWrapUpGameSettlement(event.id);
   if (wrapUpSettlement) {
     hasCost = true;
     allPaid = wrapUpSettlement.rows.length === 0 || wrapUpSettlement.rows.every((r) => r.status === "paid");
