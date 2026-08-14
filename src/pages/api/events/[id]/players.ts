@@ -20,6 +20,7 @@ import { balanceTeams } from "../../../../lib/elo.server";
 import { Randomize } from "../../../../lib/random";
 import { nextGameParticipantOrder } from "../../../../lib/game.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
+import { getActiveRosterState } from "../../../../lib/roster.server";
 import {
   IDEMPOTENCY_HEADER,
   getCachedResponse,
@@ -35,30 +36,6 @@ const log = createLogger("players-api");
 startIdempotencySweep();
 
 /**
- * Resolve the authoritative active player names for an event.
- * ADR 0016: when currentGameId exists, use GameParticipant (game-scoped).
- * Falls back to the legacy Player table for non-recurring events.
- */
-async function getActivePlayerNames(eventId: string, maxPlayers: number, currentGameId?: string | null): Promise<Set<string>> {
-  if (currentGameId) {
-    const participants = await prisma.gameParticipant.findMany({
-      where: { gameId: currentGameId, archivedAt: null },
-      include: { eventPlayer: { select: { name: true } } },
-      orderBy: { order: "asc" },
-      take: maxPlayers,
-    });
-    return new Set(participants.map((gp) => gp.eventPlayer.name));
-  }
-  const players = await prisma.player.findMany({
-    where: { eventId, archivedAt: null },
-    orderBy: { order: "asc" },
-    take: maxPlayers,
-    select: { name: true },
-  });
-  return new Set(players.map(p => p.name));
-}
-
-/**
  * Validate that all team members are active players (order < maxPlayers).
  * Removes any invalid members from teams rather than clearing all teams.
  * Returns true if any members were removed.
@@ -70,7 +47,7 @@ export async function validateTeams(eventId: string, maxPlayers: number, current
   });
   if (teams.length === 0) return false;
 
-  const activeNames = await getActivePlayerNames(eventId, maxPlayers, currentGameId);
+  const activeNames = (await getActiveRosterState(eventId, maxPlayers, currentGameId)).activeNames;
 
   const idsToRemove: string[] = [];
   for (const team of teams) {
@@ -105,7 +82,7 @@ export async function addPlayerToTeams(eventId: string, playerName: string, curr
 
   if (event?.balanced && teams.length === 2) {
     // Full rebalance: include all current members + new player
-    const activeNames = await getActivePlayerNames(eventId, event.maxPlayers, gameId);
+    const activeNames = (await getActiveRosterState(eventId, event.maxPlayers, gameId)).activeNames;
     // Only rebalance if new player is in active range
     if (activeNames.has(playerName)) {
       const ratings = await prisma.playerRating.findMany({ where: { eventId } });
@@ -160,7 +137,7 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
 
   // Balanced mode: full rebalance with current active players (excluding the leaving one, including promoted)
   if (event?.balanced && teams.length === 2) {
-    const activeNames = [...await getActivePlayerNames(eventId, event.maxPlayers, gameId)].filter(n => n !== playerName);
+    const activeNames = [...(await getActiveRosterState(eventId, event.maxPlayers, gameId)).activeNames].filter(n => n !== playerName);
     if (promotedName && !activeNames.includes(promotedName)) {
       activeNames.push(promotedName);
     }
@@ -303,7 +280,7 @@ async function autoRandomizeIfFull(eventId: string, maxPlayers: number, currentG
   if (existingTeams > 0) return;
 
   // Count active players
-  const activeNames = await getActivePlayerNames(eventId, maxPlayers, currentGameId);
+  const activeNames = (await getActiveRosterState(eventId, maxPlayers, currentGameId)).activeNames;
   if (activeNames.size < maxPlayers) return;
 
   // Game is full and no teams — auto-generate
@@ -403,13 +380,13 @@ export function resetInviteRateLimitStores(): void {
  * a recurring reset) used to return early and silently skipped both — the
  * external gateway (e.g. a WhatsApp bridge) never heard about returning players.
  */
-function notifyPlayerJoined(event: { id: string; maxPlayers: number }, playerName: string, activeBefore: number) {
+function notifyPlayerJoined(event: { id: string; maxPlayers: number }, playerName: string, activeBefore: number, actor: string) {
   // activeBefore is the ACTIVE roster count BEFORE this join (game-scoped under
   // ADR 0016). Legacy Player order must not be used here: it accumulates across
   // recurring occurrences and would wrongly fire game_full on a 4/10 roster.
   const isActive = activeBefore < event.maxPlayers;
   const spotsLeft = isActive ? Math.max(0, event.maxPlayers - activeBefore - 1) : 0;
-  const data = { playerName, isActive, spotsLeft };
+  const data = { playerName, isActive, spotsLeft, actor };
   fireWebhooks(event.id, "player_joined", data).catch(() => {});
   if (spotsLeft === 0) fireWebhooks(event.id, "game_full", data).catch(() => {});
   logEvent(event.id, "player_added", null, null, { playerName }).catch(() => {});
@@ -473,10 +450,13 @@ export const POST: APIRoute = async ({ params, request }) => {
   // occurrences — 19 active rows here while the game has 4 players). Snapshot
   // the ACTIVE count BEFORE this join so spotsLeft/bench logic sees the real
   // roster and game_full fires only when the current game actually fills.
-  const activeBefore = (await getActivePlayerNames(eventId, event.maxPlayers, event.currentGameId)).size;
-  const rosterCount = event.currentGameId
-    ? await prisma.gameParticipant.count({ where: { gameId: event.currentGameId, archivedAt: null } })
-    : event.players.length;
+  const rosterState = await getActiveRosterState(eventId, event.maxPlayers, event.currentGameId);
+  const activeBefore = rosterState.activeCount;
+  const rosterCount = rosterState.totalCount;
+
+  // Actor for the player_joined webhook payload: the session user who performed
+  // the join, or "anonymous" when nobody is signed in.
+  const joinActor = session?.user?.name ?? "anonymous";
 
   // Optional email — used to notify a registered user or invite an unregistered
   // one to join Convocados. Validated loosely; ignored if malformed.
@@ -649,7 +629,7 @@ export const POST: APIRoute = async ({ params, request }) => {
           await addPlayerToTeams(eventId, trimmed, event.currentGameId);
           await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
         }
-        notifyPlayerJoined(event, trimmed, activeBefore);
+        notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
         return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
       }
       // ── ADR 0016: game-scoped re-join after recurring reset ─────────────
@@ -689,7 +669,7 @@ export const POST: APIRoute = async ({ params, request }) => {
             create: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
             update: { status: "yes", respondedAt: new Date() },
           });
-          notifyPlayerJoined(event, trimmed, activeBefore);
+          notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
         if (!alreadyInGame) {
@@ -719,7 +699,7 @@ export const POST: APIRoute = async ({ params, request }) => {
             await addPlayerToTeams(eventId, trimmed, event.currentGameId);
             await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
           }
-          notifyPlayerJoined(event, trimmed, activeBefore);
+          notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
         // Already in the current game — fall through to duplicate error
@@ -869,7 +849,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   // Fire webhooks
-  const webhookData = { playerName: trimmed, isActive: !isOnBench, spotsLeft };
+  const webhookData = { playerName: trimmed, isActive: !isOnBench, spotsLeft, actor: joinActor };
   fireWebhooks(eventId, "player_joined", webhookData).catch(() => {});
   if (spotsLeft === 0) {
     fireWebhooks(eventId, "game_full", webhookData).catch(() => {});

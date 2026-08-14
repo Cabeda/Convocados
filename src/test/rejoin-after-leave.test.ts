@@ -219,7 +219,8 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
     expect(fireWebhooks).toHaveBeenCalledWith(
       event.id,
       "player_joined",
-      expect.objectContaining({ playerName: "Prucha" }),
+      // Session user is "Prucha" → actor is the signed-in user who performed the join
+      expect.objectContaining({ playerName: "Prucha", actor: "Prucha" }),
     );
   });
 
@@ -254,7 +255,8 @@ describe("POST /api/events/[id]/players — rejoin after leave (game-scoped, ADR
     expect(fireWebhooks).toHaveBeenCalledWith(
       event.id,
       "player_joined",
-      expect.objectContaining({ playerName: "Fresh Guy", isActive: true, spotsLeft: 5 }),
+      // No session → actor is "anonymous"
+      expect.objectContaining({ playerName: "Fresh Guy", isActive: true, spotsLeft: 5, actor: "anonymous" }),
     );
     const gameFullCalls = vi.mocked(fireWebhooks).mock.calls.filter(([id, type]) => id === event.id && type === "game_full");
     expect(gameFullCalls).toHaveLength(0);
