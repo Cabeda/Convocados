@@ -4,6 +4,7 @@ import { checkOwnership } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "~/lib/notificationQueue.server";
 import { createLogger } from "~/lib/logger.server";
+import { getActiveRosterState } from "~/lib/roster.server";
 
 const log = createLogger("switch-court");
 
@@ -13,7 +14,6 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const event = await prisma.event.findUnique({
     where: { id: params.id },
-    include: { players: { where: { archivedAt: null } } },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
@@ -47,8 +47,9 @@ export const POST: APIRoute = async ({ params, request }) => {
   await prisma.event.update({ where: { id: params.id }, data: updateData });
 
   // Notify all followers about the location change
-  const activePlayers = event.players.length;
-  const spotsLeft = Math.max(0, event.maxPlayers - activePlayers);
+  // ADR 0016: spotsLeft from the game-scoped roster (legacy Player rows
+  // accumulate across recurring occurrences and would wrongly read 0).
+  const spotsLeft = Math.max(0, event.maxPlayers - (await getActiveRosterState(event.id, event.maxPlayers, event.currentGameId)).activeCount);
 
   await enqueueNotification(event.id, "event_details", {
     title: event.title,

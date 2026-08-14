@@ -16,6 +16,7 @@
  */
 
 import { prisma } from "./db.server";
+import { getActiveRosterState } from "./roster.server";
 import { computeAvailableUnits, type WalletTx } from "./wallet";
 import {
   activeSubscriptionCoversDate,
@@ -365,25 +366,12 @@ export async function syncPaymentsForEvent(eventId: string): Promise<void> {
   });
   if (!event) return;
 
-  // ADR 0016: prefer GameParticipant for active player list
-  let activePlayers: { name: string; userId: string | null }[];
-  if (event.currentGameId) {
-    const participants = await prisma.gameParticipant.findMany({
-      where: { gameId: event.currentGameId, archivedAt: null },
-      include: { eventPlayer: { select: { name: true, userId: true } } },
-      orderBy: { order: "asc" },
-      take: event.maxPlayers,
-    });
-    activePlayers = participants.map((p) => ({ name: p.eventPlayer.name, userId: p.eventPlayer.userId }));
-  } else {
-    const players = await prisma.player.findMany({
-      where: { eventId, archivedAt: null },
-      orderBy: { order: "asc" },
-      take: event.maxPlayers,
-      select: { name: true, userId: true },
-    });
-    activePlayers = players;
-  }
+  // ADR 0016: prefer GameParticipant for active player list (via the shared
+  // roster helper) — same source of truth as the join/leave paths.
+  const activePlayers = (await getActiveRosterState(eventId, event.maxPlayers, event.currentGameId))
+    .members
+    .slice(0, event.maxPlayers)
+    .map((m) => ({ name: m.name, userId: m.userId }));
   // Per-player share = total / required playing slots (maxPlayers), NOT the
   // current roster size — the per-player price is fixed for the event.
   const share = event.maxPlayers > 0 ? eventCost.totalAmount / event.maxPlayers : 0;
