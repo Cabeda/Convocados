@@ -83,8 +83,32 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     throw new Error("You can only leave on your own behalf.");
   }
 
-  const wasActive = playerIndex < event.maxPlayers;
-  const firstBench = event.players[event.maxPlayers];
+  // ADR 0016: the current game's GameParticipant rows are the authoritative
+  // roster. Legacy Player rows accumulate across recurring occurrences and would
+  // inflate the active/bench/spotsLeft logic below, so when a current game exists
+  // we derive that state from its participants instead (mirrors players.ts).
+  let activeCountBefore: number;
+  let hasBench: boolean;
+  let firstBenchName: string | undefined;
+  let wasActive: boolean;
+
+  if (currentGameId) {
+    const participants = await prisma.gameParticipant.findMany({
+      where: { gameId: currentGameId, archivedAt: null },
+      include: { eventPlayer: { select: { name: true } } },
+      orderBy: { order: "asc" },
+      take: event.maxPlayers + 1,
+    });
+    activeCountBefore = Math.min(participants.length, event.maxPlayers);
+    hasBench = participants.length > event.maxPlayers;
+    firstBenchName = hasBench ? participants[event.maxPlayers].eventPlayer.name : undefined;
+    wasActive = participants.slice(0, event.maxPlayers).some((p) => p.eventPlayer.name === player.name);
+  } else {
+    activeCountBefore = Math.min(event.players.length, event.maxPlayers);
+    hasBench = event.players.length > event.maxPlayers;
+    firstBenchName = hasBench ? event.players[event.maxPlayers].name : undefined;
+    wasActive = playerIndex < event.maxPlayers;
+  }
 
   // Soft-archive the Player row. Preserves the row + any Rsvp keyed on this playerId.
   await prisma.player.update({
@@ -154,21 +178,19 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
 
   // Auto-sync teams: remove player, optionally promote bench player into their team
   if (wasActive) {
-    await removePlayerFromTeams(eventId, player.name, firstBench?.name, currentGameId);
+    await removePlayerFromTeams(eventId, player.name, firstBenchName, currentGameId);
   }
   await validateTeams(eventId, event.maxPlayers, currentGameId);
 
   // spotsLeft after removal
-  const activeAfter = wasActive
-    ? firstBench ? event.maxPlayers : Math.min(event.players.length - 1, event.maxPlayers)
-    : Math.min(event.players.length - 1, event.maxPlayers);
+  const activeAfter = wasActive ? (hasBench ? event.maxPlayers : activeCountBefore - 1) : activeCountBefore;
   const spotsLeft = Math.max(0, event.maxPlayers - activeAfter);
 
   // Bench-empty after the removal. A bench is currently empty iff the total players fit
   // within maxPlayers (i.e. there were no bench players to start with). If the bench already
   // has players, the leave flow promotes the first one to active, so the slot is filled.
   const benchEmptyAfter: boolean | undefined = wasActive
-    ? event.players.length <= event.maxPlayers
+    ? !hasBench
     : undefined;
 
   // Warn-the-rest push: within 48h AND wasActive AND bench is empty after.
@@ -191,7 +213,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
       },
       actor.userId ?? undefined,
     );
-  } else if (wasActive && firstBench) {
+  } else if (wasActive && firstBenchName) {
     // Existing promotion notification (unchanged from prior behavior — always fires on promotion)
     await enqueueNotification(
       eventId,
@@ -199,7 +221,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
       {
         title: event.title,
         key: "notifyPlayerLeftPromoted",
-        params: { left: player.name, promoted: firstBench.name, n: spotsLeftStr },
+        params: { left: player.name, promoted: firstBenchName, n: spotsLeftStr },
         url,
         spotsLeft,
       },
@@ -223,8 +245,8 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
 
   // ADR 0017: Spot-available push — fire whenever a spot opens and game is in the future (Tier 2).
   // Previously gated on 48h; now always fires so interested players/followers learn immediately.
-  const wasFull = event.players.length >= event.maxPlayers;
-  if (wasActive && wasFull && !firstBench && spotsLeft > 0 && event.dateTime > new Date()) {
+  const wasFull = activeCountBefore >= event.maxPlayers;
+  if (wasActive && wasFull && !hasBench && spotsLeft > 0 && event.dateTime > new Date()) {
     await enqueueNotification(
       eventId,
       "spot_available",
