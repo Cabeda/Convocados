@@ -788,6 +788,57 @@ describe("GET /api/events/:id/post-game-status", () => {
     expect(json.latestHistoryId).toBeTruthy();
   });
 
+  it("does not report pending past payments for an untracked game after reset", async () => {
+    // Untracked ("each one pays their own share"): everyone is settled by
+    // definition, so a stale legacy snapshot with pending rows must not keep
+    // hasPendingPastPayments true after the recurrence reset.
+    const event = await prisma.event.create({
+      data: {
+        title: "Weekly Futsal",
+        location: "Pitch",
+        // Next game is in the future (post-reset)
+        dateTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+        isRecurring: true,
+      },
+    });
+    // Past game was untracked — everyone settled by definition.
+    const game = await prisma.game.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        status: "played",
+        scoreOne: 3,
+        scoreTwo: 2,
+        paymentMode: "untracked",
+      },
+    });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, order: 0 } });
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 50, currency: "EUR" } });
+    // Stale legacy snapshot still lists pending rows.
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        scoreOne: 3,
+        scoreTwo: 2,
+        paymentsSnapshot: JSON.stringify([
+          { playerName: "Ana", amount: 25, status: "pending", method: null },
+        ]),
+      },
+    });
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.gameEnded).toBe(false);
+    expect(json.gameConfig?.mode).toBe("untracked");
+    expect(json.hasPendingPastPayments).toBe(false);
+  });
+
   it("does not show hasPendingPastPayments when history is fully paid", async () => {
     const event = await prisma.event.create({
       data: {
