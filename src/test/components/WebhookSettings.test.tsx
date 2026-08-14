@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import { screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { screen, fireEvent, waitFor, cleanup, within } from "@testing-library/react";
 import * as jestDomMatchers from "@testing-library/jest-dom/matchers";
 import { renderWithTheme } from "../render";
 import { WebhookSettings } from "~/components/event/WebhookSettings";
@@ -159,6 +159,81 @@ describe("WebhookSettings", () => {
 
     await waitFor(() => {
       expect(fetchMock.mock.calls.some((c) => c[1]?.method === "DELETE")).toBe(true);
+    });
+  });
+
+  it("edits webhook events via PATCH", async () => {
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === "PATCH") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            id: "wh-1",
+            url: "https://example.com/receive",
+            events: ["player_joined"],
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          webhooks: [{
+            id: "wh-1",
+            url: "https://example.com/receive",
+            events: ["player_joined", "game_full"],
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }],
+        }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderSettings();
+    await waitFor(() => expect(screen.getByText("https://example.com/receive")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "webhookEdit" }));
+
+    const dialog = await screen.findByRole("dialog");
+    const gameFullCheckbox = within(dialog).getByRole("checkbox", { name: "webhookEventType_game_full" });
+    fireEvent.click(gameFullCheckbox);
+    fireEvent.click(within(dialog).getByRole("button", { name: "webhookSave" }));
+
+    await waitFor(() => {
+      const patchCall = fetchMock.mock.calls.find((c) => c[1]?.method === "PATCH");
+      expect(patchCall).toBeTruthy();
+      expect(JSON.parse(String((patchCall as [string, RequestInit])[1].body))).toEqual({
+        events: ["player_joined"],
+      });
+    });
+  });
+
+  it("cancels edit without sending PATCH", async () => {
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      if (!init || init.method === "GET") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            webhooks: [{
+              id: "wh-1",
+              url: "https://example.com/receive",
+              events: ["player_joined", "game_full"],
+              createdAt: "2026-01-01T00:00:00.000Z",
+            }],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderSettings();
+    await waitFor(() => expect(screen.getByText("https://example.com/receive")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "webhookEdit" }));
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "cancel" }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some((c) => c[1]?.method === "PATCH")).toBe(false);
     });
   });
 });
