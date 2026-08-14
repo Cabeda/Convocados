@@ -837,7 +837,7 @@ fun EventDetailScreen(
                                                     modifier = Modifier.weight(1f),
                                                 )
                                             }
-                                            if (!pg.mvpComplete && pg.latestHistoryId != null) {
+                                            if (pg.isPlayer && !pg.mvpComplete && pg.latestHistoryId != null) {
                                                 Button(
                                                     onClick = { onHistoryClick(pg.latestHistoryId) },
                                                     modifier = Modifier.fillMaxWidth(),
