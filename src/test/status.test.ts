@@ -16,6 +16,9 @@ vi.mock("~/lib/auth.helpers.server", async () => {
 });
 
 beforeEach(async () => {
+  await prisma.gameParticipant.deleteMany();
+  await prisma.eventPlayer.deleteMany();
+  await prisma.game.deleteMany();
   await prisma.player.deleteMany();
   await prisma.teamResult.deleteMany();
   await prisma.event.deleteMany();
@@ -122,6 +125,34 @@ describe("GET /api/events/[id]/status", () => {
     expect(body.players.active).toHaveLength(2);
     expect(body.players.bench).toHaveLength(1);
     expect(body.players.spotsLeft).toBe(0);
+  });
+
+  it("reports the game-scoped roster for recurring events, ignoring accumulated legacy Player rows (ADR 0016)", async () => {
+    const event = await seedEvent({}, "evt-recurring");
+    event.isRecurring = true;
+    await prisma.event.update({ where: { id: event.id }, data: { isRecurring: true } });
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: event.dateTime, status: "upcoming" },
+    });
+    await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
+
+    // 15 legacy Player rows accumulated across occurrences — NOT the current roster
+    for (let i = 0; i < 15; i++) {
+      await prisma.player.create({ data: { name: `Legacy ${i}`, eventId: event.id, order: i } });
+    }
+    // 6 GameParticipants in the current game
+    for (let i = 1; i <= 6; i++) {
+      const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: `Active ${i}` } });
+      await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, order: i } });
+    }
+
+    const res = await GET(ctx(event.id));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.players.active).toHaveLength(6);
+    expect(body.players.bench).toHaveLength(0);
+    expect(body.players.total).toBe(6);
+    expect(body.players.spotsLeft).toBe(4);
   });
 
   it("includes team results", async () => {
