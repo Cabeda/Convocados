@@ -3,11 +3,12 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Box, Button, Stack, Typography, TextField, Checkbox, FormControlLabel,
   FormGroup, Paper, List, ListItem, ListItemText, Chip, CircularProgress,
-  IconButton, Tooltip, Alert, Divider,
+  IconButton, Tooltip, Alert, Divider, Dialog, DialogTitle, DialogContent, DialogActions,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SendIcon from "@mui/icons-material/Send";
 import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
 import { useT } from "~/lib/useT";
 import type { TranslationKey } from "~/lib/i18n";
 
@@ -57,6 +58,9 @@ export function WebhookSettings({ eventId }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, Delivery>>({});
+  const [editing, setEditing] = useState<Webhook | null>(null);
+  const [editEvents, setEditEvents] = useState<string[]>([]);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const fetchWebhooks = useCallback(async () => {
     try {
@@ -132,6 +136,37 @@ export function WebhookSettings({ eventId }: Props) {
 
   const handleToggleEvent = (ev: string) => {
     setEvents((cur) => (cur.includes(ev) ? cur.filter((e) => e !== ev) : [...cur, ev]));
+  };
+
+  const handleOpenEdit = (wh: Webhook) => {
+    setEditing(wh);
+    setEditEvents([...wh.events]);
+    setEditError(null);
+  };
+
+  const handleToggleEditEvent = (ev: string) => {
+    setEditEvents((cur) => (cur.includes(ev) ? cur.filter((e) => e !== ev) : [...cur, ev]));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editing) return;
+    setEditError(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/webhooks/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ events: editEvents }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: t("webhookEditError") }));
+        setEditError(data.error ?? t("webhookEditError"));
+        return;
+      }
+      setEditing(null);
+      await fetchWebhooks();
+    } catch {
+      setEditError(t("webhookEditError"));
+    }
   };
 
   const statusChip = (status: string) => {
@@ -229,6 +264,11 @@ export function WebhookSettings({ eventId }: Props) {
                   </Stack>
                 }
               />
+              <Tooltip title={t("webhookEdit")}>
+                <IconButton size="small" aria-label={t("webhookEdit")} onClick={() => handleOpenEdit(wh)}>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
               <Tooltip title={t("webhookTest")}>
                 <IconButton size="small" aria-label={t("webhookTest")} onClick={() => handleTest(wh.id)}>
                   <SendIcon fontSize="small" />
@@ -243,6 +283,28 @@ export function WebhookSettings({ eventId }: Props) {
           ))}
         </List>
       )}
+
+      {/* Edit events dialog */}
+      <Dialog open={editing !== null} onClose={() => setEditing(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t("webhookEditEvents")}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ wordBreak: "break-all", mb: 1 }}>{editing?.url}</Typography>
+          <FormGroup row>
+            {EVENT_TYPES.map((ev) => (
+              <FormControlLabel
+                key={ev}
+                control={<Checkbox size="small" checked={editEvents.includes(ev)} onChange={() => handleToggleEditEvent(ev)} />}
+                label={<Typography variant="body2">{t(`webhookEventType_${ev}`)}</Typography>}
+              />
+            ))}
+          </FormGroup>
+          {editError && <Alert severity="error" sx={{ mt: 1, py: 0 }}>{editError}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button size="small" onClick={() => setEditing(null)}>{t("cancel")}</Button>
+          <Button size="small" variant="contained" onClick={handleSaveEdit}>{t("webhookSave")}</Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
