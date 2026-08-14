@@ -8,6 +8,7 @@
  *  supports undo); the existing hard-delete X flow is being replaced by this.
  */
 import { prisma } from "./db.server";
+import { getActiveRosterState } from "./roster.server";
 import { enqueueNotification, drainNotificationQueue } from "./notificationQueue.server";
 import { fireWebhooks } from "./webhook.server";
 import { syncPaymentsForEvent } from "./payments.server";
@@ -100,30 +101,14 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
 
   // ADR 0016: the current game's GameParticipant rows are the authoritative
   // roster. Legacy Player rows accumulate across recurring occurrences and would
-  // inflate the active/bench/spotsLeft logic below, so when a current game exists
-  // we derive that state from its participants instead (mirrors players.ts).
-  let activeCountBefore: number;
-  let hasBench: boolean;
-  let firstBenchName: string | undefined;
-  let wasActive: boolean;
-
-  if (currentGameId) {
-    const participants = await prisma.gameParticipant.findMany({
-      where: { gameId: currentGameId, archivedAt: null },
-      include: { eventPlayer: { select: { name: true } } },
-      orderBy: { order: "asc" },
-      take: event.maxPlayers + 1,
-    });
-    activeCountBefore = Math.min(participants.length, event.maxPlayers);
-    hasBench = participants.length > event.maxPlayers;
-    firstBenchName = hasBench ? participants[event.maxPlayers].eventPlayer.name : undefined;
-    wasActive = participants.slice(0, event.maxPlayers).some((p) => p.eventPlayer.name === player.name);
-  } else {
-    activeCountBefore = Math.min(event.players.length, event.maxPlayers);
-    hasBench = event.players.length > event.maxPlayers;
-    firstBenchName = hasBench ? event.players[event.maxPlayers].name : undefined;
-    wasActive = playerIndex < event.maxPlayers;
-  }
+  // inflate the active/bench/spotsLeft logic below, so we derive that state from
+  // the shared getActiveRosterState helper (same source as the join path — this
+  // duplication is how #722 slipped through before).
+  const roster = await getActiveRosterState(eventId, event.maxPlayers, currentGameId);
+  const activeCountBefore = roster.activeCount;
+  const hasBench = roster.hasBench;
+  const firstBenchName = roster.firstBenchName ?? undefined;
+  const wasActive = roster.activeNames.has(player.name);
 
   // Soft-archive the Player row. Preserves the row + any Rsvp keyed on this playerId.
   await prisma.player.update({

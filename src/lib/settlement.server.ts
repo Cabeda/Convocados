@@ -15,6 +15,7 @@
  * the join-gate / outstanding-balance stays consistent.
  */
 import { prisma, Prisma } from "./db.server";
+import { getActiveRosterState } from "./roster.server";
 import { recordReceived } from "./payments.server";
 
 export type PaymentMode = "tracked" | "untracked";
@@ -489,12 +490,9 @@ export async function getSettlementSummary(
   }
 
   // Active participant count of the current game — drives the per-share display.
-  let activePlayerCount = 0;
-  if (event.currentGameId) {
-    activePlayerCount = await prisma.gameParticipant.count({
-      where: { gameId: event.currentGameId, archivedAt: null },
-    });
-  }
+  const activePlayerCount = event.currentGameId
+    ? (await getActiveRosterState(event.id, event.maxPlayers, event.currentGameId)).totalCount
+    : 0;
 
   return {
     games: gameViews,
