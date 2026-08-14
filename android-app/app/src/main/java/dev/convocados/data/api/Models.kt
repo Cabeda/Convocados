@@ -247,6 +247,7 @@ data class PostGameStatus(
     val allPaid: Boolean = false,
     val allComplete: Boolean = false,
     val isParticipant: Boolean = false,
+    val isPlayer: Boolean = false,
     val latestHistoryId: String? = null,
     val costCurrency: String? = null,
     val costAmount: Double? = null,

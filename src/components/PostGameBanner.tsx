@@ -29,6 +29,7 @@ export interface PostGameStatus {
   allPaid: boolean;
   allComplete: boolean;
   isParticipant: boolean;
+  isPlayer: boolean;
   latestHistoryId: string | null;
   paymentsSnapshot: PaymentEntry[] | null;
   costCurrency: string | null;
@@ -127,7 +128,11 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
   // Untracked games (each one pays their own share) never reach a "nothing left
   // to settle" state — allPaid is true by definition — so the allComplete
   // dismissal must not hide the wrap-up banner for them.
-  if (!status || !status.isParticipant || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled)) || (status.allComplete && status.gameConfig?.mode !== "untracked")) return null;
+  //
+  // MVP voting is players-only (isHistoryParticipant), so an Owner/Admin who did
+  // not play must not be held open by pending MVP state, and the untracked
+  // allComplete exemption only applies to players who can still vote.
+  if (!status || !status.isParticipant || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled || !status.isPlayer)) || (status.allComplete && (status.gameConfig?.mode !== "untracked" || !status.isPlayer))) return null;
 
   const completedCount = (status.hasScore ? 1 : 0) + (status.allPaid ? 1 : 0);
   const progressPct = (completedCount / 2) * 100;
@@ -427,8 +432,9 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
               ) : null}
             </Box>
 
-            {/* MVP voting task */}
-            {status.mvpEnabled && status.latestHistoryId && status.hasScore && (
+            {/* MVP voting task — players-only (isHistoryParticipant). Owners/admins
+            who did not play can't vote, so they don't get the Vote MVP prompt. */}
+            {status.isPlayer && status.mvpEnabled && status.latestHistoryId && status.hasScore && (
               <Box sx={{
                 p: 1.5,
                 borderRadius: 2,

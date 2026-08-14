@@ -1124,6 +1124,49 @@ describe("isParticipant visibility rules (issue #658)", () => {
     const res = await getPostGameStatus(ctx({ id: event.id }));
     const json = await res.json();
     expect(json.isParticipant).toBe(true);
+    expect(json.isPlayer).toBe(true);
+  });
+
+  it("returns isPlayer=true for a player in the settled game's teamsSnapshot even when not the owner", async () => {
+    await login("u-bob", "Bob", { isOwner: false, isAdmin: false });
+    const event = await endedEvent();
+    await settledHistory(event.id, { teams: JSON.stringify([
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ]) });
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isPlayer).toBe(true);
+  });
+
+  it("returns isPlayer=false for an Owner who did not play the settled game", async () => {
+    await login("u-owner", "Owner", { isOwner: true, isAdmin: false });
+    await prisma.user.create({ data: { id: "u-owner", name: "Owner", email: "owner@test.com", emailVerified: false } });
+    const event = await endedEvent({ ownerId: "u-owner" });
+    await settledHistory(event.id, { teams: JSON.stringify([
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ]) });
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isParticipant).toBe(true);
+    expect(json.isPlayer).toBe(false);
+  });
+
+  it("returns isPlayer=false for an Admin who did not play the settled game", async () => {
+    await login("u-admin", "Admin", { isOwner: false, isAdmin: true });
+    const event = await endedEvent();
+    await settledHistory(event.id, { teams: JSON.stringify([
+      { team: "A", players: [{ name: "Alice", order: 0 }] },
+      { team: "B", players: [{ name: "Bob", order: 0 }] },
+    ]) });
+
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isParticipant).toBe(true);
+    expect(json.isPlayer).toBe(false);
   });
 
   it("returns isParticipant=true for an unpaid player on the settled game's payment roll even when not in the teams", async () => {
