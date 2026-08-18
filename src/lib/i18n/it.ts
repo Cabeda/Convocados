@@ -1124,6 +1124,7 @@ const it: TranslationKeys = {
   landingFeatureReminders: "Promemoria per giocare e pagare",
   landingFeatureCourtFinder: "Trova e confronta campi vicini",
   landingOpenSource: "Open source · Gratis per sempre",
+  supportUs: "Sostienici",
 
   // MVP voting (#200)
   voteMvp: "Vota MVP",

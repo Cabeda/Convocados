@@ -1179,6 +1179,7 @@ const en = {
   landingFeatureReminders: "Reminders to play and pay",
   landingFeatureCourtFinder: "Find & compare nearby courts",
   landingOpenSource: "Open source · Free forever",
+  supportUs: "Support us",
 
   // MVP voting (#200)
   voteMvp: "Vote MVP",
