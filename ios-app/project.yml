@@ -71,3 +71,33 @@ targets:
         aps-environment: development
         com.apple.developer.associated-domains:
           - "applinks:convocados.cabeda.dev"
+
+  ConvocadosUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: ConvocadosUITests
+    dependencies:
+      - target: Convocados
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.convocados.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        TEST_TARGET_NAME: Convocados
+        SWIFT_VERSION: "6.0"
+
+schemes:
+  Convocados:
+    build:
+      targets:
+        Convocados: all
+        ConvocadosUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - ConvocadosUITests
+
