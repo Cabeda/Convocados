@@ -28,6 +28,7 @@ import type { Locale } from "~/lib/i18n";
 import { useSession, signOut } from "~/lib/auth.client";
 import { shareForHomeScreen } from "~/lib/pwaInstall";
 import { SignInModal } from "./SignInModal";
+import SupportLinks from "./SupportLinks";
 
 const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
   { code: "en", label: "English" },
@@ -591,6 +592,9 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
               GitHub
             </Typography>
           </Stack>
+          <Box sx={{ mb: 1 }}>
+            <SupportLinks />
+          </Box>
           <Typography variant="body2" color="text.secondary" align="center">
             © {new Date().getFullYear()} {t("appName")}
           </Typography>

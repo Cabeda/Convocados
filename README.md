@@ -4,6 +4,8 @@
 
 [![CI](https://github.com/Cabeda/Convocados/actions/workflows/ci.yml/badge.svg)](https://github.com/Cabeda/Convocados/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Cabeda)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-00A9E0?logo=kofi&logoColor=white)](https://ko-fi.com/cabeda)
 
 🌐 **[Live Demo](https://convocados.cabeda.dev)** · 📖 **[Docs](https://convocados.cabeda.dev/docs)** · 📱 **[Android App](https://play.google.com/store/apps/details?id=com.cabeda.convocados)**
 
@@ -123,6 +125,15 @@ Open `http://localhost:4321` — create your first game in 10 seconds.
 Contributions welcome! The project uses TDD with strict pre-push hooks (lint + typecheck + tests must pass). See [AGENTS.md](./AGENTS.md) for the full development workflow and [contributing guide](https://convocados.cabeda.dev/docs/guides/contributing).
 
 Good first issues are labeled [`good first issue`](https://github.com/Cabeda/Convocados/labels/good%20first%20issue).
+
+---
+
+## Support the project
+
+Convocados is free and open source. If it saves you time, consider donating — donations cover the [Apple Developer Program](https://developer.apple.com/support/compare-memberships/) fee needed to publish the iOS app on the App Store:
+
+- 💖 **GitHub Sponsors** — [sponsor on GitHub](https://github.com/sponsors/Cabeda)
+- ☕ **Ko-fi** — [buy us a coffee](https://ko-fi.com/cabeda)
 
 ---
 
