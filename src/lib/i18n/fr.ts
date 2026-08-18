@@ -1126,6 +1126,12 @@ const fr: TranslationKeys = {
   landingOpenSource: "Open source · Gratuit pour toujours",
   supportUs: "Soutenez-nous",
 
+  // Beta testing (#740 follow-up)
+  landingBetaButton: "Obtenir l'appli Android bêta",
+  betaBannerTitle: "Testez l'appli Android en avant-première",
+  betaBannerBody: "Rejoignez la bêta et installez Convocados directement depuis le Play Store — un clic pour adhérer, puis elle est sur votre écran d'accueil.",
+  getTheApp: "Obtenir l'appli",
+
   // MVP voting (#200)
   voteMvp: "Voter MVP",
   mvpVotingClosed: "Vote MVP fermé",

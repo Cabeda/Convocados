@@ -1,6 +1,7 @@
 import {
-  Box, Typography, Stack, useTheme, useMediaQuery, Chip,
+  Box, Typography, Stack, useTheme, useMediaQuery, Chip, Button, Container,
 } from "@mui/material";
+import AndroidIcon from "@mui/icons-material/Android";
 import CasinoIcon from "@mui/icons-material/Casino";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
@@ -11,6 +12,8 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import CreateEventForm from "./CreateEventForm";
 import { useT } from "~/lib/useT";
+
+const BETA_URL = "https://play.google.com/apps/testing/com.cabeda.Convocados";
 
 const FEATURES = [
   { icon: CasinoIcon, key: "landingFeatureTeams" },
@@ -93,6 +96,19 @@ function HeroContent() {
           {t("landingOpenSource")}
         </Typography>
       )}
+
+      <Button
+        component="a"
+        href={BETA_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        variant="contained"
+        size={isMobile ? "medium" : "large"}
+        startIcon={<AndroidIcon />}
+        sx={{ mb: isMobile ? 2 : 3 }}
+      >
+        {t("landingBetaButton")}
+      </Button>
     </Box>
   );
 }
@@ -102,27 +118,70 @@ export default function LandingPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   return (
+    <Stack sx={{ width: "100%" }}>
+      <Box sx={{
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        alignItems: isMobile ? "stretch" : "center",
+        justifyContent: "center",
+        minHeight: isMobile ? undefined : "calc(100vh - 130px)",
+        maxWidth: 1200,
+        mx: "auto",
+        width: "100%",
+      }}>
+        <Box sx={{
+          flex: isMobile ? "none" : "0 0 42%",
+        }}>
+          <HeroContent />
+        </Box>
+        <Box sx={{
+          flex: isMobile ? "none" : 1,
+          minWidth: 0,
+        }}>
+          <CreateEventForm bare />
+        </Box>
+      </Box>
+      <BetaBanner />
+    </Stack>
+  );
+}
+
+function BetaBanner() {
+  const t = useT();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  return (
     <Box sx={{
-      display: "flex",
-      flexDirection: isMobile ? "column" : "row",
-      alignItems: isMobile ? "stretch" : "center",
-      justifyContent: "center",
-      minHeight: isMobile ? undefined : "calc(100vh - 130px)",
-      maxWidth: 1200,
-      mx: "auto",
       width: "100%",
+      py: 4,
+      px: 2,
+      mt: isMobile ? 1 : 4,
+      backgroundColor: theme.palette.primary.main,
+      color: theme.palette.primary.contrastText,
+      textAlign: "center",
     }}>
-      <Box sx={{
-        flex: isMobile ? "none" : "0 0 42%",
-      }}>
-        <HeroContent />
-      </Box>
-      <Box sx={{
-        flex: isMobile ? "none" : 1,
-        minWidth: 0,
-      }}>
-        <CreateEventForm bare />
-      </Box>
+      <Container maxWidth="md">
+        <Typography variant="h5" component="h2" fontWeight={700}>
+          {t("betaBannerTitle")}
+        </Typography>
+        <Typography sx={{ mt: 1, opacity: 0.92, maxWidth: 560, mx: "auto" }}>
+          {t("betaBannerBody")}
+        </Typography>
+        <Button
+          component="a"
+          href={BETA_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          variant="contained"
+          color="secondary"
+          size="large"
+          startIcon={<AndroidIcon />}
+          sx={{ mt: 2, fontWeight: 700 }}
+        >
+          {t("landingBetaButton")}
+        </Button>
+      </Container>
     </Box>
   );
 }
