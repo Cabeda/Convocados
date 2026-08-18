@@ -28,7 +28,7 @@ xcodebuild -project Convocados.xcodeproj -scheme Convocados -sdk iphoneos -confi
 - **MVVM** with ObservableObject ViewModels
 - **URLSession + async/await** networking
 - **Keychain** token storage (Security framework, no third-party deps)
-- **ASWebAuthenticationSession** for OAuth 2.1 PKCE
+- **URLSession email/password auth** via `/api/auth/mobile-native` (mirrors Android)
 - **NavigationStack** with typed routes
 - **Zero third-party dependencies** — only system frameworks
 
@@ -72,7 +72,7 @@ xcodebuild -exportArchive \
 
 ## Features (full Android parity)
 
-- OAuth 2.1 login (PKCE via Custom Tabs equivalent)
+- Email/password login (via `/api/auth/mobile-native`, Android parity)
 - Games list with tabs (My Games / Archived / Public)
 - Event detail: header, teams, players, quick-join, add from contacts
 - Create event with sport presets + recurring

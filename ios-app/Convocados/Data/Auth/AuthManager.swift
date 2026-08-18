@@ -1,5 +1,3 @@
-import AuthenticationServices
-import CryptoKit
 import Foundation
 
 final class AuthManager: NSObject, ObservableObject {
@@ -8,7 +6,6 @@ final class AuthManager: NSObject, ObservableObject {
 
     private let tokenStore: TokenStore
     private let settings: SettingsStore
-    private var session: ASWebAuthenticationSession?
 
     init(tokenStore: TokenStore, settings: SettingsStore) {
         self.tokenStore = tokenStore
@@ -16,137 +13,67 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     var serverURL: String { settings.serverUrl }
-    private var callbackScheme: String { "convocados" }
-
-    // MARK: - PKCE
-
-    private func generateCodeVerifier() -> String {
-        var bytes = [UInt8](repeating: 0, count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        return Data(bytes).base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-    }
-
-    private func generateCodeChallenge(from verifier: String) -> String {
-        let data = Data(verifier.utf8)
-        let hash = SHA256.hash(data: data)
-        return Data(hash).base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-    }
+    private var baseURL: String { settings.serverUrl }
 
     // MARK: - Login
 
     @MainActor
-    func login() async {
+    func login(email: String, password: String) async {
         isLoading = true
         error = nil
+        defer { isLoading = false }
 
-        let verifier = generateCodeVerifier()
-        let challenge = generateCodeChallenge(from: verifier)
-
-        guard var components = URLComponents(string: "\(serverURL)/api/oauth/authorize") else {
+        guard let url = URL(string: "\(baseURL)/api/auth/mobile-native") else {
             error = "Invalid server URL"
-            isLoading = false
             return
-        }
-
-        components.queryItems = [
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "client_id", value: "convocados-ios"),
-            URLQueryItem(name: "redirect_uri", value: "\(callbackScheme)://auth/callback"),
-            URLQueryItem(name: "scope", value: "openid profile email"),
-            URLQueryItem(name: "code_challenge", value: challenge),
-            URLQueryItem(name: "code_challenge_method", value: "S256"),
-        ]
-
-        guard let url = components.url else {
-            error = "Failed to build auth URL"
-            isLoading = false
-            return
-        }
-
-        do {
-            let callbackURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
-                let session = ASWebAuthenticationSession(url: url, callbackURLScheme: callbackScheme) { url, err in
-                    if let err = err {
-                        continuation.resume(throwing: err)
-                    } else if let url = url {
-                        continuation.resume(returning: url)
-                    } else {
-                        continuation.resume(throwing: AuthError.noCallback)
-                    }
-                }
-                session.presentationContextProvider = self
-                session.prefersEphemeralWebBrowserSession = false
-                self.session = session
-                session.start()
-            }
-
-            guard let code = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?
-                .queryItems?.first(where: { $0.name == "code" })?.value else {
-                error = "No authorization code received"
-                isLoading = false
-                return
-            }
-
-            try await exchangeToken(code: code, verifier: verifier)
-        } catch let err as ASWebAuthenticationSessionError where err.code == .canceledLogin {
-            // User cancelled — not an error
-        } catch {
-            self.error = error.localizedDescription
-        }
-
-        isLoading = false
-    }
-
-    // MARK: - Token Exchange
-
-    private func exchangeToken(code: String, verifier: String) async throws {
-        guard let url = URL(string: "\(serverURL)/api/oauth/token") else {
-            throw AuthError.invalidURL
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let body = [
-            "grant_type=authorization_code",
-            "code=\(code)",
-            "redirect_uri=\(callbackScheme)://auth/callback",
-            "client_id=convocados-ios",
-            "code_verifier=\(verifier)",
-        ].joined(separator: "&")
-        request.httpBody = Data(body.utf8)
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "action": "email-signin",
+                "email": email,
+                "password": password,
+            ])
 
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let token = try JSONDecoder().decode(OAuthTokenResponse.self, from: data)
-        tokenStore.store(accessToken: token.accessToken, refreshToken: token.refreshToken, expiresIn: token.expiresIn)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                error = "Invalid response"
+                return
+            }
+            guard (200...299).contains(http.statusCode) else {
+                let msg = (try? JSONDecoder().decode(MobileAuthErrorResponse.self, from: data))?.error
+                    ?? "Login failed (HTTP \(http.statusCode))"
+                self.error = msg
+                return
+            }
+
+            let token = try JSONDecoder().decode(OAuthTokenResponse.self, from: data)
+            tokenStore.store(accessToken: token.accessToken, refreshToken: token.refreshToken, expiresIn: token.expiresIn)
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     // MARK: - Refresh
 
     func refreshAccessToken() async -> Bool {
         guard let rt = tokenStore.refreshToken,
-              let url = URL(string: "\(serverURL)/api/oauth/token") else { return false }
+              let url = URL(string: "\(baseURL)/api/auth/oauth2/token") else { return false }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
-        let body = [
-            "grant_type=refresh_token",
-            "refresh_token=\(rt)",
-            "client_id=convocados-ios",
-        ].joined(separator: "&")
+        let body = "grant_type=refresh_token&refresh_token=\(rt)&client_id=convocados-mobile-app"
         request.httpBody = Data(body.utf8)
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
             let token = try JSONDecoder().decode(OAuthTokenResponse.self, from: data)
             tokenStore.store(accessToken: token.accessToken, refreshToken: token.refreshToken, expiresIn: token.expiresIn)
             return true
@@ -159,29 +86,13 @@ final class AuthManager: NSObject, ObservableObject {
 
     @MainActor
     func logout() async {
-        if let rt = tokenStore.refreshToken,
-           let url = URL(string: "\(serverURL)/api/oauth/revoke") {
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-            request.httpBody = Data("token=\(rt)&client_id=convocados-ios".utf8)
-            _ = try? await URLSession.shared.data(for: request)
-        }
         tokenStore.clear()
     }
 
     // MARK: - URL Callback
 
     func handleCallback(url: URL) {
-        // Handled via ASWebAuthenticationSession completion
-    }
-}
-
-// MARK: - ASWebAuthenticationPresentationContextProviding
-
-extension AuthManager: ASWebAuthenticationPresentationContextProviding {
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        ASPresentationAnchor()
+        // Handled via /api/auth/mobile-native email/password flow
     }
 }
 
@@ -197,4 +108,8 @@ enum AuthError: LocalizedError {
         case .invalidURL: return "Invalid server URL"
         }
     }
+}
+
+private struct MobileAuthErrorResponse: Decodable {
+    let error: String?
 }
