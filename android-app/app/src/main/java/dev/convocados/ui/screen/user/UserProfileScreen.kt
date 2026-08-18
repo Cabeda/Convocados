@@ -25,6 +25,7 @@ import dev.convocados.R
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.PlayerStats
 import dev.convocados.data.api.UserPublicProfile
+import dev.convocados.ui.components.InitialAvatar
 import dev.convocados.ui.screen.stats.StatBox
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -75,9 +76,12 @@ fun UserProfileScreen(userId: String, onBack: () -> Unit, onEventClick: (String)
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = CircleShape, modifier = Modifier.size(72.dp)) {
-                        Box(Modifier.fillMaxSize(), Alignment.Center) {
-                            Text(p.name.first().uppercase(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineLarge)
-                        }
+                        InitialAvatar(
+                            name = p.name,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.fillMaxSize(),
+                            style = MaterialTheme.typography.headlineLarge,
+                        )
                     }
                     Spacer(Modifier.height(12.dp))
                     Text(p.name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge)
