@@ -4,6 +4,7 @@ struct GamesView: View {
     @StateObject private var viewModel: GamesViewModel
     @EnvironmentObject private var apiClient: APIClient
     @State private var selectedTab = 0
+    @State private var selectedGameID: String?
 
     init(apiClient: APIClient) {
         _viewModel = StateObject(wrappedValue: GamesViewModel(apiClient: apiClient))
@@ -39,6 +40,9 @@ struct GamesView: View {
             }
             .refreshable { await viewModel.loadGames() }
             .task { await viewModel.loadGames() }
+            .navigationDestination(item: $selectedGameID) { gameID in
+                EventDetailView(eventId: gameID, apiClient: apiClient)
+            }
             .alert("Error", isPresented: .constant(viewModel.error != nil)) {
                 Button("OK") { viewModel.error = nil }
             } message: {
@@ -56,9 +60,12 @@ struct GamesView: View {
             ContentUnavailableView("No games", systemImage: "sportscourt", description: Text("Create or join a game to get started"))
         } else {
             List(games) { game in
-                NavigationLink(destination: EventDetailView(eventId: game.id, apiClient: apiClient)) {
+                Button {
+                    selectedGameID = game.id
+                } label: {
                     GameCard(event: game)
                 }
+                .buttonStyle(.plain)
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
                         Task {
