@@ -1,6 +1,6 @@
 import Foundation
 
-final class APIClient: ObservableObject {
+final class APIClient: ObservableObject, @unchecked Sendable {
     private let tokenStore: TokenStore
     private let settings: SettingsStore
     private weak var authManager: AuthManager?

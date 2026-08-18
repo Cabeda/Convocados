@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 import UserNotifications
 
-final class PushManager: NSObject, ObservableObject {
+final class PushManager: NSObject, ObservableObject, @unchecked Sendable {
     @Published var isRegistered = false
     private let apiClient: APIClient
 
@@ -24,6 +24,7 @@ final class PushManager: NSObject, ObservableObject {
 
     func sendTokenToServer(deviceToken: Data) {
         let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+        let apiClient = self.apiClient
         Task {
             struct Body: Codable { let token: String; let platform: String }
             let _: OkResponse = try await apiClient.post("/api/push/app-token", body: Body(token: token, platform: "ios"))
