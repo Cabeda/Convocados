@@ -1181,6 +1181,12 @@ const en = {
   landingOpenSource: "Open source · Free forever",
   supportUs: "Support us",
 
+  // Beta testing (#740 follow-up)
+  landingBetaButton: "Get the Android beta app",
+  betaBannerTitle: "Test the Android app early",
+  betaBannerBody: "Join the beta and install Convocados straight from the Play Store — one tap to opt in, then it's on your home screen.",
+  getTheApp: "Get the app",
+
   // MVP voting (#200)
   voteMvp: "Vote MVP",
   mvpVotingClosed: "MVP voting is closed",

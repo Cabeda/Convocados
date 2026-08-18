@@ -10,6 +10,7 @@ import {
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
 import GitHubIcon from "@mui/icons-material/GitHub";
+import AndroidIcon from "@mui/icons-material/Android";
 import SportsIcon from "@mui/icons-material/Sports";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
 import GetAppIcon from "@mui/icons-material/GetApp";
@@ -588,6 +589,18 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
             >
               <GitHubIcon sx={{ fontSize: 16 }} />
               GitHub
+            </Typography>
+            <Typography variant="body2" sx={{ display: "flex", alignItems: "center", color: theme.palette.text.disabled }}>·</Typography>
+            <Typography
+              variant="body2"
+              component="a"
+              href="https://play.google.com/apps/testing/com.cabeda.Convocados"
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ display: "flex", alignItems: "center", gap: 0.5, color: theme.palette.text.secondary, textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
+            >
+              <AndroidIcon sx={{ fontSize: 16 }} />
+              {t("getTheApp")}
             </Typography>
           </Stack>
           <Box sx={{ mb: 1 }}>
