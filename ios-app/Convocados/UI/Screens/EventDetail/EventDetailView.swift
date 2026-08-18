@@ -73,7 +73,7 @@ struct EventDetailView: View {
                         Label(event.location, systemImage: "mappin.and.ellipse")
                             .font(.subheadline)
                     }
-                    Label(event.dateTime, systemImage: "calendar")
+                    Label(formattedDate(event.dateTime), systemImage: "calendar")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -167,5 +167,16 @@ struct EventDetailView: View {
             newPlayerName = ""
             isNameFieldFocused = false
         }
+    }
+
+    private func formattedDate(_ iso: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = formatter.date(from: iso) else {
+            formatter.formatOptions = [.withInternetDateTime]
+            guard let date = formatter.date(from: iso) else { return iso }
+            return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
+        }
+        return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
     }
 }
