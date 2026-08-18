@@ -62,16 +62,17 @@ final class AuthManager: NSObject, ObservableObject {
 
     func refreshAccessToken() async -> Bool {
         guard let rt = tokenStore.refreshToken,
-              let url = URL(string: "\(baseURL)/api/auth/oauth2/token") else { return false }
+              let url = URL(string: "\(baseURL)/api/auth/mobile-native") else { return false }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-
-        let body = "grant_type=refresh_token&refresh_token=\(rt)&client_id=convocados-mobile-app"
-        request.httpBody = Data(body.utf8)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "action": "refresh",
+                "refresh_token": rt,
+            ])
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
             let token = try JSONDecoder().decode(OAuthTokenResponse.self, from: data)
