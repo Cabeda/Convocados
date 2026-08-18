@@ -1,6 +1,8 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
 import { auth } from "../../../lib/auth.server";
+import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
+import { verifyGoogleIdToken } from "../../../lib/googleToken.server";
 import crypto from "node:crypto";
 
 // ponytail: single endpoint for all native mobile auth flows.
@@ -8,7 +10,6 @@ import crypto from "node:crypto";
 // Returns OAuth tokens directly (same format as mobile-callback POST).
 
 const MOBILE_CLIENT_ID = "convocados-mobile-app";
-const GOOGLE_TOKEN_INFO_URL = "https://oauth2.googleapis.com/tokeninfo";
 
 /** Issue OAuth tokens for a user. Shared by all auth methods. */
 async function issueTokens(userId: string) {
@@ -47,30 +48,20 @@ async function issueTokens(userId: string) {
   });
 }
 
-/** Verify a Google ID token and return the payload (email, sub, name, picture). */
-async function verifyGoogleIdToken(idToken: string) {
-  const res = await fetch(`${GOOGLE_TOKEN_INFO_URL}?id_token=${encodeURIComponent(idToken)}`);
-  if (!res.ok) return null;
-  const payload = await res.json();
-  // Validate audience matches our client ID(s)
-  const validAudiences = [
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_ANDROID_CLIENT_ID,
-    process.env.GOOGLE_WEB_CLIENT_ID,
-  ].filter(Boolean);
-  if (!validAudiences.includes(payload.aud)) return null;
-  if (!payload.email_verified || payload.email_verified === "false") return null;
-  return payload as { email: string; sub: string; name?: string; picture?: string };
-}
-
 /** Handle Google ID token sign-in (from Credential Manager). */
-async function handleGoogleIdToken(body: Record<string, unknown>) {
+async function handleGoogleIdToken(body: Record<string, unknown>, request: Request) {
   const idToken = String(body.idToken ?? "").trim();
   if (!idToken) {
     return Response.json({ error: "idToken is required" }, { status: 400 });
   }
 
-  const payload = await verifyGoogleIdToken(idToken);
+  const validAudiences = [
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_ANDROID_CLIENT_ID,
+    process.env.GOOGLE_WEB_CLIENT_ID,
+  ].filter(Boolean) as string[];
+
+  const payload = await verifyGoogleIdToken(idToken, validAudiences);
   if (!payload) {
     return Response.json({ error: "Invalid or expired Google ID token" }, { status: 401 });
   }
@@ -86,6 +77,11 @@ async function handleGoogleIdToken(body: Record<string, unknown>) {
   });
 
   if (!user) {
+    // New-account creation is the bot chokepoint — apply the stricter
+    // per-IP signup limit before auto-creating the account.
+    const limited = await rateLimitResponse(request, "auth_signup");
+    if (limited) return limited;
+
     // Auto-create account for Google sign-in (email is verified by Google)
     user = await prisma.user.create({
       data: {
@@ -218,13 +214,17 @@ async function handleMagicLink(body: Record<string, unknown>) {
 }
 
 export const POST: APIRoute = async ({ request }) => {
+  // Per-IP rate limit for the whole endpoint before any processing.
+  const limited = await rateLimitResponse(request, "auth");
+  if (limited) return limited;
+
   try {
     const body = await request.json() as Record<string, unknown>;
     const action = String(body.action ?? "").trim();
 
     switch (action) {
       case "google-id-token":
-        return handleGoogleIdToken(body);
+        return handleGoogleIdToken(body, request);
       case "email-signin":
         return handleEmailSignIn(body);
       case "email-signup":
