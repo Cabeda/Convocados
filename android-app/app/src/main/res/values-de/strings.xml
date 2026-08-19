@@ -48,6 +48,7 @@
     <string name="sign_out">Abmelden</string>
     <string name="edit_name">Name bearbeiten</string>
     <string name="configure_instance">Instanz konfigurieren</string>
+    <string name="view_releases">Versionen auf GitHub ansehen</string>
     <string name="game_details">Spieldetails</string>
     <string name="game_history">Spielverlauf</string>
     <string name="event_log">Ereignisprotokoll</string>

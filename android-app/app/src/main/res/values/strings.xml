@@ -56,6 +56,7 @@
     <string name="sign_out">Sign out</string>
     <string name="edit_name">Edit name</string>
     <string name="configure_instance">Configure instance</string>
+    <string name="view_releases">View releases on GitHub</string>
     <string name="game_details">Game Details</string>
     <string name="game_history">Game History</string>
     <string name="event_log">Event Log</string>
