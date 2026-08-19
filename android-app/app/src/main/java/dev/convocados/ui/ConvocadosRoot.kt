@@ -18,6 +18,7 @@ import dev.convocados.data.api.UserProfile
 import dev.convocados.data.auth.AuthManager
 import dev.convocados.data.auth.TokenRefreshWorker
 import dev.convocados.data.auth.TokenStore
+import dev.convocados.data.crash.CrashReporter
 import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.push.PushTokenManager
 import dev.convocados.ui.navigation.AppNavigation
@@ -35,6 +36,7 @@ class RootViewModel @Inject constructor(
     private val pushTokenManager: PushTokenManager,
     private val workManager: WorkManager,
     private val settingsStore: SettingsStore,
+    private val crashReporter: CrashReporter,
 ) : ViewModel() {
 
     val isAuthenticated = tokenStore.isAuthenticated
@@ -70,11 +72,11 @@ class RootViewModel @Inject constructor(
         viewModelScope.launch {
             isAuthenticated.collect { authed ->
                 if (authed) {
-                    runCatching { _user.value = api.fetchUserInfo() }
+                    runCatching { setUser(api.fetchUserInfo()) }
                     pushTokenManager.registerCurrentToken()
                     TokenRefreshWorker.schedule(workManager)
                 } else {
-                    _user.value = null
+                    setUser(null)
                     TokenRefreshWorker.cancel(workManager)
                 }
             }
@@ -88,7 +90,7 @@ class RootViewModel @Inject constructor(
             viewModelScope.launch {
                 try {
                     authManager.handleCallback(uri)
-                    runCatching { _user.value = api.fetchUserInfo() }
+                    runCatching { setUser(api.fetchUserInfo()) }
                     pushTokenManager.registerCurrentToken()
                 } finally {
                     _processingAuth.value = false
@@ -101,7 +103,12 @@ class RootViewModel @Inject constructor(
         pushTokenManager.unregisterCurrentToken()
         TokenRefreshWorker.cancel(workManager)
         authManager.logout()
-        _user.value = null
+        setUser(null)
+    }
+
+    private fun setUser(user: UserProfile?) {
+        _user.value = user
+        crashReporter.setUserId(user?.id)
     }
 }
 
