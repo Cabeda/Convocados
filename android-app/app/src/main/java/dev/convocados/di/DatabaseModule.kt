@@ -8,6 +8,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dev.convocados.data.auth.OAuthTokenStorage
+import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.local.AppDatabase
 import dev.convocados.data.local.dao.EventDao
 import dev.convocados.data.local.dao.EventDetailDao
@@ -41,4 +43,8 @@ object DatabaseModule {
     @Singleton
     fun provideWorkManager(@ApplicationContext context: Context): WorkManager =
         WorkManager.getInstance(context)
+
+    @Provides
+    @Singleton
+    fun provideOAuthTokenStorage(tokenStore: TokenStore): OAuthTokenStorage = tokenStore
 }

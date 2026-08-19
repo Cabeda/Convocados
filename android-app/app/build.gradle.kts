@@ -222,6 +222,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.ktor.client.mock)
     // Screenshot testing (JVM, no device) via Roborazzi + Robolectric
     testImplementation(libs.robolectric)
     testImplementation(libs.roborazzi)
