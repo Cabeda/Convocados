@@ -1163,8 +1163,8 @@ const pt: TranslationKeys = {
   logOverrideCleared: "{actor} removeu a substituição temporária dos métodos de pagamento",
 
   // Landing page (#203)
-  landingHeadline: "Organiza o teu jogo em 30 segundos",
-  landingSubtitle: "Partilha um link, junta jogadores, sorteia equipas — feito.",
+  landingHeadline: "O teu jogo semanal, sem a confusão do WhatsApp.",
+  landingSubtitle: "Cria o jogo, partilha o link, confirma jogadores, divide custos e sorteia equipas—grátis.",
   landingFeatureTeams: "Sorteia equipas equilibradas",
   landingFeaturePayments: "Divide custos com os jogadores",
   landingFeatureRankings: "Acompanha classificações ELO",
