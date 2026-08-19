@@ -1,30 +1,26 @@
-# Mobile App
+# Mobile Apps
 
-Convocados has a native Android app built with Kotlin and Jetpack Compose. It connects to any self-hosted Convocados instance via OAuth 2.1 + PKCE.
+Convocados has native apps for Android and iOS. Both connect to any self-hosted Convocados instance.
 
-## Features
+## Android
+
+Native Android app built with Kotlin and Jetpack Compose (Material 3). Available in public beta via the Play Store.
+
+- **Beta link:** https://play.google.com/apps/testing/com.cabeda.Convocados
+- **Auth:** Convocados OIDC provider (Authorization Code + PKCE via Custom Tabs)
+- **Push:** Firebase Cloud Messaging (FCM)
+
+### Features
 
 - View and manage your upcoming games
 - Join/leave events, add guest players
-- Team randomization with VS display
+- Team randomization with standings
 - Player stats and ELO rankings
-- Push notifications via Firebase Cloud Messaging (FCM)
+- Push notifications via FCM
 - Multi-language: English, Português, Español, Français, Deutsch, Italiano
 - Configurable server URL — connect to any Convocados instance
 
-## Authentication
-
-The app authenticates via the Convocados OIDC provider using Authorization Code + PKCE. Tokens are stored securely using Android's EncryptedSharedPreferences.
-
-The server must have the app's redirect URI registered as a trusted client:
-
-```bash
-TRUSTED_OAUTH_CLIENT_ID=convocados-android
-TRUSTED_OAUTH_CLIENT_SECRET=<secret>
-TRUSTED_OAUTH_REDIRECT_URIS=convocados://callback
-```
-
-## Development setup
+### Development setup
 
 ```bash
 cd android-app
@@ -32,17 +28,15 @@ cd android-app
 ./gradlew installDebug     # Install on connected device / emulator
 ```
 
-## Push notifications
+### Push notifications
 
 Push notifications use Firebase Cloud Messaging (FCM) HTTP v1 API.
-
-### Required setup
 
 1. Create a Firebase project and download `google-services.json`
 2. Place it at `android-app/app/google-services.json`
 3. Set the `GOOGLE_SERVICE_ACCOUNT_JSON` environment variable on the server with your Firebase service account credentials
 
-## Project structure
+### Project structure
 
 ```
 android-app/
@@ -60,7 +54,7 @@ android-app/
 └── settings.gradle.kts
 ```
 
-## Building a release APK
+### Building a release APK
 
 Release APKs are built automatically by the CI/CD pipeline on every release. To build locally:
 
@@ -70,3 +64,48 @@ cd android-app
 ```
 
 The unsigned APK will be at `app/build/outputs/apk/release/`.
+
+## iOS
+
+Native iOS app built with SwiftUI (MVVM, zero third-party dependencies). Under development and **awaiting funding**.
+
+- **Funding:** https://ko-fi.com/cabeda/goal?g=20 — one-time campaign to cover the $100 Apple Developer Program membership
+- **Recurring support:** https://github.com/sponsors/Cabeda
+- **Auth:** email/password and Google sign-in via `/api/auth/mobile-native`; tokens stored in Keychain
+- **Status:** builds and runs on the iOS Simulator; same feature set as Android
+
+### Development setup
+
+```bash
+cd ios-app
+xcodegen generate          # Regenerate the Xcode project (requires xcodegen)
+open Convocados.xcodeproj  # Build & run in Xcode — simulator works out of the box
+```
+
+### E2E tests
+
+`ios-app/ConvocadosUITests` (XCUITest) drives the app on the simulator against a local dev server: sign in, create a game, open it.
+
+```bash
+cd ios-app
+./scripts/run-e2e.sh
+```
+
+### Project structure
+
+```
+ios-app/
+├── Convocados/            # App source
+│   ├── App/               # SwiftUI entry, root wiring
+│   ├── Data/              # API client, auth, push, settings
+│   ├── UI/                # Screens, components, theme
+│   └── Resources/         # Info.plist, entitlements, assets
+├── ConvocadosUITests/     # XCUITest end-to-end suite
+├── project.yml            # xcodegen project definition
+└── scripts/run-e2e.sh     # E2E test runner
+```
+
+### Authentication
+
+The app authenticates via `/api/auth/mobile-native` (email/password or Google sign-in) and refreshes tokens through the
+same endpoint's `refresh` action. Tokens are stored in the iOS Keychain.

@@ -1131,6 +1131,13 @@ const it: TranslationKeys = {
   betaBannerTitle: "Prova l'app Android in anteprima",
   betaBannerBody: "Unisciti alla beta e installa Convocados direttamente dal Play Store — un tocco per aderire, poi è sulla tua home.",
   getTheApp: "Scarica l'app",
+  appsForEveryTeamTitle: "App per ogni squadra",
+  iosFundHeading: "Aiutaci a portare Convocados su iPhone",
+  iosFundBody: "Il tuo contributo copre l'iscrizione all'Apple Developer Program affinché Convocados resti gratuito e open source.",
+  iosFundCta: "Aiuta a finanziare l'app iOS",
+  iosFundMonthly: "Preferisci un supporto mensile? GitHub Sponsors",
+  iosFundProgress: "${raised} di ${target} raccolti",
+  appsLearnMore: "Scopri di più sulle app mobili",
 
   // MVP voting (#200)
   voteMvp: "Vota MVP",
