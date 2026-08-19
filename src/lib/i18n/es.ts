@@ -1131,6 +1131,13 @@ const es: TranslationKeys = {
   betaBannerTitle: "Prueba la app Android antes",
   betaBannerBody: "Únete a la beta e instala Convocados directamente desde Play Store — un toque para unirte y ya está en tu pantalla de inicio.",
   getTheApp: "Consigue la app",
+  appsForEveryTeamTitle: "Apps para cada equipo",
+  iosFundHeading: "Ayuda a llevar Convocados al iPhone",
+  iosFundBody: "Tu contribución cubre la membresía del Apple Developer Program para que Convocados siga siendo gratuito y de código abierto.",
+  iosFundCta: "Ayuda a financiar la app de iOS",
+  iosFundMonthly: "¿Prefieres soporte mensual? GitHub Sponsors",
+  iosFundProgress: "${raised} de ${target} recaudados",
+  appsLearnMore: "Más información sobre las apps móviles",
 
   // MVP voting (#200)
   voteMvp: "Votar MVP",
