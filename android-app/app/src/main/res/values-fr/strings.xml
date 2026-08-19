@@ -48,6 +48,7 @@
     <string name="sign_out">Se déconnecter</string>
     <string name="edit_name">Modifier le nom</string>
     <string name="configure_instance">Configurer l\'instance</string>
+    <string name="view_releases">Voir les versions sur GitHub</string>
     <string name="game_details">Détails du match</string>
     <string name="game_history">Historique des matchs</string>
     <string name="event_log">Journal de l\'événement</string>
