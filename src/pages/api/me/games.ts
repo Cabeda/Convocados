@@ -4,6 +4,7 @@ import { prisma } from "../../../lib/db.server";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../lib/authenticate.server";
 import { parsePaginationParams } from "../../../lib/pagination";
+import { getActiveRosterState } from "../../../lib/roster.server";
 import { createLogger } from "../../../lib/logger.server";
 
 const log = createLogger("me-games");
@@ -43,12 +44,7 @@ export const GET: APIRoute = async ({ request }) => {
   // ponytail: when currentGameId is set, player count comes from GameParticipant
   // (game-scoped). Otherwise fall back to event-level Player count.
   async function resolvePlayerCount(e: GameRow): Promise<number> {
-    if (e.currentGameId) {
-      return prisma.gameParticipant.count({
-        where: { gameId: e.currentGameId, archivedAt: null },
-      });
-    }
-    return e._count.players;
+    return (await getActiveRosterState(e.id, e.maxPlayers, e.currentGameId)).totalCount;
   }
 
   const mapGame = async (e: GameRow) => ({

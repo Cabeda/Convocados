@@ -1,6 +1,7 @@
 import {
-  Box, Typography, Stack, useTheme, useMediaQuery, Chip,
+  Box, Typography, Stack, useTheme, useMediaQuery, Chip, Button,
 } from "@mui/material";
+import AndroidIcon from "@mui/icons-material/Android";
 import CasinoIcon from "@mui/icons-material/Casino";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
@@ -10,7 +11,10 @@ import PlaceIcon from "@mui/icons-material/Place";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import CreateEventForm from "./CreateEventForm";
+import AppsSection from "./AppsSection";
 import { useT } from "~/lib/useT";
+
+const BETA_URL = "https://play.google.com/apps/testing/com.cabeda.Convocados";
 
 const FEATURES = [
   { icon: CasinoIcon, key: "landingFeatureTeams" },
@@ -93,6 +97,19 @@ function HeroContent() {
           {t("landingOpenSource")}
         </Typography>
       )}
+
+      <Button
+        component="a"
+        href={BETA_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        variant="contained"
+        size={isMobile ? "medium" : "large"}
+        startIcon={<AndroidIcon />}
+        sx={{ mb: isMobile ? 2 : 3 }}
+      >
+        {t("landingBetaButton")}
+      </Button>
     </Box>
   );
 }
@@ -102,28 +119,31 @@ export default function LandingPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   return (
-    <Box sx={{
-      display: "flex",
-      flexDirection: isMobile ? "column" : "row",
-      alignItems: isMobile ? "stretch" : "center",
-      justifyContent: "center",
-      minHeight: isMobile ? undefined : "calc(100vh - 130px)",
-      maxWidth: 1200,
-      mx: "auto",
-      width: "100%",
-    }}>
+    <Stack sx={{ width: "100%" }}>
       <Box sx={{
-        flex: isMobile ? "none" : "0 0 42%",
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        alignItems: isMobile ? "stretch" : "center",
+        justifyContent: "center",
+        minHeight: isMobile ? undefined : "calc(100vh - 130px)",
+        maxWidth: 1200,
+        mx: "auto",
+        width: "100%",
       }}>
-        <HeroContent />
+        <Box sx={{
+          flex: isMobile ? "none" : "0 0 42%",
+        }}>
+          <HeroContent />
+        </Box>
+        <Box sx={{
+          flex: isMobile ? "none" : 1,
+          minWidth: 0,
+        }}>
+          <CreateEventForm bare />
+        </Box>
       </Box>
-      <Box sx={{
-        flex: isMobile ? "none" : 1,
-        minWidth: 0,
-      }}>
-        <CreateEventForm bare />
-      </Box>
-    </Box>
+      <AppsSection />
+    </Stack>
   );
 }
 

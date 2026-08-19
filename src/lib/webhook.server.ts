@@ -22,6 +22,8 @@ interface WebhookPayloadData {
   playerName?: string;
   isActive?: boolean;
   spotsLeft?: number;
+  /** Who performed the action: a player/user name, or "anonymous". */
+  actor?: string;
   [key: string]: unknown;
 }
 

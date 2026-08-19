@@ -18,7 +18,7 @@ data class OAuthTokens(
 )
 
 @Singleton
-class TokenStore @Inject constructor(@ApplicationContext context: Context) {
+class TokenStore @Inject constructor(@ApplicationContext context: Context) : OAuthTokenStorage {
 
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -44,14 +44,14 @@ class TokenStore @Inject constructor(@ApplicationContext context: Context) {
     private val _isAuthenticated = MutableStateFlow(getTokens() != null)
     val isAuthenticated: StateFlow<Boolean> = _isAuthenticated
 
-    fun getTokens(): OAuthTokens? {
+    override fun getTokens(): OAuthTokens? {
         val access = prefs.getString("access_token", null) ?: return null
         val refresh = prefs.getString("refresh_token", null) ?: return null
         val expires = prefs.getLong("expires_at", 0)
         return OAuthTokens(access, refresh, expires)
     }
 
-    fun setTokens(tokens: OAuthTokens) {
+    override fun setTokens(tokens: OAuthTokens) {
         prefs.edit()
             .putString("access_token", tokens.accessToken)
             .putString("refresh_token", tokens.refreshToken)
@@ -60,7 +60,7 @@ class TokenStore @Inject constructor(@ApplicationContext context: Context) {
         _isAuthenticated.value = true
     }
 
-    fun clearTokens() {
+    override fun clearTokens() {
         prefs.edit().clear().apply()
         _isAuthenticated.value = false
     }
@@ -70,7 +70,7 @@ class TokenStore @Inject constructor(@ApplicationContext context: Context) {
         return System.currentTimeMillis() >= tokens.expiresAt - 60_000
     }
 
-    fun getServerUrl(): String {
+    override fun getServerUrl(): String {
         return prefs.getString("server_url", null) ?: DEFAULT_SERVER_URL
     }
 

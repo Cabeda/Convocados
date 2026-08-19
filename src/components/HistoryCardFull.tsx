@@ -23,6 +23,7 @@ import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
+import PaymentsIcon from "@mui/icons-material/Payments";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SentimentSatisfiedAltIcon from "@mui/icons-material/SentimentSatisfiedAlt";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -37,6 +38,7 @@ import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, expectedScore, kFactor, type EloUpdate } from "~/lib/elo";
 import { formatDateInTz } from "~/lib/timezones";
 import { isNameInPaymentsSnapshot, isNameInTeamsSnapshot } from "~/lib/snapshotParticipants";
+import { PaymentConfigDialog, type PaymentConfigGame } from "./PaymentConfigDialog";
 
 type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
@@ -58,6 +60,7 @@ export interface HistoryCardFullEntry {
   isFriendly: boolean;
   eloUpdates?: { name: string; delta: number }[] | null;
   participants?: string[];
+  paymentConfig?: PaymentConfigGame | null;
 }
 
 interface EventLite {
@@ -195,6 +198,7 @@ export function HistoryCardFull({
   isAdmin,
   userName,
   eventPlayers: _eventPlayers,
+  onPaymentsConfigSaved,
 }: {
   entry: HistoryCardFullEntry;
   eventId: string;
@@ -210,6 +214,7 @@ export function HistoryCardFull({
   isAdmin: boolean;
   userName: string | null;
   eventPlayers?: { id: string; name: string }[];
+  onPaymentsConfigSaved?: () => void;
 }) {
   const t = useT();
   const locale = detectLocale();
@@ -238,6 +243,8 @@ export function HistoryCardFull({
   const [statusMenuAnchor, setStatusMenuAnchor] = useState<HTMLElement | null>(null);
   // Admin actions (kebab) menu
   const [moreMenuAnchor, setMoreMenuAnchor] = useState<HTMLElement | null>(null);
+  // "Who paid this game?" config — lets the manager switch the mode back on a past game
+  const [paymentConfigOpen, setPaymentConfigOpen] = useState(false);
 
   // Mvp vote state
   const [votingFor, setVotingFor] = useState<string | null>(null);
@@ -678,6 +685,14 @@ export function HistoryCardFull({
               {t("addCostInline")}
             </Button>
           ) : null}
+
+          {isPlayAdmin && entry.paymentConfig?.hasCost && (
+            <Button size="small" variant="text" startIcon={<PaymentsIcon />}
+              onClick={() => setPaymentConfigOpen(true)}
+              sx={{ textTransform: "none", minWidth: 0, p: 0.5, color: "text.secondary" }}>
+              {t("paymentsConfigTitle")}
+            </Button>
+          )}
         </Stack>
 
         {/* Score band — same hero zone, no divider */}
@@ -831,6 +846,18 @@ export function HistoryCardFull({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* "Who paid this game?" config — switch the mode back on a past game */}
+      <PaymentConfigDialog
+        open={paymentConfigOpen && !!entry.paymentConfig}
+        eventId={eventId}
+        game={entry.paymentConfig ?? null}
+        onClose={() => setPaymentConfigOpen(false)}
+        onSaved={async () => {
+          setPaymentConfigOpen(false);
+          onPaymentsConfigSaved?.();
+        }}
+      />
 
       <Stack spacing={0}>
         {error && (

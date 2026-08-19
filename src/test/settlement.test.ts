@@ -635,8 +635,19 @@ describe("getWrapUpGameSettlement", () => {
     expect(wrap?.rows.find((r) => r.name === "Ana")?.isPayer).toBe(true);
   });
 
-  it("returns null for an untracked game", async () => {
+  it("returns an empty untracked settlement for an untracked game with a cost (each one pays own share)", async () => {
     const { event, game } = await seedEvent({ cost: 60 });
+    await prisma.game.update({ where: { id: game.id }, data: { status: "played" } });
+    await setPaymentConfig(event.id, game.id, { mode: "untracked" });
+
+    const wrap = await getWrapUpGameSettlement(event.id);
+    expect(wrap?.gameId).toBe(game.id);
+    expect(wrap?.mode).toBe("untracked");
+    expect(wrap?.rows).toEqual([]);
+  });
+
+  it("returns null for an untracked game without a cost", async () => {
+    const { event, game } = await seedEvent(); // no cost
     await prisma.game.update({ where: { id: game.id }, data: { status: "played" } });
     await setPaymentConfig(event.id, game.id, { mode: "untracked" });
 

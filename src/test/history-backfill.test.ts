@@ -720,4 +720,29 @@ describe("Played live Game resolves to editable GameHistory (regression)", () =>
     });
     expect(snapshots).toHaveLength(1);
   });
+
+  it("GET history exposes paymentConfig so the mode can be switched back on a played game", async () => {
+    const event = await seedEvent("owner1");
+    const dt = new Date("2025-03-16T18:00:00Z");
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: dt, status: "played", paymentMode: "untracked" },
+    });
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ana" } });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, order: 0 } });
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 30, currency: "EUR" } });
+
+    const res = await getHistory(ctx({ id: event.id }, undefined, "GET"));
+    const body = await res.json();
+
+    const entry = body.data.find((e: any) => e.dateTime === dt.toISOString());
+    expect(entry).toBeTruthy();
+    expect(entry.paymentConfig).toEqual({
+      gameId: game.id,
+      mode: "untracked",
+      payerName: null,
+      payerIsPlayer: false,
+      hasCost: true,
+      rows: [{ eventPlayerId: ep.id, name: "Ana", amount: 3, status: "pending", isPayer: false }],
+    });
+  });
 });

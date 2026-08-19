@@ -500,6 +500,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
                     playerRatings={playerRatings}
                     userName={session?.user?.name ?? null}
                     eventPlayers={eventPlayers}
+                    onPaymentsConfigSaved={load}
                   />
                 ))}
                 {hasMore && (

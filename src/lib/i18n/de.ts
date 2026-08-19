@@ -260,6 +260,10 @@ const de: TranslationKeys = {
   webhookTest: "Test-Payload senden",
   webhookDelete: "Löschen",
   webhookDeleteConfirm: "Bist du sicher, dass du diesen Webhook löschen möchtest?",
+  webhookEdit: "Bearbeiten",
+  webhookEditEvents: "Zu sendende Events",
+  webhookEditError: "Webhook konnte nicht aktualisiert werden.",
+  webhookSave: "Speichern",
   webhookTestOk: "Zugestellt {at}",
   webhookTestFailed: "Fehlgeschlagen: {error}",
   webhookDeliveryStatus_success: "zugestellt",
@@ -1120,6 +1124,20 @@ const de: TranslationKeys = {
   landingFeatureReminders: "Erinnerungen zum Spielen und Bezahlen",
   landingFeatureCourtFinder: "Finde und vergleiche Plätze in der Nähe",
   landingOpenSource: "Open Source · Für immer kostenlos",
+  supportUs: "Unterstütze uns",
+
+  // Beta testing (#740 follow-up)
+  landingBetaButton: "Android-Beta-App holen",
+  betaBannerTitle: "Teste die Android-App frühzeitig",
+  betaBannerBody: "Tritt der Beta bei und installiere Convocados direkt aus dem Play Store — ein Tipp und sie ist auf deinem Homescreen.",
+  getTheApp: "App holen",
+  appsForEveryTeamTitle: "Apps für jedes Team",
+  iosFundHeading: "Hilf dabei, Convocados aufs iPhone zu bringen",
+  iosFundBody: "Dein Beitrag deckt die Apple-Developer-Program-Mitgliedschaft, damit Convocados kostenlos und Open Source bleibt.",
+  iosFundCta: "Hilf, die iOS-App zu finanzieren",
+  iosFundMonthly: "Monatlicher Support bevorzugt? GitHub Sponsors",
+  iosFundProgress: "${raised} von ${target} gesammelt",
+  appsLearnMore: "Mehr über die mobilen Apps erfahren",
 
   // MVP voting (#200)
   voteMvp: "MVP wählen",
