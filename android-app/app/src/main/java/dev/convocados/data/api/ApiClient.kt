@@ -1,8 +1,10 @@
 package dev.convocados.data.api
 
-import dev.convocados.data.auth.TokenStore
+import dev.convocados.data.auth.OAuthTokenStorage
+import dev.convocados.data.auth.OAuthTokens
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -15,7 +17,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ApiClient @Inject constructor(private val tokenStore: TokenStore) {
+class ApiClient @Inject constructor(
+    private val tokenStore: OAuthTokenStorage,
+) {
+    internal constructor(tokenStore: OAuthTokenStorage, engine: HttpClientEngine) : this(tokenStore) {
+        client = buildClient(engine)
+    }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -23,7 +30,13 @@ class ApiClient @Inject constructor(private val tokenStore: TokenStore) {
         coerceInputValues = true
     }
 
-    private val client = HttpClient(OkHttp) {
+    private lateinit var client: HttpClient
+
+    init {
+        client = buildClient(OkHttp.create())
+    }
+
+    private fun buildClient(engine: HttpClientEngine): HttpClient = HttpClient(engine) {
         install(ContentNegotiation) { json(this@ApiClient.json) }
         install(HttpTimeout) {
             requestTimeoutMillis = 15_000
@@ -74,13 +87,25 @@ class ApiClient @Inject constructor(private val tokenStore: TokenStore) {
     @PublishedApi
     internal suspend fun refreshToken() {
         val tokens = tokenStore.getTokens() ?: throw ApiException(401, "No refresh token")
-        val response = client.post("$baseUrl/api/auth/oauth2/token") {
-            contentType(ContentType.Application.FormUrlEncoded)
-            setBody("grant_type=refresh_token&refresh_token=${tokens.refreshToken}&client_id=convocados-mobile-app")
+        val response = try {
+            client.post("$baseUrl/api/auth/oauth2/token") {
+                contentType(ContentType.Application.FormUrlEncoded)
+                setBody("grant_type=refresh_token&refresh_token=${tokens.refreshToken}&client_id=convocados-mobile-app")
+            }
+        } catch (e: Exception) {
+            // Network/timeout failure — keep the stored tokens so a later
+            // refresh attempt can succeed. Only a definitive server rejection
+            // of the refresh token ends the session.
+            throw ApiException(0, "Network error during token refresh")
         }
         if (!response.status.isSuccess()) {
-            tokenStore.clearTokens()
-            throw ApiException(401, "Session expired")
+            // 401/403 = refresh token invalid/revoked → the session is over.
+            // Any other failure (5xx, 429) is transient and must NOT log the
+            // user out.
+            if (response.status.value == 401 || response.status.value == 403) {
+                tokenStore.clearTokens()
+            }
+            throw ApiException(response.status.value, "Token refresh failed (${response.status.value})")
         }
         val data: OAuthTokenResponse = response.body()
         tokenStore.setTokens(
