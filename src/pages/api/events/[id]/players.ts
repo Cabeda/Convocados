@@ -14,11 +14,13 @@ import { getOutstandingBalance, getGateBalance } from "../../../../lib/balance.s
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
+import { isGameEnded } from "../../../../lib/gameStatus";
 import { archiveAndLeave } from "../../../../lib/leave.server";
 import { balanceTeams } from "../../../../lib/elo.server";
 import { Randomize } from "../../../../lib/random";
 import { nextGameParticipantOrder } from "../../../../lib/game.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
+import { getActiveRosterState } from "../../../../lib/roster.server";
 import {
   IDEMPOTENCY_HEADER,
   getCachedResponse,
@@ -34,30 +36,6 @@ const log = createLogger("players-api");
 startIdempotencySweep();
 
 /**
- * Resolve the authoritative active player names for an event.
- * ADR 0016: when currentGameId exists, use GameParticipant (game-scoped).
- * Falls back to the legacy Player table for non-recurring events.
- */
-async function getActivePlayerNames(eventId: string, maxPlayers: number, currentGameId?: string | null): Promise<Set<string>> {
-  if (currentGameId) {
-    const participants = await prisma.gameParticipant.findMany({
-      where: { gameId: currentGameId, archivedAt: null },
-      include: { eventPlayer: { select: { name: true } } },
-      orderBy: { order: "asc" },
-      take: maxPlayers,
-    });
-    return new Set(participants.map((gp) => gp.eventPlayer.name));
-  }
-  const players = await prisma.player.findMany({
-    where: { eventId, archivedAt: null },
-    orderBy: { order: "asc" },
-    take: maxPlayers,
-    select: { name: true },
-  });
-  return new Set(players.map(p => p.name));
-}
-
-/**
  * Validate that all team members are active players (order < maxPlayers).
  * Removes any invalid members from teams rather than clearing all teams.
  * Returns true if any members were removed.
@@ -69,7 +47,7 @@ export async function validateTeams(eventId: string, maxPlayers: number, current
   });
   if (teams.length === 0) return false;
 
-  const activeNames = await getActivePlayerNames(eventId, maxPlayers, currentGameId);
+  const activeNames = (await getActiveRosterState(eventId, maxPlayers, currentGameId)).activeNames;
 
   const idsToRemove: string[] = [];
   for (const team of teams) {
@@ -104,7 +82,7 @@ export async function addPlayerToTeams(eventId: string, playerName: string, curr
 
   if (event?.balanced && teams.length === 2) {
     // Full rebalance: include all current members + new player
-    const activeNames = await getActivePlayerNames(eventId, event.maxPlayers, gameId);
+    const activeNames = (await getActiveRosterState(eventId, event.maxPlayers, gameId)).activeNames;
     // Only rebalance if new player is in active range
     if (activeNames.has(playerName)) {
       const ratings = await prisma.playerRating.findMany({ where: { eventId } });
@@ -159,7 +137,7 @@ export async function removePlayerFromTeams(eventId: string, playerName: string,
 
   // Balanced mode: full rebalance with current active players (excluding the leaving one, including promoted)
   if (event?.balanced && teams.length === 2) {
-    const activeNames = [...await getActivePlayerNames(eventId, event.maxPlayers, gameId)].filter(n => n !== playerName);
+    const activeNames = [...(await getActiveRosterState(eventId, event.maxPlayers, gameId)).activeNames].filter(n => n !== playerName);
     if (promotedName && !activeNames.includes(promotedName)) {
       activeNames.push(promotedName);
     }
@@ -302,7 +280,7 @@ async function autoRandomizeIfFull(eventId: string, maxPlayers: number, currentG
   if (existingTeams > 0) return;
 
   // Count active players
-  const activeNames = await getActivePlayerNames(eventId, maxPlayers, currentGameId);
+  const activeNames = (await getActiveRosterState(eventId, maxPlayers, currentGameId)).activeNames;
   if (activeNames.size < maxPlayers) return;
 
   // Game is full and no teams — auto-generate
@@ -402,10 +380,13 @@ export function resetInviteRateLimitStores(): void {
  * a recurring reset) used to return early and silently skipped both — the
  * external gateway (e.g. a WhatsApp bridge) never heard about returning players.
  */
-function notifyPlayerJoined(event: { id: string; maxPlayers: number }, playerName: string, order: number) {
-  const isActive = order < event.maxPlayers;
-  const spotsLeft = isActive ? Math.max(0, event.maxPlayers - order - 1) : 0;
-  const data = { playerName, isActive, spotsLeft };
+function notifyPlayerJoined(event: { id: string; maxPlayers: number }, playerName: string, activeBefore: number, actor: string) {
+  // activeBefore is the ACTIVE roster count BEFORE this join (game-scoped under
+  // ADR 0016). Legacy Player order must not be used here: it accumulates across
+  // recurring occurrences and would wrongly fire game_full on a 4/10 roster.
+  const isActive = activeBefore < event.maxPlayers;
+  const spotsLeft = isActive ? Math.max(0, event.maxPlayers - activeBefore - 1) : 0;
+  const data = { playerName, isActive, spotsLeft, actor };
   fireWebhooks(event.id, "player_joined", data).catch(() => {});
   if (spotsLeft === 0) fireWebhooks(event.id, "game_full", data).catch(() => {});
   logEvent(event.id, "player_added", null, null, { playerName }).catch(() => {});
@@ -433,6 +414,16 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
+  // Once the game has ended, the roster is frozen on the event page — players
+  // must not be added after kickoff. Post-game roster fixes go through the
+  // game history (PATCH /history) instead.
+  if (isGameEnded(event.dateTime, event.durationMinutes)) {
+    return Response.json(
+      { error: "The game has already ended — players can no longer be added." },
+      { status: 403 },
+    );
+  }
+
   const { name, linkToAccount, email } = await request.json();
 
   // Idempotency replay check: if the same key + same body was already processed,
@@ -453,6 +444,19 @@ export const POST: APIRoute = async ({ params, request }) => {
       );
     }
   }
+
+  // ADR 0016: the authoritative roster is the current game's GameParticipant
+  // rows, NOT the legacy Player rows (which accumulate across recurring
+  // occurrences — 19 active rows here while the game has 4 players). Snapshot
+  // the ACTIVE count BEFORE this join so spotsLeft/bench logic sees the real
+  // roster and game_full fires only when the current game actually fills.
+  const rosterState = await getActiveRosterState(eventId, event.maxPlayers, event.currentGameId);
+  const activeBefore = rosterState.activeCount;
+  const rosterCount = rosterState.totalCount;
+
+  // Actor for the player_joined webhook payload: the session user who performed
+  // the join, or "anonymous" when nobody is signed in.
+  const joinActor = session?.user?.name ?? "anonymous";
 
   // Optional email — used to notify a registered user or invite an unregistered
   // one to join Convocados. Validated loosely; ignored if malformed.
@@ -487,7 +491,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   // Bench cap: max bench size equals maxPlayers (total players = 2 * maxPlayers)
   const maxTotal = event.maxPlayers * 2;
-  if (event.players.length >= maxTotal) {
+  if (rosterCount >= maxTotal) {
     return Response.json(
       { error: `The bench is full (maximum ${event.maxPlayers} bench players).` },
       { status: 400 },
@@ -620,12 +624,12 @@ export const POST: APIRoute = async ({ params, request }) => {
           });
         }
         // Bug fix: re-activated players must be added to teams if within active range
-        const readdIsOnBench = newOrder >= event.maxPlayers;
+        const readdIsOnBench = activeBefore >= event.maxPlayers;
         if (!readdIsOnBench) {
           await addPlayerToTeams(eventId, trimmed, event.currentGameId);
           await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
         }
-        notifyPlayerJoined(event, trimmed, newOrder);
+        notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
         return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
       }
       // ── ADR 0016: game-scoped re-join after recurring reset ─────────────
@@ -665,7 +669,7 @@ export const POST: APIRoute = async ({ params, request }) => {
             create: { eventPlayerId: eventPlayer.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
             update: { status: "yes", respondedAt: new Date() },
           });
-          notifyPlayerJoined(event, trimmed, newOrder);
+          notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
         if (!alreadyInGame) {
@@ -690,12 +694,12 @@ export const POST: APIRoute = async ({ params, request }) => {
             update: { status: "yes", respondedAt: new Date() },
           });
           // Bug fix: re-joining players must be added to teams if within active range
-          const rejoinIsOnBench = newOrder >= event.maxPlayers;
+          const rejoinIsOnBench = activeBefore >= event.maxPlayers;
           if (!rejoinIsOnBench) {
             await addPlayerToTeams(eventId, trimmed, event.currentGameId);
             await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
           }
-          notifyPlayerJoined(event, trimmed, newOrder);
+          notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
           return Response.json({ ok: true, invited: null, resolvedName: trimmed });
         }
         // Already in the current game — fall through to duplicate error
@@ -760,9 +764,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     await syncGamePayments(event.currentGameId, eventId);
   }
 
-  // spotsLeft after adding
-  const activeBefore = Math.min(event.players.length, event.maxPlayers);
-  const isOnBench = event.players.length >= event.maxPlayers;
+  // spotsLeft after adding (activeBefore snapshot from the top of the handler)
+  const isOnBench = activeBefore >= event.maxPlayers;
   const spotsLeft = isOnBench ? 0 : Math.max(0, event.maxPlayers - activeBefore - 1);
   const url = `${origin}/events/${eventId}`;
 
@@ -780,7 +783,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   if (isOnBench) {
     // ADR 0018: Include bench position in notification body
-    const benchPosition = event.players.length - event.maxPlayers + 1;
+    const benchPosition = rosterCount - event.maxPlayers + 1;
     await enqueueNotification(eventId, "player_joined_bench", { title: event.title, key: "notifyPlayerJoinedBench", params: { name: trimmed, position: String(benchPosition) }, url, spotsLeft }, senderClientId);
   } else {
     await enqueueNotification(eventId, "player_joined", { title: event.title, key: "notifyPlayerJoined", params: { name: trimmed }, url, spotsLeft }, senderClientId);
@@ -846,7 +849,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   // Fire webhooks
-  const webhookData = { playerName: trimmed, isActive: !isOnBench, spotsLeft };
+  const webhookData = { playerName: trimmed, isActive: !isOnBench, spotsLeft, actor: joinActor };
   fireWebhooks(eventId, "player_joined", webhookData).catch(() => {});
   if (spotsLeft === 0) {
     fireWebhooks(eventId, "game_full", webhookData).catch(() => {});

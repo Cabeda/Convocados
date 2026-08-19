@@ -10,6 +10,7 @@ import {
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
 import GitHubIcon from "@mui/icons-material/GitHub";
+import AndroidIcon from "@mui/icons-material/Android";
 import SportsIcon from "@mui/icons-material/Sports";
 import SystemUpdateAltIcon from "@mui/icons-material/SystemUpdateAlt";
 import GetAppIcon from "@mui/icons-material/GetApp";
@@ -28,6 +29,7 @@ import type { Locale } from "~/lib/i18n";
 import { useSession, signOut } from "~/lib/auth.client";
 import { shareForHomeScreen } from "~/lib/pwaInstall";
 import { SignInModal } from "./SignInModal";
+import SupportLinks from "./SupportLinks";
 
 const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
   { code: "en", label: "English" },
@@ -567,34 +569,47 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
         borderTop: `1px solid ${theme.palette.divider}`,
       }}>
         <Container maxWidth="sm">
-          <Stack direction="row" spacing={2} justifyContent="center" alignItems="center" sx={{ mb: 1 }}>
+          <Stack direction="row" spacing={2} sx={{ mb: 1, flexWrap: "wrap", rowGap: 0.5, justifyContent: "center", alignItems: "center" }}>
             <Typography
               variant="body2"
               component="a"
               href="/docs"
-              color="text.secondary"
-              sx={{ display: "flex", alignItems: "center", textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
+              sx={{ display: "flex", alignItems: "center", color: theme.palette.text.secondary, textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
             >
               {t("docs")}
             </Typography>
-            <Typography variant="body2" color="text.disabled" sx={{ display: "flex", alignItems: "center" }}>·</Typography>
+            <Typography variant="body2" sx={{ display: "flex", alignItems: "center", color: theme.palette.text.disabled }}>·</Typography>
             <Typography
               variant="body2"
               component="a"
               href="https://github.com/Cabeda/Convocados"
               target="_blank"
               rel="noopener noreferrer"
-              color="text.secondary"
-              sx={{ display: "flex", alignItems: "center", gap: 0.5, textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
+              sx={{ display: "flex", alignItems: "center", gap: 0.5, color: theme.palette.text.secondary, textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
             >
               <GitHubIcon sx={{ fontSize: 16 }} />
               GitHub
             </Typography>
+            <Typography variant="body2" sx={{ display: "flex", alignItems: "center", color: theme.palette.text.disabled }}>·</Typography>
+            <Typography
+              variant="body2"
+              component="a"
+              href="https://play.google.com/apps/testing/com.cabeda.Convocados"
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ display: "flex", alignItems: "center", gap: 0.5, color: theme.palette.text.secondary, textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
+            >
+              <AndroidIcon sx={{ fontSize: 16 }} />
+              {t("getTheApp")}
+            </Typography>
           </Stack>
-          <Typography variant="body2" color="text.secondary" align="center">
+          <Box sx={{ mb: 1 }}>
+            <SupportLinks />
+          </Box>
+          <Typography variant="body2" align="center" sx={{ color: theme.palette.text.secondary }}>
             © {new Date().getFullYear()} {t("appName")}
           </Typography>
-          <Typography variant="caption" color="text.disabled" align="center" component="div">
+          <Typography variant="caption" align="center" component="div" sx={{ color: theme.palette.text.disabled }}>
             <Typography
               component="a"
               href="https://github.com/Cabeda/Convocados/releases"

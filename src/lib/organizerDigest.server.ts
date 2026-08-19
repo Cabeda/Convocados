@@ -9,6 +9,7 @@
  * Upgrade path: per-event digest vs global; timezone-aware scheduling.
  */
 import { prisma } from "./db.server";
+import { getActiveRosterState } from "./roster.server";
 import { sendPushToUser } from "./push.server";
 import { createLogger } from "./logger.server";
 
@@ -48,14 +49,14 @@ export async function processOrganizerDigests(): Promise<DigestResult> {
         archivedAt: null,
         dateTime: { gt: now }, // only upcoming
       },
-      select: { id: true, title: true, maxPlayers: true, dateTime: true },
+      select: { id: true, title: true, maxPlayers: true, dateTime: true, currentGameId: true },
     });
 
     const adminEvents = await prisma.eventAdmin.findMany({
       where: { userId: du.userId },
       include: {
         event: {
-          select: { id: true, title: true, maxPlayers: true, dateTime: true, archivedAt: true },
+          select: { id: true, title: true, maxPlayers: true, dateTime: true, currentGameId: true, archivedAt: true },
         },
       },
     });
@@ -73,7 +74,7 @@ export async function processOrganizerDigests(): Promise<DigestResult> {
     // Build digest for each event
     const lines: string[] = [];
     for (const event of events) {
-      const playerCount = await prisma.player.count({ where: { eventId: event.id, archivedAt: null } });
+      const playerCount = (await getActiveRosterState(event.id, event.maxPlayers, event.currentGameId)).totalCount;
       const spotsLeft = Math.max(0, event.maxPlayers - playerCount);
 
       // Pending payments

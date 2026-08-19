@@ -286,6 +286,10 @@ const en = {
   webhookTest: "Send test payload",
   webhookDelete: "Delete",
   webhookDeleteConfirm: "Are you sure you want to delete this webhook?",
+  webhookEdit: "Edit",
+  webhookEditEvents: "Events to send",
+  webhookEditError: "Could not update webhook.",
+  webhookSave: "Save",
   webhookTestOk: "Delivered {at}",
   webhookTestFailed: "Failed: {error}",
   webhookDeliveryStatus_success: "delivered",
@@ -1175,6 +1179,22 @@ const en = {
   landingFeatureReminders: "Reminders to play and pay",
   landingFeatureCourtFinder: "Find & compare nearby courts",
   landingOpenSource: "Open source · Free forever",
+  supportUs: "Support us",
+
+  // Beta testing (#740 follow-up)
+  landingBetaButton: "Get the Android beta app",
+  betaBannerTitle: "Test the Android app early",
+  betaBannerBody: "Join the beta and install Convocados straight from the Play Store — one tap to opt in, then it's on your home screen.",
+  getTheApp: "Get the app",
+
+  // iOS funding campaign (#746)
+  appsForEveryTeamTitle: "Apps for every team",
+  iosFundHeading: "Help bring Convocados to iPhone",
+  iosFundBody: "Your contribution covers the Apple Developer Program membership so Convocados remains free and open source.",
+  iosFundCta: "Help fund the iOS app",
+  iosFundMonthly: "Prefer monthly support? GitHub Sponsors",
+  iosFundProgress: "${raised} of ${target} raised",
+  appsLearnMore: "Learn more about the mobile apps",
 
   // MVP voting (#200)
   voteMvp: "Vote MVP",

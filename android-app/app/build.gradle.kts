@@ -12,6 +12,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.play.publisher)
     alias(libs.plugins.baselineprofile)
     alias(libs.plugins.roborazzi)
@@ -199,6 +200,7 @@ dependencies {
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging.ktx)
+    implementation(libs.firebase.crashlytics)
 
     // Accompanist (Permissions)
     implementation(libs.accompanist.permissions)
@@ -222,6 +224,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.ktor.client.mock)
     // Screenshot testing (JVM, no device) via Roborazzi + Robolectric
     testImplementation(libs.robolectric)
     testImplementation(libs.roborazzi)

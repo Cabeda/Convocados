@@ -85,6 +85,9 @@ interface Props {
   userRsvpMap?: Record<string, RsvpStatus>;
   /** True for the owner or an admin. Controls whether the guest pill is clickable. */
   canEditGuestAttendance?: boolean;
+  /** Hide all add-player surfaces (input, submit, recent chips). Used when the
+   *  game has ended and the roster is frozen — roster fixes go via game history. */
+  rosterLocked?: boolean;
   /** Set the current user's own RSVP. */
   onSetMyRsvp?: (status: "yes" | "no") => Promise<void>;
   /** Set a guest player's RSVP (owner/admin only). Pass null to clear. */
@@ -111,6 +114,7 @@ export function PlayerList({
   onSetGuestRsvp,
   onJoinAsSelf: _onJoinAsSelf,
   eventDateTime,
+  rosterLocked = false,
 }: Props) {
   const t = useT();
   const theme = useTheme();
@@ -306,6 +310,7 @@ export function PlayerList({
 
         {playerError && <Alert severity="error" onClose={() => onPlayerErrorChange(null)}>{playerError}</Alert>}
 
+        {!rosterLocked && (<>
         <Stack direction="row" spacing={1} alignItems="stretch">
           <Autocomplete<PlayerOption, false, false, true>
             sx={{ flex: 1, minWidth: 0 }}
@@ -525,6 +530,7 @@ export function PlayerList({
             </Box>
           </Box>
         )}
+        </>)}
 
         {active.length > 0 && (
           <Paper variant="outlined" sx={{

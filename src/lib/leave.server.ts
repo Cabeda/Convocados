@@ -8,6 +8,7 @@
  *  supports undo); the existing hard-delete X flow is being replaced by this.
  */
 import { prisma } from "./db.server";
+import { getActiveRosterState } from "./roster.server";
 import { enqueueNotification, drainNotificationQueue } from "./notificationQueue.server";
 import { fireWebhooks } from "./webhook.server";
 import { syncPaymentsForEvent } from "./payments.server";
@@ -53,6 +54,21 @@ export function isWithin48hBeforeKickoff(dateTime: Date, now: Date = new Date())
   return hoursUntil > 0 && hoursUntil <= RSVP_WINDOW_HOURS;
 }
 
+/** Name of whoever performed the leave/removal, for the webhook payload.
+ *  Self-leave → the player's own name. Organizer removal → the organizer's
+ *  user name when identifiable, otherwise "anonymous". */
+export async function resolveActorName(playerName: string, actor: LeaveActor): Promise<string> {
+  if (actor.kind === "self") return playerName;
+  if (actor.userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: actor.userId },
+      select: { name: true },
+    });
+    if (user?.name) return user.name;
+  }
+  return "anonymous";
+}
+
 export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<ArchiveAndLeaveResult> {
   const { eventId, playerId, actor } = input;
   const origin = input.origin ?? "https://convocados.cabeda.dev";
@@ -83,8 +99,16 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     throw new Error("You can only leave on your own behalf.");
   }
 
-  const wasActive = playerIndex < event.maxPlayers;
-  const firstBench = event.players[event.maxPlayers];
+  // ADR 0016: the current game's GameParticipant rows are the authoritative
+  // roster. Legacy Player rows accumulate across recurring occurrences and would
+  // inflate the active/bench/spotsLeft logic below, so we derive that state from
+  // the shared getActiveRosterState helper (same source as the join path — this
+  // duplication is how #722 slipped through before).
+  const roster = await getActiveRosterState(eventId, event.maxPlayers, currentGameId);
+  const activeCountBefore = roster.activeCount;
+  const hasBench = roster.hasBench;
+  const firstBenchName = roster.firstBenchName ?? undefined;
+  const wasActive = roster.activeNames.has(player.name);
 
   // Soft-archive the Player row. Preserves the row + any Rsvp keyed on this playerId.
   await prisma.player.update({
@@ -154,21 +178,19 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
 
   // Auto-sync teams: remove player, optionally promote bench player into their team
   if (wasActive) {
-    await removePlayerFromTeams(eventId, player.name, firstBench?.name, currentGameId);
+    await removePlayerFromTeams(eventId, player.name, firstBenchName, currentGameId);
   }
   await validateTeams(eventId, event.maxPlayers, currentGameId);
 
   // spotsLeft after removal
-  const activeAfter = wasActive
-    ? firstBench ? event.maxPlayers : Math.min(event.players.length - 1, event.maxPlayers)
-    : Math.min(event.players.length - 1, event.maxPlayers);
+  const activeAfter = wasActive ? (hasBench ? event.maxPlayers : activeCountBefore - 1) : activeCountBefore;
   const spotsLeft = Math.max(0, event.maxPlayers - activeAfter);
 
   // Bench-empty after the removal. A bench is currently empty iff the total players fit
   // within maxPlayers (i.e. there were no bench players to start with). If the bench already
   // has players, the leave flow promotes the first one to active, so the slot is filled.
   const benchEmptyAfter: boolean | undefined = wasActive
-    ? event.players.length <= event.maxPlayers
+    ? !hasBench
     : undefined;
 
   // Warn-the-rest push: within 48h AND wasActive AND bench is empty after.
@@ -191,7 +213,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
       },
       actor.userId ?? undefined,
     );
-  } else if (wasActive && firstBench) {
+  } else if (wasActive && firstBenchName) {
     // Existing promotion notification (unchanged from prior behavior — always fires on promotion)
     await enqueueNotification(
       eventId,
@@ -199,7 +221,7 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
       {
         title: event.title,
         key: "notifyPlayerLeftPromoted",
-        params: { left: player.name, promoted: firstBench.name, n: spotsLeftStr },
+        params: { left: player.name, promoted: firstBenchName, n: spotsLeftStr },
         url,
         spotsLeft,
       },
@@ -223,8 +245,8 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
 
   // ADR 0017: Spot-available push — fire whenever a spot opens and game is in the future (Tier 2).
   // Previously gated on 48h; now always fires so interested players/followers learn immediately.
-  const wasFull = event.players.length >= event.maxPlayers;
-  if (wasActive && wasFull && !firstBench && spotsLeft > 0 && event.dateTime > new Date()) {
+  const wasFull = activeCountBefore >= event.maxPlayers;
+  if (wasActive && wasFull && !hasBench && spotsLeft > 0 && event.dateTime > new Date()) {
     await enqueueNotification(
       eventId,
       "spot_available",
@@ -249,7 +271,8 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
   }
 
   // Fire webhooks
-  fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft }).catch(() => {});
+  const webhookActor = await resolveActorName(player.name, actor);
+  fireWebhooks(eventId, "player_left", { playerName: player.name, spotsLeft, actor: webhookActor }).catch(() => {});
 
   // Recalculate payment shares if a cost is set
   await syncPaymentsForEvent(eventId);

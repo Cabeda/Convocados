@@ -3,7 +3,6 @@ package dev.convocados.ui.screen.event
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
@@ -47,7 +46,7 @@ class PlayerRowTest {
                 PlayerRow(player = Player("p1", "Alice", 0, userId = "u1", image = null), onUserClick = {})
             }
         }
-        composeRule.onNodeWithText("A").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Alice").assertIsDisplayed()
     }
 
     @Test
@@ -81,7 +80,7 @@ class PlayerRowTest {
                 )
             }
         }
-        composeRule.onNodeWithText("A").performClick()
+        composeRule.onNodeWithContentDescription("Alice").performClick()
         assertTrue(clicked)
     }
 }

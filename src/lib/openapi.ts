@@ -621,6 +621,26 @@ export const openApiSpec = {
       },
     },
     "/api/events/{id}/webhooks/{webhookId}": {
+      patch: {
+        summary: "Update which events a webhook receives",
+        tags: ["Webhooks"],
+        parameters: [eventIdParam, { name: "webhookId", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["events"],
+                properties: {
+                  events: { type: "array", items: { type: "string" } },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Webhook updated" }, ...errorResponses },
+      },
       delete: {
         summary: "Delete a webhook",
         tags: ["Webhooks"],
