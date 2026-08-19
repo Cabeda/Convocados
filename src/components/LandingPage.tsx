@@ -1,5 +1,5 @@
 import {
-  Box, Typography, Stack, useTheme, useMediaQuery, Chip, Button, Container,
+  Box, Typography, Stack, useTheme, useMediaQuery, Chip, Button,
 } from "@mui/material";
 import AndroidIcon from "@mui/icons-material/Android";
 import CasinoIcon from "@mui/icons-material/Casino";
@@ -11,6 +11,7 @@ import PlaceIcon from "@mui/icons-material/Place";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import CreateEventForm from "./CreateEventForm";
+import AppsSection from "./AppsSection";
 import { useT } from "~/lib/useT";
 
 const BETA_URL = "https://play.google.com/apps/testing/com.cabeda.Convocados";
@@ -141,48 +142,8 @@ export default function LandingPage() {
           <CreateEventForm bare />
         </Box>
       </Box>
-      <BetaBanner />
+      <AppsSection />
     </Stack>
-  );
-}
-
-function BetaBanner() {
-  const t = useT();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-
-  return (
-    <Box sx={{
-      width: "100%",
-      py: 4,
-      px: 2,
-      mt: isMobile ? 1 : 4,
-      backgroundColor: theme.palette.primary.main,
-      color: theme.palette.primary.contrastText,
-      textAlign: "center",
-    }}>
-      <Container maxWidth="md">
-        <Typography variant="h5" component="h2" fontWeight={700}>
-          {t("betaBannerTitle")}
-        </Typography>
-        <Typography sx={{ mt: 1, opacity: 0.92, maxWidth: 560, mx: "auto" }}>
-          {t("betaBannerBody")}
-        </Typography>
-        <Button
-          component="a"
-          href={BETA_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          variant="contained"
-          color="secondary"
-          size="large"
-          startIcon={<AndroidIcon />}
-          sx={{ mt: 2, fontWeight: 700 }}
-        >
-          {t("landingBetaButton")}
-        </Button>
-      </Container>
-    </Box>
   );
 }
 
