@@ -45,7 +45,7 @@ import org.osmdroid.views.overlay.Marker
 import javax.inject.Inject
 import androidx.compose.material.icons.filled.Public
 
-val SPORT_FILTERS = listOf("all", "football", "futsal", "basketball", "volleyball", "tennis", "padel")
+val SPORT_FILTERS = listOf("all", "football", "futsal", "basketball", "volleyball", "tennis", "padel", "badminton", "squash", "pickleball")
 
 @HiltViewModel
 class PublicGamesViewModel @Inject constructor(private val api: ConvocadosApi) : ViewModel() {
@@ -86,6 +86,12 @@ class PublicGamesViewModel @Inject constructor(private val api: ConvocadosApi) :
     fun setSportFilter(sport: String) {
         _sportFilter.value = sport
         applyFilter()
+    }
+
+    fun adopt(eventId: String) {
+        viewModelScope.launch {
+            runCatching { api.adoptPickup(eventId) }
+        }
     }
 
     private fun applyFilter() {
@@ -162,6 +168,7 @@ fun PublicGamesScreen(
                         }
                     }
                     items(events, key = { it.id }) { event ->
+                        val isPickup = event.source == "playtomic" && event.ownerId == null
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             modifier = Modifier
@@ -182,12 +189,25 @@ fun PublicGamesScreen(
                                         SportIcon(event.sport, modifier = Modifier.size(20.dp).padding(end = 4.dp))
                                         Text(event.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
                                     }
-                                    Card(colors = CardDefaults.cardColors(containerColor = if (event.spotsLeft == 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer)) {
-                                        Text(if (event.spotsLeft == 0) stringResource(R.string.full) else stringResource(R.string.spots_left, event.spotsLeft), color = if (event.spotsLeft == 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (isPickup) {
+                                            Text(stringResource(R.string.open_pickup), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(end = 8.dp))
+                                        }
+                                        Card(colors = CardDefaults.cardColors(containerColor = if (event.spotsLeft == 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer)) {
+                                            Text(if (event.spotsLeft == 0) stringResource(R.string.full) else stringResource(R.string.spots_left, event.spotsLeft), color = if (event.spotsLeft == 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                                        }
                                     }
                                 }
                                 Text(stringResource(R.string.event_meta, formatRelativeDate(event.dateTime), event.playerCount, event.maxPlayers), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                                 if (event.location.isNotBlank()) Text(event.location, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+                                if (isPickup) {
+                                    Button(
+                                        onClick = { viewModel.adopt(event.id); onEventClick(event.id) },
+                                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                                    ) {
+                                        Text(stringResource(R.string.claim_pickup))
+                                    }
+                                }
                             }
                         }
                     }
