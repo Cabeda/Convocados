@@ -1,0 +1,71 @@
+---
+export const prerender = true;
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Mobile Apps" description="Native Android and iOS apps for Convocados.">
+  <h1>Mobile Apps</h1>
+  <p class="subtitle">Convocados ships native apps for Android and iOS that connect to any Convocados instance.</p>
+
+  <h2>Android</h2>
+  <p>
+    A native <strong>Android app</strong> (Kotlin + Jetpack Compose, Material 3) is available in public beta. It connects
+    to any self-hosted Convocados instance via the Convocados OIDC provider.
+  </p>
+  <p>
+    <a href="https://play.google.com/apps/testing/com.cabeda.Convocados" target="_blank" rel="noopener noreferrer">Get the Android beta app</a>
+  </p>
+
+  <h3>Features</h3>
+  <ul>
+    <li>View and manage your upcoming games</li>
+    <li>Join/leave events, add guest players</li>
+    <li>Team randomization with live standings</li>
+    <li>Player stats and ELO rankings</li>
+    <li>Push notifications via Firebase Cloud Messaging (FCM)</li>
+    <li>Multi-language: English, Português, Español, Français, Deutsch, Italiano</li>
+    <li>Configurable server URL — connect to any Convocados instance</li>
+  </ul>
+
+  <h2>iOS</h2>
+  <p>
+    A native <strong>iOS app</strong> (SwiftUI, MVVM) is under development and awaiting funding. The one-time
+    <strong>$100 Apple Developer Program</strong> membership is required to publish it. We keep Convocados free and open
+    source, so we're asking the community to help cover this fee.
+  </p>
+  <p>
+    <a href="https://ko-fi.com/cabeda/goal?g=20" target="_blank" rel="noopener noreferrer">Help fund the iOS app</a>
+  </p>
+  <p>
+    iOS builds and runs on the iOS Simulator today. The app covers the same feature set as Android: email/password sign-in,
+    games list, event detail, team randomization, rankings, payments, history, stats, and notifications.
+  </p>
+
+  <h3>Support</h3>
+  <ul>
+    <li><a href="https://ko-fi.com/cabeda/goal?g=20" target="_blank" rel="noopener noreferrer">One-time: fund the iOS app</a></li>
+    <li><a href="https://github.com/sponsors/Cabeda" target="_blank" rel="noopener noreferrer">Recurring: GitHub Sponsors</a></li>
+  </ul>
+
+  <h2>Development</h2>
+  <h3>Android</h3>
+  <pre><code>cd android-app
+./gradlew assembleDebug    # Build debug APK
+./gradlew installDebug     # Install on a connected device / emulator</code></pre>
+
+  <h3>iOS</h3>
+  <pre><code>cd ios-app
+xcodegen generate          # Regenerate the Xcode project
+open Convocados.xcodeproj  # Build & run in Xcode (simulator works out of the box)</code></pre>
+  <p>
+    iOS has an XCUITest end-to-end suite (<code>ios-app/scripts/run-e2e.sh</code>) that drives login, event creation, and
+    event detail on the simulator against a local dev server.
+  </p>
+
+  <h2>Authentication</h2>
+  <p>
+    Both apps authenticate via the Convocados OIDC provider (Authorization Code + PKCE on Android; email/password or
+    Google sign-in through <code>/api/auth/mobile-native</code> on iOS). Tokens are stored securely in platform keychains.
+    The server must have the app's redirect URI registered as a trusted client.
+  </p>
+</DocsLayout>
