@@ -309,4 +309,6 @@
     <string name="add_from_contacts">Add from contacts</string>
     <string name="no_archived_games">No archived games</string>
     <string name="will_invite">Will invite %1$s</string>
+    <string name="open_pickup">Open pickup</string>
+    <string name="claim_pickup">Claim this pickup</string>
 </resources>
