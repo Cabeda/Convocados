@@ -888,6 +888,7 @@ const en = {
   adminGamesPlayed: "Games Played",
   adminActiveUsers: "Active Users (30d)",
   adminActiveEvents: "Upcoming Events",
+  adminActiveGames: "Active Games",
   adminGamesLast7d: "Games (7d)",
   adminGamesLast30d: "Games (30d)",
   adminAvgPlayers: "Avg. Max Players",
