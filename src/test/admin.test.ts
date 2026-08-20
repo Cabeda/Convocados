@@ -223,6 +223,38 @@ describe("getAdminStats", () => {
 
     expect(stats.activeGames).toBe(4); // e1, e2, e5, e6
   });
+
+  it("reports open pickup adoption metrics (ADR-0021)", async () => {
+    await seedUser("u1");
+    const now = Date.now();
+    // 2 un-adopted pickups + 1 adopted pickup, all created in the last 30 days
+    for (const [i, owned] of [false, false, true].entries()) {
+      await prisma.event.create({
+        data: {
+          title: `Pickup ${i}`,
+          location: "Club",
+          dateTime: new Date(now + 86400000),
+          maxPlayers: 4,
+          durationMinutes: 90,
+          sport: "padel",
+          isPublic: true,
+          source: "playtomic",
+          sourceKey: `tenant-1|court-${i}|2026-06-18|19:30`,
+          playtomicTenantId: "tenant-1",
+          playtomicTenantName: "Club",
+          ownerId: owned ? "u1" : null,
+          createdAt: new Date(now - 3 * 86400000),
+        },
+      });
+    }
+
+    const { getAdminStats } = await import("~/lib/admin.server");
+    const stats = await getAdminStats();
+
+    expect(stats.pickupsDetected).toBe(3);
+    expect(stats.pickupsAdopted).toBe(1);
+    expect(stats.pickupAdoptionRate).toBe(1 / 3);
+  });
 });
 
 describe("listUsers", () => {
