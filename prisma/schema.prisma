@@ -47,6 +47,7 @@ model User {
   monthlySubscriptions    MonthlySubscription[]
   appOpens                UserAppOpen[]
   walletTransactions      WalletTransaction[]
+  playerInvitesSent       PlayerInvite[]       @relation("PlayerInviteBy")
 }
 
 model Session {
@@ -305,6 +306,7 @@ model Game {
   participants    GameParticipant[]
   payments        GamePayment[]
   rsvps           Rsvp[]
+  playerInvites   PlayerInvite[]
 
   @@index([eventId, dateTime])
   @@index([eventId, status])
@@ -328,7 +330,13 @@ model EventPlayer {
   participations GameParticipant[]
   payments       GamePayment[]
   rsvps          Rsvp[]
+  playerInvites  PlayerInvite[]
   paidGames      Game[]          @relation("GamePayer")
+
+  // ADR 0025: per-event invite opt-out — "not interested in this event anymore".
+  // Reversible; cleared automatically on rejoin. Excluded from RSVP/recruitment
+  // pings, suggestions, and PlayerInvite creation.
+  invitationOptOutAt DateTime?
 
   @@unique([eventId, name])
   @@index([userId])
@@ -617,6 +625,11 @@ model NotificationPreferences {
   paymentReminderEmail Boolean  @default(false)
   paymentReminderPush  Boolean  @default(true)
 
+  // ADR 0025: global invite opt-out — kill switch for receiving PlayerInvites
+  // + being suggested as a co-play candidate. Channel flags gameInviteEmail/Push
+  // above already gate the legacy direct-add notifications.
+  invitesEnabled Boolean @default(true)
+
   // Reminder time preferences
   reminder24h          Boolean  @default(true)
   reminder2h           Boolean  @default(true)
@@ -695,6 +708,37 @@ model PriorityConfirmation {
   @@unique([eventId, userId, gameDate])
   @@index([eventId, gameDate])
   @@index([deadline])
+}
+
+// ── ADR 0025: persistent PlayerInvite (proactive invites) ─────────────────────
+//
+// A single-shot invite to a specific game occurrence for a specific EventPlayer.
+// Distinct from EventInvite (event-wide access/password bypass) and from the
+// legacy direct-add path (Player + GameParticipant + Rsvp=yes immediately).
+//
+// Creating an invite also creates EventPlayer + GameParticipant(pending) +
+// Rsvp(null). 'Invited' entries are excluded from maxPlayers, bench cap,
+// payments, team draws and gamesPlayed until they accept.
+
+model PlayerInvite {
+  id              String      @id @default(cuid())
+  gameId          String
+  game            Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  eventPlayerId   String
+  eventPlayer     EventPlayer @relation(fields: [eventPlayerId], references: [id], onDelete: Cascade)
+  invitedByUserId String
+  invitedBy       User        @relation("PlayerInviteBy", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+
+  status         String    @default("pending") // pending | accepted | declined | expired | cancelled
+  token          String    @unique
+  notifiedAt     DateTime?
+  respondedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([gameId, eventPlayerId])
+  @@index([eventPlayerId])
+  @@index([gameId, status])
 }
 
 // ── Event access control ──────────────────────────────────────────────────────
