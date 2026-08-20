@@ -1,4 +1,6 @@
+import { auth } from "./auth.server";
 import { prisma } from "./db.server";
+import { decodeIdTokenPayload } from "./googleToken.server";
 
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
 
@@ -8,21 +10,18 @@ interface GoogleAccountLike {
 }
 
 /**
- * Decode the `picture` claim from a Google ID token (base64url JWT payload).
+ * Decode the `picture` claim from a Google ID token payload.
  * The token is only read for the picture URL — no signature verification is
  * done here because the token was already verified when it was issued or
  * exchanged by better-auth.
  */
 export function pictureFromIdToken(idToken: string): string | null {
-  try {
-    const payloadPart = idToken.split(".")[1];
-    if (!payloadPart) return null;
-    const json = Buffer.from(payloadPart, "base64url").toString("utf8");
-    const payload = JSON.parse(json) as { picture?: unknown };
-    return typeof payload.picture === "string" && payload.picture ? payload.picture : null;
-  } catch {
-    return null;
-  }
+  const payload = decodeIdTokenPayload(idToken);
+  return typeof payload?.picture === "string" && payload.picture ? payload.picture : null;
+}
+
+function isPicture(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
 }
 
 /**
@@ -36,19 +35,22 @@ export async function resolveGooglePicture(google: GoogleAccountLike): Promise<s
     if (picture) return picture;
   }
   if (google.accessToken) {
-    try {
-      const res = await fetch(GOOGLE_USERINFO_URL, {
-        headers: { authorization: `Bearer ${google.accessToken}` },
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { picture?: unknown };
-        if (typeof data.picture === "string" && data.picture) return data.picture;
-      }
-    } catch {
-      // Network failure — leave the image untouched.
-    }
+    return fetchGoogleUserinfoPicture(google.accessToken);
   }
   return null;
+}
+
+async function fetchGoogleUserinfoPicture(accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch(GOOGLE_USERINFO_URL, {
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { picture?: unknown };
+    return isPicture(data.picture) ? data.picture : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -72,4 +74,39 @@ export async function syncGoogleProfileImage(userId: string, idTokenPicture?: st
   if (picture) {
     await prisma.user.update({ where: { id: user.id }, data: { image: picture } });
   }
+}
+
+/**
+ * Backfill a missing Google profile image after a successful login response.
+ * Resolves the session from the response's cookies and fills the image when
+ * the session user has none yet.
+ */
+export async function backfillGoogleProfileImageFromLogin(
+  response: Response,
+  idTokenPicture: string | null,
+): Promise<void> {
+  try {
+    const cookies = sessionCookiesFromResponse(response);
+    if (!cookies) {
+      // A successful Google login that set no session cookie leaves no user
+      // to update. Log it so a regression (e.g. better-auth changing how it
+      // issues cookies) is visible instead of failing silently.
+      console.warn("[auth image sync] Google login succeeded without a session cookie; avatar backfill skipped");
+      return;
+    }
+    const session = await auth.api.getSession({ headers: new Headers({ cookie: cookies }) });
+    if (session?.user?.id && !session.user.image) {
+      await syncGoogleProfileImage(session.user.id, idTokenPicture);
+    }
+  } catch (err) {
+    // Backfilling an avatar must never break the sign-in itself.
+    console.error("[auth image sync]", err);
+  }
+}
+
+function sessionCookiesFromResponse(response: Response): string {
+  return (response.headers.getSetCookie?.() ?? [])
+    .map((c) => c.split(";")[0])
+    .filter(Boolean)
+    .join("; ");
 }

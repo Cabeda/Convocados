@@ -2,7 +2,17 @@ import type { APIRoute } from "astro";
 import { auth, ensureTrustedClientInDB } from "../../../lib/auth.server";
 import { oauthRateLimitResponse } from "../../../lib/oauthRateLimit.server";
 import { verifyGoogleIdToken } from "../../../lib/googleToken.server";
-import { syncGoogleProfileImage } from "../../../lib/syncGoogleImage.server";
+import { backfillGoogleProfileImageFromLogin } from "../../../lib/syncGoogleImage.server";
+
+interface GoogleIdTokenBody {
+  provider?: unknown;
+  idToken?: { token?: unknown };
+}
+
+interface GoogleLoginDetection {
+  isGoogleLogin: boolean;
+  picture: string | null;
+}
 
 const handler: APIRoute = async ({ request }) => {
   // Ensure trusted OAuth client exists in DB (lazy, runs once)
@@ -11,9 +21,9 @@ const handler: APIRoute = async ({ request }) => {
   const limited = await oauthRateLimitResponse(request);
   if (limited) return limited;
 
-  // Detect a Google login on this request and capture the profile picture
-  // from an id-token body before the handler consumes it (wear / iOS PWA).
-  const { active: isGoogleLogin, picture: idTokenPicture } = await detectGoogleLogin(request);
+  // Capture the Google profile picture from an id-token body before the
+  // handler consumes it (wear / iOS PWA sign-in).
+  const { isGoogleLogin, picture } = await detectGoogleLogin(request);
 
   let response: Response;
   try {
@@ -32,8 +42,13 @@ const handler: APIRoute = async ({ request }) => {
   }
 
   // After a successful Google login, backfill a missing profile image.
+  // Guarded so an avatar backfill can never break the sign-in itself.
   if (isGoogleLogin && response.status >= 200 && response.status < 400) {
-    await syncProfileImageFromLogin(response, idTokenPicture);
+    try {
+      await backfillGoogleProfileImageFromLogin(response, picture);
+    } catch (err) {
+      console.error("[auth image sync]", err);
+    }
   }
 
   return response;
@@ -41,27 +56,27 @@ const handler: APIRoute = async ({ request }) => {
 
 /**
  * Detect a Google login request and extract its profile picture.
- * Covers the web OAuth callback (GET /callback/google) and the id-token
- * sign-in path (POST /sign-in/social with provider "google").
+ * Covers the web OAuth callback (/callback/google) and the id-token sign-in
+ * path (/sign-in/social with provider "google").
  */
-async function detectGoogleLogin(request: Request): Promise<{ active: boolean; picture: string | null }> {
+async function detectGoogleLogin(request: Request): Promise<GoogleLoginDetection> {
   const pathname = new URL(request.url).pathname;
 
   if (pathname.endsWith("/callback/google")) {
-    return { active: true, picture: null };
+    return { isGoogleLogin: true, picture: null };
   }
   if (!pathname.endsWith("/sign-in/social") || request.method !== "POST") {
-    return { active: false, picture: null };
+    return { isGoogleLogin: false, picture: null };
   }
 
-  let body: { provider?: unknown; idToken?: { token?: unknown } };
+  let body: GoogleIdTokenBody;
   try {
     body = await request.clone().json();
   } catch {
-    return { active: false, picture: null };
+    return { isGoogleLogin: false, picture: null };
   }
-  if (body?.provider !== "google") return { active: false, picture: null };
-  if (typeof body.idToken?.token !== "string") return { active: true, picture: null };
+  if (body.provider !== "google") return { isGoogleLogin: false, picture: null };
+  if (typeof body.idToken?.token !== "string") return { isGoogleLogin: true, picture: null };
 
   const validAudiences = [
     process.env.GOOGLE_CLIENT_ID,
@@ -70,25 +85,7 @@ async function detectGoogleLogin(request: Request): Promise<{ active: boolean; p
   ].filter(Boolean) as string[];
 
   const payload = await verifyGoogleIdToken(body.idToken.token, validAudiences);
-  return { active: true, picture: payload?.picture ?? null };
-}
-
-/** Resolve the session from the login response and backfill a missing image. */
-async function syncProfileImageFromLogin(response: Response, idTokenPicture: string | null): Promise<void> {
-  try {
-    const cookies = (response.headers.getSetCookie?.() ?? [])
-      .map((c) => c.split(";")[0])
-      .filter(Boolean)
-      .join("; ");
-    if (!cookies) return;
-    const session = await auth.api.getSession({ headers: new Headers({ cookie: cookies }) });
-    if (session?.user?.id) {
-      await syncGoogleProfileImage(session.user.id, idTokenPicture);
-    }
-  } catch (err) {
-    // Backfilling an avatar must never break the sign-in itself.
-    console.error("[auth image sync]", err);
-  }
+  return { isGoogleLogin: true, picture: payload?.picture ?? null };
 }
 
 export const GET = handler;
