@@ -101,7 +101,6 @@
     <string name="invite_view_game">Visualizza partita</string>
     <string name="invite_sign_in">Accedi</string>
     <string name="invite_not_for_you">Questo invito non è per il tuo account.</string>
-    <string name="invite_not_for_you">Questo invito non è per il tuo account.</string>
 
     <string name="game_title">Titolo della partita</string>
     <string name="game_title_placeholder">es. Calcio del martedì</string>

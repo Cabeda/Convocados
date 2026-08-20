@@ -58,7 +58,7 @@ async function inviteBlockReason(eventId: string, gameId: string, inviteeUserId:
     getNotificationPrefs(inviteeUserId),
     prisma.eventPlayer.findFirst({ where: { eventId, userId: inviteeUserId } }),
     prisma.gameParticipant.findFirst({
-      where: { gameId, eventPlayer: { userId: inviteeUserId }, archivedAt: null },
+      where: { gameId, eventPlayer: { userId: inviteeUserId }, archivedAt: null, status: { not: "pending" } },
       select: { id: true },
     }),
     prisma.playerInvite.findFirst({
