@@ -189,6 +189,12 @@ model Event {
   courtWatchConfig String?
   courtWatchAlerts CourtWatchAlert[]
 
+  // Open Pickups (ADR-0021): events sourced from Playtomic bookings
+  source String @default("manual") // "manual" | "playtomic"
+  sourceKey String? // natural key for pickups: "{tenantId}|{resourceId}|{slotDate}|{slotStart}" (unique)
+  playtomicTenantId String? // Playtomic club id (pickup source)
+  playtomicTenantName String? // Playtomic club name (pickup title)
+
   // Archive
   archivedAt     DateTime?
 
@@ -196,6 +202,8 @@ model Event {
   updatedAt      DateTime              @updatedAt
 
   @@index([ownerId])
+  @@unique([sourceKey])
+  @@index([source, archivedAt])
 }
 
 model GameHistory {
