@@ -2,9 +2,11 @@ import { PrismaClient, Prisma } from "./__generated__/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 
 let prisma: PrismaClient;
+let prismaReady: Promise<void>;
 
 declare global {
   var __prisma: PrismaClient | undefined;
+  var __prismaReady: Promise<void> | undefined;
 }
 
 async function applyPragmas(client: PrismaClient): Promise<void> {
@@ -14,9 +16,34 @@ async function applyPragmas(client: PrismaClient): Promise<void> {
   await client.$queryRawUnsafe("PRAGMA cache_size = -20000");
   await client.$queryRawUnsafe("PRAGMA foreign_keys = ON");
   await client.$queryRawUnsafe("PRAGMA mmap_size = 67108864");
+  // Long-lived connection: let SQLite keep query plans/statistics fresh.
+  // Mask 0x10002 = run ANALYZE where the query planner suggests, skipping
+  // tables with >1M rows so startup stays fast. (sqlite.org/pragma.html)
+  await client.$queryRawUnsafe("PRAGMA optimize=0x10002");
+  await client.$queryRawUnsafe("PRAGMA temp_store = MEMORY");
+  // Bound the WAL file so it can't balloon unbounded after checkpoints.
+  await client.$queryRawUnsafe("PRAGMA journal_size_limit = 67108864");
 }
 
-function createClient(): PrismaClient {
+/** Periodic query-plan maintenance. Docs recommend running plain
+ * `PRAGMA optimize` once per day on long-lived connections. */
+export function runDbOptimize(): Promise<unknown> {
+  return prisma.$queryRawUnsafe("PRAGMA optimize");
+}
+
+const DAILY_MS = 24 * 60 * 60 * 1000;
+
+/** Registers a daily `PRAGMA optimize`. unref'd so it never keeps the
+ * process alive by itself. */
+export function scheduleDbOptimize(intervalMs: number = DAILY_MS): NodeJS.Timeout {
+  const timer = setInterval(() => {
+    void runDbOptimize().catch(() => {});
+  }, intervalMs);
+  timer.unref();
+  return timer;
+}
+
+function createClient(): { client: PrismaClient; ready: Promise<void> } {
   // timestampFormat: unixepoch-ms — persist DateTime as INTEGER epoch-ms, the
   // format the DB already holds (Prisma 6's built-in SQLite connector wrote
   // integers). The adapter default (iso8601 TEXT) makes DateTime equality
@@ -29,17 +56,24 @@ function createClient(): PrismaClient {
     { timestampFormat: "unixepoch-ms" },
   );
   const client = new PrismaClient({ adapter });
-  applyPragmas(client).catch(() => {});
-  return client;
+  return { client, ready: applyPragmas(client) };
 }
 
 if (process.env.NODE_ENV === "production") {
-  prisma = createClient();
+  const { client, ready } = createClient();
+  prisma = client;
+  prismaReady = ready;
+  ready
+    .then(() => scheduleDbOptimize())
+    .catch(() => {});
 } else {
   if (!global.__prisma) {
-    global.__prisma = createClient();
+    const { client, ready } = createClient();
+    global.__prisma = client;
+    global.__prismaReady = ready;
   }
   prisma = global.__prisma;
+  prismaReady = global.__prismaReady!;
 }
 
-export { Prisma, prisma, applyPragmas };
+export { Prisma, prisma, prismaReady, applyPragmas };

@@ -34,6 +34,15 @@ describe("GET /api/health", () => {
     expect(body.db.writable).toBe(true);
   });
 
+  it("includes SQLite page/freelist counts and WAL size", async () => {
+    const res = await GET(ctx());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(typeof body.db.pageCount).toBe("number");
+    expect(typeof body.db.freelistCount).toBe("number");
+    expect(typeof body.db.walSizeBytes).toBe("number");
+  });
+
   it("does not include litestream in non-production env", async () => {
     const oldNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "development";
