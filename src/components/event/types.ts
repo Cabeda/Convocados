@@ -55,6 +55,9 @@ export interface EventData {
   /** ADR 0025: players who declined (rsvp=no) the current game. Server-gated —
    *  only participants/owner/admins receive a non-empty array. */
   declined?: Array<{ id: string; name: string; userId: string | null; image: string | null }>;
+  /** ADR 0025: pending PlayerInvite entries for the current game. Server-gated —
+   *  only participants/owner/admins (or the invitee themselves) see a non-empty array. */
+  invited?: Array<{ id: string; name: string; userId: string | null; image: string | null }>;
 }
 
 export interface KnownPlayer {

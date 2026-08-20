@@ -94,7 +94,7 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
     effectiveGameCost(gameId, eventId),
     db.game.findUnique({ where: { id: gameId }, select: { payerEventPlayerId: true, status: true } }),
     db.gameParticipant.findMany({
-      where: { gameId, archivedAt: null },
+      where: { gameId, archivedAt: null, status: { not: "pending" } },
       include: { eventPlayer: { select: { id: true, name: true, userId: true } } },
       orderBy: { order: "asc" },
     }),
