@@ -27,6 +27,10 @@ async function seedEvent(id: string, ownerId: string, overrides: Record<string, 
   });
 }
 
+async function seedGame(eventId: string, status = "upcoming", dateTime = new Date(Date.now() + 86400000)) {
+  await prisma.game.create({ data: { eventId, dateTime, status } });
+}
+
 async function seedGameHistory(eventId: string, status = "played", dateTime = new Date()) {
   await prisma.gameHistory.create({
     data: {
@@ -168,6 +172,7 @@ describe("getAdminStats", () => {
     expect(stats.totalEvents).toBe(2);
     expect(stats.totalGamesPlayed).toBe(2);
     expect(stats.activeEvents).toBe(2); // both are in the future
+    expect(stats.activeGames).toBe(2); // recurring + future one-off
     expect(stats.activeUsers).toBe(1);
     expect(stats.gamesLast7d).toBe(2);
     expect(stats.gamesLast30d).toBe(2);
@@ -184,12 +189,39 @@ describe("getAdminStats", () => {
     expect(stats.totalEvents).toBe(0);
     expect(stats.totalGamesPlayed).toBe(0);
     expect(stats.activeEvents).toBe(0);
+    expect(stats.activeGames).toBe(0);
     expect(stats.activeUsers).toBe(0);
     expect(stats.gamesLast7d).toBe(0);
     expect(stats.gamesLast30d).toBe(0);
     expect(stats.recurringEvents).toBe(0);
     expect(stats.oneOffEvents).toBe(0);
     expect(stats.sportDistribution).toEqual({});
+  });
+
+  it("counts active games: future, in-progress, or recurring (non-archived)", async () => {
+    await seedUser("u1");
+    // Recurring → active
+    await seedEvent("e1", "u1", { isRecurring: true });
+    // One-off, future dateTime → active (legacy, no Game rows)
+    await seedEvent("e2", "u1", { isRecurring: false });
+    // One-off, past dateTime, no Game rows → not active
+    await seedEvent("e3", "u1", { isRecurring: false, dateTime: new Date(Date.now() - 86400000) });
+    // Archived recurring → not active
+    await seedEvent("e4", "u1", { isRecurring: true, archivedAt: new Date() });
+    // One-off, past dateTime but with an upcoming Game → active
+    await seedEvent("e5", "u1", { isRecurring: false, dateTime: new Date(Date.now() - 86400000) });
+    await seedGame("e5", "upcoming", new Date(Date.now() + 86400000));
+    // One-off, past dateTime but with an in-progress Game → active
+    await seedEvent("e6", "u1", { isRecurring: false, dateTime: new Date(Date.now() - 86400000) });
+    await seedGame("e6", "in_progress", new Date());
+    // Archived event with an upcoming Game → not active
+    await seedEvent("e7", "u1", { isRecurring: false, dateTime: new Date(Date.now() - 86400000), archivedAt: new Date() });
+    await seedGame("e7", "upcoming", new Date(Date.now() + 86400000));
+
+    const { getAdminStats } = await import("~/lib/admin.server");
+    const stats = await getAdminStats();
+
+    expect(stats.activeGames).toBe(4); // e1, e2, e5, e6
   });
 });
 

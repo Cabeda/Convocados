@@ -38,6 +38,7 @@ export async function getAdminStats() {
     totalEvents,
     totalGamesPlayed,
     activeEvents,
+    activeGames,
     gamesLast7d,
     gamesLast30d,
     sportCounts,
@@ -49,6 +50,17 @@ export async function getAdminStats() {
     prisma.event.count(),
     prisma.gameHistory.count({ where: { status: "played" } }),
     prisma.event.count({ where: { dateTime: { gte: now } } }),
+    // Active games: non-archived events that are recurring OR have a future/ongoing game
+    prisma.event.count({
+      where: {
+        archivedAt: null,
+        OR: [
+          { isRecurring: true },
+          { dateTime: { gte: now } },
+          { games: { some: { status: { in: ["upcoming", "in_progress"] } } } },
+        ],
+      },
+    }),
     prisma.gameHistory.count({ where: { status: "played", dateTime: { gte: sevenDaysAgo } } }),
     prisma.gameHistory.count({ where: { status: "played", dateTime: { gte: thirtyDaysAgo } } }),
     prisma.event.groupBy({ by: ["sport"], _count: { sport: true } }),
@@ -72,6 +84,7 @@ export async function getAdminStats() {
     totalEvents,
     totalGamesPlayed,
     activeEvents,
+    activeGames,
     activeUsers: activeUserIds.length,
     gamesLast7d,
     gamesLast30d,
