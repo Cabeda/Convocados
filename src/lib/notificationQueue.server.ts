@@ -30,7 +30,8 @@ export type NotificationJobType =
   | "payment_confirmed"
   | "payment_self_reported"
   | "recruitment"
-  | "few_spots_left";
+  | "few_spots_left"
+  | "player_invited";
 
 export interface NotificationJobPayload {
   title: string;
