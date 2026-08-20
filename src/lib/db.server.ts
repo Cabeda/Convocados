@@ -25,22 +25,11 @@ async function applyPragmas(client: PrismaClient): Promise<void> {
   await client.$queryRawUnsafe("PRAGMA journal_size_limit = 67108864");
 }
 
-/** Periodic query-plan maintenance. Docs recommend running plain
- * `PRAGMA optimize` once per day on long-lived connections. */
+/** Periodic query-plan maintenance. The scheduler worker calls this once per
+ * day via POST /api/cron/db-maintenance — the app itself never holds a timer
+ * (it suspends on inactivity). */
 export function runDbOptimize(): Promise<unknown> {
   return prisma.$queryRawUnsafe("PRAGMA optimize");
-}
-
-const DAILY_MS = 24 * 60 * 60 * 1000;
-
-/** Registers a daily `PRAGMA optimize`. unref'd so it never keeps the
- * process alive by itself. */
-export function scheduleDbOptimize(intervalMs: number = DAILY_MS): NodeJS.Timeout {
-  const timer = setInterval(() => {
-    void runDbOptimize().catch(() => {});
-  }, intervalMs);
-  timer.unref();
-  return timer;
 }
 
 function createClient(): { client: PrismaClient; ready: Promise<void> } {
@@ -63,9 +52,6 @@ if (process.env.NODE_ENV === "production") {
   const { client, ready } = createClient();
   prisma = client;
   prismaReady = ready;
-  ready
-    .then(() => scheduleDbOptimize())
-    .catch(() => {});
 } else {
   if (!global.__prisma) {
     const { client, ready } = createClient();
