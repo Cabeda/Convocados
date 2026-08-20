@@ -136,7 +136,8 @@ public-games:
   capabilities:
     list-view: { web: true, android: true, wearos: false }
     map-view: { web: true, android: false, wearos: false }
-    sport-filter: { web: true, android: false, wearos: false }
+    sport-filter: { web: true, android: true, wearos: false }
+    adopt-open-pickup: { web: true, android: true, wearos: false }
 
 notifications:
   web: true

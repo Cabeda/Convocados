@@ -29,6 +29,9 @@ export const GET: APIRoute = async ({ request }) => {
     playerCount: e.players.length,
     spotsLeft: Math.max(0, e.maxPlayers - e.players.length),
     isRecurring: e.isRecurring,
+    source: e.source,
+    ownerId: e.ownerId,
+    playtomicTenantName: e.playtomicTenantName,
   }));
 
   return Response.json(buildPaginatedResponse(mapped, limit));

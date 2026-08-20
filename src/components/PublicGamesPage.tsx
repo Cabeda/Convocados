@@ -14,6 +14,7 @@ import GridViewIcon from "@mui/icons-material/GridView";
 import TableRowsIcon from "@mui/icons-material/TableRows";
 import MapIcon from "@mui/icons-material/Map";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
+import PublicIcon from "@mui/icons-material/Public";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -34,6 +35,31 @@ interface PublicEvent {
   playerCount: number;
   spotsLeft: number;
   isRecurring: boolean;
+  source?: string;
+  ownerId?: string | null;
+  playtomicTenantName?: string | null;
+}
+
+const isOpenPickup = (ev: PublicEvent): boolean => ev.source === "playtomic" && ev.ownerId === null;
+
+/** Adopt an Open Pickup (ADR-0021): becomes the owner, stays public. */
+async function adoptPickup(ev: PublicEvent, t: TFunction) {
+  if (!window.confirm(t("claimPickupConfirm"))) return;
+  try {
+    const res = await fetch(`/api/events/${ev.id}/adopt`, { method: "POST" });
+    if (res.status === 401) {
+      window.location.href = `/auth/signin?callbackURL=${encodeURIComponent(`/events/${ev.id}`)}`;
+      return;
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      alert(body?.error ?? t("claimPickupFailed"));
+      return;
+    }
+    window.location.href = `/events/${ev.id}`;
+  } catch {
+    alert(t("claimPickupFailed"));
+  }
 }
 
 interface PaginatedPublicEvents {
@@ -66,6 +92,7 @@ function CardView({ events, locale, t }: {
                 display: "flex", flexDirection: "column", gap: 1.5,
                 transition: "transform 0.15s, box-shadow 0.15s",
                 "&:hover": { transform: "translateY(-2px)", boxShadow: 6 },
+                ...(isOpenPickup(ev) ? { border: "1px dashed", borderColor: "primary.main" } : {}),
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -73,6 +100,14 @@ function CardView({ events, locale, t }: {
                   {ev.title}
                 </Typography>
                 <Box sx={{ display: "flex", gap: 0.5, ml: 1, flexShrink: 0 }}>
+                  {isOpenPickup(ev) && (
+                    <Chip
+                      icon={<PublicIcon />}
+                      label={t("openPickupBadge")}
+                      size="small"
+                      color="primary"
+                    />
+                  )}
                   <Chip
                     label={t(sportPreset.labelKey as Parameters<typeof t>[0])}
                     size="small"
@@ -128,14 +163,25 @@ function CardView({ events, locale, t }: {
               </Stack>
 
               <Box sx={{ mt: "auto", pt: 1 }}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  href={`/events/${ev.id}`}
-                  sx={{ borderRadius: 2 }}
-                >
-                  {t("joinGame")}
-                </Button>
+                {isOpenPickup(ev) ? (
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    sx={{ borderRadius: 2 }}
+                    onClick={() => void adoptPickup(ev, t)}
+                  >
+                    {t("claimPickup")}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    href={`/events/${ev.id}`}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    {t("joinGame")}
+                  </Button>
+                )}
               </Box>
             </Paper>
           </Grid>
@@ -210,7 +256,9 @@ function TableView({ events, locale, t }: {
                   )}
                 </TableCell>
                 <TableCell>
-                  {ev.isRecurring ? (
+                  {isOpenPickup(ev) ? (
+                    <Chip icon={<PublicIcon />} label={t("openPickupBadge")} size="small" color="primary" />
+                  ) : ev.isRecurring ? (
                     <Chip icon={<EventRepeatIcon />} label={t("recurring")} size="small" color="secondary" variant="outlined" />
                   ) : (
                     <Typography variant="body2" color="text.secondary">{t("oneOff")}</Typography>

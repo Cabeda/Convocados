@@ -188,6 +188,10 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun claimOwnership(eventId: String): OkResponse =
         client.post("/api/events/$eventId/claim")
 
+    /** Adopt an Open Pickup (ADR-0021): user becomes the owner, event stays public. */
+    suspend fun adoptPickup(eventId: String): OkResponse =
+        client.post("/api/events/$eventId/adopt")
+
     suspend fun relinquishOwnership(eventId: String): OkResponse =
         client.delete("/api/events/$eventId/claim")
 
