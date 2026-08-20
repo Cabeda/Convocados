@@ -16,6 +16,7 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
 import BackspaceIcon from "@mui/icons-material/Backspace";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import DoNotDisturbAltIcon from "@mui/icons-material/DoNotDisturbAlt";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import { PlayerAvatar, AnonymousPlayerIcon } from "./PlayerIdentity";
@@ -98,6 +99,9 @@ interface Props {
   // #XXX Leave flow
   /** ISO dateTime of the event. Used to determine if we're within 48h before kickoff for the leave-warning copy. */
   eventDateTime?: string;
+  /** ADR 0025: players who declined (rsvp=no) the current game. Server-gated —
+   *  only participants/owner/admins receive a non-empty array. Read-only display. */
+  declined?: Array<{ id: string; name: string; userId: string | null; image?: string | null }>;
 }
 
 export function PlayerList({
@@ -115,6 +119,7 @@ export function PlayerList({
   onJoinAsSelf: _onJoinAsSelf,
   eventDateTime,
   rosterLocked = false,
+  declined,
 }: Props) {
   const t = useT();
   const theme = useTheme();
@@ -683,6 +688,51 @@ export function PlayerList({
                     </ListItem>
                   );
                 })}
+              </List>
+            </Paper>
+          </>
+        )}
+
+        {declined && declined.length > 0 && (
+          <>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <DoNotDisturbAltIcon fontSize="small" color="action" />
+              <Typography variant="body2" fontWeight={600} color="text.secondary">
+                {t("declinedPlayers", { n: declined.length })}
+              </Typography>
+            </Box>
+            <Paper variant="outlined" sx={{
+              p: 1,
+              backgroundColor: alpha(theme.palette.action.hover, 0.35),
+              borderColor: alpha(theme.palette.text.disabled, 0.3),
+            }}>
+              <List dense disablePadding>
+                {declined.map((d) => (
+                  <ListItem key={d.id} sx={{ borderRadius: 2, px: 1, py: 0.5 }}>
+                    {d.userId ? (
+                      <Tooltip title={t("protectedPlayer")}>
+                        <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
+                          <PlayerAvatar userId={d.userId} name={d.name} image={d.image ?? null} />
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip title={t("anonymousPlayer")}>
+                        <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
+                          <AnonymousPlayerIcon />
+                        </span>
+                      </Tooltip>
+                    )}
+                    <ListItemText
+                      primary={d.userId ? (
+                        <a href={`/users/${d.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>
+                          {d.name}
+                        </a>
+                      ) : d.name}
+                      slotProps={{ primary: { sx: { fontWeight: 500, fontSize: "0.9rem", color: "text.secondary" } } }}
+                    />
+                    <Chip size="small" variant="outlined" color="default" label={t("declinedLabel")} />
+                  </ListItem>
+                ))}
               </List>
             </Paper>
           </>

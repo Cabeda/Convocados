@@ -249,6 +249,7 @@ export const GET: APIRoute = async ({ params, request }) => {
         userId,
         image: userId ? (imageByUserId.get(userId) ?? null) : null,
         createdAt: gp.createdAt.toISOString(),
+        invitationOptOutAt: gp.eventPlayer.invitationOptOutAt?.toISOString() ?? null,
       };
     });
   } else {
@@ -257,6 +258,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       userId: p.userId ?? null,
       image: user?.image ?? null,
       createdAt: p.createdAt.toISOString(),
+      invitationOptOutAt: null,
     }));
   }
 
@@ -268,6 +270,48 @@ export const GET: APIRoute = async ({ params, request }) => {
       select: { status: true },
     });
     gameStatus = currentGame?.status ?? null;
+  }
+
+  // ADR 0025: declined roster (rsvp=no on the current game) — read-only,
+  // visible to participants + owner + admins only. Anonymous/followers get [].
+  let declined: Array<{ id: string; name: string; userId: string | null; image: string | null }> = [];
+  if (event.currentGameId) {
+    const declinedRsvps = await prisma.rsvp.findMany({
+      where: { gameId: event.currentGameId, status: "no" },
+      select: { eventPlayerId: true },
+    });
+    if (declinedRsvps.length > 0) {
+      const declinedEps = await prisma.eventPlayer.findMany({
+        where: { id: { in: declinedRsvps.map((r) => r.eventPlayerId) } },
+        select: { id: true, name: true, userId: true },
+      });
+      const declinedUserIds = declinedEps.map((e) => e.userId).filter((u): u is string => !!u);
+      const declinedUsers = declinedUserIds.length
+        ? await prisma.user.findMany({ where: { id: { in: declinedUserIds } }, select: { id: true, image: true } })
+        : [];
+      const declinedImageByUserId = new Map(declinedUsers.map((u) => [u.id, u.image]));
+
+      const sessionForDecline = await getSession(request).catch(() => null);
+      const viewerId = sessionForDecline?.user?.id ?? null;
+      let viewerSeesDeclined = false;
+      if (viewerId) {
+        if (event.ownerId === viewerId) {
+          viewerSeesDeclined = true;
+        } else {
+          const isParticipant = playersPayload.some((p) => p.userId === viewerId);
+          const isAdm = await checkEventAdmin(event.id, viewerId).catch(() => false);
+          viewerSeesDeclined = isParticipant || isAdm;
+        }
+      }
+      if (viewerSeesDeclined) {
+        declined = declinedEps.map((e) => ({
+          id: e.id,
+          name: e.name,
+          userId: e.userId,
+          image: e.userId ? (declinedImageByUserId.get(e.userId) ?? null) : null,
+        }));
+      }
+    }
   }
 
   // ADR 0016: filter teamResults to only include members in the current game's player list.
@@ -300,5 +344,6 @@ export const GET: APIRoute = async ({ params, request }) => {
     nextResetAt: event.nextResetAt?.toISOString() ?? null,
     archivedAt: event.archivedAt?.toISOString() ?? null,
     players: playersPayload,
+    declined,
   });
 };

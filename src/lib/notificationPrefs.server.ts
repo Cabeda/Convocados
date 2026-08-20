@@ -180,3 +180,9 @@ export function wantsPaymentReminderEmail(prefs: NotificationPrefs): boolean {
 export function wantsPaymentReminderPush(prefs: NotificationPrefs): boolean {
   return prefs.pushEnabled && prefs.paymentReminderPush;
 }
+
+/** ADR 0025: does this user accept PlayerInvites + co-play suggestions?
+ *  Global kill switch — `invitesEnabled` defaults to true. */
+export function wantsInvites(prefs: NotificationPrefs): boolean {
+  return prefs.invitesEnabled !== false;
+}

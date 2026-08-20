@@ -13,6 +13,8 @@ export interface NotificationPrefs {
   weeklySummaryEmail: boolean;
   paymentReminderEmail: boolean;
   paymentReminderPush: boolean;
+  // ADR 0025: global invite kill switch — receiving PlayerInvites + being suggested
+  invitesEnabled: boolean;
   reminder24h: boolean;
   reminder2h: boolean;
   reminder1h: boolean;
@@ -36,6 +38,7 @@ export const DEFAULTS: NotificationPrefs = {
   weeklySummaryEmail: false,
   paymentReminderEmail: false,
   paymentReminderPush: true,
+  invitesEnabled: true,
   reminder24h: true,
   reminder2h: true,
   reminder1h: false,

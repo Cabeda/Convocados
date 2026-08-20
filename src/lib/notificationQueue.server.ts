@@ -311,6 +311,13 @@ async function createInAppNotifications(
     if (event?.ownerId) recipientIds.add(event.ownerId);
     if (senderClientId) recipientIds.delete(senderClientId);
 
+    // ADR 0025: recruitment / spot-available pings skip declined + opted-out users.
+    if (type === "recruitment" || type === "few_spots_left" || type === "spot_available") {
+      const { getPingSuppressedUserIds } = await import("./inviteOptOut.server");
+      const suppressed = await getPingSuppressedUserIds(eventId);
+      for (const id of suppressed) recipientIds.delete(id);
+    }
+
     if (recipientIds.size === 0) return;
 
     await prisma.inAppNotification.createMany({

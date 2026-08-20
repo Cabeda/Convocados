@@ -15,6 +15,8 @@ interface FollowOverrides {
   isPlayer?: boolean;
   isAdmin?: boolean;
   pushEnabled?: boolean;
+  /** ADR 0025: per-event invite opt-out (EventPlayer.invitationOptOutAt). */
+  inviteOptedOut?: boolean;
 }
 
 type OverrideField = "mutePlayerActivity" | "muteReminders" | "mutePostGame" | "muteEventDetails";
@@ -54,6 +56,21 @@ export function MyNotificationsDialog({ eventId, open, onClose }: Props) {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [field]: newValue }),
+      });
+    } catch { /* silent — local state is already updated */ }
+  };
+
+  /** ADR 0025: per-event invite opt-out — toggles EventPlayer.invitationOptOutAt
+   *  via the dedicated endpoint (independent of follow overrides). */
+  const toggleInviteOptOut = async () => {
+    if (!state) return;
+    const newValue = !state.inviteOptedOut;
+    setState((prev) => prev ? { ...prev, inviteOptedOut: newValue } : prev);
+    try {
+      await fetch(`/api/events/${eventId}/invitation-opt-out`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ optOut: newValue }),
       });
     } catch { /* silent — local state is already updated */ }
   };
@@ -188,6 +205,39 @@ export function MyNotificationsDialog({ eventId, open, onClose }: Props) {
               </Box>
             );
           })}
+
+          {/* ADR 0025: per-event invite opt-out — stops RSVP/recruitment pings,
+              suggestions and invites for THIS event only. Independent of follow. */}
+          <Box
+            sx={{
+              display: "flex", alignItems: "flex-start", gap: 1.5,
+              p: 1.5, borderRadius: 2, mt: 1,
+              bgcolor: state.inviteOptedOut
+                ? alpha(theme.palette.action.hover, 0.03)
+                : alpha(theme.palette.success.main, 0.04),
+              border: `1px solid ${state.inviteOptedOut ? alpha(theme.palette.divider, 0.5) : alpha(theme.palette.success.main, 0.2)}`,
+            }}
+          >
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="body2" fontWeight={600}>
+                {t("notifyInviteOptOutLabel")}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {t("notifyInviteOptOutDesc")}
+              </Typography>
+            </Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={!state.inviteOptedOut}
+                  onChange={toggleInviteOptOut}
+                />
+              }
+              label=""
+              sx={{ m: 0, mr: -0.5 }}
+            />
+          </Box>
         </Stack>
         {/* Admin-specific notifications — only shown to organizers/admins */}
         {state.isAdmin && (
