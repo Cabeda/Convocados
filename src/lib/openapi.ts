@@ -378,6 +378,14 @@ export const openApiSpec = {
         responses: { "200": { description: "Ownership transferred" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/adopt": {
+      post: {
+        summary: "Adopt an Open Pickup (ADR-0021)",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Pickup adopted" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/status": {
       get: {
         summary: "Get event status (player count, spots left)",
