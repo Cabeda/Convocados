@@ -27,6 +27,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +48,7 @@ import dev.convocados.data.api.*
 import dev.convocados.data.auth.TokenStore
 import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.repository.EventRepository
+import dev.convocados.ui.components.InitialAvatar
 import dev.convocados.ui.screen.courts.PLAYTOMIC_SPORTS
 import dev.convocados.ui.screen.games.formatEventDateInTz
 import dev.convocados.ui.screen.games.formatRelativeDate
@@ -1363,6 +1365,7 @@ fun PlayerAvatar(
             .size(24.dp)
             .clip(CircleShape)
             .background(bg)
+            .semantics(mergeDescendants = true) { contentDescription = name }
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -1371,23 +1374,13 @@ fun PlayerAvatar(
                 model = image,
                 contentDescription = name,
                 modifier = Modifier.fillMaxSize(),
-                loading = { PlayerInitial(name, fg) },
-                error = { PlayerInitial(name, fg) },
+                loading = { InitialAvatar(name, fg) },
+                error = { InitialAvatar(name, fg) },
             )
         } else {
-            PlayerInitial(name, fg)
+            InitialAvatar(name, fg)
         }
     }
-}
-
-@Composable
-private fun PlayerInitial(name: String, color: Color) {
-    Text(
-        name.trim().take(1).uppercase(),
-        color = color,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.SemiBold,
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

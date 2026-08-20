@@ -1126,6 +1126,19 @@ const fr: TranslationKeys = {
   landingOpenSource: "Open source · Gratuit pour toujours",
   supportUs: "Soutenez-nous",
 
+  // Beta testing (#740 follow-up)
+  landingBetaButton: "Obtenir l'appli Android bêta",
+  betaBannerTitle: "Testez l'appli Android en avant-première",
+  betaBannerBody: "Rejoignez la bêta et installez Convocados directement depuis le Play Store — un clic pour adhérer, puis elle est sur votre écran d'accueil.",
+  getTheApp: "Obtenir l'appli",
+  appsForEveryTeamTitle: "Des apps pour chaque équipe",
+  iosFundHeading: "Aidez-nous à amener Convocados sur iPhone",
+  iosFundBody: "Votre contribution couvre l'adhésion à l'Apple Developer Program pour que Convocados reste gratuit et open source.",
+  iosFundCta: "Aidez à financer l'app iOS",
+  iosFundMonthly: "Vous préférez un soutien mensuel ? GitHub Sponsors",
+  iosFundProgress: "${raised} sur ${target} récoltés",
+  appsLearnMore: "En savoir plus sur les apps mobiles",
+
   // MVP voting (#200)
   voteMvp: "Voter MVP",
   mvpVotingClosed: "Vote MVP fermé",

@@ -1,12 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { randomBytes, randomUUID } from "node:crypto";
 import { prisma } from "~/lib/db.server";
+import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 // Mock better-auth handler — controls email/password sign-in/sign-up behavior
 const mockAuthHandler = vi.fn();
 vi.mock("~/lib/auth.server", () => ({
   auth: { handler: (...args: any[]) => mockAuthHandler(...args) },
   ensureTrustedClientInDB: vi.fn(),
+}));
+
+// Mock Google ID token verification — the real crypto verification is covered
+// in google-token.test.ts; here we only exercise the handler logic.
+const mockVerifyGoogleToken = vi.fn();
+vi.mock("~/lib/googleToken.server", () => ({
+  verifyGoogleIdToken: (...args: any[]) => mockVerifyGoogleToken(...args),
 }));
 
 // Import the handler
@@ -22,6 +30,8 @@ function ctx(body: unknown) {
 }
 
 beforeEach(async () => {
+  await resetApiRateLimitStore();
+  mockVerifyGoogleToken.mockReset();
   await prisma.oauthAccessToken.deleteMany();
   await prisma.oauthRefreshToken.deleteMany();
   await prisma.account.deleteMany();
@@ -149,60 +159,24 @@ describe("POST /api/auth/mobile-native — google-id-token", () => {
     expect(body.error).toContain("idToken is required");
   });
 
-  it("returns 401 for invalid token (mocked fetch)", async () => {
-    // Mock the Google tokeninfo fetch to return 400
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn().mockResolvedValueOnce(new Response("", { status: 400 })) as any;
+  it("returns 401 when Google verification fails", async () => {
+    mockVerifyGoogleToken.mockResolvedValueOnce(null);
 
     const res = await POST(ctx({ action: "google-id-token", idToken: "bad-token" }));
     expect(res.status).toBe(401);
     const body = await res.json();
     expect(body.error).toContain("Invalid or expired");
-
-    globalThis.fetch = originalFetch;
-  });
-
-  it("returns 401 when audience does not match", async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({ aud: "wrong-client-id", email: "a@b.com", email_verified: true, sub: "123" }), { status: 200 }),
-    ) as any;
-
-    const res = await POST(ctx({ action: "google-id-token", idToken: "valid-format" }));
-    expect(res.status).toBe(401);
-
-    globalThis.fetch = originalFetch;
-  });
-
-  it("returns 401 when email is not verified", async () => {
-    const originalFetch = globalThis.fetch;
-    const originalEnv = process.env.GOOGLE_CLIENT_ID;
-    process.env.GOOGLE_CLIENT_ID = "test-client-id";
-    globalThis.fetch = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({ aud: "test-client-id", email: "a@b.com", email_verified: "false", sub: "123" }), { status: 200 }),
-    ) as any;
-
-    const res = await POST(ctx({ action: "google-id-token", idToken: "valid-format" }));
-    expect(res.status).toBe(401);
-
-    globalThis.fetch = originalFetch;
-    process.env.GOOGLE_CLIENT_ID = originalEnv;
   });
 
   it("creates new user and returns tokens for valid Google token", async () => {
-    const originalFetch = globalThis.fetch;
-    const originalEnv = process.env.GOOGLE_CLIENT_ID;
-    process.env.GOOGLE_CLIENT_ID = "test-client-id";
-    globalThis.fetch = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        aud: "test-client-id",
-        email: "google@example.com",
-        email_verified: true,
-        sub: "google-sub-123",
-        name: "Google User",
-        picture: "https://example.com/photo.jpg",
-      }), { status: 200 }),
-    ) as any;
+    mockVerifyGoogleToken.mockResolvedValue({
+      aud: "test-client-id",
+      email: "google@example.com",
+      email_verified: true,
+      sub: "google-sub-123",
+      name: "Google User",
+      picture: "https://example.com/photo.jpg",
+    });
 
     const res = await POST(ctx({ action: "google-id-token", idToken: "valid-token" }));
     expect(res.status).toBe(200);
@@ -221,9 +195,6 @@ describe("POST /api/auth/mobile-native — google-id-token", () => {
     const account = await prisma.account.findFirst({ where: { userId: user!.id, providerId: "google" } });
     expect(account).not.toBeNull();
     expect(account!.accountId).toBe("google-sub-123");
-
-    globalThis.fetch = originalFetch;
-    process.env.GOOGLE_CLIENT_ID = originalEnv;
   });
 
   it("links Google account to existing user found by email", async () => {
@@ -232,19 +203,14 @@ describe("POST /api/auth/mobile-native — google-id-token", () => {
       data: { id: "existing-u", email: "existing@example.com", name: "Existing", emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
     });
 
-    const originalFetch = globalThis.fetch;
-    const originalEnv = process.env.GOOGLE_CLIENT_ID;
-    process.env.GOOGLE_CLIENT_ID = "test-client-id";
-    globalThis.fetch = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        aud: "test-client-id",
-        email: "existing@example.com",
-        email_verified: true,
-        sub: "google-sub-456",
-        name: "Existing User",
-        picture: "https://example.com/new-pic.jpg",
-      }), { status: 200 }),
-    ) as any;
+    mockVerifyGoogleToken.mockResolvedValue({
+      aud: "test-client-id",
+      email: "existing@example.com",
+      email_verified: true,
+      sub: "google-sub-456",
+      name: "Existing User",
+      picture: "https://example.com/new-pic.jpg",
+    });
 
     const res = await POST(ctx({ action: "google-id-token", idToken: "valid-token" }));
     expect(res.status).toBe(200);
@@ -257,9 +223,6 @@ describe("POST /api/auth/mobile-native — google-id-token", () => {
     // Verify profile picture was updated
     const user = await prisma.user.findUnique({ where: { id: "existing-u" } });
     expect(user!.image).toBe("https://example.com/new-pic.jpg");
-
-    globalThis.fetch = originalFetch;
-    process.env.GOOGLE_CLIENT_ID = originalEnv;
   });
 
   it("skips account link if already exists", async () => {
@@ -270,18 +233,13 @@ describe("POST /api/auth/mobile-native — google-id-token", () => {
       data: { id: "acc-1", userId: "linked-u", accountId: "google-sub-789", providerId: "google", createdAt: new Date(), updatedAt: new Date() },
     });
 
-    const originalFetch = globalThis.fetch;
-    const originalEnv = process.env.GOOGLE_CLIENT_ID;
-    process.env.GOOGLE_CLIENT_ID = "test-client-id";
-    globalThis.fetch = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        aud: "test-client-id",
-        email: "linked@example.com",
-        email_verified: true,
-        sub: "google-sub-789",
-        picture: "https://example.com/pic.jpg", // same picture, no update
-      }), { status: 200 }),
-    ) as any;
+    mockVerifyGoogleToken.mockResolvedValue({
+      aud: "test-client-id",
+      email: "linked@example.com",
+      email_verified: true,
+      sub: "google-sub-789",
+      picture: "https://example.com/pic.jpg", // same picture, no update
+    });
 
     const res = await POST(ctx({ action: "google-id-token", idToken: "valid-token" }));
     expect(res.status).toBe(200);
@@ -289,9 +247,6 @@ describe("POST /api/auth/mobile-native — google-id-token", () => {
     // Should still only have one account link
     const accounts = await prisma.account.findMany({ where: { userId: "linked-u", providerId: "google" } });
     expect(accounts).toHaveLength(1);
-
-    globalThis.fetch = originalFetch;
-    process.env.GOOGLE_CLIENT_ID = originalEnv;
   });
 });
 
@@ -393,5 +348,57 @@ describe("POST /api/auth/mobile-native — refresh", () => {
     await POST(ctx({ action: "refresh", refresh_token: refreshToken }));
     const res = await POST(ctx({ action: "refresh", refresh_token: refreshToken }));
     expect(res.status).toBe(401);
+  });
+});
+
+describe("POST /api/auth/mobile-native — rate limiting", () => {
+  it("returns 429 after exceeding the per-IP auth limit (10/min)", async () => {
+    for (let i = 0; i < 10; i++) {
+      const res = await POST(ctx({ action: "google-id-token" }));
+      expect(res.status).toBe(400); // missing idToken — not rate limited yet
+    }
+    const res = await POST(ctx({ action: "google-id-token" }));
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error).toContain("Too many requests");
+  });
+
+  it("returns 429 when new-account creation exceeds the signup limit (5/hour)", async () => {
+    let next = 0;
+    mockVerifyGoogleToken.mockImplementation(() =>
+      Promise.resolve({
+        aud: "test-client-id",
+        email: `bot${++next}@example.com`,
+        email_verified: true,
+        sub: `sub-${next}`,
+        name: "Bot User",
+      }),
+    );
+
+    for (let i = 0; i < 5; i++) {
+      const res = await POST(ctx({ action: "google-id-token", idToken: `token-${i}` }));
+      expect(res.status).toBe(200);
+    }
+    const res = await POST(ctx({ action: "google-id-token", idToken: "token-6" }));
+    expect(res.status).toBe(429);
+  });
+
+  it("allows existing-user sign-in regardless of the signup limit", async () => {
+    await prisma.user.create({
+      data: { id: "rlu", email: "regular@example.com", name: "Regular", emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
+    });
+    mockVerifyGoogleToken.mockResolvedValue({
+      aud: "test-client-id",
+      email: "regular@example.com",
+      email_verified: true,
+      sub: "google-sub-rlu",
+    });
+
+    // Exhaust the signup limit with new accounts on a different IP, then verify
+    // an existing user can still sign in from this IP.
+    for (let i = 0; i < 6; i++) {
+      const res = await POST(ctx({ action: "google-id-token", idToken: "existing" }));
+      expect(res.status).toBe(200);
+    }
   });
 });

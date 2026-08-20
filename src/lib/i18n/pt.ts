@@ -1163,8 +1163,8 @@ const pt: TranslationKeys = {
   logOverrideCleared: "{actor} removeu a substituição temporária dos métodos de pagamento",
 
   // Landing page (#203)
-  landingHeadline: "Organiza o teu jogo em 30 segundos",
-  landingSubtitle: "Partilha um link, junta jogadores, sorteia equipas — feito.",
+  landingHeadline: "O teu jogo semanal, sem a confusão do WhatsApp.",
+  landingSubtitle: "Cria o jogo, partilha o link, confirma jogadores, divide custos e sorteia equipas—grátis.",
   landingFeatureTeams: "Sorteia equipas equilibradas",
   landingFeaturePayments: "Divide custos com os jogadores",
   landingFeatureRankings: "Acompanha classificações ELO",
@@ -1173,6 +1173,19 @@ const pt: TranslationKeys = {
   landingFeatureCourtFinder: "Encontra e compara campos próximos",
   landingOpenSource: "Open source · Grátis para sempre",
   supportUs: "Apoia-nos",
+
+  // Beta testing (#740 follow-up)
+  landingBetaButton: "Obter a app Android beta",
+  betaBannerTitle: "Testa a app Android em primeira mão",
+  betaBannerBody: "Entra na beta e instala o Convocados diretamente da Play Store — um toque para aderir e fica no teu ecrã inicial.",
+  getTheApp: "Obter a app",
+  appsForEveryTeamTitle: "Aplicações para todas as equipas",
+  iosFundHeading: "Ajude a levar o Convocados para o iPhone",
+  iosFundBody: "A sua contribuição cobre a subscrição do Apple Developer Program para que o Convocados continue gratuito e open source.",
+  iosFundCta: "Ajude a financiar a app iOS",
+  iosFundMonthly: "Prefere apoio mensal? GitHub Sponsors",
+  iosFundProgress: "${raised} de ${target} arrecadados",
+  appsLearnMore: "Saiba mais sobre as aplicações móveis",
 
   // MVP voting (#200)
   voteMvp: "Votar MVP",

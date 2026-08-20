@@ -48,6 +48,7 @@
     <string name="sign_out">Sair</string>
     <string name="edit_name">Editar nome</string>
     <string name="configure_instance">Configurar instância</string>
+    <string name="view_releases">Ver versões no GitHub</string>
     <string name="game_details">Detalhes do jogo</string>
     <string name="game_history">Histórico de jogos</string>
     <string name="event_log">Registo do evento</string>

@@ -3,11 +3,15 @@ package dev.convocados.di
 import android.content.Context
 import androidx.room.Room
 import androidx.work.WorkManager
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dev.convocados.data.auth.OAuthTokenStorage
+import dev.convocados.data.auth.TokenStore
+import dev.convocados.data.crash.CrashReporter
 import dev.convocados.data.local.AppDatabase
 import dev.convocados.data.local.dao.EventDao
 import dev.convocados.data.local.dao.EventDetailDao
@@ -25,7 +29,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "convocados.db"
-        ).fallbackToDestructiveMigration().build()
+        ).addMigrations(AppDatabase.MIGRATION_4_5).fallbackToDestructiveMigration().build()
     }
 
     @Provides
@@ -41,4 +45,12 @@ object DatabaseModule {
     @Singleton
     fun provideWorkManager(@ApplicationContext context: Context): WorkManager =
         WorkManager.getInstance(context)
+
+    @Provides
+    @Singleton
+    fun provideOAuthTokenStorage(tokenStore: TokenStore): OAuthTokenStorage = tokenStore
+
+    @Provides
+    @Singleton
+    fun provideCrashReporter(): CrashReporter = CrashReporter(FirebaseCrashlytics.getInstance())
 }

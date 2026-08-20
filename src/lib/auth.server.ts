@@ -48,6 +48,20 @@ export async function ensureTrustedClientInDB() {
 export const auth = betterAuth({
   baseURL: baseUrl,
   database: prismaAdapter(prisma, { provider: "sqlite" }),
+  // Per-IP auth rate limiting (better-auth built-in). Enabled only in
+  // production to avoid throttling the test suite. customRules tighten the
+  // bot-farm choke points: account creation and magic-link sending.
+  rateLimit: {
+    enabled: process.env.NODE_ENV === "production",
+    window: 60,
+    max: 30,
+    customRules: {
+      "/sign-up/email": { window: 3600, max: 5 },
+      "/magic-link/send": { window: 3600, max: 5 },
+      "/sign-in/social": { window: 60, max: 10 },
+      "/callback/google": { window: 60, max: 20 },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,

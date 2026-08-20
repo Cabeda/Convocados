@@ -48,6 +48,7 @@
     <string name="sign_out">Esci</string>
     <string name="edit_name">Modifica nome</string>
     <string name="configure_instance">Configura istanza</string>
+    <string name="view_releases">Vedi le versioni su GitHub</string>
     <string name="game_details">Dettagli partita</string>
     <string name="game_history">Cronologia partite</string>
     <string name="event_log">Registro evento</string>

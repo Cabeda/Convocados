@@ -13,6 +13,8 @@ const PRESETS = {
   write: { windowMs: 60_000, maxRequests: 30 },
   /** Auth endpoints: 10 req/min */
   auth: { windowMs: 60_000, maxRequests: 10 },
+  /** New-account creation: 5 req/hour per IP (blocks account-farm signups) */
+  auth_signup: { windowMs: 3_600_000, maxRequests: 5 },
   /** Heavy operations (e.g. ELO recalculate): 1 req/min */
   heavy: { windowMs: 60_000, maxRequests: 1 },
   /** OAuth token endpoint: 20 req/min per IP */
