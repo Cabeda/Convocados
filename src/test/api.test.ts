@@ -1147,6 +1147,26 @@ describe("GET /api/events/public", () => {
     expect(body.data[0].sport).toBe("padel");
   });
 
+  it("exposes pickup fields for Open Pickups (ADR-0021)", async () => {
+    await prisma.event.create({
+      data: {
+        title: "Padel — Club (Thu 19:30)",
+        location: "Club", dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true, sport: "padel", maxPlayers: 4,
+        source: "playtomic",
+        sourceKey: "tenant-1|court-1|2026-06-18|19:30",
+        playtomicTenantId: "tenant-1",
+        playtomicTenantName: "Club",
+      },
+    });
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].source).toBe("playtomic");
+    expect(body.data[0].ownerId).toBeNull();
+    expect(body.data[0].playtomicTenantName).toBe("Club");
+  });
+
   it("includes playerCount and spotsLeft", async () => {
     const event = await prisma.event.create({
       data: {

@@ -31,6 +31,10 @@ A Game marked with `isFriendly: true` by the Owner/Admin. Friendly Games are exc
 Use cases: casual sessions with guests, holiday matches, unbalanced rosters, first-timer introductions.
 _Avoid_: exhibition, practice, scrimmage
 
+## Open Pickup
+An un-adopted one-off Event+Game sourced from a Playtomic booking (`source=playtomic`), created automatically by the sweep when a court slot is detected as booked. Public (`isPublic=true`), no Owner (`ownerId=null`), no players yet. A notice that people play here at this court and time — a lead for organizing, not a real game. Rendered distinctly in the public listing (badge + no roster/join UI). Joining is blocked until someone Adopts.
+_Avoid_: synthetic game, beacon, phantom game
+
 ## Player
 A participation record in a specific **Game** (via `GameParticipant`). The per-game row that tracks order/position. Linked to an **EventPlayer** (the persistent series identity). "Joined" means having a GameParticipant record in the current Game.
 
@@ -56,6 +60,10 @@ The User who created the Game or to whom ownership was transferred. Has full man
 
 ## Admin
 A User granted management privileges for a Game by the Owner (via `EventAdmin`). Can edit teams, archive players, approve ELO, etc. Has no ownership rights.
+
+## Adopt
+The action of taking over an Open Pickup: an authenticated User claims the event, becoming its Owner. The event then behaves as an ordinary Event+Game and stays public unless the new Owner opts into privacy (sets a password via settings). Followers and joiners are notified on adoption. Distinct from Claim (anonymous EventPlayer identity claim).
+_Avoid_: take over, takeover
 
 ## Follow
 An explicit relationship between a User and a Game (stored in `EventFollow`). Following a Game means:

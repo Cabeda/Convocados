@@ -183,6 +183,8 @@ data class PublicEvent(
     val maxPlayers: Int,
     val playerCount: Int,
     val spotsLeft: Int,
+    val source: String = "manual",
+    val ownerId: String? = null,
 )
 
 @Serializable

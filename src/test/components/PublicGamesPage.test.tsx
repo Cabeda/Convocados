@@ -172,4 +172,59 @@ describe("PublicGamesPage", () => {
       expect(screen.getByText(/No games match/i)).toBeInTheDocument();
     });
   });
+
+  it("shows an adoptable Open Pickup badge with a claim button", async () => {
+    const pickup = {
+      ...mockEvents[0],
+      id: "pickup-1",
+      source: "playtomic",
+      ownerId: null,
+      playtomicTenantName: "CJD Padel Academy",
+    };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [pickup], nextCursor: null, hasMore: false }),
+    });
+
+    renderWithTheme(<PublicGamesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Open pickup/i)).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /Claim this pickup/i })).toBeInTheDocument();
+  });
+
+  it("adopts the pickup via POST /api/events/[id]/adopt", async () => {
+    const pickup = {
+      ...mockEvents[0],
+      id: "pickup-1",
+      source: "playtomic",
+      ownerId: null,
+      playtomicTenantName: "CJD Padel Academy",
+    };
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [pickup], nextCursor: null, hasMore: false }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true }),
+      });
+
+    const user = userEvent.setup();
+    renderWithTheme(<PublicGamesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Claim this pickup/i })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /Claim this pickup/i }));
+
+    await waitFor(() => {
+      const adoptCall = mockFetch.mock.calls.find(([url]) => String(url).endsWith("/api/events/pickup-1/adopt"));
+      expect(adoptCall).toBeDefined();
+      expect(adoptCall![1]).toMatchObject({ method: "POST" });
+    });
+  });
 });

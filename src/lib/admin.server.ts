@@ -45,6 +45,8 @@ export async function getAdminStats() {
     recurringCount,
     avgPlayersResult,
     activeUserIds,
+    pickupsDetected,
+    pickupsAdopted,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.event.count(),
@@ -72,6 +74,19 @@ export async function getAdminStats() {
       select: { userId: true },
       distinct: ["userId"],
     }),
+    // Open Pickups (ADR-0021): detected in the last 30 days; adopted within that
+    // same detection cohort (created AND adopted in the last 30 days), so the
+    // adoption rate can never exceed 100%.
+    prisma.event.count({
+      where: { source: "playtomic", createdAt: { gte: thirtyDaysAgo } },
+    }),
+    prisma.event.count({
+      where: {
+        source: "playtomic",
+        createdAt: { gte: thirtyDaysAgo },
+        adoptedAt: { gte: thirtyDaysAgo },
+      },
+    }),
   ]);
 
   const sportDistribution: Record<string, number> = {};
@@ -92,6 +107,9 @@ export async function getAdminStats() {
     recurringEvents: recurringCount,
     oneOffEvents: totalEvents - recurringCount,
     sportDistribution,
+    pickupsDetected,
+    pickupsAdopted,
+    pickupAdoptionRate: pickupsDetected > 0 ? pickupsAdopted / pickupsDetected : 0,
   };
 }
 

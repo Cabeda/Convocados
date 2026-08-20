@@ -282,4 +282,6 @@
     <string name="add_from_contacts">Adicionar dos contactos</string>
     <string name="no_archived_games">Sem jogos arquivados</string>
     <string name="will_invite">Vai convidar %1$s</string>
+    <string name="open_pickup">Pickup aberto</string>
+    <string name="claim_pickup">Assumir este pickup</string>
 </resources>
