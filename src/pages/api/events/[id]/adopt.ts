@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
-import { enqueueNotification } from "../../../../lib/notificationQueue.server";
+import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
 
 /**
  * POST — adopt an Open Pickup (ADR-0021).
@@ -25,7 +25,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   // Atomic claim — only succeeds if the pickup is still unowned.
   const claimed = await prisma.event.updateMany({
     where: { id: eventId, ownerId: null, source: "playtomic" },
-    data: { ownerId: session.user.id },
+    data: { ownerId: session.user.id, adoptedAt: new Date() },
   });
 
   if (claimed.count === 0) {
@@ -44,6 +44,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     url: `/events/${eventId}`,
     spotsLeft: event.maxPlayers,
   });
+  await drainNotificationQueue().catch(() => {});
 
   return Response.json({ ok: true, eventId, ownerId: session.user.id });
 };

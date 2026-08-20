@@ -74,12 +74,12 @@ export async function getAdminStats() {
       select: { userId: true },
       distinct: ["userId"],
     }),
-    // Open Pickups (ADR-0021): pickups detected and adopted in the last 30 days
+    // Open Pickups (ADR-0021): detected in the last 30 days; adopted in the last 30 days
     prisma.event.count({
       where: { source: "playtomic", createdAt: { gte: thirtyDaysAgo } },
     }),
     prisma.event.count({
-      where: { source: "playtomic", ownerId: { not: null }, createdAt: { gte: thirtyDaysAgo } },
+      where: { source: "playtomic", adoptedAt: { gte: thirtyDaysAgo } },
     }),
   ]);
 

@@ -34,7 +34,8 @@ describe("createPickupEvent", () => {
   it("creates a public unowned one-off Event+Game with the expected fields", async () => {
     const preset = getSportPreset("padel");
 
-    const created = await createPickupEvent(input);
+    const { event: created, created: isNew } = await createPickupEvent(input);
+    expect(isNew).toBe(true);
 
     const event = await prisma.event.findUnique({ where: { id: created.id } });
     expect(event).not.toBeNull();
@@ -68,8 +69,10 @@ describe("createPickupEvent", () => {
     const first = await createPickupEvent(input);
     const second = await createPickupEvent(input);
 
-    expect(second.id).toBe(first.id);
-    expect(await prisma.event.count({ where: { sourceKey: first.sourceKey } })).toBe(1);
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.event.id).toBe(first.event.id);
+    expect(await prisma.event.count({ where: { sourceKey: first.event.sourceKey } })).toBe(1);
   });
 
   it("creates separate events for the same court at different times", async () => {
@@ -79,14 +82,14 @@ describe("createPickupEvent", () => {
       slot: { ...slot, startTime: "20:00" },
     });
 
-    expect(a.id).not.toBe(b.id);
+    expect(a.event.id).not.toBe(b.event.id);
     expect(await prisma.event.count()).toBe(2);
   });
 });
 
 describe("archiveExpiredPickups", () => {
   it("cancels the Game and archives an un-adopted pickup whose slot has passed", async () => {
-    const past = await createPickupEvent(input);
+    const { event: past } = await createPickupEvent(input);
     await prisma.event.update({ where: { id: past.id }, data: { dateTime: new Date(Date.now() - 3 * 3600_000) } });
 
     const archived = await archiveExpiredPickups({ graceMinutes: 120 });
@@ -99,7 +102,7 @@ describe("archiveExpiredPickups", () => {
   });
 
   it("leaves adopted pickups untouched even after the slot passes", async () => {
-    const past = await createPickupEvent(input);
+    const { event: past } = await createPickupEvent(input);
     const owner = await prisma.user.create({ data: { id: "u1", name: "Owner", email: "o@t.com", emailVerified: true } });
     await prisma.event.update({
       where: { id: past.id },
@@ -114,7 +117,7 @@ describe("archiveExpiredPickups", () => {
   });
 
   it("leaves future pickups untouched", async () => {
-    const upcoming = await createPickupEvent(input);
+    const { event: upcoming } = await createPickupEvent(input);
     await prisma.event.update({ where: { id: upcoming.id }, data: { dateTime: new Date(Date.now() + 24 * 3600_000) } });
 
     const archived = await archiveExpiredPickups({ graceMinutes: 120 });

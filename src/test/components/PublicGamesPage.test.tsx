@@ -202,6 +202,7 @@ describe("PublicGamesPage", () => {
       ownerId: null,
       playtomicTenantName: "CJD Padel Academy",
     };
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
