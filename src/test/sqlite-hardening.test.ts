@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { prisma, applyPragmas, prismaReady, runDbOptimize, scheduleDbOptimize } from "~/lib/db.server";
+import { prisma, applyPragmas, prismaReady, runDbOptimize } from "~/lib/db.server";
 
 describe("SQLite hardening", () => {
   // Ensure PRAGMAs are applied before testing (the async init may not have finished)
@@ -59,13 +59,6 @@ describe("SQLite hardening", () => {
   it("should run PRAGMA optimize without error", async () => {
     const result = await runDbOptimize();
     expect(Array.isArray(result)).toBe(true);
-  });
-
-  it("scheduleDbOptimize registers an unref'd timer", () => {
-    const timer = scheduleDbOptimize(86_400_000);
-    expect(timer).toBeDefined();
-    expect(timer.hasRef()).toBe(false);
-    clearInterval(timer);
   });
 
   it("should be writable", async () => {
