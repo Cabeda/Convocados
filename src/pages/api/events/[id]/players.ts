@@ -36,30 +36,6 @@ const log = createLogger("players-api");
 startIdempotencySweep();
 
 /**
- * Resolve the authoritative active player names for an event.
- * ADR 0016: when currentGameId exists, use GameParticipant (game-scoped).
- * Falls back to the legacy Player table for non-recurring events.
- */
-async function getActivePlayerNames(eventId: string, maxPlayers: number, currentGameId?: string | null): Promise<Set<string>> {
-  if (currentGameId) {
-    const participants = await prisma.gameParticipant.findMany({
-      where: { gameId: currentGameId, archivedAt: null, status: { not: "pending" } },
-      include: { eventPlayer: { select: { name: true } } },
-      orderBy: { order: "asc" },
-      take: maxPlayers,
-    });
-    return new Set(participants.map((gp) => gp.eventPlayer.name));
-  }
-  const players = await prisma.player.findMany({
-    where: { eventId, archivedAt: null },
-    orderBy: { order: "asc" },
-    take: maxPlayers,
-    select: { name: true },
-  });
-  return new Set(players.map(p => p.name));
-}
-
-/**
  * Validate that all team members are active players (order < maxPlayers).
  * Removes any invalid members from teams rather than clearing all teams.
  * Returns true if any members were removed.
