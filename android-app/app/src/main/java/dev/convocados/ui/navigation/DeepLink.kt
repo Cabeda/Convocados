@@ -77,6 +77,13 @@ object DeepLink {
             return Route.EventDetail.create(id) + if (actionPay) "?action=pay" else ""
         }
 
+        // Invite link: /invite/<token> (https or convocados://)
+        val inviteMatch = Regex("^/?invite/([^/?]+)").find(path)
+        if (inviteMatch != null) {
+            val token = inviteMatch.groupValues[1]
+            return Route.Invite.create(token)
+        }
+
         // Top-level routes
         return when (path.removePrefix("/")) {
             "games" -> Route.Games.route

@@ -300,7 +300,12 @@ export const GET: APIRoute = async ({ params, request }) => {
       if (event.ownerId === viewerId) {
         viewerIsAdmin = true;
       } else {
-        viewerIsAdmin = await checkEventAdmin(event.id, viewerId).catch(() => false);
+        try {
+          const isAdminResult = await checkEventAdmin(event.id, viewerId);
+          viewerIsAdmin = isAdminResult === true;
+        } catch {
+          viewerIsAdmin = false;
+        }
       }
       viewerHasPendingHere = pendingParticipants.some((gp) => (gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name)) === viewerId);
     }

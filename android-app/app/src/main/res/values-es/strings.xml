@@ -88,6 +88,20 @@
     <string name="delete">Eliminar</string>
     <string name="no_court_watches">Aún no hay alertas de pistas.\nCrea una desde las pistas alternativas de un evento.</string>
 
+    <!-- Invites (ADR 0025) -->
+    <string name="invite_page_title">Invitación a partido</string>
+    <string name="invite_not_found">No se pudo encontrar esta invitación.</string>
+    <string name="invite_expired">Esta invitación ha caducado.</string>
+    <string name="invite_accepted">¡Te has unido al partido!</string>
+    <string name="invite_declined">Has rechazado esta invitación.</string>
+    <string name="invite_cancelled">Esta invitación fue cancelada.</string>
+    <string name="invite_invited_by">%1$s te invitó a jugar</string>
+    <string name="invite_accept">Aceptar</string>
+    <string name="invite_decline">Rechazar</string>
+    <string name="invite_view_game">Ver partido</string>
+    <string name="invite_sign_in">Iniciar sesión</string>
+    <string name="invite_not_for_you">Esta invitación no es para tu cuenta.</string>
+
     <string name="game_title">Título del partido</string>
     <string name="game_title_placeholder">ej. Fútbol del martes</string>
     <string name="sport">Deporte</string>

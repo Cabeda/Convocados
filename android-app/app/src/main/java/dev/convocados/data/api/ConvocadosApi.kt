@@ -266,6 +266,13 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun deleteCourtWatch(id: String): OkResponse =
         client.delete("/api/court-watches/$id")
+
+    // ── Invites (ADR 0025) ───────────────────────────────────────────────
+    suspend fun fetchInvite(token: String): InviteLookupResponse =
+        client.get("/api/invite/$token")
+
+    suspend fun respondToInvite(token: String, action: String): InviteActionResponse =
+        client.post("/api/invite/$token", InviteActionRequest(action))
 }
 
 // ── Request bodies ────────────────────────────────────────────────────────────
