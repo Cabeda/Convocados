@@ -3,27 +3,27 @@ import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
 // Mock better-auth, Google token verification, rate limiter, and the image
 // sync lib so this test only exercises the route wiring in [...all].ts.
-const mockAuthHandler = vi.fn();
-const mockGetSession = vi.fn();
-const mockVerifyGoogle = vi.fn();
-const mockRateLimit = vi.fn();
-const mockSyncImage = vi.fn();
+const mockAuthHandler = vi.fn<(request: Request) => Promise<Response>>();
+const mockVerifyGoogle = vi.fn<(token: string, audiences: string[]) => Promise<{ picture?: string } | null>>();
+const mockRateLimit = vi.fn<(request: Request) => Promise<Response | null>>();
+const mockBackfillImage = vi.fn<(response: Response, picture: string | null) => Promise<void>>();
 
 vi.mock("~/lib/auth.server", () => ({
   auth: {
-    handler: (...args: any[]) => mockAuthHandler(...args),
-    api: { getSession: (...args: any[]) => mockGetSession(...args) },
+    handler: (request: Request) => mockAuthHandler(request),
+    api: { getSession: vi.fn() },
   },
   ensureTrustedClientInDB: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("~/lib/googleToken.server", () => ({
-  verifyGoogleIdToken: (...args: any[]) => mockVerifyGoogle(...args),
+  verifyGoogleIdToken: (token: string, audiences: string[]) => mockVerifyGoogle(token, audiences),
 }));
 vi.mock("~/lib/oauthRateLimit.server", () => ({
-  oauthRateLimitResponse: (...args: any[]) => mockRateLimit(...args),
+  oauthRateLimitResponse: (request: Request) => mockRateLimit(request),
 }));
 vi.mock("~/lib/syncGoogleImage.server", () => ({
-  syncGoogleProfileImage: (...args: any[]) => mockSyncImage(...args),
+  backfillGoogleProfileImageFromLogin: (response: Response, picture: string | null) =>
+    mockBackfillImage(response, picture),
 }));
 
 import { GET, POST } from "~/pages/api/auth/[...all]";
@@ -37,60 +37,52 @@ function responseWithSession(status: number, body: unknown) {
   });
 }
 
+function route(request: Request) {
+  return { request, params: {} } as Parameters<typeof POST>[0];
+}
+
+function googleLoginRequest(provider: string) {
+  return new Request("http://localhost/api/auth/sign-in/social", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ provider, idToken: { token: "jwt-here" } }),
+  });
+}
+
 beforeEach(async () => {
   await resetApiRateLimitStore();
   vi.clearAllMocks();
   mockRateLimit.mockResolvedValue(null);
-  mockGetSession.mockResolvedValue({ user: { id: "user-sync-test" } });
 });
 
 describe("POST /api/auth/sign-in/social — Google id-token sign-in", () => {
   it("extracts the picture from the google id token and backfills the user image", async () => {
     mockAuthHandler.mockResolvedValueOnce(responseWithSession(200, { redirect: false, token: "t" }));
-    mockVerifyGoogle.mockResolvedValueOnce({ sub: "g1", email: "a@b.com", picture: "https://example.com/token-pic.jpg" });
+    mockVerifyGoogle.mockResolvedValueOnce({ picture: "https://example.com/token-pic.jpg" });
 
-    const req = new Request("http://localhost/api/auth/sign-in/social", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ provider: "google", idToken: { token: "jwt-here" } }),
-    });
-
-    const res = await POST({ request: req, params: {} } as any);
+    const res = await POST(route(googleLoginRequest("google")));
 
     expect(res.status).toBe(200);
     expect(mockVerifyGoogle).toHaveBeenCalledWith("jwt-here", expect.any(Array));
-    expect(mockGetSession).toHaveBeenCalled();
-    expect(mockSyncImage).toHaveBeenCalledWith("user-sync-test", "https://example.com/token-pic.jpg");
+    expect(mockBackfillImage).toHaveBeenCalledWith(res, "https://example.com/token-pic.jpg");
   });
 
   it("does not verify or sync for a non-google provider", async () => {
     mockAuthHandler.mockResolvedValueOnce(responseWithSession(200, { redirect: false, token: "t" }));
 
-    const req = new Request("http://localhost/api/auth/sign-in/social", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ provider: "github", idToken: { token: "jwt-here" } }),
-    });
-
-    await POST({ request: req, params: {} } as any);
+    await POST(route(googleLoginRequest("github")));
 
     expect(mockVerifyGoogle).not.toHaveBeenCalled();
-    expect(mockSyncImage).not.toHaveBeenCalled();
+    expect(mockBackfillImage).not.toHaveBeenCalled();
   });
 
   it("skips sync when the login itself fails", async () => {
     mockAuthHandler.mockResolvedValueOnce(new Response(JSON.stringify({ error: "invalid_token" }), { status: 401 }));
 
-    const req = new Request("http://localhost/api/auth/sign-in/social", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ provider: "google", idToken: { token: "jwt-here" } }),
-    });
-
-    const res = await POST({ request: req, params: {} } as any);
+    const res = await POST(route(googleLoginRequest("google")));
 
     expect(res.status).toBe(401);
-    expect(mockSyncImage).not.toHaveBeenCalled();
+    expect(mockBackfillImage).not.toHaveBeenCalled();
   });
 });
 
@@ -105,11 +97,10 @@ describe("GET /api/auth/callback/google — web OAuth redirect", () => {
 
     const req = new Request("http://localhost/api/auth/callback/google?code=x&state=y", { method: "GET" });
 
-    const res = await GET({ request: req, params: {} } as any);
+    const res = await GET(route(req));
 
     expect(res.status).toBe(302);
-    expect(mockGetSession).toHaveBeenCalled();
-    expect(mockSyncImage).toHaveBeenCalledWith("user-sync-test", null);
+    expect(mockBackfillImage).toHaveBeenCalledWith(res, null);
   });
 
   it("does not sync for unrelated auth routes", async () => {
@@ -121,21 +112,18 @@ describe("GET /api/auth/callback/google — web OAuth redirect", () => {
       body: JSON.stringify({ email: "a@b.com", password: "pw" }),
     });
 
-    await POST({ request: req, params: {} } as any);
+    await POST(route(req));
 
-    expect(mockGetSession).not.toHaveBeenCalled();
-    expect(mockSyncImage).not.toHaveBeenCalled();
+    expect(mockBackfillImage).not.toHaveBeenCalled();
   });
 
-  it("still returns the handler response when the image sync fails", async () => {
+  it("still returns the handler response when the image sync throws", async () => {
     mockAuthHandler.mockImplementationOnce(() => {
       throw new Response(null, { status: 302, headers: { location: "http://localhost/", "set-cookie": SESSION_COOKIE } });
     });
-    mockGetSession.mockRejectedValueOnce(new Error("boom"));
+    mockBackfillImage.mockRejectedValueOnce(new Error("boom"));
 
-    const req = new Request("http://localhost/api/auth/callback/google?code=x", { method: "GET" });
-
-    const res = await GET({ request: req, params: {} } as any);
+    const res = await GET(route(new Request("http://localhost/api/auth/callback/google?code=x", { method: "GET" })));
 
     expect(res.status).toBe(302);
   });
