@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { randomBytes, randomUUID } from "node:crypto";
 import { prisma } from "~/lib/db.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 
@@ -289,6 +290,64 @@ describe("POST /api/auth/mobile-native — error handling", () => {
     expect(res.status).toBe(500);
     const body = await res.json();
     expect(body.error).toBe("Internal server error");
+  });
+});
+
+describe("POST /api/auth/mobile-native — refresh", () => {
+  async function seedUserWithRefreshToken() {
+    const user = await prisma.user.create({
+      data: { id: "u-refresh", email: "refresh@example.com", name: "Refresh User", emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
+    });
+    const refreshToken = randomBytes(32).toString("hex");
+    await prisma.oauthRefreshToken.create({
+      data: {
+        id: randomUUID(),
+        token: refreshToken,
+        userId: user.id,
+        clientId: "convocados-mobile-app",
+        scopes: "openid",
+        expiresAt: new Date(Date.now() + 30 * 86400_000),
+      },
+    });
+    return { user, refreshToken };
+  }
+
+  it("returns 400 when refresh_token missing", async () => {
+    const res = await POST(ctx({ action: "refresh" }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("refresh_token is required");
+  });
+
+  it("returns 401 for unknown refresh token", async () => {
+    const res = await POST(ctx({ action: "refresh", refresh_token: "does-not-exist" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("issues new tokens and rotates the refresh token", async () => {
+    const { user, refreshToken } = await seedUserWithRefreshToken();
+
+    const res = await POST(ctx({ action: "refresh", refresh_token: refreshToken }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.access_token).toBeDefined();
+    expect(body.refresh_token).toBeDefined();
+    expect(body.refresh_token).not.toBe(refreshToken);
+    expect(body.expires_in).toBe(3600);
+
+    // Old refresh token invalidated (rotated)
+    const old = await prisma.oauthRefreshToken.findFirst({ where: { token: refreshToken } });
+    expect(old).toBeNull();
+    // New token belongs to same user
+    const newRecord = await prisma.oauthRefreshToken.findFirst({ where: { token: body.refresh_token } });
+    expect(newRecord?.userId).toBe(user.id);
+  });
+
+  it("rejects an already-rotated refresh token", async () => {
+    const { refreshToken } = await seedUserWithRefreshToken();
+    await POST(ctx({ action: "refresh", refresh_token: refreshToken }));
+    const res = await POST(ctx({ action: "refresh", refresh_token: refreshToken }));
+    expect(res.status).toBe(401);
   });
 });
 

@@ -213,6 +213,30 @@ async function handleMagicLink(body: Record<string, unknown>) {
   return Response.json({ success: true, message: "Magic link sent to your email" });
 }
 
+/** Refresh tokens for a previously-issued mobile session. */
+async function handleRefresh(body: Record<string, unknown>) {
+  const refreshToken = String(body.refresh_token ?? "").trim();
+  if (!refreshToken) {
+    return Response.json({ error: "refresh_token is required" }, { status: 400 });
+  }
+
+  const record = await prisma.oauthRefreshToken.findFirst({
+    where: { token: refreshToken, clientId: MOBILE_CLIENT_ID },
+  });
+
+  if (!record || !record.userId || (record.expiresAt && record.expiresAt <= new Date())) {
+    return Response.json(
+      { error: "Invalid or expired refresh token" },
+      { status: 401 },
+    );
+  }
+
+  // Rotate: invalidate the used refresh token so it can't be replayed.
+  await prisma.oauthRefreshToken.delete({ where: { id: record.id } });
+
+  return issueTokens(record.userId);
+}
+
 export const POST: APIRoute = async ({ request }) => {
   // Per-IP rate limit for the whole endpoint before any processing.
   const limited = await rateLimitResponse(request, "auth");
@@ -231,9 +255,11 @@ export const POST: APIRoute = async ({ request }) => {
         return handleEmailSignUp(body);
       case "magic-link":
         return handleMagicLink(body);
+      case "refresh":
+        return handleRefresh(body);
       default:
         return Response.json(
-          { error: "Invalid action. Use: google-id-token, email-signin, email-signup, magic-link" },
+          { error: "Invalid action. Use: google-id-token, email-signin, email-signup, magic-link, refresh" },
           { status: 400 },
         );
     }

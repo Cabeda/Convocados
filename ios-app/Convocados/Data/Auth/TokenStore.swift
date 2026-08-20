@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-final class TokenStore: ObservableObject {
+final class TokenStore: ObservableObject, @unchecked Sendable {
     static let shared = TokenStore()
 
     @Published private(set) var isAuthenticated: Bool = false

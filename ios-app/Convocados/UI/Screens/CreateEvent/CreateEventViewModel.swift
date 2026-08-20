@@ -3,7 +3,7 @@ import Foundation
 final class CreateEventViewModel: ObservableObject {
     @Published var title = ""
     @Published var location = ""
-    @Published var dateTime = Date()
+    @Published var dateTime = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
     @Published var sport = "football"
     @Published var maxPlayers = 10
     @Published var isRecurring = false
