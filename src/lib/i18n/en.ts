@@ -450,6 +450,7 @@ sportBadmintonSingles: "Badminton (singles)",
   joinedGames: "Joined Games",
   followedGames: "Followed Games",
   unfollow: "Unfollow",
+  gamesYouMightJoin: "Games you might join",
 
   // Calendar
   addToCalendar: "Add to calendar",
