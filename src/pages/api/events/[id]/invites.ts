@@ -27,13 +27,29 @@ export const GET: APIRoute = async ({ params, request }) => {
   const invites = await prisma.playerInvite.findMany({
     where: { gameId: event.currentGameId },
     include: {
-      eventPlayer: { select: { name: true, userId: true, image: true } },
+      eventPlayer: { select: { id: true, name: true, userId: true } },
       invitedBy: { select: { name: true } },
     },
     orderBy: { createdAt: "asc" },
   });
 
-  return Response.json({ invites });
+  // EventPlayer has no image; resolve it from the linked User, like the event
+  // roster does. Guests (no userId) have no image.
+  const userIds = [...new Set(invites.map((i) => i.eventPlayer.userId).filter((u): u is string => !!u))];
+  const users = userIds.length
+    ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, image: true } })
+    : [];
+  const imageByUserId = new Map(users.map((u) => [u.id, u.image]));
+
+  return Response.json({
+    invites: invites.map((i) => ({
+      ...i,
+      eventPlayer: {
+        ...i.eventPlayer,
+        image: i.eventPlayer.userId ? (imageByUserId.get(i.eventPlayer.userId) ?? null) : null,
+      },
+    })),
+  });
 };
 
 /** Preconditions for inviting a user. Returns an error string or null. */

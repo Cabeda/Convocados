@@ -319,4 +319,44 @@ describe("GET /api/events/:id/suggestions", () => {
     const body = await res.json();
     expect(body.suggestions).toEqual([]);
   });
+
+  it("returns empty when the event has no current game", async () => {
+    const inviter = await seedUser("inviter-nocurrent");
+    const event = await seedEvent(); // no currentGameId set
+    const inviterEp = await seedEventPlayer(event.id, inviter.id, "Inviter");
+    await seedGame(event.id, new Date(Date.now() + 1 * DAY_MS), [inviterEp.id]);
+
+    mockAuth(inviter.id);
+    const res = await GET(ctx(event.id));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.suggestions).toEqual([]);
+  });
+
+  it("returns empty when the inviter has no player record on any event", async () => {
+    const inviter = await seedUser("inviter-noep");
+    const other = await seedUser("other", "Other");
+    const event = await seedEvent();
+    const otherEp = await seedEventPlayer(event.id, other.id, "Other");
+    await seedGame(event.id, new Date(Date.now() + 1 * DAY_MS), [otherEp.id], { makeCurrent: true });
+
+    mockAuth(inviter.id);
+    const res = await GET(ctx(event.id));
+    const body = await res.json();
+    expect(body.suggestions).toEqual([]);
+  });
+
+  it("returns empty when the inviter has player records but no participations", async () => {
+    const inviter = await seedUser("inviter-noplay");
+    const other = await seedUser("other2", "Other");
+    const event = await seedEvent();
+    await seedEventPlayer(event.id, inviter.id, "Inviter"); // player record, no participations
+    const otherEp = await seedEventPlayer(event.id, other.id, "Other");
+    await seedGame(event.id, new Date(Date.now() + 1 * DAY_MS), [otherEp.id], { makeCurrent: true });
+
+    mockAuth(inviter.id);
+    const res = await GET(ctx(event.id));
+    const body = await res.json();
+    expect(body.suggestions).toEqual([]);
+  });
 });
