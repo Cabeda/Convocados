@@ -837,6 +837,7 @@ const it: TranslationKeys = {
   adminGamesPlayed: "Partite Giocate",
   adminActiveUsers: "Utenti Attivi (30g)",
   adminActiveEvents: "Eventi in Programma",
+  adminActiveGames: "Partite Attive",
   adminGamesLast7d: "Partite (7g)",
   adminGamesLast30d: "Partite (30g)",
   adminAvgPlayers: "Media Max Giocatori",

@@ -24,6 +24,7 @@ interface AdminStats {
   totalEvents: number;
   totalGamesPlayed: number;
   activeEvents: number;
+  activeGames: number;
   activeUsers: number;
   gamesLast7d: number;
   gamesLast30d: number;
@@ -142,15 +143,6 @@ function GrowthChart({ growthData, growthRange, setGrowthRange, loadingGrowth }:
               dataKey="users"
               name={t("adminTotalUsers")}
               stroke={isDark ? "#64b5f6" : theme.palette.primary.main}
-              strokeWidth={2}
-              dot={{ r: 3 }}
-              activeDot={{ r: 5 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="events"
-              name={t("adminTotalEvents")}
-              stroke={isDark ? "#f48fb1" : theme.palette.secondary.main}
               strokeWidth={2}
               dot={{ r: 3 }}
               activeDot={{ r: 5 }}
@@ -324,6 +316,9 @@ export default function AdminDashboardPage() {
 
                 {/* Secondary metrics */}
                 <Grid container spacing={2}>
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+                    <StatCard label={t("adminActiveGames")} value={stats.activeGames} icon={<SportsScoreIcon fontSize="small" />} />
+                  </Grid>
                   <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminActiveEvents")} value={stats.activeEvents} icon={<EventIcon fontSize="small" />} />
                   </Grid>
