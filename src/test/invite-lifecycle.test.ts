@@ -202,6 +202,8 @@ describe("POST /api/events/[id]/invites", () => {
 
     const res = await createInvite(ctx({ id: ev.id }, { userId: invitee.id }));
     expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatch(/pending invite/i);
   });
 
   it("blocks users with noShowStreak >= 2", async () => {
@@ -364,6 +366,29 @@ describe("acceptPlayerInvite", () => {
     expect(res.bench).toBe(true);
     const jobs = await prisma.notificationJob.findMany({ where: { type: "player_joined_bench" } });
     expect(jobs.length).toBeGreaterThan(0);
+  });
+
+  it("accepts a pending invite onto the active roster when a slot is free (pending entries excluded from order)", async () => {
+    // maxPlayers=2 with one active player → one free slot. A pending invite
+    // (order 1) must NOT push the accepting invitee to order 2 / the bench.
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const filler = await seedUser("Filler");
+    const maxPlayers = 2;
+    const ev = await seedEventWithGame(owner.id, new Date(Date.now() + 48 * 3600_000));
+    await prisma.event.update({ where: { id: ev.id }, data: { maxPlayers } });
+    const fillerEp = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: filler.name, userId: filler.id } });
+    await prisma.gameParticipant.create({ data: { gameId: ev.currentGameId, eventPlayerId: fillerEp.id, order: 0, status: "active" } });
+
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+
+    const res = await acceptPlayerInvite({ token: invite.token, userId: invitee.id, eventId: ev.id, gameId: ev.currentGameId, maxPlayers });
+    expect(res.bench).toBe(false);
+
+    const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: ev.id, userId: invitee.id } });
+    const gp = await prisma.gameParticipant.findFirstOrThrow({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } });
+    expect(gp.status).toBe("active");
+    expect(gp.order).toBeLessThan(maxPlayers);
   });
 
   it("rejects accepting for the wrong account", async () => {

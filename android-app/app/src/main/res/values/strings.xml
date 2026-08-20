@@ -110,7 +110,7 @@
     <string name="invite_decline">Decline</string>
     <string name="invite_view_game">View game</string>
     <string name="invite_sign_in">Sign in</string>
-    <string name="invite_not_for_you">This invite is not for your account.</string></string>
+    <string name="invite_not_for_you">This invite is not for your account.</string>
 
     <!-- Create event -->
     <string name="game_title">Game title</string>
