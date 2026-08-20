@@ -23,6 +23,15 @@ describe("security middleware", () => {
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 
+  it("allows Google avatar images in the CSP img-src", async () => {
+    const res = await run(ctx("GET", "https://convocados.cabeda.dev/"), async () =>
+      new Response("ok", { status: 200 }),
+    );
+    const csp = res.headers.get("Content-Security-Policy") ?? "";
+    const imgSrc = csp.match(/img-src ([^;]+)/)?.[1] ?? "";
+    expect(imgSrc).toContain("https://*.googleusercontent.com");
+  });
+
   it("does not throw on redirect responses with immutable headers", async () => {
     const res = await run(
       ctx("GET", "https://convocados.cabeda.dev/api/auth/mobile-callback"),

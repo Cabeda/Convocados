@@ -36,7 +36,7 @@ const SECURITY_HEADERS: Record<string, string> = {
     "script-src 'self' 'unsafe-inline' https://maps.googleapis.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: https://*.tile.openstreetmap.org https://maps.googleapis.com https://maps.gstatic.com",
+    "img-src 'self' data: https://*.tile.openstreetmap.org https://maps.googleapis.com https://maps.gstatic.com https://*.googleusercontent.com",
     "connect-src 'self' https://maps.googleapis.com",
     // frame-ancestors 'self' (not 'none') so Astro's ClientRouter can embed
     // the next page in a same-origin hidden iframe while preparing the view
