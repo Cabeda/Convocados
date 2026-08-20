@@ -351,6 +351,9 @@ model GameParticipant {
   order         Int         @default(0)
   archivedAt    DateTime?
   noShow        Boolean     @default(false) // ADR 0018: marked by organizer post-game
+  // ADR 0025: "pending" = invited-but-not-yet-accepted. Pending entries are
+  // excluded from roster/bench counts, payments, team draws and gamesPlayed.
+  status        String      @default("active") // "pending" | "active"
   createdAt     DateTime    @default(now())
 
   @@unique([gameId, eventPlayerId])
