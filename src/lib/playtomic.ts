@@ -27,6 +27,10 @@ export function playtomicSportIds(sport: string): string[] | null {
     "football-5v5": ["FOOTBALL_OTHERS", "FUTSAL"],
     "football-7v7": ["FOOTBALL7"],
     "futsal": ["FUTSAL", "FOOTBALL_OTHERS"],
+    "badminton-singles": ["BADMINTON"],
+    "badminton-doubles": ["BADMINTON"],
+    "squash": ["SQUASH"],
+    "pickleball": ["PICKLEBALL"],
   };
   return map[sport] ?? null;
 }
