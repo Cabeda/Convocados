@@ -89,3 +89,6 @@ src/lib/__generated__/
 
 # AI review pipeline screenshots
 /screenshots/
+
+# iOS build artifacts
+/ios-app/build/

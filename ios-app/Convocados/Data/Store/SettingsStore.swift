@@ -16,7 +16,14 @@ final class SettingsStore: ObservableObject {
     }
 
     init() {
-        self.serverUrl = defaults.string(forKey: "serverUrl") ?? "https://convocados.cabeda.dev"
+        // Allow overriding the server URL via launch argument for UI tests / CI:
+        //   -serverUrl http://localhost:4321
+        if let argIndex = ProcessInfo.processInfo.arguments.firstIndex(of: "-serverUrl"),
+           ProcessInfo.processInfo.arguments.indices.contains(argIndex + 1) {
+            self.serverUrl = ProcessInfo.processInfo.arguments[argIndex + 1]
+        } else {
+            self.serverUrl = defaults.string(forKey: "serverUrl") ?? "https://convocados.cabeda.dev"
+        }
         self.locale = defaults.string(forKey: "locale") ?? "en"
         self.themeMode = ThemeMode(rawValue: defaults.string(forKey: "themeMode") ?? "system") ?? .system
     }

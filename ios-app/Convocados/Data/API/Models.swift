@@ -79,7 +79,7 @@ struct EventDetail: Codable, Identifiable {
     var players: [Player] = []
     var teamResults: [TeamResult]?
     var wasReset: Bool = false
-    var locked: Bool = false
+    var locked: Bool?
 }
 
 // MARK: - History
