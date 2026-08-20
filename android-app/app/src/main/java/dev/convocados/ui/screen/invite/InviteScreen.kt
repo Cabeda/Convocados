@@ -22,7 +22,6 @@ import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.InviteLookupResponse
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectAsState
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -43,7 +42,7 @@ class InviteViewModel @Inject constructor(
 
     init { load() }
 
-    private fun load() {
+    fun load() {
         viewModelScope.launch {
             runCatching { api.fetchInvite(_state.value.data?.token.orEmpty()) }
                 .onSuccess { _state.value = InviteState(loading = false, data = it) }
