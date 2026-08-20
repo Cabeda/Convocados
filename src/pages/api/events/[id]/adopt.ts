@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
+import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
 
 /**
@@ -9,6 +10,9 @@ import { enqueueNotification, drainNotificationQueue } from "../../../../lib/not
  * by default and the new Owner configures privacy via the normal event settings.
  */
 export const POST: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
+
   const eventId = params.id ?? "";
   const session = await getSession(request);
   if (!session?.user) {

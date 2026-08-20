@@ -10,7 +10,7 @@ import { fromDateTimeLocalValue } from "./timezones";
 import { getSportPreset } from "./sports";
 import { createT } from "./i18n";
 import { searchClubs } from "./playtomic.server";
-import { getCachedAvailability } from "./availabilityCache.server";
+import { getCachedAvailability, mapWithConcurrency } from "./availabilityCache.server";
 import { detectBookedSlots } from "./pickupSweep";
 
 const tEn = createT("en");
@@ -65,7 +65,7 @@ export async function createPickupEvent(input: PickupEventInput): Promise<{ even
           dateTime,
           timezone: input.timezone,
           maxPlayers: preset.defaultMaxPlayers,
-          durationMinutes: preset.defaultDurationMinutes,
+          durationMinutes: input.slot.durationMinutes,
           sport: input.sport,
           isPublic: true,
           isRecurring: false,
@@ -164,7 +164,8 @@ const DEFAULT_ANCHORS: SweepAnchor[] = [
   { city: "Lisbon", lat: 38.72225, lng: -9.13934, timezone: "Europe/Lisbon" },
 ];
 
-const LOOKAHEAD_DAYS = 7;
+// Today + the next 6 days = a rolling 7-day lookahead (ADR-0021).
+const LOOKAHEAD_DAYS = 6;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -191,8 +192,6 @@ export async function runPickupSweep(anchors: SweepAnchor[], options: { lookahea
   const lookaheadDays = options.lookaheadDays ?? LOOKAHEAD_DAYS;
   const dates = upcomingDates(lookaheadDays);
   const result: SweepResult = { anchors: anchors.length, clubs: 0, created: 0, skipped: 0, errors: [] };
-
-  const { mapWithConcurrency } = await import("./availabilityCache.server");
 
   for (const anchor of anchors) {
     for (const sport of SWEEP_SPORTS) {

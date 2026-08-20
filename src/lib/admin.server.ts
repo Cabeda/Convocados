@@ -74,12 +74,18 @@ export async function getAdminStats() {
       select: { userId: true },
       distinct: ["userId"],
     }),
-    // Open Pickups (ADR-0021): detected in the last 30 days; adopted in the last 30 days
+    // Open Pickups (ADR-0021): detected in the last 30 days; adopted within that
+    // same detection cohort (created AND adopted in the last 30 days), so the
+    // adoption rate can never exceed 100%.
     prisma.event.count({
       where: { source: "playtomic", createdAt: { gte: thirtyDaysAgo } },
     }),
     prisma.event.count({
-      where: { source: "playtomic", adoptedAt: { gte: thirtyDaysAgo } },
+      where: {
+        source: "playtomic",
+        createdAt: { gte: thirtyDaysAgo },
+        adoptedAt: { gte: thirtyDaysAgo },
+      },
     }),
   ]);
 
