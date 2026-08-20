@@ -904,6 +904,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 : undefined}
               eventDateTime={event.dateTime}
               rosterLocked={gameEnded}
+              declined={event.declined}
               />
             </div>
 
