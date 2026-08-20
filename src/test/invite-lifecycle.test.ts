@@ -21,9 +21,10 @@ vi.mock("~/lib/geocode", () => ({ resolveLocation: vi.fn() }));
 import { GET as getEvent } from "~/pages/api/events/[id]/index";
 import { GET as inviteLookup, POST as inviteTokenPost } from "~/pages/api/invite/[token]";
 import {
-  POST as createInvite, DELETE as retractInvite,
+  POST as createInvite, DELETE as retractInvite, GET as getInvites,
 } from "~/pages/api/events/[id]/invites";
 import { createPlayerInvite, acceptPlayerInvite, declinePlayerInvite, expirePendingInvites } from "~/lib/invite.server";
+import * as inviteServer from "~/lib/invite.server";
 
 function ctx(params: Record<string, string>, body?: unknown) {
   const request = new Request("http://localhost/api/test", {
@@ -39,6 +40,16 @@ function deleteCtx(params: Record<string, string>, body: unknown) {
     method: "DELETE",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
+  });
+  return { request, params, url: new URL("http://localhost/api/test") } as any;
+}
+
+/** Request with a malformed JSON body (tests the try/catch parse branches). */
+function rawCtx(params: Record<string, string>, method = "POST", rawBody = "not-json") {
+  const request = new Request("http://localhost/api/test", {
+    method,
+    headers: { "content-type": "application/json" },
+    body: rawBody,
   });
   return { request, params, url: new URL("http://localhost/api/test") } as any;
 }
@@ -212,6 +223,103 @@ describe("POST /api/events/[id]/invites", () => {
     const res = await createInvite(ctx({ id: ev.id }, { userId: invitee.id }));
     expect(res.status).toBe(400);
   });
+
+  it("rejects unauthenticated senders", async () => {
+    const { invitee, ev } = await seedInvitableEvent();
+    mockGetSession.mockResolvedValue(null);
+    const res = await createInvite(ctx({ id: ev.id }, { userId: invitee.id }));
+    expect(res.status).toBe(401);
+  });
+
+  it("404 for an unknown event", async () => {
+    const { invitee } = await seedInvitableEvent();
+    mockGetSession.mockResolvedValue({ user: { id: "u-any" } });
+    mockCheckEventAdmin.mockResolvedValue(true);
+    const res = await createInvite(ctx({ id: "e-unknown" }, { userId: invitee.id }));
+    expect(res.status).toBe(404);
+  });
+
+  it("400 when the event has no current game", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await prisma.event.create({ data: { id: eid(), title: "Game", location: "Pitch", dateTime: new Date(Date.now() + 48 * 3600_000), ownerId: owner.id, maxPlayers: 10 } });
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    mockCheckEventAdmin.mockResolvedValue(true);
+    const res = await createInvite(ctx({ id: ev.id }, { userId: invitee.id }));
+    expect(res.status).toBe(400);
+  });
+
+  it("400 on malformed JSON", async () => {
+    const owner = await seedUser("Owner");
+    const ev = await seedEventWithGame(owner.id);
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    mockCheckEventAdmin.mockResolvedValue(true);
+    const res = await createInvite(rawCtx({ id: ev.id }));
+    expect(res.status).toBe(400);
+  });
+
+  it("400 when userId is missing or not a string", async () => {
+    const owner = await seedUser("Owner");
+    const ev = await seedEventWithGame(owner.id);
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    mockCheckEventAdmin.mockResolvedValue(true);
+    const res = await createInvite(ctx({ id: ev.id }, {}));
+    expect(res.status).toBe(400);
+  });
+
+  it("400 when invite creation fails server-side", async () => {
+    const { owner, invitee, ev } = await seedInvitableEvent();
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    mockCheckEventAdmin.mockResolvedValue(true);
+    const spy = vi.spyOn(inviteServer, "createPlayerInvite").mockRejectedValue(new Error("boom"));
+    const res = await createInvite(ctx({ id: ev.id }, { userId: invitee.id }));
+    expect(res.status).toBe(400);
+    spy.mockRestore();
+  });
+});
+
+describe("GET /api/events/[id]/invites", () => {
+  it("401 when unauthenticated", async () => {
+    const owner = await seedUser("Owner");
+    const ev = await seedEventWithGame(owner.id);
+    mockGetSession.mockResolvedValue(null);
+    const res = await getInvites(ctx({ id: ev.id }));
+    expect(res.status).toBe(401);
+  });
+
+  it("403 when not an admin", async () => {
+    const owner = await seedUser("Owner");
+    const ev = await seedEventWithGame(owner.id);
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+    const res = await getInvites(ctx({ id: ev.id }));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns empty invites when the event has no current game", async () => {
+    const owner = await seedUser("Owner");
+    const ev = await prisma.event.create({ data: { id: eid(), title: "Game", location: "Pitch", dateTime: new Date(Date.now() + 48 * 3600_000), ownerId: owner.id, maxPlayers: 10 } });
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    mockCheckEventAdmin.mockResolvedValue(true);
+    const res = await getInvites(ctx({ id: ev.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.invites).toEqual([]);
+  });
+
+  it("lists pending invites for the current game", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+    await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    mockCheckEventAdmin.mockResolvedValue(true);
+    const res = await getInvites(ctx({ id: ev.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.invites).toHaveLength(1);
+    expect(body.invites[0].eventPlayer.name).toBe(invitee.name);
+  });
 });
 
 describe("acceptPlayerInvite", () => {
@@ -325,6 +433,38 @@ describe("retractPlayerInvite", () => {
     const res = await retractInvite(deleteCtx({ id: ev.id }, { inviteId: invite.inviteId }));
     expect(res.status).toBe(403);
   });
+
+  it("401 when unauthenticated", async () => {
+    mockGetSession.mockResolvedValue(null);
+    const res = await retractInvite(deleteCtx({ id: "e-1" }, { inviteId: "i-1" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("400 on malformed JSON", async () => {
+    const owner = await seedUser("Owner");
+    const ev = await seedEventWithGame(owner.id);
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    const res = await retractInvite(rawCtx({ id: ev.id }, "DELETE"));
+    expect(res.status).toBe(400);
+  });
+
+  it("400 when inviteId is missing", async () => {
+    const owner = await seedUser("Owner");
+    const ev = await seedEventWithGame(owner.id);
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    const res = await retractInvite(deleteCtx({ id: ev.id }, {}));
+    expect(res.status).toBe(400);
+  });
+
+  it("400 when retract fails with a non-owner error", async () => {
+    const owner = await seedUser("Owner");
+    const ev = await seedEventWithGame(owner.id);
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    const spy = vi.spyOn(inviteServer, "retractPlayerInvite").mockRejectedValue(new Error("boom"));
+    const res = await retractInvite(deleteCtx({ id: ev.id }, { inviteId: "i-1" }));
+    expect(res.status).toBe(400);
+    spy.mockRestore();
+  });
 });
 
 describe("GET /api/invite/[token]", () => {
@@ -348,6 +488,21 @@ describe("GET /api/invite/[token]", () => {
     const res = await inviteLookup(ctx({ token: "nope" }));
     const body = await res.json();
     expect(body.valid).toBe(false);
+  });
+
+  it("reports isInvitee false for an authenticated stranger", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const stranger = await seedUser("Stranger");
+    const ev = await seedEventWithGame(owner.id);
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+
+    mockGetSession.mockResolvedValue({ user: { id: stranger.id } });
+    const res = await inviteLookup(ctx({ token: invite.token }));
+    const body = await res.json();
+    expect(body.valid).toBe(true);
+    expect(body.isInvitee).toBe(false);
+    expect(body.authenticated).toBe(true);
   });
 });
 
@@ -401,6 +556,61 @@ describe("POST /api/invite/[token] (accept/decline via link)", () => {
     mockGetSession.mockResolvedValue({ user: { id: invitee.id } });
     const res = await inviteTokenPost(ctx({ token: invite.token }, { action: "accept" }));
     expect(res.status).toBe(410);
+  });
+
+  it("401 when unauthenticated", async () => {
+    mockGetSession.mockResolvedValue(null);
+    const res = await inviteTokenPost(ctx({ token: "t-1" }, { action: "accept" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("400 on malformed JSON", async () => {
+    const owner = await seedUser("Owner");
+    const ev = await seedEventWithGame(owner.id);
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: (await seedUser("Invitee")).id, invitedByUserId: owner.id, origin: "https://x.dev" });
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    const res = await inviteTokenPost(rawCtx({ token: invite.token }));
+    expect(res.status).toBe(400);
+  });
+
+  it("400 on an invalid action", async () => {
+    const owner = await seedUser("Owner");
+    const ev = await seedEventWithGame(owner.id);
+    const invitee = await seedUser("Invitee");
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+    mockGetSession.mockResolvedValue({ user: { id: invitee.id } });
+    const res = await inviteTokenPost(ctx({ token: invite.token }, { action: "maybe" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("404 for an unknown token", async () => {
+    const invitee = await seedUser("Invitee");
+    mockGetSession.mockResolvedValue({ user: { id: invitee.id } });
+    const res = await inviteTokenPost(ctx({ token: "nope" }, { action: "accept" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("404 when the invite's game is missing", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+    await prisma.game.deleteMany({ where: { id: ev.currentGameId } });
+    mockGetSession.mockResolvedValue({ user: { id: invitee.id } });
+    const res = await inviteTokenPost(ctx({ token: invite.token }, { action: "accept" }));
+    expect(res.status).toBe(404);
+  });
+
+  it("400 when accepting an invite throws server-side", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+    mockGetSession.mockResolvedValue({ user: { id: invitee.id } });
+    const spy = vi.spyOn(inviteServer, "acceptPlayerInvite").mockRejectedValue(new Error("boom"));
+    const res = await inviteTokenPost(ctx({ token: invite.token }, { action: "accept" }));
+    expect(res.status).toBe(400);
+    spy.mockRestore();
   });
 });
 
