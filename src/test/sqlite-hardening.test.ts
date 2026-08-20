@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { prisma, applyPragmas } from "~/lib/db.server";
+import { prisma, applyPragmas, prismaReady, runDbOptimize, scheduleDbOptimize } from "~/lib/db.server";
 
 describe("SQLite hardening", () => {
   // Ensure PRAGMAs are applied before testing (the async init may not have finished)
@@ -38,6 +38,34 @@ describe("SQLite hardening", () => {
     const result = await prisma.$queryRawUnsafe("PRAGMA cache_size") as Record<string, bigint>[];
     const val = Number(Object.values(result[0])[0]);
     expect([-20000, -2000]).toContain(val);
+  });
+
+  it("should have temp_store set to MEMORY (2)", async () => {
+    const result = await prisma.$queryRawUnsafe("PRAGMA temp_store") as Record<string, bigint>[];
+    const val = Number(Object.values(result[0])[0]);
+    expect(val).toBe(2);
+  });
+
+  it("should have journal_size_limit of 64MB", async () => {
+    const result = await prisma.$queryRawUnsafe("PRAGMA journal_size_limit") as Record<string, bigint>[];
+    const val = Number(Object.values(result[0])[0]);
+    expect(val).toBe(67108864);
+  });
+
+  it("prismaReady resolves after startup pragmas are applied", async () => {
+    await expect(prismaReady).resolves.toBeUndefined();
+  });
+
+  it("should run PRAGMA optimize without error", async () => {
+    const result = await runDbOptimize();
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("scheduleDbOptimize registers an unref'd timer", () => {
+    const timer = scheduleDbOptimize(86_400_000);
+    expect(timer).toBeDefined();
+    expect(timer.hasRef()).toBe(false);
+    clearInterval(timer);
   });
 
   it("should be writable", async () => {
