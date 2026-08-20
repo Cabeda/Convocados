@@ -88,6 +88,20 @@
     <string name="delete">Löschen</string>
     <string name="no_court_watches">Noch keine Platz-Alarme.\nErstelle einen über die alternativen Plätze eines Ereignisses.</string>
 
+    <!-- Invites (ADR 0025) -->
+    <string name="invite_page_title">Spieleinladung</string>
+    <string name="invite_not_found">Diese Einladung wurde nicht gefunden.</string>
+    <string name="invite_expired">Diese Einladung ist abgelaufen.</string>
+    <string name="invite_accepted">Du bist dem Spiel beigetreten!</string>
+    <string name="invite_declined">Du hast diese Einladung abgelehnt.</string>
+    <string name="invite_cancelled">Diese Einladung wurde storniert.</string>
+    <string name="invite_invited_by">%1$s hat dich zum Spielen eingeladen</string>
+    <string name="invite_accept">Annehmen</string>
+    <string name="invite_decline">Ablehnen</string>
+    <string name="invite_view_game">Spiel ansehen</string>
+    <string name="invite_sign_in">Anmelden</string>
+    <string name="invite_not_for_you">Diese Einladung ist nicht für dein Konto.</string>
+
     <string name="game_title">Spieltitel</string>
     <string name="game_title_placeholder">z. B. Dienstags-Fußball</string>
     <string name="sport">Sportart</string>

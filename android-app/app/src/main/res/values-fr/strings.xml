@@ -88,6 +88,20 @@
     <string name="delete">Supprimer</string>
     <string name="no_court_watches">Pas encore d\'alertes de terrains.\nCréez-en une depuis les terrains alternatifs d\'un événement.</string>
 
+    <!-- Invites (ADR 0025) -->
+    <string name="invite_page_title">Invitation à un match</string>
+    <string name="invite_not_found">Impossible de trouver cette invitation.</string>
+    <string name="invite_expired">Cette invitation a expiré.</string>
+    <string name="invite_accepted">Vous avez rejoint le match !</string>
+    <string name="invite_declined">Vous avez décliné cette invitation.</string>
+    <string name="invite_cancelled">Cette invitation a été annulée.</string>
+    <string name="invite_invited_by">%1$s vous a invité à jouer</string>
+    <string name="invite_accept">Accepter</string>
+    <string name="invite_decline">Décliner</string>
+    <string name="invite_view_game">Voir le match</string>
+    <string name="invite_sign_in">Se connecter</string>
+    <string name="invite_not_for_you">Cette invitation n'est pas pour votre compte.</string>
+
     <string name="game_title">Titre du match</string>
     <string name="game_title_placeholder">ex. Foot du mardi</string>
     <string name="sport">Sport</string>

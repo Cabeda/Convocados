@@ -98,6 +98,20 @@
     <string name="delete">Delete</string>
     <string name="no_court_watches">No court watches yet.\nCreate one from an event\'s Court Alternatives.</string>
 
+    <!-- Invites (ADR 0025) -->
+    <string name="invite_page_title">Game invite</string>
+    <string name="invite_not_found">This invite could not be found.</string>
+    <string name="invite_expired">This invite has expired.</string>
+    <string name="invite_accepted">You\'ve joined the game!</string>
+    <string name="invite_declined">You declined this invite.</string>
+    <string name="invite_cancelled">This invite was cancelled.</string>
+    <string name="invite_invited_by">%1$s invited you to play</string>
+    <string name="invite_accept">Accept</string>
+    <string name="invite_decline">Decline</string>
+    <string name="invite_view_game">View game</string>
+    <string name="invite_sign_in">Sign in</string>
+    <string name="invite_not_for_you">This invite is not for your account.</string></string>
+
     <!-- Create event -->
     <string name="game_title">Game title</string>
     <string name="game_title_placeholder">e.g. Tuesday 5-a-side</string>

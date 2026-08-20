@@ -534,3 +534,37 @@ data class PaymentGateError(
     val enforcement: String = "",
     val threshold: Double = 0.0,
 )
+
+// ── Invites (ADR 0025) ─────────────────────────────────────────────────────
+
+@Serializable
+data class InviteGame(
+    val id: String,
+    val title: String,
+    val location: String = "",
+    val dateTime: String = "",
+    val maxPlayers: Int = 0,
+)
+
+@Serializable
+data class InviteLookupResponse(
+    val valid: Boolean = false,
+    val status: String = "",
+    val token: String = "",
+    val isInvitee: Boolean = false,
+    val authenticated: Boolean = false,
+    val inviteeName: String = "",
+    val invitedByName: String = "",
+    val gameId: String = "",
+    val game: InviteGame? = null,
+)
+
+@Serializable
+data class InviteActionRequest(val action: String)
+
+@Serializable
+data class InviteActionResponse(
+    val ok: Boolean = false,
+    val action: String = "",
+    val bench: Boolean = false,
+)

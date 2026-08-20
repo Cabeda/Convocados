@@ -1,0 +1,9 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import InvitePage from "../../components/InvitePage";
+
+const { token } = Astro.params;
+---
+<BaseLayout title="Game invite — Convocados" mainTransitionName="page-invite">
+  <InvitePage client:only="react" token={token} />
+</BaseLayout>

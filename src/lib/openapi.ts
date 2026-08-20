@@ -917,6 +917,20 @@ export const openApiSpec = {
         responses: { "200": { description: "Court alternatives" }, ...errorResponses },
       },
     },
+    "/api/invite/{token}": {
+      get: {
+        summary: "Look up an invite by token (invite-by-link)",
+        tags: ["Invites"],
+        parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Invite details" } },
+      },
+      post: {
+        summary: "Respond to an invite (accept/decline)",
+        tags: ["Invites"],
+        parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Invite accepted or declined" } },
+      },
+    },
   },
   tags: [
     { name: "System", description: "Health and status" },

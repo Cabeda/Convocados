@@ -17,6 +17,7 @@ import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
 import BackspaceIcon from "@mui/icons-material/Backspace";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import DoNotDisturbAltIcon from "@mui/icons-material/DoNotDisturbAlt";
+import ScheduleSendIcon from "@mui/icons-material/ScheduleSend";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import { PlayerAvatar, AnonymousPlayerIcon } from "./PlayerIdentity";
@@ -102,6 +103,13 @@ interface Props {
   /** ADR 0025: players who declined (rsvp=no) the current game. Server-gated —
    *  only participants/owner/admins receive a non-empty array. Read-only display. */
   declined?: Array<{ id: string; name: string; userId: string | null; image?: string | null }>;
+  /** ADR 0025: pending PlayerInvite entries for the current game. Server-gated.
+   *  Read-only display — these are roster ghosts, not members yet. */
+  invited?: Array<{ id: string; name: string; userId: string | null; image?: string | null }>;
+  /** ADR 0025: ranked co-play suggestions (owner/admin). Each carries an Invite action. */
+  coPlaySuggestions?: Array<{ userId: string; name: string; image?: string | null; reason?: string }>;
+  /** ADR 0025: send a PlayerInvite for a suggested user (owner/admin). */
+  onInviteUser?: (userId: string, name: string) => Promise<void>;
 }
 
 export function PlayerList({
@@ -120,6 +128,9 @@ export function PlayerList({
   eventDateTime,
   rosterLocked = false,
   declined,
+  invited,
+  coPlaySuggestions,
+  onInviteUser,
 }: Props) {
   const t = useT();
   const theme = useTheme();
@@ -501,6 +512,38 @@ export function PlayerList({
           </Typography>
         )}
 
+        {/* ADR 0025: co-play suggestions (owner/admin) — ranked players to invite.
+            Each chip carries a one-tap Invite action (creates a PlayerInvite). */}
+        {coPlaySuggestions && coPlaySuggestions.length > 0 && !playerInput.trim() && (
+          <Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              {t("coPlaySuggestions")}:
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+              {coPlaySuggestions.slice(0, 8).map((s) => {
+                const alreadyIn = players.some((p) => p.userId === s.userId)
+                  || (invited ?? []).some((i) => i.userId === s.userId);
+                if (alreadyIn) return null;
+                return (
+                  <Chip
+                    key={s.userId}
+                    icon={s.image
+                      ? <PlayerAvatar userId={s.userId} name={s.name} image={s.image} size={18} clickable={false} />
+                      : <PersonAddIcon fontSize="small" />}
+                    label={s.name}
+                    variant="outlined"
+                    size="small"
+                    color="primary"
+                    title={s.reason}
+                    onClick={onInviteUser ? () => onInviteUser(s.userId, s.name) : undefined}
+                    sx={{ cursor: "pointer", "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.12) } }}
+                  />
+                );
+              })}
+            </Box>
+          </Box>
+        )}
+
         {/* Recent players chips (organizer convenience for re-adding past players).
             The self Quick Join / Quick Leave pills are gone — replaced by the AttendanceCta below. */}
         {availableSuggestions.length > 0 && !playerInput.trim() && (
@@ -731,6 +774,51 @@ export function PlayerList({
                       slotProps={{ primary: { sx: { fontWeight: 500, fontSize: "0.9rem", color: "text.secondary" } } }}
                     />
                     <Chip size="small" variant="outlined" color="default" label={t("declinedLabel")} />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </>
+        )}
+
+        {invited && invited.length > 0 && (
+          <>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <ScheduleSendIcon fontSize="small" color="primary" />
+              <Typography variant="body2" fontWeight={600} color="primary.main">
+                {t("invitedPlayers", { n: invited.length })}
+              </Typography>
+            </Box>
+            <Paper variant="outlined" sx={{
+              p: 1,
+              backgroundColor: alpha(theme.palette.primary.main, 0.04),
+              borderColor: alpha(theme.palette.primary.main, 0.3),
+            }}>
+              <List dense disablePadding>
+                {invited.map((d) => (
+                  <ListItem key={d.id} sx={{ borderRadius: 2, px: 1, py: 0.5 }}>
+                    {d.userId ? (
+                      <Tooltip title={t("protectedPlayer")}>
+                        <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
+                          <PlayerAvatar userId={d.userId} name={d.name} image={d.image ?? null} />
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip title={t("anonymousPlayer")}>
+                        <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
+                          <AnonymousPlayerIcon />
+                        </span>
+                      </Tooltip>
+                    )}
+                    <ListItemText
+                      primary={d.userId ? (
+                        <a href={`/users/${d.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>
+                          {d.name}
+                        </a>
+                      ) : d.name}
+                      slotProps={{ primary: { sx: { fontWeight: 500, fontSize: "0.9rem" } } }}
+                    />
+                    <Chip size="small" variant="outlined" color="primary" label={t("invitePendingLabel")} />
                   </ListItem>
                 ))}
               </List>
