@@ -414,6 +414,18 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
+  // ADR-0021: joining an un-adopted Open Pickup is blocked until someone adopts.
+  const pickupGate = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { source: true, ownerId: true },
+  });
+  if (pickupGate?.source === "playtomic" && pickupGate.ownerId === null) {
+    return Response.json(
+      { error: "This is an open pickup — claim it first." },
+      { status: 409 },
+    );
+  }
+
   // Once the game has ended, the roster is frozen on the event page — players
   // must not be added after kickoff. Post-game roster fixes go through the
   // game history (PATCH /history) instead.

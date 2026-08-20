@@ -5,6 +5,7 @@
  */
 
 import { prisma } from "./db.server";
+import type { Event } from "@prisma/client";
 import { fromDateTimeLocalValue } from "./timezones";
 import { getSportPreset } from "./sports";
 import { createT } from "./i18n";
@@ -40,51 +41,53 @@ function weekdayLabel(dateTime: Date, timezone: string): string {
   return new Intl.DateTimeFormat("en", { weekday: "short", timeZone: timezone }).format(dateTime);
 }
 
-/** Create (or return the existing) Event+Game for a detected booked slot. */
-export async function createPickupEvent(input: PickupEventInput) {
+/**
+ * Create (or return the existing) Event+Game for a detected booked slot.
+ * Returns `created: true` only when a new pickup was actually written, so callers
+ * can report accurate sweep metrics.
+ */
+export async function createPickupEvent(input: PickupEventInput): Promise<{ event: Event; created: boolean }> {
   const sourceKey = pickupSourceKey(input);
   const existing = await prisma.event.findUnique({ where: { sourceKey } });
-  if (existing) return existing;
+  if (existing) return { event: existing, created: false };
 
   const preset = getSportPreset(input.sport);
   const dateTime = new Date(fromDateTimeLocalValue(`${input.date}T${input.slot.startTime}`, input.timezone));
 
   try {
-    const event = await prisma.event.create({
-      data: {
-        title: `${tEn(preset.labelKey)} — ${input.tenantName} (${weekdayLabel(dateTime, input.timezone)} ${input.slot.startTime})`,
-        location: input.address ?? input.tenantName,
-        latitude: input.coordinate?.lat ?? null,
-        longitude: input.coordinate?.lng ?? null,
-        dateTime,
-        timezone: input.timezone,
-        maxPlayers: preset.defaultMaxPlayers,
-        durationMinutes: preset.defaultDurationMinutes,
-        sport: input.sport,
-        isPublic: true,
-        isRecurring: false,
-        source: "playtomic",
-        sourceKey,
-        playtomicTenantId: input.tenantId,
-        playtomicTenantName: input.tenantName,
-      },
+    const event = await prisma.$transaction(async (tx) => {
+      const ev = await tx.event.create({
+        data: {
+          title: `${tEn(preset.labelKey)} — ${input.tenantName} (${weekdayLabel(dateTime, input.timezone)} ${input.slot.startTime})`,
+          location: input.address ?? input.tenantName,
+          latitude: input.coordinate?.lat ?? null,
+          longitude: input.coordinate?.lng ?? null,
+          dateTime,
+          timezone: input.timezone,
+          maxPlayers: preset.defaultMaxPlayers,
+          durationMinutes: preset.defaultDurationMinutes,
+          sport: input.sport,
+          isPublic: true,
+          isRecurring: false,
+          source: "playtomic",
+          sourceKey,
+          playtomicTenantId: input.tenantId,
+          playtomicTenantName: input.tenantName,
+        },
+      });
+
+      const game = await tx.game.create({ data: { eventId: ev.id, dateTime } });
+      await tx.event.update({ where: { id: ev.id }, data: { currentGameId: game.id } });
+
+      return ev;
     });
 
-    const game = await prisma.game.create({
-      data: { eventId: event.id, dateTime },
-    });
-
-    await prisma.event.update({
-      where: { id: event.id },
-      data: { currentGameId: game.id },
-    });
-
-    return event;
+    return { event, created: true };
   } catch (err) {
     // Concurrent sweep created the same slot first — return the existing row.
     if (err instanceof Error && "code" in err && (err as { code?: string }).code === "P2002") {
       const winner = await prisma.event.findUnique({ where: { sourceKey } });
-      if (winner) return winner;
+      if (winner) return { event: winner, created: false };
     }
     throw err;
   }
@@ -167,7 +170,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Next N dates from today, YYYY-MM-DD (UTC). */
+/** Today plus the next `lookaheadDays` days, as YYYY-MM-DD (UTC). */
 export function upcomingDates(lookaheadDays: number): string[] {
   const dates: string[] = [];
   const start = new Date();
@@ -222,7 +225,7 @@ export async function runPickupSweep(anchors: SweepAnchor[], options: { lookahea
               maxDurationMinutes: 120,
             });
             for (const booking of bookings) {
-              await createPickupEvent({
+              const { created } = await createPickupEvent({
                 tenantId: club.tenant_id,
                 tenantName: club.tenant_name,
                 address: club.address
@@ -241,7 +244,7 @@ export async function runPickupSweep(anchors: SweepAnchor[], options: { lookahea
                 },
                 timezone: anchor.timezone,
               });
-              result.created++;
+              if (created) result.created++;
             }
             await sleep(200); // pace Playtomic calls (ADR-0021)
           }

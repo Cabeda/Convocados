@@ -243,6 +243,7 @@ describe("getAdminStats", () => {
           playtomicTenantId: "tenant-1",
           playtomicTenantName: "Club",
           ownerId: owned ? "u1" : null,
+          adoptedAt: owned ? new Date(now - 2 * 86400000) : null,
           createdAt: new Date(now - 3 * 86400000),
         },
       });

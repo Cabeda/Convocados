@@ -11,6 +11,7 @@ import PeopleIcon from "@mui/icons-material/People";
 import EventIcon from "@mui/icons-material/Event";
 import SportsScoreIcon from "@mui/icons-material/SportsScore";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import PublicIcon from "@mui/icons-material/Public";
 import SearchIcon from "@mui/icons-material/Search";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from "recharts";
@@ -32,6 +33,9 @@ interface AdminStats {
   recurringEvents: number;
   oneOffEvents: number;
   sportDistribution: Record<string, number>;
+  pickupsDetected: number;
+  pickupsAdopted: number;
+  pickupAdoptionRate: number;
 }
 
 interface UserRow {
@@ -336,6 +340,9 @@ export default function AdminDashboardPage() {
                   </Grid>
                   <Grid size={{ xs: 6, sm: 4, md: 2 }}>
                     <StatCard label={t("adminOneOffEvents")} value={stats.oneOffEvents} icon={<EventIcon fontSize="small" />} />
+                    <StatCard label={t("adminPickupsDetected")} value={stats.pickupsDetected} icon={<PublicIcon fontSize="small" />} />
+                    <StatCard label={t("adminPickupsAdopted")} value={stats.pickupsAdopted} icon={<PublicIcon fontSize="small" />} />
+                    <StatCard label={t("adminPickupAdoptionRate")} value={`${Math.round(stats.pickupAdoptionRate * 100)}%`} icon={<PublicIcon fontSize="small" />} />
                   </Grid>
                 </Grid>
 

@@ -88,11 +88,8 @@ class PublicGamesViewModel @Inject constructor(private val api: ConvocadosApi) :
         applyFilter()
     }
 
-    fun adopt(eventId: String) {
-        viewModelScope.launch {
-            runCatching { api.adoptPickup(eventId) }
-        }
-    }
+    suspend fun adopt(eventId: String): Boolean =
+        runCatching { api.adoptPickup(eventId) }.isSuccess
 
     private fun applyFilter() {
         _events.value = if (_sportFilter.value == "all") allEvents
@@ -114,6 +111,7 @@ fun PublicGamesScreen(
     val hasMore by viewModel.hasMore.collectAsState()
     val sportFilter by viewModel.sportFilter.collectAsState()
     var showMap by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
@@ -202,7 +200,11 @@ fun PublicGamesScreen(
                                 if (event.location.isNotBlank()) Text(event.location, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
                                 if (isPickup) {
                                     Button(
-                                        onClick = { viewModel.adopt(event.id); onEventClick(event.id) },
+                                        onClick = {
+                                            scope.launch {
+                                                if (viewModel.adopt(event.id)) onEventClick(event.id)
+                                            }
+                                        },
                                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                                     ) {
                                         Text(stringResource(R.string.claim_pickup))

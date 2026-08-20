@@ -44,6 +44,7 @@ const isOpenPickup = (ev: PublicEvent): boolean => ev.source === "playtomic" && 
 
 /** Adopt an Open Pickup (ADR-0021): becomes the owner, stays public. */
 async function adoptPickup(ev: PublicEvent, t: TFunction) {
+  if (!window.confirm(t("claimPickupConfirm"))) return;
   try {
     const res = await fetch(`/api/events/${ev.id}/adopt`, { method: "POST" });
     if (res.status === 401) {

@@ -194,6 +194,7 @@ model Event {
   sourceKey String? // natural key for pickups: "{tenantId}|{resourceId}|{slotDate}|{slotStart}" (unique)
   playtomicTenantId String? // Playtomic club id (pickup source)
   playtomicTenantName String? // Playtomic club name (pickup title)
+  adoptedAt DateTime? // when an Open Pickup was adopted (ADR-0021); null = unowned
 
   // Archive
   archivedAt     DateTime?
