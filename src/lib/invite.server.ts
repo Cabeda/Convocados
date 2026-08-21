@@ -25,11 +25,45 @@ import { getNotificationPrefs, wantsInvites } from "./notificationPrefs.server";
 import { sendPushToUser } from "./push.server";
 import { fireWebhooks } from "./webhook.server";
 import { enqueueNotification } from "./notificationQueue.server";
+import { sendGameInvite, isEmailConfigured } from "./email.server";
 import { createT, type Locale } from "./i18n";
 
 const log = createLogger("invite");
 
 export type PlayerInviteStatus = "pending" | "accepted" | "declined" | "expired" | "cancelled";
+
+/** Notification channels an invite was delivered through (ADR 0025). */
+export interface InviteChannels {
+  email: boolean;
+  webPush: boolean;
+  appPush: boolean;
+}
+
+const NO_CHANNELS: InviteChannels = { email: false, webPush: false, appPush: false };
+
+/**
+ * Which notification channels are enabled for an invitee. Each channel is true
+ * only when the invitee opted in (prefs + verified email) AND a delivery
+ * surface exists (email provider configured, web push subscription, app push
+ * token). When all three are false the inviter should fall back to link sharing.
+ */
+export async function getInviteChannels(userId: string): Promise<InviteChannels> {
+  const prefs = await getNotificationPrefs(userId);
+  if (!wantsInvites(prefs)) return NO_CHANNELS;
+
+  const [user, webSubs, appTokens] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { email: true, emailVerified: true } }),
+    prisma.pushSubscription.count({ where: { userId } }),
+    prisma.appPushToken.count({ where: { userId } }),
+  ]);
+
+  const pushWanted = prefs.pushEnabled && prefs.gameInvitePush;
+  return {
+    email: prefs.emailEnabled && prefs.gameInviteEmail && !!user?.email && !!user.emailVerified && isEmailConfigured(),
+    webPush: pushWanted && webSubs > 0,
+    appPush: pushWanted && appTokens > 0,
+  };
+}
 
 /** Cryptographically random per-invite token (used for /invite/<token> links). */
 export function generateInviteToken(): string {
@@ -65,7 +99,7 @@ export async function createPlayerInvite(opts: {
   inviteeUserId: string;
   invitedByUserId: string;
   origin: string;
-}): Promise<{ inviteId: string; token: string; inviteUrl: string }> {
+}): Promise<{ inviteId: string; token: string; inviteUrl: string; channels: InviteChannels }> {
   const { eventId, gameId, inviteeUserId, invitedByUserId, origin } = opts;
   const user = await prisma.user.findUnique({
     where: { id: inviteeUserId },
@@ -104,21 +138,24 @@ export async function createPlayerInvite(opts: {
 
   const inviteUrl = `${origin}/invite/${token}`;
 
-  await notifyInvitee({ userId: inviteeUserId, eventId, inviteUrl, invitedByUserId });
+  const channels = await notifyInvitee({ userId: inviteeUserId, eventId, inviteUrl, invitedByUserId });
   fireWebhooks(eventId, "player_invited", { playerName: user.name, inviteUrl }).catch(() => {});
 
-  log.info({ inviteId: invite.id, eventId, inviteeUserId, invitedByUserId }, "Player invite created");
-  return { inviteId: invite.id, token, inviteUrl };
+  log.info({ inviteId: invite.id, eventId, inviteeUserId, invitedByUserId, channels }, "Player invite created");
+  return { inviteId: invite.id, token, inviteUrl, channels };
 }
 
-async function notifyInvitee(opts: { userId: string; eventId: string; inviteUrl: string; invitedByUserId: string }) {
+async function notifyInvitee(opts: { userId: string; eventId: string; inviteUrl: string; invitedByUserId: string }): Promise<InviteChannels> {
   const prefs = await getNotificationPrefs(opts.userId);
-  if (!wantsInvites(prefs)) return;
+  // Global kill switch: nothing is sent (no in-app row either).
+  if (!wantsInvites(prefs)) return NO_CHANNELS;
+  const channels = await getInviteChannels(opts.userId);
 
-  const [event, inviterToken] = await Promise.all([
-    prisma.event.findUnique({ where: { id: opts.eventId }, select: { title: true } }),
+  const [event, inviterToken, inviteeUser] = await Promise.all([
+    prisma.event.findUnique({ where: { id: opts.eventId }, select: { title: true, dateTime: true, location: true } }),
     // The inviter's push locale (AppPushToken) — the push is composed by them.
     prisma.appPushToken.findFirst({ where: { userId: opts.invitedByUserId }, select: { locale: true } }),
+    prisma.user.findUnique({ where: { id: opts.userId }, select: { email: true } }),
   ]);
   const title = event?.title ?? "Game";
 
@@ -135,12 +172,23 @@ async function notifyInvitee(opts: { userId: string; eventId: string; inviteUrl:
     },
   });
 
-  if (prefs.pushEnabled) {
+  if (channels.webPush || channels.appPush) {
     // Push body is composed by the inviter — render it in the INVITER's locale.
     const inviterLocale = (inviterToken?.locale as Locale) ?? "en";
     const t = createT(inviterLocale);
     sendPushToUser(opts.userId, title, t(key, { event: title }), opts.inviteUrl).catch(() => {});
   }
+
+  if (channels.email && event && inviteeUser?.email) {
+    sendGameInvite(inviteeUser.email, {
+      eventTitle: title,
+      dateTime: event.dateTime.toISOString(),
+      location: event.location,
+      eventUrl: opts.inviteUrl,
+    }).catch(() => {});
+  }
+
+  return channels;
 }
 
 /**
