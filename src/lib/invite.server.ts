@@ -51,15 +51,21 @@ export async function getInviteChannels(userId: string): Promise<InviteChannels>
   const prefs = await getNotificationPrefs(userId);
   if (!wantsInvites(prefs)) return NO_CHANNELS;
 
-  const [user, webSubs, appTokens] = await Promise.all([
+  const [user, webSubs, appTokens, googleAccount] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { email: true, emailVerified: true } }),
     prisma.pushSubscription.count({ where: { userId } }),
     prisma.appPushToken.count({ where: { userId } }),
+    prisma.account.findFirst({ where: { userId, providerId: "google" }, select: { id: true } }),
   ]);
 
   const pushWanted = prefs.pushEnabled && prefs.gameInvitePush;
+  // Google users have verified email via OAuth — auto-enable email channel for invites
+  // even if they haven't explicitly opted into email prefs yet. Their email is
+  // already stored in User.email and is verified by Google.
+  const isGoogleUser = !!googleAccount;
+  const emailWanted = (prefs.emailEnabled && prefs.gameInviteEmail) || (isGoogleUser && !!user?.emailVerified);
   return {
-    email: prefs.emailEnabled && prefs.gameInviteEmail && !!user?.email && !!user.emailVerified && isEmailConfigured(),
+    email: emailWanted && !!user?.email && !!user.emailVerified && isEmailConfigured(),
     webPush: pushWanted && webSubs > 0,
     appPush: pushWanted && appTokens > 0,
   };

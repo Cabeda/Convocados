@@ -9,6 +9,7 @@ export { NotifyButton } from "./NotifyButton";
 export { MoreActionsMenu } from "./MoreActionsMenu";
 export { AddPlayerConfirmDialog } from "./AddPlayerConfirmDialog";
 export { InviteShareDialog } from "./InviteShareDialog";
+export { InviteBanner } from "./InviteBanner";
 export type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 export { useCountdown } from "./useCountdown";
 export type { Player, TeamMember, TeamResult, EventData, KnownPlayer, PlayerOption } from "./types";

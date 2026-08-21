@@ -48,11 +48,14 @@ export function InviteShareDialog({ open, name, url, onClose }: Props) {
       <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <LinkIcon color="primary" />
-          {t("inviteNoChannels", { name })}
+          {(t as any)("inviteShareTitle", { name }) || t("inviteNoChannels", { name })}
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" gutterBottom>
-            {t("inviteNoChannelsDesc")}
+            {(t as any)("inviteShareDesc", { name }) || t("inviteNoChannelsDesc")}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+            {(t as any)("inviteShareHint") || "Anyone with the link can view the invite. Only the invited account can accept it."}
           </Typography>
           <TextField
             fullWidth
