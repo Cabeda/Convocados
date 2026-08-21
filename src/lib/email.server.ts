@@ -22,6 +22,11 @@ export function _resetResendClient() {
   _resend = null;
 }
 
+/** True when a transactional email provider (Resend API key) is configured. */
+export function isEmailConfigured(): boolean {
+  return !!(import.meta.env.RESEND_API_KEY ?? process.env.RESEND_API_KEY);
+}
+
 const EMAIL_FROM = import.meta.env.EMAIL_FROM ?? process.env.EMAIL_FROM ?? "Convocados <noreply@cabeda.dev>";
 
 function getAppUrl(): string {
