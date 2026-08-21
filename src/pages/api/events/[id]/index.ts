@@ -282,36 +282,13 @@ export const GET: APIRoute = async ({ params, request }) => {
     gameStatus = currentGame?.status ?? null;
   }
 
-  // ADR 0025: declined roster (rsvp=no on the current game) + pending invitees —
-  // both read-only, visible to participants + owner + admins only (plus the
-  // invitee's own pending entry). Anonymous/followers get [].
+  // ADR 0025: declined roster (rsvp=no) is visible to all viewers when a game exists;
+  // invited pending entries remain gated (participants/owner/admins + own pending).
   let declined: Array<{ id: string; name: string; userId: string | null; image: string | null }> = [];
   let invited: Array<{ id: string; name: string; userId: string | null; image: string | null }> = [];
   if (event.currentGameId) {
-    const sessionForViewer = await getSession(request).catch(() => null);
-    const viewerId = sessionForViewer?.user?.id ?? null;
-
-    let viewerIsParticipant = false;
-    let viewerIsAdmin = false;
-    let viewerHasPendingHere = false;
-    if (viewerId) {
-      viewerIsParticipant = playersPayload.some((p) => p.userId === viewerId)
-        || pendingParticipants.some((gp) => (gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name)) === viewerId);
-      if (event.ownerId === viewerId) {
-        viewerIsAdmin = true;
-      } else {
-        try {
-          const isAdminResult = await checkEventAdmin(event.id, viewerId);
-          viewerIsAdmin = isAdminResult === true;
-        } catch {
-          viewerIsAdmin = false;
-        }
-      }
-      viewerHasPendingHere = pendingParticipants.some((gp) => (gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name)) === viewerId);
-    }
-    const viewerSeesRosterExtras = !!viewerId && (viewerIsParticipant || viewerIsAdmin);
-
-    if (viewerSeesRosterExtras) {
+    // Declined: visible to everyone (collapsed by default in the UI). No gating.
+    {
       const declinedRsvps = await prisma.rsvp.findMany({
         where: { gameId: event.currentGameId, status: "no" },
         select: { eventPlayerId: true },
@@ -334,6 +311,29 @@ export const GET: APIRoute = async ({ params, request }) => {
         }));
       }
     }
+
+    const sessionForViewer = await getSession(request).catch(() => null);
+    const viewerId = sessionForViewer?.user?.id ?? null;
+
+    let viewerIsParticipant = false;
+    let viewerIsAdmin = false;
+    let viewerHasPendingHere = false;
+    if (viewerId) {
+      viewerIsParticipant = playersPayload.some((p) => p.userId === viewerId)
+        || pendingParticipants.some((gp) => (gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name)) === viewerId);
+      if (event.ownerId === viewerId) {
+        viewerIsAdmin = true;
+      } else {
+        try {
+          const isAdminResult = await checkEventAdmin(event.id, viewerId);
+          viewerIsAdmin = isAdminResult === true;
+        } catch {
+          viewerIsAdmin = false;
+        }
+      }
+      viewerHasPendingHere = pendingParticipants.some((gp) => (gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name)) === viewerId);
+    }
+    const viewerSeesRosterExtras = !!viewerId && (viewerIsParticipant || viewerIsAdmin);
 
     // The invitee's own pending entry is always visible to them.
     if (viewerId && (viewerSeesRosterExtras || viewerHasPendingHere)) {

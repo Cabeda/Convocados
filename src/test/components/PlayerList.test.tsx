@@ -43,18 +43,10 @@ beforeEach(() => {
 });
 
 describe("PlayerList — confirmation dialog trigger", () => {
-  it("opens the dialog when a recent-players Chip is clicked", async () => {
-    const user = userEvent.setup();
+  it("does not render recent-players chips (deprecated)", async () => {
     renderWithTheme(<PlayerList {...baseProps} />);
-    const chip = screen.getByText("Charlie");
-    await user.click(chip);
-    expect(baseProps.onRequestAdd).toHaveBeenCalledWith({
-      kind: "single",
-      name: "Charlie",
-      email: undefined,
-      source: "chip",
-    });
-    expect(baseProps.onAddPlayer).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Recent players/)).toBeNull();
+    expect(screen.queryByText("Charlie")).toBeNull();
   });
 
   it("dispatches intent with source=dropdown when an Autocomplete option is selected", async () => {
@@ -70,17 +62,19 @@ describe("PlayerList — confirmation dialog trigger", () => {
     );
   });
 
-  it("does NOT open the dialog when Enter is pressed on a typed name (typing is deliberate)", async () => {
+  it("opens the choice dialog when Enter is pressed on a typed name", async () => {
     const user = userEvent.setup();
     renderWithTheme(<PlayerList {...baseProps} />);
     const input = screen.getByPlaceholderText(/add player/i);
     await user.click(input);
     await user.type(input, "NewName{Enter}");
-    expect(baseProps.onAddPlayer).toHaveBeenCalledWith("NewName");
-    expect(baseProps.onRequestAdd).not.toHaveBeenCalled();
+    expect(baseProps.onRequestAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "NewName", source: "input" }),
+    );
+    expect(baseProps.onAddPlayer).not.toHaveBeenCalled();
   });
 
-  it("does NOT open the dialog when the + IconButton is tapped (typing is deliberate)", async () => {
+  it("opens the choice dialog when the + IconButton is tapped", async () => {
     const user = userEvent.setup();
     renderWithTheme(<PlayerList {...baseProps} />);
     const input = screen.getByPlaceholderText(/add player/i);
@@ -90,17 +84,23 @@ describe("PlayerList — confirmation dialog trigger", () => {
       ?? buttons.find((b) => b.querySelector('[data-testid="PersonAddIcon"]') !== null);
     if (!addButton) throw new Error("+ IconButton not found");
     fireEvent.click(addButton);
-    expect(baseProps.onAddPlayer).toHaveBeenCalled();
-    expect(baseProps.onRequestAdd).not.toHaveBeenCalled();
+    expect(baseProps.onRequestAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "AnotherName", source: "input" }),
+    );
+    expect(baseProps.onAddPlayer).not.toHaveBeenCalled();
   });
 
   it("falls back to onAddPlayer when no onRequestAdd is provided (e.g. older API surface)", async () => {
-    const user = userEvent.setup();
     const fallbackProps = { ...baseProps, onRequestAdd: undefined };
     renderWithTheme(<PlayerList {...fallbackProps} />);
-    const chip = screen.getByText("Charlie");
-    await user.click(chip);
-    expect(baseProps.onAddPlayer).toHaveBeenCalledWith("Charlie");
+    const input = screen.getByPlaceholderText(/add player/i);
+    fireEvent.change(input, { target: { value: "FallbackName" } });
+    const buttons = screen.getAllByRole("button");
+    const addButton = buttons.find((b) => b.getAttribute("data-testid") === "add-player-submit")
+      ?? buttons.find((b) => b.querySelector('[data-testid="PersonAddIcon"]') !== null);
+    if (!addButton) throw new Error("+ IconButton not found");
+    fireEvent.click(addButton);
+    expect(baseProps.onAddPlayer).toHaveBeenCalledWith("FallbackName");
   });
 });
 
@@ -148,14 +148,14 @@ describe("PlayerList — player identity (avatar / anonymous icon)", () => {
     expect(screen.getAllByTestId("Person2OutlinedIcon").length).toBeGreaterThan(0);
   });
 
-  it("renders avatar/anonymous markers in the recent-players chips", () => {
+  it("does not render recent-players chips even when suggestions exist", () => {
     const suggestions = [
       { name: "Linked", gamesPlayed: 2, userId: "u-x", image: "https://example.com/linked.jpg" },
       { name: "Anon", gamesPlayed: 1, userId: null, image: null },
     ];
     renderWithTheme(<PlayerList {...baseProps} players={[]} availableSuggestions={suggestions} />);
-    expect(screen.getByRole("img", { name: "Linked" })).toBeInTheDocument();
-    expect(screen.getByTestId("Person2OutlinedIcon")).toBeInTheDocument();
+    expect(screen.queryByText(/Recent players/)).toBeNull();
+    expect(screen.queryByRole("img", { name: "Linked" })).toBeNull();
   });
 
   it("renders avatar/anonymous markers in the add-player dropdown options", async () => {
