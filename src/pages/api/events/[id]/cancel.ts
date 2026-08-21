@@ -54,6 +54,47 @@ export const PUT: APIRoute = async ({ params, request }) => {
     data: { status: "cancelled" },
   });
 
+  // ── Reverse the cancelled game's payments (ADR 0009) ─────────────────────
+  // 1. Archive its GamePayment rows so they never surface on the settlement
+  //    page as "payment requested".
+  // 2. Reverse the WalletTransaction ledger: a game_cancelled_credit zeroes
+  //    each per_game_share debit, and any credit_redeemed (wallet unit) tied
+  //    to this game is voided so the unit is restored. Players who had
+  //    already paid end up with a refund credit — correct for a cancellation.
+  await prisma.gamePayment.updateMany({
+    where: { gameId: game.id, archivedAt: null },
+    data: { archivedAt: new Date() },
+  });
+
+  const chargeDebits = await prisma.walletTransaction.findMany({
+    where: {
+      eventId: event.id,
+      eventInstanceId: game.id,
+      reason: "per_game_share",
+      direction: "debit",
+    },
+    select: { userId: true, amountCents: true, currency: true },
+  });
+  for (const d of chargeDebits) {
+    await prisma.walletTransaction.create({
+      data: {
+        eventId: event.id,
+        userId: d.userId,
+        amountCents: d.amountCents,
+        currency: d.currency,
+        direction: "credit",
+        gameUnits: 0,
+        reason: "game_cancelled_credit",
+        eventInstanceId: game.id,
+      },
+    });
+  }
+
+  // Void any wallet-unit redemptions tied to the cancelled game.
+  await prisma.walletTransaction.deleteMany({
+    where: { eventId: event.id, eventInstanceId: game.id, reason: "credit_redeemed" },
+  });
+
   // Create GameHistory entry
   await prisma.gameHistory.create({
     data: {
