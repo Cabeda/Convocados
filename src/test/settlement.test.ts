@@ -419,6 +419,41 @@ describe("getSettlementSummary (privacy)", () => {
   });
 });
 
+describe("getSettlementSummary excludes cancelled and future games", () => {
+  it("excludes a cancelled game", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+    await prisma.game.update({ where: { id: game.id }, data: { status: "cancelled" } });
+
+    const s = await getSettlementSummary(event.id, { role: "owner", userId: "owner-settlement" });
+    expect(s.games).toHaveLength(0);
+    expect(s.totals.unsettledGames).toBe(0);
+  });
+
+  it("excludes a future (upcoming) game but keeps a past game", async () => {
+    const { event, game } = await seedEvent({ cost: 60 }); // past upcoming game
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+
+    // A future recurrence with pending payments must NOT appear.
+    const futureGame = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(Date.now() + 7 * 24 * 3600_000), status: "upcoming" },
+    });
+    for (const name of ["Ana", "Bruno", "Carla"]) {
+      const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { name } });
+      await prisma.gameParticipant.create({ data: { gameId: futureGame.id, eventPlayerId: ep.id, order: 0 } });
+    }
+    await syncGamePayments(futureGame.id, event.id);
+
+    const s = await getSettlementSummary(event.id, { role: "owner", userId: "owner-settlement" });
+    expect(s.games).toHaveLength(1);
+    expect(s.games[0].gameId).toBe(game.id);
+  });
+});
+
 describe("spec alignment", () => {
   it("shares by maxPlayers — bench overflow doesn't lower the per-player price", async () => {
     const { event, game } = await seedEvent({ cost: 60 });

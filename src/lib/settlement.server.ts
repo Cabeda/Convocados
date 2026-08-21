@@ -378,7 +378,16 @@ export async function getSettlementSummary(
   if (!event) throw new Error("Event not found.");
 
   const games = await prisma.game.findMany({
-    where: { eventId, OR: [{ paymentMode: null }, { paymentMode: "tracked" }] },
+    where: {
+      eventId,
+      // Cancelled games never incur a payment obligation (ADR 0009).
+      status: { not: "cancelled" },
+      // The settlement page is for expenses that have already happened —
+      // a game still in the future (incl. the current upcoming recurrence)
+      // must not surface as "payment requested". See #bugs aug17/aug24.
+      dateTime: { lte: new Date() },
+      OR: [{ paymentMode: null }, { paymentMode: "tracked" }],
+    },
     include: {
       payments: { where: { archivedAt: null }, include: { eventPlayer: { select: { name: true } } } },
       payerEventPlayer: { select: { id: true, name: true } },
