@@ -596,3 +596,18 @@ data class SuggestionsResponse(val suggestions: List<CoPlaySuggestion> = emptyLi
 
 @Serializable
 data class InviteCreateRequest(val userId: String)
+
+@Serializable
+data class InviteChannels(
+    val email: Boolean = false,
+    val webPush: Boolean = false,
+    val appPush: Boolean = false,
+)
+
+@Serializable
+data class InviteCreateResponse(
+    val ok: Boolean = true,
+    val token: String = "",
+    val inviteUrl: String = "",
+    val channels: InviteChannels = InviteChannels(),
+)

@@ -92,6 +92,7 @@ beforeEach(async () => {
   mockCheckEventAdmin.mockReset();
   mockEnqueueNotification.mockReset();
   await resetApiRateLimitStore();
+  await prisma.walletTransaction.deleteMany();
   await prisma.eventLog.deleteMany();
   await prisma.gamePayment.deleteMany();
   await prisma.gameParticipant.deleteMany();
@@ -232,6 +233,55 @@ describe("PUT /api/events/[id]/cancel", () => {
 
     const res = await cancelGame(putCtx({ id: event.id }));
     expect(res.status).toBe(400);
+  });
+
+  it("archives payment rows and reverses the ledger for a cancelled game", async () => {
+    await seedUser();
+    const event = await seedEvent({ ownerId: "user1" });
+    const game = await seedGame(event.id);
+
+    // A participant with a linked user + an outstanding per_game_share debit
+    // (mirrors what recordPerGameShare writes when a player joins).
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Ana", userId: "user1" },
+    });
+    await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: ep.id, order: 0 } });
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 60, currency: "EUR" } });
+    await prisma.gamePayment.create({
+      data: { gameId: game.id, eventPlayerId: ep.id, playerName: "Ana", amount: 6, status: "pending" },
+    });
+    await prisma.walletTransaction.create({
+      data: {
+        eventId: event.id,
+        userId: "user1",
+        amountCents: 600,
+        currency: "EUR",
+        direction: "debit",
+        gameUnits: 0,
+        reason: "per_game_share",
+        eventInstanceId: game.id,
+      },
+    });
+
+    mockGetSession.mockResolvedValue({ user: { id: "user1", name: "Owner" } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+
+    const res = await cancelGame(putCtx({ id: event.id }));
+    expect(res.status).toBe(200);
+
+    // GamePayment rows are archived so they never surface on the settlement page.
+    const payment = await prisma.gamePayment.findFirst({ where: { gameId: game.id } });
+    expect(payment?.archivedAt).not.toBeNull();
+
+    // The ledger is reversed with a game_cancelled_credit that zeroes the debt.
+    const txs = await prisma.walletTransaction.findMany({
+      where: { eventId: event.id, eventInstanceId: game.id },
+    });
+    expect(txs).toHaveLength(2);
+    const credit = txs.find((t) => t.reason === "game_cancelled_credit");
+    expect(credit).toBeTruthy();
+    expect(credit?.direction).toBe("credit");
+    expect(credit?.amountCents).toBe(600);
   });
 
   it("logs the cancellation event", async () => {

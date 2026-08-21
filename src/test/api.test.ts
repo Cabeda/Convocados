@@ -342,6 +342,25 @@ describe("POST /api/events/[id]/players", () => {
     expect(players[0].name).toBe("Alice");
   });
 
+  it("marks a name-only add as anonymous (no account to notify)", async () => {
+    const id = await seedEvent();
+    const res = await addPlayer(ctx({ id }, { name: "GuestGuy" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.anonymous).toBe(true);
+  });
+
+  it("does not mark an email-linked add as anonymous", async () => {
+    const user = await prisma.user.create({
+      data: { id: "u-anon-flag", name: "LinkedUser", email: "linked@t.com", emailVerified: true },
+    });
+    const id = await seedEvent();
+    const res = await addPlayer(ctx({ id }, { name: user.name, email: user.email }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.anonymous).toBe(false);
+  });
+
   it("returns 404 for unknown event", async () => {
     const res = await addPlayer(ctx({ id: "bad-id" }, { name: "Alice" }));
     expect(res.status).toBe(404);
