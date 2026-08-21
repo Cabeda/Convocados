@@ -194,7 +194,7 @@ describe("GET /api/events/[id] — declined roster + opt-out state", () => {
     expect(body.declined[0].userId).toBe(decliner.id);
   });
 
-  it("returns declined entries for anonymous viewers (visible to all)", async () => {
+  it("returns empty declined for anonymous viewers", async () => {
     const owner = await seedUser("Owner");
     const decliner = await seedUser("Decliner");
     const ev = await seedEventWithGame(owner.id);
@@ -203,8 +203,7 @@ describe("GET /api/events/[id] — declined roster + opt-out state", () => {
 
     const res = await getEvent(ctx({ id: ev.id }));
     const body = await res.json();
-    expect(body.declined).toHaveLength(1);
-    expect(body.declined[0].name).toBe(decliner.name);
+    expect(body.declined).toEqual([]);
   });
 
   it("includes invitationOptOutAt on player entries", async () => {
