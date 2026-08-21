@@ -25,6 +25,7 @@ import {
   PasswordPrompt,
   useCountdown,
   AddPlayerConfirmDialog,
+  InviteShareDialog,
   type AddPlayerIntent,
 } from "./event";
 import type { EventData, Player, KnownPlayer } from "./event";
@@ -72,6 +73,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  const [inviteShare, setInviteShare] = useState<{ url: string; name: string } | null>(null);
   const [balanced, setBalanced] = useState(false);
   const [_isPublic, setIsPublic] = useState(false);
   const [sport, setSport] = useState("football-5v5");
@@ -204,7 +206,21 @@ export default function EventPage({ eventId }: { eventId: string }) {
         setPlayerError(json.error ?? t("somethingWentWrong"));
         return;
       }
-      setSnackbar(t("inviteSent", { name }));
+      // ADR 0025: surface which notification channels the invitee will get.
+      // With none enabled, fall back to sharing the invite link directly.
+      const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
+      const anyChannel = !!(channels?.email || channels?.webPush || channels?.appPush);
+      if (anyChannel) {
+        const labels: string[] = [];
+        if (channels?.email) labels.push(t("channelEmail"));
+        if (channels?.webPush) labels.push(t("channelWebPush"));
+        if (channels?.appPush) labels.push(t("channelAppPush"));
+        setSnackbar(t("inviteSentVia", { name, channels: labels.join(", ") }));
+      } else if (typeof json?.inviteUrl === "string") {
+        setInviteShare({ url: json.inviteUrl, name });
+      } else {
+        setSnackbar(t("inviteSent", { name }));
+      }
       fetchEvent();
     } catch {
       setPlayerError(t("somethingWentWrong"));
@@ -1021,6 +1037,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
           isAdding={!!addInFlightName}
           onConfirm={handleConfirmAdd}
           onClose={() => setAddIntent(null)}
+        />
+
+        <InviteShareDialog
+          open={!!inviteShare}
+          name={inviteShare?.name ?? ""}
+          url={inviteShare?.url ?? ""}
+          onClose={() => setInviteShare(null)}
         />
       </ResponsiveLayout>
     </ThemeModeProvider>
