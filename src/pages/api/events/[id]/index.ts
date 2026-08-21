@@ -215,6 +215,10 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   // ADR 0016: read players from GameParticipant+EventPlayer when currentGameId is set
   let playersPayload: any[];
+  // Hoisted for the ADR 0025 invited/declined gating below (separate if-block).
+  let pendingParticipants: Array<{ eventPlayer: { id: string; name: string; userId: string | null; invitationOptOutAt: Date | null; eventId: string }; order: number; createdAt: Date; status: string }> = [];
+  let playersByName = new Map<string, string | null>();
+  let imageByUserId = new Map<string, string | null>();
   if (event.currentGameId) {
     const participants = await prisma.gameParticipant.findMany({
       where: { gameId: event.currentGameId, archivedAt: null },
@@ -225,11 +229,17 @@ export const GET: APIRoute = async ({ params, request }) => {
     // ponytail: EventPlayer.userId may be stale (null) if the player rejoined
     // after a reset and the upsert didn't update it. Fall back to the event-level
     // Player.userId which is the authoritative link.
-    const playersByName = new Map(
+    playersByName = new Map(
       event.players
         .filter((p) => p.userId)
         .map((p) => [p.name, p.userId]),
     );
+
+    // ADR 0025: pending invite entries (status="pending") are roster ghosts —
+    // shown separately as "invited", excluded from playersPayload so they never
+    // pollute roster/bench counts, payments or team draws.
+    const activeParticipants = participants.filter((gp) => gp.status !== "pending");
+    pendingParticipants = participants.filter((gp) => gp.status === "pending");
 
     // EventPlayer has no Prisma relation to User, so resolve profile images in
     // one batch query keyed by the resolved userId (account-linked identity).
@@ -237,9 +247,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     const linkedUsers = linkedUserIds.length
       ? await prisma.user.findMany({ where: { id: { in: linkedUserIds } }, select: { id: true, image: true } })
       : [];
-    const imageByUserId = new Map(linkedUsers.map((u) => [u.id, u.image]));
+    imageByUserId = new Map(linkedUsers.map((u) => [u.id, u.image]));
 
-    playersPayload = participants.map((gp) => {
+    playersPayload = activeParticipants.map((gp) => {
       const userId = gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name) ?? null;
       return {
         id: gp.eventPlayer.id,
@@ -249,6 +259,7 @@ export const GET: APIRoute = async ({ params, request }) => {
         userId,
         image: userId ? (imageByUserId.get(userId) ?? null) : null,
         createdAt: gp.createdAt.toISOString(),
+        invitationOptOutAt: gp.eventPlayer.invitationOptOutAt?.toISOString() ?? null,
       };
     });
   } else {
@@ -257,6 +268,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       userId: p.userId ?? null,
       image: user?.image ?? null,
       createdAt: p.createdAt.toISOString(),
+      invitationOptOutAt: null,
     }));
   }
 
@@ -268,6 +280,73 @@ export const GET: APIRoute = async ({ params, request }) => {
       select: { status: true },
     });
     gameStatus = currentGame?.status ?? null;
+  }
+
+  // ADR 0025: declined roster (rsvp=no on the current game) + pending invitees —
+  // both read-only, visible to participants + owner + admins only (plus the
+  // invitee's own pending entry). Anonymous/followers get [].
+  let declined: Array<{ id: string; name: string; userId: string | null; image: string | null }> = [];
+  let invited: Array<{ id: string; name: string; userId: string | null; image: string | null }> = [];
+  if (event.currentGameId) {
+    const sessionForViewer = await getSession(request).catch(() => null);
+    const viewerId = sessionForViewer?.user?.id ?? null;
+
+    let viewerIsParticipant = false;
+    let viewerIsAdmin = false;
+    let viewerHasPendingHere = false;
+    if (viewerId) {
+      viewerIsParticipant = playersPayload.some((p) => p.userId === viewerId)
+        || pendingParticipants.some((gp) => (gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name)) === viewerId);
+      if (event.ownerId === viewerId) {
+        viewerIsAdmin = true;
+      } else {
+        try {
+          const isAdminResult = await checkEventAdmin(event.id, viewerId);
+          viewerIsAdmin = isAdminResult === true;
+        } catch {
+          viewerIsAdmin = false;
+        }
+      }
+      viewerHasPendingHere = pendingParticipants.some((gp) => (gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name)) === viewerId);
+    }
+    const viewerSeesRosterExtras = !!viewerId && (viewerIsParticipant || viewerIsAdmin);
+
+    if (viewerSeesRosterExtras) {
+      const declinedRsvps = await prisma.rsvp.findMany({
+        where: { gameId: event.currentGameId, status: "no" },
+        select: { eventPlayerId: true },
+      });
+      if (declinedRsvps.length > 0) {
+        const declinedEps = await prisma.eventPlayer.findMany({
+          where: { id: { in: declinedRsvps.map((r) => r.eventPlayerId) } },
+          select: { id: true, name: true, userId: true },
+        });
+        const declinedUserIds = declinedEps.map((e) => e.userId).filter((u): u is string => !!u);
+        const declinedUsers = declinedUserIds.length
+          ? await prisma.user.findMany({ where: { id: { in: declinedUserIds } }, select: { id: true, image: true } })
+          : [];
+        const declinedImageByUserId = new Map(declinedUsers.map((u) => [u.id, u.image]));
+        declined = declinedEps.map((e) => ({
+          id: e.id,
+          name: e.name,
+          userId: e.userId,
+          image: e.userId ? (declinedImageByUserId.get(e.userId) ?? null) : null,
+        }));
+      }
+    }
+
+    // The invitee's own pending entry is always visible to them.
+    if (viewerId && (viewerSeesRosterExtras || viewerHasPendingHere)) {
+      invited = pendingParticipants.map((gp) => {
+        const userId = gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name) ?? null;
+        return {
+          id: gp.eventPlayer.id,
+          name: gp.eventPlayer.name,
+          userId,
+          image: userId ? (imageByUserId.get(userId) ?? null) : null,
+        };
+      });
+    }
   }
 
   // ADR 0016: filter teamResults to only include members in the current game's player list.
@@ -300,5 +379,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     nextResetAt: event.nextResetAt?.toISOString() ?? null,
     archivedAt: event.archivedAt?.toISOString() ?? null,
     players: playersPayload,
+    declined,
+    invited,
   });
 };

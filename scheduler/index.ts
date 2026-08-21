@@ -62,6 +62,12 @@ const MAINTENANCE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 /** Interval for court-watch sweep (hourly) */
 const COURT_WATCH_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
+/** Interval for SQLite maintenance — PRAGMA optimize (daily, per SQLite docs) */
+const DB_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/** UTC hours the Open Pickup sweep runs (ADR-0021: twice daily) */
+const PICKUP_SWEEP_HOURS = [9, 21];
+
 async function triggerMaintenance(): Promise<void> {
   const res = await fetch(`${APP_URL}/api/cron/reminders`, {
     method: "POST",
@@ -92,10 +98,42 @@ async function triggerCourtWatch(): Promise<void> {
   console.log("[scheduler] Court-watch completed:", JSON.stringify(body));
 }
 
+async function triggerDbMaintenance(): Promise<void> {
+  const res = await fetch(`${APP_URL}/api/cron/db-maintenance`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${CRON_SECRET}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+
+  if (!res.ok) {
+    throw new Error(`DB maintenance cron failed: ${res.status} ${res.statusText}`);
+  }
+
+  const body = await res.json() as Record<string, unknown>;
+  console.log("[scheduler] DB maintenance completed:", JSON.stringify(body));
+}
+
+async function triggerPickupSweep(): Promise<void> {
+  const res = await fetch(`${APP_URL}/api/cron/pickups`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${CRON_SECRET}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Pickup sweep cron failed: ${res.status} ${res.statusText}`);
+  }
+
+  const body = await res.json() as Record<string, unknown>;
+  console.log("[scheduler] Pickup sweep completed:", JSON.stringify(body));
+}
+
 async function runLoop() {
   let pollInterval = POLL_IDLE_MS;
   let lastMaintenance = 0;
   let lastCourtWatch = 0;
+  let lastDbMaintenance = 0;
+  let lastPickupSweep = 0;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -118,6 +156,28 @@ async function runLoop() {
         lastCourtWatch = start;
       } catch (err) {
         console.error("[scheduler] Court-watch error:", err);
+      }
+    }
+
+    // Daily SQLite maintenance (PRAGMA optimize) — runs in the app on request;
+    // the worker only holds the timer, so the app needs no long-lived process.
+    if (start - lastDbMaintenance >= DB_MAINTENANCE_INTERVAL_MS) {
+      try {
+        await triggerDbMaintenance();
+        lastDbMaintenance = start;
+      } catch (err) {
+        console.error("[scheduler] DB maintenance error:", err);
+      }
+    }
+
+    // Twice-daily Open Pickup sweep (09:00 / 21:00 UTC, at most once per hour).
+    const utcHour = new Date().getUTCHours();
+    if (PICKUP_SWEEP_HOURS.includes(utcHour) && start - lastPickupSweep >= 60 * 60 * 1000) {
+      try {
+        await triggerPickupSweep();
+        lastPickupSweep = start;
+      } catch (err) {
+        console.error("[scheduler] Pickup sweep error:", err);
       }
     }
 

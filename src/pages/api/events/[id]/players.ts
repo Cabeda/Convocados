@@ -414,6 +414,18 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
+  // ADR-0021: joining an un-adopted Open Pickup is blocked until someone adopts.
+  const pickupGate = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { source: true, ownerId: true },
+  });
+  if (pickupGate?.source === "playtomic" && pickupGate.ownerId === null) {
+    return Response.json(
+      { error: "This is an open pickup — claim it first." },
+      { status: 409 },
+    );
+  }
+
   // Once the game has ended, the roster is frozen on the event page — players
   // must not be added after kickoff. Post-game roster fixes go through the
   // game history (PATCH /history) instead.
@@ -607,7 +619,8 @@ export const POST: APIRoute = async ({ params, request }) => {
           const ep = await prisma.eventPlayer.upsert({
             where: { eventId_name: { eventId, name: trimmed } },
             create: { eventId, name: trimmed, userId: reactivatedUserId },
-            update: { ...(reactivatedUserId ? { userId: reactivatedUserId } : {}) },
+            // ADR 0025: rejoining clears the per-event invite opt-out.
+            update: { ...(reactivatedUserId ? { userId: reactivatedUserId } : {}), invitationOptOutAt: null },
           });
           await prisma.rsvp.upsert({
             where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
@@ -630,7 +643,7 @@ export const POST: APIRoute = async ({ params, request }) => {
           await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
         }
         notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
-        return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
+        return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true, anonymous: linkedUserId === null });
       }
       // ── ADR 0016: game-scoped re-join after recurring reset ─────────────
       // Player record exists at event level (from last week) but may not be in
@@ -639,7 +652,8 @@ export const POST: APIRoute = async ({ params, request }) => {
         const eventPlayer = await prisma.eventPlayer.upsert({
           where: { eventId_name: { eventId, name: trimmed } },
           create: { eventId, name: trimmed, userId: linkedUserId ?? existing.userId },
-          update: { ...(linkedUserId ? { userId: linkedUserId } : {}) },
+          // ADR 0025: rejoining clears the per-event invite opt-out.
+          update: { ...(linkedUserId ? { userId: linkedUserId } : {}), invitationOptOutAt: null },
         });
         const alreadyInGame = await prisma.gameParticipant.findUnique({
           where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
@@ -670,7 +684,7 @@ export const POST: APIRoute = async ({ params, request }) => {
             update: { status: "yes", respondedAt: new Date() },
           });
           notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
-          return Response.json({ ok: true, invited: null, resolvedName: trimmed });
+          return Response.json({ ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null });
         }
         if (!alreadyInGame) {
           const gpOrder = await nextGameParticipantOrder(event.currentGameId);
@@ -700,7 +714,7 @@ export const POST: APIRoute = async ({ params, request }) => {
             await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
           }
           notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
-          return Response.json({ ok: true, invited: null, resolvedName: trimmed });
+          return Response.json({ ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null });
         }
         // Already in the current game — fall through to duplicate error
       }
@@ -713,7 +727,7 @@ export const POST: APIRoute = async ({ params, request }) => {
               where: { id: existing.id },
               data: { userId: resolvedUser.id },
             });
-            return Response.json({ ok: true, invited: null, resolvedName: trimmed });
+            return Response.json({ ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null });
           } else if (existing.userId === resolvedUser.id) {
             return Response.json({ error: `"${trimmed}" is already in the list.` }, { status: 409 });
           } else {
@@ -750,7 +764,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     const eventPlayer = await prisma.eventPlayer.upsert({
       where: { eventId_name: { eventId, name: trimmed } },
       create: { eventId, name: trimmed, userId: linkedUserId },
-      update: {},
+      // ADR 0025: joining clears any stale per-event invite opt-out.
+      update: { invitationOptOutAt: null },
     });
     const gpOrder = await nextGameParticipantOrder(event.currentGameId);
     await prisma.gameParticipant.upsert({
@@ -909,7 +924,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
   }
 
-  const successResponse = Response.json({ ok: true, invited: inviteResult, resolvedName: trimmed });
+  const successResponse = Response.json({ ok: true, invited: inviteResult, resolvedName: trimmed, anonymous: linkedUserId === null });
 
   // Cache the 2xx response for replay on retry with the same Idempotency-Key.
   if (idemKey && idemCacheKey) {

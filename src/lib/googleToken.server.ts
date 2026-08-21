@@ -60,6 +60,15 @@ function decodeToken(
   }
 }
 
+/**
+ * Decode a Google ID token's payload without verifying it.
+ * Only for reading claims out of a token that was already verified by
+ * better-auth (or by {@link verifyGoogleIdToken}) before being persisted.
+ */
+export function decodeIdTokenPayload(token: string): GoogleIdTokenClaims | null {
+  return decodeToken(token)?.payload ?? null;
+}
+
 async function fetchJwks(): Promise<GoogleJwk[]> {
   const now = Date.now();
   if (jwksCache && jwksCache.expiresAt > now) return jwksCache.keys;

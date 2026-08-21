@@ -3,10 +3,11 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   Container, Typography, Stack, Box, Button,
   CircularProgress, Alert, Divider, Accordion, AccordionSummary, AccordionDetails,
-  IconButton, Tooltip,
+  IconButton, Tooltip, Paper, Chip,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import UnfollowIcon from "@mui/icons-material/VisibilityOff";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { PushPromptBanner } from "./PushPromptBanner";
@@ -29,6 +30,25 @@ interface DashboardData {
   followedHasMore: boolean;
 }
 
+/** ADR 0025 co-play suggestion (subset of the /suggestions endpoint shape). */
+interface DashboardSuggestion {
+  userId: string;
+  name: string;
+  image?: string | null;
+  gamesPlayed?: number;
+  coPlayCount?: number;
+  score?: number;
+  invitedPending?: boolean;
+}
+
+interface ManagedGameSuggestions {
+  game: GameSummary;
+  suggestions: DashboardSuggestion[];
+}
+
+/** ADR 0025: dashboard panel surfaces at most the 3 nearest upcoming managed games. */
+const MANAGED_SUGGESTIONS_GAMES = 3;
+
 export default function DashboardPage() {
   const t = useT();
   const { data: session, isPending: sessionLoading } = useSession();
@@ -45,6 +65,7 @@ export default function DashboardPage() {
   const [followedHasMore, setFollowedHasMore] = useState(false);
   const [loadingOwned, setLoadingOwned] = useState(false);
   const [loadingFollowed, setLoadingFollowed] = useState(false);
+  const [managedSuggestions, setManagedSuggestions] = useState<ManagedGameSuggestions[]>([]);
 
   const fetchGames = useCallback(async (oc?: string | null, fc?: string | null) => {
     const params = new URLSearchParams();
@@ -52,6 +73,28 @@ export default function DashboardPage() {
     if (fc) params.set("followedCursor", fc);
     const res = await fetch(`/api/me/games?${params.toString()}`);
     return (await res.json()) as DashboardData;
+  }, []);
+
+  /** ADR 0025: fetch co-play invite suggestions for the 3 nearest upcoming
+   *  managed (owned/admin) games. Returns games that actually have candidates. */
+  const fetchManagedSuggestions = useCallback(async (ownedGames: GameSummary[], adminGames: GameSummary[]) => {
+    const nowMs = Date.now();
+    const managed = [...ownedGames, ...adminGames]
+      .filter((g) => new Date(g.dateTime).getTime() > nowMs)
+      .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime())
+      .slice(0, MANAGED_SUGGESTIONS_GAMES);
+    if (managed.length === 0) return [];
+    const results = await Promise.all(managed.map(async (game) => {
+      try {
+        const res = await fetch(`/api/events/${game.id}/suggestions`);
+        const json = await res.json().catch(() => ({ suggestions: [] }));
+        const suggestions = Array.isArray(json?.suggestions) ? json.suggestions : [];
+        return { game, suggestions };
+      } catch {
+        return { game, suggestions: [] as DashboardSuggestion[] };
+      }
+    }));
+    return results.filter((r) => r.suggestions.length > 0);
   }, []);
 
   const loadData = useCallback(async () => {
@@ -65,7 +108,8 @@ export default function DashboardPage() {
     setOwnedHasMore(data.ownedHasMore);
     setFollowedCursor(data.followedNextCursor);
     setFollowedHasMore(data.followedHasMore);
-  }, [fetchGames]);
+    setManagedSuggestions(await fetchManagedSuggestions(data.owned, data.admin ?? []));
+  }, [fetchGames, fetchManagedSuggestions]);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -88,6 +132,7 @@ export default function DashboardPage() {
         setOwnedHasMore(data.ownedHasMore);
         setFollowedCursor(data.followedNextCursor);
         setFollowedHasMore(data.followedHasMore);
+        fetchManagedSuggestions(data.owned, data.admin ?? []).then(setManagedSuggestions).catch(() => {});
       }).catch(() => {});
     };
 
@@ -104,7 +149,7 @@ export default function DashboardPage() {
       if (pollRef.current) clearInterval(pollRef.current);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [session?.user, fetchGames]);
+  }, [session?.user, fetchGames, fetchManagedSuggestions]);
 
   const handleUnfollow = async (eventId: string) => {
     await fetch("/api/me/follows", {
@@ -113,6 +158,24 @@ export default function DashboardPage() {
       body: JSON.stringify({ eventId }),
     });
     setFollowed((prev) => prev.filter((g) => g.id !== eventId));
+  };
+
+  /** ADR 0025: one-tap invite from the dashboard panel. On success the chip is
+   *  dropped from the panel (PlayerInvite pending on the server). */
+  const handleSuggestionInvite = async (eventId: string, userId: string) => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/invites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (res.ok) {
+        setManagedSuggestions((prev) => prev.map((m) => ({
+          ...m,
+          suggestions: m.suggestions.filter((s) => s.userId !== userId),
+        })));
+      }
+    } catch { /* network blip — panel stays as-is */ }
   };
 
   const loadMoreOwned = async () => {
@@ -271,6 +334,43 @@ export default function DashboardPage() {
                       )}
                     </Stack>
                   </Box>
+                )}
+
+                {managedSuggestions.length > 0 && (
+                  <>
+                    <Box>
+                      <Typography variant="h6" fontWeight={600} gutterBottom>
+                        {t("dashboardSuggestedPlayers")}
+                      </Typography>
+                      <Stack spacing={1.5}>
+                        {managedSuggestions.map(({ game, suggestions }) => (
+                          <Paper key={game.id} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                            <Typography variant="subtitle2" fontWeight={600}>
+                              <a href={`/events/${game.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                                {game.title}
+                              </a>
+                            </Typography>
+                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mt: 1 }}>
+                              {suggestions.slice(0, 6).map((s) => (
+                                <Chip
+                                  key={s.userId}
+                                  icon={<PersonAddIcon fontSize="small" />}
+                                  label={s.name}
+                                  variant="outlined"
+                                  size="small"
+                                  color="primary"
+                                  title={s.gamesPlayed ? `${s.gamesPlayed} games` : undefined}
+                                  onClick={() => handleSuggestionInvite(game.id, s.userId)}
+                                  sx={{ cursor: "pointer" }}
+                                />
+                              ))}
+                            </Box>
+                          </Paper>
+                        ))}
+                      </Stack>
+                    </Box>
+                    <Divider />
+                  </>
                 )}
 
                 {!hasActive && (

@@ -25,6 +25,7 @@ import {
   PasswordPrompt,
   useCountdown,
   AddPlayerConfirmDialog,
+  InviteShareDialog,
   type AddPlayerIntent,
 } from "./event";
 import type { EventData, Player, KnownPlayer } from "./event";
@@ -72,6 +73,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  const [inviteShare, setInviteShare] = useState<{ url: string; name: string } | null>(null);
   const [balanced, setBalanced] = useState(false);
   const [_isPublic, setIsPublic] = useState(false);
   const [sport, setSport] = useState("football-5v5");
@@ -171,6 +173,59 @@ export default function EventPage({ eventId }: { eventId: string }) {
       .catch(() => {});
     return () => controller.abort();
   }, [eventId]);
+
+  // ── ADR 0025: co-play suggestions (owner/admin only) ───────────────────────
+  interface CoPlaySuggestion { userId: string; name: string; image?: string | null; gamesPlayed?: number; score?: number; reason?: string }
+  const [coPlaySuggestions, setCoPlaySuggestions] = useState<CoPlaySuggestion[]>([]);
+  const isOwnerFlag = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
+  const isAdminFlag = !!event?.isAdmin;
+  useEffect(() => {
+    if (!(isOwnerFlag || isAdminFlag) || !event?.gameId) {
+      setCoPlaySuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/events/${eventId}/suggestions`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : Promise.resolve({ suggestions: [] })))
+      .then((d) => setCoPlaySuggestions(Array.isArray(d?.suggestions) ? d.suggestions : []))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [eventId, event?.gameId, isOwnerFlag, isAdminFlag]);
+
+  /** ADR 0025: send a PlayerInvite to a suggested user (owner/admin). */
+  const invitePlayer = useCallback(async (userId: string, name: string) => {
+    setPlayerError(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/invites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
+      if (!res.ok) {
+        setPlayerError(json.error ?? t("somethingWentWrong"));
+        return;
+      }
+      // ADR 0025: surface which notification channels the invitee will get.
+      // With none enabled, fall back to sharing the invite link directly.
+      const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
+      const anyChannel = !!(channels?.email || channels?.webPush || channels?.appPush);
+      if (anyChannel) {
+        const labels: string[] = [];
+        if (channels?.email) labels.push(t("channelEmail"));
+        if (channels?.webPush) labels.push(t("channelWebPush"));
+        if (channels?.appPush) labels.push(t("channelAppPush"));
+        setSnackbar(t("inviteSentVia", { name, channels: labels.join(", ") }));
+      } else if (typeof json?.inviteUrl === "string") {
+        setInviteShare({ url: json.inviteUrl, name });
+      } else {
+        setSnackbar(t("inviteSent", { name }));
+      }
+      fetchEvent();
+    } catch {
+      setPlayerError(t("somethingWentWrong"));
+    }
+  }, [eventId, fetchEvent, t]);
 
   // ── Payment-nudge state ────────────────────────────────────────────────────
   // Fetched lazily on first pill click; controls whether the Quick Join pill
@@ -314,7 +369,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
         return;
       }
       const resolvedName: string | undefined = json.resolvedName;
-      if (resolvedName && resolvedName !== trimmed && trimmed) {
+      // Anonymous player (no account): no notification channel exists — surface
+      // the share-by-link option right away so the inviter can reach them.
+      if (json.anonymous === true) {
+        setInviteShare({ url: window.location.href, name: resolvedName ?? trimmed });
+      } else if (resolvedName && resolvedName !== trimmed && trimmed) {
         setSnackbar(`Added ${resolvedName} ✓`);
       }
       addKnownName(resolvedName ?? trimmed);
@@ -904,6 +963,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 : undefined}
               eventDateTime={event.dateTime}
               rosterLocked={gameEnded}
+              declined={event.declined}
+              invited={event.invited}
+              coPlaySuggestions={coPlaySuggestions}
+              onInviteUser={invitePlayer}
               />
             </div>
 
@@ -978,6 +1041,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
           isAdding={!!addInFlightName}
           onConfirm={handleConfirmAdd}
           onClose={() => setAddIntent(null)}
+        />
+
+        <InviteShareDialog
+          open={!!inviteShare}
+          name={inviteShare?.name ?? ""}
+          url={inviteShare?.url ?? ""}
+          onClose={() => setInviteShare(null)}
         />
       </ResponsiveLayout>
     </ThemeModeProvider>

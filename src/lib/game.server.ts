@@ -22,7 +22,7 @@ export async function shouldProcessGameElo(gameId: string): Promise<boolean> {
  */
 export async function nextGameParticipantOrder(gameId: string): Promise<number> {
   const agg = await prisma.gameParticipant.aggregate({
-    where: { gameId },
+    where: { gameId, status: { not: "pending" } },
     _max: { order: true },
   });
   return (agg._max.order ?? -1) + 1;
