@@ -20,6 +20,7 @@ export const MONEY_CLEARING_REASONS = new Set<WalletTxReason>([
   "payment_received",
   "payment_self_reported",
   "credit_redeemed",
+  "game_cancelled_credit",
 ]);
 
 /** Reasons that create a money debt for the player (debits). ADR 0019. */
@@ -32,6 +33,7 @@ export const MONEY_CHARGING_REASONS = new Set<WalletTxReason>([
 export const OUTSTANDING_CLEARING_REASONS = new Set<WalletTxReason>([
   "payment_received",
   "credit_redeemed",
+  "game_cancelled_credit",
 ]);
 
 export type WalletTxReason =
@@ -43,7 +45,8 @@ export type WalletTxReason =
   | "credit_expired"
   | "extras_declare"
   | "payment_received"
-  | "payment_self_reported";
+  | "payment_self_reported"
+  | "game_cancelled_credit";
 
 export type WalletTxDirection = "debit" | "credit";
 
