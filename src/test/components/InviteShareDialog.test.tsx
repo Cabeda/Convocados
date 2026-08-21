@@ -15,8 +15,8 @@ describe("InviteShareDialog — ADR 0025 no-channels fallback", () => {
   it("shows the invitee name, the explanation and the invite link", () => {
     render(<InviteShareDialog open name="Alice" url="https://convocados.cabeda.dev/invite/abc123" onClose={() => {}} />);
 
-    expect(screen.getByText("No notifications enabled for Alice")).toBeInTheDocument();
-    expect(screen.getByText(/share the invite link directly/)).toBeInTheDocument();
+    expect(screen.getByText("Invite sent to Alice")).toBeInTheDocument();
+    expect(screen.getByText(/Share this link with Alice/)).toBeInTheDocument();
     expect(screen.getByDisplayValue("https://convocados.cabeda.dev/invite/abc123")).toBeInTheDocument();
   });
 

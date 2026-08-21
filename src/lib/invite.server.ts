@@ -51,15 +51,21 @@ export async function getInviteChannels(userId: string): Promise<InviteChannels>
   const prefs = await getNotificationPrefs(userId);
   if (!wantsInvites(prefs)) return NO_CHANNELS;
 
-  const [user, webSubs, appTokens] = await Promise.all([
+  const [user, webSubs, appTokens, googleAccount] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { email: true, emailVerified: true } }),
     prisma.pushSubscription.count({ where: { userId } }),
     prisma.appPushToken.count({ where: { userId } }),
+    prisma.account.findFirst({ where: { userId, providerId: "google" }, select: { id: true } }),
   ]);
 
   const pushWanted = prefs.pushEnabled && prefs.gameInvitePush;
+  // Google users have verified email via OAuth — auto-enable email channel for invites
+  // even if they haven't explicitly opted into email prefs yet. Their email is
+  // already stored in User.email and is verified by Google.
+  const isGoogleUser = !!googleAccount;
+  const emailWanted = (prefs.emailEnabled && prefs.gameInviteEmail) || (isGoogleUser && !!user?.emailVerified);
   return {
-    email: prefs.emailEnabled && prefs.gameInviteEmail && !!user?.email && !!user.emailVerified && isEmailConfigured(),
+    email: emailWanted && !!user?.email && !!user.emailVerified && isEmailConfigured(),
     webPush: pushWanted && webSubs > 0,
     appPush: pushWanted && appTokens > 0,
   };
@@ -115,8 +121,18 @@ export async function createPlayerInvite(opts: {
 
   const token = generateInviteToken();
   const invite = await prisma.$transaction(async (tx) => {
-    const inv = await tx.playerInvite.create({
-      data: {
+    // Guard: don't overwrite an active roster spot. The API route's
+    // inviteBlockReason should have blocked this, but handle race/concurrency.
+    const existingParticipant = await tx.gameParticipant.findUnique({
+      where: { gameId_eventPlayerId: { gameId, eventPlayerId: ep.id } },
+    });
+    if (existingParticipant && existingParticipant.status === "active" && !existingParticipant.archivedAt) {
+      throw new Error("This user is already on the player list.");
+    }
+
+    const inv = await tx.playerInvite.upsert({
+      where: { gameId_eventPlayerId: { gameId, eventPlayerId: ep.id } },
+      create: {
         gameId,
         eventPlayerId: ep.id,
         invitedByUserId,
@@ -124,13 +140,25 @@ export async function createPlayerInvite(opts: {
         token,
         notifiedAt: new Date(),
       },
+      update: {
+        invitedByUserId,
+        status: "pending",
+        token,
+        notifiedAt: new Date(),
+        respondedAt: null,
+      },
     });
 
     // ADR 0025: pending roster entry — visible to participants/owner as
     // "Invited", counts toward nothing (roster/bench/payments/teams).
+    // Use upsert so re-invites after cancel/expire (which leave a pending
+    // GameParticipant) don't hit the (gameId, eventPlayerId) unique constraint
+    // for Tiago Magalhães repro: Unique constraint failed on (gameId, eventPlayerId).
     const order = await nextGameParticipantOrder(gameId);
-    await tx.gameParticipant.create({
-      data: { gameId, eventPlayerId: ep.id, order, status: "pending" },
+    await tx.gameParticipant.upsert({
+      where: { gameId_eventPlayerId: { gameId, eventPlayerId: ep.id } },
+      create: { gameId, eventPlayerId: ep.id, order, status: "pending" },
+      update: { order, status: "pending", archivedAt: null },
     });
 
     return inv;

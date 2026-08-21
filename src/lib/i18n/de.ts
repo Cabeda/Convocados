@@ -1244,6 +1244,16 @@ adminPickupsDetected: "Pickups erkannt",
   gameCancelled: "Abgesagt",
   gameCancelledSnackbar: "Spiel wurde abgesagt.",
   logGameCancelled: "{actor} sagte das Spiel ab",
+
+  inviteBannerDesc: "Du wurdest zu diesem Spiel eingeladen. Nimm an, um der Liste beizutreten, oder lehne ab, wenn du nicht kannst.",
+  inviteAcceptedDesc: "Du bist dabei! Sieh dir die Liste unten an.",
+  inviteNotForThisEvent: "Diese Einladung ist für ein anderes Spiel: {title}",
+  inviteNotForYouDesc: "Diese Einladung ist für {name}. Du kannst das Event trotzdem unten ansehen.",
+  inviteShareTitle: "Einladung an {name} gesendet",
+  inviteShareText: "Du wurdest zu einem Spiel eingeladen. Tippe auf den Link zum Annehmen.",
+  inviteShareDesc: "Teile diesen Link mit {name}. Damit kann direkt angenommen oder abgelehnt werden — auch wenn das Event privat ist oder ein Passwort hat.",
+  inviteShareHint: "Jeder mit dem Link kann die Einladung ansehen. Nur das eingeladene Konto kann annehmen.",
+  inviteShareWebShareHint: "Du kannst auch direkt via WhatsApp, SMS, etc. teilen.",
 };
 
 export default de;

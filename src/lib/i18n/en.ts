@@ -1303,6 +1303,15 @@ adminPickupsDetected: "Pickups detected",
   gameCancelled: "Cancelled",
   gameCancelledSnackbar: "Game has been cancelled.",
   logGameCancelled: "{actor} cancelled the game",
+  inviteBannerDesc: "You've been invited to join this game. Accept to join the roster, or decline if you can't make it.",
+  inviteAcceptedDesc: "You're in! Check the roster below.",
+  inviteNotForThisEvent: "This invite is for another game: {title}",
+  inviteNotForYouDesc: "This invite is for {name}. You can still view the event below.",
+  inviteShareTitle: "Invite sent to {name}",
+  inviteShareText: "You've been invited to join a game. Tap the link to accept.",
+  inviteShareDesc: "Share this link with {name}. It will let them accept or decline directly — even if the event is private or has a password.",
+  inviteShareHint: "Anyone with the link can view the invite. Only the invited account can accept it.",
+  inviteShareWebShareHint: "You can also share directly via WhatsApp, SMS, etc.",
 } as const;
 
 export default en;
