@@ -643,7 +643,7 @@ export const POST: APIRoute = async ({ params, request }) => {
           await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
         }
         notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
-        return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true });
+        return Response.json({ ok: true, invited: null, resolvedName: trimmed, reactivated: true, anonymous: linkedUserId === null });
       }
       // ── ADR 0016: game-scoped re-join after recurring reset ─────────────
       // Player record exists at event level (from last week) but may not be in
@@ -684,7 +684,7 @@ export const POST: APIRoute = async ({ params, request }) => {
             update: { status: "yes", respondedAt: new Date() },
           });
           notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
-          return Response.json({ ok: true, invited: null, resolvedName: trimmed });
+          return Response.json({ ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null });
         }
         if (!alreadyInGame) {
           const gpOrder = await nextGameParticipantOrder(event.currentGameId);
@@ -714,7 +714,7 @@ export const POST: APIRoute = async ({ params, request }) => {
             await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
           }
           notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
-          return Response.json({ ok: true, invited: null, resolvedName: trimmed });
+          return Response.json({ ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null });
         }
         // Already in the current game — fall through to duplicate error
       }
@@ -727,7 +727,7 @@ export const POST: APIRoute = async ({ params, request }) => {
               where: { id: existing.id },
               data: { userId: resolvedUser.id },
             });
-            return Response.json({ ok: true, invited: null, resolvedName: trimmed });
+            return Response.json({ ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null });
           } else if (existing.userId === resolvedUser.id) {
             return Response.json({ error: `"${trimmed}" is already in the list.` }, { status: 409 });
           } else {
@@ -924,7 +924,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
   }
 
-  const successResponse = Response.json({ ok: true, invited: inviteResult, resolvedName: trimmed });
+  const successResponse = Response.json({ ok: true, invited: inviteResult, resolvedName: trimmed, anonymous: linkedUserId === null });
 
   // Cache the 2xx response for replay on retry with the same Idempotency-Key.
   if (idemKey && idemCacheKey) {

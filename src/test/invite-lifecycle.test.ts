@@ -23,9 +23,10 @@ import { GET as inviteLookup, POST as inviteTokenPost } from "~/pages/api/invite
 import {
   POST as createInvite, DELETE as retractInvite, GET as getInvites,
 } from "~/pages/api/events/[id]/invites";
-import { createPlayerInvite, acceptPlayerInvite, declinePlayerInvite, expirePendingInvites } from "~/lib/invite.server";
+import { createPlayerInvite, acceptPlayerInvite, declinePlayerInvite, expirePendingInvites, getInviteChannels } from "~/lib/invite.server";
 import * as inviteServer from "~/lib/invite.server";
 import * as pushServer from "~/lib/push.server";
+import * as emailServer from "~/lib/email.server";
 
 function ctx(params: Record<string, string>, body?: unknown) {
   const request = new Request("http://localhost/api/test", {
@@ -89,6 +90,9 @@ beforeEach(async () => {
   await prisma.game.deleteMany();
   await prisma.eventFollow.deleteMany();
   await prisma.priorityEnrollment.deleteMany();
+  await prisma.notificationPreferences.deleteMany();
+  await prisma.appPushToken.deleteMany();
+  await prisma.pushSubscription.deleteMany();
   await prisma.event.deleteMany();
   await prisma.user.deleteMany();
 });
@@ -138,6 +142,10 @@ describe("createPlayerInvite", () => {
     await prisma.appPushToken.create({
       data: { userId: owner.id, token: `pt-token-${Date.now()}`, platform: "android", locale: "pt" },
     });
+    // The invitee must have a registered device for the push channel to fire.
+    await prisma.appPushToken.create({
+      data: { userId: invitee.id, token: `invitee-token-${Date.now()}`, platform: "android", locale: "en" },
+    });
 
     const spy = vi.spyOn(pushServer, "sendPushToUser").mockResolvedValue(undefined);
     try {
@@ -155,6 +163,9 @@ describe("createPlayerInvite", () => {
     const owner = await seedUser("Owner");
     const invitee = await seedUser("Invitee");
     const ev = await seedEventWithGame(owner.id);
+    await prisma.appPushToken.create({
+      data: { userId: invitee.id, token: `invitee-token-${Date.now()}`, platform: "android", locale: "en" },
+    });
 
     const spy = vi.spyOn(pushServer, "sendPushToUser").mockResolvedValue(undefined);
     try {
@@ -728,5 +739,110 @@ describe("GET /api/events/[id] — invited roster", () => {
     const body = await res.json();
     expect(body.invited).toHaveLength(1);
     expect(body.invited[0].userId).toBe(invitee.id);
+  });
+});
+describe("getInviteChannels — ADR 0025 notification channels", () => {
+  it("reports web push when the user has a web subscription and push prefs", async () => {
+    const user = await seedUser("ChanWeb");
+    await prisma.pushSubscription.create({ data: { userId: user.id, endpoint: `https://ep-${Date.now()}`, p256dh: "x", auth: "y" } });
+
+    const channels = await getInviteChannels(user.id);
+    expect(channels.webPush).toBe(true);
+    expect(channels.appPush).toBe(false);
+    expect(channels.email).toBe(false);
+  });
+
+  it("reports app push when the user has an app push token", async () => {
+    const user = await seedUser("ChanApp");
+    await prisma.appPushToken.create({ data: { userId: user.id, token: `tok-${Date.now()}`, platform: "android", locale: "pt" } });
+
+    const channels = await getInviteChannels(user.id);
+    expect(channels.appPush).toBe(true);
+  });
+
+  it("reports email when email prefs, a verified email and a provider are configured", async () => {
+    const user = await seedUser("ChanEmail");
+    await prisma.notificationPreferences.create({ data: { userId: user.id, emailEnabled: true, gameInviteEmail: true } });
+    process.env.RESEND_API_KEY = "test-key";
+    try {
+      const channels = await getInviteChannels(user.id);
+      expect(channels.email).toBe(true);
+    } finally {
+      delete process.env.RESEND_API_KEY;
+    }
+  });
+
+  it("does not report email without a verified email", async () => {
+    const user = await prisma.user.create({
+      data: { id: "u-chan-unverified", name: "ChanUnverified", email: "unver@t.com", emailVerified: false },
+    });
+    await prisma.notificationPreferences.create({ data: { userId: user.id, emailEnabled: true, gameInviteEmail: true } });
+    process.env.RESEND_API_KEY = "test-key";
+    try {
+      const channels = await getInviteChannels(user.id);
+      expect(channels.email).toBe(false);
+    } finally {
+      delete process.env.RESEND_API_KEY;
+    }
+  });
+
+  it("returns all false when the global invites kill switch is off", async () => {
+    const user = await seedUser("ChanOff");
+    await prisma.notificationPreferences.create({ data: { userId: user.id, invitesEnabled: false } });
+    await prisma.pushSubscription.create({ data: { userId: user.id, endpoint: `https://ep-${Date.now()}`, p256dh: "x", auth: "y" } });
+
+    const channels = await getInviteChannels(user.id);
+    expect(channels).toEqual({ email: false, webPush: false, appPush: false });
+  });
+
+  it("sends the invite email when the email channel is enabled", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    await prisma.notificationPreferences.create({ data: { userId: invitee.id, emailEnabled: true, gameInviteEmail: true } });
+    const ev = await seedEventWithGame(owner.id);
+
+    process.env.RESEND_API_KEY = "test-key";
+    const spy = vi.spyOn(emailServer, "sendGameInvite").mockResolvedValue(undefined);
+    try {
+      const res = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(res.channels.email).toBe(true);
+      expect(spy.mock.calls[0][0]).toBe(invitee.email);
+      expect(spy.mock.calls[0][1].eventUrl).toContain("/invite/");
+    } finally {
+      spy.mockRestore();
+      delete process.env.RESEND_API_KEY;
+    }
+  });
+
+  it("does not send email when the email channel is disabled", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+
+    process.env.RESEND_API_KEY = "test-key";
+    const spy = vi.spyOn(emailServer, "sendGameInvite").mockResolvedValue(undefined);
+    try {
+      const res = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+      expect(spy).not.toHaveBeenCalled();
+      expect(res.channels.email).toBe(false);
+    } finally {
+      spy.mockRestore();
+      delete process.env.RESEND_API_KEY;
+    }
+  });
+
+  it("returns the channels in the POST /invites response", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    await prisma.appPushToken.create({ data: { userId: invitee.id, token: `tok-${Date.now()}`, platform: "android", locale: "en" } });
+    const ev = await seedEventWithGame(owner.id);
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    mockCheckEventAdmin.mockResolvedValue(true);
+
+    const res = await createInvite(ctx({ id: ev.id }, { userId: invitee.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.channels).toEqual({ email: false, webPush: false, appPush: true });
   });
 });
