@@ -369,7 +369,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
         return;
       }
       const resolvedName: string | undefined = json.resolvedName;
-      if (resolvedName && resolvedName !== trimmed && trimmed) {
+      // Anonymous player (no account): no notification channel exists — surface
+      // the share-by-link option right away so the inviter can reach them.
+      if (json.anonymous === true) {
+        setInviteShare({ url: window.location.href, name: resolvedName ?? trimmed });
+      } else if (resolvedName && resolvedName !== trimmed && trimmed) {
         setSnackbar(`Added ${resolvedName} ✓`);
       }
       addKnownName(resolvedName ?? trimmed);
