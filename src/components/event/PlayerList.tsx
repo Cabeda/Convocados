@@ -761,8 +761,10 @@ export function PlayerList({
             <Collapse in={declinedOpen} data-testid="declined-collapse">
               <Paper variant="outlined" sx={{
                 p: 1,
-                backgroundColor: alpha(theme.palette.action.hover, 0.35),
-                borderColor: alpha(theme.palette.text.disabled, 0.3),
+                backgroundColor: theme.palette.mode === "dark"
+                  ? alpha(theme.palette.grey[800], 0.5)
+                  : alpha(theme.palette.action.hover, 0.35),
+                borderColor: theme.palette.divider,
               }}>
                 <List dense disablePadding>
                   {declined.map((d) => (
