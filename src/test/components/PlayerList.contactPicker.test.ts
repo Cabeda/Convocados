@@ -147,18 +147,19 @@ describe("PlayerList — contact picker invite (Android parity)", () => {
     expect(addBtn).not.toBeDisabled();
   });
 
-  it("Enter key submits with email detection when input is an email", () => {
-    const onAddPlayer = vi.fn().mockResolvedValue(undefined);
-    renderList({ ...baseProps(), onAddPlayer });
+  it("Enter key requests the choice when input is an email", () => {
+    const onRequestAdd = vi.fn();
+    renderList({ ...baseProps(), onRequestAdd } as unknown as PlayerListProps);
     const nameInput = screen.getByPlaceholderText("addPlayerPlaceholder");
     fireEvent.change(nameInput, { target: { value: "mario@x.com" } });
     fireEvent.keyDown(nameInput, { key: "Enter" });
-    expect(onAddPlayer).toHaveBeenCalledWith("mario", "mario@x.com");
+    expect(onRequestAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "mario@x.com", email: "mario@x.com", source: "input" }),
+    );
   });
-  // ── Quick Join pill removed (replaced by AttendanceCta in #XXX). Recent-players chips still
-  //    render when the user is authenticated and idle. ───────────────────────────
+  // ── Recent-players chips deprecated — not rendered even when idle. ─────────────
 
-  it("renders the recent-players chips when authenticated and idle", () => {
+  it("does not render recent-players chips when authenticated and idle (deprecated)", () => {
     renderList({
       ...baseProps(),
       availableSuggestions: [
@@ -166,11 +167,11 @@ describe("PlayerList — contact picker invite (Android parity)", () => {
         { name: "Carla", gamesPlayed: 2, userId: "u-carla" },
       ] as PlayerSuggestion[],
     });
-    expect(screen.getByText("Bruno")).toBeInTheDocument();
-    expect(screen.getByText("Carla")).toBeInTheDocument();
+    expect(screen.queryByText("Bruno")).toBeNull();
+    expect(screen.queryByText("Carla")).toBeNull();
   });
 
-  it("hides the recent-players chips when the user is mid-typing", () => {
+  it("still hides suggestion-related UI when the user is mid-typing", () => {
     renderList({
       ...baseProps(),
       availableSuggestions: [

@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from "react";
 import {
   Paper, Typography, Box, Stack, Chip, Button, Alert,
   IconButton, Tooltip, InputAdornment, TextField, Autocomplete,
-  List, ListItem, ListItemText, Menu, MenuItem, ListItemIcon, Divider,
+  List, ListItem, ListItemText, Collapse,
   alpha, useTheme, LinearProgress,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
@@ -11,13 +11,11 @@ import CloseIcon from "@mui/icons-material/Close";
 import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatReclineNormal";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ContactsIcon from "@mui/icons-material/Contacts";
-import HowToRegIcon from "@mui/icons-material/HowToReg";
-import CancelIcon from "@mui/icons-material/Cancel";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
-import BackspaceIcon from "@mui/icons-material/Backspace";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import DoNotDisturbAltIcon from "@mui/icons-material/DoNotDisturbAlt";
 import ScheduleSendIcon from "@mui/icons-material/ScheduleSend";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import { PlayerAvatar, AnonymousPlayerIcon } from "./PlayerIdentity";
@@ -50,6 +48,10 @@ function computeWithin48h(eventDateTime: string | undefined): boolean {
   return hoursUntil > 0 && hoursUntil <= 48;
 }
 
+function isEmailLike(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 interface PlayerSuggestion {
   name: string;
   gamesPlayed: number;
@@ -79,21 +81,19 @@ interface Props {
   currentUserId?: string | null;
   /** Current user's RSVP status, fetched separately. */
   myRsvpStatus?: RsvpStatus;
-  /** Map of guest-playerId → RSVP status. When provided, every guest row renders an inline pill. */
+  /** @deprecated pill removed — kept for test shim */
   guestRsvpMap?: Record<string, RsvpStatus>;
-  /** Map of linked-userId → RSVP status. Only rendered when the viewer is logged in
-   *  (one-way privacy — anonymous viewers never see logged-user RSVPs). The viewer's
-   *  own row is intentionally skipped because the AttendanceCta carries that answer. */
+  /** @deprecated pill removed — kept for test shim */
   userRsvpMap?: Record<string, RsvpStatus>;
-  /** True for the owner or an admin. Controls whether the guest pill is clickable. */
+  /** @deprecated pill removed */
   canEditGuestAttendance?: boolean;
+  /** @deprecated pill removed */
+  onSetGuestRsvp?: (playerId: string, status: RsvpStatus) => Promise<void>;
   /** Hide all add-player surfaces (input, submit, recent chips). Used when the
    *  game has ended and the roster is frozen — roster fixes go via game history. */
   rosterLocked?: boolean;
   /** Set the current user's own RSVP. */
   onSetMyRsvp?: (status: "yes" | "no") => Promise<void>;
-  /** Set a guest player's RSVP (owner/admin only). Pass null to clear. */
-  onSetGuestRsvp?: (playerId: string, status: RsvpStatus) => Promise<void>;
   /** Called by AttendanceCta's "Going" button when the user is NOT on the list. The parent
    *  typically routes this through the payment-nudge dialog before adding the user. */
   onJoinAsSelf?: () => void;
@@ -106,9 +106,10 @@ interface Props {
   /** ADR 0025: pending PlayerInvite entries for the current game. Server-gated.
    *  Read-only display — these are roster ghosts, not members yet. */
   invited?: Array<{ id: string; name: string; userId: string | null; image?: string | null }>;
-  /** ADR 0025: ranked co-play suggestions (owner/admin). Each carries an Invite action. */
+  /** ADR 0025: ranked co-play suggestions (owner/admin). Clicking one requests the
+   *  add-or-invite choice (onRequestAdd) instead of inviting directly. */
   coPlaySuggestions?: Array<{ userId: string; name: string; image?: string | null; reason?: string }>;
-  /** ADR 0025: send a PlayerInvite for a suggested user (owner/admin). */
+  /** @deprecated chip now requests choice via onRequestAdd */
   onInviteUser?: (userId: string, name: string) => Promise<void>;
 }
 
@@ -117,27 +118,28 @@ export function PlayerList({
   availableSuggestions, playerError, onPlayerErrorChange,
   onAddPlayer, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
   onRandomize, onConfirmReRandomize, canRemovePlayer,
-  currentUserId,
+  currentUserId: _currentUserId,
   myRsvpStatus: _myRsvpStatus,
-  guestRsvpMap,
-  userRsvpMap,
-  canEditGuestAttendance,
+  guestRsvpMap: _guestRsvpMap,
+  userRsvpMap: _userRsvpMap,
+  canEditGuestAttendance: _canEditGuestAttendance,
+  onSetGuestRsvp: _onSetGuestRsvp,
   onSetMyRsvp,
-  onSetGuestRsvp,
   onJoinAsSelf: _onJoinAsSelf,
   eventDateTime,
   rosterLocked = false,
   declined,
   invited,
   coPlaySuggestions,
-  onInviteUser,
+  onInviteUser: _onInviteUser,
 }: Props) {
   const t = useT();
   const theme = useTheme();
   const [playerInput, setPlayerInput] = useState("");
+  const [declinedOpen, setDeclinedOpen] = useState(false);
 
   // Detect if the current input looks like an email address
-  const isEmailInput = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(playerInput.trim());
+  const isEmailInput = isEmailLike(playerInput.trim());
 
   // Feature-detect the Contact Picker API. Available in Chromium-based browsers
   // (Chrome, Edge, Opera, Samsung Internet). Hidden on Safari / Firefox — see ADR-0010.
@@ -370,14 +372,15 @@ export function PlayerList({
               if (!newValue) return;
               const val = typeof newValue === "string" ? newValue.trim() : newValue.name;
               if (!val) return;
-              if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
-                // Email address — direct add (typing is deliberate).
-                onAddPlayer(val.split("@")[0], val);
-              } else if (onRequestAdd) {
-                // Dropdown row tap — single-tap surface, requires confirmation.
-                onRequestAdd({ kind: "single", name: val, source: "dropdown" });
+              const email = isEmailLike(val) ? val : undefined;
+              const userId = typeof newValue !== "string" && newValue.type === "existing"
+                ? (newValue.userId ?? undefined)
+                : undefined;
+              if (onRequestAdd) {
+                // Every add path asks invite-vs-add — the dialog dispatches the actual call.
+                onRequestAdd({ kind: "single", name: val, email, userId, source: "dropdown" });
               } else {
-                onAddPlayer(val);
+                onAddPlayer(email ? val.split("@")[0] : val, email);
               }
               setPlayerInput("");
             }}
@@ -392,14 +395,8 @@ export function PlayerList({
                   if (e.key === "Enter") {
                     const trimmed = playerInput.trim();
                     if (!trimmed) return;
-                    // Email detection: submit as email invite
-                    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onAddPlayer(trimmed.split("@")[0], trimmed);
-                      setPlayerInput("");
-                      return;
-                    }
+                    // If a suggestion matches, let the user pick it from the dropdown
+                    // instead of creating a duplicate — the dropdown carries the userId.
                     const hasExactMatch = availableSuggestions.some(
                       (s) => s.name.toLowerCase() === trimmed.toLowerCase()
                     );
@@ -410,7 +407,16 @@ export function PlayerList({
                     if (hasPartialMatch) return;
                     e.preventDefault();
                     e.stopPropagation();
-                    onAddPlayer(trimmed);
+                    if (onRequestAdd) {
+                      onRequestAdd({
+                        kind: "single",
+                        name: trimmed,
+                        email: isEmailLike(trimmed) ? trimmed : undefined,
+                        source: "input",
+                      });
+                    } else {
+                      onAddPlayer(trimmed);
+                    }
                     setPlayerInput("");
                   }
                 }}
@@ -489,8 +495,14 @@ export function PlayerList({
             disabled={!playerInput.trim()}
             onClick={() => {
               const trimmed = playerInput.trim();
-              if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-                onAddPlayer(trimmed.split("@")[0], trimmed);
+              if (!trimmed) return;
+              if (onRequestAdd) {
+                onRequestAdd({
+                  kind: "single",
+                  name: trimmed,
+                  email: isEmailLike(trimmed) ? trimmed : undefined,
+                  source: "input",
+                });
               } else {
                 onAddPlayer(trimmed);
               }
@@ -502,10 +514,6 @@ export function PlayerList({
           </IconButton>
         </Stack>
 
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-          {isEmailInput ? t("inviteByEmailHelper") : t("addPlayerOrEmailHelper")}
-        </Typography>
-
         {contactPickerSupported && (
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontStyle: "italic" }}>
             {t("addFromContactsHint")}
@@ -513,7 +521,7 @@ export function PlayerList({
         )}
 
         {/* ADR 0025: co-play suggestions (owner/admin) — ranked players to invite.
-            Each chip carries a one-tap Invite action (creates a PlayerInvite). */}
+            Each chip opens the add-or-invite choice (dialog). */}
         {coPlaySuggestions && coPlaySuggestions.length > 0 && !playerInput.trim() && (
           <Box>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
@@ -527,6 +535,7 @@ export function PlayerList({
                 return (
                   <Chip
                     key={s.userId}
+                    data-testid={`suggest-chip-${s.userId}`}
                     icon={s.image
                       ? <PlayerAvatar userId={s.userId} name={s.name} image={s.image} size={18} clickable={false} />
                       : <PersonAddIcon fontSize="small" />}
@@ -535,46 +544,17 @@ export function PlayerList({
                     size="small"
                     color="primary"
                     title={s.reason}
-                    onClick={onInviteUser ? () => onInviteUser(s.userId, s.name) : undefined}
+                    onClick={() => {
+                      if (onRequestAdd) {
+                        onRequestAdd({ kind: "single", name: s.name, userId: s.userId, source: "chip" });
+                      } else {
+                        onAddPlayer(s.name);
+                      }
+                    }}
                     sx={{ cursor: "pointer", "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.12) } }}
                   />
                 );
               })}
-            </Box>
-          </Box>
-        )}
-
-        {/* Recent players chips (organizer convenience for re-adding past players).
-            The self Quick Join / Quick Leave pills are gone — replaced by the AttendanceCta below. */}
-        {availableSuggestions.length > 0 && !playerInput.trim() && (
-          <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
-              {t("recentPlayers")}:
-            </Typography>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-              {availableSuggestions.slice(0, 12).map((s) => (
-                <Chip
-                  key={s.name}
-                  icon={s.userId
-                    ? <PlayerAvatar userId={s.userId} name={s.name} image={s.image} size={18} clickable={false} />
-                    : <AnonymousPlayerIcon size={18} />}
-                  label={s.name}
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    if (onRequestAdd) {
-                      onRequestAdd({ kind: "single", name: s.name, source: "chip" });
-                    } else {
-                      onAddPlayer(s.name);
-                    }
-                  }}
-                  title={s.userId ? t("protectedPlayer") : t("anonymousPlayer")}
-                  sx={{
-                    cursor: "pointer",
-                    "&:hover": { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
-                  }}
-                />
-              ))}
             </Box>
           </Box>
         )}
@@ -602,31 +582,11 @@ export function PlayerList({
                     "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.04) },
                   }}
                   secondaryAction={
-                    <Stack direction="row" spacing={0.5} alignItems="center">
-                      {/* #XXX Guest attendance pill — visible to all, clickable to owner/admin only. */}
-                      {player.userId === null && guestRsvpMap && (
-                        <GuestAttendancePill
-                          playerId={player.id}
-                          status={guestRsvpMap[player.id] ?? null}
-                          canEdit={!!canEditGuestAttendance}
-                          onSet={onSetGuestRsvp ? (status) => onSetGuestRsvp(player.id, status) : undefined}
-                          onRequestDecline={canEditGuestAttendance
-                            ? () => openLeaveDialog(player.id, "organizer")
-                            : undefined}
-                        />
-                      )}
-                      {/* #XXX User attendance pill — read-only status for a linked user. Visible
-                          only to logged viewers (one-way privacy); the viewer's own row is
-                          skipped so the AttendanceCta at the top carries their answer. */}
-                      {player.userId !== null && player.userId !== undefined && currentUserId && player.userId !== currentUserId && userRsvpMap && userRsvpMap[player.userId] !== undefined && (
-                        <UserRsvpPill userId={player.userId} status={userRsvpMap[player.userId] ?? null} />
-                      )}
-                      {canRemovePlayer(player) ? (
-                        <IconButton edge="end" size="small" data-testid={`remove-player-${player.id}`} onClick={() => openLeaveDialog(player.id, "organizer")}>
-                          <CloseIcon fontSize="small" />
-                        </IconButton>
-                      ) : undefined}
-                    </Stack>
+                    canRemovePlayer(player) ? (
+                      <IconButton edge="end" size="small" data-testid={`remove-player-${player.id}`} onClick={() => openLeaveDialog(player.id, "organizer")}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    ) : undefined
                   }
                 >
                   {isOwner && (
@@ -736,51 +696,6 @@ export function PlayerList({
           </>
         )}
 
-        {declined && declined.length > 0 && (
-          <>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <DoNotDisturbAltIcon fontSize="small" color="action" />
-              <Typography variant="body2" fontWeight={600} color="text.secondary">
-                {t("declinedPlayers", { n: declined.length })}
-              </Typography>
-            </Box>
-            <Paper variant="outlined" sx={{
-              p: 1,
-              backgroundColor: alpha(theme.palette.action.hover, 0.35),
-              borderColor: alpha(theme.palette.text.disabled, 0.3),
-            }}>
-              <List dense disablePadding>
-                {declined.map((d) => (
-                  <ListItem key={d.id} sx={{ borderRadius: 2, px: 1, py: 0.5 }}>
-                    {d.userId ? (
-                      <Tooltip title={t("protectedPlayer")}>
-                        <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
-                          <PlayerAvatar userId={d.userId} name={d.name} image={d.image ?? null} />
-                        </span>
-                      </Tooltip>
-                    ) : (
-                      <Tooltip title={t("anonymousPlayer")}>
-                        <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
-                          <AnonymousPlayerIcon />
-                        </span>
-                      </Tooltip>
-                    )}
-                    <ListItemText
-                      primary={d.userId ? (
-                        <a href={`/users/${d.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>
-                          {d.name}
-                        </a>
-                      ) : d.name}
-                      slotProps={{ primary: { sx: { fontWeight: 500, fontSize: "0.9rem", color: "text.secondary" } } }}
-                    />
-                    <Chip size="small" variant="outlined" color="default" label={t("declinedLabel")} />
-                  </ListItem>
-                ))}
-              </List>
-            </Paper>
-          </>
-        )}
-
         {invited && invited.length > 0 && (
           <>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -826,6 +741,62 @@ export function PlayerList({
           </>
         )}
 
+        {declined && declined.length > 0 && (
+          <>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <DoNotDisturbAltIcon fontSize="small" color="action" />
+              <Typography variant="body2" fontWeight={600} color="text.secondary">
+                {t("declinedPlayers", { n: declined.length })}
+              </Typography>
+              <Box sx={{ flexGrow: 1 }} />
+              <IconButton
+                size="small"
+                onClick={() => setDeclinedOpen((v) => !v)}
+                data-testid="declined-toggle"
+                aria-label={declinedOpen ? "Collapse" : "Expand"}
+              >
+                {declinedOpen ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+              </IconButton>
+            </Box>
+            <Collapse in={declinedOpen} data-testid="declined-collapse">
+              <Paper variant="outlined" sx={{
+                p: 1,
+                backgroundColor: alpha(theme.palette.action.hover, 0.35),
+                borderColor: alpha(theme.palette.text.disabled, 0.3),
+              }}>
+                <List dense disablePadding>
+                  {declined.map((d) => (
+                    <ListItem key={d.id} sx={{ borderRadius: 2, px: 1, py: 0.5 }}>
+                      {d.userId ? (
+                        <Tooltip title={t("protectedPlayer")}>
+                          <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
+                            <PlayerAvatar userId={d.userId} name={d.name} image={d.image ?? null} />
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip title={t("anonymousPlayer")}>
+                          <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
+                            <AnonymousPlayerIcon />
+                          </span>
+                        </Tooltip>
+                      )}
+                      <ListItemText
+                        primary={d.userId ? (
+                          <a href={`/users/${d.userId}`} style={{ textDecoration: "none", color: "inherit", fontWeight: 500 }}>
+                            {d.name}
+                          </a>
+                        ) : d.name}
+                        slotProps={{ primary: { sx: { fontWeight: 500, fontSize: "0.9rem", color: "text.secondary" } } }}
+                      />
+                      <Chip size="small" variant="outlined" color="default" label={t("declinedLabel")} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Collapse>
+          </>
+        )}
+
         <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2 }}>
           <Button variant="contained" size="large" startIcon={<ShuffleIcon />}
             disabled={active.length < 2} sx={{ px: 4, py: 1.5 }}
@@ -849,148 +820,4 @@ export function PlayerList({
   );
 }
 
-/**
- * #XXX Guest attendance pill + owner/admin menu.
- * - Non-admin viewers: read-only chip showing the current state.
- * - Owner/admin: click → small popover with 3 status options + a Clear action.
- *   The "Declined" option routes through the confirm-leave dialog (it also archives the player).
- */
-function GuestAttendancePill({
-  playerId, status, canEdit, onSet, onRequestDecline,
-}: {
-  playerId: string;
-  status: RsvpStatus;
-  canEdit: boolean;
-  onSet?: (status: RsvpStatus) => void;
-  onRequestDecline?: () => void;
-}) {
-  const t = useT();
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  const open = !!anchorEl;
-  const handleOpen = (e: React.MouseEvent<HTMLElement>) => {
-    if (!canEdit) return;
-    e.stopPropagation();
-    setAnchorEl(e.currentTarget);
-  };
-  const handleClose = () => setAnchorEl(null);
-  const pick = (next: RsvpStatus) => {
-    handleClose();
-    if (next === "no") {
-      // Declining a guest = leave flow (archive + Rsvp.no). The parent routes through confirm-leave.
-      onRequestDecline?.();
-    } else {
-      onSet?.(next);
-    }
-  };
 
-  const chip = (
-    <Chip
-      size="small"
-      data-testid={`rsvp-guest-pill-${playerId}`}
-      data-status={status ?? "none"}
-      icon={status === "yes"
-        ? <HowToRegIcon />
-        : status === "no"
-          ? <CancelIcon />
-          : <HelpOutlineIcon />}
-      label={status === "yes"
-        ? t("rsvpGoing")
-        : status === "no"
-          ? t("rsvpDeclined")
-          : t("rsvpNoResponse")}
-      color={status === "yes" ? "success" : status === "no" ? "error" : "default"}
-      variant={canEdit ? "filled" : "outlined"}
-      onClick={handleOpen}
-      sx={{
-        cursor: canEdit ? "pointer" : "default",
-        pointerEvents: canEdit ? "auto" : "none",
-      }}
-    />
-  );
-
-  return (
-    <>
-      {canEdit
-        ? <Tooltip title={t("guestPillMenuSet")}>{chip}</Tooltip>
-        : <Tooltip title={t("rsvpSetByOrganizer")}><span>{chip}</span></Tooltip>}
-      <Menu
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-        data-testid={`rsvp-guest-menu-${playerId}`}
-      >
-        <MenuItem
-          data-testid={`rsvp-guest-menu-going-${playerId}`}
-          selected={status === "yes"}
-          onClick={() => pick("yes")}
-        >
-          <ListItemIcon><HowToRegIcon fontSize="small" /></ListItemIcon>
-          {t("rsvpGoing")}
-        </MenuItem>
-        <MenuItem
-          data-testid={`rsvp-guest-menu-declined-${playerId}`}
-          selected={status === "no"}
-          onClick={() => pick("no")}
-        >
-          <ListItemIcon><CancelIcon fontSize="small" /></ListItemIcon>
-          {t("rsvpDeclined")}
-        </MenuItem>
-        <MenuItem
-          data-testid={`rsvp-guest-menu-noresponse-${playerId}`}
-          selected={status === null}
-          onClick={() => pick(null)}
-        >
-          <ListItemIcon><HelpOutlineIcon fontSize="small" /></ListItemIcon>
-          {t("rsvpNoResponse")}
-        </MenuItem>
-        {status !== null && (
-          [
-            <Divider key="divider" />,
-            <MenuItem
-              key="clear"
-              data-testid={`rsvp-guest-menu-clear-${playerId}`}
-              onClick={() => pick(null)}
-            >
-              <ListItemIcon><BackspaceIcon fontSize="small" /></ListItemIcon>
-              {t("guestPillMenuClear")}
-            </MenuItem>,
-          ]
-        )}
-      </Menu>
-    </>
-  );
-}
-
-/**
- * #XXX User attendance pill — read-only status badge on a linked-user row.
- * Visible only to logged viewers (the server-side `getUserRsvpMap` enforces this).
- * No menu: the user can only RSVP for themselves, via the AttendanceCta at the top
- * of the list. Their own row is skipped by the parent so we don't render two pills.
- */
-function UserRsvpPill({ userId, status }: { userId: string; status: RsvpStatus }) {
-  const t = useT();
-  return (
-    <Chip
-      size="small"
-      data-testid={`rsvp-user-pill-${userId}`}
-      data-status={status ?? "none"}
-      icon={status === "yes"
-        ? <HowToRegIcon />
-        : status === "maybe"
-          ? <HelpOutlineIcon />
-          : status === "no"
-            ? <CancelIcon />
-            : <HelpOutlineIcon />}
-      label={status === "yes"
-        ? t("rsvpGoing")
-        : status === "maybe"
-          ? t("rsvpMaybe")
-          : status === "no"
-            ? t("rsvpDeclined")
-            : t("rsvpNoResponse")}
-      color={status === "yes" ? "success" : status === "no" ? "error" : status === "maybe" ? "warning" : "default"}
-      variant="outlined"
-      sx={{ pointerEvents: "none" }}
-    />
-  );
-}
