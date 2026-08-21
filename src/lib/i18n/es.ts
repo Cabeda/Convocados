@@ -1244,6 +1244,16 @@ adminPickupsDetected: "Pickups detectados",
   gameCancelled: "Cancelado",
   gameCancelledSnackbar: "El partido ha sido cancelado.",
   logGameCancelled: "{actor} canceló el partido",
+
+  inviteBannerDesc: "Has sido invitado a este partido. Acepta para unirte a la lista o rechaza si no puedes ir.",
+  inviteAcceptedDesc: "¡Estás dentro! Mira la lista abajo.",
+  inviteNotForThisEvent: "Esta invitación es para otro partido: {title}",
+  inviteNotForYouDesc: "Esta invitación es para {name}. Puedes ver el evento abajo.",
+  inviteShareTitle: "Invitación enviada a {name}",
+  inviteShareText: "Has sido invitado a un partido. Toca el enlace para aceptar.",
+  inviteShareDesc: "Comparte este enlace con {name}. Le permitirá aceptar o rechazar directamente — aunque el evento sea privado o tenga contraseña.",
+  inviteShareHint: "Cualquiera con el enlace puede ver la invitación. Solo la cuenta invitada puede aceptar.",
+  inviteShareWebShareHint: "También puedes compartir vía WhatsApp, SMS, etc.",
 };
 
 export default es;

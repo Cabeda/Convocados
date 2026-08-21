@@ -1292,6 +1292,16 @@ adminPickupsDetected: "Pickups detetados",
   gameCancelled: "Cancelado",
   gameCancelledSnackbar: "O jogo foi cancelado.",
   logGameCancelled: "{actor} cancelou o jogo",
+
+  inviteBannerDesc: "Foste convidado para este jogo. Aceita para entrar na lista, ou recusa se não puderes ir.",
+  inviteAcceptedDesc: "Entraste! Vê a lista abaixo.",
+  inviteNotForThisEvent: "Este convite é para outro jogo: {title}",
+  inviteNotForYouDesc: "Este convite é para {name}. Podes ver o evento abaixo.",
+  inviteShareTitle: "Convite enviado para {name}",
+  inviteShareText: "Foste convidado para um jogo. Clica no link para aceitar.",
+  inviteShareDesc: "Partilha este link com {name}. Vai permitir aceitar ou recusar diretamente — mesmo que o evento seja privado ou tenha password.",
+  inviteShareHint: "Qualquer pessoa com o link pode ver o convite. Só a conta convidada pode aceitar.",
+  inviteShareWebShareHint: "Também podes partilhar via WhatsApp, SMS, etc.",
 };
 
 export default pt;

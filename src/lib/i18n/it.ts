@@ -1244,6 +1244,16 @@ adminPickupsDetected: "Pickup rilevati",
   gameCancelled: "Annullata",
   gameCancelledSnackbar: "La partita è stata annullata.",
   logGameCancelled: "{actor} ha annullato la partita",
+
+  inviteBannerDesc: "Sei stato invitato a questa partita. Accetta per unirti alla lista o rifiuta se non puoi venire.",
+  inviteAcceptedDesc: "Sei dentro! Controlla la lista qui sotto.",
+  inviteNotForThisEvent: "Questo invito è per un'altra partita: {title}",
+  inviteNotForYouDesc: "Questo invito è per {name}. Puoi comunque vedere l'evento qui sotto.",
+  inviteShareTitle: "Invito inviato a {name}",
+  inviteShareText: "Sei stato invitato a una partita. Tocca il link per accettare.",
+  inviteShareDesc: "Condividi questo link con {name}. Permetterà di accettare o rifiutare direttamente — anche se l'evento è privato o ha una password.",
+  inviteShareHint: "Chiunque con il link può vedere l'invito. Solo l'account invitato può accettare.",
+  inviteShareWebShareHint: "Puoi anche condividere direttamente via WhatsApp, SMS, ecc.",
 };
 
 export default it;

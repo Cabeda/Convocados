@@ -25,6 +25,7 @@ import {
   useCountdown,
   AddPlayerConfirmDialog,
   InviteShareDialog,
+  InviteBanner,
   type AddPlayerIntent,
 } from "./event";
 import type { EventData, Player, KnownPlayer } from "./event";
@@ -73,6 +74,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [inviteShare, setInviteShare] = useState<{ url: string; name: string } | null>(null);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [balanced, setBalanced] = useState(false);
   const [_isPublic, setIsPublic] = useState(false);
   const [sport, setSport] = useState("football-5v5");
@@ -126,9 +128,17 @@ export default function EventPage({ eventId }: { eventId: string }) {
     [event],
   );
 
+  // Invite token from ?inviteToken=xxx — lets the link bypass password and shows a banner.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const token = new URLSearchParams(window.location.search).get("inviteToken");
+    if (token) setInviteToken(token);
+  }, []);
+
   const fetchEvent = useCallback(async () => {
     try {
-      const r = await fetch(`/api/events/${eventId}`);
+      const inviteParam = inviteToken ? `?inviteToken=${encodeURIComponent(inviteToken)}` : "";
+      const r = await fetch(`/api/events/${eventId}${inviteParam}`);
       if (r.status === 404) { setError({ status: 404 }); return; }
       const data = await r.json();
       if (data.locked) {
@@ -144,7 +154,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
     } finally {
       setIsLoading(false);
     }
-  }, [eventId]);
+  }, [eventId, inviteToken]);
 
   // Initial fetch
   useEffect(() => { fetchEvent(); }, [fetchEvent]);
@@ -206,18 +216,25 @@ export default function EventPage({ eventId }: { eventId: string }) {
         setPlayerError(json.error ?? t("somethingWentWrong"));
         return;
       }
-      // ADR 0025: surface which notification channels the invitee will get.
-      // With none enabled, fall back to sharing the invite link directly.
+      // Always surface the shareable link so the organizer can copy/share
+      // via WhatsApp etc., even when push/email channels are enabled.
       const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
       const anyChannel = !!(channels?.email || channels?.webPush || channels?.appPush);
-      if (anyChannel) {
+      if (typeof json?.inviteUrl === "string") {
+        if (anyChannel) {
+          const labels: string[] = [];
+          if (channels?.email) labels.push(t("channelEmail"));
+          if (channels?.webPush) labels.push(t("channelWebPush"));
+          if (channels?.appPush) labels.push(t("channelAppPush"));
+          setSnackbar(t("inviteSentVia", { name, channels: labels.join(", ") }));
+        }
+        setInviteShare({ url: json.inviteUrl, name });
+      } else if (anyChannel) {
         const labels: string[] = [];
         if (channels?.email) labels.push(t("channelEmail"));
         if (channels?.webPush) labels.push(t("channelWebPush"));
         if (channels?.appPush) labels.push(t("channelAppPush"));
         setSnackbar(t("inviteSentVia", { name, channels: labels.join(", ") }));
-      } else if (typeof json?.inviteUrl === "string") {
-        setInviteShare({ url: json.inviteUrl, name });
       } else {
         setSnackbar(t("inviteSent", { name }));
       }
@@ -814,6 +831,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   }),
                 })}
               </Alert>
+            )}
+
+            {inviteToken && event && (
+              <InviteBanner token={inviteToken} eventId={event.id} onAccepted={fetchEvent} />
             )}
 
             {/* #457 Push prompt banner — event-detail trigger. #463 high-intent:

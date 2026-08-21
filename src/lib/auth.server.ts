@@ -48,6 +48,38 @@ export async function ensureTrustedClientInDB() {
 export const auth = betterAuth({
   baseURL: baseUrl,
   database: prismaAdapter(prisma, { provider: "sqlite" }),
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          // Auto-enable email for Google users — their email is verified by Google
+          // and stored in User.email, so we can send them invite emails directly.
+          try {
+            const googleAccount = await prisma.account.findFirst({
+              where: { userId: user.id, providerId: "google" },
+              select: { id: true },
+            });
+            if (googleAccount && (user as any).emailVerified) {
+              await prisma.notificationPreferences.upsert({
+                where: { userId: user.id },
+                create: {
+                  userId: user.id,
+                  emailEnabled: true,
+                  gameInviteEmail: true,
+                },
+                update: {
+                  emailEnabled: true,
+                  gameInviteEmail: true,
+                },
+              });
+            }
+          } catch {
+            // ignore — prefs will be created lazily with defaults on first fetch
+          }
+        },
+      },
+    },
+  },
   // Per-IP auth rate limiting (better-auth built-in). Enabled only in
   // production to avoid throttling the test suite. customRules tighten the
   // bot-farm choke points: account creation and magic-link sending.
