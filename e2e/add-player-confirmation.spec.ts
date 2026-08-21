@@ -90,14 +90,20 @@ async function getPlayerId(
 }
 
 async function addPlayerViaUi(page: Page, name: string): Promise<void> {
-  // Type the name into the autocomplete and press Enter. This is the
-  // no-dialog path: typing is itself a deliberate action (the
-  // AddPlayerConfirmDialog must not open here).
+  // Type the name into the autocomplete, press Enter, then choose
+  // "Add to list" in the Add-or-Invite choice dialog. The dialog is the
+  // single entry point for both invite-vs-add paths (Recent players removed,
+  // helper hint removed).
   const input = page.getByPlaceholder(/add player/i);
   await expect(input).toBeVisible({ timeout: 10_000 });
   await input.click();
   await input.fill(name);
   await input.press("Enter");
+  // Add-or-Invite choice dialog should appear.
+  const choiceDialog = page.getByTestId("add-player-confirm-add");
+  await expect(choiceDialog).toBeVisible({ timeout: 5_000 });
+  await choiceDialog.click();
+  await expect(page.getByRole("dialog", { name: /Add or invite/i })).not.toBeVisible({ timeout: 5_000 });
   // Anonymous adds now auto-open the InviteShareDialog ("No notifications enabled
   // for ..."). Close it so the next add / roster check isn't blocked.
   const shareDialog = page.getByRole("dialog").filter({ hasText: "No notifications enabled" });
@@ -105,8 +111,6 @@ async function addPlayerViaUi(page: Page, name: string): Promise<void> {
     await shareDialog.getByRole("button", { name: "Cancel" }).click();
     await expect(shareDialog).not.toBeVisible({ timeout: 5_000 });
   }
-  // No ADD dialog should open on Enter.
-  await expect(page.getByRole("dialog", { name: /Add /i })).not.toBeVisible();
   // Wait for the player to appear on the roster and input to clear before
   // returning — prevents race when adding multiple players in sequence.
   await expect(page.getByText(name, { exact: true }).first()).toBeVisible({ timeout: 10_000 });
@@ -214,8 +218,8 @@ test.describe("Event page — add and remove players (issue #455)", () => {
     expect(roster).toEqual(targets);
   });
 
-  test("typing a name and pressing Enter adds the player without a dialog (self-initiated)", async ({ page, request }) => {
-    const eventId = await createEvent(request, "E2E Typing No Dialog Game");
+  test("typing a name and pressing Enter opens the Add-or-Invite choice and adds the player", async ({ page, request }) => {
+    const eventId = await createEvent(request, "E2E Typing Choice Dialog Game");
     const target = "TypingCharlie";
 
     await page.goto(`/events/${eventId}`);
@@ -223,10 +227,24 @@ test.describe("Event page — add and remove players (issue #455)", () => {
     // Pre-condition: no dialog open.
     await expect(page.getByRole("dialog")).not.toBeVisible();
 
-    await addPlayerViaUi(page, target);
+    const input = page.getByPlaceholder(/add player/i);
+    await input.click();
+    await input.fill(target);
+    await input.press("Enter");
 
-    // Post-condition: no dialog opened during/after the Enter press.
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    // Choice dialog appears.
+    await expect(page.getByRole("dialog", { name: /Add or invite/i })).toBeVisible();
+    await expect(page.getByTestId("add-player-confirm-add")).toBeVisible();
+    await expect(page.getByTestId("add-player-confirm-invite")).not.toBeVisible(); // plain name has no contact channel
+
+    await page.getByTestId("add-player-confirm-add").click();
+    await expect(page.getByRole("dialog", { name: /Add or invite/i })).not.toBeVisible();
+
+    // Close the follow-up InviteShareDialog if it appears (anonymous add).
+    const shareDialog = page.getByRole("dialog").filter({ hasText: "No notifications enabled" });
+    if (await shareDialog.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await shareDialog.getByRole("button", { name: "Cancel" }).click();
+    }
 
     // Post-condition: target is on the roster.
     await expectRosterContains(page, request, eventId, target);
