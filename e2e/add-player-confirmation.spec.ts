@@ -104,12 +104,21 @@ async function addPlayerViaUi(page: Page, name: string): Promise<void> {
   await expect(choiceDialog).toBeVisible({ timeout: 5_000 });
   await choiceDialog.click();
   await expect(page.getByRole("dialog", { name: /Add or invite/i })).not.toBeVisible({ timeout: 5_000 });
-  // Anonymous adds now auto-open the InviteShareDialog ("No notifications enabled
-  // for ..."). Close it so the next add / roster check isn't blocked.
-  const shareDialog = page.getByRole("dialog").filter({ hasText: "No notifications enabled" });
+  // After choosing Add, an InviteShareDialog may open (always shown now so the
+  // organizer can copy/share the link, even when push/email channels are enabled).
+  // It previously was only for "No notifications enabled", now it's "Invite sent to".
+  // Close it so the next add / roster check isn't blocked (it intercepts pointer events).
+  const shareDialog = page.getByRole("dialog").filter({ hasText: /Invite sent to|No notifications enabled|Share this link/ });
   if (await shareDialog.isVisible({ timeout: 1500 }).catch(() => false)) {
-    await shareDialog.getByRole("button", { name: "Cancel" }).click();
-    await expect(shareDialog).not.toBeVisible({ timeout: 5_000 });
+    const closeBtn = shareDialog.getByRole("button", { name: /Cancel|Close/ }).first();
+    if (await closeBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await closeBtn.click();
+      await expect(shareDialog).not.toBeVisible({ timeout: 5_000 });
+    } else {
+      // Fallback: press Escape to close the dialog
+      await page.keyboard.press("Escape");
+      await expect(shareDialog).not.toBeVisible({ timeout: 5_000 });
+    }
   }
   // Wait for the player to appear on the roster and input to clear before
   // returning — prevents race when adding multiple players in sequence.
