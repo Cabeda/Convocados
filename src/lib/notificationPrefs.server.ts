@@ -30,12 +30,33 @@ export function isGameLevelNotification(type: NotificationJobType): boolean {
   return TIER_2_TYPES.has(type);
 }
 
-/** Get notification preferences for a user, returning defaults if none are stored */
+/** Get notification preferences for a user, returning defaults if none are stored.
+ *  For Google users with verified email, auto-enable email channels so invites
+ *  can be delivered via email without manual opt-in. */
 export async function getNotificationPrefs(userId: string): Promise<NotificationPrefs> {
   const prefs = await prisma.notificationPreferences.findUnique({
     where: { userId },
   });
-  return prefs ? { ...DEFAULTS, ...prefs } : DEFAULTS;
+  const merged = prefs ? { ...DEFAULTS, ...prefs } : DEFAULTS;
+
+  // Google users: if they have a verified email but email is still off, treat it as on for reads.
+  // The DB row is lazily upgraded on next write, but reads already reflect the auto-enable
+  // so getInviteChannels will send email without requiring the user to toggle settings.
+  if (!merged.emailEnabled || !merged.gameInviteEmail) {
+    try {
+      const [user, googleAccount] = await Promise.all([
+        prisma.user.findUnique({ where: { id: userId }, select: { emailVerified: true } }),
+        prisma.account.findFirst({ where: { userId, providerId: "google" }, select: { id: true } }),
+      ]);
+      if (googleAccount && user?.emailVerified) {
+        return { ...merged, emailEnabled: true, gameInviteEmail: true };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return merged;
 }
 
 /** Check if a user wants push for a given job type */

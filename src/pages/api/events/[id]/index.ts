@@ -29,13 +29,35 @@ export const GET: APIRoute = async ({ params, request }) => {
       ? await checkEventAdmin(event.id, session.user.id)
       : false;
 
+    // Invite link bypass: a valid PlayerInvite token for this event unlocks the page.
+    // This lets an organizer share the event link with ?inviteToken=xxx to skip the
+    // password, and the EventPage will show an Accept/Decline banner.
+    let hasValidInviteToken = false;
+    try {
+      const inviteToken = new URL(request.url).searchParams.get("inviteToken");
+      if (inviteToken) {
+        const invite = await prisma.playerInvite.findUnique({
+          where: { token: inviteToken },
+          select: {
+            eventPlayer: { select: { eventId: true } },
+            game: { select: { eventId: true } },
+          },
+        });
+        if (invite && (invite.eventPlayer.eventId === event.id || invite.game?.eventId === event.id)) {
+          hasValidInviteToken = true;
+        }
+      }
+    } catch {
+      // ignore malformed URL or DB errors — fall through to password gate
+    }
+
     const access = checkAccess({
       eventOwnerId: event.ownerId,
       accessPassword: event.accessPassword,
       requestUserId: session?.user?.id ?? null,
       cookieHeader: request.headers.get("cookie"),
       eventId: event.id,
-      isInvited: isInvited || isEventAdmin,
+      isInvited: isInvited || isEventAdmin || hasValidInviteToken,
     });
 
     if (!access.granted) {
