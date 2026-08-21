@@ -917,6 +917,34 @@ export const openApiSpec = {
         responses: { "200": { description: "Court alternatives" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/suggestions": {
+      get: {
+        summary: "Ranked co-play invite suggestions for the current user on an event",
+        tags: ["Invites"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Ranked suggestions" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/invites": {
+      get: {
+        summary: "List pending invites for the current game (owner/admin/player)",
+        tags: ["Invites"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Invites" }, ...errorResponses },
+      },
+      post: {
+        summary: "Create a player invite",
+        tags: ["Invites"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Invite created" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Retract a player invite",
+        tags: ["Invites"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Invite retracted" }, ...errorResponses },
+      },
+    },
     "/api/invite/{token}": {
       get: {
         summary: "Look up an invite by token (invite-by-link)",
