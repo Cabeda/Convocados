@@ -41,7 +41,13 @@ export const GET: APIRoute = async ({ params, request }) => {
   // Include global push status so the dialog can show effective state
   const prefs = await getNotificationPrefs(userId);
 
-  return Response.json({ following: !!follow, isPlayer, isAdmin, pushEnabled: prefs.pushEnabled, ...pickOverrides(follow) });
+  // ADR 0025: per-event invite opt-out state (EventPlayer.invitationOptOutAt)
+  const ep = await prisma.eventPlayer.findFirst({
+    where: { eventId, userId },
+    select: { invitationOptOutAt: true },
+  });
+
+  return Response.json({ following: !!follow, isPlayer, isAdmin, pushEnabled: prefs.pushEnabled, inviteOptedOut: !!ep?.invitationOptOutAt, ...pickOverrides(follow) });
 };
 
 export const POST: APIRoute = async ({ params, request }) => {

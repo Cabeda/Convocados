@@ -48,6 +48,7 @@ import dev.convocados.ui.screen.history.EventHistoryScreen
 import dev.convocados.ui.screen.map.MapPickerScreen
 import dev.convocados.ui.screen.courts.CourtAlternativesScreen
 import dev.convocados.ui.screen.courts.CourtWatchesScreen
+import dev.convocados.ui.screen.invite.InviteScreen
 
 data class BottomNavItem(val route: String, val label: String, val icon: @Composable () -> Unit)
 
@@ -308,6 +309,17 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processing
                 }
                 composable(Route.CourtWatches.route) {
                     CourtWatchesScreen(onBack = { navController.popBackStack() })
+                }
+                composable(
+                    Route.Invite().route,
+                    arguments = listOf(navArgument("token") { type = NavType.StringType }),
+                ) { entry ->
+                    val token = entry.arguments?.getString("token") ?: return@composable
+                    InviteScreen(
+                        token = token,
+                        onBack = { navController.popBackStack() },
+                        onViewGame = { id -> navController.navigate(Route.EventDetail.create(id)) },
+                    )
                 }
             }
         }

@@ -40,4 +40,7 @@ sealed class Route(val route: String) {
         companion object { fun create(id: String) = "event/$id/courts" }
     }
     data object CourtWatches : Route("court-watches")
+    data class Invite(val token: String = "{token}") : Route("invite/{token}") {
+        companion object { fun create(token: String) = "invite/$token" }
+    }
 }

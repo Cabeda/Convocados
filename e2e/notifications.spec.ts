@@ -515,7 +515,7 @@ test.describe("Notification settings UI", () => {
     await expect(page.locator('text=Push notifications').first()).toBeVisible();
 
     // Should show category sections
-    await expect(page.locator('text=Game invites')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Game invites' })).toBeVisible();
     await expect(page.locator('text=Player activity')).toBeVisible();
     await expect(page.locator('text=Event changes')).toBeVisible();
     await expect(page.locator('text=Game reminders')).toBeVisible();

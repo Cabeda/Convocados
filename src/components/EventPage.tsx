@@ -172,6 +172,45 @@ export default function EventPage({ eventId }: { eventId: string }) {
     return () => controller.abort();
   }, [eventId]);
 
+  // ── ADR 0025: co-play suggestions (owner/admin only) ───────────────────────
+  interface CoPlaySuggestion { userId: string; name: string; image?: string | null; gamesPlayed?: number; score?: number; reason?: string }
+  const [coPlaySuggestions, setCoPlaySuggestions] = useState<CoPlaySuggestion[]>([]);
+  const isOwnerFlag = !!(session?.user && event?.ownerId && session.user.id === event.ownerId);
+  const isAdminFlag = !!event?.isAdmin;
+  useEffect(() => {
+    if (!(isOwnerFlag || isAdminFlag) || !event?.gameId) {
+      setCoPlaySuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/events/${eventId}/suggestions`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : Promise.resolve({ suggestions: [] })))
+      .then((d) => setCoPlaySuggestions(Array.isArray(d?.suggestions) ? d.suggestions : []))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [eventId, event?.gameId, isOwnerFlag, isAdminFlag]);
+
+  /** ADR 0025: send a PlayerInvite to a suggested user (owner/admin). */
+  const invitePlayer = useCallback(async (userId: string, name: string) => {
+    setPlayerError(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/invites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
+      if (!res.ok) {
+        setPlayerError(json.error ?? t("somethingWentWrong"));
+        return;
+      }
+      setSnackbar(t("inviteSent", { name }));
+      fetchEvent();
+    } catch {
+      setPlayerError(t("somethingWentWrong"));
+    }
+  }, [eventId, fetchEvent, t]);
+
   // ── Payment-nudge state ────────────────────────────────────────────────────
   // Fetched lazily on first pill click; controls whether the Quick Join pill
   // routes through the payment-nudge dialog (when the user has a balance) or
@@ -904,6 +943,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 : undefined}
               eventDateTime={event.dateTime}
               rosterLocked={gameEnded}
+              declined={event.declined}
+              invited={event.invited}
+              coPlaySuggestions={coPlaySuggestions}
+              onInviteUser={invitePlayer}
               />
             </div>
 

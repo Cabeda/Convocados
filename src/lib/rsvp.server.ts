@@ -2,6 +2,7 @@
 
 import { prisma } from "./db.server";
 import { createLogger } from "./logger.server";
+import { getPingSuppressedUserIds } from "./inviteOptOut.server";
 import type { RsvpStatus, RsvpStatusValue } from "./rsvp";
 
 const log = createLogger("rsvp");
@@ -247,12 +248,24 @@ export interface RsvpSummary {
  * players excluded. Followers are NOT included — the "Are you coming" confirm
  * ping (#656) and its summary are for game participants only, not spectators
  * (ADR 0017: game reminders are players-only).
+ *
+ * Suppression (ADR 0025): users who declined the current game (rsvp=no) and
+ * users who opted out of invites for this event (EventPlayer.invitationOptOutAt)
+ * are excluded from the ping. Per-game only — a recurrence reset creates a fresh
+ * pending Rsvp for the new game, so decliners are asked again once per occurrence.
+ * `getRsvpSummary` passes `{ suppress: false }` so attendance counts stay complete.
  */
-export async function getRsvpRecipients(eventId: string): Promise<string[]> {
+export interface RsvpRecipientOptions {
+  suppress?: boolean;
+}
+
+export async function getRsvpRecipients(eventId: string, opts: RsvpRecipientOptions = {}): Promise<string[]> {
+  const { suppress = true } = opts;
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: {
       ownerId: true,
+      currentGameId: true,
       players: { where: { archivedAt: null }, select: { userId: true } },
     },
   });
@@ -260,6 +273,13 @@ export async function getRsvpRecipients(eventId: string): Promise<string[]> {
   const set = new Set<string>();
   if (event.ownerId) set.add(event.ownerId);
   for (const p of event.players) if (p.userId) set.add(p.userId);
+  if (set.size === 0) return [];
+
+  if (suppress) {
+    const suppressed = await getPingSuppressedUserIds(eventId);
+    for (const id of suppressed) set.delete(id);
+  }
+
   return [...set];
 }
 
@@ -275,7 +295,7 @@ export async function getRsvpSummary(eventId: string): Promise<RsvpSummary> {
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
   if (!event?.currentGameId) return { yes: 0, no: 0, pending: 0, yesUserIds: [], noUserIds: [], pendingUserIds: [] };
 
-  const recipientIds = await getRsvpRecipients(eventId);
+  const recipientIds = await getRsvpRecipients(eventId, { suppress: false });
   const guestPlayers = await getActiveGuestPlayers(eventId);
 
   // Resolve EventPlayer IDs for recipients (linked users)

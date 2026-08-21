@@ -24,6 +24,10 @@
     <string name="playing_count">Playing (%1$d/%2$d)</string>
     <string name="bench">Bench</string>
     <string name="bench_count">Bench (%1$d)</string>
+    <string name="invited_count">Invited (%1$d)</string>
+    <string name="declined_count">Declined (%1$d)</string>
+    <string name="suggested_players">Suggested players</string>
+    <string name="suggested_players_games">Suggested players for your games</string>
     <string name="add_player_placeholder">Add player name</string>
     <string name="add_button">Add</string>
     <string name="add_player_confirm_title">Add %1$s?</string>
@@ -97,6 +101,20 @@
     <string name="court_watches">Court Watches</string>
     <string name="delete">Delete</string>
     <string name="no_court_watches">No court watches yet.\nCreate one from an event\'s Court Alternatives.</string>
+
+    <!-- Invites (ADR 0025) -->
+    <string name="invite_page_title">Game invite</string>
+    <string name="invite_not_found">This invite could not be found.</string>
+    <string name="invite_expired">This invite has expired.</string>
+    <string name="invite_accepted">You\'ve joined the game!</string>
+    <string name="invite_declined">You declined this invite.</string>
+    <string name="invite_cancelled">This invite was cancelled.</string>
+    <string name="invite_invited_by">%1$s invited you to play</string>
+    <string name="invite_accept">Accept</string>
+    <string name="invite_decline">Decline</string>
+    <string name="invite_view_game">View game</string>
+    <string name="invite_sign_in">Sign in</string>
+    <string name="invite_not_for_you">This invite is not for your account.</string>
 
     <!-- Create event -->
     <string name="game_title">Game title</string>
