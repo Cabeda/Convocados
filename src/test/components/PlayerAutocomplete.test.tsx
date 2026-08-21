@@ -15,7 +15,7 @@ const suggestions = [
 
 interface HarnessProps {
   onAdd: (name: string) => void;
-  onRequestAdd: (intent: { kind: "single"; name: string; email?: string; source: "chip" | "dropdown" }) => void;
+  onRequestAdd: (intent: { kind: "single"; name: string; email?: string; userId?: string; source: "chip" | "dropdown" | "input" }) => void;
   withRequestAdd?: boolean;
 }
 

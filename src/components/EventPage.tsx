@@ -15,7 +15,6 @@ import { addKnownName, getQjName } from "~/lib/knownNames";
 import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
 import { isGameEnded } from "~/lib/gameStatus";
 import { useSession } from "~/lib/auth.client";
-import type { RsvpStatus } from "~/lib/rsvp";
 
 import {
   EventHeader,
@@ -195,6 +194,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   /** ADR 0025: send a PlayerInvite to a suggested user (owner/admin). */
   const invitePlayer = useCallback(async (userId: string, name: string) => {
     setPlayerError(null);
+    setInvitingName(name);
     try {
       const res = await fetch(`/api/events/${eventId}/invites`, {
         method: "POST",
@@ -224,6 +224,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
       fetchEvent();
     } catch {
       setPlayerError(t("somethingWentWrong"));
+    } finally {
+      setInvitingName(null);
     }
   }, [eventId, fetchEvent, t]);
 
@@ -321,6 +323,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // return early and surface an "in flight" snackbar.
   const addInFlightRef = useRef<{ name: string; idempotencyKey: string } | null>(null);
   const [addInFlightName, setAddInFlightName] = useState<string | null>(null);
+  const [invitingName, setInvitingName] = useState<string | null>(null);
 
   // Confirmation dialog state. Lifted to EventPage so the dialog content
   // (bench/email footnotes) can read the same event state that addPlayer uses.
@@ -415,6 +418,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
     // If performAdd did nothing because of the in-flight guard, the snackbar
     // already informed the user. Otherwise, use the resolved name from
     // performAdd for the snackbar (the snackbar is set inside performAdd).
+    void confirmedName;
+  };
+
+  const handleConfirmInvite = async (intent: AddPlayerIntent) => {
+    const confirmedName = intent.name;
+    setAddIntent(null);
+    if (intent.email) {
+      const idempotencyKey = crypto.randomUUID();
+      await performAdd(intent.name, false, intent.email, idempotencyKey);
+    } else if (intent.userId) {
+      await invitePlayer(intent.userId, intent.name);
+    }
     void confirmedName;
   };
 
@@ -679,33 +694,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
     return () => { alive = false; };
   }, [eventId, isAuthenticated]);
 
-  // #XXX Guest attendance — fetched for the player-list pills (visible to all, clickable to owner/admin).
-  const [guestRsvpMap, setGuestRsvpMap] = useState<Record<string, "yes" | "no" | "maybe" | null>>({});
-  const fetchGuestRsvpMap = useCallback(async () => {
-    try {
-      const r = await fetch(`/api/events/${eventId}/rsvp/guests`, { credentials: "include" });
-      if (!r.ok) return;
-      const data = await r.json();
-      setGuestRsvpMap(data.guests ?? {});
-    } catch { /* ignore */ }
-  }, [eventId]);
-  useEffect(() => { fetchGuestRsvpMap(); }, [fetchGuestRsvpMap]);
-
-  // #XXX User attendance — fetched for the player-list pills on linked-user rows.
-  // The server returns an empty map for anonymous viewers (one-way privacy), so this
-  // is also implicitly the visibility gate: the PlayerList only renders the pill
-  // when the current viewer is logged in.
-  const [userRsvpMap, setUserRsvpMap] = useState<Record<string, "yes" | "no" | "maybe" | null>>({});
-  const fetchUserRsvpMap = useCallback(async () => {
-    try {
-      const r = await fetch(`/api/events/${eventId}/rsvp/users`, { credentials: "include" });
-      if (!r.ok) return;
-      const data = await r.json();
-      setUserRsvpMap(data.users ?? {});
-    } catch { /* ignore */ }
-  }, [eventId]);
-  useEffect(() => { fetchUserRsvpMap(); }, [fetchUserRsvpMap]);
-
   const handleSetMyRsvp = useCallback(async (status: "yes" | "no") => {
     const prev = myRsvpStatus;
     setMyRsvpStatus(status); // optimistic
@@ -735,30 +723,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
       setSnackbar(t("somethingWentWrong"));
     }
   }, [eventId, myRsvpStatus, t, fetchEvent]);
-
-  const handleSetGuestRsvp = useCallback(async (playerId: string, status: RsvpStatus) => {
-    const prev = guestRsvpMap[playerId] ?? null;
-    setGuestRsvpMap((m) => ({ ...m, [playerId]: status })); // optimistic
-    try {
-      const r = await fetch(`/api/events/${eventId}/players/${playerId}/rsvp`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ status }),
-      });
-      if (!r.ok) {
-        setGuestRsvpMap((m) => ({ ...m, [playerId]: prev }));
-        const j = await r.json().catch(() => ({}));
-        setSnackbar(j.error ?? t("somethingWentWrong"));
-        return;
-      }
-      // Refresh summary chips (used by AttendanceCard)
-      fetchEvent();
-    } catch {
-      setGuestRsvpMap((m) => ({ ...m, [playerId]: prev }));
-      setSnackbar(t("somethingWentWrong"));
-    }
-  }, [eventId, guestRsvpMap, fetchEvent, t]);
 
   const canRemovePlayer = (player: Player) => {
     if (isOwner || isAdmin) return true;
@@ -951,13 +915,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onRandomize={doRandomize}
               onConfirmReRandomize={() => setConfirmOpen(true)}
               canRemovePlayer={canRemovePlayer}
-              currentUserId={isAuthenticated ? session?.user?.id : null}
-              myRsvpStatus={myRsvpStatus}
-              guestRsvpMap={guestRsvpMap}
-              userRsvpMap={userRsvpMap}
-              canEditGuestAttendance={isOwner || isAdmin}
               onSetMyRsvp={handleSetMyRsvp}
-              onSetGuestRsvp={handleSetGuestRsvp}
               onJoinAsSelf={isAuthenticated && session?.user?.name
                 ? () => handleQuickJoinPillClick(session.user!.name)
                 : undefined}
@@ -966,7 +924,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
               declined={event.declined}
               invited={event.invited}
               coPlaySuggestions={coPlaySuggestions}
-              onInviteUser={invitePlayer}
               />
             </div>
 
@@ -1037,9 +994,10 @@ export default function EventPage({ eventId }: { eventId: string }) {
           intent={addIntent}
           eventName={event.title}
           isBench={event.players.length >= event.maxPlayers}
-          hasInviteEmail={!!(addIntent?.email && addIntent.email.trim())}
           isAdding={!!addInFlightName}
-          onConfirm={handleConfirmAdd}
+          isInviting={!!invitingName}
+          onConfirmAdd={handleConfirmAdd}
+          onConfirmInvite={handleConfirmInvite}
           onClose={() => setAddIntent(null)}
         />
 
