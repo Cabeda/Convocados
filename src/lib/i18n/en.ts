@@ -450,7 +450,7 @@ sportBadmintonSingles: "Badminton (singles)",
   joinedGames: "Joined Games",
   followedGames: "Followed Games",
   unfollow: "Unfollow",
-  gamesYouMightJoin: "Games you might join",
+  dashboardSuggestedPlayers: "Suggested players for your games",
 
   // Calendar
   addToCalendar: "Add to calendar",

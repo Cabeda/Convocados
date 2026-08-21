@@ -12,12 +12,26 @@ import { getNotificationPrefs, wantsInvites } from "~/lib/notificationPrefs.serv
  * POST   /api/events/[id]/invites       — create an invite: { userId }
  * DELETE /api/events/[id]/invites       — retract: { inviteId }
  */
+/**
+ * ADR 0025: who may send invites on an event — the owner, any admin, or any
+ * player who has played in the event (an EventPlayer with at least one
+ * GameParticipant across the event's games).
+ */
+async function canInviteOnEvent(eventId: string, userId: string): Promise<boolean> {
+  if (await checkEventAdmin(eventId, userId)) return true;
+  const played = await prisma.eventPlayer.findFirst({
+    where: { eventId, userId, participations: { some: {} } },
+    select: { id: true },
+  });
+  return !!played;
+}
+
 export const GET: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
   const session = await getSession(request);
   if (!session?.user) return Response.json({ error: "Authentication required." }, { status: 401 });
-  if (!(await checkEventAdmin(eventId, session.user.id))) {
-    return Response.json({ error: "Only the owner or an admin can manage invites." }, { status: 403 });
+  if (!(await canInviteOnEvent(eventId, session.user.id))) {
+    return Response.json({ error: "Only the owner, an admin, or a player of this event can manage invites." }, { status: 403 });
   }
 
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
@@ -92,8 +106,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
   const session = await getSession(request);
   if (!session?.user) return Response.json({ error: "Authentication required." }, { status: 401 });
-  if (!(await checkEventAdmin(eventId, session.user.id))) {
-    return Response.json({ error: "Only the owner or an admin can send invites." }, { status: 403 });
+  if (!(await canInviteOnEvent(eventId, session.user.id))) {
+    return Response.json({ error: "Only the owner, an admin, or a player of this event can send invites." }, { status: 403 });
   }
 
   const event = await prisma.event.findUnique({

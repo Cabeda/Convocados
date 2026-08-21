@@ -25,6 +25,7 @@ import {
 } from "~/pages/api/events/[id]/invites";
 import { createPlayerInvite, acceptPlayerInvite, declinePlayerInvite, expirePendingInvites } from "~/lib/invite.server";
 import * as inviteServer from "~/lib/invite.server";
+import * as pushServer from "~/lib/push.server";
 
 function ctx(params: Record<string, string>, body?: unknown) {
   const request = new Request("http://localhost/api/test", {
@@ -129,6 +130,41 @@ describe("createPlayerInvite", () => {
     expect(notif.type).toBe("player_invited");
     expect(notif.url).toContain("/invite/");
   });
+
+  it("renders the invite push in the inviter's language", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+    await prisma.appPushToken.create({
+      data: { userId: owner.id, token: `pt-token-${Date.now()}`, platform: "android", locale: "pt" },
+    });
+
+    const spy = vi.spyOn(pushServer, "sendPushToUser").mockResolvedValue(undefined);
+    try {
+      await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+      expect(spy).toHaveBeenCalledTimes(1);
+      const [, , body] = spy.mock.calls[0];
+      expect(body).toContain("Foste convidado para jogar em");
+      expect(body).not.toContain("You've been invited");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("falls back to English for the invite push when the inviter has no push locale", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+
+    const spy = vi.spyOn(pushServer, "sendPushToUser").mockResolvedValue(undefined);
+    try {
+      await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+      const [, , body] = spy.mock.calls[0];
+      expect(body).toContain("You've been invited");
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
 
 describe("POST /api/events/[id]/invites", () => {
@@ -161,6 +197,20 @@ describe("POST /api/events/[id]/invites", () => {
 
     const res = await createInvite(ctx({ id: ev.id }, { userId: invitee.id }));
     expect(res.status).toBe(403);
+  });
+
+  it("allows a player who has played in the event to invite (no admin role)", async () => {
+    const owner = await seedUser("Owner");
+    const player = await seedUser("Player");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+    const playerEp = await prisma.eventPlayer.create({ data: { eventId: ev.id, name: player.name, userId: player.id } });
+    await prisma.gameParticipant.create({ data: { gameId: ev.currentGameId, eventPlayerId: playerEp.id, status: "active" } });
+    mockGetSession.mockResolvedValue({ user: { id: player.id } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+
+    const res = await createInvite(ctx({ id: ev.id }, { userId: invitee.id }));
+    expect(res.status).toBe(200);
   });
 
   it("blocks users who opted out of invites for this event", async () => {

@@ -450,7 +450,7 @@ sportBadmintonSingles: "Badminton (singles)",
   adminGames: "Jogos que Administro",
   followedGames: "Jogos que Sigo",
   unfollow: "Deixar de seguir",
-  gamesYouMightJoin: "Jogos a que podes aderir",
+  dashboardSuggestedPlayers: "Jogadores sugeridos para os teus jogos",
   ownedGames: "Os Meus Jogos",
   joinedGames: "Jogos em que Participei",
 
