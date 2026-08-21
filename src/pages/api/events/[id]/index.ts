@@ -282,36 +282,12 @@ export const GET: APIRoute = async ({ params, request }) => {
     gameStatus = currentGame?.status ?? null;
   }
 
-  // ADR 0025: declined roster (rsvp=no) is visible to all viewers when a game exists;
-  // invited pending entries remain gated (participants/owner/admins + own pending).
+  // ADR 0025: declined roster (rsvp=no on the current game) + pending invitees —
+  // both read-only, visible to participants + owner + admins only (plus the
+  // invitee's own pending entry). Anonymous/followers get [].
   let declined: Array<{ id: string; name: string; userId: string | null; image: string | null }> = [];
   let invited: Array<{ id: string; name: string; userId: string | null; image: string | null }> = [];
   if (event.currentGameId) {
-    // Declined: visible to everyone (collapsed by default in the UI). No gating.
-    {
-      const declinedRsvps = await prisma.rsvp.findMany({
-        where: { gameId: event.currentGameId, status: "no" },
-        select: { eventPlayerId: true },
-      });
-      if (declinedRsvps.length > 0) {
-        const declinedEps = await prisma.eventPlayer.findMany({
-          where: { id: { in: declinedRsvps.map((r) => r.eventPlayerId) } },
-          select: { id: true, name: true, userId: true },
-        });
-        const declinedUserIds = declinedEps.map((e) => e.userId).filter((u): u is string => !!u);
-        const declinedUsers = declinedUserIds.length
-          ? await prisma.user.findMany({ where: { id: { in: declinedUserIds } }, select: { id: true, image: true } })
-          : [];
-        const declinedImageByUserId = new Map(declinedUsers.map((u) => [u.id, u.image]));
-        declined = declinedEps.map((e) => ({
-          id: e.id,
-          name: e.name,
-          userId: e.userId,
-          image: e.userId ? (declinedImageByUserId.get(e.userId) ?? null) : null,
-        }));
-      }
-    }
-
     const sessionForViewer = await getSession(request).catch(() => null);
     const viewerId = sessionForViewer?.user?.id ?? null;
 
@@ -334,6 +310,30 @@ export const GET: APIRoute = async ({ params, request }) => {
       viewerHasPendingHere = pendingParticipants.some((gp) => (gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name)) === viewerId);
     }
     const viewerSeesRosterExtras = !!viewerId && (viewerIsParticipant || viewerIsAdmin);
+
+    if (viewerSeesRosterExtras) {
+      const declinedRsvps = await prisma.rsvp.findMany({
+        where: { gameId: event.currentGameId, status: "no" },
+        select: { eventPlayerId: true },
+      });
+      if (declinedRsvps.length > 0) {
+        const declinedEps = await prisma.eventPlayer.findMany({
+          where: { id: { in: declinedRsvps.map((r) => r.eventPlayerId) } },
+          select: { id: true, name: true, userId: true },
+        });
+        const declinedUserIds = declinedEps.map((e) => e.userId).filter((u): u is string => !!u);
+        const declinedUsers = declinedUserIds.length
+          ? await prisma.user.findMany({ where: { id: { in: declinedUserIds } }, select: { id: true, image: true } })
+          : [];
+        const declinedImageByUserId = new Map(declinedUsers.map((u) => [u.id, u.image]));
+        declined = declinedEps.map((e) => ({
+          id: e.id,
+          name: e.name,
+          userId: e.userId,
+          image: e.userId ? (declinedImageByUserId.get(e.userId) ?? null) : null,
+        }));
+      }
+    }
 
     // The invitee's own pending entry is always visible to them.
     if (viewerId && (viewerSeesRosterExtras || viewerHasPendingHere)) {
