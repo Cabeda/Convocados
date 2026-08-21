@@ -125,7 +125,7 @@ describe("DashboardPage — ADR 0025 'Games you might join' panel", () => {
     renderWithTheme(<DashboardPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Games you might join")).toBeInTheDocument();
+      expect(screen.getByText("Suggested players for your games")).toBeInTheDocument();
     });
     // Game titles appear once in the owned GameCard list and once in the panel.
     expect(screen.getAllByText("Sunday Football").length).toBe(2);
@@ -157,7 +157,7 @@ describe("DashboardPage — ADR 0025 'Games you might join' panel", () => {
       expect(screen.getByText("My Games")).toBeInTheDocument();
     });
     await new Promise((r) => setTimeout(r, 50));
-    expect(screen.queryByText("Games you might join")).not.toBeInTheDocument();
+    expect(screen.queryByText("Suggested players for your games")).not.toBeInTheDocument();
   });
 
   it("clicking a suggestion chip POSTs an invite and removes the chip", async () => {

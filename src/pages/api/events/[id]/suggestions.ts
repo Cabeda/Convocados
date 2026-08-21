@@ -6,6 +6,7 @@ import {
   applyDeclinePenalty,
   computeCoPlayScore,
   SUGGESTIONS_CAP,
+  CO_PLAY_WINDOW_DAYS,
   type CoPlayRecord,
 } from "../../../../lib/suggestions";
 
@@ -49,47 +50,50 @@ export const GET: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "Missing event id" }, { status: 400 });
   }
 
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { currentGameId: true },
-  });
+  const now = new Date();
+
+  // Performance (ADR 0025): bound co-play history to a recency window. Games
+  // older than CO_PLAY_WINDOW_DAYS contribute ~2% (or less) of a recent game's
+  // ranking weight, so excluding them keeps the query bounded for accounts with
+  // long event histories without meaningfully changing ranking.
+  const windowCutoff = new Date(now.getTime() - CO_PLAY_WINDOW_DAYS * 86_400_000);
+
+  // 1. Event + the inviter's participations in parallel. Navigating the
+  //    eventPlayer relation avoids a separate "inviter's EventPlayers" query.
+  const [event, inviterParticipations] = await Promise.all([
+    prisma.event.findUnique({
+      where: { id: eventId },
+      select: { currentGameId: true },
+    }),
+    prisma.gameParticipant.findMany({
+      where: {
+        eventPlayer: { userId: sessionUserId },
+        status: "active",
+        archivedAt: null,
+        game: { dateTime: { gte: windowCutoff } },
+      },
+      select: { gameId: true, eventPlayerId: true },
+    }),
+  ]);
   if (!event?.currentGameId) {
     return Response.json({ suggestions: [] });
   }
   const currentGameId = event.currentGameId;
 
-  const now = new Date();
-
-  // 1. The inviter's EventPlayers across all events.
-  const inviterEventPlayers = await prisma.eventPlayer.findMany({
-    where: { userId: sessionUserId },
-    select: { id: true },
-  });
-  const inviterEventPlayerIds = inviterEventPlayers.map((ep) => ep.id);
-  if (inviterEventPlayerIds.length === 0) {
-    return Response.json({ suggestions: [] });
-  }
-
-  // 2. Co-play history: games the inviter played, then the OTHER players in them.
-  const inviterParticipations = await prisma.gameParticipant.findMany({
-    where: {
-      eventPlayerId: { in: inviterEventPlayerIds },
-      status: "active",
-      archivedAt: null,
-    },
-    select: { gameId: true },
-  });
+  const inviterEventPlayerIds = [...new Set(inviterParticipations.map((p) => p.eventPlayerId))];
   const inviterGameIds = [...new Set(inviterParticipations.map((p) => p.gameId))];
-  if (inviterGameIds.length === 0) {
+  if (inviterEventPlayerIds.length === 0 || inviterGameIds.length === 0) {
     return Response.json({ suggestions: [] });
   }
 
+  // 2. Co-play history: OTHER players in the inviter's games (same window).
   const coPlayRows = await prisma.gameParticipant.findMany({
     where: {
       gameId: { in: inviterGameIds },
       eventPlayerId: { notIn: inviterEventPlayerIds },
       status: "active",
       archivedAt: null,
+      game: { dateTime: { gte: windowCutoff } },
     },
     include: {
       eventPlayer: { select: { userId: true, name: true, gamesPlayed: true } },

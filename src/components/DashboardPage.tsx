@@ -340,7 +340,7 @@ export default function DashboardPage() {
                   <>
                     <Box>
                       <Typography variant="h6" fontWeight={600} gutterBottom>
-                        {t("gamesYouMightJoin")}
+                        {t("dashboardSuggestedPlayers")}
                       </Typography>
                       <Stack spacing={1.5}>
                         {managedSuggestions.map(({ game, suggestions }) => (

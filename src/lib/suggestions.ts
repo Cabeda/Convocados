@@ -17,6 +17,14 @@ export const DECLINE_PENALTY_THRESHOLD = 3;
 export const DECLINE_PENALTY_FACTOR = 0.1;
 export const SUGGESTIONS_CAP = 20;
 
+/**
+ * Co-play history window (days). Games older than this are excluded from the
+ * ranking query. A game CO_PLAY_WINDOW_DAYS ago contributes exp(-window/90)
+ * to the score (~2% at 365d), so older co-plays are noise — bounding the
+ * window keeps the endpoint query cheap for accounts with long histories.
+ */
+export const CO_PLAY_WINDOW_DAYS = 365;
+
 export interface CoPlayRecord {
   userId: string;
   name: string;

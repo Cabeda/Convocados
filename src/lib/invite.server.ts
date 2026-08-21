@@ -104,21 +104,26 @@ export async function createPlayerInvite(opts: {
 
   const inviteUrl = `${origin}/invite/${token}`;
 
-  await notifyInvitee({ userId: inviteeUserId, eventId, inviteUrl });
+  await notifyInvitee({ userId: inviteeUserId, eventId, inviteUrl, invitedByUserId });
   fireWebhooks(eventId, "player_invited", { playerName: user.name, inviteUrl }).catch(() => {});
 
   log.info({ inviteId: invite.id, eventId, inviteeUserId, invitedByUserId }, "Player invite created");
   return { inviteId: invite.id, token, inviteUrl };
 }
 
-async function notifyInvitee(opts: { userId: string; eventId: string; inviteUrl: string }) {
+async function notifyInvitee(opts: { userId: string; eventId: string; inviteUrl: string; invitedByUserId: string }) {
   const prefs = await getNotificationPrefs(opts.userId);
   if (!wantsInvites(prefs)) return;
 
-  const event = await prisma.event.findUnique({ where: { id: opts.eventId }, select: { title: true } });
+  const [event, inviterToken] = await Promise.all([
+    prisma.event.findUnique({ where: { id: opts.eventId }, select: { title: true } }),
+    // The inviter's push locale (AppPushToken) — the push is composed by them.
+    prisma.appPushToken.findFirst({ where: { userId: opts.invitedByUserId }, select: { locale: true } }),
+  ]);
   const title = event?.title ?? "Game";
 
   const key = "notifyPlayerInvited" as const;
+  // In-app feed: store key + params, rendered client-side in the RECEIVER's locale.
   await prisma.inAppNotification.create({
     data: {
       userId: opts.userId,
@@ -131,7 +136,9 @@ async function notifyInvitee(opts: { userId: string; eventId: string; inviteUrl:
   });
 
   if (prefs.pushEnabled) {
-    const t = createT("en" as Locale);
+    // Push body is composed by the inviter — render it in the INVITER's locale.
+    const inviterLocale = (inviterToken?.locale as Locale) ?? "en";
+    const t = createT(inviterLocale);
     sendPushToUser(opts.userId, title, t(key, { event: title }), opts.inviteUrl).catch(() => {});
   }
 }
