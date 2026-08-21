@@ -31,7 +31,7 @@ export function InvitePage({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
 
   const load = () => {
-    fetch(`/api/invite/${token}`)
+    fetch(`/api/invite/${token}`, { credentials: "include" })
       .then((r) => r.json())
       .then(setData)
       .catch(() => setError(t("somethingWentWrong")))
@@ -48,6 +48,7 @@ export function InvitePage({ token }: { token: string }) {
       const res = await fetch(`/api/invite/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ action }),
       });
       const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
