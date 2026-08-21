@@ -22,6 +22,10 @@
     <string name="playing_count">Spielt (%1$d/%2$d)</string>
     <string name="bench">Bank</string>
     <string name="bench_count">Bank (%1$d)</string>
+    <string name="invited_count">Eingeladen (%1$d)</string>
+    <string name="declined_count">Abgelehnt (%1$d)</string>
+    <string name="suggested_players">Vorgeschlagene Spieler</string>
+    <string name="suggested_players_games">Vorgeschlagene Spieler für deine Spiele</string>
     <string name="add_player_placeholder">Spielernamen hinzufügen</string>
     <string name="add_button">Hinzufügen</string>
     <string name="add_player_confirm_title">%1$s hinzufügen?</string>

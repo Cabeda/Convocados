@@ -22,6 +22,10 @@
     <string name="playing_count">In campo (%1$d/%2$d)</string>
     <string name="bench">Panchina</string>
     <string name="bench_count">Panchina (%1$d)</string>
+    <string name="invited_count">Invitati (%1$d)</string>
+    <string name="declined_count">Rifiutati (%1$d)</string>
+    <string name="suggested_players">Giocatori suggeriti</string>
+    <string name="suggested_players_games">Giocatori suggeriti per le tue partite</string>
     <string name="add_player_placeholder">Aggiungi nome giocatore</string>
     <string name="add_button">Aggiungi</string>
     <string name="add_player_confirm_title">Aggiungere %1$s?</string>
