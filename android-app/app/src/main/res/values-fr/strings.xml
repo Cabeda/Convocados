@@ -22,6 +22,10 @@
     <string name="playing_count">Sur le terrain (%1$d/%2$d)</string>
     <string name="bench">Remplaçants</string>
     <string name="bench_count">Remplaçants (%1$d)</string>
+    <string name="invited_count">Invités (%1$d)</string>
+    <string name="declined_count">Refusés (%1$d)</string>
+    <string name="suggested_players">Joueurs suggérés</string>
+    <string name="suggested_players_games">Joueurs suggérés pour vos matchs</string>
     <string name="add_player_placeholder">Ajouter le nom du joueur</string>
     <string name="add_button">Ajouter</string>
     <string name="add_player_confirm_title">Ajouter %1$s ?</string>

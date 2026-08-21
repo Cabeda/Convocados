@@ -88,6 +88,17 @@ data class EventDetail(
     val teamResults: List<TeamResult>? = null,
     val wasReset: Boolean = false,
     val locked: Boolean = false,
+    // ADR 0025: pending-invited + declined roster entries (read-only, server-gated)
+    val invited: List<RosterPlayer> = emptyList(),
+    val declined: List<RosterPlayer> = emptyList(),
+)
+
+@Serializable
+data class RosterPlayer(
+    val id: String,
+    val name: String,
+    val userId: String? = null,
+    val image: String? = null,
 )
 
 @Serializable
@@ -568,3 +579,20 @@ data class InviteActionResponse(
     val action: String = "",
     val bench: Boolean = false,
 )
+
+@Serializable
+data class CoPlaySuggestion(
+    val userId: String,
+    val name: String,
+    val image: String? = null,
+    val gamesPlayed: Int = 0,
+    val coPlayCount: Int = 0,
+    val score: Double = 0.0,
+    val invitedPending: Boolean = false,
+)
+
+@Serializable
+data class SuggestionsResponse(val suggestions: List<CoPlaySuggestion> = emptyList())
+
+@Serializable
+data class InviteCreateRequest(val userId: String)
