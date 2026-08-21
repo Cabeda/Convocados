@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -28,6 +29,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventSummary
 import dev.convocados.data.api.MyGamesResponse
+import dev.convocados.data.api.CoPlaySuggestion
 import dev.convocados.data.repository.EventRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,6 +63,9 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 
+/** ADR 0025: a managed game plus its ranked co-play invite candidates. */
+data class GameSuggestions(val game: EventSummary, val suggestions: List<CoPlaySuggestion>)
+
 @HiltViewModel
 class GamesViewModel @Inject constructor(
     private val repository: EventRepository,
@@ -82,6 +87,11 @@ class GamesViewModel @Inject constructor(
     val archivedOwned = repository.getEventsByType("archivedOwned")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // ADR 0025: "Suggested players for your games" — co-play invite candidates
+    // for the 3 nearest upcoming managed games.
+    private val _suggestionsPanel = MutableStateFlow<List<GameSuggestions>>(emptyList())
+    val suggestionsPanel: StateFlow<List<GameSuggestions>> = _suggestionsPanel
+
     init { refresh() }
 
     fun refresh() {
@@ -89,6 +99,32 @@ class GamesViewModel @Inject constructor(
             _refreshing.value = true
             repository.refreshMyGames()
             _refreshing.value = false
+            loadSuggestionsPanel()
+        }
+    }
+
+    private suspend fun loadSuggestionsPanel() {
+        val nowMs = System.currentTimeMillis()
+        val managed = (ownedGames.value + adminGames.value)
+            .filter { it.archivedAt == null && runCatching { Instant.parse(it.dateTime).toEpochMilli() }.getOrNull()?.let { it > nowMs } == true }
+            .sortedBy { runCatching { Instant.parse(it.dateTime).toEpochMilli() }.getOrDefault(Long.MAX_VALUE) }
+            .take(3)
+        _suggestionsPanel.value = managed.map { game ->
+            GameSuggestions(
+                game = game,
+                suggestions = runCatching { api.fetchEventSuggestions(game.id) }.getOrNull()?.suggestions ?: emptyList(),
+            )
+        }.filter { it.suggestions.isNotEmpty() }
+    }
+
+    /** ADR 0025: one-tap invite from the suggestions panel. */
+    fun sendInvite(eventId: String, userId: String) {
+        viewModelScope.launch {
+            runCatching { api.sendInvite(eventId, userId) }.onSuccess {
+                _suggestionsPanel.value = _suggestionsPanel.value
+                    .map { if (it.game.id == eventId) it.copy(suggestions = it.suggestions.filter { s -> s.userId != userId }) else it }
+                    .filter { it.suggestions.isNotEmpty() }
+            }
         }
     }
 
@@ -119,6 +155,7 @@ fun GamesScreen(
     val followed by viewModel.followedGames.collectAsState()
     val archivedOwned by viewModel.archivedOwned.collectAsState()
     val isRefreshing by viewModel.refreshing.collectAsState()
+    val suggestionsPanel by viewModel.suggestionsPanel.collectAsState()
     var showArchived by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -206,6 +243,17 @@ fun GamesScreen(
                                 Text(stringResource(R.string.create_a_game), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                             }
                         }
+                    }
+                }
+
+                // ADR 0025: "Suggested players for your games" — co-play invite panel.
+                if (!showArchived && suggestionsPanel.isNotEmpty()) {
+                    item(key = "suggestions-panel") {
+                        SuggestionsPanel(
+                            games = suggestionsPanel,
+                            onInvite = { eventId, userId -> viewModel.sendInvite(eventId, userId) },
+                            onEventClick = onEventClick,
+                        )
                     }
                 }
 
@@ -372,3 +420,45 @@ fun formatEventDateInTz(iso: String, timezone: String): String = runCatching {
         .withZone(zone)
     formatter.format(instant)
 }.getOrDefault(iso)
+
+/**
+ * ADR 0025: "Suggested players for your games" panel. Lists the nearest
+ * upcoming managed games with their ranked co-play invite candidates.
+ */
+@Composable
+private fun SuggestionsPanel(
+    games: List<GameSuggestions>,
+    onInvite: (eventId: String, userId: String) -> Unit,
+    onEventClick: (String) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Text(
+            stringResource(R.string.suggested_players_games),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(8.dp))
+        games.forEach { gs ->
+            ElevatedCard(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    Text(
+                        gs.game.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { onEventClick(gs.game.id) },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    gs.suggestions.forEach { s ->
+                        AssistChip(
+                            onClick = { onInvite(gs.game.id, s.userId) },
+                            label = { Text(s.name) },
+                            leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

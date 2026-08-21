@@ -35,6 +35,7 @@ function parseAndroidEndpoints(): EndpointCall[] {
       .replace(/\$eventId/g, "{id}")
       .replace(/\$historyId/g, "{historyId}")
       .replace(/\$userId/g, "{id}")
+      .replace(/\$token/g, "{token}")
       .replace(/\$id/g, "{id}")
       .replace(/\$\w+/g, "")   // strip remaining $vars like $qs
       .replace(/\?.*/, "");    // strip query strings

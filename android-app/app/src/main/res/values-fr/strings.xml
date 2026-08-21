@@ -22,6 +22,10 @@
     <string name="playing_count">Sur le terrain (%1$d/%2$d)</string>
     <string name="bench">Remplaçants</string>
     <string name="bench_count">Remplaçants (%1$d)</string>
+    <string name="invited_count">Invités (%1$d)</string>
+    <string name="declined_count">Refusés (%1$d)</string>
+    <string name="suggested_players">Joueurs suggérés</string>
+    <string name="suggested_players_games">Joueurs suggérés pour vos matchs</string>
     <string name="add_player_placeholder">Ajouter le nom du joueur</string>
     <string name="add_button">Ajouter</string>
     <string name="add_player_confirm_title">Ajouter %1$s ?</string>
@@ -87,6 +91,20 @@
     <string name="court_watches">Alertes de terrains</string>
     <string name="delete">Supprimer</string>
     <string name="no_court_watches">Pas encore d\'alertes de terrains.\nCréez-en une depuis les terrains alternatifs d\'un événement.</string>
+
+    <!-- Invites (ADR 0025) -->
+    <string name="invite_page_title">Invitation à un match</string>
+    <string name="invite_not_found">Impossible de trouver cette invitation.</string>
+    <string name="invite_expired">Cette invitation a expiré.</string>
+    <string name="invite_accepted">Vous avez rejoint le match !</string>
+    <string name="invite_declined">Vous avez décliné cette invitation.</string>
+    <string name="invite_cancelled">Cette invitation a été annulée.</string>
+    <string name="invite_invited_by">%1$s vous a invité à jouer</string>
+    <string name="invite_accept">Accepter</string>
+    <string name="invite_decline">Décliner</string>
+    <string name="invite_view_game">Voir le match</string>
+    <string name="invite_sign_in">Se connecter</string>
+    <string name="invite_not_for_you">Cette invitation n\'est pas pour votre compte.</string>
 
     <string name="game_title">Titre du match</string>
     <string name="game_title_placeholder">ex. Foot du mardi</string>

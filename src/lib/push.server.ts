@@ -2,6 +2,7 @@ import { prisma } from "./db.server";
 import { createT, type Locale, type TranslationKey } from "./i18n";
 import { createLogger } from "./logger.server";
 import { DEFAULTS, wantsPushReminder, wantsPushWithOverrides } from "./notificationPrefs.server";
+import { getPingSuppressedUserIds } from "./inviteOptOut.server";
 import type { NotificationJobType } from "./notificationQueue.server";
 import type webpush from "web-push";
 import pLimit from "p-limit";
@@ -305,6 +306,13 @@ export async function sendPushToEvent(
     senderUserIds.add(senderClientId);
   }
   for (const id of senderUserIds) recipientUserIds.delete(id);
+
+  // ADR 0025: recruitment / spot-available pings skip users who declined the
+  // current game (rsvp=no) or opted out of invites for this event. Per-game only.
+  if (jobType === "recruitment" || jobType === "few_spots_left" || jobType === "spot_available") {
+    const suppressed = await getPingSuppressedUserIds(eventId);
+    for (const id of suppressed) recipientUserIds.delete(id);
+  }
 
   const recipientList = [...recipientUserIds];
   if (recipientList.length === 0) return;

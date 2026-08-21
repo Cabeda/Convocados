@@ -619,7 +619,8 @@ export const POST: APIRoute = async ({ params, request }) => {
           const ep = await prisma.eventPlayer.upsert({
             where: { eventId_name: { eventId, name: trimmed } },
             create: { eventId, name: trimmed, userId: reactivatedUserId },
-            update: { ...(reactivatedUserId ? { userId: reactivatedUserId } : {}) },
+            // ADR 0025: rejoining clears the per-event invite opt-out.
+            update: { ...(reactivatedUserId ? { userId: reactivatedUserId } : {}), invitationOptOutAt: null },
           });
           await prisma.rsvp.upsert({
             where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
@@ -651,7 +652,8 @@ export const POST: APIRoute = async ({ params, request }) => {
         const eventPlayer = await prisma.eventPlayer.upsert({
           where: { eventId_name: { eventId, name: trimmed } },
           create: { eventId, name: trimmed, userId: linkedUserId ?? existing.userId },
-          update: { ...(linkedUserId ? { userId: linkedUserId } : {}) },
+          // ADR 0025: rejoining clears the per-event invite opt-out.
+          update: { ...(linkedUserId ? { userId: linkedUserId } : {}), invitationOptOutAt: null },
         });
         const alreadyInGame = await prisma.gameParticipant.findUnique({
           where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
@@ -762,7 +764,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     const eventPlayer = await prisma.eventPlayer.upsert({
       where: { eventId_name: { eventId, name: trimmed } },
       create: { eventId, name: trimmed, userId: linkedUserId },
-      update: {},
+      // ADR 0025: joining clears any stale per-event invite opt-out.
+      update: { invitationOptOutAt: null },
     });
     const gpOrder = await nextGameParticipantOrder(event.currentGameId);
     await prisma.gameParticipant.upsert({

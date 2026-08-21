@@ -17,6 +17,7 @@ const EVENT_TYPE_LABELS: Record<string, TranslationKey> = {
   player_left: "webhookEventType_player_left",
   game_full: "webhookEventType_game_full",
   game_reset: "webhookEventType_game_reset",
+  player_invited: "webhookEventType_player_invited",
 };
 
 const DELIVERY_STATUS_LABELS: Record<string, TranslationKey> = {
@@ -25,7 +26,7 @@ const DELIVERY_STATUS_LABELS: Record<string, TranslationKey> = {
   pending: "webhookDeliveryStatus_pending",
 };
 
-const EVENT_TYPES = ["player_joined", "player_left", "game_full", "game_reset"] as const;
+const EVENT_TYPES = ["player_joined", "player_left", "game_full", "game_reset", "player_invited"] as const;
 
 interface Webhook {
   id: string;
