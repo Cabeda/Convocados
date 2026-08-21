@@ -106,6 +106,8 @@ data class EventScreenState(
     val showPaymentNudge: Boolean = false,
     // Contact-pick auto-add
     val addedPlayerName: String? = null,
+    // ADR 0025: ranked co-play suggestions (owner/admin) — one-tap Invite
+    val coPlaySuggestions: List<CoPlaySuggestion> = emptyList(),
 )
 
 data class TeamMoveUndo(
@@ -170,6 +172,12 @@ class EventDetailViewModel @Inject constructor(
             val known = runCatching { api.fetchKnownPlayers(eventId) }.getOrNull()?.players ?: emptyList()
             val following = runCatching { api.getFollowState(eventId) }.getOrNull()
             val balance = runCatching { api.fetchBalance(eventId) }.getOrNull()
+            // ADR 0025: co-play suggestions are owner/admin-only (server-gated).
+            val ev = event.value
+            val isOwner = _user.value?.id != null && ev?.ownerId == _user.value?.id
+            val coPlay = if (isOwner || following?.isAdmin == true)
+                runCatching { api.fetchEventSuggestions(eventId) }.getOrNull()?.suggestions ?: emptyList()
+            else emptyList()
             // Seed the editable past-game payment snapshot from the server, but
             // don't clobber unsaved local edits.
             val seededPayments = if (_state.value.postGamePaymentsDirty)
@@ -186,6 +194,7 @@ class EventDetailViewModel @Inject constructor(
                 mutePostGame = following?.mutePostGame,
                 muteEventDetails = following?.muteEventDetails,
                 balance = balance,
+                coPlaySuggestions = coPlay,
             )
         }
     }
@@ -284,6 +293,20 @@ class EventDetailViewModel @Inject constructor(
 
     fun dismissAddedPlayerSnackbar() {
         _state.value = _state.value.copy(addedPlayerName = null)
+    }
+
+    /** ADR 0025: one-tap invite from a co-play suggestion chip. */
+    fun inviteSuggestion(eventId: String, userId: String) {
+        viewModelScope.launch {
+            runCatching { api.sendInvite(eventId, userId) }
+                .onSuccess {
+                    // Pending invite created server-side — drop the chip locally.
+                    _state.value = _state.value.copy(
+                        coPlaySuggestions = _state.value.coPlaySuggestions.filter { it.userId != userId },
+                    )
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message) }
+        }
     }
 
     fun fetchBalance(eventId: String) {
@@ -995,6 +1018,40 @@ fun EventDetailScreen(
                             )
                         }
 
+                        // ADR 0025: Invited (pending invites) + Declined roster rows.
+                        // Read-only, server-gated (participants + owner/admin).
+                        if (event.invited.isNotEmpty()) {
+                            SectionTitle(stringResource(R.string.invited_count, event.invited.size))
+                            RosterStatusList(names = event.invited.map { it.name })
+                        }
+                        if (event.declined.isNotEmpty()) {
+                            SectionTitle(stringResource(R.string.declined_count, event.declined.size))
+                            RosterStatusList(names = event.declined.map { it.name })
+                        }
+
+                        // ADR 0025: ranked co-play suggestions (owner/admin) — one-tap Invite
+                        if (state.coPlaySuggestions.isNotEmpty() && newPlayer.isBlank()) {
+                            Column(modifier = Modifier.padding(top = 12.dp)) {
+                                Text(
+                                    stringResource(R.string.suggested_players),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Row(
+                                    modifier = Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    state.coPlaySuggestions.forEach { s ->
+                                        AssistChip(
+                                            onClick = { viewModel.inviteSuggestion(eventId, s.userId) },
+                                            label = { Text(s.name) },
+                                            leadingIcon = { Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         // Suggestions (quick-add chips when input is empty)
                         if (suggestions.isNotEmpty() && newPlayer.isBlank()) {
                             Row(modifier = Modifier.padding(top = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1298,6 +1355,27 @@ private fun TeamColumn(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = if (pid != null) Modifier.clickable { onMovePlayer(pid, m.name, toTeamOne) } else Modifier,
             )
+        }
+    }
+}
+
+/** Read-only collapsed row of roster-status names (Invited / Declined). */
+@Composable
+fun RosterStatusList(names: List<String>) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column {
+            names.forEachIndexed { i, name ->
+                Text(
+                    name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                if (i < names.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
         }
     }
 }

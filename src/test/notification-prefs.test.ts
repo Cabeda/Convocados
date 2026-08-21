@@ -247,6 +247,7 @@ describe("notificationPrefs helpers", () => {
     weeklySummaryEmail: true,
     paymentReminderEmail: true,
     paymentReminderPush: true,
+    invitesEnabled: true,
     reminder24h: true,
     reminder2h: true,
     reminder1h: true,
@@ -265,6 +266,7 @@ describe("notificationPrefs helpers", () => {
     weeklySummaryEmail: false,
     paymentReminderEmail: false,
     paymentReminderPush: false,
+    invitesEnabled: false,
     reminder24h: false,
     reminder2h: false,
     reminder1h: false,
@@ -345,6 +347,7 @@ describe("wantsPushWithOverrides", () => {
     gameReminderEmail: true, gameReminderPush: true, playerActivityPush: true,
     eventDetailsPush: true, postGamePush: true, weeklySummaryEmail: true,
     paymentReminderEmail: true, paymentReminderPush: true,
+    invitesEnabled: true,
     reminder24h: true, reminder2h: true, reminder1h: true,
   };
 

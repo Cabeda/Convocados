@@ -8,7 +8,8 @@ export type WebhookEventType =
   | "player_joined"
   | "player_left"
   | "game_full"
-  | "game_reset";
+  | "game_reset"
+  | "player_invited";
 
 const MAX_ATTEMPTS = 5;
 const TIMEOUT_MS = 5000;
@@ -24,6 +25,8 @@ interface WebhookPayloadData {
   spotsLeft?: number;
   /** Who performed the action: a player/user name, or "anonymous". */
   actor?: string;
+  viaInvite?: boolean;
+  inviteUrl?: string;
   [key: string]: unknown;
 }
 

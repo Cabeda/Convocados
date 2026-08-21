@@ -88,6 +88,17 @@ data class EventDetail(
     val teamResults: List<TeamResult>? = null,
     val wasReset: Boolean = false,
     val locked: Boolean = false,
+    // ADR 0025: pending-invited + declined roster entries (read-only, server-gated)
+    val invited: List<RosterPlayer> = emptyList(),
+    val declined: List<RosterPlayer> = emptyList(),
+)
+
+@Serializable
+data class RosterPlayer(
+    val id: String,
+    val name: String,
+    val userId: String? = null,
+    val image: String? = null,
 )
 
 @Serializable
@@ -183,6 +194,8 @@ data class PublicEvent(
     val maxPlayers: Int,
     val playerCount: Int,
     val spotsLeft: Int,
+    val source: String = "manual",
+    val ownerId: String? = null,
 )
 
 @Serializable
@@ -531,4 +544,70 @@ data class PaymentGateError(
     val gateAmount: Double = 0.0,
     val enforcement: String = "",
     val threshold: Double = 0.0,
+)
+
+// ── Invites (ADR 0025) ─────────────────────────────────────────────────────
+
+@Serializable
+data class InviteGame(
+    val id: String,
+    val title: String,
+    val location: String = "",
+    val dateTime: String = "",
+    val maxPlayers: Int = 0,
+)
+
+@Serializable
+data class InviteLookupResponse(
+    val valid: Boolean = false,
+    val status: String = "",
+    val token: String = "",
+    val isInvitee: Boolean = false,
+    val authenticated: Boolean = false,
+    val inviteeName: String = "",
+    val invitedByName: String = "",
+    val gameId: String = "",
+    val game: InviteGame? = null,
+)
+
+@Serializable
+data class InviteActionRequest(val action: String)
+
+@Serializable
+data class InviteActionResponse(
+    val ok: Boolean = false,
+    val action: String = "",
+    val bench: Boolean = false,
+)
+
+@Serializable
+data class CoPlaySuggestion(
+    val userId: String,
+    val name: String,
+    val image: String? = null,
+    val gamesPlayed: Int = 0,
+    val coPlayCount: Int = 0,
+    val score: Double = 0.0,
+    val invitedPending: Boolean = false,
+)
+
+@Serializable
+data class SuggestionsResponse(val suggestions: List<CoPlaySuggestion> = emptyList())
+
+@Serializable
+data class InviteCreateRequest(val userId: String)
+
+@Serializable
+data class InviteChannels(
+    val email: Boolean = false,
+    val webPush: Boolean = false,
+    val appPush: Boolean = false,
+)
+
+@Serializable
+data class InviteCreateResponse(
+    val ok: Boolean = true,
+    val token: String = "",
+    val inviteUrl: String = "",
+    val channels: InviteChannels = InviteChannels(),
 )

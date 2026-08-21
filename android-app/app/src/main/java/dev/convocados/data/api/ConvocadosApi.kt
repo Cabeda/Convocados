@@ -188,6 +188,10 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun claimOwnership(eventId: String): OkResponse =
         client.post("/api/events/$eventId/claim")
 
+    /** Adopt an Open Pickup (ADR-0021): user becomes the owner, event stays public. */
+    suspend fun adoptPickup(eventId: String): OkResponse =
+        client.post("/api/events/$eventId/adopt")
+
     suspend fun relinquishOwnership(eventId: String): OkResponse =
         client.delete("/api/events/$eventId/claim")
 
@@ -262,6 +266,19 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun deleteCourtWatch(id: String): OkResponse =
         client.delete("/api/court-watches/$id")
+
+    // ── Invites (ADR 0025) ───────────────────────────────────────────────
+    suspend fun fetchInvite(token: String): InviteLookupResponse =
+        client.get("/api/invite/$token")
+
+    suspend fun respondToInvite(token: String, action: String): InviteActionResponse =
+        client.post("/api/invite/$token", InviteActionRequest(action))
+
+    suspend fun fetchEventSuggestions(eventId: String): SuggestionsResponse =
+        client.get("/api/events/$eventId/suggestions")
+
+    suspend fun sendInvite(eventId: String, userId: String): InviteCreateResponse =
+        client.post("/api/events/$eventId/invites", InviteCreateRequest(userId))
 }
 
 // ── Request bodies ────────────────────────────────────────────────────────────

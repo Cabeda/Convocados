@@ -91,6 +91,10 @@ export function NotificationSettingsSection() {
           <Typography variant="subtitle2" fontWeight={600}>{t("gameInvites")}</Typography>
           <Stack spacing={0.5} sx={{ pl: 1 }}>
             <FormControlLabel
+              control={<Switch checked={prefs.invitesEnabled} onChange={() => toggle("invitesEnabled")} disabled={saving} size="small" />}
+              label={t("receiveGameInvites")}
+            />
+            <FormControlLabel
               control={<Switch checked={prefs.gameInviteEmail} onChange={() => toggle("gameInviteEmail")} disabled={saving || !prefs.emailEnabled} size="small" />}
               label={t("emailNotifications")}
             />

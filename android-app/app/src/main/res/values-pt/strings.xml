@@ -22,6 +22,10 @@
     <string name="playing_count">A jogar (%1$d/%2$d)</string>
     <string name="bench">Suplentes</string>
     <string name="bench_count">Suplentes (%1$d)</string>
+    <string name="invited_count">Convidados (%1$d)</string>
+    <string name="declined_count">Recusados (%1$d)</string>
+    <string name="suggested_players">Jogadores sugeridos</string>
+    <string name="suggested_players_games">Jogadores sugeridos para os teus jogos</string>
     <string name="add_player_placeholder">Adicionar nome do jogador</string>
     <string name="add_button">Adicionar</string>
     <string name="add_player_confirm_title">Adicionar %1$s?</string>
@@ -87,6 +91,20 @@
     <string name="court_watches">Alertas de campos</string>
     <string name="delete">Eliminar</string>
     <string name="no_court_watches">Ainda sem alertas de campos.\nCria um a partir dos campos alternativos de um evento.</string>
+
+    <!-- Invites (ADR 0025) -->
+    <string name="invite_page_title">Convite para jogo</string>
+    <string name="invite_not_found">Não foi possível encontrar este convite.</string>
+    <string name="invite_expired">Este convite expirou.</string>
+    <string name="invite_accepted">Entraste no jogo!</string>
+    <string name="invite_declined">Recusaste este convite.</string>
+    <string name="invite_cancelled">Este convite foi cancelado.</string>
+    <string name="invite_invited_by">%1$s convidou-te para jogar</string>
+    <string name="invite_accept">Aceitar</string>
+    <string name="invite_decline">Recusar</string>
+    <string name="invite_view_game">Ver jogo</string>
+    <string name="invite_sign_in">Iniciar sessão</string>
+    <string name="invite_not_for_you">Este convite não é para a tua conta.</string>
 
     <string name="game_title">Título do jogo</string>
     <string name="game_title_placeholder">ex. Futebol de terça</string>
@@ -282,4 +300,6 @@
     <string name="add_from_contacts">Adicionar dos contactos</string>
     <string name="no_archived_games">Sem jogos arquivados</string>
     <string name="will_invite">Vai convidar %1$s</string>
+    <string name="open_pickup">Pickup aberto</string>
+    <string name="claim_pickup">Assumir este pickup</string>
 </resources>

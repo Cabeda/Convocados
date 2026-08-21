@@ -16,6 +16,10 @@ export const SPORT_PRESETS: SportPreset[] = [
   { id: "tennis-singles", labelKey: "sportTennisSingles", defaultMaxPlayers: 2, defaultDurationMinutes: 90 },
   { id: "tennis-doubles", labelKey: "sportTennisDoubles", defaultMaxPlayers: 4, defaultDurationMinutes: 90 },
   { id: "padel", labelKey: "sportPadel", defaultMaxPlayers: 4, defaultDurationMinutes: 90 },
+  { id: "badminton-singles", labelKey: "sportBadmintonSingles", defaultMaxPlayers: 2, defaultDurationMinutes: 45 },
+  { id: "badminton-doubles", labelKey: "sportBadmintonDoubles", defaultMaxPlayers: 4, defaultDurationMinutes: 45 },
+  { id: "squash", labelKey: "sportSquash", defaultMaxPlayers: 2, defaultDurationMinutes: 40 },
+  { id: "pickleball", labelKey: "sportPickleball", defaultMaxPlayers: 4, defaultDurationMinutes: 60 },
   { id: "other", labelKey: "sportOther", defaultMaxPlayers: 10, defaultDurationMinutes: 60 },
 ];
 

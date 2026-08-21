@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ params, url, request }) => {
   let allPlayers: { name: string; order: number }[];
   if (event.currentGameId) {
     const participants = await prisma.gameParticipant.findMany({
-      where: { gameId: event.currentGameId, archivedAt: null },
+      where: { gameId: event.currentGameId, archivedAt: null, status: { not: "pending" } },
       include: { eventPlayer: { select: { name: true } } },
       orderBy: { order: "asc" },
     });

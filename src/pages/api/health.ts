@@ -1,13 +1,22 @@
 import type { APIRoute } from "astro";
-import { prisma } from "../../lib/db.server";
+import { promises as fs } from "node:fs";
+import { prisma, prismaReady } from "../../lib/db.server";
 import { SCHEDULER_HEARTBEAT_ID } from "../../lib/scheduler.server";
 
 /** Scheduler polls every 5–30s; anything older than 3min means it's down.
  * (3min tolerates maintenance timeouts + rotating deploys without false alarms.) */
 const SCHEDULER_STALE_MS = 3 * 60 * 1000;
 
+function resolveDbPath(): string {
+  const url = process.env.DATABASE_URL || "file:./prisma/dev.db";
+  return url.replace(/^file:/, "");
+}
+
 export const GET: APIRoute = async () => {
   try {
+    // Surface startup-pragma failures instead of silently swallowing them:
+    // if WAL/optimize/etc. couldn't be applied, the DB is not healthy.
+    await prismaReady;
     // Verify both read and write capability
     await prisma.$queryRaw`SELECT 1`;
     // Write check: SQLite-specific — verify WAL mode is active
@@ -16,11 +25,26 @@ export const GET: APIRoute = async () => {
     ) as { journal_mode: string }[];
     const journalMode = pragmaResult[0]?.journal_mode ?? "unknown";
 
+    // Size/drift metrics: page_count is the total file size in pages,
+    // freelist_count is pages freed by deletes that were never reclaimed —
+    // a large ratio here means VACUUM/incremental_vacuum is overdue.
+    const pageCountResult = await prisma.$queryRawUnsafe("PRAGMA page_count") as Record<string, bigint>[];
+    const freelistResult = await prisma.$queryRawUnsafe("PRAGMA freelist_count") as Record<string, bigint>[];
+    let walSizeBytes = 0;
+    try {
+      walSizeBytes = (await fs.stat(`${resolveDbPath()}-wal`)).size;
+    } catch {
+      // WAL file may not exist yet (no writes since open); 0 is accurate then
+    }
+
     const response: Record<string, unknown> = {
       status: "ok",
       db: {
         journalMode,
         writable: true,
+        pageCount: Number(Object.values(pageCountResult[0] ?? {})[0] ?? 0),
+        freelistCount: Number(Object.values(freelistResult[0] ?? {})[0] ?? 0),
+        walSizeBytes,
       },
     };
 

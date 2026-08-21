@@ -342,6 +342,25 @@ describe("POST /api/events/[id]/players", () => {
     expect(players[0].name).toBe("Alice");
   });
 
+  it("marks a name-only add as anonymous (no account to notify)", async () => {
+    const id = await seedEvent();
+    const res = await addPlayer(ctx({ id }, { name: "GuestGuy" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.anonymous).toBe(true);
+  });
+
+  it("does not mark an email-linked add as anonymous", async () => {
+    const user = await prisma.user.create({
+      data: { id: "u-anon-flag", name: "LinkedUser", email: "linked@t.com", emailVerified: true },
+    });
+    const id = await seedEvent();
+    const res = await addPlayer(ctx({ id }, { name: user.name, email: user.email }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.anonymous).toBe(false);
+  });
+
   it("returns 404 for unknown event", async () => {
     const res = await addPlayer(ctx({ id: "bad-id" }, { name: "Alice" }));
     expect(res.status).toBe(404);
@@ -1145,6 +1164,26 @@ describe("GET /api/events/public", () => {
     const body = await res.json();
     expect(body.data).toHaveLength(1);
     expect(body.data[0].sport).toBe("padel");
+  });
+
+  it("exposes pickup fields for Open Pickups (ADR-0021)", async () => {
+    await prisma.event.create({
+      data: {
+        title: "Padel — Club (Thu 19:30)",
+        location: "Club", dateTime: new Date(Date.now() + 86400_000),
+        isPublic: true, sport: "padel", maxPlayers: 4,
+        source: "playtomic",
+        sourceKey: "tenant-1|court-1|2026-06-18|19:30",
+        playtomicTenantId: "tenant-1",
+        playtomicTenantName: "Club",
+      },
+    });
+    const res = await getPublicEvents(ctx({}));
+    const body = await res.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].source).toBe("playtomic");
+    expect(body.data[0].ownerId).toBeNull();
+    expect(body.data[0].playtomicTenantName).toBe("Club");
   });
 
   it("includes playerCount and spotsLeft", async () => {
