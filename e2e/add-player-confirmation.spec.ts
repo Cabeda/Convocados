@@ -91,14 +91,22 @@ async function getPlayerId(
 
 async function addPlayerViaUi(page: Page, name: string): Promise<void> {
   // Type the name into the autocomplete and press Enter. This is the
-  // no-dialog path: typing is itself a deliberate action.
+  // no-dialog path: typing is itself a deliberate action (the
+  // AddPlayerConfirmDialog must not open here).
   const input = page.getByPlaceholder(/add player/i);
   await expect(input).toBeVisible({ timeout: 10_000 });
   await input.click();
   await input.fill(name);
   await input.press("Enter");
-  // No dialog should open on Enter.
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  // Anonymous adds now auto-open the InviteShareDialog ("No notifications enabled
+  // for ..."). Close it so the next add / roster check isn't blocked.
+  const shareDialog = page.getByRole("dialog").filter({ hasText: "No notifications enabled" });
+  if (await shareDialog.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await shareDialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(shareDialog).not.toBeVisible({ timeout: 5_000 });
+  }
+  // No ADD dialog should open on Enter.
+  await expect(page.getByRole("dialog", { name: /Add /i })).not.toBeVisible();
   // Wait for the player to appear on the roster and input to clear before
   // returning — prevents race when adding multiple players in sequence.
   await expect(page.getByText(name, { exact: true }).first()).toBeVisible({ timeout: 10_000 });
