@@ -106,6 +106,7 @@ async function ensureDemoOrganizer() {
       id: `account-${org.id}`,
       accountId: org.id,
       providerId: "credential",
+      issuer: "local:credential",
       userId: org.id,
       password: DEMO_PASSWORD_HASH,
     },
