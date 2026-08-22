@@ -39,6 +39,7 @@ import { computeGameUpdates, expectedScore, kFactor, type EloUpdate } from "~/li
 import { formatDateInTz } from "~/lib/timezones";
 import { isNameInPaymentsSnapshot, isNameInTeamsSnapshot } from "~/lib/snapshotParticipants";
 import { PaymentConfigDialog, type PaymentConfigGame } from "./PaymentConfigDialog";
+import { playerInputPasswordManagerProps } from "./event/PlayerAutocomplete";
 
 type PlayerOption =
   | { type: "existing"; name: string; gamesPlayed: number; userId: string | null }
@@ -1112,7 +1113,7 @@ export function HistoryCardFull({
                                   </InputAdornment>
                                 ),
                               },
-                              htmlInput: { ...params.slotProps.htmlInput, maxLength: 50 },
+                              htmlInput: { ...params.slotProps.htmlInput, maxLength: 50, ...playerInputPasswordManagerProps },
                             }} />
                         )}
                           noOptionsText={t("noSuggestions")}
