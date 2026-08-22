@@ -127,109 +127,20 @@ jobs:
                     'to add you there to unlock `/preview`.',
             });
 
-  # ── Deploy ───────────────────────────────────────────────────────────────────
+  # ── Deploy (delegated to reusable workflow) ──────────────────────────────────
+  # Kept in a workflow_call file so this privileged-trigger workflow never
+  # checks out untrusted PR code — see .github/workflows/preview-deploy.yml.
   deploy-preview:
     needs: authorize
     if: needs.authorize.outputs.command == '/preview' && needs.authorize.outputs.allowed == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      # Gate passed — now it is safe to check out untrusted PR code.
-      - uses: actions/checkout@v7
-        with:
-          ref: refs/pull/${{ needs.authorize.outputs.pr_number }}/head
-          persist-credentials: false
-
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Set app identity
-        id: app
-        run: |
-          APP="convocados-pr-${{ needs.authorize.outputs.pr_number }}"
-          echo "name=$APP" >> "$GITHUB_OUTPUT"
-          echo "url=https://${APP}.fly.dev" >> "$GITHUB_OUTPUT"
-
-      - name: Create Fly app if missing
-        run: |
-          APP="${{ steps.app.outputs.name }}"
-          if ! flyctl status --app "$APP" >/dev/null 2>&1; then
-            flyctl apps create "$APP" --org "$FLY_ORG"
-          fi
-
-      # Staged so it is applied by the deploy below; deterministic across
-      # redeploys, so auth sessions survive pushes to the same PR.
-      - name: Stage preview auth secret
-        env:
-          PREVIEW_SECRET: ${{ secrets.PREVIEW_BETTER_AUTH_SECRET }}
-        run: |
-          if [ -z "$PREVIEW_SECRET" ]; then
-            echo "::error::Repository secret PREVIEW_BETTER_AUTH_SECRET is not configured."
-            exit 1
-          fi
-          printf '%s' "$PREVIEW_SECRET" | flyctl secrets set BETTER_AUTH_SECRET=- \
-            --stage --app "${{ steps.app.outputs.name }}"
-
-      - name: Deploy preview
-        run: |
-          flyctl deploy --remote-only \
-            --config .fly/preview.toml \
-            --app "${{ steps.app.outputs.name }}" \
-            --env "BETTER_AUTH_URL=${{ steps.app.outputs.url }}" \
-            --strategy immediate \
-            --wait-timeout 300
-
-      - name: Report success
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const url = '${{ steps.app.outputs.url }}';
-            const marker = '<!-- convocados-preview -->';
-            const body = [
-              marker,
-              ':white_check_mark: **Preview deployed**',
-              '',
-              `- :link: ${url}`,
-              '- :deciduous_tree: Deployed from the current PR head',
-              '- :wastebasket: Destroyed automatically when this PR closes (`/preview-stop` to stop early)',
-              '',
-              '_Preview data is ephemeral and disposable — do not enter real credentials or personal data._',
-            ].join('\n');
-            const comments = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
-            const existing = comments.data.find((c) => c.body?.startsWith(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
-
-      - name: Report failure
-        if: failure()
-        uses: actions/github-script@v8
-        with:
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: ':x: **Preview deployment failed** — check the ' +
-                    '[workflow run](' + process.env.GITHUB_SERVER_URL + '/' +
-                    context.repo.owner + '/' + context.repo.repo + '/actions/runs/' +
-                    process.env.GITHUB_RUN_ID + ') for logs.',
-            });
+    uses: ./.github/workflows/preview-deploy.yml
+    with:
+      pr_number: ${{ fromJSON(needs.authorize.outputs.pr_number) }}
+      app_name: convocados-pr-${{ needs.authorize.outputs.pr_number }}
+      app_url: https://convocados-pr-${{ needs.authorize.outputs.pr_number }}.fly.dev
+    secrets:
+      FLY_API_TOKEN: ${{ secrets.FLY_PREVIEW_TOKEN }}
+      PREVIEW_BETTER_AUTH_SECRET: ${{ secrets.PREVIEW_BETTER_AUTH_SECRET }}
 
   # ── Teardown: explicit command ───────────────────────────────────────────────
   destroy-on-command:
