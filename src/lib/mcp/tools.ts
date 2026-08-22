@@ -1,5 +1,7 @@
 import { prisma } from "../db.server";
 import type { AuthContext } from "../authenticate.server";
+import { fetchMyGames } from "../myGames.server";
+import { getEventBalanceSummary } from "../balance.server";
 
 export interface ToolDef {
   name: string;
@@ -10,37 +12,14 @@ export interface ToolDef {
 }
 
 async function listMyGames(_args: Record<string, unknown>, ctx: AuthContext) {
-  const userId = ctx.userId;
-  const owned = await prisma.event.findMany({
-    where: { ownerId: userId },
-    select: { id: true, title: true, location: true, dateTime: true, maxPlayers: true, sport: true },
-    orderBy: { dateTime: "desc" },
-    take: 50,
-  });
-  const adminEvents = await prisma.event.findMany({
-    where: { admins: { some: { userId } } },
-    select: { id: true, title: true, location: true, dateTime: true, maxPlayers: true, sport: true },
-    orderBy: { dateTime: "desc" },
-    take: 50,
-  });
-  const followedRecords = await prisma.eventFollow.findMany({
-    where: { userId },
-    select: { event: { select: { id: true, title: true, location: true, dateTime: true, maxPlayers: true, sport: true } } },
-    take: 50,
-    orderBy: { createdAt: "desc" },
-  }).catch(() => [] as any);
-
-  const ownedIds = new Set(owned.map((e) => e.id));
-  const adminFiltered = adminEvents.filter((e) => !ownedIds.has(e.id));
-  const adminIds = new Set(adminFiltered.map((e) => e.id));
-  const followed = followedRecords
-    .map((r: any) => r.event)
-    .filter((e: any) => !ownedIds.has(e.id) && !adminIds.has(e.id));
-
+  const result = await fetchMyGames(ctx.userId, 50);
+  // Return only active games for MCP simplicity; strip archived variants
   return {
-    owned: owned.map((e) => ({ ...e, dateTime: e.dateTime.toISOString() })),
-    admin: adminFiltered.map((e) => ({ ...e, dateTime: e.dateTime.toISOString() })),
-    followed: followed.map((e: any) => ({ ...e, dateTime: e.dateTime.toISOString() })),
+    owned: result.owned,
+    admin: result.admin,
+    followed: result.followed,
+    ownedHasMore: result.ownedHasMore,
+    followedHasMore: result.followedHasMore,
   };
 }
 
@@ -60,24 +39,32 @@ async function getGame(args: Record<string, unknown>, _ctx: AuthContext) {
   };
 }
 
+type PlayerLike = { id: string; name: string; userId: string | null; rating?: number };
 async function listPlayers(args: Record<string, unknown>, _ctx: AuthContext) {
   const eventId = args.eventId as string;
   if (!eventId) throw Object.assign(new Error("eventId required"), { code: -32602 });
   const eventPlayers = await prisma.eventPlayer.findMany({ where: { eventId }, select: { id: true, name: true, userId: true, rating: true } });
   // fallback to legacy Player for older events
   const legacy = await prisma.player.findMany({ where: { eventId }, select: { id: true, name: true, userId: true } });
-  const map = new Map<string, any>();
+  const map = new Map<string, PlayerLike>();
   for (const p of eventPlayers) map.set(p.name, p);
-  for (const p of legacy) if (!map.has(p.name)) map.set(p.name, p);
+  for (const p of legacy) if (!map.has(p.name)) map.set(p.name, { ...p, rating: undefined });
   return { players: Array.from(map.values()) };
 }
 
 async function getBalance(args: Record<string, unknown>, _ctx: AuthContext) {
   const eventId = args.eventId as string;
   if (!eventId) throw Object.assign(new Error("eventId required"), { code: -32602 });
-  const history = await prisma.gameHistory.findMany({ where: { eventId }, select: { paymentsSnapshot: true } });
-  // placeholder: return can compute from GamePayment but keep simple
-  return { eventId, historyCount: history.length, note: "balance from GamePayment ledger" };
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true } });
+  if (!event) throw Object.assign(new Error("Game not found"), { code: 404 });
+  const summary = await getEventBalanceSummary(eventId);
+  return {
+    eventId,
+    paidCount: summary.paidCount,
+    totalCount: summary.totalCount,
+    balances: summary.balances,
+    aggregate: `${summary.paidCount}/${summary.totalCount} paid`,
+  };
 }
 
 async function getHistory(args: Record<string, unknown>, _ctx: AuthContext) {
