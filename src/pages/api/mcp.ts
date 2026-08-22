@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { authenticateRequest, requireScope } from "../../lib/authenticate.server";
 import { checkApiRateLimit, extractIp } from "../../lib/apiRateLimit.server";
 import { TOOLS } from "../../lib/mcp/tools";
+import { McpError } from "../../lib/mcp/errors";
 
 const PROTOCOL_VERSION = "2026-07-28";
 
@@ -156,16 +157,12 @@ export const POST: APIRoute = async ({ request }) => {
       return jsonRpcResult(id, {
         content: [{ type: "text" as const, text: JSON.stringify(data) }],
       });
-    } catch (err: any) {
-      const code = typeof err.code === "number" ? err.code : -32603;
-      const status = err.code === 404 ? 404 : 500;
-      if (err.code === 404) {
-        return jsonRpcError(id, -32001, err.message ?? "Not found", undefined, 404);
+    } catch (err: unknown) {
+      if (err instanceof McpError) {
+        return jsonRpcError(id, err.code, err.message, err.data, err.status);
       }
-      if (err.code === -32602) {
-        return jsonRpcError(id, -32602, err.message ?? "Invalid params");
-      }
-      return jsonRpcError(id, code, err.message ?? "Internal error", undefined, status);
+      const message = err instanceof Error ? err.message : "Internal error";
+      return jsonRpcError(id, -32603, message, undefined, 500);
     }
   }
 

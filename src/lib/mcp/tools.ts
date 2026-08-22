@@ -2,6 +2,7 @@ import { prisma } from "../db.server";
 import type { AuthContext } from "../authenticate.server";
 import { fetchMyGames } from "../myGames.server";
 import { getEventBalanceSummary } from "../balance.server";
+import { McpError } from "./errors";
 
 export interface ToolDef {
   name: string;
@@ -25,9 +26,9 @@ async function listMyGames(_args: Record<string, unknown>, ctx: AuthContext) {
 
 async function getGame(args: Record<string, unknown>, _ctx: AuthContext) {
   const eventId = args.eventId as string;
-  if (!eventId) throw Object.assign(new Error("eventId required"), { code: -32602 });
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
   const event = await prisma.event.findUnique({ where: { id: eventId } });
-  if (!event) throw Object.assign(new Error("Game not found"), { code: 404 });
+  if (!event) throw new McpError("Game not found", -32001, 404);
   return {
     id: event.id,
     title: event.title,
@@ -42,7 +43,7 @@ async function getGame(args: Record<string, unknown>, _ctx: AuthContext) {
 type PlayerLike = { id: string; name: string; userId: string | null; rating?: number };
 async function listPlayers(args: Record<string, unknown>, _ctx: AuthContext) {
   const eventId = args.eventId as string;
-  if (!eventId) throw Object.assign(new Error("eventId required"), { code: -32602 });
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
   const eventPlayers = await prisma.eventPlayer.findMany({ where: { eventId }, select: { id: true, name: true, userId: true, rating: true } });
   // fallback to legacy Player for older events
   const legacy = await prisma.player.findMany({ where: { eventId }, select: { id: true, name: true, userId: true } });
@@ -54,9 +55,9 @@ async function listPlayers(args: Record<string, unknown>, _ctx: AuthContext) {
 
 async function getBalance(args: Record<string, unknown>, _ctx: AuthContext) {
   const eventId = args.eventId as string;
-  if (!eventId) throw Object.assign(new Error("eventId required"), { code: -32602 });
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true } });
-  if (!event) throw Object.assign(new Error("Game not found"), { code: 404 });
+  if (!event) throw new McpError("Game not found", -32001, 404);
   const summary = await getEventBalanceSummary(eventId);
   return {
     eventId,
@@ -69,14 +70,14 @@ async function getBalance(args: Record<string, unknown>, _ctx: AuthContext) {
 
 async function getHistory(args: Record<string, unknown>, _ctx: AuthContext) {
   const eventId = args.eventId as string;
-  if (!eventId) throw Object.assign(new Error("eventId required"), { code: -32602 });
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
   const rows = await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "desc" }, take: 20 });
   return { history: rows.map((r) => ({ ...r, dateTime: r.dateTime.toISOString(), createdAt: r.createdAt.toISOString() })) };
 }
 
 async function getRatings(args: Record<string, unknown>, _ctx: AuthContext) {
   const eventId = args.eventId as string;
-  if (!eventId) throw Object.assign(new Error("eventId required"), { code: -32602 });
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
   const ratings = await prisma.playerRating.findMany({ where: { eventId } });
   const fallback = ratings.length ? ratings : await prisma.eventPlayer.findMany({ where: { eventId }, select: { name: true, rating: true, gamesPlayed: true, wins: true, losses: true } });
   return { ratings: fallback };
