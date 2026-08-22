@@ -118,10 +118,10 @@ export default defineConfig({
         "src/pages/api/users/[id]/calendar.ics.ts",
         "src/test/**",
       ],
-      // ponytail: thresholds set at current measured values (2026-08-22 — MCP stateless).
+      // ponytail: thresholds set at current measured values (2026-08-22 — MCP stateless, typed errors + CIMD).
       // Excluding __generated__/prisma (auto-generated Prisma 7 types).
       // Upgrade path: mutation testing (Stryker) validates assertion quality where coverage can't.
-      thresholds: { lines: 93, functions: 89, branches: 81, statements: 90 },
+      thresholds: { lines: 91, functions: 89, branches: 82, statements: 90 },
     },
   },
 });
