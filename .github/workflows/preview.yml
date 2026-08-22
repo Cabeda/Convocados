@@ -14,6 +14,10 @@
 #   in .github/CODEOWNERS (usernames only; teams/emails are not resolved).
 # - BOTH the PR author AND the commenter must pass the gate — a trusted
 #   maintainer cannot be social-engineered into deploying untrusted fork code.
+# - Deployment happens in preview-deploy.yml, triggered via
+#   repository_dispatch: a trusted-actor event that never carries
+#   attacker-controlled context. That workflow re-runs the allowlist gate
+#   (defense in depth) before fetching untrusted PR code.
 # - Secrets used here are preview-scoped (FLY_PREVIEW_TOKEN) and never reach
 #   the deployed app; previews get their own throwaway auth secret.
 
@@ -30,7 +34,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write # repository_dispatch to hand off to the deploy workflow
   issues: write
   pull-requests: write
 
@@ -127,20 +131,25 @@ jobs:
                     'to add you there to unlock `/preview`.',
             });
 
-  # ── Deploy (delegated to reusable workflow) ──────────────────────────────────
-  # Kept in a workflow_call file so this privileged-trigger workflow never
-  # checks out untrusted PR code — see .github/workflows/preview-deploy.yml.
-  deploy-preview:
+  # ── Deploy (delegated via repository_dispatch) ────────────────────────────────
+  # The privileged trigger never checks out untrusted code here; the worker
+  # workflow (preview-deploy.yml) re-runs the allowlist gate before fetching
+  # the PR head. See .github/workflows/preview-deploy.yml and ADR 0022.
+  request-deploy:
     needs: authorize
     if: needs.authorize.outputs.command == '/preview' && needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/preview-deploy.yml
-    with:
-      pr_number: ${{ fromJSON(needs.authorize.outputs.pr_number) }}
-      app_name: convocados-pr-${{ needs.authorize.outputs.pr_number }}
-      app_url: https://convocados-pr-${{ needs.authorize.outputs.pr_number }}.fly.dev
-    secrets:
-      FLY_API_TOKEN: ${{ secrets.FLY_PREVIEW_TOKEN }}
-      PREVIEW_BETTER_AUTH_SECRET: ${{ secrets.PREVIEW_BETTER_AUTH_SECRET }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger preview deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.authorize.outputs.pr_number }}
+          REQUESTED_BY: ${{ github.event.comment.user.login }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/dispatches" \
+            -f event_type=convocados-preview \
+            -F "client_payload[pr_number]=$PR_NUMBER" \
+            -f "client_payload[requested_by]=$REQUESTED_BY"
 
   # ── Teardown: explicit command ───────────────────────────────────────────────
   destroy-on-command:

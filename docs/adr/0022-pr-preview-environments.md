@@ -24,12 +24,20 @@ PRs cost nothing.
 
 ### 2. Strict allowlist gate
 
-The workflow runs on `pull_request_target` / `issue_comment` (base-repo
-context, secrets available). Before any untrusted PR code is checked out, both
-the **PR author and the commenter** must pass one gate: repository-owner
-association, or a username listed in `.github/CODEOWNERS` (usernames only —
-teams and emails are not resolved). This file doubles as the normal code-owners
-mapping; adding a contributor there grants them preview access.
+The entry workflow runs on `pull_request_target` / `issue_comment` (base-repo
+context, secrets available). Before anything is deployed, both the **PR author
+and the commenter** must pass one gate: repository-owner association, or a
+username listed in `.github/CODEOWNERS` (usernames only — teams and emails are
+not resolved). This file doubles as the normal code-owners mapping; adding a
+contributor there grants them preview access. The shared gate logic lives in
+`.github/scripts/preview-authorize.sh`.
+
+Deployment is delegated to `preview-deploy.yml` via `repository_dispatch` — a
+trusted-actor event that never carries attacker-controlled context — and the
+worker **re-runs the same allowlist gate** against fresh CODEOWNERS before
+fetching untrusted PR code. Keeping privileged event triggers and the
+untrusted checkout in separate workflow definitions also satisfies CodeQL's
+`actions/untrusted-checkout` query by construction rather than suppression.
 
 ### 3. Cheapest viable machine shape
 

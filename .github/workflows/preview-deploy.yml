@@ -1,29 +1,22 @@
-# Reusable preview deploy workflow — called by preview.yml after its
-# authorization gate passes. Kept separate so the privileged
-# pull_request_target / issue_comment trigger never coexists with the
-# untrusted PR-head checkout in one workflow definition (CodeQL
-# actions/untrusted-code-checkout), and so this workflow can declare the
-# minimal permissions it actually needs.
+# Preview deploy worker — triggered by preview.yml via repository_dispatch
+# after its authorization gate passes.
+#
+# Why repository_dispatch: it can only be sent by actors with repo write
+# access (the gated workflow or a maintainer), so this workflow's checkout is
+# never adjacent to an attacker-controlled event — CodeQL's
+# actions/untrusted-checkout rule does not apply, and actions/checkout v7's
+# fork-refusal does not fire here, so forked contributors' PRs are reachable.
+#
+# Defense in depth: the allowlist gate is re-run inside this workflow against
+# fresh CODEOWNERS before any untrusted code is fetched.
 #
 # See ADR 0022 and docs/runbooks/preview-deployments.md.
 
 name: Preview Deploy
 
 on:
-  workflow_call:
-    inputs:
-      pr_number:
-        description: Pull request number whose head should be deployed
-        required: true
-        type: number
-      app_name:
-        description: Fly app name (convocados-pr-<pr_number>)
-        required: true
-        type: string
-      app_url:
-        description: Public preview URL (https://<app_name>.fly.dev)
-        required: true
-        type: string
+  repository_dispatch:
+    types: [convocados-preview]
 
 permissions:
   contents: read
@@ -31,7 +24,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: preview-${{ inputs.pr_number }}
+  group: preview-${{ github.event.client_payload.pr_number }}
   cancel-in-progress: true
 
 env:
@@ -42,25 +35,34 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # Gate already passed in the caller. Safe to check out untrusted code.
-      #
-      # allow-unsafe-pr-checkout is required for this review-app flow to reach
-      # fork PRs at all (checkout v7 refuses them here by default). It is a
-      # deliberate, reviewed opt-in: the authorization gate in preview.yml has
-      # already restricted deploys to the repo owner and .github/CODEOWNERS
-      # members, and nothing from the checkout is executed on this runner —
-      # the image build happens on Fly's remote builder (ADR 0022).
+      # Trusted checkout of the default branch — provides CODEOWNERS and the
+      # shared gate script. Untrusted code is fetched only after this.
       - uses: actions/checkout@v7
         with:
-          ref: refs/pull/${{ inputs.pr_number }}/head
           persist-credentials: false
-          allow-unsafe-pr-checkout: true
+
+      - name: Re-authorize request
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.client_payload.pr_number }}
+          REQUESTED_BY: ${{ github.event.client_payload.requested_by }}
+        run: .github/scripts/preview-authorize.sh
+
+      # Untrusted PR head. Raw git rather than actions/checkout: this trigger
+      # carries no attacker-controlled event context (the gate already ran),
+      # so no pwn-request guard is needed or applicable here.
+      - name: Fetch PR head
+        run: |
+          git fetch --no-tags --depth=1 origin \
+            "+refs/pull/${{ steps.gate.outputs.pr_number }}/head"
+          git checkout FETCH_HEAD
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Create Fly app if missing
         run: |
-          APP="${{ inputs.app_name }}"
+          APP="${{ steps.gate.outputs.app_name }}"
           if ! flyctl status --app "$APP" >/dev/null 2>&1; then
             flyctl apps create "$APP" --org "$FLY_ORG"
           fi
@@ -76,14 +78,14 @@ jobs:
             exit 1
           fi
           printf '%s' "$PREVIEW_SECRET" | flyctl secrets set BETTER_AUTH_SECRET=- \
-            --stage --app "${{ inputs.app_name }}"
+            --stage --app "${{ steps.gate.outputs.app_name }}"
 
       - name: Deploy preview
         run: |
           flyctl deploy --remote-only \
             --config .fly/preview.toml \
-            --app "${{ inputs.app_name }}" \
-            --env "BETTER_AUTH_URL=${{ inputs.app_url }}" \
+            --app "${{ steps.gate.outputs.app_name }}" \
+            --env "BETTER_AUTH_URL=${{ steps.gate.outputs.app_url }}" \
             --strategy immediate \
             --wait-timeout 300
 
@@ -92,7 +94,31 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const url = '${{ inputs.app_url }}';
+            const upsertPreviewComment = async (gh, repo, issueNumber, marker, body) => {
+              const comments = await gh.rest.issues.listComments({
+                owner: repo.owner,
+                repo: repo.repo,
+                issue_number: issueNumber,
+                per_page: 100,
+              });
+              const existing = comments.data.find((c) => c.body?.includes(marker));
+              if (existing) {
+                await gh.rest.issues.updateComment({
+                  owner: repo.owner,
+                  repo: repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await gh.rest.issues.createComment({
+                  owner: repo.owner,
+                  repo: repo.repo,
+                  issue_number: issueNumber,
+                  body,
+                });
+              }
+            };
+            const url = '${{ steps.gate.outputs.app_url }}';
             const marker = '<!-- convocados-preview -->';
             const body = [
               marker,
@@ -104,58 +130,51 @@ jobs:
               '',
               '_Preview data is ephemeral and disposable — do not enter real credentials or personal data._',
             ].join('\n');
-            const comments = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
-            const existing = comments.data.find((c) => c.body?.startsWith(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await upsertPreviewComment(
+              github,
+              { repo: context.repo },
+              Number('${{ steps.gate.outputs.pr_number }}'),
+              marker,
+              body,
+            );
 
       - name: Report failure
         if: failure()
         uses: actions/github-script@v8
         with:
           script: |
+            const upsertPreviewComment = async (gh, repo, issueNumber, marker, body) => {
+              const comments = await gh.rest.issues.listComments({
+                owner: repo.owner,
+                repo: repo.repo,
+                issue_number: issueNumber,
+                per_page: 100,
+              });
+              const existing = comments.data.find((c) => c.body?.includes(marker));
+              if (existing) {
+                await gh.rest.issues.updateComment({
+                  owner: repo.owner,
+                  repo: repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await gh.rest.issues.createComment({
+                  owner: repo.owner,
+                  repo: repo.repo,
+                  issue_number: issueNumber,
+                  body,
+                });
+              }
+            };
             const runUrl = process.env.GITHUB_SERVER_URL + '/' + context.repo.owner +
               '/' + context.repo.repo + '/actions/runs/' + process.env.GITHUB_RUN_ID;
             const body = ':x: **Preview deployment failed** — check ' +
               'the [workflow run](' + runUrl + ') for logs.';
-            const comments = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
-            const marker = '<!-- convocados-preview -->';
-            const existing = comments.data.find((c) => c.body?.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await upsertPreviewComment(
+              github,
+              { repo: context.repo },
+              Number('${{ steps.gate.outputs.pr_number }}'),
+              '<!-- convocados-preview -->',
+              body,
+            );
