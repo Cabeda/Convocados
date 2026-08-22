@@ -1,16 +1,24 @@
 import type { APIRoute } from "astro";
 import { authenticateRequest, requireScope } from "../../lib/authenticate.server";
+import { checkApiRateLimit, extractIp } from "../../lib/apiRateLimit.server";
 import { TOOLS } from "../../lib/mcp/tools";
 
 const PROTOCOL_VERSION = "2026-07-28";
 
-function jsonRpcError(id: unknown, code: number, message: string, data?: unknown, status = 400) {
+function jsonRpcError(
+  id: unknown,
+  code: number,
+  message: string,
+  data?: unknown,
+  status = 400,
+  headers: Record<string, string> = {},
+) {
   const body: Record<string, unknown> = {
     jsonrpc: "2.0",
     id: id ?? null,
     error: { code, message, ...(data !== undefined ? { data } : {}) },
   };
-  return Response.json(body, { status });
+  return Response.json(body, { status, headers });
 }
 
 function jsonRpcResult(id: unknown, result: unknown) {
@@ -78,8 +86,22 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 
+  // ── Rate limiting (AGENTS: apply to mutations; MCP tools are metered per Mcp-Name) ─
+  const isToolsList = mcpMethod === "tools/list" || method === "tools/list";
+  const isToolsCall = mcpMethod === "tools/call" || method === "tools/call";
+  if (isToolsList || isToolsCall) {
+    const preset = isToolsCall ? "write" : "read";
+    const ip = extractIp(request);
+    const { allowed, retryAfterMs } = await checkApiRateLimit(ip, preset);
+    if (!allowed) {
+      return jsonRpcError(id, -32000, "Too many requests. Please try again later.", undefined, 429, {
+        "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+      });
+    }
+  }
+
   // ── Auth required for tools ─────────────────────────────────────────────
-  const needsAuth = mcpMethod === "tools/list" || mcpMethod === "tools/call" || method === "tools/list" || method === "tools/call";
+  const needsAuth = isToolsList || isToolsCall;
   let authCtx: Awaited<ReturnType<typeof authenticateRequest>> = null;
   if (needsAuth) {
     authCtx = await authenticateRequest(request);
