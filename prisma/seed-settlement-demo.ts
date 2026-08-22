@@ -41,6 +41,7 @@ async function ensureDemoUser() {
         id: `account-${user.id}`,
         accountId: user.id,
         providerId: "credential",
+        issuer: "local:credential",
         userId: user.id,
         password: DEMO_PASSWORD_HASH,
       },

@@ -1,0 +1,22 @@
+title = "Convocados gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "test and example secrets"
+paths = [
+  '''playwright\.config\.ts''',
+  '''e2e/.*''',
+  '''src/test/.*''',
+  '''\.env\.example$''',
+  '''bruno/.*''',
+  '''android-app/app/google-services\.json''',
+  '''android-app/wear/google-services\.json''',
+]
+regexes = [
+  '''e2e-test-secret''',
+  '''mtBHItJI5svbpC7sc9axQiA''',
+  '''test-trusted-.*''',
+  '''test-secret''',
+]

@@ -24,24 +24,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Enable corepack and install pnpm
-        run: corepack enable && corepack install
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@v6
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        id: nm-cache
         with:
-          path: ${{ steps.pnpm-cache.outputs.dir }}
-          key: pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          path: |
+            node_modules
+            src/lib/__generated__
+          key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Generate Prisma client
+        if: steps.nm-cache.outputs.cache-hit != 'true'
         run: pnpm prisma generate
         env:
           DATABASE_URL: file:./prisma/dev.db

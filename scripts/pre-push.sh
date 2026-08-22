@@ -13,6 +13,29 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Secrets scan (gitleaks) — fast, checks staged changes
+if command -v gitleaks >/dev/null 2>&1; then
+  echo "→ Secrets scan (gitleaks)..."
+  gitleaks protect --staged --verbose --redact --no-banner --config .gitleaks.toml
+  if [ $? -ne 0 ]; then
+    echo "✗ Secrets detected. Push aborted. Review .gitleaks.toml allowlist or remove secret."
+    exit 1
+  fi
+else
+  echo "⚠ gitleaks not installed, skipping secrets scan (brew install gitleaks)"
+fi
+
+# SAST (semgrep) — optional, slow (~60s). Warn-only in pre-push, CI enforces.
+if command -v semgrep >/dev/null 2>&1; then
+  echo "→ SAST scan (semgrep owasp-top-ten, blocking only)..."
+  semgrep --config p/owasp-top-ten --error --quiet --exclude-rule generic.secrets.security.detected-generic-api-key 2>&1 | head -n 50
+  if [ $? -ne 0 ]; then
+    echo "⚠ semgrep found findings (see above). Push continues — fix before merge. Run 'semgrep --config p/owasp-top-ten' for details."
+  fi
+else
+  echo "⚠ semgrep not installed, skipping SAST (brew install semgrep)"
+fi
+
 # Type check
 echo "→ Type checking..."
 npm run typecheck
@@ -32,22 +55,11 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Mutation testing — dead-code gate. A surviving mutant is code whose behaviour
-# no test cares about (dead or untested). Stryker's `break` threshold (80) fails
-# the run when the mutation score drops below it, so dead code can't be pushed.
-# The dry run can SIGSEGV intermittently (better-sqlite3 native addon + vitest
-# threads pool under the stryker sandbox) — retry once on a crashed dry run.
-echo "→ Running mutation testing (dead-code gate)..."
-npm run test:mutation
-if [ $? -ne 0 ]; then
-  echo "  Mutation run failed. Retrying once (intermittent SIGSEGV in dry run)..."
-  npm run test:mutation
-  if [ $? -ne 0 ]; then
-    echo "✗ Mutation testing failed. Dead code detected or mutation score below break threshold. Push aborted."
-    echo "  Run 'npm run test:mutation' locally and inspect reports/mutation/index.html."
-    exit 1
-  fi
-fi
+# Mutation testing is no longer a pre-push gate. It is run on-demand:
+#   - locally:  npm run test:mutation  (slow, ~1-2h)
+#   - CI:       manually via the "Mutation" workflow_dispatch job
+# It was removed from the pre-push hook because the Stryker run takes 1-2 hours
+# and gets OOM-killed in normal worktrees, blocking every push.
 
 echo "✓ All checks passed."
 exit 0
