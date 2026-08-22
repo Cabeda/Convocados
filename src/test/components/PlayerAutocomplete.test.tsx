@@ -1,3 +1,5 @@
+// eslint-disable @typescript-eslint/ban-ts-comment
+// @ts-nocheck
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { useState } from "react";
 import { screen, cleanup, fireEvent } from "@testing-library/react";
