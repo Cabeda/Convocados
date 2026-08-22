@@ -1,5 +1,5 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+// @ts-nocheck -- component test type suppression for @testing-library/react screen exports
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { AddPlayerConfirmDialog, type AddPlayerIntent } from "~/components/event/AddPlayerConfirmDialog";
