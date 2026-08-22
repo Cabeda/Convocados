@@ -327,7 +327,7 @@ jobs:
         run: pnpm prisma migrate deploy
         env:
           DATABASE_URL: file:./ci-test.db
-      - name: Run Lighthouse CI (fast: 1 run × 1 URL)
+      - name: "Run Lighthouse CI (fast: 1 run x 1 URL)"
         run: pnpm lhci
         env:
           LHCI_FAST: "1"
