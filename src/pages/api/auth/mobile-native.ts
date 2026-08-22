@@ -107,6 +107,7 @@ async function handleGoogleIdToken(body: Record<string, unknown>, request: Reque
         userId: user.id,
         accountId: payload.sub,
         providerId: "google",
+        issuer: "https://accounts.google.com",
         createdAt: new Date(),
         updatedAt: new Date(),
       },
