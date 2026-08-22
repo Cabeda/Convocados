@@ -356,3 +356,15 @@ _Avoid_: postLoginURL (component-internal only), returnUrl, redirect_to
 A better-auth-managed, short-lived, HttpOnly cookie (`better-auth.state`) that carries authentication-flow context across the OAuth round-trip. On `POST /api/auth/sign-in/social` the server stores the requested `callbackURL` in the state, then redirects the browser to the provider with a `state` query param. On the provider callback (`/api/auth/callback/<provider>?state=...&code=...`) the server reads the state cookie, extracts the callbackURL, and 302-redirects the browser there. The cookie is single-use (consumed on read) and expires in 5 minutes — long enough to survive a Google sign-in, short enough that a leaked state cannot be replayed. State is the **only** carrier of the post-auth destination for social sign-in; losing it means the user lands on the default landing page.
 _Avoid_: nonce (overloaded with CSRF), request_token, oauth_token
 
+## MCP Server
+The stateless HTTP endpoint at `POST /api/mcp` that speaks MCP `2026-07-28` without sessions or handshake. Each request is self-describing and header-routed; optional `server/discover` replaces `initialize`.
+_Avoid_: MCP endpoint (ambiguous with transport), SSE server
+
+## MCP Tool
+A request/response operation exposed via `tools/call` on the MCP Server, named `convocados_<verb>_<noun>` and operating on a single Convocados domain concept (Game, Player, Balance). Tools are the only mutation path for AI clients.
+_Avoid_: MCP function, action, command (overloaded)
+
+## Stateless Transport
+The MCP `2026-07-28` protocol core: no `initialize`/`Mcp-Session-Id`, mandatory `MCP-Protocol-Version` + `Mcp-Method`/`Mcp-Name` headers, deterministic `tools/list` with `ttlMs`/`cacheScope`, and self-contained JSON-RPC per request behind plain round-robin.
+_Avoid_: sessionless API, REST wrapper
+
