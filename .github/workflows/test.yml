@@ -138,17 +138,24 @@ jobs:
         run: pnpm db:seed
 
   # ── Unit + integration tests ────────────────────────────────────────────
-  # Sharded 4-ways + 4 workers/CI (vitest.config.ts) => wall time ~35-45s
-  # without coverage. Coverage only on push (sharded then merged) so PRs stay <60s.
-  # Previous single-job: 80s (no cov) / 160s (cov) → now ~40s per shard.
+  # Split by vitest project, then shard each. Plain --shard=N/4 split by file
+  # count and clustered the slow jsdom/MUI component files into one shard
+  # (66s vs 25s siblings). node project = many fast suites (2 shards);
+  # jsdom = few heavy component suites (3 shards). Wall time = setup (~30s)
+  # + slowest leg. Coverage only on push (sharded, merged in coverage-gate).
   test:
-    name: Test (shard ${{ matrix.shard }}/4)
+    name: Test (${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        include:
+          - { project: node, shard: 1, total: 2 }
+          - { project: node, shard: 2, total: 2 }
+          - { project: jsdom, shard: 1, total: 3 }
+          - { project: jsdom, shard: 2, total: 3 }
+          - { project: jsdom, shard: 3, total: 3 }
 
     steps:
       - uses: actions/checkout@v7
@@ -170,30 +177,34 @@ jobs:
           key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
       - if: steps.nm-cache.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile --prefer-offline
-      - run: pnpm prisma generate
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm prisma generate
         env:
           DATABASE_URL: file:./prisma/dev.db
-      - name: Run tests (no coverage on PRs) — shard ${{ matrix.shard }}/4
+      - name: Run tests (no coverage on PRs) — ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
         if: github.event_name == 'pull_request'
-        run: pnpm vitest run --shard=${{ matrix.shard }}/4 --reporter=default --reporter=json --outputFile=test-results-${{ matrix.shard }}.json
-      - name: Run tests with coverage — shard ${{ matrix.shard }}/4
+        run: pnpm vitest run --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --reporter=default --reporter=json --outputFile=test-results.json
+      - name: Run tests with coverage — ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
         if: github.event_name != 'pull_request'
-        run: pnpm vitest run --shard=${{ matrix.shard }}/4 --coverage --reporter=default --reporter=json --outputFile=test-results-${{ matrix.shard }}.json --coverage.reportsDirectory=coverage/shard-${{ matrix.shard }}
+        run: >-
+          pnpm vitest run --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }}
+          --coverage --reporter=default --reporter=json --outputFile=test-results.json
+          --coverage.reportsDirectory=coverage/leg-${{ matrix.project }}-${{ matrix.shard }}
         env:
           COVERAGE_THRESHOLDS: "1"
       - name: Upload shard results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-results-shard-${{ matrix.shard }}
+          name: test-results-${{ matrix.project }}-${{ matrix.shard }}
           path: |
-            test-results-${{ matrix.shard }}.json
-            coverage/shard-${{ matrix.shard }}/coverage-summary.json
+            test-results.json
+            coverage/leg-${{ matrix.project }}-${{ matrix.shard }}/coverage-summary.json
           retention-days: 1
           if-no-files-found: ignore
-      - name: Report flaky tests (shard ${{ matrix.shard }})
+      - name: Report flaky tests (${{ matrix.project }} ${{ matrix.shard }})
         if: always()
-        run: node scripts/report-flaky.mjs test-results-${{ matrix.shard }}.json || true
+        run: node scripts/report-flaky.mjs test-results.json || true
 
   # Coverage merge + threshold gate (only on push). Runs after shards.
   coverage-gate:
@@ -224,27 +235,26 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
       - uses: actions/download-artifact@v8
         with:
-          pattern: test-results-shard-*
+          pattern: test-results-*
           merge-multiple: true
       - name: Merge coverage and check thresholds
         run: |
           node -e "
-          const fs=require('fs');
-          const shards=[1,2,3,4];
+          const fs=require('fs'), path=require('path');
+          const dirs=fs.readdirSync('coverage').filter(d=>d.startsWith('leg-'));
           let merged=null;
-          for(const s of shards){
-            const p='coverage/shard-'+s+'/coverage-summary.json';
+          for(const d of dirs){
+            const p=path.join('coverage',d,'coverage-summary.json');
             if(!fs.existsSync(p)){ console.warn('missing',p); continue; }
             const j=JSON.parse(fs.readFileSync(p,'utf8'));
             if(!merged) merged=j;
             else {
               for(const k of ['lines','functions','branches','statements']){
-                const a=merged.total[k], b=j.total[k];
-                merged.total[k].pct = Math.min(a.pct, b.pct);
+                merged.total[k].pct = Math.min(merged.total[k].pct, j.total[k].pct);
               }
             }
           }
-          if(!merged) throw new Error('no coverage shards found');
+          if(!merged) throw new Error('no coverage legs found');
           console.log('Merged (min) coverage:', JSON.stringify(merged.total,null,2));
           const t={lines:94,functions:89,branches:82,statements:91};
           for(const k in t) if(merged.total[k].pct < t[k]) throw new Error(k+' coverage '+merged.total[k].pct+'% < '+t[k]+'%');
