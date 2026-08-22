@@ -38,6 +38,7 @@ async function seedUser(image: string | null, account: Record<string, unknown> |
         id: `${id}-acct`,
         userId: id,
         providerId: "google",
+        issuer: "https://accounts.google.com",
         accountId: `g-${id}`,
         ...account,
       },
