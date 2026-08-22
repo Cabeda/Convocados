@@ -106,6 +106,19 @@ describe("PlayerList — confirmation dialog trigger", () => {
   });
 });
 
+describe("PlayerList — password manager suppression", () => {
+  it("marks the add-player input so password managers do not offer/save credentials", () => {
+    renderWithTheme(<PlayerList {...baseProps} />);
+    const input = screen.getByPlaceholderText(/add player/i) as HTMLInputElement;
+    expect(input).toHaveAttribute("autocomplete", "off");
+    expect(input).toHaveAttribute("name", "player-name");
+    // Vendor-specific ignore hints: 1Password, LastPass, Dashlane/Bitwarden heuristics
+    expect(input).toHaveAttribute("data-1p-ignore", "true");
+    expect(input).toHaveAttribute("data-lpignore", "true");
+    expect(input).toHaveAttribute("data-form-type", "other");
+  });
+});
+
 describe("PlayerList — player identity (avatar / anonymous icon)", () => {
   const linkedWithImage: Player = { id: "p-img", name: "Alice", userId: "u-1", image: "https://example.com/alice.jpg" };
   const linkedNoImage: Player = { id: "p-nimg", name: "Bob", userId: "u-2", image: null };
