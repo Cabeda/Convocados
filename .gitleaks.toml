@@ -5,6 +5,9 @@ useDefault = true
 
 [allowlist]
 description = "test and example secrets"
+# 1e384ca4: historical .env commit (BETTER_AUTH_SECRET / DATABASE_URL).
+# Credentials rotated separately — do NOT add path-wide `.env` allowlist.
+commits = ["1e384ca4bc1e8941dba47ee5fde7d2605cde5bca"]
 paths = [
   '''playwright\.config\.ts''',
   '''e2e/.*''',

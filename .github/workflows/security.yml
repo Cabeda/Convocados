@@ -1,0 +1,47 @@
+name: Security Scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  secrets-scan:
+    name: Secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sast-scan:
+    name: SAST (semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # PRs: block only on findings NEW vs the base branch.
+      - name: semgrep — fail on new findings vs base (PRs)
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          docker run --rm -v "$PWD:/src" semgrep/semgrep sh -c "semgrep scan --config p/owasp-top-ten --exclude-rule generic.secrets.security.detected-generic-api-key --baseline-commit $BASE_SHA --error"
+      # main pushes: report-only until the pre-existing backlog is triaged,
+      # then switch this run to --error as well.
+      - name: semgrep — report (push to main)
+        if: github.event_name == 'push'
+        run: docker run --rm -v "$PWD:/src" semgrep/semgrep semgrep scan --config p/owasp-top-ten --exclude-rule generic.secrets.security.detected-generic-api-key --json --output /src/semgrep-report.json
+      - name: upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep-report.json
+          if-no-files-found: ignore
