@@ -13,12 +13,20 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Secrets scan (gitleaks) — fast, checks staged changes
+# Secrets scan (gitleaks) — scan unpushed commits only; full history is
+# triaged separately (known historical .env finding, tracked for rotation)
 if command -v gitleaks >/dev/null 2>&1; then
   echo "→ Secrets scan (gitleaks)..."
-  gitleaks protect --staged --verbose --redact --no-banner --config .gitleaks.toml
+  if git rev-parse -q --verify "@{upstream}" >/dev/null 2>&1; then
+    GITLEAKS_LOG_OPTS="--log-opts=@{upstream}..HEAD"
+  elif git rev-parse -q --verify origin/main >/dev/null 2>&1; then
+    GITLEAKS_LOG_OPTS="--log-opts=origin/main..HEAD"
+  else
+    GITLEAKS_LOG_OPTS="--staged"
+  fi
+  gitleaks git --verbose --redact --no-banner --config .gitleaks.toml $GITLEAKS_LOG_OPTS
   if [ $? -ne 0 ]; then
-    echo "✗ Secrets detected. Push aborted. Review .gitleaks.toml allowlist or remove secret."
+    echo "✗ Secrets detected in unpushed commits. Push aborted. Remove the secret and rewrite the commit, or review .gitleaks.toml allowlist."
     exit 1
   fi
 else
@@ -28,10 +36,14 @@ fi
 # SAST (semgrep) — optional, slow (~60s). Warn-only in pre-push, CI enforces.
 if command -v semgrep >/dev/null 2>&1; then
   echo "→ SAST scan (semgrep owasp-top-ten, blocking only)..."
-  semgrep --config p/owasp-top-ten --error --quiet --exclude-rule generic.secrets.security.detected-generic-api-key 2>&1 | head -n 50
-  if [ $? -ne 0 ]; then
+  SEMGREP_OUT="$(mktemp)"
+  semgrep --config p/owasp-top-ten --error --quiet --exclude-rule generic.secrets.security.detected-generic-api-key >"$SEMGREP_OUT" 2>&1
+  semgrep_status=$?
+  if [ "$semgrep_status" -ne 0 ]; then
+    head -n 50 "$SEMGREP_OUT"
     echo "⚠ semgrep found findings (see above). Push continues — fix before merge. Run 'semgrep --config p/owasp-top-ten' for details."
   fi
+  rm -f "$SEMGREP_OUT"
 else
   echo "⚠ semgrep not installed, skipping SAST (brew install semgrep)"
 fi

@@ -30,6 +30,7 @@ overrides:
   basic-ftp@<=5.2.2: '>=5.3.0'
   basic-ftp@<=5.3.0: '>=5.3.1'
   better-auth@<1.6.2: '>=1.6.2'
+  body-parser@<1.20.6: '>=1.20.6'
   brace-expansion@>=3.0.0 <5.0.7: '>=5.0.7'
   deepmerge-ts@<8.0.0: '>=8.0.0'
   devalue@>=5.6.3 <=5.8.0: '>=5.8.1'
