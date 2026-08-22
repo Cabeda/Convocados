@@ -364,3 +364,16 @@ _Avoid_: postLoginURL (component-internal only), returnUrl, redirect_to
 A better-auth-managed, short-lived, HttpOnly cookie (`better-auth.state`) that carries authentication-flow context across the OAuth round-trip. On `POST /api/auth/sign-in/social` the server stores the requested `callbackURL` in the state, then redirects the browser to the provider with a `state` query param. On the provider callback (`/api/auth/callback/<provider>?state=...&code=...`) the server reads the state cookie, extracts the callbackURL, and 302-redirects the browser there. The cookie is single-use (consumed on read) and expires in 5 minutes — long enough to survive a Google sign-in, short enough that a leaked state cannot be replayed. State is the **only** carrier of the post-auth destination for social sign-in; losing it means the user lands on the default landing page.
 _Avoid_: nonce (overloaded with CSRF), request_token, oauth_token
 
+## Preview App
+An ephemeral Fly.io deployment of a specific pull request (`convocados-pr-<N>`), reachable at `https://convocados-pr-<N>.fly.dev`. Created on request, destroyed when the PR closes (or earlier via explicit stop). Its database starts empty and is disposable — never carries production data. Distinct from the production app (`convocados`) and from the scheduler app; a Preview App is per-PR and short-lived.
+_Avoid_: staging environment (implies shared long-lived env), review app (Vercel/Heroku jargon), test deploy
+
+## Preview Allowlist
+The set of GitHub usernames authorized to request Preview Apps: the repository owner plus any username listed in `.github/CODEOWNERS`. Both the pull-request author and the person issuing the command must be on the allowlist. Usernames only — teams and email entries in CODEOWNERS do not grant access. Adding a contributor handle there is the single act that grants preview access.
+_Avoid_: codeowners permission (overloaded — the file also routes reviews), whitelist
+
+## Preview Request
+A `/preview` comment command on a pull request that triggers deploying that PR's current head to its Preview App. `/preview-stop` is the matching teardown command. Requests are opt-in per deploy: pushes to the PR never trigger deployments by themselves.
+_Avoid_: preview trigger, redeploy comment
+
+
