@@ -337,6 +337,22 @@ describe("HistoryCardFull — Players stream", () => {
   });
 });
 
+describe("HistoryCardFull — password manager suppression", () => {
+  it("marks the add-player-to-team input so password managers do not offer/save credentials", () => {
+    renderCard();
+    const inputs = screen.getAllByPlaceholderText(/add player/i) as HTMLInputElement[];
+    expect(inputs.length).toBeGreaterThan(0);
+    for (const input of inputs) {
+      expect(input).toHaveAttribute("autocomplete", "off");
+      expect(input).toHaveAttribute("name", "player-name");
+      // Vendor-specific ignore hints: 1Password, LastPass, Dashlane/Bitwarden heuristics
+      expect(input).toHaveAttribute("data-1p-ignore", "true");
+      expect(input).toHaveAttribute("data-lpignore", "true");
+      expect(input).toHaveAttribute("data-form-type", "other");
+    }
+  });
+});
+
 describe("HistoryCardFull — cancelled", () => {
   it("dims the card when status is cancelled", () => {
     renderCard({ status: "cancelled" });
