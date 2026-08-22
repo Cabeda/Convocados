@@ -19,6 +19,20 @@ interface Props {
   label?: string;
 }
 
+/**
+ * Attributes telling browser password managers (Bitwarden, 1Password,
+ * LastPass, Dashlane) this is a plain text box, not a credential field.
+ * Without them their save/autofill overlay hides the player suggestions.
+ */
+export const playerInputPasswordManagerProps = {
+  autoComplete: "off",
+  name: "player-name",
+  // Vendor-specific opt-outs
+  "data-1p-ignore": "true", // 1Password
+  "data-lpignore": "true", // LastPass
+  "data-form-type": "other", // Dashlane / Bitwarden heuristics
+} as const;
+
 export function PlayerAutocomplete({ value, onChange, onAdd, onRequestAdd, suggestions, disabled, label }: Props) {
   const t = useT();
   const dispatchAdd = (name: string) => {
@@ -99,7 +113,7 @@ export function PlayerAutocomplete({ value, onChange, onAdd, onRequestAdd, sugge
               ),
             },
 
-            htmlInput: { ...params.slotProps.htmlInput, maxLength: 50 }
+            htmlInput: { ...params.slotProps.htmlInput, maxLength: 50, ...playerInputPasswordManagerProps }
           }} />
       )}
       renderOption={(props, option) => {

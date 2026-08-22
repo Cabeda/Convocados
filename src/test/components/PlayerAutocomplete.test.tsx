@@ -96,6 +96,20 @@ describe("PlayerAutocomplete — confirmation dialog trigger", () => {
   });
 });
 
+describe("PlayerAutocomplete — password manager suppression", () => {
+  it("marks the input so password managers do not offer/save credentials", () => {
+    const onAdd = vi.fn();
+    renderWithTheme(<Harness onAdd={onAdd} onRequestAdd={vi.fn()} />);
+    const input = screen.getByPlaceholderText(/add player name/i) as HTMLInputElement;
+    expect(input).toHaveAttribute("autocomplete", "off");
+    expect(input).toHaveAttribute("name", "player-name");
+    // Vendor-specific ignore hints: 1Password, LastPass, Dashlane/Bitwarden heuristics
+    expect(input).toHaveAttribute("data-1p-ignore", "true");
+    expect(input).toHaveAttribute("data-lpignore", "true");
+    expect(input).toHaveAttribute("data-form-type", "other");
+  });
+});
+
 describe("PlayerAutocomplete — player identity (avatar / anonymous icon)", () => {
   interface IdentityHarnessProps {
     onAdd: (name: string) => void;
