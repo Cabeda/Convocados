@@ -230,7 +230,7 @@ describe("POST /api/auth/mobile-native — google-id-token", () => {
       data: { id: "linked-u", email: "linked@example.com", name: "Linked", image: "https://example.com/pic.jpg", emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
     });
     await prisma.account.create({
-      data: { id: "acc-1", userId: "linked-u", accountId: "google-sub-789", providerId: "google", createdAt: new Date(), updatedAt: new Date() },
+      data: { id: "acc-1", userId: "linked-u", accountId: "google-sub-789", providerId: "google", issuer: "https://accounts.google.com", createdAt: new Date(), updatedAt: new Date() },
     });
 
     mockVerifyGoogleToken.mockResolvedValue({

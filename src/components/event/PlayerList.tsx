@@ -19,6 +19,7 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import { PlayerAvatar, AnonymousPlayerIcon } from "./PlayerIdentity";
+import { playerInputPasswordManagerProps } from "./PlayerAutocomplete";
 import type { Player, PlayerOption } from "./types";
 import type { AddPlayerIntent } from "./AddPlayerConfirmDialog";
 import { ConfirmLeaveDialog, type LeaveContext } from "./ConfirmLeaveDialog";
@@ -449,7 +450,7 @@ export function PlayerList({
                     ) : undefined,
                   },
 
-                  htmlInput: { ...params.slotProps.htmlInput, maxLength: 120 }
+                  htmlInput: { ...params.slotProps.htmlInput, maxLength: 120, ...playerInputPasswordManagerProps }
                 }} />
             )}
             renderOption={(props, option) => {

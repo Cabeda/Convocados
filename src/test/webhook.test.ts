@@ -199,9 +199,15 @@ describe("signPayload", () => {
 // ─── fireWebhooks ───────────────────────────────────────────────────────────
 
 describe("fireWebhooks", () => {
+  beforeEach(() => {
+    // Collapse retry backoff (1+2+4+8s real sleep per exhausted delivery)
+    vi.stubEnv("WEBHOOK_BACKOFF_BASE_MS", "1");
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("delivers to matching webhook and records success", async () => {

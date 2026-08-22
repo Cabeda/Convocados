@@ -73,6 +73,7 @@ async function seedCredentialAccount(userId: string, plainPassword: string) {
       id: `acc-${userId}`,
       accountId: userId,
       providerId: "credential",
+      issuer: "local:credential",
       userId,
       password: hashed,
     },

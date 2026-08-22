@@ -29,6 +29,7 @@ describe("Google email auto-enable for invites", () => {
         id: "acc-google-1",
         userId: user.id,
         providerId: "google",
+        issuer: "https://accounts.google.com",
         accountId: "google-123",
       },
     });
@@ -81,6 +82,7 @@ describe("Google email auto-enable for invites", () => {
         id: "acc-google-2",
         userId: user.id,
         providerId: "google",
+        issuer: "https://accounts.google.com",
         accountId: "google-456",
       },
     });
