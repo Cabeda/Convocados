@@ -28,11 +28,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        id: nm-cache
+        with:
+          path: |
+            node_modules
+            src/lib/__generated__
+          key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
       - run: pnpm prisma generate
         env:
           DATABASE_URL: file:./prisma/dev.db
@@ -46,12 +58,40 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        id: nm-cache
+        with:
+          path: |
+            node_modules
+            src/lib/__generated__
+          key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
       - run: pnpm lint
+
+  # ── Dependency audit: fail on high/critical vulns ─────────────────────────
+  # Reads pnpm-lock.yaml only — no install needed, so this job is ~10s.
+  # Gate at "high" to keep signal; moderate/low noise tracked separately.
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Audit dependencies (fail on high/critical)
+        run: pnpm audit --audit-level high
 
   # ── Seed smoke: catches dev-script breakage fast ────────────────────────
   # Runs against a throwaway DB so the seed script can't pass by reusing
@@ -65,11 +105,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        id: nm-cache
+        with:
+          path: |
+            node_modules
+            src/lib/__generated__
+          key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
       - name: Prepare throwaway DB
         env:
           DATABASE_URL: file:./seed-smoke.db
@@ -86,38 +138,130 @@ jobs:
         run: pnpm db:seed
 
   # ── Unit + integration tests ────────────────────────────────────────────
-  # Coverage is only run on push to main — on PRs we skip coverage to halve
-  # the test runtime (~205s → ~80s on this codebase).
+  # Split by vitest project, then shard each. Plain --shard=N/4 split by file
+  # count and clustered the slow jsdom/MUI component files into one shard
+  # (66s vs 25s siblings). node project = many fast suites (2 shards);
+  # jsdom = few heavy component suites (3 shards). Wall time = setup (~30s)
+  # + slowest leg. Coverage only on push (sharded, merged in coverage-gate).
   test:
-    name: Test
+    name: Test (${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { project: node, shard: 1, total: 4 }
+          - { project: node, shard: 2, total: 4 }
+          - { project: node, shard: 3, total: 4 }
+          - { project: node, shard: 4, total: 4 }
+          - { project: jsdom, shard: 1, total: 3 }
+          - { project: jsdom, shard: 2, total: 3 }
+          - { project: jsdom, shard: 3, total: 3 }
 
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          # No `cache: pnpm` here — node_modules cache below already covers
+          # installs; downloading the pnpm store too costs 9-13s per leg.
+          cache-dependency-path cache-dependency-path: pnpm-lock.yaml
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        id: nm-cache
+        with:
+          path: |
+            node_modules
+            src/lib/__generated__
+          key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+      - name: Run tests (no coverage on PRs) — ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
+        if: github.event_name == 'pull_request'
+        run: pnpm vitest run --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --reporter=default --reporter=json --outputFile=test-results.json
+      - name: Run tests with coverage — ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
+        if: github.event_name != 'pull_request'
+        run: >-
+          pnpm vitest run --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }}
+          --coverage --reporter=default --reporter=json --outputFile=test-results.json
+          --coverage.reportsDirectory=coverage/leg-${{ matrix.project }}-${{ matrix.shard }}
+        env:
+          COVERAGE_THRESHOLDS: "1"
+      - name: Upload shard results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.project }}-${{ matrix.shard }}
+          path: |
+            test-results.json
+            coverage/leg-${{ matrix.project }}-${{ matrix.shard }}/coverage-summary.json
+          retention-days: 1
+          if-no-files-found: ignore
+      - name: Report flaky tests (${{ matrix.project }} ${{ matrix.shard }})
+        if: always()
+        run: node scripts/report-flaky.mjs test-results.json || true
+
+  # Coverage merge + threshold gate (only on push). Runs after shards.
+  coverage-gate:
+    name: Coverage Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name != 'pull_request'
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm prisma generate
-        env:
-          DATABASE_URL: file:./prisma/dev.db
-      - name: Run tests (no coverage on PRs)
-        if: github.event_name == 'pull_request'
-        run: pnpm vitest run --reporter=default --reporter=json --outputFile=test-results.json
-      - name: Run tests with coverage
-        if: github.event_name != 'pull_request'
-        run: pnpm vitest run --coverage --reporter=default --reporter=json --outputFile=test-results.json
-        env:
-          COVERAGE_THRESHOLDS: "1"
-      - name: Report flaky tests
-        if: always()
-        run: node scripts/report-flaky.mjs
-      - name: Check coverage thresholds
-        if: github.event_name != 'pull_request'
-        run: node -e "const c=require('./coverage/coverage-summary.json');const t={lines:94,functions:89,branches:82,statements:91};for(const k in t)if(c.total[k].pct<t[k])throw new Error(k+' coverage '+c.total[k].pct+'% < '+t[k]+'%')"
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        id: nm-cache
+        with:
+          path: |
+            node_modules
+            src/lib/__generated__
+          key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: test-results-*
+          merge-multiple: true
+      - name: Merge coverage and check thresholds
+        run: |
+          node -e "
+          const fs=require('fs'), path=require('path');
+          const dirs=fs.readdirSync('coverage').filter(d=>d.startsWith('leg-'));
+          let merged=null;
+          for(const d of dirs){
+            const p=path.join('coverage',d,'coverage-summary.json');
+            if(!fs.existsSync(p)){ console.warn('missing',p); continue; }
+            const j=JSON.parse(fs.readFileSync(p,'utf8'));
+            if(!merged) merged=j;
+            else {
+              for(const k of ['lines','functions','branches','statements']){
+                merged.total[k].pct = Math.min(merged.total[k].pct, j.total[k].pct);
+              }
+            }
+          }
+          if(!merged) throw new Error('no coverage legs found');
+          console.log('Merged (min) coverage:', JSON.stringify(merged.total,null,2));
+          const t={lines:94,functions:89,branches:82,statements:91};
+          for(const k in t) if(merged.total[k].pct < t[k]) throw new Error(k+' coverage '+merged.total[k].pct+'% < '+t[k]+'%');
+          "
 
   # ── Build (needed for E2E) ──────────────────────────────────────────────
   build:
@@ -128,11 +272,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        id: nm-cache
+        with:
+          path: |
+            node_modules
+            src/lib/__generated__
+          key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
       - run: pnpm prisma generate
         env:
           DATABASE_URL: file:./prisma/dev.db
@@ -144,7 +300,8 @@ jobs:
           retention-days: 1
 
   # ── Lighthouse — only on push to main, not on PRs ────────────────────────
-  # Was 30% of CI time on PRs. Now main-only.
+  # Optimized for <60s: single run, single URL on fast path, reuses build artifact,
+  # caches node_modules. Full 3×3 runs only when LHCI_FULL=1 (manual).
   lighthouse:
     name: Lighthouse
     runs-on: ubuntu-latest
@@ -155,11 +312,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        id: nm-cache
+        with:
+          path: |
+            node_modules
+            src/lib/__generated__
+          key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
       - run: pnpm prisma generate
         env:
           DATABASE_URL: file:./prisma/dev.db
@@ -171,8 +340,10 @@ jobs:
         run: pnpm prisma migrate deploy
         env:
           DATABASE_URL: file:./ci-test.db
-      - name: Run Lighthouse CI
+      - name: "Run Lighthouse CI (fast: 1 run x 1 URL)"
         run: pnpm lhci
+        env:
+          LHCI_FAST: "1"
 
   # ── E2E tests ──────────────────────────────────────────────────────────
   e2e:
@@ -184,11 +355,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        id: nm-cache
+        with:
+          path: |
+            node_modules
+            src/lib/__generated__
+          key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
       - run: pnpm prisma generate
         env:
           DATABASE_URL: file:./prisma/dev.db
@@ -296,7 +479,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [typecheck, lint, test, build, e2e, seed-smoke]
+    needs: [typecheck, lint, audit, test, build, e2e, seed-smoke]
     steps:
       - name: Check results
         run: |
