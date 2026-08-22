@@ -77,6 +77,22 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
       - run: pnpm lint
 
+  # ── Dependency audit: fail on high/critical vulns ─────────────────────────
+  # Reads pnpm-lock.yaml only — no install needed, so this job is ~10s.
+  # Gate at "high" to keep signal; moderate/low noise tracked separately.
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Audit dependencies (fail on high/critical)
+        run: pnpm audit --audit-level high
+
   # ── Seed smoke: catches dev-script breakage fast ────────────────────────
   # Runs against a throwaway DB so the seed script can't pass by reusing
   # stale state. pnpm + tsx resolution has bitten us before — keep this
@@ -450,7 +466,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [typecheck, lint, test, build, e2e, seed-smoke]
+    needs: [typecheck, lint, audit, test, build, e2e, seed-smoke]
     steps:
       - name: Check results
         run: |
