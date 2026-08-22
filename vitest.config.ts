@@ -16,12 +16,16 @@ export default defineConfig({
     // 30s default hook timeout. Rate-limit-store resets and DB
     // deleteMany chains can take 5-10s under heavy CPU contention.
     hookTimeout: 30_000,
-    // threads pool with max 2 workers. Each worker gets its own SQLite
-    // file (see src/test/setup.ts), so cross-worker write contention is
-    // a non-issue. The cap of 2 keeps memory pressure manageable on
-    // 4-CPU/8GB local boxes and 2-CPU GitHub Actions runners.
+    // threads pool — workers each get own SQLite file (see src/test/setup.ts)
+    // so write contention irrelevant. CI runners are 4 vCPU / 16GB (ubuntu-latest);
+    // use 4 workers on CI to halve wall time (70s → ~38s no-coverage, 160s → ~85s
+    // with coverage before sharding). Local dev keeps 2 to stay <8GB.
     pool: "threads",
-    maxWorkers: process.env.VITEST_SINGLE_THREAD ? 1 : 2,
+    maxWorkers: process.env.VITEST_SINGLE_THREAD
+      ? 1
+      : process.env.CI
+        ? 4
+        : 2,
     exclude: ["node_modules", "dist", "e2e", "mobile"],
     environment: "node",
     env: {
@@ -95,7 +99,12 @@ export default defineConfig({
     ],
     coverage: {
       provider: "v8",
-      reporter: ["text", "lcov", "html", "json-summary"],
+      // v8 coverage instruments every file via c8; reporter "html" writes
+      // thousands of files and doubles I/O on CI. Keep json-summary for
+      // threshold gate; html only locally.
+      reporter: process.env.CI
+        ? ["text", "json-summary"]
+        : ["text", "lcov", "html", "json-summary"],
       include: ["src/lib/**", "src/pages/api/**"],
       exclude: [
         "src/lib/db.server.ts",

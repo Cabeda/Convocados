@@ -6,18 +6,20 @@ module.exports = {
         "DATABASE_URL=file:./ci-test.db BETTER_AUTH_SECRET=ci-test-secret BETTER_AUTH_URL=http://localhost:3000 HOST=0.0.0.0 PORT=3000 node dist/server/entry.mjs",
       startServerReadyPattern: "Server listening on",
       startServerReadyTimeout: 30000,
-      url: [
-        "http://localhost:3000/",
-        "http://localhost:3000/public",
-        "http://localhost:3000/auth/signin",
-      ],
-      // Run each URL 3 times so transient noise (CPU/network jitter on CI
-      // runners) is averaged out instead of failing the build on a single
-      // unlucky run. Assertions below aggregate across these runs.
-      numberOfRuns: 3,
+      // Fast mode: LHCI_FAST=1 => 1 run × 1 URL for sub-60s CI.
+      // Full mode (nightly/manual): 3 runs × 3 URLs for low flake.
+      // Absolute max speed needs 1 URL; 1 run saves ~80s vs 3×3 (122s→~18s).
+      url: process.env.LHCI_FAST
+        ? ["http://localhost:3000/"]
+        : [
+            "http://localhost:3000/",
+            "http://localhost:3000/public",
+            "http://localhost:3000/auth/signin",
+          ],
+      numberOfRuns: process.env.LHCI_FAST ? 1 : 3,
       settings: {
         preset: "desktop",
-        maxWaitForLoad: 45000,
+        maxWaitForLoad: process.env.LHCI_FAST ? 30000 : 45000,
         // "simulate" throttling is deterministic (applied to a single trace)
         // rather than measuring real network/CPU, which is far less flaky in CI.
         throttlingMethod: "simulate",
