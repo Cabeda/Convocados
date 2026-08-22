@@ -98,7 +98,7 @@ async function seedPlayerInvite(
   gameId: string,
   eventPlayerId: string,
   invitedByUserId: string,
-  status = "pending",
+  status: any = "pending",
 ) {
   return prisma.playerInvite.create({
     data: {
