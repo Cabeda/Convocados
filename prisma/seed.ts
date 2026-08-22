@@ -425,6 +425,7 @@ async function main() {
           id: `account-${demoUser.id}`,
           accountId: demoUser.id,
           providerId: "credential",
+          issuer: "local:credential",
           userId: demoUser.id,
           password: DEMO_PASSWORD_HASH,
         },
