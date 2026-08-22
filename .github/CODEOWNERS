@@ -1,0 +1,8 @@
+# Default code ownership.
+#
+# This file doubles as the allowlist for preview deployments
+# (.github/workflows/preview.yml): any GitHub username listed here may request
+# `/preview` deployments on their pull requests, alongside the repository
+# owner. Usernames only — teams and email addresses are not resolved by the
+# preview gate.
+* @Cabeda
