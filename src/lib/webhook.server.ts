@@ -14,6 +14,13 @@ export type WebhookEventType =
 const MAX_ATTEMPTS = 5;
 const TIMEOUT_MS = 5000;
 const BACKOFF_BASE_MS = 1000;
+// WEBHOOK_BACKOFF_BASE_MS lets tests collapse the
+// exponential wait (1+2+4+8s) to ~0 so retry-exhaustion tests don't burn
+// 15s of real sleep each.
+function backoffBaseMs(): number {
+  const v = Number(process.env.WEBHOOK_BACKOFF_BASE_MS);
+  return Number.isFinite(v) && v >= 0 ? v : BACKOFF_BASE_MS;
+}
 
 export function signPayload(payload: string, secret: string): string {
   return "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
@@ -131,7 +138,7 @@ async function deliverWebhook(
 
     // Exponential backoff before retry
     if (attempt < MAX_ATTEMPTS) {
-      await new Promise((r) => setTimeout(r, BACKOFF_BASE_MS * Math.pow(2, attempt - 1)));
+      await new Promise((r) => setTimeout(r, backoffBaseMs() * Math.pow(2, attempt - 1)));
     }
   }
 
