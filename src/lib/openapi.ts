@@ -1107,6 +1107,11 @@ export const openApiSpec = {
         tags: ["Invites"],
         parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "Invite details" } },
+      },
+      post: {
+        summary: "Respond to an invite (accept/decline)",
+        tags: ["Invites"],
+        parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "Invite accepted or declined" } },
       },
     },

@@ -18,8 +18,9 @@ export const GET: APIRoute = async () => {
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
     token_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post"],
-    // RFC 9207 issuer parameter
+    // RFC 9207 issuer parameter — server MUST return iss, client MUST validate before code redeem (SEP-2468)
     issuer_identification: true,
+    authorization_response_iss_parameter_supported: true,
   }, {
     headers: { "Cache-Control": "public, max-age=3600" },
   });
