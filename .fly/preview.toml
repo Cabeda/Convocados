@@ -1,0 +1,47 @@
+# Preview-only Fly.io config — deployed by .github/workflows/preview.yml via:
+#
+#   flyctl deploy -c .fly/preview.toml --app convocados-pr-<N> --remote-only
+#
+# Differences from the production fly.toml (see ADR 0022):
+# - no [[mounts]]: SQLite lives on machine-local ephemeral disk. Preview data
+#   is disposable; a host reclaim wipes it, which we accept.
+# - no release_command: without a persistent volume its throwaway release
+#   machine would discard DB writes. scripts/start.sh re-runs
+#   `prisma migrate deploy` on every boot instead.
+# - smallest machine (shared-cpu-1x, 256mb) and min_machines_running = 0:
+#   previews serve a single reviewer and should cost nothing while idle.
+
+app = "convocados" # overridden by --app at deploy time
+primary_region = "cdg"
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "3000"
+  NODE_ENV = "production"
+  EMAIL_FROM = "Convocados <noreply@cabeda.dev>"
+  # BETTER_AUTH_URL is injected per-app at deploy time (--env) because it
+  # depends on the preview app name: https://convocados-pr-<N>.fly.dev
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 15
+    soft_limit = 10
+
+  [[http_service.checks]]
+    grace_period = "120s"
+    interval = "30s"
+    method = "GET"
+    path = "/api/health"
+    timeout = "5s"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

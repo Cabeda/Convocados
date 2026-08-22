@@ -1,0 +1,257 @@
+# Preview deployments (Fly.io review apps) — see ADR 0022 and
+# docs/runbooks/preview-deployments.md.
+#
+# Model: opt-in per PR via comment commands.
+#   /preview        deploy current PR head to https://convocados-pr-<N>.fly.dev
+#   /preview-stop   tear the preview down early
+# Previews are destroyed automatically when the PR closes.
+#
+# Security model:
+# - `pull_request_target` / `issue_comment` run in the base-repo context with
+#   access to secrets, so every request passes an authorization gate BEFORE any
+#   untrusted PR code is checked out.
+# - Gate = strict allowlist: repository OWNER association OR a username listed
+#   in .github/CODEOWNERS (usernames only; teams/emails are not resolved).
+# - BOTH the PR author AND the commenter must pass the gate — a trusted
+#   maintainer cannot be social-engineered into deploying untrusted fork code.
+# - Secrets used here are preview-scoped (FLY_PREVIEW_TOKEN) and never reach
+#   the deployed app; previews get their own throwaway auth secret.
+
+name: Preview Deployment
+
+on:
+  pull_request_target:
+    types: [closed]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_PREVIEW_TOKEN }}
+  FLY_ORG: personal # Fly org that hosts preview apps
+
+jobs:
+  # ── Authorization gate ────────────────────────────────────────────────────────
+  authorize:
+    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '/preview')
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.gate.outputs.allowed }}
+      command: ${{ steps.cmd.outputs.command }}
+      pr_number: ${{ steps.cmd.outputs.pr_number }}
+    steps:
+      # Base branch checkout only — trusted CODEOWNERS source. No PR code yet.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Parse command
+        id: cmd
+        env:
+          BODY: ${{ github.event.comment.body }}
+          IS_PR: ${{ github.event.issue.pull_request != null }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          COMMAND=none
+          if [ "$IS_PR" = "true" ]; then
+            case "$BODY" in
+              "/preview-stop"*|"/preview stop"*) COMMAND=/preview-stop ;;
+              "/preview"*)                       COMMAND=/preview ;;
+            esac
+          fi
+          echo "command=$COMMAND" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Check allowlist
+        id: gate
+        env:
+          AUTHOR: ${{ github.event.issue.user.login }}       # PR author
+          COMMENTER: ${{ github.event.comment.user.login }}  # who typed the command
+          AUTHOR_ASSOC: ${{ github.event.issue.author_association }}
+          COMMENTER_ASSOC: ${{ github.event.comment.author_association }}
+        run: |
+          allowed_by() {
+            local user="$1" assoc="$2"
+            [ "$assoc" = "OWNER" ] && return 0
+            while IFS= read -r entry; do
+              entry="${entry#@}"
+              [ "${entry,,}" = "${user,,}" ] && return 0
+            done < <(grep -vE '^\s*#' .github/CODEOWNERS | grep -oE '@[a-zA-Z0-9][a-zA-Z0-9_-]*' | sort -fu)
+            return 1
+          }
+          ALLOWED=false
+          if allowed_by "$AUTHOR" "$AUTHOR_ASSOC" && allowed_by "$COMMENTER" "$COMMENTER_ASSOC"; then
+            ALLOWED=true
+          fi
+          echo "allowed=$ALLOWED" >> "$GITHUB_OUTPUT"
+          echo "author=$AUTHOR allowed_by_gate=$(allowed_by "$AUTHOR" "$AUTHOR_ASSOC" && echo yes || echo no)"
+          echo "commenter=$COMMENTER allowed_by_gate=$(allowed_by "$COMMENTER" "$COMMENTER_ASSOC" && echo yes || echo no)"
+
+      - name: Acknowledge request
+        if: steps.cmd.outputs.command != 'none'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const emoji = '${{ steps.gate.outputs.allowed }}' === 'true' ? 'eyes' : 'no_entry';
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: emoji,
+            });
+
+  # ── Reject unauthorized requests ─────────────────────────────────────────────
+  reject-unauthorized:
+    needs: authorize
+    if: needs.authorize.outputs.command == '/preview' && needs.authorize.outputs.allowed != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post gated notice
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: ':no_entry: Preview deployments are limited to the repository ' +
+                    'owner and members listed in `.github/CODEOWNERS`. Ask a maintainer ' +
+                    'to add you there to unlock `/preview`.',
+            });
+
+  # ── Deploy ───────────────────────────────────────────────────────────────────
+  deploy-preview:
+    needs: authorize
+    if: needs.authorize.outputs.command == '/preview' && needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      # Gate passed — now it is safe to check out untrusted PR code.
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/pull/${{ needs.authorize.outputs.pr_number }}/head
+          persist-credentials: false
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Set app identity
+        id: app
+        run: |
+          APP="convocados-pr-${{ needs.authorize.outputs.pr_number }}"
+          echo "name=$APP" >> "$GITHUB_OUTPUT"
+          echo "url=https://${APP}.fly.dev" >> "$GITHUB_OUTPUT"
+
+      - name: Create Fly app if missing
+        run: |
+          APP="${{ steps.app.outputs.name }}"
+          if ! flyctl status --app "$APP" >/dev/null 2>&1; then
+            flyctl apps create "$APP" --org "$FLY_ORG"
+          fi
+
+      # Staged so it is applied by the deploy below; deterministic across
+      # redeploys, so auth sessions survive pushes to the same PR.
+      - name: Stage preview auth secret
+        env:
+          PREVIEW_SECRET: ${{ secrets.PREVIEW_BETTER_AUTH_SECRET }}
+        run: |
+          if [ -z "$PREVIEW_SECRET" ]; then
+            echo "::error::Repository secret PREVIEW_BETTER_AUTH_SECRET is not configured."
+            exit 1
+          fi
+          printf '%s' "$PREVIEW_SECRET" | flyctl secrets set BETTER_AUTH_SECRET=- \
+            --stage --app "${{ steps.app.outputs.name }}"
+
+      - name: Deploy preview
+        run: |
+          flyctl deploy --remote-only \
+            --config .fly/preview.toml \
+            --app "${{ steps.app.outputs.name }}" \
+            --env "BETTER_AUTH_URL=${{ steps.app.outputs.url }}" \
+            --strategy immediate \
+            --wait-timeout 300
+
+      - name: Report success
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const url = '${{ steps.app.outputs.url }}';
+            const marker = '<!-- convocados-preview -->';
+            const body = [
+              marker,
+              ':white_check_mark: **Preview deployed**',
+              '',
+              `- :link: ${url}`,
+              '- :deciduous_tree: Deployed from the current PR head',
+              '- :wastebasket: Destroyed automatically when this PR closes (`/preview-stop` to stop early)',
+              '',
+              '_Preview data is ephemeral and disposable — do not enter real credentials or personal data._',
+            ].join('\n');
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.data.find((c) => c.body?.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Report failure
+        if: failure()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: ':x: **Preview deployment failed** — check the ' +
+                    '[workflow run](' + process.env.GITHUB_SERVER_URL + '/' +
+                    context.repo.owner + '/' + context.repo.repo + '/actions/runs/' +
+                    process.env.GITHUB_RUN_ID + ') for logs.',
+            });
+
+  # ── Teardown: explicit command ───────────────────────────────────────────────
+  destroy-on-command:
+    needs: authorize
+    if: needs.authorize.outputs.command == '/preview-stop' && needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Destroy preview app
+        run: |
+          APP="convocados-pr-${{ needs.authorize.outputs.pr_number }}"
+          flyctl apps destroy "$APP" --yes || true
+          echo "Destroyed $APP"
+
+  # ── Teardown: automatic on PR close ──────────────────────────────────────────
+  destroy-on-close:
+    if: github.event_name == 'pull_request_target' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Destroy preview app
+        run: |
+          APP="convocados-pr-${{ github.event.pull_request.number }}"
+          flyctl apps destroy "$APP" --yes || true
+          echo "Destroyed $APP (PR closed)"
