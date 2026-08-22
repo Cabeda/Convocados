@@ -723,6 +723,14 @@ model PriorityConfirmation {
 // Rsvp(null). 'Invited' entries are excluded from maxPlayers, bench cap,
 // payments, team draws and gamesPlayed until they accept.
 
+enum PlayerInviteStatus {
+  pending
+  accepted
+  declined
+  expired
+  cancelled
+}
+
 model PlayerInvite {
   id              String      @id @default(cuid())
   gameId          String
@@ -732,7 +740,7 @@ model PlayerInvite {
   invitedByUserId String
   invitedBy       User        @relation("PlayerInviteBy", fields: [invitedByUserId], references: [id], onDelete: Cascade)
 
-  status         String    @default("pending") // pending | accepted | declined | expired | cancelled
+  status         PlayerInviteStatus    @default(pending)
   token          String    @unique
   notifiedAt     DateTime?
   respondedAt    DateTime?
