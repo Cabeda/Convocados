@@ -43,10 +43,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Gate already passed in the caller. Safe to check out untrusted code.
+      #
+      # allow-unsafe-pr-checkout is required for this review-app flow to reach
+      # fork PRs at all (checkout v7 refuses them here by default). It is a
+      # deliberate, reviewed opt-in: the authorization gate in preview.yml has
+      # already restricted deploys to the repo owner and .github/CODEOWNERS
+      # members, and nothing from the checkout is executed on this runner —
+      # the image build happens on Fly's remote builder (ADR 0022).
       - uses: actions/checkout@v7
         with:
           ref: refs/pull/${{ inputs.pr_number }}/head
           persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
