@@ -1,4 +1,4 @@
-// eslint-disable @typescript-eslint/ban-ts-comment
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { useState } from "react";
