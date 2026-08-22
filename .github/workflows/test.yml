@@ -151,8 +151,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { project: node, shard: 1, total: 2 }
-          - { project: node, shard: 2, total: 2 }
+          - { project: node, shard: 1, total: 4 }
+          - { project: node, shard: 2, total: 4 }
+          - { project: node, shard: 3, total: 4 }
+          - { project: node, shard: 4, total: 4 }
           - { project: jsdom, shard: 1, total: 3 }
           - { project: jsdom, shard: 2, total: 3 }
           - { project: jsdom, shard: 3, total: 3 }
@@ -165,8 +167,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          # No `cache: pnpm` here — node_modules cache below already covers
+          # installs; downloading the pnpm store too costs 9-13s per leg.
+          cache-dependency-path cache-dependency-path: pnpm-lock.yaml
       - name: Cache node_modules
         uses: actions/cache@v6
         id: nm-cache
