@@ -1107,12 +1107,43 @@ export const openApiSpec = {
         tags: ["Invites"],
         parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "Invite details" } },
-      },
-      post: {
-        summary: "Respond to an invite (accept/decline)",
-        tags: ["Invites"],
-        parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "Invite accepted or declined" } },
+      },
+    },
+    "/api/mcp": {
+      post: {
+        summary: "MCP 2026-07-28 stateless endpoint (tools/list, tools/call, server/discover)",
+        tags: ["MCP"],
+        security: [{ oauth2: [] }],
+        parameters: [
+          { name: "MCP-Protocol-Version", in: "header", required: true, schema: { type: "string", enum: ["2026-07-28"] } },
+          { name: "Mcp-Method", in: "header", required: true, schema: { type: "string" } },
+          { name: "Mcp-Name", in: "header", schema: { type: "string" } },
+        ],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { jsonrpc: { type: "string" }, id: {}, method: { type: "string" }, params: { type: "object" } } } } },
+        },
+        responses: { "200": { description: "JSON-RPC result" }, "400": { description: "Header or method error" }, "401": { description: "Unauthorized" } },
+      },
+      get: {
+        summary: "MCP SSE deprecation hint (use POST)",
+        tags: ["MCP"],
+        responses: { "405": { description: "Use POST with Mcp-Method header" } },
+      },
+    },
+    "/.well-known/oauth-protected-resource": {
+      get: {
+        summary: "OAuth protected resource metadata (RFC 9728) for MCP",
+        tags: ["OAuth"],
+        responses: { "200": { description: "Protected resource metadata" } },
+      },
+    },
+    "/.well-known/oauth-authorization-server": {
+      get: {
+        summary: "OAuth authorization server metadata (RFC 8414 + RFC 9207 iss)",
+        tags: ["OAuth"],
+        responses: { "200": { description: "Authorization server metadata" } },
       },
     },
   },
@@ -1129,6 +1160,7 @@ export const openApiSpec = {
     { name: "Webhooks", description: "Webhook subscriptions and delivery" },
     { name: "Users", description: "User profiles and authentication" },
     { name: "OAuth", description: "OAuth 2.1 authorization server endpoints" },
+    { name: "MCP", description: "Model Context Protocol 2026-07-28 stateless tools" },
   ],
   components: {
     securitySchemes: {
