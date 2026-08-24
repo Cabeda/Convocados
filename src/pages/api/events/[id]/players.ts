@@ -21,6 +21,7 @@ import { Randomize } from "../../../../lib/random";
 import { nextGameParticipantOrder } from "../../../../lib/game.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 import { getActiveRosterState } from "../../../../lib/roster.server";
+import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "../../../../lib/rosterCore.server";
 import {
   IDEMPOTENCY_HEADER,
   getCachedResponse,
@@ -616,12 +617,10 @@ export const POST: APIRoute = async ({ params, request }) => {
           },
         });
         if (event.currentGameId) {
-          const ep = await prisma.eventPlayer.upsert({
-            where: { eventId_name: { eventId, name: trimmed } },
-            create: { eventId, name: trimmed, userId: reactivatedUserId },
-            // ADR 0025: rejoining clears the per-event invite opt-out.
-            update: { ...(reactivatedUserId ? { userId: reactivatedUserId } : {}), invitationOptOutAt: null },
-          });
+          const ep = await upsertEventPlayerForRoster(
+            eventId,
+            { name: trimmed, userId: reactivatedUserId, user: reactivatedUserId ? { id: reactivatedUserId, name: trimmed } : null },
+          );
           await prisma.rsvp.upsert({
             where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
             create: { eventPlayerId: ep.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
@@ -630,11 +629,7 @@ export const POST: APIRoute = async ({ params, request }) => {
           // Restore the GameParticipant too — a previous leave archived it, and
           // without this the re-added player stays invisible on the game list.
           const gpOrder = await nextGameParticipantOrder(event.currentGameId);
-          await prisma.gameParticipant.upsert({
-            where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: ep.id } },
-            create: { gameId: event.currentGameId, eventPlayerId: ep.id, order: gpOrder },
-            update: { archivedAt: null, order: gpOrder },
-          });
+          await upsertGameParticipantForRoster({ gameId: event.currentGameId, eventPlayerId: ep.id, status: "active", order: gpOrder });
         }
         // Bug fix: re-activated players must be added to teams if within active range
         const readdIsOnBench = activeBefore >= event.maxPlayers;
@@ -649,12 +644,10 @@ export const POST: APIRoute = async ({ params, request }) => {
       // Player record exists at event level (from last week) but may not be in
       // the current game yet. If so, add them to the new game instead of erroring.
       if (existing && !existing.archivedAt && event.currentGameId) {
-        const eventPlayer = await prisma.eventPlayer.upsert({
-          where: { eventId_name: { eventId, name: trimmed } },
-          create: { eventId, name: trimmed, userId: linkedUserId ?? existing.userId },
-          // ADR 0025: rejoining clears the per-event invite opt-out.
-          update: { ...(linkedUserId ? { userId: linkedUserId } : {}), invitationOptOutAt: null },
-        });
+        const eventPlayer = await upsertEventPlayerForRoster(
+          eventId,
+          { name: trimmed, userId: linkedUserId ?? existing.userId, user: linkedUserId ? { id: linkedUserId, name: trimmed } : null },
+        );
         const alreadyInGame = await prisma.gameParticipant.findUnique({
           where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
         });
@@ -663,10 +656,7 @@ export const POST: APIRoute = async ({ params, request }) => {
           // leave flow. Un-archive it (at the end of the list) instead of
           // falling through to the 409 "already in the list" error.
           const gpOrder = await nextGameParticipantOrder(event.currentGameId);
-          await prisma.gameParticipant.update({
-            where: { id: alreadyInGame.id },
-            data: { archivedAt: null, order: gpOrder },
-          });
+          await upsertGameParticipantForRoster({ gameId: event.currentGameId, eventPlayerId: eventPlayer.id, status: "active", order: gpOrder });
           // Move player to end of list — same rule as a fresh re-join
           const maxOrder = await prisma.player.aggregate({
             where: { eventId, archivedAt: null },
@@ -687,10 +677,7 @@ export const POST: APIRoute = async ({ params, request }) => {
           return Response.json({ ok: true, invited: null, resolvedName: trimmed, anonymous: linkedUserId === null });
         }
         if (!alreadyInGame) {
-          const gpOrder = await nextGameParticipantOrder(event.currentGameId);
-          await prisma.gameParticipant.create({
-            data: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: gpOrder },
-          });
+          await upsertGameParticipantForRoster({ gameId: event.currentGameId, eventPlayerId: eventPlayer.id, status: "active" });
           // Move player to end of list — their old order is stale from the previous game
           const maxOrder = await prisma.player.aggregate({
             where: { eventId, archivedAt: null },
@@ -759,22 +746,13 @@ export const POST: APIRoute = async ({ params, request }) => {
     update: {},
   });
 
-  // ADR 0016: upsert EventPlayer + create GameParticipant in current Game
+  // ADR 0016: upsert EventPlayer + create GameParticipant in current Game — single place via rosterCore
   if (event.currentGameId) {
-    const eventPlayer = await prisma.eventPlayer.upsert({
-      where: { eventId_name: { eventId, name: trimmed } },
-      create: { eventId, name: trimmed, userId: linkedUserId },
-      // ADR 0025: joining clears any stale per-event invite opt-out.
-      update: { invitationOptOutAt: null },
-    });
-    const gpOrder = await nextGameParticipantOrder(event.currentGameId);
-    await prisma.gameParticipant.upsert({
-      where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
-      create: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id, order: gpOrder },
-      // Clear archivedAt: an archived GameParticipant can linger (e.g. after a
-      // merge removed the Player row) — joining must make the player visible.
-      update: { archivedAt: null },
-    });
+    const eventPlayer = await upsertEventPlayerForRoster(
+      eventId,
+      { name: trimmed, userId: linkedUserId, user: linkedUserId ? { id: linkedUserId, name: trimmed } : null },
+    );
+    await upsertGameParticipantForRoster({ gameId: event.currentGameId, eventPlayerId: eventPlayer.id, status: "active" });
     // Payment overhaul: keep per-game payment rows in sync with the roster.
     await syncGamePayments(event.currentGameId, eventId);
   }
