@@ -23,13 +23,13 @@ export interface AddPlayerConfirmDialogProps {
   isAdding: boolean;
   /** True while the underlying invite request is in flight. Disables the options. */
   isInviting: boolean;
-  onConfirmAdd: (intent: AddPlayerIntent) => void;
-  onConfirmInvite: (intent: AddPlayerIntent) => void;
+  /** Single place for both Add (active) and Invite (pending) — asInvite flag selects the flow. */
+  onConfirm: (intent: AddPlayerIntent, asInvite: boolean) => void;
   onClose: () => void;
 }
 
 export function AddPlayerConfirmDialog({
-  intent, eventName, isBench, isAdding, isInviting, onConfirmAdd, onConfirmInvite, onClose,
+  intent, eventName, isBench, isAdding, isInviting, onConfirm, onClose,
 }: AddPlayerConfirmDialogProps) {
   const t = useT();
 
@@ -65,7 +65,7 @@ export function AddPlayerConfirmDialog({
             type="button"
             data-testid="add-player-confirm-add"
             disabled={busy}
-            onClick={() => onConfirmAdd(intent)}
+            onClick={() => onConfirm(intent, false)}
             sx={{
               display: "flex", alignItems: "flex-start", gap: 1.5, width: "100%",
               border: 1, borderColor: "divider", borderRadius: 2, mb: 1,
@@ -93,7 +93,7 @@ export function AddPlayerConfirmDialog({
               type="button"
               data-testid="add-player-confirm-invite"
               disabled={busy}
-              onClick={() => onConfirmInvite(intent)}
+              onClick={() => onConfirm(intent, true)}
               sx={{
                 display: "flex", alignItems: "flex-start", gap: 1.5, width: "100%",
                 border: 1, borderColor: "divider", borderRadius: 2,

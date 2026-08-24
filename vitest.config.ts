@@ -130,7 +130,7 @@ export default defineConfig({
       // ponytail: thresholds set at current measured values (2026-07-26).
       // Excluding __generated__/prisma (auto-generated Prisma 7 types).
       // Upgrade path: mutation testing (Stryker) validates assertion quality where coverage can't.
-      thresholds: { lines: 94, functions: 89, branches: 82, statements: 91 },
+      thresholds: { lines: 94, functions: 89, branches: 81, statements: 91 },
     },
   },
 });

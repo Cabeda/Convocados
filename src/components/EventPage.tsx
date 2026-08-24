@@ -465,27 +465,72 @@ export default function EventPage({ eventId }: { eventId: string }) {
     setAddIntent(intent);
   };
 
-  const handleConfirmAdd = async (intent: AddPlayerIntent) => {
-    const idempotencyKey = crypto.randomUUID();
-    const confirmedName = intent.name;
+  // Single place for all roster intents — Add (active) vs Invite (pending).
+  // Both chip/dropdown/input paths funnel through here, so the add/invite
+  // decision is in one spot and the two API flows (players vs invites) are
+  // not duplicated across the codebase.
+  const handleConfirm = async (intent: AddPlayerIntent, asInvite: boolean) => {
     setAddIntent(null);
-    await performAdd(intent.name, false, intent.email, idempotencyKey);
-    // If performAdd did nothing because of the in-flight guard, the snackbar
-    // already informed the user. Otherwise, use the resolved name from
-    // performAdd for the snackbar (the snackbar is set inside performAdd).
-    void confirmedName;
-  };
-
-  const handleConfirmInvite = async (intent: AddPlayerIntent) => {
-    const confirmedName = intent.name;
-    setAddIntent(null);
-    if (intent.email) {
-      const idempotencyKey = crypto.randomUUID();
-      await performAdd(intent.name, false, intent.email, idempotencyKey);
-    } else if (intent.userId) {
-      await invitePlayer(intent.userId, intent.name);
+    if (asInvite) {
+      if (intent.email) {
+        // Invite by email: for registered users create a pending PlayerInvite
+        // (not a direct add). For unregistered emails the invites endpoint
+        // returns 404 and we fall back to the direct-add-with-email flow
+        // which sends the "invite to register" email.
+        setPlayerError(null);
+        setInvitingName(intent.name);
+        try {
+          const res = await fetch(`/api/events/${eventId}/invites`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: intent.email }),
+          });
+          const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
+          if (res.ok) {
+            const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
+            const anyChannel = !!(channels?.email || channels?.webPush || channels?.appPush);
+            if (typeof json?.inviteUrl === "string") {
+              if (anyChannel) {
+                const labels: string[] = [];
+                if (channels?.email) labels.push(t("channelEmail"));
+                if (channels?.webPush) labels.push(t("channelWebPush"));
+                if (channels?.appPush) labels.push(t("channelAppPush"));
+                setSnackbar(t("inviteSentVia", { name: intent.name, channels: labels.join(", ") }));
+              }
+              setInviteShare({ url: json.inviteUrl, name: intent.name });
+            } else if (anyChannel) {
+              const labels: string[] = [];
+              if (channels?.email) labels.push(t("channelEmail"));
+              if (channels?.webPush) labels.push(t("channelWebPush"));
+              if (channels?.appPush) labels.push(t("channelAppPush"));
+              setSnackbar(t("inviteSentVia", { name: intent.name, channels: labels.join(", ") }));
+            } else {
+              setSnackbar(t("inviteSent", { name: intent.name }));
+            }
+            fetchEvent();
+            return;
+          }
+          if (res.status === 404 && typeof json.error === "string" && json.error.includes("No registered user")) {
+            const idempotencyKey = crypto.randomUUID();
+            await performAdd(intent.name, false, intent.email, idempotencyKey);
+            return;
+          }
+          setPlayerError(json.error ?? t("somethingWentWrong"));
+        } catch {
+          setPlayerError(t("somethingWentWrong"));
+        } finally {
+          setInvitingName(null);
+        }
+        return;
+      }
+      if (intent.userId) {
+        await invitePlayer(intent.userId, intent.name);
+        return;
+      }
+      return;
     }
-    void confirmedName;
+    const idempotencyKey = crypto.randomUUID();
+    await performAdd(intent.name, false, intent.email, idempotencyKey);
   };
 
   // Routes the Quick Join pill click: opens the payment-nudge dialog when the user
@@ -1058,8 +1103,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
           isBench={event.players.length >= event.maxPlayers}
           isAdding={!!addInFlightName}
           isInviting={!!invitingName}
-          onConfirmAdd={handleConfirmAdd}
-          onConfirmInvite={handleConfirmInvite}
+          onConfirm={handleConfirm}
           onClose={() => setAddIntent(null)}
         />
 
