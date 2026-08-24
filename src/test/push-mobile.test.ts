@@ -334,11 +334,11 @@ describe("sendPushToEvent — mobile app push delivery", () => {
     expect(ptCall).toBeDefined();
 
     const body = JSON.parse(ptCall![1].body);
-    const notification = body.message?.notification;
-    expect(notification).toBeDefined();
+    const data = body.message.data;
+    expect(data.title).toBe("Push Test Game");
     // Body should contain the player name and spots left suffix
-    expect(notification.body).toContain("Someone");
-    expect(notification.body).toContain("·");
+    expect(data.body).toContain("Someone");
+    expect(data.body).toContain("·");
   });
 
   it("handles game full notification (spotsLeft = 0)", async () => {
@@ -371,9 +371,50 @@ describe("sendPushToEvent — mobile app push delivery", () => {
     expect(fullCall).toBeDefined();
 
     const body = JSON.parse(fullCall![1].body);
-    const notification = body.message?.notification;
-    expect(notification).toBeDefined();
-    expect(notification.body).toContain("·");
+    const data = body.message.data;
+    expect(data.title).toBe("Push Test Game");
+    expect(data.body).toContain("·");
+  });
+
+  it("sends data-only FCM messages with url and type for Android action handling", async () => {
+    const ownerId = await seedUser("owner-dataonly", "Owner");
+    const playerId = await seedUser("player-dataonly", "Player");
+    const eventId = await seedEvent(ownerId, "evt-dataonly");
+
+    await prisma.player.create({
+      data: { name: "Player", eventId, userId: playerId, order: 0 },
+    });
+    await followEvent(playerId, eventId);
+    await prisma.appPushToken.create({
+      data: { userId: playerId, token: "fcm-token-dataonly-1", platform: "android" },
+    });
+
+    const { sendPushToEvent } = await import("~/lib/push.server");
+    await sendPushToEvent(
+      eventId,
+      "Push Test Game",
+      "notifyGameReminder24h",
+      { title: "Push Test Game" },
+      `/events/${eventId}`,
+      5,
+      undefined,
+      "reminder",
+      "24h",
+    );
+
+    const call = getFcmCalls().find((c: any[]) => getFcmToken(c) === "fcm-token-dataonly-1");
+    expect(call).toBeDefined();
+
+    const body = JSON.parse(call![1].body);
+    // No `notification` block: Firebase would auto-render a plain system
+    // notification in the background and skip onMessageReceived entirely.
+    expect(body.message.notification).toBeUndefined();
+    expect(body.message.data.url).toBe(`/events/${eventId}`);
+    expect(body.message.data.type).toBe("reminder");
+    expect(body.message.data.reminderType).toBe("24h");
+    expect(body.message.data.title).toBe("Push Test Game");
+    expect(typeof body.message.data.body).toBe("string");
+    expect(body.message.data.body.length).toBeGreaterThan(0);
   });
 });
 
@@ -395,8 +436,9 @@ describe("sendPushToUser — direct user push", () => {
     expect(directCall).toBeDefined();
 
     const body = JSON.parse(directCall![1].body);
-    expect(body.message.notification.title).toBe("Test Title");
-    expect(body.message.notification.body).toBe("Test body message");
+    expect(body.message.notification).toBeUndefined();
+    expect(body.message.data.title).toBe("Test Title");
+    expect(body.message.data.body).toBe("Test body message");
     expect(body.message.data.url).toBe("/test");
   });
 

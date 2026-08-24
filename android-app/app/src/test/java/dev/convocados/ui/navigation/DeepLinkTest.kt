@@ -76,6 +76,20 @@ class DeepLinkTest {
     }
 
     @Test
+    fun `getStringExtra url is used as last-resort fallback (FCM data extras)`() {
+        // When an FCM message carries a `notification` block, Firebase auto-displays it
+        // and merges the data payload into the launch intent as raw extras — the key
+        // is the server's data map key ("url"), not our "deep_link" convention.
+        val intent = mockk<Intent>()
+        every { intent.data } returns null
+        every { intent.getStringExtra("deep_link") } returns null
+        every { intent.getStringExtra("navigate_to") } returns null
+        every { intent.getStringExtra("url") } returns "/events/evt-fcm"
+
+        assertEquals("/events/evt-fcm", DeepLink.extract(intent))
+    }
+
+    @Test
     fun `null intent returns null without throwing`() {
         assertNull(DeepLink.extract(null))
     }

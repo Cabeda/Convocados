@@ -6,7 +6,6 @@ import android.content.Intent
 import android.app.NotificationManager
 import android.util.Log
 import dagger.hilt.android.AndroidEntryPoint
-import dev.convocados.data.api.ConvocadosApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -19,7 +18,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class NotificationActionReceiver : BroadcastReceiver() {
 
-    @Inject lateinit var api: ConvocadosApi
+    @Inject lateinit var handler: NotificationActionHandler
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.getStringExtra(EXTRA_ACTION) ?: return
@@ -37,18 +36,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         // Fire-and-forget API call
         CoroutineScope(Dispatchers.IO).launch {
-            try {
-                when (action) {
-                    ACTION_RSVP_YES -> api.submitRsvp(eventId, "yes")
-                    ACTION_RSVP_NO -> api.submitRsvp(eventId, "no")
-                    ACTION_JOIN -> api.quickJoin(eventId)
-                    ACTION_CONFIRM_PAYMENT -> if (playerName != null) {
-                        api.updatePaymentStatus(eventId, playerName, "paid")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("NotificationAction", "Failed: $action for $eventId", e)
-            }
+            handler.handle(action, eventId, playerName)
         }
     }
 
@@ -58,9 +46,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_NOTIFICATION_ID = "notification_id"
         const val EXTRA_PLAYER_NAME = "player_name"
 
-        const val ACTION_RSVP_YES = "rsvp_yes"
-        const val ACTION_RSVP_NO = "rsvp_no"
-        const val ACTION_JOIN = "join"
-        const val ACTION_CONFIRM_PAYMENT = "confirm_payment"
+        const val ACTION_RSVP_YES = NotificationActionHandler.ACTION_RSVP_YES
+        const val ACTION_RSVP_NO = NotificationActionHandler.ACTION_RSVP_NO
+        const val ACTION_JOIN = NotificationActionHandler.ACTION_JOIN
+        const val ACTION_CONFIRM_PAYMENT = NotificationActionHandler.ACTION_CONFIRM_PAYMENT
     }
 }
