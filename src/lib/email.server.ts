@@ -1,5 +1,6 @@
 import type { Resend as ResendClass } from "resend";
 import { createLogger } from "./logger.server";
+import { getOrCreateUnsubscribeTokenByEmail, type UnsubscribeType } from "./unsubscribe.server";
 
 const log = createLogger("email");
 
@@ -33,12 +34,57 @@ function getAppUrl(): string {
   return import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev";
 }
 
-function emailTemplate({ heading, body, buttonText, buttonUrl, footnote }: {
+/** In-app page where email preferences can be updated (login required). */
+export const EMAIL_PREFERENCES_PATH = "/settings/notifications";
+
+interface FooterLinks {
+  /** Rendered anchor row for the template footer. */
+  html: string;
+  /** List-Unsubscribe headers for RFC 8058 one-click (only when unsubscribable). */
+  headers: Record<string, string>;
+}
+
+const LINK_STYLE = "font-size: 12px; color: #8a9b92; text-decoration: none;";
+
+/**
+ * Build the footer links every email carries: a quick link to email
+ * preferences, plus — when the email type maps to a preference toggle — a
+ * tokenized one-click unsubscribe link that works without login.
+ */
+async function buildFooterLinks(
+  to: string,
+  unsubscribeType: UnsubscribeType | null,
+  unsubscribeLabel = "Unsubscribe",
+): Promise<FooterLinks> {
+  const preferencesUrl = `${getAppUrl()}${EMAIL_PREFERENCES_PATH}`;
+  let linksHtml = `<a href="${preferencesUrl}" style="${LINK_STYLE}">Email preferences</a>`;
+  const headers: Record<string, string> = {};
+
+  if (unsubscribeType) {
+    try {
+      const token = await getOrCreateUnsubscribeTokenByEmail(to);
+      if (token) {
+        const unsubscribeUrl = `${getAppUrl()}/api/unsubscribe?token=${token}&type=${unsubscribeType}`;
+        linksHtml += ` &nbsp;·&nbsp; <a href="${unsubscribeUrl}" style="${LINK_STYLE}">${unsubscribeLabel}</a>`;
+        headers["List-Unsubscribe"] = `<${unsubscribeUrl}>`;
+        headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click";
+      }
+    } catch (err) {
+      // Footer links must never block a send.
+      log.warn({ err }, "Failed to build unsubscribe link — sending without it");
+    }
+  }
+
+  return { html: linksHtml, headers };
+}
+
+function emailTemplate({ heading, body, buttonText, buttonUrl, footnote, footerLinks }: {
   heading: string;
   body: string;
   buttonText: string;
   buttonUrl: string;
   footnote: string;
+  footerLinks?: string;
 }) {
   return `
 <!DOCTYPE html>
@@ -87,7 +133,7 @@ function emailTemplate({ heading, body, buttonText, buttonUrl, footnote }: {
           <!-- Footer -->
           <tr>
             <td style="padding: 20px 32px; border-top: 1px solid #e8ece9; text-align: center;">
-              <a href="${getAppUrl()}" style="font-size: 12px; color: #8a9b92; text-decoration: none;">convocados.cabeda.dev</a>
+              <a href="${getAppUrl()}" style="${LINK_STYLE}">convocados.cabeda.dev</a>${footerLinks ? ` &nbsp;·&nbsp; ${footerLinks}` : ""}
             </td>
           </tr>
         </table>
@@ -101,6 +147,7 @@ function emailTemplate({ heading, body, buttonText, buttonUrl, footnote }: {
 export async function sendVerificationEmail(to: string, url: string) {
   log.info({ to }, "Sending verification email");
   const resend = await getResend();
+  const links = await buildFooterLinks(to, null);
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -111,7 +158,9 @@ export async function sendVerificationEmail(to: string, url: string) {
       buttonText: "Verify email",
       buttonUrl: url,
       footnote: "If you didn't create an account, you can safely ignore this email. This link will expire in 24 hours.",
+      footerLinks: links.html,
     }),
+    headers: links.headers,
   });
   if (result.error) {
     log.error({ err: result.error }, "Failed to send verification email");
@@ -139,6 +188,7 @@ export interface PlayerJoinedOwnerData {
 export async function sendPlayerJoinedOwnerNotification(to: string, data: PlayerJoinedOwnerData) {
   const resend = await getResend();
   const spotsText = data.spotsLeft === 0 ? "Game is now full" : `${data.spotsLeft} spot${data.spotsLeft === 1 ? "" : "s"} left`;
+  const links = await buildFooterLinks(to, "all", "Turn off these emails");
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -148,14 +198,17 @@ export async function sendPlayerJoinedOwnerNotification(to: string, data: Player
       body: `<strong>${data.playerName}</strong> just joined <strong>${data.eventTitle}</strong>.<br/><br/>👥 ${spotsText}`,
       buttonText: "View game",
       buttonUrl: data.eventUrl,
-      footnote: `Don't want these emails? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+      footnote: "",
+      footerLinks: links.html,
     }),
+    headers: links.headers,
   });
   if (result.error) throw new Error(`Failed to send player joined notification: ${result.error.message}`);
 }
 
 export async function sendGameInvite(to: string, data: GameInviteData) {
   const resend = await getResend();
+  const links = await buildFooterLinks(to, "gameInvite", "Unsubscribe from invites");
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -165,8 +218,10 @@ export async function sendGameInvite(to: string, data: GameInviteData) {
       body: `📍 ${data.location}<br/>🕐 ${new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}`,
       buttonText: "View game",
       buttonUrl: data.eventUrl,
-      footnote: `Don't want these emails? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+      footnote: "",
+      footerLinks: links.html,
     }),
+    headers: links.headers,
   });
   if (result.error) throw new Error(`Failed to send game invite: ${result.error.message}`);
 }
@@ -190,6 +245,7 @@ export async function sendPlayerInviteToRegister(to: string, data: PlayerInviteD
   const inviter = data.inviterName ? `${data.inviterName} added you to` : "You've been added to";
   const signupUrl = `${getAppUrl()}/auth/signup?email=${encodeURIComponent(to)}`;
   const inviterLabel = data.inviterName ?? "Someone";
+  const links = await buildFooterLinks(to, null);
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -200,6 +256,7 @@ export async function sendPlayerInviteToRegister(to: string, data: PlayerInviteD
       buttonText: "Join Convocados",
       buttonUrl: signupUrl,
       footnote: `Or just view the game: <a href="${data.eventUrl}" style="color:#1b6b4a;">${data.eventTitle}</a><br/><br/>Didn't expect this? This is a one-time invite from ${inviterLabel}. You won't receive further emails unless you create an account. <a href="mailto:abuse@convocados.cabeda.dev" style="color:#1b6b4a;">Report abuse</a>`,
+      footerLinks: links.html,
     }),
   });
   if (result.error) throw new Error(`Failed to send player invite: ${result.error.message}`);
@@ -217,6 +274,7 @@ export interface ReminderData {
 export async function sendReminder(to: string, data: ReminderData) {
   const spotsText = data.spotsLeft > 0 ? `${data.spotsLeft} spots left` : "Game is full";
   const resend = await getResend();
+  const links = await buildFooterLinks(to, "gameReminder", "Unsubscribe from reminders");
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -226,8 +284,10 @@ export async function sendReminder(to: string, data: ReminderData) {
       body: `📍 ${data.location}<br/>🕐 ${new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}<br/>👥 ${spotsText}`,
       buttonText: "View game",
       buttonUrl: data.eventUrl,
-      footnote: `Don't want reminders? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+      footnote: "",
+      footerLinks: links.html,
     }),
+    headers: links.headers,
   });
   if (result.error) throw new Error(`Failed to send reminder: ${result.error.message}`);
 }
@@ -248,6 +308,7 @@ export async function sendWeeklySummary(to: string, data: WeeklySummaryData) {
     : "";
   const body = `Hey ${data.userName}!<br/><br/><strong>Upcoming</strong><br/>${upcomingHtml}${resultsHtml ? `<br/><br/><strong>Recent results</strong><br/>${resultsHtml}` : ""}`;
   const resend = await getResend();
+  const links = await buildFooterLinks(to, "weeklySummary", "Unsubscribe from summaries");
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -257,8 +318,10 @@ export async function sendWeeklySummary(to: string, data: WeeklySummaryData) {
       body,
       buttonText: "Go to dashboard",
       buttonUrl: data.dashboardUrl,
-      footnote: `Don't want weekly summaries? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+      footnote: "",
+      footerLinks: links.html,
     }),
+    headers: links.headers,
   });
   if (result.error) throw new Error(`Failed to send weekly summary: ${result.error.message}`);
 }
@@ -266,6 +329,7 @@ export async function sendWeeklySummary(to: string, data: WeeklySummaryData) {
 export async function sendMagicLinkEmail(to: string, url: string) {
   log.info({ to }, "Sending magic link email");
   const resend = await getResend();
+  const links = await buildFooterLinks(to, null);
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -276,6 +340,7 @@ export async function sendMagicLinkEmail(to: string, url: string) {
       buttonText: "Sign in",
       buttonUrl: url,
       footnote: "If you didn't request this link, you can safely ignore this email.",
+      footerLinks: links.html,
     }),
   });
   if (result.error) {
@@ -288,6 +353,7 @@ export async function sendMagicLinkEmail(to: string, url: string) {
 export async function sendChangeEmailVerification(to: string, url: string) {
   log.info({ to }, "Sending change-email verification");
   const resend = await getResend();
+  const links = await buildFooterLinks(to, null);
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -298,6 +364,7 @@ export async function sendChangeEmailVerification(to: string, url: string) {
       buttonText: "Confirm new email",
       buttonUrl: url,
       footnote: "If you didn't request this change, you can safely ignore this email. Your current email will remain unchanged.",
+      footerLinks: links.html,
     }),
   });
   if (result.error) {
@@ -318,6 +385,7 @@ export interface PaymentReminderData {
 
 export async function sendPaymentReminder(to: string, data: PaymentReminderData) {
   const resend = await getResend();
+  const links = await buildFooterLinks(to, "paymentReminder", "Unsubscribe from payment reminders");
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -327,8 +395,10 @@ export async function sendPaymentReminder(to: string, data: PaymentReminderData)
       body: `You have an outstanding payment of <strong>${data.amount} ${data.currency}</strong> for this game.<br/><br/>Please settle your payment or contact the event organizer.`,
       buttonText: "View game",
       buttonUrl: data.eventUrl,
-      footnote: `Don't want payment reminders? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+      footnote: "",
+      footerLinks: links.html,
     }),
+    headers: links.headers,
   });
   if (result.error) throw new Error(`Failed to send payment reminder: ${result.error.message}`);
 }
@@ -348,6 +418,7 @@ export async function sendPriorityEnrollment(to: string, data: PriorityEnrollmen
   const deadlineStr = new Date(data.deadline).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   const dateStr = new Date(data.dateTime).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   const resend = await getResend();
+  const links = await buildFooterLinks(to, null);
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -357,7 +428,8 @@ export async function sendPriorityEnrollment(to: string, data: PriorityEnrollmen
       body: `Your spot is reserved based on your attendance record.<br/><br/>📍 ${data.location}<br/>🕐 ${dateStr}<br/><br/>Confirm by <strong>${deadlineStr}</strong> or your spot opens up for others.<br/><br/><a href="${data.declineUrl}" style="color:#1b6b4a;">Can't make it? Decline here</a>`,
       buttonText: "Confirm my spot",
       buttonUrl: data.confirmUrl,
-      footnote: `Don't want auto-enrollment? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">Manage your settings</a>`,
+      footnote: "",
+      footerLinks: links.html,
     }),
   });
   if (result.error) throw new Error(`Failed to send priority enrollment email: ${result.error.message}`);
@@ -366,6 +438,7 @@ export async function sendPriorityEnrollment(to: string, data: PriorityEnrollmen
 export async function sendPriorityDeadlineReminder(to: string, data: PriorityEnrollmentData) {
   const deadlineStr = new Date(data.deadline).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   const resend = await getResend();
+  const links = await buildFooterLinks(to, null);
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -375,7 +448,8 @@ export async function sendPriorityDeadlineReminder(to: string, data: PriorityEnr
       body: `You haven't confirmed yet for <strong>${data.eventTitle}</strong>.<br/><br/>Your spot will be released on <strong>${deadlineStr}</strong>.<br/><br/><a href="${data.declineUrl}" style="color:#1b6b4a;">Can't make it? Decline here</a>`,
       buttonText: "Confirm my spot",
       buttonUrl: data.confirmUrl,
-      footnote: `Don't want auto-enrollment? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">Manage your settings</a>`,
+      footnote: "",
+      footerLinks: links.html,
     }),
   });
   if (result.error) throw new Error(`Failed to send priority deadline reminder: ${result.error.message}`);
@@ -403,6 +477,7 @@ export async function sendAdminRoleNotification(to: string, data: AdminRoleNotif
     : `You've been removed as an admin from <strong>${data.eventTitle}</strong>. You no longer have management access to this event.`;
   const buttonText = isAdded ? "View event" : "Go to dashboard";
   const buttonUrl = isAdded ? data.eventUrl : getAppUrl();
+  const links = await buildFooterLinks(to, "all", "Turn off these emails");
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -412,14 +487,17 @@ export async function sendAdminRoleNotification(to: string, data: AdminRoleNotif
       body,
       buttonText,
       buttonUrl,
-      footnote: `Don't want these emails? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">unsubscribe</a>`,
+      footnote: "",
+      footerLinks: links.html,
     }),
+    headers: links.headers,
   });
   if (result.error) throw new Error(`Failed to send admin role notification: ${result.error.message}`);
 }
 
 export async function sendPrioritySpotReleased(to: string, data: { eventTitle: string; eventUrl: string }) {
   const resend = await getResend();
+  const links = await buildFooterLinks(to, null);
   const result = await resend.emails.send({
     from: EMAIL_FROM,
     to,
@@ -429,7 +507,8 @@ export async function sendPrioritySpotReleased(to: string, data: { eventTitle: s
       body: `The confirmation deadline passed for <strong>${data.eventTitle}</strong>.<br/><br/>You can still join manually if spots are available.`,
       buttonText: "View game",
       buttonUrl: data.eventUrl,
-      footnote: `Don't want auto-enrollment? <a href="${getAppUrl()}/dashboard" style="color:#1b6b4a;">Manage your settings</a>`,
+      footnote: "",
+      footerLinks: links.html,
     }),
   });
   if (result.error) throw new Error(`Failed to send priority spot released email: ${result.error.message}`);
