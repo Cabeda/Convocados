@@ -4,12 +4,12 @@ import PhoneIphoneIcon from "@mui/icons-material/PhoneIphone";
 import { useT } from "~/lib/useT";
 import { IOS_CAMPAIGN, campaignProgressPercent } from "~/lib/campaign";
 
-const ANDROID_BETA_URL = "https://play.google.com/apps/testing/com.cabeda.Convocados";
+const ANDROID_STORE_URL = "https://play.google.com/store/apps/details?id=com.cabeda.Convocados";
 const DOCS_URL = "/docs/mobile";
 
 /**
  * "Apps for every team" — landing-page cards for the native mobile apps.
- * Android is available as a beta; iOS is awaiting funding for the Apple
+ * Android is available on Google Play; iOS is awaiting funding for the Apple
  * Developer Program membership. Create-a-game remains the page's primary
  * action; these cards are optional and outcome-driven.
  */
@@ -40,7 +40,7 @@ export default function AppsSection() {
           spacing={3}
           sx={{ justifyContent: "center", alignItems: "stretch" }}
         >
-          {/* Android beta card */}
+          {/* Android Play Store card */}
           <Box sx={{
             flex: 1,
             maxWidth: 520,
@@ -61,7 +61,7 @@ export default function AppsSection() {
             </Typography>
             <Button
               component="a"
-              href={ANDROID_BETA_URL}
+              href={ANDROID_STORE_URL}
               target="_blank"
               rel="noopener noreferrer"
               variant="contained"

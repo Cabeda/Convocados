@@ -14,7 +14,7 @@ import CreateEventForm from "./CreateEventForm";
 import AppsSection from "./AppsSection";
 import { useT } from "~/lib/useT";
 
-const BETA_URL = "https://play.google.com/apps/testing/com.cabeda.Convocados";
+const STORE_URL = "https://play.google.com/store/apps/details?id=com.cabeda.Convocados";
 
 const FEATURES = [
   { icon: CasinoIcon, key: "landingFeatureTeams" },
@@ -100,7 +100,7 @@ function HeroContent() {
 
       <Button
         component="a"
-        href={BETA_URL}
+        href={STORE_URL}
         target="_blank"
         rel="noopener noreferrer"
         variant="contained"
