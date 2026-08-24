@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { getSession, checkEventAdmin } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
-import { createPlayerInvite, retractPlayerInvite, expirePendingInvites } from "~/lib/invite.server";
+import { createPlayerInvite, retractPlayerInvite, expirePendingInvites, resendPlayerInvite, InviteResendCooldownError } from "~/lib/invite.server";
 import { getNotificationPrefs, wantsInvites } from "~/lib/notificationPrefs.server";
 
 /**
@@ -10,6 +10,7 @@ import { getNotificationPrefs, wantsInvites } from "~/lib/notificationPrefs.serv
  *
  * GET    /api/events/[id]/invites       — list invites for the current game
  * POST   /api/events/[id]/invites       — create an invite: { userId }
+ * PATCH  /api/events/[id]/invites       — resend a pending invite: { inviteId }
  * DELETE /api/events/[id]/invites       — retract: { inviteId }
  */
 /**
@@ -142,6 +143,51 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ ok: true, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to create invite.";
+    return Response.json({ error: message }, { status: 400 });
+  }
+};
+
+/**
+ * Resend a pending invite (owner, admin, or the original inviter). Enforces a
+ * 24h cooldown since the last delivery — 429 with retryAfterSeconds while the
+ * invite was sent too recently.
+ */
+export const PATCH: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
+
+  const eventId = params.id ?? "";
+  const session = await getSession(request);
+  if (!session?.user) return Response.json({ error: "Authentication required." }, { status: 401 });
+
+  let body: { inviteId?: unknown };
+  try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
+  if (typeof body.inviteId !== "string") {
+    return Response.json({ error: "inviteId is required." }, { status: 400 });
+  }
+
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
+  const origin = `${proto}://${host}`;
+
+  try {
+    const result = await resendPlayerInvite({
+      eventId,
+      inviteId: body.inviteId,
+      requestedByUserId: session.user.id,
+      origin,
+    });
+    return Response.json({ ok: true, ...result });
+  } catch (err) {
+    if (err instanceof InviteResendCooldownError) {
+      return Response.json(
+        { error: err.message, retryAfterSeconds: err.retryAfterSeconds },
+        { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } },
+      );
+    }
+    const message = err instanceof Error ? err.message : "Failed to resend invite.";
+    if (message.includes("Only the owner")) return Response.json({ error: message }, { status: 403 });
+    if (message.includes("no longer pending")) return Response.json({ error: message }, { status: 409 });
     return Response.json({ error: message }, { status: 400 });
   }
 };

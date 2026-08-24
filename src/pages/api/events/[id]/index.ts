@@ -308,7 +308,14 @@ export const GET: APIRoute = async ({ params, request }) => {
   // both read-only, visible to participants + owner + admins only (plus the
   // invitee's own pending entry). Anonymous/followers get [].
   let declined: Array<{ id: string; name: string; userId: string | null; image: string | null }> = [];
-  let invited: Array<{ id: string; name: string; userId: string | null; image: string | null }> = [];
+  let invited: Array<{
+    id: string;
+    name: string;
+    userId: string | null;
+    image: string | null;
+    channels: { email: boolean; webPush: boolean; appPush: boolean };
+    notifiedAt: string | null;
+  }> = [];
   if (event.currentGameId) {
     const sessionForViewer = await getSession(request).catch(() => null);
     const viewerId = sessionForViewer?.user?.id ?? null;
@@ -359,13 +366,34 @@ export const GET: APIRoute = async ({ params, request }) => {
 
     // The invitee's own pending entry is always visible to them.
     if (viewerId && (viewerSeesRosterExtras || viewerHasPendingHere)) {
+      // ADR 0025 follow-up: attach the persisted per-invite delivery channels
+      // (email / web push / app push) + last-notified time so admins can see
+      // how an invite was sent and when a resend becomes available.
+      const pendingInviteRows = await prisma.playerInvite.findMany({
+        where: { gameId: event.currentGameId, status: "pending" },
+        select: {
+          eventPlayerId: true,
+          notifiedAt: true,
+          sentViaEmail: true,
+          sentViaWebPush: true,
+          sentViaAppPush: true,
+        },
+      });
+      const inviteByEventPlayerId = new Map(pendingInviteRows.map((pi) => [pi.eventPlayerId, pi]));
       invited = pendingParticipants.map((gp) => {
         const userId = gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name) ?? null;
+        const pi = inviteByEventPlayerId.get(gp.eventPlayer.id);
         return {
           id: gp.eventPlayer.id,
           name: gp.eventPlayer.name,
           userId,
           image: userId ? (imageByUserId.get(userId) ?? null) : null,
+          channels: {
+            email: pi?.sentViaEmail ?? false,
+            webPush: pi?.sentViaWebPush ?? false,
+            appPush: pi?.sentViaAppPush ?? false,
+          },
+          notifiedAt: pi?.notifiedAt?.toISOString() ?? null,
         };
       });
     }
