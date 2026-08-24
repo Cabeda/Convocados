@@ -155,6 +155,27 @@ class DeepLinkTest {
     }
 
     @Test
+    fun `deepLinkToRoute resolves court watches url`() {
+        // Server sends absolute APP_URL/court-watches from the court-watch cron
+        assertEquals(
+            "court-watches",
+            DeepLink.deepLinkToRoute("https://convocados.cabeda.dev/court-watches"),
+        )
+    }
+
+    @Test
+    fun `deepLinkToRoute resolves convocados court watches url`() {
+        val route = DeepLink.deepLinkToRoute("convocados://court-watches")
+        assertEquals("court-watches", route)
+    }
+
+    @Test
+    fun `deepLinkToRoute maps organizer dashboard url to games`() {
+        // No dashboard screen on Android — organizer digest notifications land on Games
+        assertEquals("games", DeepLink.deepLinkToRoute("/dashboard"))
+    }
+
+    @Test
     fun `deepLinkToRoute returns null for unknown url`() {
         assertNull(DeepLink.deepLinkToRoute("convocados://settings/unknown"))
     }
