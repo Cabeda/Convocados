@@ -659,3 +659,73 @@ describe("PlayerList — roster locked after game end (issue #716)", () => {
     expect(baseProps.onAddPlayer).not.toHaveBeenCalled();
   });
 });
+
+describe("PlayerList — invited roster: channel chips + resend (ADR 0025 follow-up)", () => {
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+
+  it("shows a chip per delivery channel next to the pending chip", () => {
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        invited={[{ id: "inv-1", name: "Eve", userId: null, channels: { email: true, webPush: false, appPush: true }, notifiedAt: hoursAgo(30) }]}
+      />,
+    );
+    expect(screen.getByText("Eve")).toBeInTheDocument();
+    expect(screen.getByTestId("invite-channel-email-inv-1")).toBeInTheDocument();
+    expect(screen.getByTestId("invite-channel-app-inv-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("invite-channel-web-inv-1")).not.toBeInTheDocument();
+    expect(screen.getByText(/pending/i)).toBeInTheDocument();
+  });
+
+  it("shows only the pending chip (with link-only tooltip) when no channel was used", () => {
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        invited={[{ id: "inv-2", name: "Frank", userId: null, channels: { email: false, webPush: false, appPush: false }, notifiedAt: null }]}
+      />,
+    );
+    expect(screen.queryByTestId(/invite-channel-/)).not.toBeInTheDocument();
+    expect(screen.getByText(/pending/i)).toBeInTheDocument();
+  });
+
+  it("enables the resend button after the 24h cooldown and calls onResendInvite", async () => {
+    const user = userEvent.setup();
+    const onResendInvite = vi.fn().mockResolvedValue(undefined);
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        canManageInvites
+        onResendInvite={onResendInvite}
+        invited={[{ id: "inv-3", name: "Grace", userId: null, channels: { email: true, webPush: false, appPush: false }, notifiedAt: hoursAgo(25) }]}
+      />,
+    );
+    const btn = screen.getByTestId("resend-invite-inv-3");
+    expect(btn).toBeEnabled();
+    await user.click(btn);
+    expect(onResendInvite).toHaveBeenCalledWith({ id: "inv-3", name: "Grace" });
+  });
+
+  it("disables the resend button within the 24h cooldown", () => {
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        canManageInvites
+        onResendInvite={vi.fn()}
+        invited={[{ id: "inv-4", name: "Heidi", userId: null, channels: { email: false, webPush: false, appPush: true }, notifiedAt: hoursAgo(2) }]}
+      />,
+    );
+    expect(screen.getByTestId("resend-invite-inv-4")).toBeDisabled();
+  });
+
+  it("hides the resend button for viewers who cannot manage invites", () => {
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        canManageInvites={false}
+        onResendInvite={vi.fn()}
+        invited={[{ id: "inv-5", name: "Ivan", userId: null, channels: { email: true, webPush: false, appPush: false }, notifiedAt: hoursAgo(48) }]}
+      />,
+    );
+    expect(screen.queryByTestId("resend-invite-inv-5")).not.toBeInTheDocument();
+  });
+});
