@@ -594,7 +594,7 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
             <Typography
               variant="body2"
               component="a"
-              href="https://play.google.com/apps/testing/com.cabeda.Convocados"
+              href="https://play.google.com/store/apps/details?id=com.cabeda.Convocados"
               target="_blank"
               rel="noopener noreferrer"
               sx={{ display: "flex", alignItems: "center", gap: 0.5, color: theme.palette.text.secondary, textDecoration: "none", "&:hover": { color: theme.palette.primary.main } }}
