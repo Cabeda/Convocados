@@ -3,7 +3,7 @@ import {
   Paper, Typography, Box, Stack, Chip, Button, Alert,
   IconButton, Tooltip, InputAdornment, TextField, Autocomplete,
   List, ListItem, ListItemText, Collapse,
-  alpha, useTheme, LinearProgress,
+  alpha, useTheme, LinearProgress, useMediaQuery, CircularProgress,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
@@ -17,6 +17,10 @@ import ScheduleSendIcon from "@mui/icons-material/ScheduleSend";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import SendIcon from "@mui/icons-material/Send";
+import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
+import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
+import AndroidIcon from "@mui/icons-material/Android";
+import LinkIcon from "@mui/icons-material/Link";
 import { useT } from "~/lib/useT";
 import { matchesWithName } from "~/lib/stringMatch";
 import { PlayerAvatar, AnonymousPlayerIcon } from "./PlayerIdentity";
@@ -95,14 +99,44 @@ export interface InviteChannelFlags {
   appPush: boolean;
 }
 
+/** Icon per delivery channel key (see sentChannels). */
+const CHANNEL_ICONS: Record<string, typeof EmailOutlinedIcon> = {
+  email: EmailOutlinedIcon,
+  web: NotificationsActiveIcon,
+  app: AndroidIcon,
+};
+
 /** Pure: which channels a pending invite was sent through. */
-export function sentChannels(channels: InviteChannelFlags | undefined): Array<{ key: string; labelKey: "channelEmail" | "channelWebPush" | "channelAppPush" }> {
+export function sentChannels(channels: InviteChannelFlags | undefined): Array<{ key: string; labelKey: InviteChannelLabelKey }> {
   if (!channels) return [];
-  const out: Array<{ key: string; labelKey: "channelEmail" | "channelWebPush" | "channelAppPush" }> = [];
+  const out: Array<{ key: string; labelKey: InviteChannelLabelKey }> = [];
   if (channels.email) out.push({ key: "email", labelKey: "channelEmail" });
   if (channels.webPush) out.push({ key: "web", labelKey: "channelWebPush" });
   if (channels.appPush) out.push({ key: "app", labelKey: "channelAppPush" });
   return out;
+}
+
+/**
+ * Delivery-channel chip. Progressive: icon-only on narrow screens (<sm) with an
+ * aria-label for screen readers; icon + text from sm up. Keeps invited rows on
+ * a single line on phones.
+ */
+type InviteChannelLabelKey = "channelEmail" | "channelWebPush" | "channelAppPush";
+
+function ChannelChip({ channelKey, labelKey, compact, inviteId }: { channelKey: string; labelKey: InviteChannelLabelKey; compact: boolean; inviteId: string }) {
+  const t = useT();
+  const Icon = CHANNEL_ICONS[channelKey] ?? NotificationsActiveIcon;
+  return (
+    <Chip
+      size="small"
+      variant="outlined"
+      color="default"
+      icon={<Icon fontSize="small" />}
+      label={compact ? undefined : t(labelKey)}
+      aria-label={t(labelKey)}
+      data-testid={`invite-channel-${channelKey}-${inviteId}`}
+    />
+  );
 }
 
 interface PlayerSuggestion {
@@ -209,6 +243,8 @@ export function PlayerList({
   const [declinedOpen, setDeclinedOpen] = useState(false);
   // Ticking clock for invite resend cooldowns (ADR 0025 follow-up).
   const now = useNow();
+  // Progressive disclosure: icon-only channel chips + compact controls below sm.
+  const isWide = useMediaQuery(theme.breakpoints.up("sm"));
 
   // Detect if the current input looks like an email address
   const isEmailInput = isEmailLike(playerInput.trim());
@@ -786,8 +822,9 @@ export function PlayerList({
                   const channelsUsed = sentChannels(d.channels);
                   const eligibility = resendEligibility(d.notifiedAt, now);
                   const resending = resendingInviteId === d.id;
+                  const canResend = canManageInvites && !!onResendInvite;
                   return (
-                    <ListItem key={d.id} sx={{ borderRadius: 2, px: 1, py: 0.5 }}>
+                    <ListItem key={d.id} sx={{ borderRadius: 2, px: 1, py: 0.5, overflow: "hidden" }}>
                       {d.userId ? (
                         <Tooltip title={t("protectedPlayer")}>
                           <span style={{ display: "inline-flex", alignItems: "center", marginRight: 4 }}>
@@ -807,44 +844,75 @@ export function PlayerList({
                             {d.name}
                           </a>
                         ) : d.name}
-                        slotProps={{ primary: { sx: { fontWeight: 500, fontSize: "0.9rem" } } }}
+                        slotProps={{
+                          primary: {
+                            sx: { fontWeight: 500, fontSize: "0.9rem" },
+                            noWrap: true,
+                          },
+                        }}
+                        sx={{ minWidth: 0, mr: 1 }}
                       />
-                      {/* ADR 0025 follow-up: how this invite was delivered */}
-                      {channelsUsed.length > 0 ? (
-                        <Stack direction="row" spacing={0.5} sx={{ mr: canManageInvites && onResendInvite ? 1 : 0.5, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                          {channelsUsed.map((c) => (
+                      {/* Right cluster: delivery channels + status + resend action.
+                          flexShrink:0 keeps controls intact; the name truncates instead. */}
+                      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
+                        {/* ADR 0025 follow-up: how this invite was delivered —
+                            icon-only below sm (touch-friendly, no wrapping),
+                            icon + label from sm up. */}
+                        {channelsUsed.map((c) => (
+                          <ChannelChip
+                            key={c.key}
+                            channelKey={c.key}
+                            labelKey={c.labelKey}
+                            compact={!isWide}
+                            inviteId={d.id}
+                          />
+                        ))}
+                        {channelsUsed.length === 0 && isWide && (
+                          <Tooltip title={t("inviteLinkOnly")}>
+                            <Chip size="small" variant="outlined" color="default" icon={<LinkIcon fontSize="small" />} label={t("inviteLinkOnlyShort")} data-testid={`invite-linkonly-${d.id}`} />
+                          </Tooltip>
+                        )}
+                        <Chip size="small" variant="outlined" color="primary" label={t("invitePendingLabel")} />
+                        {canResend && eligibility.eligible && (
+                          <Tooltip title={t("inviteResendAria", { name: d.name })}>
+                            <span>
+                              <IconButton
+                                edge="end"
+                                size="small"
+                                disabled={resending}
+                                data-testid={`resend-invite-${d.id}`}
+                                aria-label={t("inviteResendAria", { name: d.name })}
+                                onClick={() => void onResendInvite!({ id: d.id, name: d.name })}
+                                sx={{ p: 1 }}
+                              >
+                                {resending ? <CircularProgress size={16} /> : <SendIcon fontSize="small" />}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
+                        {canResend && !eligibility.eligible && (
+                          // Cooldown shown as a live chip instead of a dead button:
+                          // users see WHY resending isn't possible and for how long,
+                          // without relying on hover tooltips (useless on touch).
+                          // useNow() re-renders every 30s; when the cooldown elapses
+                          // the chip flips to an active resend button automatically.
+                          <Tooltip title={t("inviteResendCooldown", { time: formatCooldown(eligibility.remainingMs) })}>
                             <Chip
-                              key={c.key}
                               size="small"
                               variant="outlined"
                               color="default"
-                              label={t(c.labelKey)}
-                              data-testid={`invite-channel-${c.key}-${d.id}`}
+                              icon={<ScheduleSendIcon fontSize="small" />}
+                              label={
+                                <Typography component="span" variant="caption" sx={{ lineHeight: 1, fontSize: "0.7rem" }} aria-hidden>
+                                  {formatCooldown(eligibility.remainingMs)}
+                                </Typography>
+                              }
+                              data-testid={`resend-cooldown-${d.id}`}
+                              aria-label={t("inviteResendCooldown", { time: formatCooldown(eligibility.remainingMs) })}
                             />
-                          ))}
-                          <Chip size="small" variant="outlined" color="primary" label={t("invitePendingLabel")} />
-                        </Stack>
-                      ) : (
-                        <Tooltip title={t("inviteLinkOnly")}>
-                          <Chip size="small" variant="outlined" color="primary" label={t("invitePendingLabel")} sx={{ mr: 0.5 }} />
-                        </Tooltip>
-                      )}
-                      {canManageInvites && onResendInvite && (
-                        <Tooltip title={eligibility.eligible ? t("inviteResend") : t("inviteResendCooldown", { time: formatCooldown(eligibility.remainingMs) })}>
-                          <span>
-                            <IconButton
-                              edge="end"
-                              size="small"
-                              disabled={!eligibility.eligible || resending}
-                              data-testid={`resend-invite-${d.id}`}
-                              aria-label={t("inviteResendAria", { name: d.name })}
-                              onClick={() => void onResendInvite({ id: d.id, name: d.name })}
-                            >
-                              <SendIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      )}
+                          </Tooltip>
+                        )}
+                      </Stack>
                     </ListItem>
                   );
                 })}
