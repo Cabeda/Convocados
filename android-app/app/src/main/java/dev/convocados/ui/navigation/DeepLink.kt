@@ -92,7 +92,10 @@ object DeepLink {
         // Top-level routes
         return when (path.removePrefix("/")) {
             "games" -> Route.Games.route
+            // No dashboard screen on Android — organizer digest notifications land on Games
+            "dashboard" -> Route.Games.route
             "create" -> Route.CreateEvent.route
+            "court-watches" -> Route.CourtWatches.route
             else -> null
         }
     }
