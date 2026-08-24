@@ -194,6 +194,8 @@ describe("event payload exposes invite channels to admins", () => {
     expect(json.invited).toHaveLength(1);
     expect(json.invited[0].channels).toEqual({ email: false, webPush: false, appPush: true });
     expect(typeof json.invited[0].notifiedAt).toBe("string");
+    expect(typeof json.invited[0].inviteId).toBe("string");
+    expect(json.invited[0].id).toBeTruthy();
   });
 
   it("GET /api/events/[id]/invites includes sentVia* flags", async () => {
@@ -387,5 +389,32 @@ describe("PATCH /api/events/[id]/invites — resend route", () => {
   it("returns 401 unauthenticated", async () => {
     const res = await resendInvite(ctx({ id: "e-x" }, { inviteId: "i-x" }, "PATCH"));
     expect(res.status).toBe(401);
+  });
+
+  it("accepts EventPlayer id as fallback (historic UI sent gp.eventPlayer.id)", async () => {
+    const owner = await seedUser("route-owner-fb");
+    mockGetSession.mockResolvedValue({ user: owner });
+    const invitee = await seedUser("route-invitee-fb");
+    const event = await seedEventWithGame(owner.id);
+    const created = await createPlayerInvite({
+      eventId: event.id,
+      gameId: event.currentGameId,
+      inviteeUserId: invitee.id,
+      invitedByUserId: owner.id,
+      origin: "http://localhost",
+    });
+    await prisma.playerInvite.update({
+      where: { id: created.inviteId },
+      data: { notifiedAt: new Date(Date.now() - 25 * 3600_000) },
+    });
+    const ep = await prisma.eventPlayer.findFirst({ where: { eventId: event.id, userId: invitee.id } });
+    expect(ep).not.toBeNull();
+    const res = await resendInvite(ctx({ id: event.id }, { inviteId: ep!.id }, "PATCH"));
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    // DB row should have been updated via the resolved PlayerInvite id
+    const pi = await prisma.playerInvite.findUnique({ where: { id: created.inviteId } });
+    expect(pi?.notifiedAt?.getTime()).toBeGreaterThan(Date.now() - 5000);
   });
 });

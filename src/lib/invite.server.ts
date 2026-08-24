@@ -212,18 +212,41 @@ export async function resendPlayerInvite(opts: {
 }): Promise<{ inviteId: string; token: string; inviteUrl: string; channels: InviteChannels; notifiedAt: Date }> {
   const { eventId, inviteId, requestedByUserId, origin } = opts;
 
-  const invite = await prisma.playerInvite.findUnique({
-    where: { id: inviteId },
-    select: {
-      gameId: true,
-      status: true,
-      token: true,
-      notifiedAt: true,
-      invitedByUserId: true,
-      eventPlayer: { select: { userId: true } },
-    },
-  });
+  let invite: { id: string; gameId: string; status: string; token: string; notifiedAt: Date | null; invitedByUserId: string; eventPlayer: { userId: string | null } } | null =
+    await prisma.playerInvite.findUnique({
+      where: { id: inviteId },
+      select: {
+        id: true,
+        gameId: true,
+        status: true,
+        token: true,
+        notifiedAt: true,
+        invitedByUserId: true,
+        eventPlayer: { select: { userId: true } },
+      },
+    });
+  // Backward compat: pre-fix clients sent EventPlayer id (invited[].id) instead of
+  // PlayerInvite id. Fall back to lookup by EventPlayer for the current game.
+  if (!invite) {
+    const eventForFallback = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+    if (eventForFallback?.currentGameId) {
+      invite = await prisma.playerInvite.findFirst({
+        where: { eventPlayerId: inviteId, gameId: eventForFallback.currentGameId },
+        select: {
+          id: true,
+          gameId: true,
+          status: true,
+          token: true,
+          notifiedAt: true,
+          invitedByUserId: true,
+          eventPlayer: { select: { userId: true } },
+        },
+      });
+    }
+  }
   if (!invite || invite.eventPlayer.userId === null) throw new Error("Invite not found.");
+  // From here on, use the resolved invite id (handles EventPlayer-id fallback)
+  const resolvedInviteId = invite.id;
 
   // Verify the invite belongs to this event via its game.
   const game = await prisma.game.findUnique({ where: { id: invite.gameId }, select: { eventId: true } });
@@ -255,7 +278,7 @@ export async function resendPlayerInvite(opts: {
 
   const notifiedAt = new Date();
   await prisma.playerInvite.update({
-    where: { id: inviteId },
+    where: { id: resolvedInviteId },
     data: {
       sentViaEmail: channels.email,
       sentViaWebPush: channels.webPush,
@@ -265,9 +288,9 @@ export async function resendPlayerInvite(opts: {
   });
 
   fireWebhooks(eventId, "player_invited", { playerName: user.name, inviteUrl }).catch(() => {});
-  log.info({ inviteId, eventId, inviteeUserId, requestedByUserId, channels }, "Player invite resent");
+  log.info({ inviteId: resolvedInviteId, eventId, inviteeUserId, requestedByUserId, channels }, "Player invite resent");
 
-  return { inviteId, token: invite.token, inviteUrl, channels, notifiedAt };
+  return { inviteId: resolvedInviteId, token: invite.token, inviteUrl, channels, notifiedAt };
 }
 
 async function deliverInviteNotification(opts: { userId: string; eventId: string; inviteUrl: string; invitedByUserId: string }): Promise<InviteChannels> {

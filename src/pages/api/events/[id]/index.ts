@@ -372,6 +372,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       const pendingInviteRows = await prisma.playerInvite.findMany({
         where: { gameId: event.currentGameId, status: "pending" },
         select: {
+          id: true,
           eventPlayerId: true,
           notifiedAt: true,
           sentViaEmail: true,
@@ -385,6 +386,7 @@ export const GET: APIRoute = async ({ params, request }) => {
         const pi = inviteByEventPlayerId.get(gp.eventPlayer.id);
         return {
           id: gp.eventPlayer.id,
+          inviteId: pi?.id ?? null,
           name: gp.eventPlayer.name,
           userId,
           image: userId ? (imageByUserId.get(userId) ?? null) : null,
