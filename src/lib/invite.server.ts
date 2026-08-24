@@ -172,7 +172,7 @@ export async function createPlayerInvite(opts: {
 
   const inviteUrl = `${origin}/invite/${token}`;
 
-  const channels = await deliverInviteNotification({ userId: inviteeUserId, eventId, inviteUrl, invitedByUserId });
+  const channels = await deliverInviteNotification({ userId: inviteeUserId, eventId, inviteUrl, inviteToken: token, invitedByUserId });
   // Persist which channels were used so admins can see delivery info on the
   // roster (and the resend cooldown can be enforced per invite).
   await prisma.playerInvite.update({
@@ -266,7 +266,7 @@ export async function resendPlayerInvite(opts: {
   if (!user) throw new Error("Invitee not found.");
 
   const inviteUrl = `${origin}/invite/${invite.token}`;
-  const channels = await deliverInviteNotification({ userId: inviteeUserId, eventId, inviteUrl, invitedByUserId: requestedByUserId });
+  const channels = await deliverInviteNotification({ userId: inviteeUserId, eventId, inviteUrl, inviteToken: invite.token, invitedByUserId: requestedByUserId });
 
   const notifiedAt = new Date();
   await prisma.playerInvite.update({
@@ -285,14 +285,14 @@ export async function resendPlayerInvite(opts: {
   return { inviteId: resolvedInviteId, token: invite.token, inviteUrl, channels, notifiedAt };
 }
 
-async function deliverInviteNotification(opts: { userId: string; eventId: string; inviteUrl: string; invitedByUserId: string }): Promise<InviteChannels> {
+async function deliverInviteNotification(opts: { userId: string; eventId: string; inviteUrl: string; inviteToken: string; invitedByUserId: string }): Promise<InviteChannels> {
   const prefs = await getNotificationPrefs(opts.userId);
   // Global kill switch: nothing is sent (no in-app row either).
   if (!wantsInvites(prefs)) return NO_CHANNELS;
   const channels = await getInviteChannels(opts.userId);
 
   const [event, inviterToken, inviteeUser] = await Promise.all([
-    prisma.event.findUnique({ where: { id: opts.eventId }, select: { title: true, dateTime: true, location: true } }),
+    prisma.event.findUnique({ where: { id: opts.eventId }, select: { title: true, dateTime: true, location: true, sport: true } }),
     // The inviter's push locale (AppPushToken) — the push is composed by them.
     prisma.appPushToken.findFirst({ where: { userId: opts.invitedByUserId }, select: { locale: true } }),
     prisma.user.findUnique({ where: { id: opts.userId }, select: { email: true } }),
@@ -314,9 +314,21 @@ async function deliverInviteNotification(opts: { userId: string; eventId: string
 
   if (channels.webPush || channels.appPush) {
     // Push body is composed by the inviter — render it in the INVITER's locale.
+    // Tap opens the EVENT page; the inviteToken + sport/startsAt/location ride in
+    // the FCM data payload so the Android app can offer Accept/Decline quick
+    // actions on an informed notification (ADR 0025). The web in-app feed keeps
+    // the /invite/<token> URL. Time is sent as ISO — the device renders it in
+    // the receiver's own timezone/locale.
     const inviterLocale = (inviterToken?.locale as Locale) ?? "en";
     const t = createT(inviterLocale);
-    sendPushToUser(opts.userId, title, t(key, { event: title }), opts.inviteUrl).catch(() => {});
+    sendPushToUser(opts.userId, title, t(key, { event: title }), `/events/${opts.eventId}`, {
+      type: "player_invited",
+      eventId: opts.eventId,
+      inviteToken: opts.inviteToken,
+      ...(event?.sport ? { sport: event.sport } : {}),
+      ...(event ? { startsAt: event.dateTime.toISOString() } : {}),
+      ...(event?.location ? { location: event.location } : {}),
+    }).catch(() => {});
   }
 
   if (channels.email && event && inviteeUser?.email) {
