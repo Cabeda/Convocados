@@ -21,6 +21,8 @@ model User {
   // #457 push prompt state machine
   pushPromptState          String    @default("default") // "default" | "granted" | "dismissed" | "denied"
   pushPromptLastDismissedAt DateTime?
+  // One-click email unsubscribe (no login required) — token embedded in email footer links
+  emailUnsubscribeToken String? @unique
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   sessions       Session[]
