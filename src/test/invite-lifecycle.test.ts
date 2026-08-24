@@ -198,6 +198,19 @@ describe("POST /api/events/[id]/invites", () => {
     expect(body.token).toBeTruthy();
   });
 
+  it("allows owner without admin or player role to create invite (repro cmt7cxlv70001ljsxlbom6ump)", async () => {
+    const owner = await seedUser("Owner2");
+    const invitee = await seedUser("Invitee2");
+    const ev = await seedEventWithGame(owner.id);
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+
+    const res = await createInvite(ctx({ id: ev.id }, { userId: invitee.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+  });
+
   it("rejects non-admin senders", async () => {
     const owner = await seedUser("Owner");
     const stranger = await seedUser("Stranger");
@@ -350,13 +363,23 @@ describe("GET /api/events/[id]/invites", () => {
     expect(res.status).toBe(401);
   });
 
-  it("403 when not an admin", async () => {
+  it("403 when not owner, admin, or player", async () => {
     const owner = await seedUser("Owner");
+    const stranger = await seedUser("Stranger");
+    const ev = await seedEventWithGame(owner.id);
+    mockGetSession.mockResolvedValue({ user: { id: stranger.id } });
+    mockCheckEventAdmin.mockResolvedValue(false);
+    const res = await getInvites(ctx({ id: ev.id }));
+    expect(res.status).toBe(403);
+  });
+
+  it("allows owner without admin to list invites (repro cmt7cxlv70001ljsxlbom6ump)", async () => {
+    const owner = await seedUser("Owner2");
     const ev = await seedEventWithGame(owner.id);
     mockGetSession.mockResolvedValue({ user: { id: owner.id } });
     mockCheckEventAdmin.mockResolvedValue(false);
     const res = await getInvites(ctx({ id: ev.id }));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   it("returns empty invites when the event has no current game", async () => {

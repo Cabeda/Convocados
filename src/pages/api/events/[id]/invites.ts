@@ -19,7 +19,12 @@ import { getNotificationPrefs, wantsInvites } from "~/lib/notificationPrefs.serv
  * GameParticipant across the event's games).
  */
 async function canInviteOnEvent(eventId: string, userId: string): Promise<boolean> {
-  if (await checkEventAdmin(eventId, userId)) return true;
+  const [isAdmin, event] = await Promise.all([
+    checkEventAdmin(eventId, userId),
+    prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } }),
+  ]);
+  if (isAdmin) return true;
+  if (event?.ownerId === userId) return true;
   const played = await prisma.eventPlayer.findFirst({
     where: { eventId, userId, participations: { some: {} } },
     select: { id: true },
