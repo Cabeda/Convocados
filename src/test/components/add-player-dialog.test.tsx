@@ -34,8 +34,7 @@ function renderDialog(intent: AddPlayerIntent | null, overrides: Partial<Paramet
     isBench: false,
     isAdding: false,
     isInviting: false,
-    onConfirmAdd: vi.fn(),
-    onConfirmInvite: vi.fn(),
+    onConfirm: vi.fn(),
     onClose: vi.fn(),
     ...overrides,
   };
@@ -77,16 +76,14 @@ describe("AddPlayerConfirmDialog — invite vs add choice", () => {
     const intent: AddPlayerIntent = { kind: "single", name: "Charlie", userId: "u-charlie", source: "chip" };
     const { props } = renderDialog(intent);
     fireEvent.click(screen.getByText("Add to list"));
-    expect(props.onConfirmAdd).toHaveBeenCalledWith(intent);
-    expect(props.onConfirmInvite).not.toHaveBeenCalled();
+    expect(props.onConfirm).toHaveBeenCalledWith(intent, false);
   });
 
   it("dispatches the invite when the Invite option is clicked", () => {
     const intent: AddPlayerIntent = { kind: "single", name: "Charlie", userId: "u-charlie", source: "chip" };
     const { props } = renderDialog(intent);
     fireEvent.click(screen.getByText("Invite"));
-    expect(props.onConfirmInvite).toHaveBeenCalledWith(intent);
-    expect(props.onConfirmAdd).not.toHaveBeenCalled();
+    expect(props.onConfirm).toHaveBeenCalledWith(intent, true);
   });
 
   it("disables the options while an add or invite is in flight", () => {
