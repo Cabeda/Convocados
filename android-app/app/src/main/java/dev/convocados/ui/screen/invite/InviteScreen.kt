@@ -40,23 +40,34 @@ class InviteViewModel @Inject constructor(
     private val _state = MutableStateFlow(InviteState())
     val state: StateFlow<InviteState> = _state
 
-    init { load() }
+    /** Token from the deep link — set by [load], used by [respond]. */
+    private var pendingToken: String? = null
 
-    fun load() {
+    fun load(token: String?) {
+        pendingToken = token?.takeIf { it.isNotBlank() }
+        if (pendingToken == null) {
+            _state.value = InviteState(loading = false, error = "Missing invite token.")
+            return
+        }
         viewModelScope.launch {
-            runCatching { api.fetchInvite(_state.value.data?.token.orEmpty()) }
+            runCatching { api.fetchInvite(pendingToken!!) }
                 .onSuccess { _state.value = InviteState(loading = false, data = it) }
-                .onFailure { _state.value = InviteState(loading = false, error = it.message) }
+                .onFailure { _state.value = InviteState(loading = false, error = it.message?.replace(Regex("<[^>]*>"), "").orEmpty().ifBlank { "Failed to load invite." }) }
         }
     }
 
     fun respond(action: String) {
-        val token = _state.value.data?.token ?: return
+        val token = _state.value.data?.token?.takeIf { it.isNotBlank() } ?: pendingToken ?: return
         _state.value = _state.value.copy(busy = true, error = null)
         viewModelScope.launch {
             runCatching { api.respondToInvite(token, action) }
                 .onSuccess { _state.value = _state.value.copy(busy = false, responded = true) }
-                .onFailure { _state.value = _state.value.copy(busy = false, error = it.message) }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        busy = false,
+                        error = it.message?.replace(Regex("<[^>]*>"), "").orEmpty().ifBlank { "Failed to respond." },
+                    )
+                }
         }
     }
 }
@@ -73,7 +84,7 @@ fun InviteScreen(
 
     LaunchedEffect(token) {
         // Re-load on token change (deep link resumes after sign-in)
-        viewModel.load()
+        viewModel.load(token)
     }
 
     Scaffold(

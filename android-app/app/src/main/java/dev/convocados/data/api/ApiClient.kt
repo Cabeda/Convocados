@@ -13,6 +13,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -78,8 +80,8 @@ class ApiClient @Inject constructor(
         }
 
         if (!response.status.isSuccess()) {
-            val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
-            throw ApiException(response.status.value, errorBody)
+            val raw = runCatching { response.bodyAsText() }.getOrDefault("")
+            throw ApiException(response.status.value, describeError(response.status.value, raw))
         }
         return response
     }
@@ -162,3 +164,31 @@ class ApiClient @Inject constructor(
 }
 
 class ApiException(val code: Int, message: String) : Exception(message)
+
+/**
+ * Turn an HTTP error body into a short human-readable message.
+ *
+ * Priority: the JSON `error` field → `message` field → plain text (truncated)
+ * → a generic status string. HTML bodies (e.g. Astro's SPA fallback for an
+ * unmatched API path) are never surfaced raw — they render as markup soup in
+ * Compose Text.
+ */
+internal fun describeError(status: Int, body: String): String {
+    val trimmed = body.trim()
+    if (trimmed.isEmpty()) return "Request failed ($status)"
+
+    // JSON error field — parse defensively; a malformed body falls through.
+    if (trimmed.startsWith("{")) {
+        runCatching {
+            val json = Json { ignoreUnknownKeys = true }
+            val obj = json.parseToJsonElement(trimmed).jsonObject
+            val err = (obj["error"] as? JsonPrimitive)?.content
+            if (!err.isNullOrBlank()) return err
+            val msg = (obj["message"] as? JsonPrimitive)?.content
+            if (!msg.isNullOrBlank()) return msg
+        }
+    }
+
+    if (trimmed.startsWith("<")) return "Server error ($status)"
+    return trimmed.take(200)
+}
