@@ -9,7 +9,7 @@ import { getNotificationPrefs, wantsInvites } from "~/lib/notificationPrefs.serv
  * ADR 0025 — PlayerInvite management (owner/admin).
  *
  * GET    /api/events/[id]/invites       — list invites for the current game
- * POST   /api/events/[id]/invites       — create an invite: { userId }
+ * POST   /api/events/[id]/invites       — create an invite: { userId } or { email }
  * PATCH  /api/events/[id]/invites       — resend a pending invite: { inviteId }
  * DELETE /api/events/[id]/invites       — retract: { inviteId }
  */
@@ -124,13 +124,23 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!event.currentGameId) return Response.json({ error: "This event has no current game." }, { status: 400 });
   if (event.dateTime <= new Date()) return Response.json({ error: "This game has already started." }, { status: 400 });
 
-  let body: { userId?: unknown };
+  let body: { userId?: unknown; email?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
-  if (typeof body.userId !== "string") {
-    return Response.json({ error: "userId is required." }, { status: 400 });
+  let inviteeUserId: string;
+  if (typeof body.userId === "string" && body.userId.trim()) {
+    inviteeUserId = body.userId.trim();
+  } else if (typeof body.email === "string" && body.email.trim()) {
+    const normalized = body.email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: normalized }, select: { id: true } });
+    if (!user) {
+      return Response.json({ error: "No registered user with that email." }, { status: 404 });
+    }
+    inviteeUserId = user.id;
+  } else {
+    return Response.json({ error: "userId or email is required." }, { status: 400 });
   }
 
-  const reason = await inviteBlockReason(eventId, event.currentGameId, body.userId);
+  const reason = await inviteBlockReason(eventId, event.currentGameId, inviteeUserId);
   if (reason) return Response.json({ error: reason }, { status: 409 });
 
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";
@@ -141,7 +151,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     const result = await createPlayerInvite({
       eventId,
       gameId: event.currentGameId,
-      inviteeUserId: body.userId,
+      inviteeUserId,
       invitedByUserId: session.user.id,
       origin,
     });
