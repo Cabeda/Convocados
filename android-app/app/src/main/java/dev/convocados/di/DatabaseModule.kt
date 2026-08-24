@@ -52,5 +52,15 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideCrashReporter(): CrashReporter = CrashReporter(FirebaseCrashlytics.getInstance())
+    fun provideCrashReporter(): CrashReporter {
+        val instance = try {
+            FirebaseCrashlytics.getInstance()
+        } catch (_: Exception) {
+            // Graceful degradation: if Crashlytics component is missing (e.g. R8 stripped
+            // its registrar or FirebaseApp not yet initialized), don't crash the app.
+            // The wrapper becomes a no-op; the real fix is the keep rule in proguard-rules.pro.
+            null
+        }
+        return CrashReporter(instance)
+    }
 }
