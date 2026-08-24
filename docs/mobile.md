@@ -4,11 +4,20 @@ Convocados has native apps for Android and iOS. Both connect to any self-hosted 
 
 ## Android
 
-Native Android app built with Kotlin and Jetpack Compose (Material 3). Available in public beta via the Play Store.
+Native Android app built with Kotlin and Jetpack Compose (Material 3). Available now on the Google Play Store.
 
-- **Beta link:** https://play.google.com/apps/testing/com.cabeda.Convocados
+- **Play Store:** https://play.google.com/store/apps/details?id=com.cabeda.Convocados
 - **Auth:** Convocados OIDC provider (Authorization Code + PKCE via Custom Tabs)
 - **Push:** Firebase Cloud Messaging (FCM)
+
+### Help us test
+
+Want to try new features before everyone else? Join the [testing track](https://play.google.com/apps/testing/com.cabeda.Convocados) to get early builds straight from the Play Store.
+
+Keep in mind:
+
+- Early builds **may include breaking changes** — data or settings could reset between updates.
+- We rely on your feedback: report bugs and share suggestions on [GitHub Issues](https://github.com/Cabeda/Convocados/issues) or start a conversation on [GitHub Discussions](https://github.com/Cabeda/Convocados/discussions).
 
 ### Features
 

@@ -1173,10 +1173,10 @@ adminPickupsDetected: "Pickups erkannt",
   landingOpenSource: "Open Source · Für immer kostenlos",
   supportUs: "Unterstütze uns",
 
-  // Beta testing (#740 follow-up)
-  landingBetaButton: "Android-Beta-App holen",
-  betaBannerTitle: "Teste die Android-App frühzeitig",
-  betaBannerBody: "Tritt der Beta bei und installiere Convocados direkt aus dem Play Store — ein Tipp und sie ist auf deinem Homescreen.",
+  // Play Store listing
+  landingBetaButton: "Android-App holen",
+  betaBannerTitle: "Convocados bei Google Play",
+  betaBannerBody: "Installiere Convocados direkt aus dem Play Store — kostenlos und mit einem Tipp auf deinem Homescreen.",
   getTheApp: "App holen",
   appsForEveryTeamTitle: "Apps für jedes Team",
   iosFundHeading: "Hilf dabei, Convocados aufs iPhone zu bringen",

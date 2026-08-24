@@ -8,7 +8,7 @@ import AppsSection from "~/components/AppsSection";
 
 afterEach(() => cleanup());
 
-const BETA_URL = "https://play.google.com/apps/testing/com.cabeda.Convocados";
+const STORE_URL = "https://play.google.com/store/apps/details?id=com.cabeda.Convocados";
 const KO_FI_GOAL_URL = "https://ko-fi.com/cabeda/goal?g=20";
 const GITHUB_SPONSORS_URL = "https://github.com/sponsors/Cabeda";
 const DOCS_URL = "/docs/mobile";
@@ -42,10 +42,10 @@ describe("AppsSection", () => {
     expect(link).toHaveAttribute("target", "_blank");
   });
 
-  it("keeps the Android beta CTA present", () => {
+  it("keeps the Android app CTA present", () => {
     renderWithTheme(<AppsSection />);
-    const link = screen.getByRole("link", { name: /Get the Android beta app/i });
-    expect(link).toHaveAttribute("href", BETA_URL);
+    const link = screen.getByRole("link", { name: /Get the Android app/i });
+    expect(link).toHaveAttribute("href", STORE_URL);
     expect(link).toHaveAttribute("target", "_blank");
   });
 
