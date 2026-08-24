@@ -151,9 +151,20 @@ describe("createPlayerInvite", () => {
     try {
       await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
       expect(spy).toHaveBeenCalledTimes(1);
-      const [, , body] = spy.mock.calls[0];
+      const [userId, , body, url, extras] = spy.mock.calls[0];
       expect(body).toContain("Foste convidado para jogar em");
       expect(body).not.toContain("You've been invited");
+      // ADR 0025: tap opens the event page; FCM data carries token + context
+      // (sport · ISO time · place) so Android can render informed quick actions.
+      expect(url).toBe(`/events/${ev.id}`);
+      expect(extras).toMatchObject({
+        type: "player_invited",
+        eventId: ev.id,
+        sport: expect.any(String),
+        startsAt: expect.any(String),
+        inviteToken: expect.any(String),
+      });
+      void userId;
     } finally {
       spy.mockRestore();
     }

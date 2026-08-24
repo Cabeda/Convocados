@@ -191,17 +191,20 @@ export async function cleanupStalePushTokens(): Promise<{ appTokens: number; web
 
 /**
  * Send a push notification to a user's mobile devices via FCM.
+ * `extras` are merged into the FCM data payload so the Android app can build
+ * quick actions (e.g. inviteToken for ADR 0025 accept/decline).
  */
 async function sendAppPushToUser(
   userId: string,
   title: string,
   body: string,
   url: string,
+  extras?: Record<string, string>,
 ): Promise<void> {
   const tokens = await prisma.appPushToken.findMany({ where: { userId } });
   if (tokens.length === 0) return;
 
-  const fcmMessages = tokens.map((t) => ({ token: t.token, title, body, data: { url } }));
+  const fcmMessages = tokens.map((t) => ({ token: t.token, title, body, data: { url, ...(extras ?? {}) } }));
   await sendFcmBatch(fcmMessages);
 }
 
@@ -404,9 +407,10 @@ export async function sendPushToUser(
   title: string,
   body: string,
   url: string,
+  extras?: Record<string, string>,
 ) {
   // Send to mobile app tokens via FCM
-  const appPushPromise = sendAppPushToUser(userId, title, body, url);
+  const appPushPromise = sendAppPushToUser(userId, title, body, url, extras);
 
   // Send to web push subscriptions — requires VAPID keys
   let webPushPromise: Promise<void> = Promise.resolve();
