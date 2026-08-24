@@ -6,11 +6,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Cabeda)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-00A9E0?logo=kofi&logoColor=white)](https://ko-fi.com/cabeda)
-[![Android Beta](https://img.shields.io/badge/Android%20Beta-3DDC84?logo=android&logoColor=white)](https://play.google.com/apps/testing/com.cabeda.Convocados)
+[![Android on Google Play](https://img.shields.io/badge/Google%20Play-3DDC84?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.cabeda.Convocados)
 
-🌐 **[Live Demo](https://convocados.cabeda.dev)** · 📖 **[Docs](https://convocados.cabeda.dev/docs)** · 📱 **[Android App](https://play.google.com/store/apps/details?id=com.cabeda.convocados)**
+🌐 **[Live Demo](https://convocados.cabeda.dev)** · 📖 **[Docs](https://convocados.cabeda.dev/docs)** · 📱 **[Android App](https://play.google.com/store/apps/details?id=com.cabeda.Convocados)**
 
-> 📱 **Try the Android app (beta)** — Join the beta and install Convocados straight from the Play Store in one tap: **[play.google.com/apps/testing/com.cabeda.Convocados](https://play.google.com/apps/testing/com.cabeda.Convocados)**
+> 📱 **Now on Google Play** — install the Android app straight from the Play Store in one tap: **[play.google.com/store/apps/details?id=com.cabeda.Convocados](https://play.google.com/store/apps/details?id=com.cabeda.Convocados)**
 
 ---
 
@@ -57,7 +57,7 @@ Most sports organizers use a WhatsApp group and a spreadsheet. Convocados replac
 | 🌍 Public events | Browse open games with filters, table view, and Leaflet map |
 | 🔗 Webhooks | HTTP callbacks for all event lifecycle events |
 | 🔐 OAuth 2.1 / OIDC | Full provider with PKCE, magic link, Google SSO, MCP-ready |
-| 📱 Android app | Native Kotlin + Jetpack Compose (phone + Wear OS) — [join the beta](https://play.google.com/apps/testing/com.cabeda.Convocados) |
+| 📱 Android app | Native Kotlin + Jetpack Compose (phone + Wear OS) — [get it on Google Play](https://play.google.com/store/apps/details?id=com.cabeda.Convocados) |
 
 ---
 
