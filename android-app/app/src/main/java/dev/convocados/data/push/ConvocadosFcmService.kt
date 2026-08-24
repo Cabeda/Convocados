@@ -32,6 +32,13 @@ class ConvocadosFcmService : FirebaseMessagingService() {
         val url = message.data["url"]
         val type = message.data["type"]
         val playerName = message.data["player"] // for payment_self_reported actions
+        // ADR 0025: invite pushes carry the PlayerInvite token so the
+        // Accept/Decline notification actions can answer without opening the app,
+        // plus sport/time/place so the decision is informed.
+        val inviteToken = message.data["inviteToken"]
+        val inviteSport = message.data["sport"]
+        val inviteStartsAt = message.data["startsAt"]
+        val inviteLocation = message.data["location"]
 
         val notificationId = System.currentTimeMillis().toInt()
         // Extract eventId from url (format: /events/<id> or /events/<id>?...)
@@ -65,10 +72,25 @@ class ConvocadosFcmService : FirebaseMessagingService() {
                     builder.addAction(0, getString(R.string.action_cant_make_it),
                         createActionIntent(NotificationActionReceiver.ACTION_RSVP_NO, eventId, notificationId))
                 }
-                // Join game: recruitment, spots, invites
+                // Join game: recruitment, spots
                 "recruitment", "few_spots_left", "spot_available", "game_invite" -> {
                     builder.addAction(0, getString(R.string.action_join),
                         createActionIntent(NotificationActionReceiver.ACTION_JOIN, eventId, notificationId))
+                }
+                // ADR 0025: invite push — Accept/Decline in place; tapping the body
+                // opens the event page (url is /events/<id>, set server-side).
+                // BigText carries "sport · local time · place" under the invite line.
+                "player_invited" -> {
+                    val detailLine = InviteNotificationFormatter.buildDetailLine(inviteSport, inviteStartsAt, inviteLocation)
+                    if (detailLine.isNotEmpty()) {
+                        builder.setStyle(NotificationCompat.BigTextStyle().bigText(InviteNotificationFormatter.buildBigText(body, detailLine)))
+                    }
+                    if (inviteToken != null) {
+                        builder.addAction(0, getString(R.string.invite_accept),
+                            createActionIntent(NotificationActionReceiver.ACTION_INVITE_ACCEPT, eventId, notificationId, null, inviteToken))
+                        builder.addAction(0, getString(R.string.invite_decline),
+                            createActionIntent(NotificationActionReceiver.ACTION_INVITE_DECLINE, eventId, notificationId, null, inviteToken))
+                    }
                 }
                 // Payment self-report: organizer quick-confirm
                 "payment_self_reported" -> {
@@ -86,15 +108,22 @@ class ConvocadosFcmService : FirebaseMessagingService() {
         nm.notify(notificationId, builder.build())
     }
 
-    private fun createActionIntent(action: String, eventId: String, notificationId: Int, playerName: String? = null): PendingIntent {
+    private fun createActionIntent(
+        action: String,
+        eventId: String,
+        notificationId: Int,
+        playerName: String? = null,
+        inviteToken: String? = null,
+    ): PendingIntent {
         val intent = Intent(this, NotificationActionReceiver::class.java).apply {
             putExtra(NotificationActionReceiver.EXTRA_ACTION, action)
             putExtra(NotificationActionReceiver.EXTRA_EVENT_ID, eventId)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
             playerName?.let { putExtra(NotificationActionReceiver.EXTRA_PLAYER_NAME, it) }
+            inviteToken?.let { putExtra(NotificationActionReceiver.EXTRA_INVITE_TOKEN, it) }
         }
         return PendingIntent.getBroadcast(
-            this, "$action:$eventId:${playerName ?: ""}".hashCode(), intent,
+            this, "$action:$eventId:${playerName ?: ""}:$inviteToken".hashCode(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
