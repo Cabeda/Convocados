@@ -65,4 +65,38 @@ class NotificationActionHandlerTest {
 
         coVerify(exactly = 1) { api.leaveEvent("evt-1") }
     }
+
+    // ── ADR 0025: invite quick actions from the push notification ─────────────
+
+    @Test
+    fun `invite accept responds with the invite token`() = runTest {
+        handler.handle(NotificationActionHandler.ACTION_INVITE_ACCEPT, "evt-1", null, "tok-123")
+
+        coVerify(exactly = 1) { api.respondToInvite("tok-123", "accept") }
+        coVerify(exactly = 0) { api.respondToInvite(any(), "decline") }
+    }
+
+    @Test
+    fun `invite decline responds with the invite token`() = runTest {
+        handler.handle(NotificationActionHandler.ACTION_INVITE_DECLINE, "evt-1", null, "tok-123")
+
+        coVerify(exactly = 1) { api.respondToInvite("tok-123", "decline") }
+        coVerify(exactly = 0) { api.respondToInvite(any(), "accept") }
+    }
+
+    @Test
+    fun `invite action without token is a no-op`() = runTest {
+        handler.handle(NotificationActionHandler.ACTION_INVITE_ACCEPT, "evt-1", null, null)
+
+        coVerify(exactly = 0) { api.respondToInvite(any(), any()) }
+    }
+
+    @Test
+    fun `invite API failures are swallowed`() = runTest {
+        coEvery { api.respondToInvite(any(), any()) } throws RuntimeException("HTTP 410")
+
+        handler.handle(NotificationActionHandler.ACTION_INVITE_ACCEPT, "evt-1", null, "tok-dead")
+
+        coVerify(exactly = 1) { api.respondToInvite("tok-dead", "accept") }
+    }
 }

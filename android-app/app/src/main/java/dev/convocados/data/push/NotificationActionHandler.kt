@@ -17,7 +17,7 @@ class NotificationActionHandler @Inject constructor(private val api: ConvocadosA
      * Performs the action. Never throws: a failure inside a BroadcastReceiver
      * would crash the app process, and there is no UI to surface errors to.
      */
-    suspend fun handle(action: String, eventId: String, playerName: String?) {
+    suspend fun handle(action: String, eventId: String, playerName: String?, inviteToken: String? = null) {
         try {
             when (action) {
                 ACTION_RSVP_YES -> api.submitRsvp(eventId, "yes")
@@ -26,6 +26,13 @@ class NotificationActionHandler @Inject constructor(private val api: ConvocadosA
                 ACTION_JOIN -> api.quickJoin(eventId)
                 ACTION_CONFIRM_PAYMENT -> if (playerName != null) {
                     api.updatePaymentStatus(eventId, playerName, "paid")
+                }
+                // ADR 0025: quick accept/decline straight from the invite push.
+                ACTION_INVITE_ACCEPT -> if (inviteToken != null) {
+                    api.respondToInvite(inviteToken, "accept")
+                }
+                ACTION_INVITE_DECLINE -> if (inviteToken != null) {
+                    api.respondToInvite(inviteToken, "decline")
                 }
             }
         } catch (_: Exception) {
@@ -38,5 +45,7 @@ class NotificationActionHandler @Inject constructor(private val api: ConvocadosA
         const val ACTION_RSVP_NO = "rsvp_no"
         const val ACTION_JOIN = "join"
         const val ACTION_CONFIRM_PAYMENT = "confirm_payment"
+        const val ACTION_INVITE_ACCEPT = "invite_accept"
+        const val ACTION_INVITE_DECLINE = "invite_decline"
     }
 }
