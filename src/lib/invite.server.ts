@@ -28,6 +28,7 @@ import { enqueueNotification } from "./notificationQueue.server";
 import { sendGameInvite, isEmailConfigured } from "./email.server";
 import { createT, type Locale } from "./i18n";
 import { checkEventAdmin } from "./auth.helpers.server";
+import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "./rosterCore.server";
 
 const log = createLogger("invite");
 
@@ -123,15 +124,11 @@ export async function createPlayerInvite(opts: {
   const { eventId, gameId, inviteeUserId, invitedByUserId, origin } = opts;
   const user = await prisma.user.findUnique({
     where: { id: inviteeUserId },
-    select: { name: true },
+    select: { id: true, name: true },
   });
   if (!user) throw new Error("Invitee not found.");
 
-  const ep = await prisma.eventPlayer.upsert({
-    where: { eventId_name: { eventId, name: user.name } },
-    create: { eventId, name: user.name, userId: inviteeUserId },
-    update: { userId: inviteeUserId },
-  });
+  const ep = await upsertEventPlayerForRoster(eventId, { name: user.name, userId: inviteeUserId, user }, prisma);
 
   const token = generateInviteToken();
   const invite = await prisma.$transaction(async (tx) => {
@@ -168,12 +165,7 @@ export async function createPlayerInvite(opts: {
     // Use upsert so re-invites after cancel/expire (which leave a pending
     // GameParticipant) don't hit the (gameId, eventPlayerId) unique constraint
     // for Tiago Magalhães repro: Unique constraint failed on (gameId, eventPlayerId).
-    const order = await nextGameParticipantOrder(gameId);
-    await tx.gameParticipant.upsert({
-      where: { gameId_eventPlayerId: { gameId, eventPlayerId: ep.id } },
-      create: { gameId, eventPlayerId: ep.id, order, status: "pending" },
-      update: { order, status: "pending", archivedAt: null },
-    });
+    await upsertGameParticipantForRoster({ gameId, eventPlayerId: ep.id, status: "pending" }, tx);
 
     return inv;
   });
