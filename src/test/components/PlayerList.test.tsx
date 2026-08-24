@@ -8,7 +8,22 @@ import { renderWithTheme } from "../render";
 import { PlayerList } from "~/components/event/PlayerList";
 import type { Player } from "~/components/event/types";
 
-afterEach(() => cleanup());
+// Responsive invite chips: default = mobile (<sm, matches:false). Desktop tests
+// flip the flag; afterEach resets it. MUI resolves breakpoint queries to media
+// query strings, so any query here maps to the single toggle.
+const { mediaQueryState } = vi.hoisted(() => ({ mediaQueryState: { matches: false } }));
+vi.mock("@mui/material", async (importOriginal) => {
+  const mod = await importOriginal();
+  return {
+    ...mod,
+    useMediaQuery: () => mediaQueryState.matches,
+  };
+});
+
+afterEach(() => {
+  cleanup();
+  mediaQueryState.matches = false;
+});
 
 const basePlayers: Player[] = [
   { id: "p1", name: "Alice", userId: null },
@@ -657,5 +672,110 @@ describe("PlayerList — roster locked after game end (issue #716)", () => {
     renderWithTheme(<PlayerList {...baseProps} rosterLocked />);
     expect(baseProps.onRequestAdd).not.toHaveBeenCalled();
     expect(baseProps.onAddPlayer).not.toHaveBeenCalled();
+  });
+});
+
+describe("PlayerList — invited roster: channel chips + resend (ADR 0025 follow-up)", () => {
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+
+  it("mobile: shows icon-only channel chips (no text labels) beside Pending", () => {
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        invited={[{ id: "inv-1", name: "Eve", userId: null, channels: { email: true, webPush: false, appPush: true }, notifiedAt: hoursAgo(30) }]}
+      />,
+    );
+    expect(screen.getByText("Eve")).toBeInTheDocument();
+    // Icon-only chips carry an accessible name instead of visible text
+    expect(screen.getByTestId("invite-channel-email-inv-1")).toBeInTheDocument();
+    expect(screen.getByTestId("invite-channel-app-inv-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("invite-channel-web-inv-1")).not.toBeInTheDocument();
+    expect(screen.queryByText("email")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("app notification")).toBeInTheDocument();
+    expect(screen.getByLabelText("email")).toBeInTheDocument();
+    expect(screen.getByText(/pending/i)).toBeInTheDocument();
+    // Link-only chip is a desktop affordance — hidden on mobile
+    expect(screen.queryByTestId(/invite-linkonly-/)).not.toBeInTheDocument();
+  });
+
+  it("desktop (sm+): channel chips show icon + text label", () => {
+    mediaQueryState.matches = true;
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        invited={[{ id: "inv-1d", name: "Eve", userId: null, channels: { email: true, webPush: false, appPush: false }, notifiedAt: hoursAgo(30) }]}
+      />,
+    );
+    const chip = screen.getByTestId("invite-channel-email-inv-1d");
+    expect(chip).toHaveTextContent("email");
+  });
+
+  it("mobile: shows only the pending chip when no channel was used", () => {
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        invited={[{ id: "inv-2", name: "Frank", userId: null, channels: { email: false, webPush: false, appPush: false }, notifiedAt: null }]}
+      />,
+    );
+    expect(screen.queryByTestId(/invite-channel-/)).not.toBeInTheDocument();
+    expect(screen.getByText(/pending/i)).toBeInTheDocument();
+  });
+
+  it("desktop (sm+): link-only chip explains when no channel was used", () => {
+    mediaQueryState.matches = true;
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        invited={[{ id: "inv-2d", name: "Frank", userId: null, channels: { email: false, webPush: false, appPush: false }, notifiedAt: null }]}
+      />,
+    );
+    expect(screen.getByTestId("invite-linkonly-inv-2d")).toHaveTextContent(/link only/i);
+  });
+
+  it("shows an active resend button after the 24h cooldown and calls onResendInvite", async () => {
+    const user = userEvent.setup();
+    const onResendInvite = vi.fn().mockResolvedValue(undefined);
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        canManageInvites
+        onResendInvite={onResendInvite}
+        invited={[{ id: "inv-3", name: "Grace", userId: null, channels: { email: true, webPush: false, appPush: false }, notifiedAt: hoursAgo(25) }]}
+      />,
+    );
+    const btn = screen.getByTestId("resend-invite-inv-3");
+    expect(btn).toBeEnabled();
+    await user.click(btn);
+    expect(onResendInvite).toHaveBeenCalledWith({ id: "inv-3", name: "Grace" });
+    // No dead cooldown control once eligible
+    expect(screen.queryByTestId("resend-cooldown-inv-3")).not.toBeInTheDocument();
+  });
+
+  it("within the 24h cooldown shows a countdown chip instead of a dead button", () => {
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        canManageInvites
+        onResendInvite={vi.fn()}
+        invited={[{ id: "inv-4", name: "Heidi", userId: null, channels: { email: false, webPush: false, appPush: true }, notifiedAt: hoursAgo(2) }]}
+      />,
+    );
+    // No disabled mystery button — a live countdown communicates WHY + HOW LONG
+    expect(screen.queryByTestId("resend-invite-inv-4")).not.toBeInTheDocument();
+    expect(screen.getByTestId("resend-cooldown-inv-4")).toBeInTheDocument();
+    expect(screen.getByTestId("resend-cooldown-inv-4")).toHaveTextContent(/\d+/); // e.g. "22h"
+  });
+
+  it("hides resend controls for viewers who cannot manage invites", () => {
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        canManageInvites={false}
+        onResendInvite={vi.fn()}
+        invited={[{ id: "inv-5", name: "Ivan", userId: null, channels: { email: true, webPush: false, appPush: false }, notifiedAt: hoursAgo(48) }]}
+      />,
+    );
+    expect(screen.queryByTestId("resend-invite-inv-5")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("resend-cooldown-inv-5")).not.toBeInTheDocument();
   });
 });
