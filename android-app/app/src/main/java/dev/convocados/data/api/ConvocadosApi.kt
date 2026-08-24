@@ -165,6 +165,10 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun submitRsvp(eventId: String, status: String): OkResponse =
         client.post("/api/events/$eventId/rsvp", RsvpSubmitRequest(status))
 
+    /** Leave the event: archives the Player row, sets RSVP "no" and unfollows */
+    suspend fun leaveEvent(eventId: String): OkResponse =
+        client.post("/api/events/$eventId/leave")
+
     /** Quick join from a notification action — equivalent to addPlayer with linkToAccount=true and user's own name */
     suspend fun quickJoin(eventId: String): AddPlayerResponse {
         val profile = fetchUserInfo()

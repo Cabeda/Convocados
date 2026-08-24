@@ -46,27 +46,7 @@ class ConvocadosFcmService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val channelId = when (type) {
-            // Tier 2 — Game-level
-            "reminder" -> CHANNEL_GAME_REMINDERS
-            "player_joined", "player_left", "player_joined_bench",
-            "player_left_bench", "player_left_promoted",
-            "game_full", "spot_available", "bench_promoted_capacity",
-            "rsvp_request" -> CHANNEL_PLAYER_ACTIVITY
-            "post_game" -> CHANNEL_POST_GAME
-            "payment_confirmed" -> CHANNEL_PAYMENT_REMINDERS
-            "payment_self_reported" -> CHANNEL_PAYMENT_REMINDERS
-            // Tier 1 — Event-level
-            "game_cancelled" -> CHANNEL_EVENT_UPDATES
-            "game_invite" -> CHANNEL_EVENT_UPDATES
-            "event_details" -> CHANNEL_EVENT_UPDATES
-            "recruitment", "few_spots_left" -> CHANNEL_EVENT_UPDATES
-            // Legacy / fallback
-            "game_reminder" -> CHANNEL_GAME_REMINDERS
-            "player_activity" -> CHANNEL_PLAYER_ACTIVITY
-            "payment_reminder" -> CHANNEL_PAYMENT_REMINDERS
-            else -> CHANNEL_PLAYER_ACTIVITY
-        }
+        val channelId = channelIdFor(type)
 
         val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -125,6 +105,30 @@ class ConvocadosFcmService : FirebaseMessagingService() {
         const val CHANNEL_POST_GAME = "post_game"
         const val CHANNEL_PAYMENT_REMINDERS = "payment_reminders"
         const val CHANNEL_EVENT_UPDATES = "event_updates"
+
+        /** Notification type → Android channel. Keep in sync with NotificationJobType on the server. */
+        fun channelIdFor(type: String?): String = when (type) {
+            // Tier 2 — Game-level
+            "reminder" -> CHANNEL_GAME_REMINDERS
+            "player_joined", "player_left", "player_joined_bench",
+            "player_left_bench", "player_left_promoted",
+            "game_full", "spot_available", "bench_promoted_capacity",
+            "rsvp_request" -> CHANNEL_PLAYER_ACTIVITY
+            "post_game" -> CHANNEL_POST_GAME
+            "payment_confirmed" -> CHANNEL_PAYMENT_REMINDERS
+            "payment_self_reported" -> CHANNEL_PAYMENT_REMINDERS
+            // Tier 1 — Event-level
+            "game_cancelled" -> CHANNEL_EVENT_UPDATES
+            "game_invite" -> CHANNEL_EVENT_UPDATES
+            "player_invited" -> CHANNEL_EVENT_UPDATES
+            "event_details" -> CHANNEL_EVENT_UPDATES
+            "recruitment", "few_spots_left" -> CHANNEL_EVENT_UPDATES
+            // Legacy / fallback
+            "game_reminder" -> CHANNEL_GAME_REMINDERS
+            "player_activity" -> CHANNEL_PLAYER_ACTIVITY
+            "payment_reminder" -> CHANNEL_PAYMENT_REMINDERS
+            else -> CHANNEL_PLAYER_ACTIVITY
+        }
 
         fun createChannels(context: Context) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

@@ -29,18 +29,23 @@ object DeepLink {
     /** Extra keys that callers (tests, dev shortcuts) can use to inject a deep link. */
     const val EXTRA_DEEP_LINK = "deep_link"
     const val EXTRA_NAVIGATE_TO = "navigate_to"
+    const val EXTRA_URL = "url"
 
     /**
      * Read the deep link from an [Intent]. Returns the URL string (any scheme/host)
      * the caller can hand to [deepLinkToRoute], or `null` if no deep link is present.
      *
      * Priority: extras first (explicit, debug-grade), then `intent.data` (the
-     * default for real scheme/web links from notifications/shares).
+     * default for real scheme/web links from notifications/shares). The `url`
+     * extra comes last — FCM merges a message's data payload into the launch
+     * intent as raw extras when it auto-displays a `notification`-block message,
+     * so the server's `url` key lands here verbatim.
      */
     fun extract(intent: Intent?): String? {
         if (intent == null) return null
         intent.getStringExtra(EXTRA_DEEP_LINK)?.let { return it }
         intent.getStringExtra(EXTRA_NAVIGATE_TO)?.let { return it }
+        intent.getStringExtra(EXTRA_URL)?.let { return it }
         return intent.data?.toString()
     }
 
@@ -87,7 +92,10 @@ object DeepLink {
         // Top-level routes
         return when (path.removePrefix("/")) {
             "games" -> Route.Games.route
+            // No dashboard screen on Android — organizer digest notifications land on Games
+            "dashboard" -> Route.Games.route
             "create" -> Route.CreateEvent.route
+            "court-watches" -> Route.CourtWatches.route
             else -> null
         }
     }

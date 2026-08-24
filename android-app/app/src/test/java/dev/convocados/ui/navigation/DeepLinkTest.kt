@@ -76,6 +76,20 @@ class DeepLinkTest {
     }
 
     @Test
+    fun `getStringExtra url is used as last-resort fallback (FCM data extras)`() {
+        // When an FCM message carries a `notification` block, Firebase auto-displays it
+        // and merges the data payload into the launch intent as raw extras — the key
+        // is the server's data map key ("url"), not our "deep_link" convention.
+        val intent = mockk<Intent>()
+        every { intent.data } returns null
+        every { intent.getStringExtra("deep_link") } returns null
+        every { intent.getStringExtra("navigate_to") } returns null
+        every { intent.getStringExtra("url") } returns "/events/evt-fcm"
+
+        assertEquals("/events/evt-fcm", DeepLink.extract(intent))
+    }
+
+    @Test
     fun `null intent returns null without throwing`() {
         assertNull(DeepLink.extract(null))
     }
@@ -138,6 +152,27 @@ class DeepLinkTest {
     fun `deepLinkToRoute resolves create`() {
         val route = DeepLink.deepLinkToRoute("convocados://create")
         assertEquals("create", route)
+    }
+
+    @Test
+    fun `deepLinkToRoute resolves court watches url`() {
+        // Server sends absolute APP_URL/court-watches from the court-watch cron
+        assertEquals(
+            "court-watches",
+            DeepLink.deepLinkToRoute("https://convocados.cabeda.dev/court-watches"),
+        )
+    }
+
+    @Test
+    fun `deepLinkToRoute resolves convocados court watches url`() {
+        val route = DeepLink.deepLinkToRoute("convocados://court-watches")
+        assertEquals("court-watches", route)
+    }
+
+    @Test
+    fun `deepLinkToRoute maps organizer dashboard url to games`() {
+        // No dashboard screen on Android — organizer digest notifications land on Games
+        assertEquals("games", DeepLink.deepLinkToRoute("/dashboard"))
     }
 
     @Test

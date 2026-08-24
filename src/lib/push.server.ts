@@ -107,7 +107,10 @@ async function getFcmAccessToken(): Promise<string | null> {
   }
 }
 
-/** Send a push notification via FCM HTTP v1 API */
+/** Send a push notification via FCM HTTP v1 API.
+ *  Data-only payload: a `notification` block would make Firebase auto-render
+ *  a plain system notification when the app is backgrounded/killed and skip
+ *  onMessageReceived entirely — losing deep-link taps and quick actions. */
 async function sendFcmMessage(token: string, title: string, body: string, data?: Record<string, string>): Promise<boolean> {
   const sa = getFcmServiceAccount();
   if (!sa) return false;
@@ -127,10 +130,9 @@ async function sendFcmMessage(token: string, title: string, body: string, data?:
       body: JSON.stringify({
         message: {
           token,
-          notification: { title, body },
-          data: data ?? {},
+          data: { ...(data ?? {}), title, body },
           android: {
-            notification: { channel_id: "default", sound: "default" },
+            priority: "high",
           },
         },
       }),
@@ -254,7 +256,7 @@ async function sendAppPushToEventUsers(
     const t = createT((token.locale as Locale) ?? "en");
     const body = t(key, params);
     const suffix = spotsLeft === 0 ? t("notifyGameFull") : t("notifySpotsLeft", { n: spotsLeft });
-    fcmMessages.push({ token: token.token, title, body: `${body} · ${suffix}`, data: { url, ...(jobType ? { type: jobType } : {}), ...params } });
+    fcmMessages.push({ token: token.token, title, body: `${body} · ${suffix}`, data: { url, ...(jobType ? { type: jobType } : {}), ...(reminderType ? { reminderType } : {}), ...params } });
   }
 
   await sendFcmBatch(fcmMessages);
