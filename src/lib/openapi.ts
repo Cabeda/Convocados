@@ -217,6 +217,14 @@ export const openApiSpec = {
         responses: { "200": { description: "RSVP submitted" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/leave": {
+      post: {
+        summary: "Leave the event as the authenticated player (archives Player, sets RSVP no, unfollows)",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Left the event" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/no-show": {
       post: {
         summary: "Mark a player as no-show for a game (owner/admin)",
