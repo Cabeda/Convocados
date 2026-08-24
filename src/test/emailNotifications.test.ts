@@ -65,7 +65,8 @@ describe("sendGameInvite", () => {
     });
 
     const html = mockSend.mock.calls[0][0].html;
-    expect(html).toContain("unsubscribe");
+    expect(html).toContain("Email preferences");
+    expect(html).toContain("/settings/notifications");
   });
 });
 
@@ -152,7 +153,8 @@ describe("sendWeeklySummary", () => {
     });
 
     const html = mockSend.mock.calls[0][0].html;
-    expect(html).toContain("unsubscribe");
+    expect(html).toContain("Email preferences");
+    expect(html).toContain("/settings/notifications");
   });
 });
 

@@ -1,0 +1,19 @@
+---
+export const prerender = true;
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { NotificationSettingsSection } from "../../components/NotificationSettingsSection";
+---
+
+<BaseLayout title="Email Preferences — Convocados">
+  <div class="page-container">
+    <NotificationSettingsSection client:only="react" />
+  </div>
+</BaseLayout>
+
+<style>
+  .page-container {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+  }
+</style>
