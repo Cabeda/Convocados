@@ -746,9 +746,26 @@ describe("PlayerList — invited roster: channel chips + resend (ADR 0025 follow
     const btn = screen.getByTestId("resend-invite-inv-3");
     expect(btn).toBeEnabled();
     await user.click(btn);
-    expect(onResendInvite).toHaveBeenCalledWith({ id: "inv-3", name: "Grace" });
+    expect(onResendInvite).toHaveBeenCalledWith({ id: "inv-3", inviteId: "inv-3", name: "Grace" });
     // No dead cooldown control once eligible
     expect(screen.queryByTestId("resend-cooldown-inv-3")).not.toBeInTheDocument();
+  });
+
+  it("uses inviteId for resend when present (EventPlayer id vs PlayerInvite id)", async () => {
+    const user = userEvent.setup();
+    const onResendInvite = vi.fn().mockResolvedValue(undefined);
+    renderWithTheme(
+      <PlayerList
+        {...baseProps}
+        canManageInvites
+        onResendInvite={onResendInvite}
+        invited={[{ id: "ep-1", inviteId: "pi-1", name: "Grace2", userId: null, channels: { email: true, webPush: false, appPush: false }, notifiedAt: hoursAgo(25) }]}
+      />,
+    );
+    const btn = screen.getByTestId("resend-invite-pi-1");
+    expect(btn).toBeEnabled();
+    await user.click(btn);
+    expect(onResendInvite).toHaveBeenCalledWith({ id: "ep-1", inviteId: "pi-1", name: "Grace2" });
   });
 
   it("within the 24h cooldown shows a countdown chip instead of a dead button", () => {
