@@ -39,8 +39,12 @@ export async function getActiveRosterState(
 ): Promise<ActiveRosterState> {
   let members: RosterMember[];
   if (currentGameId) {
+    // ADR 0025: pending invite participants (status="pending") are roster
+    // ghosts — visible as "invited" only, never part of the active/bench math.
+    // The event GET endpoint applies the same filter; this shared helper must
+    // agree with it or joins get marked "bench" and team sync silently skips.
     const participants = await prisma.gameParticipant.findMany({
-      where: { gameId: currentGameId, archivedAt: null },
+      where: { gameId: currentGameId, archivedAt: null, status: { not: "pending" } },
       include: { eventPlayer: { select: { name: true, userId: true } } },
       orderBy: { order: "asc" },
     });
