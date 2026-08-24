@@ -248,13 +248,14 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   // ── ADR 0025 follow-up: resend a pending invite (24h cooldown enforced server-side) ──
   const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
-  const resendInvite = useCallback(async (invite: { id: string; name: string }) => {
-    setResendingInviteId(invite.id);
+  const resendInvite = useCallback(async (invite: { id: string; inviteId?: string | null; name: string }) => {
+    const inviteIdForAction = invite.inviteId ?? invite.id;
+    setResendingInviteId(inviteIdForAction);
     try {
       const res = await fetch(`/api/events/${eventId}/invites`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inviteId: invite.id }),
+        body: JSON.stringify({ inviteId: inviteIdForAction }),
       });
       const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
       if (!res.ok) {

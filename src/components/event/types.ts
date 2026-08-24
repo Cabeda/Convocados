@@ -61,6 +61,8 @@ export interface EventData {
    *  channels/notifiedAt: how the invite was delivered and when (ADR 0025 follow-up). */
   invited?: Array<{
     id: string;
+    /** PlayerInvite id for resend — present when a pending invite row exists. */
+    inviteId?: string | null;
     name: string;
     userId: string | null;
     image: string | null;
