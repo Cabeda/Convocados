@@ -27,6 +27,7 @@ import { fireWebhooks } from "./webhook.server";
 import { enqueueNotification } from "./notificationQueue.server";
 import { sendGameInvite, isEmailConfigured } from "./email.server";
 import { createT, type Locale } from "./i18n";
+import { checkEventAdmin } from "./auth.helpers.server";
 
 const log = createLogger("invite");
 
@@ -40,6 +41,19 @@ export interface InviteChannels {
 }
 
 const NO_CHANNELS: InviteChannels = { email: false, webPush: false, appPush: false };
+
+/** Minimum time between an invite being sent (or resent) and a resend. */
+export const RESEND_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/** Thrown when a resend is attempted before the 24h cooldown has elapsed. */
+export class InviteResendCooldownError extends Error {
+  readonly retryAfterSeconds: number;
+  constructor(retryAfterSeconds: number) {
+    super("This invite was sent recently. Wait before resending.");
+    this.name = "InviteResendCooldownError";
+    this.retryAfterSeconds = Math.max(1, Math.ceil(retryAfterSeconds));
+  }
+}
 
 /**
  * Which notification channels are enabled for an invitee. Each channel is true
@@ -166,14 +180,97 @@ export async function createPlayerInvite(opts: {
 
   const inviteUrl = `${origin}/invite/${token}`;
 
-  const channels = await notifyInvitee({ userId: inviteeUserId, eventId, inviteUrl, invitedByUserId });
+  const channels = await deliverInviteNotification({ userId: inviteeUserId, eventId, inviteUrl, invitedByUserId });
+  // Persist which channels were used so admins can see delivery info on the
+  // roster (and the resend cooldown can be enforced per invite).
+  await prisma.playerInvite.update({
+    where: { id: invite.id },
+    data: {
+      sentViaEmail: channels.email,
+      sentViaWebPush: channels.webPush,
+      sentViaAppPush: channels.appPush,
+      notifiedAt: new Date(),
+    },
+  });
   fireWebhooks(eventId, "player_invited", { playerName: user.name, inviteUrl }).catch(() => {});
 
   log.info({ inviteId: invite.id, eventId, inviteeUserId, invitedByUserId, channels }, "Player invite created");
   return { inviteId: invite.id, token, inviteUrl, channels };
 }
 
-async function notifyInvitee(opts: { userId: string; eventId: string; inviteUrl: string; invitedByUserId: string }): Promise<InviteChannels> {
+/**
+ * Re-send an existing pending PlayerInvite through all currently-enabled
+ * notification channels (ADR 0025). Enforces a 24h cooldown since the last
+ * delivery. Allowed for the event owner, an event admin, or the original
+ * inviter. The invite token is kept — previously shared links stay valid.
+ */
+export async function resendPlayerInvite(opts: {
+  eventId: string;
+  inviteId: string;
+  requestedByUserId: string;
+  origin: string;
+}): Promise<{ inviteId: string; token: string; inviteUrl: string; channels: InviteChannels; notifiedAt: Date }> {
+  const { eventId, inviteId, requestedByUserId, origin } = opts;
+
+  const invite = await prisma.playerInvite.findUnique({
+    where: { id: inviteId },
+    select: {
+      gameId: true,
+      status: true,
+      token: true,
+      notifiedAt: true,
+      invitedByUserId: true,
+      eventPlayer: { select: { userId: true } },
+    },
+  });
+  if (!invite || invite.eventPlayer.userId === null) throw new Error("Invite not found.");
+
+  // Verify the invite belongs to this event via its game.
+  const game = await prisma.game.findUnique({ where: { id: invite.gameId }, select: { eventId: true } });
+  if (!game || game.eventId !== eventId) throw new Error("Invite not found.");
+
+  const [isEventAdmin, owner] = await Promise.all([
+    checkEventAdmin(eventId, requestedByUserId).catch(() => false),
+    prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } }),
+  ]);
+  const isOwnerOrInviter = owner?.ownerId === requestedByUserId || invite.invitedByUserId === requestedByUserId;
+  if (!isOwnerOrInviter && isEventAdmin !== true) {
+    throw new Error("Only the owner, an admin, or the inviter can resend an invite.");
+  }
+  if (invite.status !== "pending") throw new Error("This invite is no longer pending.");
+
+  if (invite.notifiedAt) {
+    const elapsed = Date.now() - invite.notifiedAt.getTime();
+    if (elapsed < RESEND_COOLDOWN_MS) {
+      throw new InviteResendCooldownError((RESEND_COOLDOWN_MS - elapsed) / 1000);
+    }
+  }
+
+  const inviteeUserId = invite.eventPlayer.userId;
+  const user = await prisma.user.findUnique({ where: { id: inviteeUserId }, select: { name: true } });
+  if (!user) throw new Error("Invitee not found.");
+
+  const inviteUrl = `${origin}/invite/${invite.token}`;
+  const channels = await deliverInviteNotification({ userId: inviteeUserId, eventId, inviteUrl, invitedByUserId: requestedByUserId });
+
+  const notifiedAt = new Date();
+  await prisma.playerInvite.update({
+    where: { id: inviteId },
+    data: {
+      sentViaEmail: channels.email,
+      sentViaWebPush: channels.webPush,
+      sentViaAppPush: channels.appPush,
+      notifiedAt,
+    },
+  });
+
+  fireWebhooks(eventId, "player_invited", { playerName: user.name, inviteUrl }).catch(() => {});
+  log.info({ inviteId, eventId, inviteeUserId, requestedByUserId, channels }, "Player invite resent");
+
+  return { inviteId, token: invite.token, inviteUrl, channels, notifiedAt };
+}
+
+async function deliverInviteNotification(opts: { userId: string; eventId: string; inviteUrl: string; invitedByUserId: string }): Promise<InviteChannels> {
   const prefs = await getNotificationPrefs(opts.userId);
   // Global kill switch: nothing is sent (no in-app row either).
   if (!wantsInvites(prefs)) return NO_CHANNELS;

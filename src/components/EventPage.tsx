@@ -246,6 +246,43 @@ export default function EventPage({ eventId }: { eventId: string }) {
     }
   }, [eventId, fetchEvent, t]);
 
+  // ── ADR 0025 follow-up: resend a pending invite (24h cooldown enforced server-side) ──
+  const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
+  const resendInvite = useCallback(async (invite: { id: string; name: string }) => {
+    setResendingInviteId(invite.id);
+    try {
+      const res = await fetch(`/api/events/${eventId}/invites`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteId: invite.id }),
+      });
+      const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
+      if (!res.ok) {
+        if (res.status === 429 && typeof json?.retryAfterSeconds === "number") {
+          const mins = Math.ceil(json.retryAfterSeconds / 60);
+          const time = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+          setSnackbar(t("inviteResendCooldown", { time }));
+        } else {
+          setPlayerError(json.error ?? t("somethingWentWrong"));
+        }
+        return;
+      }
+      const channels = json?.channels as { email?: boolean; webPush?: boolean; appPush?: boolean } | undefined;
+      const labels: string[] = [];
+      if (channels?.email) labels.push(t("channelEmail"));
+      if (channels?.webPush) labels.push(t("channelWebPush"));
+      if (channels?.appPush) labels.push(t("channelAppPush"));
+      setSnackbar(labels.length > 0
+        ? t("inviteResentVia", { name: invite.name, channels: labels.join(", ") })
+        : t("inviteSent", { name: invite.name }));
+      fetchEvent();
+    } catch {
+      setPlayerError(t("somethingWentWrong"));
+    } finally {
+      setResendingInviteId(null);
+    }
+  }, [eventId, fetchEvent, t]);
+
   // ── Payment-nudge state ────────────────────────────────────────────────────
   // Fetched lazily on first pill click; controls whether the Quick Join pill
   // routes through the payment-nudge dialog (when the user has a balance) or
@@ -944,6 +981,9 @@ export default function EventPage({ eventId }: { eventId: string }) {
               rosterLocked={gameEnded}
               declined={event.declined}
               invited={event.invited}
+              canManageInvites={isOwner || isAdminFlag}
+              onResendInvite={resendInvite}
+              resendingInviteId={resendingInviteId}
               coPlaySuggestions={coPlaySuggestions}
               />
             </div>

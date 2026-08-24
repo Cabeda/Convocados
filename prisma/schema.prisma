@@ -748,6 +748,9 @@ model PlayerInvite {
   token          String    @unique
   notifiedAt     DateTime?
   respondedAt    DateTime?
+  sentViaEmail   Boolean   @default(false)
+  sentViaWebPush Boolean   @default(false)
+  sentViaAppPush Boolean   @default(false)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
