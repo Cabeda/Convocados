@@ -195,6 +195,7 @@ interface Props {
    *  may carry the persisted delivery channels + notifiedAt (ADR 0025 follow-up). */
   invited?: Array<{
     id: string;
+    inviteId?: string | null;
     name: string;
     userId: string | null;
     image?: string | null;
@@ -204,7 +205,7 @@ interface Props {
   /** Owner/admin flag: shows the per-invite resend action when onResendInvite is set. */
   canManageInvites?: boolean;
   /** ADR 0025 follow-up: resend a pending invite (server enforces a 24h cooldown). */
-  onResendInvite?: (invite: { id: string; name: string }) => Promise<void>;
+  onResendInvite?: (invite: { id: string; inviteId?: string | null; name: string }) => Promise<void>;
   /** Id of an invite currently being resent — disables that row's button. */
   resendingInviteId?: string | null;
   /** ADR 0025: ranked co-play suggestions (owner/admin). Clicking one requests the
@@ -821,7 +822,8 @@ export function PlayerList({
                 {invited.map((d) => {
                   const channelsUsed = sentChannels(d.channels);
                   const eligibility = resendEligibility(d.notifiedAt, now);
-                  const resending = resendingInviteId === d.id;
+                  const inviteIdForAction = (d as { inviteId?: string | null }).inviteId ?? d.id;
+                  const resending = resendingInviteId === inviteIdForAction || resendingInviteId === d.id;
                   const canResend = canManageInvites && !!onResendInvite;
                   return (
                     <ListItem key={d.id} sx={{ borderRadius: 2, px: 1, py: 0.5, overflow: "hidden" }}>
@@ -864,12 +866,12 @@ export function PlayerList({
                             channelKey={c.key}
                             labelKey={c.labelKey}
                             compact={!isWide}
-                            inviteId={d.id}
+                            inviteId={inviteIdForAction}
                           />
                         ))}
                         {channelsUsed.length === 0 && isWide && (
                           <Tooltip title={t("inviteLinkOnly")}>
-                            <Chip size="small" variant="outlined" color="default" icon={<LinkIcon fontSize="small" />} label={t("inviteLinkOnlyShort")} data-testid={`invite-linkonly-${d.id}`} />
+                            <Chip size="small" variant="outlined" color="default" icon={<LinkIcon fontSize="small" />} label={t("inviteLinkOnlyShort")} data-testid={`invite-linkonly-${inviteIdForAction}`} />
                           </Tooltip>
                         )}
                         <Chip size="small" variant="outlined" color="primary" label={t("invitePendingLabel")} />
@@ -880,9 +882,9 @@ export function PlayerList({
                                 edge="end"
                                 size="small"
                                 disabled={resending}
-                                data-testid={`resend-invite-${d.id}`}
+                                data-testid={`resend-invite-${inviteIdForAction}`}
                                 aria-label={t("inviteResendAria", { name: d.name })}
-                                onClick={() => void onResendInvite!({ id: d.id, name: d.name })}
+                                onClick={() => void onResendInvite!({ id: d.id, inviteId: inviteIdForAction, name: d.name })}
                                 sx={{ p: 1 }}
                               >
                                 {resending ? <CircularProgress size={16} /> : <SendIcon fontSize="small" />}
