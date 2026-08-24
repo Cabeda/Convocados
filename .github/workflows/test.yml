@@ -142,7 +142,10 @@ jobs:
   # count and clustered the slow jsdom/MUI component files into one shard
   # (66s vs 25s siblings). node project = many fast suites (2 shards);
   # jsdom = few heavy component suites (3 shards). Wall time = setup (~30s)
-  # + slowest leg. Coverage only on push (sharded, merged in coverage-gate).
+  # + slowest leg. Shards never run coverage: each leg sees only its slice,
+  # so global thresholds would fail every leg. Coverage runs unsharded in
+  # the coverage-gate job below, where vitest's own threshold check sees
+  # the whole suite.
   test:
     name: Test (${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
@@ -184,38 +187,29 @@ jobs:
         run: pnpm prisma generate
         env:
           DATABASE_URL: file:./prisma/dev.db
-      - name: Run tests (no coverage on PRs) — ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
-        if: github.event_name == 'pull_request'
+      - name: Run tests (no coverage — sharded legs see partial suites) — ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
         run: pnpm vitest run --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --reporter=default --reporter=json --outputFile=test-results.json
-      - name: Run tests with coverage — ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
-        if: github.event_name != 'pull_request'
-        run: >-
-          pnpm vitest run --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }}
-          --coverage --reporter=default --reporter=json --outputFile=test-results.json
-          --coverage.reportsDirectory=coverage/leg-${{ matrix.project }}-${{ matrix.shard }}
-        env:
-          COVERAGE_THRESHOLDS: "1"
       - name: Upload shard results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.project }}-${{ matrix.shard }}
-          path: |
-            test-results.json
-            coverage/leg-${{ matrix.project }}-${{ matrix.shard }}/coverage-summary.json
+          path: test-results.json
           retention-days: 1
           if-no-files-found: ignore
       - name: Report flaky tests (${{ matrix.project }} ${{ matrix.shard }})
         if: always()
         run: node scripts/report-flaky.mjs test-results.json || true
 
-  # Coverage merge + threshold gate (only on push). Runs after shards.
+  # Coverage threshold gate (only on push). Runs the FULL suite unsharded so
+  # vitest's own thresholds (vitest.config.ts, single source of truth) see
+  # complete per-file coverage. Never shard this: a shard only exercises part
+  # of the suite and would fail global thresholds against partial data.
   coverage-gate:
     name: Coverage Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     if: github.event_name != 'pull_request'
-    needs: [test]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -236,32 +230,12 @@ jobs:
           key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
       - if: steps.nm-cache.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile --prefer-offline
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: test-results-*
-          merge-multiple: true
-      - name: Merge coverage and check thresholds
-        run: |
-          node -e "
-          const fs=require('fs'), path=require('path');
-          const dirs=fs.readdirSync('coverage').filter(d=>d.startsWith('leg-'));
-          let merged=null;
-          for(const d of dirs){
-            const p=path.join('coverage',d,'coverage-summary.json');
-            if(!fs.existsSync(p)){ console.warn('missing',p); continue; }
-            const j=JSON.parse(fs.readFileSync(p,'utf8'));
-            if(!merged) merged=j;
-            else {
-              for(const k of ['lines','functions','branches','statements']){
-                merged.total[k].pct = Math.min(merged.total[k].pct, j.total[k].pct);
-              }
-            }
-          }
-          if(!merged) throw new Error('no coverage legs found');
-          console.log('Merged (min) coverage:', JSON.stringify(merged.total,null,2));
-          const t={lines:94,functions:89,branches:82,statements:91};
-          for(const k in t) if(merged.total[k].pct < t[k]) throw new Error(k+' coverage '+merged.total[k].pct+'% < '+t[k]+'%');
-          "
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+      - name: Run full suite with coverage (thresholds from vitest.config.ts)
+        run: pnpm vitest run --coverage --reporter=default
 
   # ── Build (needed for E2E) ──────────────────────────────────────────────
   build:
@@ -479,7 +453,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [typecheck, lint, audit, test, build, e2e, seed-smoke]
+    needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke]
     steps:
       - name: Check results
         run: |
