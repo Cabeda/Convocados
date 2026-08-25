@@ -6,6 +6,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -61,6 +62,32 @@ class ApiClientRefreshTest {
         assertEquals("fresh_access", tokens?.accessToken)
         assertEquals("fresh_refresh", tokens?.refreshToken)
         assertTrue((tokens?.expiresAt ?: 0) > System.currentTimeMillis())
+    }
+
+    @Test
+    fun refresh_posts_to_mobile_native_with_json_action_refresh() = runTest {
+        val store = FakeTokenStore(
+            OAuthTokens("old_access", "old_refresh", System.currentTimeMillis() - 60_000)
+        )
+        var capturedPath: String? = null
+        var capturedBody: String? = null
+        val engine = MockEngine { request ->
+            capturedPath = request.url.encodedPath
+            capturedBody = (request.body as TextContent).text
+            respond(
+                content = """{"access_token":"fresh_access","refresh_token":"fresh_refresh","expires_in":3600}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        }
+        val client = client(engine, store)
+
+        client.refreshToken()
+
+        assertEquals("/api/auth/mobile-native", capturedPath)
+        assertTrue("Body must use the action:refresh JSON contract", capturedBody?.contains("action") == true)
+        assertTrue("Body must include the refresh_token", capturedBody?.contains("refresh_token") == true)
+        assertEquals("fresh_access", store.getTokens()?.accessToken)
     }
 
     @Test

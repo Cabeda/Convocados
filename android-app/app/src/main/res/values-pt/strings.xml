@@ -57,7 +57,9 @@
     <string name="view_releases">Ver versões no GitHub</string>
     <string name="game_details">Detalhes do jogo</string>
     <string name="game_history">Histórico de jogos</string>
+    <string name="history_subtitle">Todos os jogos registados neste evento</string>
     <string name="event_log">Registo do evento</string>
+    <string name="event_log_subtitle">Alterações recentes neste evento</string>
     <string name="no_log_entries">Ainda sem registos</string>
     <string name="load_more">Carregar mais</string>
     <string name="back">Voltar</string>
@@ -81,6 +83,7 @@
     <string name="games_played_total">%1$d jogos disputados</string>
     <string name="no_attendance_data">Ainda sem dados de presença</string>
     <string name="games_streak_format">%1$d/%2$d jogos · sequência: %3$d</string>
+    <string name="last_played">Última vez %1$s</string>
 
     <string name="watch_created">Alerta criado! Serás notificado quando estiver livre.</string>
     <string name="court_alternatives">Campos alternativos</string>
@@ -234,6 +237,19 @@
     <string name="total">Total</string>
     <string name="mark_all_paid">Marcar tudo como pago</string>
     <string name="no_payments">Sem pagamentos configurados</string>
+    <string name="payments_title">Pagamentos do evento</string>
+    <string name="payments_intro">Veja quem deve o quê, e acerte as contas.</string>
+    <string name="payments_no_unsettled">Nada a acertar.</string>
+    <string name="payments_to_receive">A receber</string>
+    <string name="payments_to_pay">A pagar</string>
+    <string name="payments_is_owed">%1$s tem a receber %2$s</string>
+    <string name="payments_owes">%1$s deve %2$s</string>
+    <string name="payments_unsettled_games">Jogos a acertar</string>
+    <string name="payments_status_sent">Enviado</string>
+    <string name="payments_mark_paid">Marcar como pago</string>
+    <string name="payments_report_sent">Reportar envio</string>
+    <string name="payments_status_pending">Pendente</string>
+    <string name="payments_settle_all">Acertar tudo</string>
     <string name="set_custom_cost">Definir custo personalizado</string>
     <string name="custom_cost_for">Custo personalizado para %1$s</string>
     <string name="amount">Valor</string>
@@ -261,6 +277,14 @@
     <string name="claim_player">Reivindicar jogador</string>
     <string name="claim_confirm">Tens a certeza de que queres reivindicar \"%1$s\"? Este jogador será associado à tua conta.</string>
     <string name="claim">Reivindicar</string>
+    <string name="ratings_hidden">As classificações deste evento estão ocultas pelos organizadores.</string>
+    <string name="set_initial_rating">Definir rating inicial</string>
+    <string name="set_initial_rating_confirm">Definir rating inicial para %1$s</string>
+    <string name="initial_rating">Inicial</string>
+    <string name="purge_player">Remover jogador</string>
+    <string name="purge_player_confirm">Remover %1$s das classificações? O histórico de rating será eliminado.</string>
+    <string name="mvp_awards">MVP</string>
+    <string name="elo_explainer">Os ratings são calculados a partir dos resultados dos jogos usando ELO. Novos jogadores começam sem rating até que um seja atribuído ou calculado.</string>
 
     <string name="event_settings">Definições do evento</string>
     <string name="location">Local</string>
@@ -270,6 +294,12 @@
     <string name="access">Acesso</string>
     <string name="danger_zone">Zona de perigo</string>
     <string name="public_game">Jogo público</string>
+    <string name="balanced_teams">Equipas equilibradas</string>
+    <string name="duration">Duração</string>
+    <string name="allow_manual_rating">Permitir rating manual</string>
+    <string name="show_competitive_data">Mostrar dados competitivos</string>
+    <string name="mvp_voting">Votação MVP</string>
+    <string name="mvp_elo">ELO do MVP</string>
     <string name="elo_ratings">Classificações ELO</string>
     <string name="hide_elo_teams">Ocultar ELO nas equipas</string>
     <string name="split_costs">Dividir custos</string>

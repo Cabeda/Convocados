@@ -80,7 +80,9 @@
     <string name="view_releases">View releases on GitHub</string>
     <string name="game_details">Game Details</string>
     <string name="game_history">Game History</string>
+    <string name="history_subtitle">All recorded games for this event</string>
     <string name="event_log">Event Log</string>
+    <string name="event_log_subtitle">Recent changes to this event</string>
     <string name="no_log_entries">No log entries yet</string>
     <string name="load_more">Load more</string>
     <string name="back">Back</string>
@@ -105,6 +107,7 @@
     <string name="games_played_total">%1$d games played</string>
     <string name="no_attendance_data">No attendance data yet</string>
     <string name="games_streak_format">%1$d/%2$d games · streak: %3$d</string>
+    <string name="last_played">Last played %1$s</string>
 
     <!-- Court alternatives / watches -->
     <string name="watch_created">Watch created! You\'ll be notified when it\'s free.</string>
@@ -270,6 +273,19 @@
     <string name="total">Total</string>
     <string name="mark_all_paid">Mark all as paid</string>
     <string name="no_payments">No payments set up</string>
+    <string name="payments_title">Event payments</string>
+    <string name="payments_intro">See who owes what, and settle up.</string>
+    <string name="payments_no_unsettled">Nothing to settle.</string>
+    <string name="payments_to_receive">To receive</string>
+    <string name="payments_to_pay">To pay</string>
+    <string name="payments_is_owed">%1$s is owed %2$s</string>
+    <string name="payments_owes">%1$s owes %2$s</string>
+    <string name="payments_unsettled_games">Games to settle</string>
+    <string name="payments_status_sent">Sent</string>
+    <string name="payments_mark_paid">Mark paid</string>
+    <string name="payments_report_sent">Report sent</string>
+    <string name="payments_status_pending">Pending</string>
+    <string name="payments_settle_all">Settle all</string>
     <string name="set_custom_cost">Set custom cost</string>
     <string name="custom_cost_for">Custom cost for %1$s</string>
     <string name="amount">Amount</string>
@@ -300,6 +316,14 @@
     <string name="claim_player">Claim player</string>
     <string name="claim_confirm">Are you sure you want to claim \"%1$s\"? This player will be linked to your account.</string>
     <string name="claim">Claim</string>
+    <string name="ratings_hidden">Ratings for this event are hidden by the organizers.</string>
+    <string name="set_initial_rating">Set initial rating</string>
+    <string name="set_initial_rating_confirm">Set initial rating for %1$s</string>
+    <string name="initial_rating">Initial</string>
+    <string name="purge_player">Remove player</string>
+    <string name="purge_player_confirm">Remove %1$s from the rankings? Their rating history will be deleted.</string>
+    <string name="mvp_awards">MVP</string>
+    <string name="elo_explainer">Ratings are computed from match results using ELO. New players start unrated until a rating is assigned or calculated.</string>
 
     <!-- Event settings -->
     <string name="event_settings">Event Settings</string>
@@ -310,6 +334,12 @@
     <string name="access">Access</string>
     <string name="danger_zone">Danger zone</string>
     <string name="public_game">Public game</string>
+    <string name="balanced_teams">Balanced teams</string>
+    <string name="duration">Duration</string>
+    <string name="allow_manual_rating">Allow manual rating</string>
+    <string name="show_competitive_data">Show competitive data</string>
+    <string name="mvp_voting">MVP voting</string>
+    <string name="mvp_elo">MVP ELO</string>
     <string name="elo_ratings">ELO ratings</string>
     <string name="hide_elo_teams">Hide ELO in teams</string>
     <string name="split_costs">Split costs</string>

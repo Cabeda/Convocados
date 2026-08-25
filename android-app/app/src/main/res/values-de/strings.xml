@@ -57,7 +57,9 @@
     <string name="view_releases">Versionen auf GitHub ansehen</string>
     <string name="game_details">Spieldetails</string>
     <string name="game_history">Spielverlauf</string>
+    <string name="history_subtitle">Alle aufgenommenen Spiele dieses Events</string>
     <string name="event_log">Ereignisprotokoll</string>
+    <string name="event_log_subtitle">Kürzliche Änderungen an diesem Event</string>
     <string name="no_log_entries">Noch keine Einträge</string>
     <string name="load_more">Mehr laden</string>
     <string name="back">Zurück</string>
@@ -81,6 +83,7 @@
     <string name="games_played_total">%1$d Spiele gespielt</string>
     <string name="no_attendance_data">Noch keine Teilnahmedaten</string>
     <string name="games_streak_format">%1$d/%2$d Spiele · Serie: %3$d</string>
+    <string name="last_played">Zuletzt %1$s</string>
 
     <string name="watch_created">Alarm erstellt! Du wirst benachrichtigt, sobald er frei ist.</string>
     <string name="court_alternatives">Alternative Plätze</string>
@@ -234,6 +237,19 @@
     <string name="total">Gesamt</string>
     <string name="mark_all_paid">Alle als bezahlt markieren</string>
     <string name="no_payments">Keine Zahlungen eingerichtet</string>
+    <string name="payments_title">Event-Zahlungen</string>
+    <string name="payments_intro">Sehen Sie, wer was schuldet, und gleicht es aus.</string>
+    <string name="payments_no_unsettled">Nichts zu verrechnen.</string>
+    <string name="payments_to_receive">Zu erhalten</string>
+    <string name="payments_to_pay">Zu zahlen</string>
+    <string name="payments_is_owed">%1$s erhält %2$s</string>
+    <string name="payments_owes">%1$s schuldet %2$s</string>
+    <string name="payments_unsettled_games">Spiele zu verrechnen</string>
+    <string name="payments_status_sent">Gesendet</string>
+    <string name="payments_mark_paid">Als bezahlt markieren</string>
+    <string name="payments_report_sent">Sendung melden</string>
+    <string name="payments_status_pending">Ausstehend</string>
+    <string name="payments_settle_all">Alles verrechnen</string>
     <string name="set_custom_cost">Eigenen Betrag festlegen</string>
     <string name="custom_cost_for">Eigener Betrag für %1$s</string>
     <string name="amount">Betrag</string>
@@ -261,6 +277,14 @@
     <string name="claim_player">Spieler beanspruchen</string>
     <string name="claim_confirm">Möchtest du \"%1$s\" wirklich beanspruchen? Dieser Spieler wird mit deinem Konto verknüpft.</string>
     <string name="claim">Beanspruchen</string>
+    <string name="ratings_hidden">Die Wertungen dieses Events wurden von den Organisatoren ausgeblendet.</string>
+    <string name="set_initial_rating">Startwertung festlegen</string>
+    <string name="set_initial_rating_confirm">Startwertung für %1$s festlegen</string>
+    <string name="initial_rating">Initial</string>
+    <string name="purge_player">Spieler entfernen</string>
+    <string name="purge_player_confirm">%1$s aus der Wertung entfernen? Der Verlauf wird gelöscht.</string>
+    <string name="mvp_awards">MVP</string>
+    <string name="elo_explainer">Wertungen werden aus Spielergebnissen per ELO berechnet. Neue Spieler starten ohne Wertung, bis eine festgelegt oder berechnet wird.</string>
 
     <string name="event_settings">Ereigniseinstellungen</string>
     <string name="location">Ort</string>
@@ -270,6 +294,12 @@
     <string name="access">Zugang</string>
     <string name="danger_zone">Gefahrenzone</string>
     <string name="public_game">Öffentliches Spiel</string>
+    <string name="balanced_teams">Ausgeglichene Teams</string>
+    <string name="duration">Dauer</string>
+    <string name="allow_manual_rating">Manuelle Wertung erlauben</string>
+    <string name="show_competitive_data">Wettbewerbsdaten anzeigen</string>
+    <string name="mvp_voting">MVP-Abstimmung</string>
+    <string name="mvp_elo">MVP-ELO</string>
     <string name="elo_ratings">ELO-Bewertungen</string>
     <string name="hide_elo_teams">ELO in Teams ausblenden</string>
     <string name="split_costs">Kosten teilen</string>

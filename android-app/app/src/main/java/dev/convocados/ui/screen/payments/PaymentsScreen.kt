@@ -1,6 +1,11 @@
 package dev.convocados.ui.screen.payments
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,7 +26,8 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.R
 import dev.convocados.data.api.ConvocadosApi
-import dev.convocados.data.api.PaymentsResponse
+import dev.convocados.data.api.SettlementGame
+import dev.convocados.data.api.SettlementSummary
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -29,82 +35,37 @@ import javax.inject.Inject
 
 @HiltViewModel
 class PaymentsViewModel @Inject constructor(private val api: ConvocadosApi) : ViewModel() {
-    private val _data = MutableStateFlow<PaymentsResponse?>(null)
-    val data: StateFlow<PaymentsResponse?> = _data
+    private val _data = MutableStateFlow<SettlementSummary?>(null)
+    val data: StateFlow<SettlementSummary?> = _data
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading
-
-    // One-shot error signal for the UI to show a snackbar. Null when no error
-    // is pending; the screen clears it after showing.
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy
 
     fun clearError() { _error.value = null }
 
     fun load(id: String) {
         viewModelScope.launch {
             _loading.value = true
-            runCatching { api.fetchPayments(id) }
+            runCatching { api.fetchSettlement(id) }
                 .onSuccess { _data.value = it }
                 .onFailure { _error.value = it.message }
             _loading.value = false
         }
     }
 
-    /**
-     * Toggle a player's payment status between paid and pending.
-     *
-     * Updates the single row in place on success (no full re-fetch, no global
-     * loading spinner) so the rest of the list doesn't blank out. On failure
-     * (e.g. 403 when the user isn't the event owner/admin) the row is left
-     * unchanged and an error is surfaced — previously this failed silently and
-     * looked like the screen was stuck on "pending".
-     */
-    fun toggle(eventId: String, playerName: String, currentStatus: String) {
-        val newStatus = if (currentStatus == "paid") "pending" else "paid"
-        viewModelScope.launch {
-            runCatching { api.updatePaymentStatus(eventId, playerName, newStatus) }
-                .onSuccess { patchStatus(playerName, newStatus) }
-                .onFailure { _error.value = it.message }
-        }
-    }
+    fun settle(eventId: String, gameId: String, eventPlayerId: String) = action { api.settleShare(eventId, gameId, eventPlayerId); load(eventId) }
+    fun settleAll(eventId: String, gameId: String) = action { api.settleAll(eventId, gameId); load(eventId) }
+    fun reportSent(eventId: String, gameId: String, eventPlayerId: String) = action { api.selfReportSent(eventId, gameId, eventPlayerId); load(eventId) }
 
-    fun setCostOverride(eventId: String, playerName: String, amount: Double) {
+    private fun action(block: suspend () -> Unit) {
         viewModelScope.launch {
-            runCatching { api.setCostOverride(eventId, playerName, amount) }
-                .onSuccess { load(eventId) }
-                .onFailure { _error.value = it.message }
+            _busy.value = true
+            runCatching { block() }.onFailure { _error.value = it.message }
+            _busy.value = false
         }
-    }
-
-    fun bulkMarkAllPaid(eventId: String) {
-        viewModelScope.launch {
-            runCatching { api.bulkMarkAllPaid(eventId) }
-                .onSuccess { load(eventId) }
-                .onFailure { _error.value = it.message }
-        }
-    }
-
-    /** Patch a single payment's status in the cached list and recompute the summary. */
-    private fun patchStatus(playerName: String, newStatus: String) {
-        val current = _data.value ?: return
-        val updatedPayments = current.payments.map { p ->
-            if (p.playerName == playerName) {
-                p.copy(status = newStatus, paidAt = if (newStatus == "paid") p.paidAt else null)
-            } else p
-        }
-        val paidCount = updatedPayments.count { it.status == "paid" }
-        val pendingCount = updatedPayments.count { it.status == "pending" }
-        val paidAmount = updatedPayments.filter { it.status == "paid" }.sumOf { it.amount }
-        _data.value = current.copy(
-            payments = updatedPayments,
-            summary = current.summary.copy(
-                paidCount = paidCount,
-                pendingCount = pendingCount,
-                totalCount = updatedPayments.size,
-                paidAmount = paidAmount,
-            ),
-        )
     }
 }
 
@@ -114,116 +75,117 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
     val data by viewModel.data.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
-    var overrideTarget by remember { mutableStateOf<String?>(null) }
-    var overrideAmount by remember { mutableStateOf("") }
+    val busy by viewModel.busy.collectAsState()
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    // Surface mutation/load errors (e.g. a 403 when the user isn't the owner)
-    // instead of failing silently.
     LaunchedEffect(error) {
-        error?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearError()
-        }
+        error?.let { snackbarHostState.showSnackbar(it); viewModel.clearError() }
     }
 
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val accent = MaterialTheme.colorScheme.primary
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = { TopAppBar(scrollBehavior = scrollBehavior, title = { Text(stringResource(R.string.upcoming_game_payments_label)) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }; return@Scaffold }
-        val d = data ?: return@Scaffold
+        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = accent) }; return@Scaffold }
+        val d = data ?: run { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { Text(stringResource(R.string.no_payments), color = MaterialTheme.colorScheme.outline) }; return@Scaffold }
+
+        val isManager = d.viewerRole == "owner" || d.viewerRole == "admin"
 
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(padding)) {
-            // Summary
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryCard(stringResource(R.string.paid), "${d.summary.paidCount}", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
-                    SummaryCard(stringResource(R.string.pending), "${d.summary.pendingCount}", MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
-                    d.totalAmount?.let { SummaryCard(stringResource(R.string.total), "${d.currency ?: "€"}$it", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f)) }
-                }
-            }
-            // Bulk mark all as paid
-            if (d.payments.any { it.status != "paid" }) {
-                item {
-                    Button(
-                        onClick = { viewModel.bulkMarkAllPaid(eventId) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    ) {
-                        Text("✓ ${stringResource(R.string.mark_all_paid)}", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                        .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.35f), MaterialTheme.colorScheme.surface)))
+                        .padding(16.dp),
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+                            Spacer(Modifier.weight(1f))
+                        }
+                        Text(stringResource(R.string.payments_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                        Text(stringResource(R.string.payments_intro), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-            if (d.payments.isEmpty()) {
-                item { Box(Modifier.fillMaxWidth().padding(48.dp), Alignment.Center) { Text(stringResource(R.string.no_payments), color = MaterialTheme.colorScheme.outline) } }
-            }
-            items(d.payments, key = { it.id }) { p ->
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth(), onClick = { viewModel.toggle(eventId, p.playerName, p.status) }) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(p.playerName, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
-                            p.method?.let { Text(it, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall) }
-                        }
-                        d.totalAmount?.let { Text("${d.currency ?: "€"}${p.amount}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = 10.dp)) }
-                        Card(colors = CardDefaults.cardColors(containerColor = when (p.status) {
-                            "paid" -> MaterialTheme.colorScheme.primaryContainer
-                            "sent" -> MaterialTheme.colorScheme.tertiaryContainer
-                            else -> MaterialTheme.colorScheme.surfaceVariant
-                        })) {
-                            val pillText = when (p.status) {
-                                "paid" -> "✓ ${stringResource(R.string.paid)}"
-                                "sent" -> "→ ${stringResource(R.string.sent)}"
-                                else -> stringResource(R.string.pending)
-                            }
-                            val pillColor = when (p.status) {
-                                "paid" -> MaterialTheme.colorScheme.onPrimaryContainer
-                                "sent" -> MaterialTheme.colorScheme.onTertiaryContainer
-                                else -> MaterialTheme.colorScheme.outline
-                            }
-                            Text(pillText, color = pillColor, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
-                        }
-                        Spacer(Modifier.width(4.dp))
-                        IconButton(onClick = { overrideTarget = p.playerName; overrideAmount = p.amount.toString() }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Edit, stringResource(R.string.set_custom_cost), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
-                        }
-                    }
-                }
-            }
-        }
 
-        // Cost override dialog
-        overrideTarget?.let { name ->
-            AlertDialog(
-                onDismissRequest = { overrideTarget = null },
-                title = { Text(stringResource(R.string.custom_cost_for, name)) },
-                text = {
-                    OutlinedTextField(value = overrideAmount, onValueChange = { overrideAmount = it }, label = { Text(stringResource(R.string.amount)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        overrideAmount.toDoubleOrNull()?.let { viewModel.setCostOverride(eventId, name, it) }
-                        overrideTarget = null
-                    }) { Text(stringResource(R.string.save), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { overrideTarget = null }) { Text(stringResource(R.string.cancel)) }
-                },
-            )
+            if (d.games.isEmpty()) {
+                item { Card(Modifier.fillMaxWidth()) { Text(stringResource(R.string.payments_no_unsettled), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp)) } }
+            }
+
+            // People rollup
+            if (d.people.isNotEmpty()) {
+                val payers = d.people.filter { it.isPayer }
+                val debtors = d.people.filter { !it.isPayer }
+                if (payers.isNotEmpty() || debtors.isNotEmpty()) {
+                    item {
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (payers.isNotEmpty()) {
+                                    Text(stringResource(R.string.payments_to_receive), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    payers.forEach { p -> Text(stringResource(R.string.payments_is_owed, p.name, fmtMoney(p.owedToAmount)), style = MaterialTheme.typography.bodyMedium) }
+                                }
+                                if (debtors.isNotEmpty()) {
+                                    if (payers.isNotEmpty()) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    Text(stringResource(R.string.payments_to_pay), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    debtors.forEach { p -> Text(stringResource(R.string.payments_owes, p.name, fmtMoney(p.owedAmount)), style = MaterialTheme.typography.bodyMedium) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Unsettled games
+            if (d.games.isNotEmpty()) {
+                item { Text(stringResource(R.string.payments_unsettled_games), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+                items(d.games, key = { it.gameId }) { g ->
+                    SettlementGameCard(g, isManager, busy, onMarkPaid = { ep -> viewModel.settle(eventId, g.gameId, ep) }, onSettleAll = { viewModel.settleAll(eventId, g.gameId) }, onReportSent = { ep -> viewModel.reportSent(eventId, g.gameId, ep) }, viewerEventPlayerId = d.viewerEventPlayerId)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun SummaryCard(label: String, value: String, valueColor: androidx.compose.ui.graphics.Color, modifier: Modifier) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = modifier) {
-        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, color = valueColor, style = MaterialTheme.typography.titleLarge)
-            Text(label, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelSmall)
+private fun SettlementGameCard(g: SettlementGame, isManager: Boolean, busy: Boolean, onMarkPaid: (String) -> Unit, onSettleAll: () -> Unit, onReportSent: (String) -> Unit, viewerEventPlayerId: String?) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(shortDate(g.dateTime), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    g.payerName?.let { Text(stringResource(R.string.payments_is_owed, it, fmtMoney(g.total)), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+                }
+                if (isManager && g.debtorCount > 0) {
+                    TextButton(onClick = onSettleAll, enabled = !busy) { Text(stringResource(R.string.payments_settle_all)) }
+                }
+            }
+            g.rows.filter { it.status == "pending" || it.status == "sent" }.forEach { r ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(r.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    when (r.status) {
+                        "sent" -> Text(stringResource(R.string.payments_status_sent), color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.labelMedium)
+                        else -> {
+                            if (isManager) {
+                                TextButton(onClick = { onMarkPaid(r.eventPlayerId) }, enabled = !busy) { Text(stringResource(R.string.payments_mark_paid)) }
+                            } else if (r.eventPlayerId == viewerEventPlayerId) {
+                                TextButton(onClick = { onReportSent(r.eventPlayerId) }, enabled = !busy) { Text(stringResource(R.string.payments_report_sent)) }
+                            } else {
+                                Text(stringResource(R.string.payments_status_pending), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
+}
+
+private fun fmtMoney(amount: Double): String = "\u20AC%.2f".format(amount)
+
+private fun shortDate(iso: String): String {
+    val d = runCatching { java.time.Instant.parse(iso).atZone(java.time.ZoneId.systemDefault()) }.getOrNull() ?: return iso
+    return d.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM, HH:mm"))
 }

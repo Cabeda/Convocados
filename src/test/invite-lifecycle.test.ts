@@ -590,6 +590,21 @@ describe("retractPlayerInvite", () => {
     expect(res.status).toBe(403);
   });
 
+  it("allows an admin (not owner/inviter) to retract an invite", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const admin = await seedUser("Admin");
+    const ev = await seedEventWithGame(owner.id);
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+
+    mockGetSession.mockResolvedValue({ user: { id: admin.id } });
+    mockCheckEventAdmin.mockResolvedValue(true);
+    const res = await retractInvite(deleteCtx({ id: ev.id }, { inviteId: invite.inviteId }));
+    expect(res.status).toBe(200);
+    const saved = await prisma.playerInvite.findUniqueOrThrow({ where: { id: invite.inviteId } });
+    expect(saved.status).toBe("cancelled");
+  });
+
   it("401 when unauthenticated", async () => {
     mockGetSession.mockResolvedValue(null);
     const res = await retractInvite(deleteCtx({ id: "e-1" }, { inviteId: "i-1" }));
