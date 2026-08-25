@@ -113,6 +113,7 @@
 
     <string name="game_title">Titre du match</string>
     <string name="game_title_placeholder">ex. Foot du mardi</string>
+    <string name="randomize_title">Surprends-moi</string>
     <string name="sport">Sport</string>
     <string name="location_optional">Lieu (facultatif)</string>
     <string name="location_placeholder">ex. Terrain du fleuve, Court 2</string>

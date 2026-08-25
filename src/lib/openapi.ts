@@ -823,7 +823,7 @@ export const openApiSpec = {
     },
     "/api/me/co-players": {
       get: {
-        summary: "List registered users the caller has co-played with (all events, ranked by frequency)",
+        summary: "List people the caller has co-played with (all events, ranked by frequency)",
         tags: ["Users"],
         responses: { "200": { description: "Co-play list" }, "401": { description: "Unauthorized" } },
       },

@@ -204,6 +204,24 @@ describe("GET /api/events/[id]", () => {
     expect(res.status).toBe(404);
   });
 
+  it("includes postGameStatus in the payload so the UI can gate the banner on load", async () => {
+    const id = await seedEvent();
+
+    // Anonymous viewers never see the banner — no status block in the payload.
+    const anonRes = await getEvent(ctx({ id }));
+    expect(anonRes.status).toBe(200);
+    expect((await anonRes.json()).postGameStatus ?? null).toBeNull();
+
+    mockGetSession.mockResolvedValue({ user: { id: "test-user-1", name: "Test User" } });
+    const res = await getEvent(ctx({ id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.postGameStatus).toBeTruthy();
+    expect(typeof body.postGameStatus.gameEnded).toBe("boolean");
+    // checkOwnership mock resolves owner — banner audience confirmed server-side.
+    expect(body.postGameStatus.isParticipant).toBe(true);
+  });
+
   it("performs lazy recurrence reset when nextResetAt is in the past", async () => {
     const event = await prisma.event.create({
       data: {
