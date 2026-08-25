@@ -207,6 +207,9 @@ dependencies {
 
     // Image loading (profile avatars)
     implementation(libs.coil.compose)
+    // Coil 3 does not fetch HTTP(S) without a network component; without this,
+    // every remote avatar fails and falls back to the initial placeholder.
+    implementation(libs.coil.network.okhttp)
 
     // OSM Maps
     implementation(libs.osmdroid)
