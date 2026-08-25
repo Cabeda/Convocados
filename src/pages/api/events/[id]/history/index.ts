@@ -156,7 +156,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 };
 
 /** Replay ELO from scratch in memory to get per-game deltas without touching the DB */
-function computeHistoryDeltas(
+export function computeHistoryDeltas(
   history: { id: string; status: string; scoreOne: number | null; scoreTwo: number | null; teamsSnapshot: string | null; dateTime: Date }[],
 ): Map<string, { name: string; delta: number }[]> {
   const result = new Map<string, { name: string; delta: number }[]>();

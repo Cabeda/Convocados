@@ -26,6 +26,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
         return client.get("/api/events/$id/history$qs")
     }
 
+    suspend fun fetchHistoryDetail(eventId: String, historyId: String): GameHistory =
+        client.get("/api/events/$eventId/history/$historyId")
+
     suspend fun fetchKnownPlayers(id: String): KnownPlayersResponse =
         client.get("/api/events/$id/known-players")
 
