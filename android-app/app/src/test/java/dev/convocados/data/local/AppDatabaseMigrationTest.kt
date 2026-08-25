@@ -55,11 +55,13 @@ class AppDatabaseMigrationTest {
         val db = openWithMigration()
         try {
             val conn = db.openHelper.writableDatabase
-            assertEquals("6", queryScalar(conn, "PRAGMA user_version"))
+            assertEquals("7", queryScalar(conn, "PRAGMA user_version"))
             assertTrue("players.image column should exist after migration", hasColumn(conn, "players", "image"))
             assertEquals("Ana", queryScalar(conn, "SELECT name FROM players WHERE id = 'p1'"))
             assertNull(queryScalar(conn, "SELECT image FROM players WHERE id = 'p1'"))
             assertTrue("recently_viewed_events table should exist after migration", tableExists(conn, "recently_viewed_events"))
+            assertTrue("invitedJson column should exist after migration", hasColumn(conn, "event_details", "invitedJson"))
+            assertTrue("declinedJson column should exist after migration", hasColumn(conn, "event_details", "declinedJson"))
         } finally {
             db.close()
         }
@@ -72,10 +74,12 @@ class AppDatabaseMigrationTest {
         val db = openWithMigration()
         try {
             val conn = db.openHelper.writableDatabase
-            assertEquals("6", queryScalar(conn, "PRAGMA user_version"))
+            assertEquals("7", queryScalar(conn, "PRAGMA user_version"))
             assertTrue("players.image column should survive migration", hasColumn(conn, "players", "image"))
             assertEquals("avatar.png", queryScalar(conn, "SELECT image FROM players WHERE id = 'p1'"))
             assertTrue("recently_viewed_events table should exist after migration", tableExists(conn, "recently_viewed_events"))
+            assertTrue("invitedJson column should exist after migration", hasColumn(conn, "event_details", "invitedJson"))
+            assertTrue("declinedJson column should exist after migration", hasColumn(conn, "event_details", "declinedJson"))
         } finally {
             db.close()
         }
@@ -85,7 +89,7 @@ class AppDatabaseMigrationTest {
         context,
         AppDatabase::class.java,
         dbName,
-    ).addMigrations(AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6).build()
+    ).addMigrations(AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7).build()
 
     /** Creates the `convocados.db` schema exactly as Room v4 generated it, at version 4. */
     private fun createV4Database(playersImage: Boolean, identityHash: String) {

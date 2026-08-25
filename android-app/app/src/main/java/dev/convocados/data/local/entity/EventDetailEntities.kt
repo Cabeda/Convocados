@@ -28,6 +28,10 @@ data class EventDetailEntity(
     val teamTwoName: String,
     /** JSON-encoded List<TeamResult> of the generated teams, or null if none. */
     val teamResultsJson: String? = null,
+    /** JSON-encoded List<RosterPlayer> of pending invitees (ADR 0025), or null. */
+    val invitedJson: String? = null,
+    /** JSON-encoded List<RosterPlayer> of declined roster (ADR 0025), or null. */
+    val declinedJson: String? = null,
 )
 
 @Entity(
@@ -86,6 +90,8 @@ fun EventDetail.toEntity() = EventDetailEntity(
     teamOneName = teamOneName,
     teamTwoName = teamTwoName,
     teamResultsJson = teamResults?.let { EntityJson.encodeToString(it) },
+    invitedJson = invited?.takeIf { it.isNotEmpty() }?.let { EntityJson.encodeToString(it) },
+    declinedJson = declined?.takeIf { it.isNotEmpty() }?.let { EntityJson.encodeToString(it) },
 )
 
 fun Player.toEntity(eventId: String) = PlayerEntity(

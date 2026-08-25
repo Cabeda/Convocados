@@ -24,7 +24,7 @@ import dev.convocados.data.local.entity.UserProfileEntity
         GameHistoryEntity::class,
         RecentlyViewedEventEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -69,6 +69,14 @@ abstract class AppDatabase : RoomDatabase() {
                         "`sport` TEXT NOT NULL, " +
                         "`viewedAt` INTEGER NOT NULL)"
                 )
+            }
+        }
+
+        /** v7: persist pending-invite (invited) + declined rosters as JSON columns. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `event_details` ADD COLUMN `invitedJson` TEXT")
+                db.execSQL("ALTER TABLE `event_details` ADD COLUMN `declinedJson` TEXT")
             }
         }
     }

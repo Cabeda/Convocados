@@ -8,6 +8,7 @@ import dev.convocados.data.api.OkResponse
 import dev.convocados.data.api.PaginatedHistory
 import dev.convocados.data.api.Player
 import dev.convocados.data.api.RemovePlayerResponse
+import dev.convocados.data.api.RosterPlayer
 import dev.convocados.data.api.TeamResult
 import dev.convocados.data.api.UndoData
 import dev.convocados.data.local.dao.EventDao
@@ -169,6 +170,12 @@ class EventRepository @Inject constructor(
         teamResults = teamResultsJson?.let {
             runCatching { EntityJson.decodeFromString<List<TeamResult>>(it) }.getOrNull()
         },
+        invited = invitedJson?.let {
+            runCatching { EntityJson.decodeFromString<List<RosterPlayer>>(it) }.getOrNull()
+        } ?: emptyList(),
+        declined = declinedJson?.let {
+            runCatching { EntityJson.decodeFromString<List<RosterPlayer>>(it) }.getOrNull()
+        } ?: emptyList(),
     )
 
     private fun PlayerEntity.toDomain() = Player(
