@@ -81,6 +81,7 @@
     <string name="games_played_total">%1$d partidos jugados</string>
     <string name="no_attendance_data">Aún no hay datos de asistencia</string>
     <string name="games_streak_format">%1$d/%2$d partidos · racha: %3$d</string>
+    <string name="last_played">Última vez %1$s</string>
 
     <string name="watch_created">¡Alerta creada! Te avisaremos cuando esté libre.</string>
     <string name="court_alternatives">Pistas alternativas</string>
