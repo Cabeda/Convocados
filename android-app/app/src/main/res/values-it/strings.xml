@@ -110,6 +110,7 @@
 
     <string name="game_title">Titolo della partita</string>
     <string name="game_title_placeholder">es. Calcio del martedì</string>
+    <string name="randomize_title">Sorprendimi</string>
     <string name="sport">Sport</string>
     <string name="location_optional">Luogo (facoltativo)</string>
     <string name="location_placeholder">es. Campo sul fiume, Campo 2</string>
