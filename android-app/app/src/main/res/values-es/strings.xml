@@ -57,6 +57,7 @@
     <string name="view_releases">Ver versiones en GitHub</string>
     <string name="game_details">Detalles del partido</string>
     <string name="game_history">Historial de partidos</string>
+    <string name="history_subtitle">Todos los partidos registrados de este evento</string>
     <string name="event_log">Registro del evento</string>
     <string name="event_log_subtitle">Cambios recientes en este evento</string>
     <string name="no_log_entries">Aún sin registros</string>
