@@ -690,6 +690,13 @@ export const openApiSpec = {
         responses: { "200": { description: "Owned and joined games" }, "401": { description: "Unauthorized" } },
       },
     },
+    "/api/me/co-players": {
+      get: {
+        summary: "List people the caller has co-played with (all events, ranked by frequency)",
+        tags: ["Users"],
+        responses: { "200": { description: "Co-play list" }, "401": { description: "Unauthorized" } },
+      },
+    },
     "/api/me/stats": {
       get: {
         summary: "Get authenticated user's statistics",
