@@ -81,6 +81,7 @@
     <string name="games_played_total">%1$d matchs joués</string>
     <string name="no_attendance_data">Pas encore de données de présence</string>
     <string name="games_streak_format">%1$d/%2$d matchs · série : %3$d</string>
+    <string name="last_played">Dernière fois %1$s</string>
 
     <string name="watch_created">Alerte créée ! Vous serez notifié dès qu\'il se libère.</string>
     <string name="court_alternatives">Terrains alternatifs</string>

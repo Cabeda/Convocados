@@ -81,6 +81,7 @@
     <string name="games_played_total">%1$d jogos disputados</string>
     <string name="no_attendance_data">Ainda sem dados de presença</string>
     <string name="games_streak_format">%1$d/%2$d jogos · sequência: %3$d</string>
+    <string name="last_played">Última vez %1$s</string>
 
     <string name="watch_created">Alerta criado! Serás notificado quando estiver livre.</string>
     <string name="court_alternatives">Campos alternativos</string>
