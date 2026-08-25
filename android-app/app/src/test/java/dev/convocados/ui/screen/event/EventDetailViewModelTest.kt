@@ -287,11 +287,49 @@ class EventDetailViewModelTest {
             viewModel.resendInvite(eventId, "inv-1", "Bob")
             advanceUntilIdle()
 
+        assertEquals(
+            InviteResendNotice(playerName = "Bob", cooldownSeconds = 6000),
+            expectMostRecentItem().resendNotice,
+        )
+    }
+
+    @Test
+    fun `invite with no notification channel surfaces share invite`() = runTest {
+        coEvery { api.sendInvite(eventId, "u-new") } returns InviteCreateResponse(
+            ok = true,
+            inviteUrl = "https://convocados.cabeda.dev/invite/abc",
+            channels = InviteChannels(email = false, webPush = false, appPush = false),
+        )
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.inviteSuggestion(eventId, "u-new", "Luís")
+            advanceUntilIdle()
+
             assertEquals(
-                InviteResendNotice(playerName = "Bob", cooldownSeconds = 6000),
-                expectMostRecentItem().resendNotice,
+                PendingShareInvite("https://convocados.cabeda.dev/invite/abc", "Luís"),
+                expectMostRecentItem().pendingShareInvite,
             )
         }
+    }
+
+    @Test
+    fun `invite with a notification channel does not offer share`() = runTest {
+        coEvery { api.sendInvite(eventId, "u-new") } returns InviteCreateResponse(
+            ok = true,
+            inviteUrl = "https://convocados.cabeda.dev/invite/abc",
+            channels = InviteChannels(email = true, webPush = false, appPush = false),
+        )
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.inviteSuggestion(eventId, "u-new", "Luís")
+            advanceUntilIdle()
+
+            assertNull(expectMostRecentItem().pendingShareInvite)
+        }
+    }
+
     }
 
     @Test

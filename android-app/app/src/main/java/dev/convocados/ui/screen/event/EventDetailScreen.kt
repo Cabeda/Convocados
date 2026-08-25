@@ -112,6 +112,9 @@ data class EventScreenState(
     // button spinner; notice drives a snackbar (cooldownSeconds non-null = 429).
     val resendingInviteId: String? = null,
     val resendNotice: InviteResendNotice? = null,
+    // ADR 0025: an invite was created but the invitee has no notification channel —
+    // surface the share sheet so the user can send the link directly.
+    val pendingShareInvite: PendingShareInvite? = null,
     // ADR 0025: ranked co-play suggestions (owner/admin) — one-tap Invite
     val coPlaySuggestions: List<CoPlaySuggestion> = emptyList(),
     val mvp: MvpResponse? = null,
@@ -124,6 +127,12 @@ data class EventScreenState(
 data class InviteResendNotice(
     val playerName: String,
     val cooldownSeconds: Long? = null,
+)
+
+/** An invite that couldn't be delivered via email/push, so it must be shared. */
+data class PendingShareInvite(
+    val inviteUrl: String,
+    val playerName: String,
 )
 
 data class TeamMoveUndo(
@@ -374,17 +383,26 @@ class EventDetailViewModel @Inject constructor(
     }
 
     /** ADR 0025: one-tap invite from a co-play suggestion chip. */
-    fun inviteSuggestion(eventId: String, userId: String) {
+    fun inviteSuggestion(eventId: String, userId: String, playerName: String) {
         viewModelScope.launch {
             runCatching { api.sendInvite(eventId, userId) }
-                .onSuccess {
+                .onSuccess { res ->
                     // Pending invite created server-side — drop the chip locally.
                     _state.value = _state.value.copy(
                         coPlaySuggestions = _state.value.coPlaySuggestions.filter { it.userId != userId },
                     )
+                    // No email/push channel for this invitee → the server intends
+                    // the inviter to share the link directly (WhatsApp, SMS, ...).
+                    if (!res.channels.email && !res.channels.webPush && !res.channels.appPush && res.inviteUrl.isNotBlank()) {
+                        _state.value = _state.value.copy(pendingShareInvite = PendingShareInvite(res.inviteUrl, playerName))
+                    }
                 }
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
         }
+    }
+
+    fun dismissShareInvite() {
+        _state.value = _state.value.copy(pendingShareInvite = null)
     }
 
     /** ADR 0025: resend a pending invite (24h cooldown enforced server-side). */
@@ -759,6 +777,7 @@ fun EventDetailScreen(
     var scoreTwo by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var pendingAdd by remember { mutableStateOf<PendingAdd?>(null) }
+    var resendTarget by remember { mutableStateOf<RosterPlayer?>(null) }
     var declinedOpen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -1018,7 +1037,7 @@ fun EventDetailScreen(
                                         Text(stringResource(R.string.invited_count, ev.invited.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                         ev.invited.forEach { inv ->
                                             val inviteActionId = inv.inviteId ?: inv.id
-                                            InvitedRow(player = inv, resending = state.resendingInviteId == inviteActionId, onResend = { viewModel.resendInvite(eventId, inviteActionId, inv.name) })
+                                            InvitedRow(player = inv, resending = state.resendingInviteId == inviteActionId, onResend = { resendTarget = inv })
                                         }
                                     }
                                     if (ev.declined.isNotEmpty()) {
@@ -1068,7 +1087,7 @@ fun EventDetailScreen(
                             else -> "${pending.name} joins ${ev.title}."
                         }) },
                         confirmButton = {
-                            if (isRegistered) TextButton(onClick = { viewModel.inviteSuggestion(eventId, pending.userId!!); pendingAdd = null }) { Text(stringResource(R.string.invite)) }
+                            if (isRegistered) TextButton(onClick = { viewModel.inviteSuggestion(eventId, pending.userId!!, pending.name); pendingAdd = null }) { Text(stringResource(R.string.invite)) }
                             else TextButton(onClick = { viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email); pendingAdd = null }) { Text(stringResource(R.string.add_button)) }
                         },
                         dismissButton = {
@@ -1079,6 +1098,38 @@ fun EventDetailScreen(
                 }
             }
         }
+    }
+    // Invited-row action: confirm the resend, or share the invite link directly
+    // through Android's share sheet (contacts / messaging apps).
+    resendTarget?.let { target ->
+        val actionId = target.inviteId ?: target.id
+        AlertDialog(
+            onDismissRequest = { resendTarget = null },
+            title = { Text(stringResource(R.string.invite_resend_confirm_title, target.name)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.invite_resend_confirm_body))
+                    val labels = channelLabels(target.channels)
+                    if (labels != null) { Spacer(Modifier.height(8.dp)); Text(labels, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    target.inviteUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                        Spacer(Modifier.height(16.dp))
+                        TextButton(
+                            onClick = {
+                                val send = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, url)
+                                }
+                                context.startActivity(Intent.createChooser(send, context.getString(R.string.invite_share_chose)))
+                                resendTarget = null
+                            },
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                        ) { Text(stringResource(R.string.invite_share_link), color = MaterialTheme.colorScheme.primary) }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { viewModel.resendInvite(eventId, actionId, target.name); resendTarget = null }) { Text(stringResource(R.string.invite_resend_confirm)) } },
+            dismissButton = { TextButton(onClick = { resendTarget = null }) { Text(stringResource(R.string.cancel)) } },
+        )
     }
     if (state.showPaymentNudge && user?.name != null) {
         val callerBalance = state.balance?.callerBalance
@@ -1416,7 +1467,7 @@ private fun AddPlayerHeroSection(eventId: String, state: EventScreenState, viewM
                         title = { Text("Invite ${sel.name}?") },
                         text = { Text("${sel.name} has played ${sel.gamesPlayed} games with you. Add them directly to the roster or send them an invite to join?") },
                         confirmButton = {
-                            TextButton(onClick = { viewModel.inviteSuggestion(eventId, sel.userId); choice = null }) { Text("Invite") }
+                            TextButton(onClick = { viewModel.inviteSuggestion(eventId, sel.userId, sel.name); choice = null }) { Text("Invite") }
                         },
                         dismissButton = {
                             TextButton(onClick = { viewModel.addPlayer(eventId, sel.name, link = false); choice = null }) { Text("Add to list") }
@@ -1500,13 +1551,12 @@ private fun demoEventForPreview(at: java.time.Instant, isRecurring: Boolean, nex
         },
         leadingContent = { PlayerAvatar(player.name, player.image, false, {}) },
         trailingContent = {
-            TextButton(onClick = onResend, enabled = !resending) {
+            TextButton(onClick = onResend, enabled = !resending, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
                 if (resending) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 else Text(stringResource(R.string.resend))
             }
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.height(44.dp),
     )
 }
 

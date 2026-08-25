@@ -101,6 +101,7 @@ data class RosterPlayer(
     val image: String? = null,
     // ADR 0025: pending-invite details — null/empty for declined rows.
     val inviteId: String? = null,
+    val inviteUrl: String? = null,
     val channels: InviteChannels = InviteChannels(),
     val notifiedAt: String? = null,
 )
