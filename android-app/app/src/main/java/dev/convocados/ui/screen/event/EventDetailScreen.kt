@@ -705,13 +705,12 @@ fun EventDetailScreen(
         }
     }
 
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
         modifier = with(sharedTransitionScope) {
             Modifier.sharedElement(rememberSharedContentState(key = "item-container-$eventId"), animatedVisibilityScope = animatedVisibilityScope)
-        }.nestedScroll(scrollBehavior.nestedScrollConnection)
+        }
     ) { padding ->
         when {
             state.loading && event == null -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator() }
