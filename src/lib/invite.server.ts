@@ -502,8 +502,9 @@ export async function retractPlayerInvite(opts: { inviteId: string; userId: stri
 
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
   const isOwnerOrInviter = event?.ownerId === userId || invite.invitedByUserId === userId;
-  if (!isOwnerOrInviter) {
-    throw new Error("Only the owner or the inviter can retract an invite.");
+  const isEventAdmin = await checkEventAdmin(eventId, userId).catch(() => false);
+  if (!isOwnerOrInviter && isEventAdmin !== true) {
+    throw new Error("Only the owner, an admin, or the inviter can retract an invite.");
   }
 
   // Cancel the pending invite and clear the roster ghost (pending GameParticipant

@@ -4,6 +4,7 @@ import { processGame, recalculateAllRatings } from "../../../../../lib/elo.serve
 import { computeGameUpdates } from "../../../../../lib/elo";
 import { MVP_ELO_BONUS } from "../../../../../lib/mvp.constants";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
+import { computeHistoryDeltas } from "./index";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
 import { isSettledGameParticipant } from "../../../../../lib/participants.server";
@@ -61,6 +62,78 @@ async function buildSnapshotForGame(eventId: string, game: { id: string; dateTim
     eloProcessed: false,
   };
 }
+
+// GET /api/events/[id]/history/[historyId] — single history entry
+export const GET: APIRoute = async ({ params, request }) => {
+  const eventId = params.id ?? "";
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  let hideCompetitive = false;
+  if (!event.showCompetitiveData && event.ownerId) {
+    const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+    hideCompetitive = !isOwner && !isAdmin;
+  }
+
+  const gh = await prisma.gameHistory.findUnique({ where: { id: params.historyId } });
+  if (gh) {
+    const eloUpdates = hideCompetitive ? null : (computeHistoryDeltas(await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "asc" } })).get(gh.id) ?? null);
+    return Response.json({
+      id: gh.id,
+      eventId: gh.eventId,
+      dateTime: gh.dateTime.toISOString(),
+      status: gh.status,
+      scoreOne: hideCompetitive ? null : gh.scoreOne,
+      scoreTwo: hideCompetitive ? null : gh.scoreTwo,
+      teamOneName: gh.teamOneName,
+      teamTwoName: gh.teamTwoName,
+      teamsSnapshot: gh.teamsSnapshot,
+      paymentsSnapshot: gh.paymentsSnapshot,
+      createdAt: gh.createdAt.toISOString(),
+      source: gh.source,
+      eloUpdates,
+      isFriendly: gh.isFriendly,
+    });
+  }
+
+  const game = await prisma.game.findUnique({
+    where: { id: params.historyId },
+    include: {
+      payments: { where: { archivedAt: null }, include: { eventPlayer: { select: { name: true } } } },
+      payerEventPlayer: { select: { name: true } },
+    },
+  });
+  if (game && game.status === "played") {
+    const snap = await buildSnapshotForGame(eventId, game);
+    // Payments come from the game's settlement rows (who actually paid), not
+    // the stale eventCost snapshot.
+    const paymentsSnapshot = JSON.stringify(
+      game.payments.map((p) => ({
+        playerName: p.eventPlayer?.name ?? "?",
+        amount: p.amount,
+        status: p.status,
+      })),
+    );
+    return Response.json({
+      id: game.id,
+      eventId,
+      dateTime: game.dateTime.toISOString(),
+      status: "played",
+      scoreOne: hideCompetitive ? null : game.scoreOne,
+      scoreTwo: hideCompetitive ? null : game.scoreTwo,
+      teamOneName: game.teamOneName ?? event.teamOneName ?? "Team 1",
+      teamTwoName: game.teamTwoName ?? event.teamTwoName ?? "Team 2",
+      teamsSnapshot: JSON.stringify(snap.teamsSnapshot),
+      paymentsSnapshot,
+      createdAt: game.createdAt.toISOString(),
+      source: "live",
+      eloUpdates: null,
+      isFriendly: game.isFriendly,
+    });
+  }
+
+  return Response.json({ error: "Not found." }, { status: 404 });
+};
 
 // PATCH /api/events/[id]/history/[historyId]
 export const PATCH: APIRoute = async ({ params, request }) => {

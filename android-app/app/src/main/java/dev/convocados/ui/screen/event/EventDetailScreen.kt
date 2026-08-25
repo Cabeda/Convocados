@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -418,7 +419,9 @@ class EventDetailViewModel @Inject constructor(
             runCatching { api.retractInvite(eventId, inviteId) }
                 .onSuccess {
                     _state.value = _state.value.copy(removedInviteName = playerName)
-                    load(eventId)
+                    // Refresh so the removed invite disappears immediately (same
+                    // pattern as undoRemove/removePlayer).
+                    repository.refreshEventDetail(eventId)
                 }
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
             _state.value = _state.value.copy(retractingInviteId = null)
@@ -427,6 +430,10 @@ class EventDetailViewModel @Inject constructor(
 
     fun dismissRemovedInviteName() {
         _state.value = _state.value.copy(removedInviteName = null)
+    }
+
+    fun dismissError() {
+        _state.value = _state.value.copy(error = null)
     }
 
     /** ADR 0025: resend a pending invite (24h cooldown enforced server-side). */
@@ -855,6 +862,15 @@ fun EventDetailScreen(
         snackbarHostState.showSnackbar(message = context.getString(R.string.invite_removed, name), duration = SnackbarDuration.Short)
         viewModel.dismissRemovedInviteName()
     }
+    LaunchedEffect(state.error) {
+        val err = state.error ?: return@LaunchedEffect
+        // Only surface transient mutation errors here; the empty/not-found and
+        // locked screens render state.error as inline text instead.
+        if (state.event != null) {
+            snackbarHostState.showSnackbar(message = err, duration = SnackbarDuration.Short)
+            viewModel.dismissError()
+        }
+    }
     LaunchedEffect(eventId) { viewModel.load(eventId) }
     LaunchedEffect(autoOpenPay, state.balance) {
         if (autoOpenPay && state.balance?.callerBalance != null && state.balance!!.callerBalance!!.amount > 0) viewModel.showPaymentNudge()
@@ -1244,7 +1260,7 @@ private fun HeroTeamColumn(team: TeamResult, event: EventDetail, toTeamOne: Bool
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
-                Text(m.name, style = MaterialTheme.typography.bodyMedium, fontWeight = if (tappable) FontWeight.SemiBold else FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+                Text(m.name, style = MaterialTheme.typography.bodyMedium, fontWeight = if (tappable) FontWeight.SemiBold else FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (tappable) {
                     Spacer(Modifier.width(4.dp))
                     Icon(

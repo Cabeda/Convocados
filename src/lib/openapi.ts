@@ -141,6 +141,46 @@ export const openApiSpec = {
         responses: { "200": { description: "Balanced mode updated" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/show-competitive-data": {
+      put: {
+        summary: "Toggle competitive data visibility",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Competitive data visibility updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/manual-rating": {
+      put: {
+        summary: "Toggle manual rating",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Manual rating updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/mvp-enabled": {
+      put: {
+        summary: "Toggle MVP voting",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "MVP voting updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/mvp-elo-enabled": {
+      put: {
+        summary: "Toggle MVP ELO bonus",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "MVP ELO updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/duration": {
+      put: {
+        summary: "Update game duration",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Duration updated" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/datetime": {
       put: {
         summary: "Update event date and time",
@@ -325,6 +365,58 @@ export const openApiSpec = {
         tags: ["Payments"],
         parameters: [eventIdParam],
         responses: { "200": { description: "All payments marked as paid" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/payments/settlement": {
+      get: {
+        summary: "People-first settlement summary (receivers public, debtor names owner/admin-only)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Settlement summary" }, ...errorResponses },
+      },
+      put: {
+        summary: "Settle one share (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, eventPlayerId: { type: "string" } }, required: ["gameId", "eventPlayerId"] } } },
+        },
+        responses: { "200": { description: "Share settled" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Revert a settled share (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, eventPlayerId: { type: "string" } }, required: ["gameId", "eventPlayerId"] } } },
+        },
+        responses: { "200": { description: "Share reverted" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/payments/settlement/bulk": {
+      put: {
+        summary: "Settle all unpaid shares for a game (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" } }, required: ["gameId"] } } },
+        },
+        responses: { "200": { description: "Shares settled" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/payments/settlement/self-report": {
+      post: {
+        summary: "Self-report that a player sent their share",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, eventPlayerId: { type: "string" } }, required: ["gameId", "eventPlayerId"] } } },
+        },
+        responses: { "200": { description: "Self-report recorded" }, ...errorResponses },
       },
     },
     "/api/events/{id}/balance": {
@@ -517,6 +609,12 @@ export const openApiSpec = {
       },
     },
     "/api/events/{id}/history/{historyId}": {
+      get: {
+        summary: "Get a single history entry",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "History entry" }, ...errorResponses },
+      },
       patch: {
         summary: "Update a history entry (score, status)",
         tags: ["History"],
@@ -533,6 +631,16 @@ export const openApiSpec = {
         parameters: [eventIdParam],
         responses: { "200": { description: "Player ratings" } },
       },
+      patch: {
+        summary: "Set a player's initial rating",
+        tags: ["Ratings"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, initialRating: { type: "integer" } }, required: ["name", "initialRating"] } } },
+        },
+        responses: { "200": { description: "Initial rating set" }, ...errorResponses },
+      },
     },
     "/api/events/{id}/ratings/recalculate": {
       post: {
@@ -540,6 +648,18 @@ export const openApiSpec = {
         tags: ["Ratings"],
         parameters: [eventIdParam],
         responses: { "200": { description: "Ratings recalculated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/purge-player": {
+      delete: {
+        summary: "Delete a player and their rating history",
+        tags: ["Ratings"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } } },
+        },
+        responses: { "200": { description: "Player purged" }, ...errorResponses },
       },
     },
 

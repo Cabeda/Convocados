@@ -26,6 +26,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
         return client.get("/api/events/$id/history$qs")
     }
 
+    suspend fun fetchHistoryDetail(eventId: String, historyId: String): GameHistory =
+        client.get("/api/events/$eventId/history/$historyId")
+
     suspend fun fetchKnownPlayers(id: String): KnownPlayersResponse =
         client.get("/api/events/$id/known-players")
 
@@ -79,9 +82,6 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updateSport(eventId: String, sport: String): OkResponse =
         client.put("/api/events/$eventId/sport", SportRequest(sport))
 
-    suspend fun updateMaxPlayers(eventId: String, maxPlayers: Int): OkResponse =
-        client.put("/api/events/$eventId/max-players", MaxPlayersRequest(maxPlayers))
-
     suspend fun updateVisibility(eventId: String, isPublic: Boolean): OkResponse =
         client.put("/api/events/$eventId/visibility", VisibilityRequest(isPublic))
 
@@ -93,6 +93,24 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun updateSplitCosts(eventId: String, enabled: Boolean): OkResponse =
         client.put("/api/events/$eventId/split-costs", SplitCostsRequest(enabled))
+
+    suspend fun updateBalanced(eventId: String, balanced: Boolean): OkResponse =
+        client.put("/api/events/$eventId/balanced", BalancedRequest(balanced))
+
+    suspend fun updateShowCompetitiveData(eventId: String, enabled: Boolean): OkResponse =
+        client.put("/api/events/$eventId/show-competitive-data", ShowCompetitiveDataRequest(enabled))
+
+    suspend fun updateAllowManualRating(eventId: String, enabled: Boolean): OkResponse =
+        client.put("/api/events/$eventId/manual-rating", ManualRatingRequest(enabled))
+
+    suspend fun updateMvpEnabled(eventId: String, enabled: Boolean): OkResponse =
+        client.put("/api/events/$eventId/mvp-enabled", MvpEnabledRequest(enabled))
+
+    suspend fun updateMvpEloEnabled(eventId: String, enabled: Boolean): OkResponse =
+        client.put("/api/events/$eventId/mvp-elo-enabled", MvpEloEnabledRequest(enabled))
+
+    suspend fun updateDuration(eventId: String, minutes: Int): OkResponse =
+        client.put("/api/events/$eventId/duration", DurationRequest(minutes))
 
     suspend fun updatePassword(eventId: String, password: String?): OkResponse =
         client.put("/api/events/$eventId/access", PasswordRequest(password))
@@ -109,6 +127,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     // ── History / Score ───────────────────────────────────────────────────
     suspend fun updateScore(eventId: String, historyId: String, scoreOne: Int, scoreTwo: Int): GameHistory =
         client.patch("/api/events/$eventId/history/$historyId", ScoreRequest(scoreOne, scoreTwo))
+
+    suspend fun updateHistorySnapshot(eventId: String, historyId: String, paymentsSnapshot: List<SnapshotPaymentEntry>? = null, teamsSnapshot: List<SnapshotTeam>? = null): GameHistory =
+        client.patch("/api/events/$eventId/history/$historyId", UpdateHistorySnapshotRequest(paymentsSnapshot, teamsSnapshot))
 
     /**
      * Save the PAST game's payment snapshot (owner/admin only, within the
@@ -138,9 +159,30 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
         return client.get("/api/events/$eventId/ratings$qs")
     }
 
+    suspend fun setInitialRating(eventId: String, name: String, initialRating: Int): SetInitialRatingResponse =
+        client.patch("/api/events/$eventId/ratings", SetInitialRatingRequest(name, initialRating))
+
+    suspend fun purgePlayer(eventId: String, name: String): OkResponse =
+        client.delete("/api/events/$eventId/purge-player", PurgePlayerRequest(name))
+
     // ── Payments ──────────────────────────────────────────────────────────
     suspend fun fetchPayments(eventId: String): PaymentsResponse =
         client.get("/api/events/$eventId/payments")
+
+    suspend fun fetchSettlement(eventId: String): SettlementSummary =
+        client.get("/api/events/$eventId/payments/settlement")
+
+    suspend fun settleShare(eventId: String, gameId: String, eventPlayerId: String): OkResponse =
+        client.put("/api/events/$eventId/payments/settlement", SettlementActionRequest(gameId, eventPlayerId))
+
+    suspend fun unsettleShare(eventId: String, gameId: String, eventPlayerId: String): OkResponse =
+        client.delete("/api/events/$eventId/payments/settlement", SettlementActionRequest(gameId, eventPlayerId))
+
+    suspend fun settleAll(eventId: String, gameId: String): OkResponse =
+        client.put("/api/events/$eventId/payments/settlement/bulk", SettlementBulkRequest(gameId))
+
+    suspend fun selfReportSent(eventId: String, gameId: String, eventPlayerId: String): OkResponse =
+        client.post("/api/events/$eventId/payments/settlement/self-report", SettlementActionRequest(gameId, eventPlayerId))
 
     suspend fun updatePaymentStatus(eventId: String, playerName: String, status: String): OkResponse =
         client.put("/api/events/$eventId/payments", PaymentUpdateRequest(playerName, status))
@@ -326,16 +368,30 @@ data class CreateEventRequest(
 @Serializable data class LocationRequest(val location: String)
 @Serializable data class DateTimeRequest(val dateTime: String, val timezone: String)
 @Serializable data class SportRequest(val sport: String)
-@Serializable data class MaxPlayersRequest(val maxPlayers: Int)
 @Serializable data class VisibilityRequest(val isPublic: Boolean)
+@Serializable data class SetInitialRatingRequest(val name: String, val initialRating: Int)
+@Serializable data class PurgePlayerRequest(val name: String)
 @Serializable data class EloRequest(val eloEnabled: Boolean)
 @Serializable data class HideEloInTeamsRequest(val hideEloInTeams: Boolean)
 @Serializable data class SplitCostsRequest(val splitCostsEnabled: Boolean)
+@Serializable data class BalancedRequest(val balanced: Boolean)
+@Serializable data class ShowCompetitiveDataRequest(val showCompetitiveData: Boolean)
+@Serializable data class ManualRatingRequest(val allowManualRating: Boolean)
+@Serializable data class MvpEnabledRequest(val mvpEnabled: Boolean)
+@Serializable data class MvpEloEnabledRequest(val mvpEloEnabled: Boolean)
+@Serializable data class DurationRequest(val durationMinutes: Int)
 @Serializable data class PasswordRequest(val password: String?)
 @Serializable data class PasswordVerifyRequest(val password: String)
 @Serializable data class ScoreRequest(val scoreOne: Int, val scoreTwo: Int)
 @Serializable data class HistoryPaymentsRequest(val paymentsSnapshot: List<PaymentSnapshotEntry>)
 @Serializable data class PaymentUpdateRequest(val playerName: String, val status: String)
+@Serializable data class SnapshotPaymentEntry(val name: String, val status: String, val amount: Double? = null)
+@Serializable data class SnapshotTeamPlayer(val name: String, val order: Int = 0)
+@Serializable data class SnapshotTeam(val team: String, val players: List<SnapshotTeamPlayer> = emptyList())
+@Serializable data class UpdateHistorySnapshotRequest(
+    val paymentsSnapshot: List<SnapshotPaymentEntry>? = null,
+    val teamsSnapshot: List<SnapshotTeam>? = null,
+)
 @Serializable data class UpdateTeamsRequest(val teamOnePlayerIds: List<String>, val teamTwoPlayerIds: List<String>)
 @Serializable data class TransferRequest(val targetUserId: String)
 @Serializable data class UpdateProfileRequest(val name: String)

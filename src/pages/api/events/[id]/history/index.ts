@@ -115,7 +115,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     teamOneName: g.teamOneName,
     teamTwoName: g.teamTwoName,
     teamsSnapshot: teamsSnapshotForGame, // reconstructed from event teamResults
-    paymentsSnapshot: null,
+    paymentsSnapshot: g.payments.length
+      ? JSON.stringify(g.payments.map((p) => ({ playerName: p.eventPlayer?.name ?? "?", amount: p.amount, status: p.status })))
+      : null,
     createdAt: g.createdAt.toISOString(),
     source: "live" as const,
     eloUpdates: null,
@@ -156,7 +158,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 };
 
 /** Replay ELO from scratch in memory to get per-game deltas without touching the DB */
-function computeHistoryDeltas(
+export function computeHistoryDeltas(
   history: { id: string; status: string; scoreOne: number | null; scoreTwo: number | null; teamsSnapshot: string | null; dateTime: Date }[],
 ): Map<string, { name: string; delta: number }[]> {
   const result = new Map<string, { name: string; delta: number }[]>();
