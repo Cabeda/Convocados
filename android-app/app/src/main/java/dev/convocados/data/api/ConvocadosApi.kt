@@ -94,6 +94,24 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updateSplitCosts(eventId: String, enabled: Boolean): OkResponse =
         client.put("/api/events/$eventId/split-costs", SplitCostsRequest(enabled))
 
+    suspend fun updateBalanced(eventId: String, balanced: Boolean): OkResponse =
+        client.put("/api/events/$eventId/balanced", BalancedRequest(balanced))
+
+    suspend fun updateShowCompetitiveData(eventId: String, enabled: Boolean): OkResponse =
+        client.put("/api/events/$eventId/show-competitive-data", ShowCompetitiveDataRequest(enabled))
+
+    suspend fun updateAllowManualRating(eventId: String, enabled: Boolean): OkResponse =
+        client.put("/api/events/$eventId/manual-rating", ManualRatingRequest(enabled))
+
+    suspend fun updateMvpEnabled(eventId: String, enabled: Boolean): OkResponse =
+        client.put("/api/events/$eventId/mvp-enabled", MvpEnabledRequest(enabled))
+
+    suspend fun updateMvpEloEnabled(eventId: String, enabled: Boolean): OkResponse =
+        client.put("/api/events/$eventId/mvp-elo-enabled", MvpEloEnabledRequest(enabled))
+
+    suspend fun updateDuration(eventId: String, minutes: Int): OkResponse =
+        client.put("/api/events/$eventId/duration", DurationRequest(minutes))
+
     suspend fun updatePassword(eventId: String, password: String?): OkResponse =
         client.put("/api/events/$eventId/access", PasswordRequest(password))
 
@@ -356,6 +374,12 @@ data class CreateEventRequest(
 @Serializable data class EloRequest(val eloEnabled: Boolean)
 @Serializable data class HideEloInTeamsRequest(val hideEloInTeams: Boolean)
 @Serializable data class SplitCostsRequest(val splitCostsEnabled: Boolean)
+@Serializable data class BalancedRequest(val balanced: Boolean)
+@Serializable data class ShowCompetitiveDataRequest(val showCompetitiveData: Boolean)
+@Serializable data class ManualRatingRequest(val allowManualRating: Boolean)
+@Serializable data class MvpEnabledRequest(val mvpEnabled: Boolean)
+@Serializable data class MvpEloEnabledRequest(val mvpEloEnabled: Boolean)
+@Serializable data class DurationRequest(val durationMinutes: Int)
 @Serializable data class PasswordRequest(val password: String?)
 @Serializable data class PasswordVerifyRequest(val password: String)
 @Serializable data class ScoreRequest(val scoreOne: Int, val scoreTwo: Int)

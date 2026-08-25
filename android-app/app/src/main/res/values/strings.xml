@@ -333,6 +333,12 @@
     <string name="access">Access</string>
     <string name="danger_zone">Danger zone</string>
     <string name="public_game">Public game</string>
+    <string name="balanced_teams">Balanced teams</string>
+    <string name="duration">Duration</string>
+    <string name="allow_manual_rating">Allow manual rating</string>
+    <string name="show_competitive_data">Show competitive data</string>
+    <string name="mvp_voting">MVP voting</string>
+    <string name="mvp_elo">MVP ELO</string>
     <string name="elo_ratings">ELO ratings</string>
     <string name="hide_elo_teams">Hide ELO in teams</string>
     <string name="split_costs">Split costs</string>
