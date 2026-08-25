@@ -78,12 +78,8 @@ object DeepLink {
         val eventMatch = Regex("^/?events?/([^/?]+)").find(path)
         if (eventMatch != null) {
             val id = eventMatch.groupValues[1]
-            val params = mutableListOf<String>()
-            if (url.contains("action=pay")) params += "action=pay"
-            // PROTOTYPE (throwaway): preserve ?variant= for debug builds
-            Regex("[?&]variant=([^&]+)").find(url)?.let { params += "variant=${it.groupValues[1]}" }
-            val qs = if (params.isEmpty()) "" else "?" + params.joinToString("&")
-            return Route.EventDetail.create(id) + qs
+            val actionPay = url.contains("action=pay")
+            return Route.EventDetail.create(id) + if (actionPay) "?action=pay" else ""
         }
 
         // Invite link: /invite/<token> (https or convocados://)
