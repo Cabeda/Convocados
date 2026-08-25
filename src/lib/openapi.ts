@@ -174,17 +174,6 @@ export const openApiSpec = {
         responses: { "200": { description: "Split costs setting updated" }, ...errorResponses },
       },
     },
-    "/api/events/{id}/cost": {
-      get: {
-        summary: "Get event cost",
-        tags: ["Events"],
-        parameters: [eventIdParam],
-        responses: {
-          "200": { description: "Event cost" },
-          "404": { description: "Event not found" },
-        },
-      },
-    },
     "/api/events/{id}/cost/override": {
       put: {
         summary: "Override player cost amount",
@@ -703,7 +692,7 @@ export const openApiSpec = {
     },
     "/api/me/co-players": {
       get: {
-        summary: "List registered users the caller has co-played with (all events, ranked by frequency)",
+        summary: "List people the caller has co-played with (all events, ranked by frequency)",
         tags: ["Users"],
         responses: { "200": { description: "Co-play list" }, "401": { description: "Unauthorized" } },
       },
@@ -969,16 +958,6 @@ export const openApiSpec = {
         tags: ["Invites"],
         parameters: [eventIdParam],
         responses: { "200": { description: "Invite retracted" }, ...errorResponses },
-      },
-      patch: {
-        summary: "Resend a pending player invite",
-        tags: ["Invites"],
-        parameters: [eventIdParam],
-        requestBody: {
-          required: true,
-          content: { "application/json": { schema: { type: "object", properties: { inviteId: { type: "string" } }, required: ["inviteId"] } } },
-        },
-        responses: { "200": { description: "Invite resent" }, ...errorResponses },
       },
     },
     "/api/invite/{token}": {

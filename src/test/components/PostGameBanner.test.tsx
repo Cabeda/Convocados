@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck -- component test type suppression for @testing-library/react screen exports
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
+import { screen, cleanup, waitFor, fireEvent, act } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import { PostGameBanner, type PostGameStatus } from "~/components/PostGameBanner";
@@ -12,6 +12,7 @@ vi.mock("~/components/MvpVotingCard", () => ({
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -31,6 +32,7 @@ const baseStatus: PostGameStatus = {
   mvpEnabled: false,
   mvpComplete: true,
   bannerMvpComplete: true,
+  myMvpComplete: true,
   scoreOne: null,
   scoreTwo: null,
   teamOneName: "A",
@@ -108,19 +110,99 @@ describe("PostGameBanner participant wrap-up editing (issue #679)", () => {
   });
 });
 
+describe("PostGameBanner viewer-scoped dismissal (wrap-up todo-list)", () => {
+  beforeEach(() => {
+    mockFetchStatus({
+      ...baseStatus,
+      hasScore: true,
+      allPaid: true,
+      mvpEnabled: true,
+      // Global voting still open — other players haven't voted yet.
+      mvpComplete: false,
+      bannerMvpComplete: false,
+    });
+  });
+
+  it("keeps the banner while this user has not voted even though score+payments are done", async () => {
+    mockFetchStatus({
+      ...baseStatus,
+      hasScore: true,
+      allPaid: true,
+      mvpEnabled: true,
+      mvpComplete: false,
+      bannerMvpComplete: false,
+      myMvpComplete: false,
+      allComplete: false,
+    });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+  });
+
+  it("dismisses the banner once this user's own vote is in, without waiting for everyone else", async () => {
+    vi.useFakeTimers();
+    const status = {
+      ...baseStatus,
+      hasScore: true,
+      allPaid: true,
+      mvpEnabled: true,
+      mvpComplete: false, // others still pending — irrelevant to the viewer
+      bannerMvpComplete: false,
+      myMvpComplete: true,
+      allComplete: true,
+    };
+    vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.includes("/payments/game")) {
+        return Promise.resolve({ ok: true, json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => status });
+    }));
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId("post-game-banner")).toBeInTheDocument();
+
+    // Celebration holds ~1.6s, then the card collapses away.
+    await act(async () => { vi.advanceTimersByTime(1700); });
+    expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
+  });
+
+  it("revives after dismissal when a task regresses (payment reverted)", async () => {
+    let status = {
+      ...baseStatus,
+      hasScore: true,
+      allPaid: true,
+      myMvpComplete: true,
+      allComplete: true,
+    };
+    vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.includes("/payments/game")) {
+        return Promise.resolve({ ok: true, json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => status });
+    }));
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    // Celebration holds ~1.6s, then the card collapses away.
+    await waitFor(() => expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument(), { timeout: 3000 });
+
+    status = { ...status, allPaid: false, allComplete: false };
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument(), { timeout: 3000 });
+  }, 10_000);
+});
+
 describe("PostGameBanner untracked mode (each one pays own share)", () => {
   beforeEach(() => {
     mockFetchStatus({
       ...baseStatus,
       hasScore: true,
       allPaid: true,
-      allComplete: true,
+      allComplete: false,
       gamePayments: [],
       gameConfig: { gameId: "g1", mode: "untracked", payerName: null, payerIsPlayer: false },
     });
   });
 
-  it("renders the banner even when allComplete is true (payments done by definition)", async () => {
+  it("keeps rendering while the player still owes their MVP vote", async () => {
     renderWithTheme(<PostGameBanner eventId="evt1" />);
     await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
   });
@@ -138,6 +220,7 @@ describe("PostGameBanner untracked mode (each one pays own share)", () => {
       isPlayer: true,
       mvpEnabled: true,
       mvpComplete: false,
+      myMvpComplete: false,
       hasScore: true,
       allComplete: false,
       latestHistoryId: "h1",
@@ -162,10 +245,7 @@ describe("PostGameBanner untracked mode (each one pays own share)", () => {
     expect(screen.queryByText(/vote mvp/i)).not.toBeInTheDocument();
   });
 
-  it("dismisses the banner for a non-player admin even in untracked mode when allComplete", async () => {
-    // A participant who played keeps the untracked wrap-up banner (issue #716).
-    // But an Owner/Admin who did NOT play has no wrap-up task left once the game
-    // is complete — MVP voting is players-only, so the banner must hide.
+  it("dismisses for a non-player admin when their tasks are done", async () => {
     mockFetchStatus({
       ...baseStatus,
       isParticipant: true,
@@ -173,29 +253,33 @@ describe("PostGameBanner untracked mode (each one pays own share)", () => {
       hasScore: true,
       allPaid: true,
       allComplete: true,
+      myMvpComplete: true,
       mvpEnabled: true,
       mvpComplete: false,
-      bannerMvpComplete: true,
+      bannerMvpComplete: false,
       gameEnded: false,
       hasPendingPastPayments: false,
       gamePayments: [],
       gameConfig: { gameId: "g1", mode: "untracked", payerName: null, payerIsPlayer: false },
     });
+    vi.useFakeTimers();
     renderWithTheme(<PostGameBanner eventId="evt1" />);
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { vi.advanceTimersByTime(1700); });
     expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
   });
 
-  it("keeps the untracked wrap-up banner for a player who played even when allComplete", async () => {
+  it("keeps the untracked wrap-up banner for a player who has NOT voted", async () => {
     mockFetchStatus({
       ...baseStatus,
       isPlayer: true,
       hasScore: true,
       allPaid: true,
-      allComplete: true,
+      allComplete: false,
+      myMvpComplete: false,
       mvpEnabled: true,
       mvpComplete: false,
-      bannerMvpComplete: true,
+      bannerMvpComplete: false,
       gameEnded: false,
       hasPendingPastPayments: false,
       gamePayments: [],
@@ -203,5 +287,65 @@ describe("PostGameBanner untracked mode (each one pays own share)", () => {
     });
     renderWithTheme(<PostGameBanner eventId="evt1" />);
     await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+  });
+});
+
+describe("PostGameBanner initial payload gating (banner flash on load)", () => {
+  // Mirrors a fresh page load of an already-settled recurring game: the event
+  // moved to the next occurrence (gameEnded=false) but the last wrap-up is
+  // fully complete, so the banner must never appear.
+  const settledStatus: PostGameStatus = {
+    ...baseStatus,
+    gameEnded: false,
+    hasScore: true,
+    allPaid: true,
+    hasPendingPastPayments: true,
+    mvpEnabled: true,
+    mvpComplete: false,
+    bannerMvpComplete: false,
+    myMvpComplete: true,
+    allComplete: true,
+    scoreOne: 7,
+    scoreTwo: 7,
+  };
+
+  it("never renders when the initial payload says wrap-up is already complete", async () => {
+    vi.useFakeTimers();
+    mockFetchStatus(settledStatus);
+    renderWithTheme(<PostGameBanner eventId="evt1" initialStatus={settledStatus} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
+    // Past the celebration window and multiple poll intervals — still nothing.
+    await act(async () => { vi.advanceTimersByTime(50_000); });
+    expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
+  });
+
+  it("renders immediately from the initial payload without waiting for its own fetch", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => { /* never resolves */ })));
+    renderWithTheme(<PostGameBanner eventId="evt1" initialStatus={baseStatus} />);
+    await act(async () => {});
+    expect(screen.getByTestId("post-game-banner")).toBeInTheDocument();
+  });
+
+  it("still celebrates a completion that happens mid-session after an actionable initial payload", async () => {
+    vi.useFakeTimers();
+    let status = { ...baseStatus };
+    vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.includes("/payments/game")) {
+        return Promise.resolve({ ok: true, json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => status });
+    }));
+    renderWithTheme(<PostGameBanner eventId="evt1" initialStatus={baseStatus} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId("post-game-banner")).toBeInTheDocument();
+
+    status = { ...settledStatus, latestHistoryId: baseStatus.latestHistoryId };
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    // Completion arrived via poll — banner shows briefly (celebration), then hides.
+    expect(screen.getByTestId("post-game-banner")).toBeInTheDocument();
+    await act(async () => { vi.advanceTimersByTime(1700); });
+    expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
   });
 });

@@ -38,6 +38,8 @@ export interface PostGameStatus {
   mvpEnabled: boolean;
   mvpComplete: boolean;
   bannerMvpComplete: boolean;
+  /** Viewer-scoped MVP task: true once THIS user has voted (or has no task). */
+  myMvpComplete?: boolean;
   scoreOne: number | null;
   scoreTwo: number | null;
   teamOneName: string;
@@ -48,6 +50,8 @@ export interface PostGameStatus {
 
 interface Props {
   eventId: string;
+  /** Status computed server-side and delivered with the page's initial event payload. */
+  initialStatus?: PostGameStatus | null;
   onScrollToScore?: () => void;
   onScrollToPayments?: () => void;
   onStatusChange?: (status: PostGameStatus | null) => void;
@@ -55,15 +59,50 @@ interface Props {
   isManager?: boolean;
 }
 
-export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey, isManager = false }: Props) {
+export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey, isManager = false }: Props) {
   const t = useT();
   const theme = useTheme();
-  const [status, setStatus] = useState<PostGameStatus | null>(null);
+  // Seed from the initial payload when the caller provides one: without it,
+  // an already-settled game would flash the banner on every fresh load until
+  // this component's own fetch resolved and the celebration timer hid it.
+  // Later payload refreshes are ignored here — live updates come from the poll.
+  const [status, setStatus] = useState<PostGameStatus | null>(initialStatus ?? null);
   const [editablePayments, setEditablePayments] = useState<PaymentEntry[]>([]);
   const [paymentsDirty, setPaymentsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  // Wrap-up completion choreography: the moment every task is done we hold the
+  // banner briefly in a "celebration" state (progress bar full, card pops)
+  // before collapsing it away — the todo-list visibly finishes instead of
+  // vanishing mid-click.
+  const [celebrating, setCelebrating] = useState(false);
+  // An initially-complete wrap-up starts dismissed: the celebration is for
+  // completions that happen mid-session, not for state that was already
+  // settled before this page loaded.
+  const [gone, setGone] = useState(() => !!initialStatus?.allComplete);
+  const celebratedForRef = useRef<string | null>(
+    initialStatus?.allComplete ? `${eventId}:${initialStatus.latestHistoryId ?? ""}` : null,
+  );
+
+  const allDone = !!status?.allComplete;
+  useEffect(() => {
+    if (!status || !status.allComplete) return;
+    const key = `${eventId}:${status.latestHistoryId ?? ""}`;
+    if (celebratedForRef.current === key) return;
+    celebratedForRef.current = key;
+    setGone(false);
+    setCelebrating(true);
+    const id = setTimeout(() => {
+      setCelebrating(false);
+      setGone(true);
+    }, 1600);
+    return () => clearTimeout(id);
+  }, [status, eventId]);
+  // A new pending task (score edited back out, payment reverted) revives it.
+  useEffect(() => {
+    if (!allDone) setGone(false);
+  }, [allDone]);
 
   const onStatusChangeRef = useRef(onStatusChange);
   useEffect(() => {
@@ -125,14 +164,16 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
   // payment roll), debtors, and the Owner/Admin. Spectators get nothing.
   // Everyone who sees the banner can settle it — toggling who paid and the
   // score are shared wrap-up tasks between the players and the admin.
-  // Untracked games (each one pays their own share) never reach a "nothing left
-  // to settle" state — allPaid is true by definition — so the allComplete
-  // dismissal must not hide the wrap-up banner for them.
   //
-  // MVP voting is players-only (isHistoryParticipant), so an Owner/Admin who did
-  // not play must not be held open by pending MVP state, and the untracked
-  // allComplete exemption only applies to players who can still vote.
-  if (!status || !status.isParticipant || (!status.gameEnded && !status.hasPendingPastPayments && (status.mvpComplete || !status.mvpEnabled || !status.isPlayer)) || (status.allComplete && (status.gameConfig?.mode !== "untracked" || !status.isPlayer))) return null;
+  // Dismissal is viewer-scoped: allComplete already accounts for MY MVP vote
+  // (myMvpComplete from the API), so the checklist disappears as soon as this
+  // user's own tasks are done — no untracked-mode exemption needed anymore,
+  // because an untracked player who hasn't voted simply reports
+  // myMvpComplete=false and keeps their banner.
+  const mvpTaskDone = status ? (status.myMvpComplete ?? status.bannerMvpComplete) : true;
+  // `allComplete && !gone` keeps the card mounted through the celebration/exit
+  // choreography below instead of hard-removing it mid-click.
+  if (!status || !status.isParticipant || (!status.gameEnded && !status.hasPendingPastPayments && (mvpTaskDone || !status.mvpEnabled || !status.isPlayer)) || (status.allComplete && gone)) return null;
 
   const completedCount = (status.hasScore ? 1 : 0) + (status.allPaid ? 1 : 0);
   const progressPct = (completedCount / 2) * 100;
@@ -171,6 +212,18 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
 
   const paidCount = editablePayments.filter((p) => p.status === "paid").length;
   const hasPayments = editablePayments.length > 0;
+  // Checklist items animate their check when they flip to done.
+  const pop = (done: boolean) =>
+    done
+      ? {
+          animation: "pgbPop 400ms ease",
+          "@keyframes pgbPop": {
+            "0%": { transform: "scale(0.4)", opacity: 0.2 },
+            "60%": { transform: "scale(1.3)" },
+            "100%": { transform: "scale(1)", opacity: 1 },
+          },
+        }
+      : {};
 
   return (
     <Paper
@@ -180,7 +233,14 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
         borderRadius: 3,
         overflow: "hidden",
         background: `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.08)} 0%, ${alpha(theme.palette.primary.main, 0.08)} 100%)`,
-        border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}`,
+        border: `1px solid ${allDone && celebrating ? alpha(theme.palette.success.main, 0.6) : alpha(theme.palette.warning.main, 0.3)}`,
+        transition: "border-color 500ms ease, opacity 500ms ease, transform 500ms ease",
+        ...(celebrating
+          ? { boxShadow: `0 0 24px ${alpha(theme.palette.success.main, 0.35)}` }
+          : {}),
+        ...(!celebrating && allDone
+          ? { opacity: 0, transform: "scale(0.97) translateY(-8px)" }
+          : {}),
       }}
     >
       <LinearProgress
@@ -197,7 +257,12 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
         <Stack spacing={2}>
           {/* Header */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <CelebrationIcon sx={{ color: theme.palette.warning.main }} />
+            <CelebrationIcon
+              sx={{
+                color: allDone && celebrating ? theme.palette.success.main : theme.palette.warning.main,
+                ...(allDone && celebrating ? pop(true) : {}),
+              }}
+            />
             <Typography variant="h6" fontWeight={700}>
               {t("postGameTitle")}
             </Typography>
@@ -262,7 +327,7 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
               }}
             >
               {status.hasScore ? (
-                <CheckCircleIcon sx={{ color: theme.palette.success.main }} />
+                <CheckCircleIcon sx={{ color: theme.palette.success.main, ...pop(true) }} />
               ) : (
                 <RadioButtonUncheckedIcon sx={{ color: theme.palette.text.disabled }} />
               )}
@@ -302,7 +367,7 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
             >
               <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                 {status.allPaid ? (
-                  <CheckCircleIcon sx={{ color: theme.palette.success.main }} />
+                  <CheckCircleIcon sx={{ color: theme.palette.success.main, ...pop(true) }} />
                 ) : (
                   <RadioButtonUncheckedIcon sx={{ color: theme.palette.text.disabled }} />
                 )}

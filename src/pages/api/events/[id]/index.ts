@@ -6,6 +6,7 @@ import { autoPriorityEnroll } from "../../../../lib/priority.server";
 import { getSession, checkEventAdmin } from "../../../../lib/auth.helpers.server";
 import { checkAccess } from "../../../../lib/eventAccess";
 import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/scheduler.server";
+import { computePostGameStatus } from "../../../../lib/postgame.server";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
@@ -419,9 +420,20 @@ export const GET: APIRoute = async ({ params, request }) => {
     }))
     .filter((tr) => tr.members.length > 0);
 
+  // Post-game wrap-up status rides the initial payload so the UI can decide
+  // whether to render the post-game banner without flashing it and hiding it
+  // after a client-side fetch resolves. Only computed for authenticated
+  // viewers — anonymous visitors never see the banner (isParticipant=false),
+  // so the extra queries would be wasted on every public/crawler request.
+  const viewerSession = await getSession(request).catch(() => null);
+  const postGameStatus = viewerSession?.user
+    ? await computePostGameStatus(params.id!, request)
+    : null;
+
   return Response.json({
     wasReset,
     ...event,
+    postGameStatus,
     teamResults: filteredTeamResults,
     gameId: event.currentGameId ?? null,
     gameStatus,

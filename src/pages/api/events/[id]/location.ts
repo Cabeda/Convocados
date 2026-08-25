@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
-import { resolveLocation } from "../../../../lib/geocode";
+import { resolveLocation, type GeoResult } from "../../../../lib/geocode";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 
@@ -22,14 +22,17 @@ export const PUT: APIRoute = async ({ params, request }) => {
   // Use explicit coordinates if provided, otherwise geocode the location text
   const explicitLat = typeof body.latitude === "number" ? body.latitude : null;
   const explicitLng = typeof body.longitude === "number" ? body.longitude : null;
-  const geo = (explicitLat !== null && explicitLng !== null)
+  const geo: GeoResult | null = (explicitLat !== null && explicitLng !== null)
     ? { latitude: explicitLat, longitude: explicitLng }
     : location ? await resolveLocation(location) : null;
+
+  // Maps links resolve to a friendly place name — display it instead of the raw URL
+  const storedLocation = geo?.name ?? location;
 
   await prisma.event.update({
     where: { id: params.id },
     data: {
-      location,
+      location: storedLocation,
       latitude: geo?.latitude ?? null,
       longitude: geo?.longitude ?? null,
     },
@@ -37,7 +40,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
 
   return Response.json({
-    location,
+    location: storedLocation,
     latitude: geo?.latitude ?? null,
     longitude: geo?.longitude ?? null,
     geocoded: geo !== null,

@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
 import { checkRateLimit } from "../../../lib/rateLimit.server";
 import { serializeRecurrenceRule, type RecurrenceRule } from "../../../lib/recurrence";
-import { resolveLocation } from "../../../lib/geocode";
+import { resolveLocation, type GeoResult } from "../../../lib/geocode";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../lib/apiRateLimit.server";
 import { getDefaultDurationMinutes } from "../../../lib/sports";
@@ -86,13 +86,16 @@ export const POST: APIRoute = async ({ request }) => {
   // Use explicit coordinates if provided (e.g. from Playtomic court finder), otherwise resolve from location text
   const explicitLat = typeof body.latitude === "number" ? body.latitude : null;
   const explicitLng = typeof body.longitude === "number" ? body.longitude : null;
-  const geo = (explicitLat !== null && explicitLng !== null)
+  const geo: GeoResult | null = (explicitLat !== null && explicitLng !== null)
     ? { latitude: explicitLat, longitude: explicitLng }
     : location ? await resolveLocation(location) : null;
 
+  // Maps links resolve to a friendly place name — display it instead of the raw URL
+  const storedLocation = geo?.name ?? location;
+
   const event = await prisma.event.create({
     data: {
-      title, location, dateTime, timezone, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
+      title, location: storedLocation, dateTime, timezone, maxPlayers, teamOneName, teamTwoName, sport, isPublic, isRecurring, recurrenceRule, nextResetAt,
       durationMinutes,
       latitude: geo?.latitude ?? null,
       longitude: geo?.longitude ?? null,

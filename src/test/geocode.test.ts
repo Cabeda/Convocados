@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { parseMapsUrl, parseRawCoords, resolveLocation } from "~/lib/geocode";
+import { parseMapsUrl, parsePlaceNameFromMapsUrl, parseRawCoords, resolveLocation } from "~/lib/geocode";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -80,6 +80,29 @@ describe("parseRawCoords", () => {
   });
 });
 
+describe("parsePlaceNameFromMapsUrl", () => {
+  it("extracts place name from a resolved maps URL", () => {
+    const url = "https://www.google.com/maps/place/Campo+futebol+Nun'Alvares/@41.1731142,-8.6300682,5003m/data=!3m1!1e3!4m6!3m5!1s0xd2465820053beb1:0x10038bef150a8c06!8m2!3d41.1731144!4d-8.6197766!16s%2Fg%2F11jclfdxbl";
+    expect(parsePlaceNameFromMapsUrl(url)).toBe("Campo futebol Nun'Alvares");
+  });
+
+  it("decodes percent-encoded characters", () => {
+    const url = "https://www.google.com/maps/place/S%C3%A3o%20Bento/@41.1,-8.6";
+    expect(parsePlaceNameFromMapsUrl(url)).toBe("São Bento");
+  });
+
+  it("returns null for coordinate-only URLs", () => {
+    expect(
+      parsePlaceNameFromMapsUrl("https://www.google.com/maps/search/?api=1&query=41.1579,-8.6291"),
+    ).toBeNull();
+  });
+
+  it("returns null for URLs without a place segment", () => {
+    expect(parsePlaceNameFromMapsUrl("https://www.google.com/maps?q=41.1579,-8.6291")).toBeNull();
+    expect(parsePlaceNameFromMapsUrl("https://example.com")).toBeNull();
+  });
+});
+
 describe("resolveLocation", () => {
   it("returns null for empty string", async () => {
     expect(await resolveLocation("")).toBeNull();
@@ -93,7 +116,7 @@ describe("resolveLocation", () => {
 
   it("resolves full Google Maps URL", async () => {
     const result = await resolveLocation("https://www.google.com/maps/place/Porto/@41.1579,-8.6291,12z");
-    expect(result).toEqual({ latitude: 41.1579, longitude: -8.6291 });
+    expect(result).toEqual({ latitude: 41.1579, longitude: -8.6291, name: "Porto" });
   });
 
   it("returns null for short URL when fetch fails", async () => {
@@ -116,7 +139,47 @@ describe("resolveLocation", () => {
       return new Response("[]", { status: 200 });
     });
     const result = await resolveLocation("https://goo.gl/maps/abc123");
-    expect(result).toEqual({ latitude: 38.7223, longitude: -9.1393 });
+    expect(result).toEqual({ latitude: 38.7223, longitude: -9.1393, name: "Test" });
+  });
+
+  it("extracts place name from a full maps place URL", async () => {
+    const result = await resolveLocation(
+      "https://www.google.com/maps/place/Campo+futebol+Nun'Alvares/@41.1579,-8.6291,12z",
+    );
+    expect(result).toEqual({ latitude: 41.1579, longitude: -8.6291, name: "Campo futebol Nun'Alvares" });
+  });
+
+  it("reverse geocodes a name for coordinate-only maps links", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const urlStr = typeof url === "string" ? url : url.toString();
+      if (urlStr.includes("goo.gl")) {
+        return new Response(null, {
+          status: 301,
+          headers: { location: "https://www.google.com/maps/search/?api=1&query=38.7223,-9.1393" },
+        });
+      }
+      if (urlStr.includes("/reverse")) {
+        return new Response(JSON.stringify({ name: "Praça do Município", display_name: "Praça do Município, Lisboa, Portugal" }), { status: 200 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+    const result = await resolveLocation("https://maps.app.goo.gl/xyz789");
+    expect(result).toEqual({ latitude: 38.7223, longitude: -9.1393, name: "Praça do Município" });
+  });
+
+  it("does not add a name for raw coordinate input", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const result = await resolveLocation("41.1579,-8.6291");
+    expect(result).toEqual({ latitude: 41.1579, longitude: -8.6291 });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not add a name for plain text addresses", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([{ lat: "41.1579", lon: "-8.6291" }]), { status: 200 }),
+    );
+    const result = await resolveLocation("Porto, Portugal");
+    expect(result).toEqual({ latitude: 41.1579, longitude: -8.6291 });
   });
 
   it("falls through to Nominatim for plain text", async () => {

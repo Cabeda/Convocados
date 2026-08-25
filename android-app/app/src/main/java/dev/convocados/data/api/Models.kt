@@ -276,6 +276,8 @@ data class PostGameStatus(
     val paymentsSnapshot: List<PaymentSnapshotEntry>? = null,
     val mvpEnabled: Boolean = false,
     val mvpComplete: Boolean = true,
+    // Viewer-scoped MVP task: true once THIS user has voted (or has no task).
+    val myMvpComplete: Boolean = true,
     val paidAggregate: PaidAggregate? = null,
 )
 
