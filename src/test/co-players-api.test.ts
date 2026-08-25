@@ -47,9 +47,9 @@ function mockAuth(userId: string) {
   mockAuthenticateRequest.mockResolvedValue({ userId, scopes: ["*"], authMethod: "oauth" });
 }
 
-async function seedUser(id: string, name = "User") {
+async function seedUser(id: string, name = "User", email?: string) {
   return prisma.user.create({
-    data: { id, name, email: `${id}@test.com`, emailVerified: true },
+    data: { id, name, email: email ?? `${id}@test.com`, emailVerified: true },
   });
 }
 
@@ -101,14 +101,12 @@ describe("GET /api/me/co-players", () => {
     await seedUser("alice", "Alice");
     await seedUser("bob", "Bob");
 
-    // Event A (10 days ago): me + alice + bob
     await seedEvent("ev-a", -10);
     const meA = await seedEventPlayer("ev-a", "me", "Me");
     const aliceA = await seedEventPlayer("ev-a", "alice", "Alice");
     const bobA = await seedEventPlayer("ev-a", "bob", "Bob");
     await seedGame("ev-a", 10, [meA.id, aliceA.id, bobA.id]);
 
-    // Event B (5 days ago): me + alice again
     await seedEvent("ev-b", -5);
     const meB = await seedEventPlayer("ev-b", "me", "Me");
     const aliceB = await seedEventPlayer("ev-b", "alice", "Alice");
@@ -128,7 +126,6 @@ describe("GET /api/me/co-players", () => {
     expect(bob).toBeDefined();
     expect(bob.coPlayCount).toBe(1);
 
-    // Sorted by coPlayCount desc
     expect(body.players[0].userId).toBe("alice");
   });
 
@@ -180,28 +177,45 @@ describe("GET /api/me/co-players", () => {
     expect(body.players[0].image).toBe("https://example.com/a.png");
   });
 
-  it("includes name-only guests grouped by name with null userId", async () => {
+  it("upgrades a name-only co-player to their registered account", async () => {
+    await seedUser("me");
+    // Luís has an account, but his EventPlayer rows were added by name (no userId).
+    await seedUser("luis", "Luís Lopes", "ll61295@gmail.com");
+
+    await seedEvent("ev-luis", -3);
+    const meEp = await seedEventPlayer("ev-luis", "me", "Me");
+    const luisEp = await seedEventPlayer("ev-luis", null, "Luís Lopes");
+    await seedGame("ev-luis", 3, [meEp.id, luisEp.id]);
+
+    mockAuth("me");
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    const luis = body.players.find((p: { userId: string | null }) => p.userId === "luis");
+    expect(luis).toBeDefined();
+    expect(luis.name).toBe("Luís Lopes");
+    expect(luis.coPlayCount).toBe(1);
+  });
+
+  it("keeps truly name-only guests (no matching account) with null userId", async () => {
     await seedUser("me");
     await seedEvent("ev-guest", -2);
     const meEp = await seedEventPlayer("ev-guest", "me", "Me");
-    // Two guests (no userId) with the same name across two games.
-    const guestA1 = await seedEventPlayer("ev-guest", null, "Luís Lopes");
+    const guestA1 = await seedEventPlayer("ev-guest", null, "Only Name");
     await seedGame("ev-guest", 2, [meEp.id, guestA1.id]);
     await seedEvent("ev-guest-2", -4);
     const meEp2 = await seedEventPlayer("ev-guest-2", "me", "Me");
-    const guestA2 = await seedEventPlayer("ev-guest-2", null, "luís lopes");
+    const guestA2 = await seedEventPlayer("ev-guest-2", null, "only name");
     await seedGame("ev-guest-2", 4, [meEp2.id, guestA2.id]);
 
     mockAuth("me");
 
     const res = await GET(ctx());
     const body = await res.json();
-    const luis = body.players.find((p: { name: string }) => p.name.toLowerCase() === "luís lopes");
-    expect(luis).toBeDefined();
-    expect(luis.userId).toBeNull();
-    // Two games → co-play count 2 (case-insensitive grouping)
-    expect(luis.coPlayCount).toBe(2);
-    expect(luis.name).toBe("Luís Lopes");
+    const guest = body.players.find((p: { userId: string | null }) => p.userId === null);
+    expect(guest).toBeDefined();
+    expect(guest.coPlayCount).toBe(2);
+    expect(guest.name).toBe("Only Name");
   });
 
   it("caps results at 30", async () => {

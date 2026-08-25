@@ -20,10 +20,14 @@ interface CoPlayEntry {
  * event's history (via /known-players) and people the user has played with
  * elsewhere. Auth required.
  *
- * Includes BOTH account-linked players (grouped by userId, inviteable) and
- * name-only guests (grouped by name, userId null — add-to-list only). A name
- * that appears as both prefers the registered entry. Same 365-day recency
- * window as ADR 0025 suggestions to keep the query cheap.
+ * A candidate is keyed by the account it links to:
+ *   - EventPlayers with a userId → grouped by userId (inviteable).
+ *   - EventPlayers without a userId (added by name, e.g. before account
+ *     linking) → grouped by name, then upgraded to the matching registered
+ *     User where a name matches (so an account a player later created is
+ *     still recognised). Unmatched names stay as name-only guests (add-only).
+ *
+ * Same 365-day recency window as ADR 0025 suggestions to keep the query cheap.
  */
 export const GET: APIRoute = async ({ request }) => {
   const authCtx = await authenticateRequest(request);
@@ -50,13 +54,11 @@ export const GET: APIRoute = async ({ request }) => {
     return Response.json({ players: [] });
   }
 
-  // Everyone else in those games. Registered players keyed by userId; guests
-  // (userId null) keyed by lowercased name so name-only co-players surface.
+  // Everyone else in those games. SQL's `NOT (user_id = ?)` drops NULL rows,
+  // so an explicit OR keeps guests.
   const coPlayRows = await prisma.gameParticipant.findMany({
     where: {
       gameId: { in: myGameIds },
-      // Everyone except the caller — including guests (userId null). SQL's
-      // `NOT (user_id = ?)` drops NULL rows, so an explicit OR is required.
       eventPlayer: { is: { OR: [{ userId: { not: sessionUserId } }, { userId: null }] } },
       status: "active",
       archivedAt: null,
@@ -69,21 +71,56 @@ export const GET: APIRoute = async ({ request }) => {
   for (const row of coPlayRows) {
     const userId = row.eventPlayer.userId;
     const name = (row.eventPlayer.name ?? "").trim();
-    if (!name && !userId) continue; // nothing to suggest
-    const key = userId ? `u:${userId}` : `g:${name.toLowerCase()}`;
-    const target = userId ? byUserId : byGuestName;
-    const existing = target.get(key);
-    const displayName = name || existing?.name || "Unknown";
-    if (existing) {
-      existing.coPlayCount += 1;
-      if (!existing.name || existing.name === "Unknown") existing.name = displayName;
+    if (userId) {
+      const existing = byUserId.get(userId);
+      if (existing) {
+        existing.coPlayCount += 1;
+      } else {
+        byUserId.set(userId, { name: name || "Unknown", userId, image: null, coPlayCount: 1 });
+      }
     } else {
-      target.set(key, { name: displayName, userId, image: null, coPlayCount: 1 });
+      const key = name.toLowerCase();
+      if (!key) continue;
+      const existing = byGuestName.get(key);
+      if (existing) {
+        existing.coPlayCount += 1;
+      } else {
+        byGuestName.set(key, { name, userId: null, image: null, coPlayCount: 1 });
+      }
     }
   }
 
-  // Resolve profile images for registered candidates in one batch.
-  const registeredIds = [...byUserId.keys()].map((k) => k.slice(2));
+  // Upgrade name-only entries to their registered account where a User name
+  // matches (case-insensitive in JS). This surfaces account-linked players
+  // whose historical EventPlayer rows were added before linking.
+  const guestNames = [...byGuestName.values()].map((e) => e.name);
+  if (guestNames.length > 0) {
+    const users = await prisma.user.findMany({
+      where: { name: { in: guestNames } },
+      select: { id: true, name: true, image: true },
+    });
+    const userByLowerName = new Map<string, { id: string; name: string; image: string | null }>();
+    for (const u of users) {
+      if (!userByLowerName.has(u.name.toLowerCase())) userByLowerName.set(u.name.toLowerCase(), u);
+    }
+    for (const [key, entry] of byGuestName) {
+      const matched = userByLowerName.get(key);
+      if (matched && matched.id !== sessionUserId) {
+        // Prefer the registered entry; merge co-play counts if both existed.
+        const registered = byUserId.get(matched.id);
+        if (registered) {
+          registered.coPlayCount += entry.coPlayCount;
+          if (registered.name === "Unknown") registered.name = entry.name;
+        } else {
+          byUserId.set(matched.id, { name: matched.name, userId: matched.id, image: matched.image, coPlayCount: entry.coPlayCount });
+        }
+        byGuestName.delete(key);
+      }
+    }
+  }
+
+  // Resolve profile images for the registered candidates (any still missing).
+  const registeredIds = [...byUserId.values()].filter((e) => e.userId && !e.image).map((e) => e.userId!) ;
   if (registeredIds.length > 0) {
     const userRows = await prisma.user.findMany({
       where: { id: { in: registeredIds } },
@@ -91,20 +128,20 @@ export const GET: APIRoute = async ({ request }) => {
     });
     const imageById = new Map(userRows.map((u) => [u.id, u.image]));
     for (const entry of byUserId.values()) {
-      entry.image = imageById.get(entry.userId ?? "") ?? null;
+      if (entry.userId) entry.image = imageById.get(entry.userId) ?? null;
     }
   }
 
-  // Registered wins over a guest entry with the same name.
+  // Registered wins over an unresolved guest entry with the same name.
   const byName = new Map<string, CoPlayEntry>();
   for (const entry of byUserId.values()) {
-    const nameKey = entry.name.toLowerCase();
-    const preferred = byName.get(nameKey);
-    if (!preferred || (preferred.userId === null && entry.userId !== null)) byName.set(nameKey, entry);
+    const key = entry.name.toLowerCase();
+    const preferred = byName.get(key);
+    if (!preferred) byName.set(key, entry);
   }
   for (const entry of byGuestName.values()) {
-    const nameKey = entry.name.toLowerCase();
-    if (!byName.has(nameKey)) byName.set(nameKey, entry);
+    const key = entry.name.toLowerCase();
+    if (!byName.has(key)) byName.set(key, entry);
   }
 
   const players = [...byName.values()]
@@ -114,4 +151,3 @@ export const GET: APIRoute = async ({ request }) => {
 
   return Response.json({ players });
 };
-

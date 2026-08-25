@@ -477,8 +477,102 @@ describe("GET /api/events/:id/post-game-status", () => {
     });
     const res = await getPostGameStatus(ctx({ id: event.id }));
     const json = await res.json();
-    expect(json.allPaid).toBe(true);
+    expect(json.mvpComplete).toBe(true);
     expect(json.allComplete).toBe(true);
+  });
+
+  it("myMvpComplete=true and allComplete=true for the ONE player who voted (others pending)", async () => {
+    // The wrap-up checklist is personal: Alice voted → her banner dismisses
+    // even though Bob hasn't voted yet (global mvpComplete stays false).
+    const event = await prisma.event.create({
+      data: {
+        title: "MVP Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+        mvpEnabled: true,
+      },
+    });
+    await prisma.user.create({ data: { id: "u-alice4", name: "Alice", email: "alice4@test.com", emailVerified: false } });
+    await prisma.user.create({ data: { id: "u-bob4", name: "Bob", email: "bob4@test.com", emailVerified: false } });
+    await prisma.player.create({ data: { id: "p-alice4", name: "Alice", eventId: event.id, userId: "u-alice4", order: 0 } });
+
+    const history = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: event.dateTime,
+        teamOneName: "A",
+        teamTwoName: "B",
+        scoreOne: 3,
+        scoreTwo: 2,
+        status: "played",
+        teamsSnapshot: JSON.stringify([
+          { team: "A", players: [{ name: "Alice", order: 0 }] },
+          { team: "B", players: [{ name: "Bob", order: 0 }] },
+        ]),
+      },
+    });
+    // Only Alice has voted.
+    await prisma.mvpVote.create({
+      data: { gameHistoryId: history.id, voterPlayerId: "p-alice4", voterName: "Alice", votedForPlayerId: "p-bob4", votedForName: "Bob" },
+    });
+
+    mockGetSession.mockResolvedValue({ user: { id: "u-alice4", name: "Alice" } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false } as any);
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isPlayer).toBe(true);
+    expect(json.mvpComplete).toBe(false); // Bob still owes his vote
+    expect(json.myMvpComplete).toBe(true); // Alice's task is done
+    expect(json.allComplete).toBe(true); // → banner dismissed for Alice
+
+    mockGetSession.mockReset();
+    mockGetSession.mockResolvedValue(null);
+    mockCheckOwnership.mockReset();
+  });
+
+  it("myMvpComplete=false for a player who has not voted while voting is open", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "MVP Game",
+        location: "Pitch",
+        dateTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        durationMinutes: 60,
+        mvpEnabled: true,
+      },
+    });
+    await prisma.user.create({ data: { id: "u-bob5", name: "Bob", email: "bob5@test.com", emailVerified: false } });
+    await prisma.player.create({ data: { id: "p-bob5", name: "Bob", eventId: event.id, userId: "u-bob5", order: 0 } });
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id,
+        dateTime: event.dateTime,
+        teamOneName: "A",
+        teamTwoName: "B",
+        scoreOne: 3,
+        scoreTwo: 2,
+        status: "played",
+        teamsSnapshot: JSON.stringify([
+          { team: "A", players: [{ name: "Bob", order: 0 }] },
+        ]),
+      },
+    });
+
+    mockGetSession.mockResolvedValue({ user: { id: "u-bob5", name: "Bob" } } as any);
+    mockCheckOwnership.mockResolvedValue({ isOwner: false, isAdmin: false } as any);
+    const res = await getPostGameStatus(ctx({ id: event.id }));
+    const json = await res.json();
+    expect(json.isPlayer).toBe(true);
+    expect(json.myMvpComplete).toBe(false);
+    expect(json.allComplete).toBe(false); // banner keeps nagging Bob
+
+    mockGetSession.mockReset();
+    mockGetSession.mockResolvedValue(null);
+    mockCheckOwnership.mockReset();
   });
 
   it("returns latestHistoryId and paymentsSnapshot for banner rendering", async () => {
@@ -910,7 +1004,11 @@ describe("GET /api/events/:id/post-game-status", () => {
     expect(json.hasScore).toBe(true);
     expect(json.allPaid).toBe(true);
     expect(json.mvpComplete).toBe(false);
-    expect(json.allComplete).toBe(false);
+    // Anonymous/non-player viewers carry no personal MVP task — their
+    // checklist completes without the global vote count (players who have
+    // NOT voted still see allComplete=false; see the myMvpComplete tests).
+    expect(json.myMvpComplete).toBe(true);
+    expect(json.allComplete).toBe(true);
   });
 
   it("allComplete=true when mvpEnabled=false (MVP not considered)", async () => {
