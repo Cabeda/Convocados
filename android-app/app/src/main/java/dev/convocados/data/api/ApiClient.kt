@@ -90,9 +90,9 @@ class ApiClient @Inject constructor(
     internal suspend fun refreshToken() {
         val tokens = tokenStore.getTokens() ?: throw ApiException(401, "No refresh token")
         val response = try {
-            client.post("$baseUrl/api/auth/oauth2/token") {
-                contentType(ContentType.Application.FormUrlEncoded)
-                setBody("grant_type=refresh_token&refresh_token=${tokens.refreshToken}&client_id=convocados-mobile-app")
+            client.post("$baseUrl/api/auth/mobile-native") {
+                contentType(ContentType.Application.Json)
+                setBody(mapOf("action" to "refresh", "refresh_token" to tokens.refreshToken))
             }
         } catch (e: Exception) {
             // Network/timeout failure — keep the stored tokens so a later
