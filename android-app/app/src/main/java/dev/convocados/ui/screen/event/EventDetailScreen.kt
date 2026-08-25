@@ -432,6 +432,10 @@ class EventDetailViewModel @Inject constructor(
         _state.value = _state.value.copy(removedInviteName = null)
     }
 
+    fun dismissError() {
+        _state.value = _state.value.copy(error = null)
+    }
+
     /** ADR 0025: resend a pending invite (24h cooldown enforced server-side). */
     fun resendInvite(eventId: String, inviteId: String, playerName: String) {
         viewModelScope.launch {
@@ -857,6 +861,15 @@ fun EventDetailScreen(
         val name = state.removedInviteName ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message = context.getString(R.string.invite_removed, name), duration = SnackbarDuration.Short)
         viewModel.dismissRemovedInviteName()
+    }
+    LaunchedEffect(state.error) {
+        val err = state.error ?: return@LaunchedEffect
+        // Only surface transient mutation errors here; the empty/not-found and
+        // locked screens render state.error as inline text instead.
+        if (state.event != null) {
+            snackbarHostState.showSnackbar(message = err, duration = SnackbarDuration.Short)
+            viewModel.dismissError()
+        }
     }
     LaunchedEffect(eventId) { viewModel.load(eventId) }
     LaunchedEffect(autoOpenPay, state.balance) {
