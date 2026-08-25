@@ -214,6 +214,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   }, [eventId, event?.gameId, isOwnerFlag, isAdminFlag]);
 
   /** ADR 0025: send a PlayerInvite to a suggested user (owner/admin). */
+  const [invitingName, setInvitingName] = useState<string | null>(null);
   const invitePlayer = useCallback(async (userId: string, name: string) => {
     setPlayerError(null);
     setInvitingName(name);
@@ -415,7 +416,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // return early and surface an "in flight" snackbar.
   const addInFlightRef = useRef<{ name: string; idempotencyKey: string } | null>(null);
   const [addInFlightName, setAddInFlightName] = useState<string | null>(null);
-  const [invitingName, setInvitingName] = useState<string | null>(null);
 
   // Confirmation dialog state. Lifted to EventPage so the dialog content
   // (bench/email footnotes) can read the same event state that addPlayer uses.
