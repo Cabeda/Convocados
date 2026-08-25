@@ -79,9 +79,6 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updateSport(eventId: String, sport: String): OkResponse =
         client.put("/api/events/$eventId/sport", SportRequest(sport))
 
-    suspend fun updateMaxPlayers(eventId: String, maxPlayers: Int): OkResponse =
-        client.put("/api/events/$eventId/max-players", MaxPlayersRequest(maxPlayers))
-
     suspend fun updateVisibility(eventId: String, isPublic: Boolean): OkResponse =
         client.put("/api/events/$eventId/visibility", VisibilityRequest(isPublic))
 
@@ -326,7 +323,6 @@ data class CreateEventRequest(
 @Serializable data class LocationRequest(val location: String)
 @Serializable data class DateTimeRequest(val dateTime: String, val timezone: String)
 @Serializable data class SportRequest(val sport: String)
-@Serializable data class MaxPlayersRequest(val maxPlayers: Int)
 @Serializable data class VisibilityRequest(val isPublic: Boolean)
 @Serializable data class EloRequest(val eloEnabled: Boolean)
 @Serializable data class HideEloInTeamsRequest(val hideEloInTeams: Boolean)
