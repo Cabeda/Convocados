@@ -29,7 +29,7 @@ class HistoryDetailViewModelTest {
         val history = GameHistory(
             id = "h1", dateTime = "2024-01-01T10:00:00Z", scoreOne = 3, scoreTwo = 2,
             teamOneName = "Ninjas", teamTwoName = "Gunas",
-            teamsSnapshot = """{"teamOne":[{"id":"p1","name":"Alice"}],"teamTwo":[{"id":"p2","name":"Bob"}]}""",
+            teamsSnapshot = """[{"team":"Ninjas","players":[{"name":"Alice","order":0}]},{"team":"Gunas","players":[{"name":"Bob","order":0}]}]""",
         )
         coEvery { api.fetchHistoryDetail("e1", "h1") } returns history
 
