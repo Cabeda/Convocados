@@ -330,6 +330,25 @@ class EventDetailViewModelTest {
         }
     }
 
+    @Test
+    fun `retract invite calls api and surfaces removed notice`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.retractInvite(eventId, "inv-1") } returns OkResponse(true)
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.retractInvite(eventId, "inv-1", "Bob")
+            advanceUntilIdle()
+
+            coVerify { api.retractInvite(eventId, "inv-1") }
+            val last = expectMostRecentItem()
+            assertTrue(last.retractingInviteId == null)
+            assertEquals("Bob", last.removedInviteName)
+        }
+    }
+
     }
 
     @Test

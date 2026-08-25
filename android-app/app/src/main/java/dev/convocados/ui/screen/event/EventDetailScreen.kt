@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -16,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
@@ -112,6 +114,10 @@ data class EventScreenState(
     // button spinner; notice drives a snackbar (cooldownSeconds non-null = 429).
     val resendingInviteId: String? = null,
     val resendNotice: InviteResendNotice? = null,
+    // ADR 0025: retracting a pending invite — inviteId in flight; removedInviteName
+    // drives a snackbar.
+    val retractingInviteId: String? = null,
+    val removedInviteName: String? = null,
     // ADR 0025: an invite was created but the invitee has no notification channel —
     // surface the share sheet so the user can send the link directly.
     val pendingShareInvite: PendingShareInvite? = null,
@@ -405,6 +411,24 @@ class EventDetailViewModel @Inject constructor(
         _state.value = _state.value.copy(pendingShareInvite = null)
     }
 
+    /** ADR 0025: retract (remove) a pending invite. */
+    fun retractInvite(eventId: String, inviteId: String, playerName: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(retractingInviteId = inviteId)
+            runCatching { api.retractInvite(eventId, inviteId) }
+                .onSuccess {
+                    _state.value = _state.value.copy(removedInviteName = playerName)
+                    load(eventId)
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message) }
+            _state.value = _state.value.copy(retractingInviteId = null)
+        }
+    }
+
+    fun dismissRemovedInviteName() {
+        _state.value = _state.value.copy(removedInviteName = null)
+    }
+
     /** ADR 0025: resend a pending invite (24h cooldown enforced server-side). */
     fun resendInvite(eventId: String, inviteId: String, playerName: String) {
         viewModelScope.launch {
@@ -669,6 +693,24 @@ internal data class PhaseUi(
 
 internal fun parseInstant(iso: String): Instant? = runCatching { Instant.parse(iso) }.getOrNull()
 
+/** Server-side resend cooldown (24h) — mirrors invite.server.ts RESEND_COOLDOWN_MS. */
+internal val RESEND_COOLDOWN: Duration = Duration.ofHours(24)
+
+/** Remaining cooldown before an invite can be resent, or null when eligible. */
+internal fun resendCooldownRemaining(notifiedAt: String?): Duration? {
+    if (notifiedAt.isNullOrBlank()) return null
+    val sentAt = parseInstant(notifiedAt) ?: return null
+    val ends = sentAt.plus(RESEND_COOLDOWN)
+    val now = Instant.now()
+    return if (now.isBefore(ends)) Duration.between(now, ends) else null
+}
+
+/** Compact cooldown label, e.g. "1h 5m" / "42m". */
+internal fun formatCooldownRemaining(remaining: Duration): String {
+    val mins = remaining.toMinutes().coerceAtLeast(1)
+    return if (mins >= 60) "${mins / 60}h ${mins % 60}m" else "${mins}m"
+}
+
 internal fun countdownText(remaining: Duration): String {
     val d = remaining.toDays()
     val h = remaining.toHours() % 24
@@ -778,6 +820,7 @@ fun EventDetailScreen(
     var password by remember { mutableStateOf("") }
     var pendingAdd by remember { mutableStateOf<PendingAdd?>(null) }
     var resendTarget by remember { mutableStateOf<RosterPlayer?>(null) }
+    var retractTarget by remember { mutableStateOf<RosterPlayer?>(null) }
     var declinedOpen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -806,6 +849,11 @@ fun EventDetailScreen(
         }
         snackbarHostState.showSnackbar(message = msg, duration = SnackbarDuration.Short)
         viewModel.dismissResendNotice()
+    }
+    LaunchedEffect(state.removedInviteName) {
+        val name = state.removedInviteName ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message = context.getString(R.string.invite_removed, name), duration = SnackbarDuration.Short)
+        viewModel.dismissRemovedInviteName()
     }
     LaunchedEffect(eventId) { viewModel.load(eventId) }
     LaunchedEffect(autoOpenPay, state.balance) {
@@ -998,12 +1046,11 @@ fun EventDetailScreen(
                             val teams = ev.teamResults
                             if (teams != null && teams.size == 2) {
                                 Card(Modifier.fillMaxWidth()) {
-                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                         Text("Teams", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
-                                        Text("Tap a player to move them", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Row {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
                                             HeroTeamColumn(teams[0], ev, false, viewModel, eventId, Modifier.weight(1f), MaterialTheme.colorScheme.primary)
-                                            Text(stringResource(R.string.vs), color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.CenterVertically).padding(horizontal = 8.dp))
+                                            VsBadge()
                                             HeroTeamColumn(teams[1], ev, true, viewModel, eventId, Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
                                         }
                                     }
@@ -1037,7 +1084,13 @@ fun EventDetailScreen(
                                         Text(stringResource(R.string.invited_count, ev.invited.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                         ev.invited.forEach { inv ->
                                             val inviteActionId = inv.inviteId ?: inv.id
-                                            InvitedRow(player = inv, resending = state.resendingInviteId == inviteActionId, onResend = { resendTarget = inv })
+                                            InvitedRow(
+                                                player = inv,
+                                                resending = state.resendingInviteId == inviteActionId,
+                                                removing = state.retractingInviteId == inviteActionId,
+                                                onResend = { resendTarget = inv },
+                                                onRemove = { retractTarget = inv },
+                                            )
                                         }
                                     }
                                     if (ev.declined.isNotEmpty()) {
@@ -1131,6 +1184,17 @@ fun EventDetailScreen(
             dismissButton = { TextButton(onClick = { resendTarget = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
+    // Invited-row remove: confirm before retracting the pending invite.
+    retractTarget?.let { target ->
+        val actionId = target.inviteId ?: target.id
+        AlertDialog(
+            onDismissRequest = { retractTarget = null },
+            title = { Text(stringResource(R.string.invite_retract_confirm_title, target.name)) },
+            text = { Text(stringResource(R.string.invite_retract_confirm_body)) },
+            confirmButton = { TextButton(onClick = { viewModel.retractInvite(eventId, actionId, target.name); retractTarget = null }) { Text(stringResource(R.string.invite_retract_confirm)) } },
+            dismissButton = { TextButton(onClick = { retractTarget = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
     if (state.showPaymentNudge && user?.name != null) {
         val callerBalance = state.balance?.callerBalance
         val autoPayPref by viewModel.autoPayOnJoin.collectAsStateWithLifecycle()
@@ -1154,12 +1218,53 @@ private fun PulsingDot(color: Color) {
 
 @Composable
 private fun HeroTeamColumn(team: TeamResult, event: EventDetail, toTeamOne: Boolean, viewModel: EventDetailViewModel, eventId: String, modifier: Modifier = Modifier, headerColor: Color) {
-    Column(modifier.clip(RoundedCornerShape(12.dp)).background(headerColor.copy(alpha = 0.08f)).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(team.name, color = headerColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+    Column(
+        modifier.clip(RoundedCornerShape(16.dp)).background(headerColor.copy(alpha = 0.08f)).padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Team header: accent bar + name + member count.
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.size(width = 32.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(headerColor))
+            Spacer(Modifier.height(6.dp))
+            Text(team.name, color = headerColor, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+            Text("${team.members.size}", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium)
+        }
+        // Player chips — tap to move to the other team. The arrow shows the
+        // direction of the move, making the action obvious without hint text.
         team.members.forEach { m ->
             val pid = event.players.find { it.name == m.name }?.id
-            Text(m.name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp).then(if (pid != null) Modifier.clickable { viewModel.movePlayerToTeam(eventId, pid, m.name, toTeamOne) } else Modifier))
+            val tappable = pid != null
+            Row(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(headerColor.copy(alpha = if (tappable) 0.14f else 0.04f))
+                    .then(if (tappable) Modifier.clickable { viewModel.movePlayerToTeam(eventId, pid, m.name, toTeamOne) } else Modifier)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(m.name, style = MaterialTheme.typography.bodyMedium, fontWeight = if (tappable) FontWeight.SemiBold else FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+                if (tappable) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        if (toTeamOne) Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Move ${m.name} to the other team",
+                        tint = headerColor,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable private fun VsBadge() {
+    Box(
+        Modifier.padding(horizontal = 8.dp).size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
+        Alignment.Center,
+    ) {
+        Text("VS", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.ExtraBold)
     }
 }
 
@@ -1541,7 +1646,11 @@ private fun demoEventForPreview(at: java.time.Instant, isRecurring: Boolean, nex
 @Composable fun PlayerAvatar(name:String,image:String?,isMe:Boolean,onClick:()->Unit,modifier:Modifier=Modifier){ val bg=if(isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant; val fg=if(isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant; Box(modifier.size(24.dp).clip(CircleShape).background(bg).clickable(onClick=onClick), Alignment.Center){ if(image!=null) SubcomposeAsyncImage(model=image, contentDescription=name, modifier=Modifier.fillMaxSize(), loading={ InitialAvatar(name, fg) }, error={ InitialAvatar(name, fg) }) else InitialAvatar(name, fg) } }
 @Composable fun PlayerRow(player: Player, isMe:Boolean=false, isBench:Boolean=false, canRemove:Boolean=false, onRemove:()->Unit={}, onUserClick:()->Unit={},){ ListItem(headlineContent={ Text("${player.name}${if(isMe) stringResource(R.string.you_suffix) else ""}", color=if(isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface, fontWeight=if(isMe) FontWeight.SemiBold else FontWeight.Normal, style=MaterialTheme.typography.bodyMedium)}, leadingContent={ if(player.userId!=null) PlayerAvatar(player.name, player.image, isMe, onUserClick) else Icon(Icons.Outlined.Person, stringResource(R.string.anonymous_player), tint=MaterialTheme.colorScheme.outline, modifier=Modifier.size(20.dp))}, trailingContent=if(canRemove){{IconButton(onClick=onRemove, modifier=Modifier.size(32.dp)){ Icon(Icons.Default.Close, stringResource(R.string.remove), tint=MaterialTheme.colorScheme.outline, modifier=Modifier.size(16.dp))}}} else null, colors=ListItemDefaults.colors(containerColor=Color.Transparent), modifier=Modifier.height(44.dp)) }
 
-@Composable fun InvitedRow(player: RosterPlayer, resending: Boolean, onResend: () -> Unit) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable fun InvitedRow(player: RosterPlayer, resending: Boolean, removing: Boolean, onResend: () -> Unit, onRemove: (() -> Unit)?) {
+    val cooldown = resendCooldownRemaining(player.notifiedAt)
+    val inCooldown = cooldown != null
+    val tooltipState = rememberTooltipState()
     ListItem(
         headlineContent = { Text(player.name, style = MaterialTheme.typography.bodyMedium) },
         supportingContent = {
@@ -1551,9 +1660,37 @@ private fun demoEventForPreview(at: java.time.Instant, isRecurring: Boolean, nex
         },
         leadingContent = { PlayerAvatar(player.name, player.image, false, {}) },
         trailingContent = {
-            TextButton(onClick = onResend, enabled = !resending, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
-                if (resending) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                else Text(stringResource(R.string.resend))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TooltipBox(
+                    state = tooltipState,
+                    tooltip = {
+                        PlainTooltip {
+                            Text(
+                                if (inCooldown) stringResource(R.string.invite_resend_cooldown, formatCooldownRemaining(cooldown!!))
+                                else stringResource(R.string.resend),
+                            )
+                        }
+                    },
+                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                ) {
+                    TextButton(
+                        onClick = onResend,
+                        enabled = !resending && !removing && !inCooldown,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        when {
+                            resending -> CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                            inCooldown -> Text(formatCooldownRemaining(cooldown!!), color = MaterialTheme.colorScheme.outline)
+                            else -> Text(stringResource(R.string.resend))
+                        }
+                    }
+                }
+                onRemove?.let {
+                    IconButton(onClick = it, enabled = !removing && !resending, modifier = Modifier.size(32.dp)) {
+                        if (removing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else Icon(Icons.Default.Close, stringResource(R.string.remove), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
+                    }
+                }
             }
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),

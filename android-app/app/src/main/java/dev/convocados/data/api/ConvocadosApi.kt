@@ -297,6 +297,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun resendInvite(eventId: String, inviteId: String): InviteResendResponse =
         client.patch("/api/events/$eventId/invites", InviteResendRequest(inviteId))
+
+    suspend fun retractInvite(eventId: String, inviteId: String): OkResponse =
+        client.delete("/api/events/$eventId/invites", InviteRetractRequest(inviteId))
 }
 
 // ── Request bodies ────────────────────────────────────────────────────────────

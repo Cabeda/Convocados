@@ -13,12 +13,16 @@
     <string name="invite">Invite</string>
     <string name="resend">Resend</string>
     <string name="invite_resent">Invite resent to %1$s.</string>
+    <string name="invite_removed">Invite removed for %1$s.</string>
     <string name="invite_resend_cooldown">You can resend again in %1$s.</string>
     <string name="invite_resend_confirm_title">Resend invite to %1$s?</string>
     <string name="invite_resend_confirm_body">This will re-deliver the invite.</string>
     <string name="invite_resend_confirm">Resend</string>
     <string name="invite_share_link">Share link</string>
     <string name="invite_share_chose">Share invite via</string>
+    <string name="invite_retract_confirm_title">Remove invite to %1$s?</string>
+    <string name="invite_retract_confirm_body">The person will no longer receive the pending invite.</string>
+    <string name="invite_retract_confirm">Remove</string>
     <string name="channel_email">Email</string>
     <string name="channel_web_push">Web push</string>
     <string name="channel_app_push">App push</string>
