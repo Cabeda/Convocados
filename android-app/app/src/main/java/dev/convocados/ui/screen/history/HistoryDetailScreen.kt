@@ -60,10 +60,17 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
     fun load(eventId: String, historyId: String) {
         viewModelScope.launch {
             _loading.value = true
-            runCatching { api.fetchHistoryDetail(eventId, historyId) }.onSuccess { entry ->
+            // Prefer the single-history GET; fall back to the paginated list +
+            // find while the backend doesn't yet serve it (details beyond page 1
+            // stay unavailable until the GET is deployed).
+            val entry = runCatching { api.fetchHistoryDetail(eventId, historyId) }
+                .getOrElse { runCatching { api.fetchHistory(eventId).data.find { it.id == historyId } }.getOrNull() }
+            if (entry != null) {
                 _history.value = entry
                 parseSnapshots(entry)
-            }.onFailure { _error.value = it.message }
+            } else {
+                _error.value = "Not found"
+            }
             _loading.value = false
         }
     }
