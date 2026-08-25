@@ -110,6 +110,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updateScore(eventId: String, historyId: String, scoreOne: Int, scoreTwo: Int): GameHistory =
         client.patch("/api/events/$eventId/history/$historyId", ScoreRequest(scoreOne, scoreTwo))
 
+    suspend fun updateHistorySnapshot(eventId: String, historyId: String, paymentsSnapshot: List<SnapshotPaymentEntry>? = null, teamsSnapshot: List<SnapshotTeam>? = null): GameHistory =
+        client.patch("/api/events/$eventId/history/$historyId", UpdateHistorySnapshotRequest(paymentsSnapshot, teamsSnapshot))
+
     /**
      * Save the PAST game's payment snapshot (owner/admin only, within the
      * 7-day editable window). Mirrors the web PostGameBanner save: the banner
@@ -358,6 +361,13 @@ data class CreateEventRequest(
 @Serializable data class ScoreRequest(val scoreOne: Int, val scoreTwo: Int)
 @Serializable data class HistoryPaymentsRequest(val paymentsSnapshot: List<PaymentSnapshotEntry>)
 @Serializable data class PaymentUpdateRequest(val playerName: String, val status: String)
+@Serializable data class SnapshotPaymentEntry(val name: String, val status: String, val amount: Double? = null)
+@Serializable data class SnapshotTeamPlayer(val name: String, val order: Int = 0)
+@Serializable data class SnapshotTeam(val team: String, val players: List<SnapshotTeamPlayer> = emptyList())
+@Serializable data class UpdateHistorySnapshotRequest(
+    val paymentsSnapshot: List<SnapshotPaymentEntry>? = null,
+    val teamsSnapshot: List<SnapshotTeam>? = null,
+)
 @Serializable data class UpdateTeamsRequest(val teamOnePlayerIds: List<String>, val teamTwoPlayerIds: List<String>)
 @Serializable data class TransferRequest(val targetUserId: String)
 @Serializable data class UpdateProfileRequest(val name: String)
