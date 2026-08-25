@@ -50,6 +50,8 @@ export interface PostGameStatus {
 
 interface Props {
   eventId: string;
+  /** Status computed server-side and delivered with the page's initial event payload. */
+  initialStatus?: PostGameStatus | null;
   onScrollToScore?: () => void;
   onScrollToPayments?: () => void;
   onStatusChange?: (status: PostGameStatus | null) => void;
@@ -57,10 +59,14 @@ interface Props {
   isManager?: boolean;
 }
 
-export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey, isManager = false }: Props) {
+export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScrollToPayments, onStatusChange, refreshKey, isManager = false }: Props) {
   const t = useT();
   const theme = useTheme();
-  const [status, setStatus] = useState<PostGameStatus | null>(null);
+  // Seed from the initial payload when the caller provides one: without it,
+  // an already-settled game would flash the banner on every fresh load until
+  // this component's own fetch resolved and the celebration timer hid it.
+  // Later payload refreshes are ignored here — live updates come from the poll.
+  const [status, setStatus] = useState<PostGameStatus | null>(initialStatus ?? null);
   const [editablePayments, setEditablePayments] = useState<PaymentEntry[]>([]);
   const [paymentsDirty, setPaymentsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -71,8 +77,13 @@ export function PostGameBanner({ eventId, onScrollToScore, onScrollToPayments, o
   // before collapsing it away — the todo-list visibly finishes instead of
   // vanishing mid-click.
   const [celebrating, setCelebrating] = useState(false);
-  const [gone, setGone] = useState(false);
-  const celebratedForRef = useRef<string | null>(null);
+  // An initially-complete wrap-up starts dismissed: the celebration is for
+  // completions that happen mid-session, not for state that was already
+  // settled before this page loaded.
+  const [gone, setGone] = useState(() => !!initialStatus?.allComplete);
+  const celebratedForRef = useRef<string | null>(
+    initialStatus?.allComplete ? `${eventId}:${initialStatus.latestHistoryId ?? ""}` : null,
+  );
 
   const allDone = !!status?.allComplete;
   useEffect(() => {
