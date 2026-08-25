@@ -81,6 +81,7 @@
     <string name="game_details">Game Details</string>
     <string name="game_history">Game History</string>
     <string name="event_log">Event Log</string>
+    <string name="event_log_subtitle">Recent changes to this event</string>
     <string name="no_log_entries">No log entries yet</string>
     <string name="load_more">Load more</string>
     <string name="back">Back</string>
