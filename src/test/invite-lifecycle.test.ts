@@ -542,6 +542,42 @@ describe("retractPlayerInvite", () => {
     expect(saved.status).toBe("cancelled");
   });
 
+  it("removes the pending GameParticipant + Rsvp ghost so the invitee leaves the invited list", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+
+    const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: ev.id, userId: invitee.id } });
+    expect(await prisma.gameParticipant.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(1);
+
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+    const res = await retractInvite(deleteCtx({ id: ev.id }, { inviteId: invite.inviteId }));
+    expect(res.status).toBe(200);
+
+    // The pending roster ghost must be gone (regression: a lingering pending
+    // GameParticipant re-surfaced the invitee as "Invited" with a null inviteId,
+    // so a second remove sent the EventPlayer id and hit "Invite not found.").
+    expect(await prisma.gameParticipant.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(0);
+    expect(await prisma.rsvp.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(0);
+  });
+
+  it("resolves an EventPlayer id (backward-compat) and removes the ghost", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+
+    const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: ev.id, userId: invitee.id } });
+    mockGetSession.mockResolvedValue({ user: { id: owner.id } });
+
+    // Pre-fix clients passed invited[].id (EventPlayer id) instead of inviteId.
+    const res = await retractInvite(deleteCtx({ id: ev.id }, { inviteId: ep.id }));
+    expect(res.status).toBe(200);
+    expect(await prisma.gameParticipant.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(0);
+    expect(await prisma.playerInvite.findUniqueOrThrow({ where: { id: invite.inviteId } }).then((i) => i.status)).toBe("cancelled");
+  });
+
   it("rejects a random user", async () => {
     const owner = await seedUser("Owner");
     const invitee = await seedUser("Invitee");
