@@ -53,7 +53,6 @@ class EventSettingsViewModel @Inject constructor(
 
     fun saveTitle(id: String, title: String) = exec { api.updateTitle(id, title); load(id) }
     fun saveLocation(id: String, loc: String) = exec { api.updateLocation(id, loc); load(id) }
-    fun saveMaxPlayers(id: String, n: Int) = exec { api.updateMaxPlayers(id, n); load(id) }
     fun saveSport(id: String, s: String) = exec { api.updateSport(id, s); load(id) }
     fun togglePublic(id: String, v: Boolean) = exec { api.updateVisibility(id, v); load(id) }
     fun toggleElo(id: String, v: Boolean) = exec { api.updateElo(id, v); load(id) }
@@ -81,7 +80,6 @@ fun EventSettingsScreen(
 
     var title by remember(event) { mutableStateOf(event?.title ?: "") }
     var location by remember(event) { mutableStateOf(event?.location ?: "") }
-    var maxPlayers by remember(event) { mutableStateOf(event?.maxPlayers?.toString() ?: "") }
     var sport by remember(event) { mutableStateOf(event?.sport ?: "") }
     var isPublic by remember(event) { mutableStateOf(event?.isPublic ?: false) }
     var eloEnabled by remember(event) { mutableStateOf(event?.eloEnabled ?: false) }
@@ -114,13 +112,6 @@ fun EventSettingsScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(value = location, onValueChange = { location = it }, modifier = Modifier.weight(1f), singleLine = true)
                 SaveButton { viewModel.saveLocation(eventId, location.trim()) }
-            }
-
-            // Max players
-            SettingsLabel(stringResource(R.string.max_players))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = maxPlayers, onValueChange = { maxPlayers = it.filter { c -> c.isDigit() } }, modifier = Modifier.width(100.dp), singleLine = true)
-                SaveButton { maxPlayers.toIntOrNull()?.let { viewModel.saveMaxPlayers(eventId, it) } }
             }
 
             // Sport
