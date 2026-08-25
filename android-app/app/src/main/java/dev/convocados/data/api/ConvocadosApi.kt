@@ -135,6 +135,12 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
         return client.get("/api/events/$eventId/ratings$qs")
     }
 
+    suspend fun setInitialRating(eventId: String, name: String, initialRating: Int): SetInitialRatingResponse =
+        client.patch("/api/events/$eventId/ratings", SetInitialRatingRequest(name, initialRating))
+
+    suspend fun purgePlayer(eventId: String, name: String): OkResponse =
+        client.delete("/api/events/$eventId/purge-player", PurgePlayerRequest(name))
+
     // ── Payments ──────────────────────────────────────────────────────────
     suspend fun fetchPayments(eventId: String): PaymentsResponse =
         client.get("/api/events/$eventId/payments")
@@ -324,6 +330,8 @@ data class CreateEventRequest(
 @Serializable data class DateTimeRequest(val dateTime: String, val timezone: String)
 @Serializable data class SportRequest(val sport: String)
 @Serializable data class VisibilityRequest(val isPublic: Boolean)
+@Serializable data class SetInitialRatingRequest(val name: String, val initialRating: Int)
+@Serializable data class PurgePlayerRequest(val name: String)
 @Serializable data class EloRequest(val eloEnabled: Boolean)
 @Serializable data class HideEloInTeamsRequest(val hideEloInTeams: Boolean)
 @Serializable data class SplitCostsRequest(val splitCostsEnabled: Boolean)

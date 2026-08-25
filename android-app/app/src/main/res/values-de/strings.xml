@@ -260,6 +260,14 @@
     <string name="claim_player">Spieler beanspruchen</string>
     <string name="claim_confirm">Möchtest du \"%1$s\" wirklich beanspruchen? Dieser Spieler wird mit deinem Konto verknüpft.</string>
     <string name="claim">Beanspruchen</string>
+    <string name="ratings_hidden">Die Wertungen dieses Events wurden von den Organisatoren ausgeblendet.</string>
+    <string name="set_initial_rating">Startwertung festlegen</string>
+    <string name="set_initial_rating_confirm">Startwertung für %1$s festlegen</string>
+    <string name="initial_rating">Initial</string>
+    <string name="purge_player">Spieler entfernen</string>
+    <string name="purge_player_confirm">%1$s aus der Wertung entfernen? Der Verlauf wird gelöscht.</string>
+    <string name="mvp_awards">MVP</string>
+    <string name="elo_explainer">Wertungen werden aus Spielergebnissen per ELO berechnet. Neue Spieler starten ohne Wertung, bis eine festgelegt oder berechnet wird.</string>
 
     <string name="event_settings">Ereigniseinstellungen</string>
     <string name="location">Ort</string>
