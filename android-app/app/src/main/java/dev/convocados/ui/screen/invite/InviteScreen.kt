@@ -1,10 +1,15 @@
 package dev.convocados.ui.screen.invite
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -115,34 +120,52 @@ fun InviteScreen(
                                 Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                Text(d.game?.title.orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.height(8.dp))
-                                val location = d.game?.location.orEmpty()
-                                if (location.isNotEmpty()) {
-                                    Text(location, color = MaterialTheme.colorScheme.outline)
-                                    Spacer(Modifier.height(4.dp))
-                                }
-                                val dateTime = runCatching { java.time.OffsetDateTime.parse(d.game?.dateTime.orEmpty()) }.getOrNull()
-                                if (dateTime != null) {
-                                    val fmt = java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM)
-                                    Text(fmt.format(dateTime), color = MaterialTheme.colorScheme.outline)
-                                }
-                                Spacer(Modifier.height(16.dp))
-                                Text(stringResource(R.string.invite_invited_by, d.invitedByName))
-                                Spacer(Modifier.height(24.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Button(
-                                        onClick = { viewModel.respond("accept") },
-                                        enabled = !state.busy,
-                                    ) { Text(stringResource(R.string.invite_accept)) }
-                                    OutlinedButton(
-                                        onClick = { viewModel.respond("decline") },
-                                        enabled = !state.busy,
-                                    ) { Text(stringResource(R.string.invite_decline)) }
-                                }
-                                if (state.error != null) {
-                                    Spacer(Modifier.height(12.dp))
-                                    Text(state.error!!, color = MaterialTheme.colorScheme.error)
+                                val accent = MaterialTheme.colorScheme.primary
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                ) {
+                                    Column(Modifier.fillMaxWidth()) {
+                                        Box(
+                                            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                                .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.35f), MaterialTheme.colorScheme.surface)))
+                                                .padding(16.dp),
+                                        ) {
+                                            Text(d.game?.title.orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                                        }
+                                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            val location = d.game?.location.orEmpty()
+                                            if (location.isNotEmpty()) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.LocationOn, null, tint = accent, modifier = Modifier.size(18.dp))
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Text(location, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
+                                            val dateTime = runCatching { java.time.OffsetDateTime.parse(d.game?.dateTime.orEmpty()) }.getOrNull()
+                                            if (dateTime != null) {
+                                                val fmt = java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM)
+                                                Text(fmt.format(dateTime), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                                            }
+                                            Text(stringResource(R.string.invite_invited_by, d.invitedByName), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                                                Button(
+                                                    onClick = { viewModel.respond("accept") },
+                                                    enabled = !state.busy,
+                                                    modifier = Modifier.weight(1f),
+                                                ) { Text(stringResource(R.string.invite_accept), fontWeight = FontWeight.SemiBold) }
+                                                OutlinedButton(
+                                                    onClick = { viewModel.respond("decline") },
+                                                    enabled = !state.busy,
+                                                    modifier = Modifier.weight(1f),
+                                                ) { Text(stringResource(R.string.invite_decline)) }
+                                            }
+                                            if (state.error != null) {
+                                                Text(state.error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
