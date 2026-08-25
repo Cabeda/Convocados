@@ -110,6 +110,7 @@
 
     <string name="game_title">Spieltitel</string>
     <string name="game_title_placeholder">z. B. Dienstags-Fußball</string>
+    <string name="randomize_title">Überrasch mich</string>
     <string name="sport">Sportart</string>
     <string name="location_optional">Ort (optional)</string>
     <string name="location_placeholder">z. B. Flussplatz, Feld 2</string>
