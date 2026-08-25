@@ -870,8 +870,6 @@ fun EventDetailScreen(
             snackbarHostState.showSnackbar(message = err, duration = SnackbarDuration.Short)
             viewModel.dismissError()
         }
-        snackbarHostState.showSnackbar(message = msg, duration = SnackbarDuration.Short)
-        viewModel.dismissResendNotice()
     }
     LaunchedEffect(eventId) { viewModel.load(eventId) }
     LaunchedEffect(autoOpenPay, state.balance) {
