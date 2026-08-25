@@ -131,6 +131,8 @@ const en = {
   noSuggestions: "Type a new name",
   createNewPlayer: "Create new player: {name}",
   nGamesPlayed: "{n} games",
+  nGamesHere: "{n} games here",
+  coPlayedWithYou: "played with you {n}\u00d7",
 
   // Watch
   watchScore: "Watch Score",
@@ -707,6 +709,9 @@ sportBadmintonSingles: "Badminton (singles)",
   inviteResend: "Resend invitation",
   inviteResendAria: "Resend invitation to {name}",
   inviteResendCooldown: "You can resend in {time}",
+  inviteRetractAria: "Remove invitation for {name}",
+  inviteRetractConfirm: "Remove the invitation for {name}?",
+  inviteRetracted: "Invitation removed for {name}.",
   inviteResentVia: "Invite resent to {name} via {channels}",
   inviteNotForYou: "This invite is not for your account.",
   notifyInviteOptOutLabel: "Don't invite me to this game",

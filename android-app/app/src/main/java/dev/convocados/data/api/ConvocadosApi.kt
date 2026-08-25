@@ -161,6 +161,10 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun fetchAttendance(eventId: String): AttendanceResult =
         client.get("/api/events/$eventId/attendance")
 
+    /** Global co-play list: registered users the caller played with on any event. */
+    suspend fun fetchCoPlayers(): CoPlayersResponse =
+        client.get("/api/me/co-players")
+
     /** Submit RSVP (yes/no/maybe) from a notification quick action */
     suspend fun submitRsvp(eventId: String, status: String): OkResponse =
         client.post("/api/events/$eventId/rsvp", RsvpSubmitRequest(status))
@@ -213,6 +217,13 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     // ── Ratings recalculate ───────────────────────────────────────────────
     suspend fun recalculateRatings(eventId: String): OkResponse =
         client.post("/api/events/$eventId/ratings/recalculate")
+
+    // ── Cost ──────────────────────────────────────────────────────────────
+    suspend fun fetchEventCost(eventId: String): EventCost? = try {
+        client.get("/api/events/$eventId/cost")
+    } catch (e: Exception) {
+        null
+    }
 
     // ── Cost override ─────────────────────────────────────────────────────
     suspend fun setCostOverride(eventId: String, playerName: String, amount: Double): OkResponse =
@@ -283,6 +294,12 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
     suspend fun sendInvite(eventId: String, userId: String): InviteCreateResponse =
         client.post("/api/events/$eventId/invites", InviteCreateRequest(userId))
+
+    suspend fun resendInvite(eventId: String, inviteId: String): InviteResendResponse =
+        client.patch("/api/events/$eventId/invites", InviteResendRequest(inviteId))
+
+    suspend fun retractInvite(eventId: String, inviteId: String): OkResponse =
+        client.delete("/api/events/$eventId/invites", InviteRetractRequest(inviteId))
 }
 
 // ── Request bodies ────────────────────────────────────────────────────────────
