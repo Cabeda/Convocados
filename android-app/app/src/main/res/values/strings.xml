@@ -139,6 +139,7 @@
     <!-- Create event -->
     <string name="game_title">Game title</string>
     <string name="game_title_placeholder">e.g. Tuesday 5-a-side</string>
+    <string name="randomize_title">Surprise me</string>
     <string name="sport">Sport</string>
     <string name="location_optional">Location (optional)</string>
     <string name="location_placeholder">e.g. Riverside Astro, Pitch 2</string>

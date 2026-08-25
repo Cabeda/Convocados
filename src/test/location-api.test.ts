@@ -89,6 +89,26 @@ describe("PUT /api/events/[id]/location", () => {
     expect(updated!.latitude).toBe(38.7);
   });
 
+  it("stores resolved place name when geocoding returns one (maps link input)", async () => {
+    const owner = await seedUser("owner-name-1");
+    const event = await seedEvent(owner.id);
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: true, isAdmin: false, session: null } as any);
+    vi.mocked(resolveLocation).mockResolvedValue({
+      latitude: 41.1731144,
+      longitude: -8.6197766,
+      name: "Campo futebol Nun'Alvares",
+    });
+
+    const res = await PUT(ctx(event.id, { location: "https://maps.app.goo.gl/DjuFPg7Ao3CzQ38J9" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.location).toBe("Campo futebol Nun'Alvares");
+
+    const updated = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(updated!.location).toBe("Campo futebol Nun'Alvares");
+  });
+
   it("clears coordinates for empty location", async () => {
     const owner = await seedUser("owner-3");
     const event = await seedEvent(owner.id);

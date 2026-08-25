@@ -1,3 +1,5 @@
+import type { PostGameStatus } from "../PostGameBanner";
+
 export interface Player {
   id: string;
   name: string;
@@ -53,6 +55,9 @@ export interface EventData {
   courtWatchConfig?: string | null;
   gameStatus?: string | null;
   gameId?: string | null;
+  /** Post-game wrap-up status delivered with the initial payload so the
+   *  banner visibility is decided on load, not after a client fetch. */
+  postGameStatus?: PostGameStatus | null;
   /** ADR 0025: players who declined (rsvp=no) the current game. Server-gated —
    *  only participants/owner/admins receive a non-empty array. */
   declined?: Array<{ id: string; name: string; userId: string | null; image: string | null }>;
