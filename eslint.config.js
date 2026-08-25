@@ -10,6 +10,8 @@ export default tseslint.config(
       "dist/**",
       "node_modules/**",
       ".astro/**",
+      ".stryker-tmp/**",
+      ".worktrees/**",
       "coverage/**",
       "k6/**",
       "e2e/**",
