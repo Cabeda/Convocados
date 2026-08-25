@@ -12,6 +12,8 @@ import dev.convocados.data.api.TeamResult
 import dev.convocados.data.api.UndoData
 import dev.convocados.data.local.dao.EventDao
 import dev.convocados.data.local.dao.EventDetailDao
+import dev.convocados.data.local.dao.RecentlyViewedDao
+import dev.convocados.data.local.entity.RecentlyViewedEventEntity
 import dev.convocados.data.local.entity.EventDetailEntity
 import dev.convocados.data.local.entity.GameHistoryEntity
 import dev.convocados.data.local.entity.PlayerEntity
@@ -27,13 +29,42 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Domain model for the Games screen "Recently viewed" section. */
+data class RecentlyViewedEvent(
+    val eventId: String,
+    val title: String,
+    val location: String,
+    val dateTime: String,
+    val sport: String,
+    val viewedAt: Long,
+)
+
 @Singleton
 class EventRepository @Inject constructor(
     private val api: ConvocadosApi,
     private val eventDao: EventDao,
     private val eventDetailDao: EventDetailDao,
+    private val recentlyViewedDao: RecentlyViewedDao,
     private val uiEventManager: UiEventManager
 ) {
+    /** Record an event view (dedup by id, most-recent-first, capped at 10). */
+    suspend fun recordEventView(eventId: String, title: String, location: String, dateTime: String, sport: String) {
+        if (eventId == "demo") return // prototype demo event — never record
+        recentlyViewedDao.upsert(
+            RecentlyViewedEventEntity(
+                eventId = eventId, title = title, location = location,
+                dateTime = dateTime, sport = sport, viewedAt = System.currentTimeMillis(),
+            )
+        )
+        recentlyViewedDao.prune(keep = 10)
+    }
+
+    fun recentlyViewed(): Flow<List<RecentlyViewedEvent>> =
+        recentlyViewedDao.recent().map { entities ->
+            entities.map {
+                RecentlyViewedEvent(it.eventId, it.title, it.location, it.dateTime, it.sport, it.viewedAt)
+            }
+        }
     fun getEventsByType(type: String): Flow<List<EventSummary>> =
         eventDao.getEventsByType(type).map { entities ->
             entities.map { it.toSummary() }
@@ -64,6 +95,8 @@ class EventRepository @Inject constructor(
                 event.players.map { it.toEntity(eventId) },
                 history.data.map { it.toEntity(eventId) }
             )
+            // Every successful fetch counts as a "view" — link visits included.
+            recordEventView(event.id, event.title, event.location, event.dateTime, event.sport)
         } catch (e: Exception) {
             uiEventManager.showSnackbar("Offline: showing cached data")
         }

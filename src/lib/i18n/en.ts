@@ -131,6 +131,8 @@ const en = {
   noSuggestions: "Type a new name",
   createNewPlayer: "Create new player: {name}",
   nGamesPlayed: "{n} games",
+  nGamesHere: "{n} games here",
+  coPlayedWithYou: "played with you {n}\u00d7",
 
   // Watch
   watchScore: "Watch Score",

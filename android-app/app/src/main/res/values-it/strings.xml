@@ -9,6 +9,8 @@
     <string name="players">Giocatori</string>
     <string name="teams">Squadre</string>
     <string name="randomize_teams">Sorteggia le squadre</string>
+    <string name="invite">Invita</string>
+    <string name="add_to_list">Aggiungi alla lista</string>
     <string name="cancel">Annulla</string>
     <string name="score">Punteggio</string>
     <string name="ratings">Valutazioni</string>
@@ -298,6 +300,10 @@
     <string name="teams_balanced">Equilibrate</string>
     <string name="teams_random">Casuali</string>
     <string name="add_from_contacts">Aggiungi dai contatti</string>
+    <string name="recently_viewed">Visti di recente</string>
+    <string name="games_you_host">Partite che organizzi (%1$d)</string>
+    <string name="games_you_follow">Partite che segui (%1$d)</string>
+    <string name="games_you_played">Partite a cui hai giocato</string>
     <string name="no_archived_games">Nessuna partita archiviata</string>
     <string name="will_invite">Inviterà %1$s</string>
     <string name="open_pickup">Pickup aperto</string>

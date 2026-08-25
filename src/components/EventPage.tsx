@@ -183,6 +183,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
     return () => controller.abort();
   }, [eventId]);
 
+  // ── Global co-players (people I played with on ANY event) for autocomplete ──
+  const [coPlayersData, setCoPlayersData] = useState<{ players: Array<{ name: string; userId: string; image: string | null; coPlayCount: number }> } | null>(null);
+  useEffect(() => {
+    if (!session?.user) return;
+    const controller = new AbortController();
+    fetch(`/api/me/co-players`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : Promise.resolve({ players: [] })))
+      .then((d) => setCoPlayersData(d))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [eventId, session?.user]);
+
   // ── ADR 0025: co-play suggestions (owner/admin only) ───────────────────────
   interface CoPlaySuggestion { userId: string; name: string; image?: string | null; gamesPlayed?: number; score?: number; reason?: string }
   const [coPlaySuggestions, setCoPlaySuggestions] = useState<CoPlaySuggestion[]>([]);
@@ -321,19 +333,44 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const mergedSuggestions = useMemo(() => {
     const qjName = getQjName().trim();
-    return (knownPlayersData?.players ?? [])
-      .map((p) => ({
+    // This event's history first (transparent "X games here"), then global
+    // co-players (transparent "played with you Y×") — deduped by name, event
+    // history wins so the per-event count is shown when both exist.
+    const byName = new Map<string, { name: string; gamesPlayed: number; userId: string | null; image: string | null; coPlayCount: number }>();
+    for (const p of knownPlayersData?.players ?? []) {
+      byName.set(p.name.toLowerCase(), {
         name: p.name,
         gamesPlayed: p.gamesPlayed ?? 1,
         userId: p.userId ?? null,
         image: p.image ?? null,
-      }))
+        coPlayCount: 0,
+      });
+    }
+    for (const cp of coPlayersData?.players ?? []) {
+      const key = cp.name.toLowerCase();
+      const existing = byName.get(key);
+      if (existing) {
+        // Same person in both lists — keep the per-event count, absorb the
+        // co-play count so the "from another event" signal survives (matches
+        // Android mergePlayerSuggestions).
+        byName.set(key, { ...existing, coPlayCount: cp.coPlayCount });
+        continue;
+      }
+      byName.set(key, {
+        name: cp.name,
+        gamesPlayed: 0,
+        userId: cp.userId,
+        image: cp.image ?? null,
+        coPlayCount: cp.coPlayCount,
+      });
+    }
+    return [...byName.values()]
       .sort((a, b) => {
         if (qjName && a.name.toLowerCase() === qjName.toLowerCase()) return -1;
         if (qjName && b.name.toLowerCase() === qjName.toLowerCase()) return 1;
-        return b.gamesPlayed - a.gamesPlayed;
+        return (b.gamesPlayed + b.coPlayCount) - (a.gamesPlayed + a.coPlayCount);
       });
-  }, [knownPlayersData]);
+  }, [knownPlayersData, coPlayersData]);
 
   const currentPlayerNames = useMemo(
     () => new Set((event?.players ?? []).map((p) => p.name.toLowerCase())),

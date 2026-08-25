@@ -112,6 +112,8 @@ data class EventScreenState(
     val coPlaySuggestions: List<CoPlaySuggestion> = emptyList(),
     val mvp: MvpResponse? = null,
     val mvpLoading: Boolean = false,
+    val cost: EventCost? = null,
+    val coPlayers: List<CoPlayer> = emptyList(),
 )
 
 data class TeamMoveUndo(
@@ -119,6 +121,58 @@ data class TeamMoveUndo(
     val previousTeamOneIds: List<String>,
     val previousTeamTwoIds: List<String>,
 )
+
+/** Where an add-player suggestion comes from — drives the transparent label. */
+enum class SuggestionSource { EVENT, CO_PLAY }
+
+/**
+ * A merged add-player suggestion. [gamesPlayedHere] is the per-event history
+ * count; [coPlayCount] is how often the viewer co-played with this person on
+ * OTHER events. Either can be 0 — the UI surfaces whichever is non-zero so
+ * the user knows why the name is being recommended.
+ */
+data class PlayerSuggestion(
+    val name: String,
+    val gamesPlayedHere: Int,
+    val coPlayCount: Int,
+    val userId: String?,
+    val image: String?,
+    val source: SuggestionSource,
+)
+
+/**
+ * Merge this event's known players with the viewer's global co-play list.
+ * Event history wins on name collision (case-insensitive) and absorbs the
+ * co-play count. Roster names are excluded. Sorted by total relevance,
+ * capped at 30.
+ */
+internal fun mergePlayerSuggestions(
+    known: List<KnownPlayer>,
+    coPlayers: List<CoPlayer>,
+    currentNames: Set<String>,
+): List<PlayerSuggestion> {
+    val excluded = currentNames.map { it.lowercase() }.toSet()
+    val byName = LinkedHashMap<String, PlayerSuggestion>()
+    for (k in known) {
+        val key = k.name.lowercase()
+        if (key in excluded || key in byName) continue
+        byName[key] = PlayerSuggestion(k.name, k.gamesPlayed, 0, null, null, SuggestionSource.EVENT)
+    }
+    for (c in coPlayers) {
+        val key = c.name.lowercase()
+        if (key in excluded) continue
+        val existing = byName[key]
+        if (existing != null) {
+            // Same person in both lists — keep event count, absorb co-play count.
+            byName[key] = existing.copy(coPlayCount = c.coPlayCount, userId = existing.userId ?: c.userId, image = existing.image ?: c.image)
+        } else {
+            byName[key] = PlayerSuggestion(c.name, 0, c.coPlayCount, c.userId, c.image, SuggestionSource.CO_PLAY)
+        }
+    }
+    return byName.values
+        .sortedByDescending { it.gamesPlayedHere + it.coPlayCount }
+        .take(30)
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -182,6 +236,8 @@ class EventDetailViewModel @Inject constructor(
             val coPlay = if (isOwner || following?.isAdmin == true)
                 runCatching { api.fetchEventSuggestions(eventId) }.getOrNull()?.suggestions ?: emptyList()
             else emptyList()
+            val cost = runCatching { api.fetchEventCost(eventId) }.getOrNull()
+            val coPlayers = runCatching { api.fetchCoPlayers() }.getOrNull()?.players ?: emptyList()
             // Seed the editable past-game payment snapshot from the server, but
             // don't clobber unsaved local edits.
             val seededPayments = if (_state.value.postGamePaymentsDirty)
@@ -199,6 +255,8 @@ class EventDetailViewModel @Inject constructor(
                 muteEventDetails = following?.muteEventDetails,
                 balance = balance,
                 coPlaySuggestions = coPlay,
+                cost = cost,
+                coPlayers = coPlayers,
             )
         }
     }
@@ -536,7 +594,7 @@ private fun parseApiErrorMessage(e: Throwable): String? {
  * `mutableStateOf` and from the AlertDialog body (forward references
  * inside a composable are not always resolved by the Kotlin compiler).
  */
-internal data class PendingAdd(val name: String, val email: String? = null)
+internal data class PendingAdd(val name: String, val email: String? = null, val userId: String? = null)
 
 
 // ── Phase helpers (parity with web countdownUrgency) ───────────────────────
@@ -771,7 +829,18 @@ fun EventDetailScreen(
                                 }
                                 Text(sportEmoji(ev.sport), fontSize = 36.sp, modifier = Modifier.padding(top = 4.dp))
                                 Text(ev.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
-                                ev.ownerName?.let { Text("Managed by $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                ev.ownerName?.let { owner ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(top = 4.dp).let {
+                                            if (ev.ownerId != null) it.clickable { onUserClick(ev.ownerId!!) } else it
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Hosted by $owner", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
                                     if (phaseUi.phase == EventPhase.LIVE) PulsingDot(accent) else Icon(Icons.Default.Schedule, null, tint = accent, modifier = Modifier.size(28.dp))
                                     Spacer(Modifier.width(10.dp))
@@ -789,6 +858,23 @@ fun EventDetailScreen(
                                         }
                                     }
                                 }
+                                ds.cost?.let { cost ->
+                                    if (cost.totalAmount > 0) {
+                                        val perPlayer = if (ev.maxPlayers > 0) cost.totalAmount / ev.maxPlayers else 0.0
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(top = 10.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)).padding(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            Icon(Icons.Default.Payments, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                "${cost.currency} ${"%.2f".format(cost.totalAmount)} total · ${"%.2f".format(perPlayer)} / player",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+                                }
                                 Column(Modifier.padding(top = 14.dp)) {
                                     LinearProgressIndicator(progress = { fillFraction }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)), color = when {
                                         fillFraction >= 1f -> MaterialTheme.colorScheme.error
@@ -801,7 +887,7 @@ fun EventDetailScreen(
                         }
 
                         Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            state.undoData?.let { undo ->
+                            ds.undoData?.let { undo ->
                                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth().clickable { viewModel.undoRemove(eventId) }) {
                                     Text(stringResource(R.string.removed_tap_undo, undo.name), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.padding(12.dp).fillMaxWidth())
                                 }
@@ -812,29 +898,16 @@ fun EventDetailScreen(
                                 onScoreChange = { a, b -> scoreOne = a; scoreTwo = b },
                                 onSaveScore = { editingScoreId = null },
                                 onVoteMvp = { onHistoryClick(it) })
-                            // YOUR RESPONSE
+                            // Join / Leave (YOUR RESPONSE deprecated in favor of this)
                             if (effectiveUser?.name != null) {
-                                Card(Modifier.fillMaxWidth()) {
-                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        Text("YOUR RESPONSE", style = MaterialTheme.typography.labelSmall, letterSpacing = 1.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                            Button(onClick = { viewModel.addPlayer(eventId, effectiveUser!!.name, true) }, enabled = myPlayer == null, modifier = Modifier.weight(1f)) {
-                                                Icon(Icons.Default.HowToReg, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (myPlayer == null) "Going" else "Going \u2713")
-                                            }
-                                            OutlinedButton(onClick = { myPlayer?.let { viewModel.removePlayer(eventId, it.id) } }, enabled = myPlayer != null, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                                                Icon(Icons.Default.PersonOff, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Not coming")
-                                            }
-                                        }
-                                    }
-                                }
-                                val callerBalance = state.balance?.callerBalance
+                                val callerBalance = ds.balance?.callerBalance
                                 val hasDebt = callerBalance != null && callerBalance.amount > 0
-                                val enforcement = state.balance?.enforcement ?: "off"
+                                val enforcement = ds.balance?.enforcement ?: "off"
                                 if (myPlayer == null) {
                                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             if (hasDebt && enforcement != "off") Text(stringResource(R.string.owe_amount, "%.2f".format(callerBalance!!.amount), callerBalance.gamesOwed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                                            Button(onClick = { if (hasDebt && enforcement != "off") viewModel.showPaymentNudge() else viewModel.addPlayer(eventId, user!!.name, true) }, enabled = !state.paymentGateBlocked, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = if (hasDebt && enforcement != "off") MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary)) {
+                                            Button(onClick = { if (hasDebt && enforcement != "off") viewModel.showPaymentNudge() else viewModel.addPlayer(eventId, effectiveUser!!.name, true) }, enabled = !ds.paymentGateBlocked, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = if (hasDebt && enforcement != "off") MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary)) {
                                                 Text(if (hasDebt && enforcement != "off") stringResource(R.string.pay_and_join, "%.2f".format(callerBalance!!.amount)) else stringResource(R.string.join_as, effectiveUser!!.name), fontWeight = FontWeight.Bold)
                                             }
                                         }
@@ -845,20 +918,6 @@ fun EventDetailScreen(
                                             Text(if (isOnBench) stringResource(R.string.on_bench) else stringResource(R.string.joined_as, myPlayer.name), color = if (isOnBench) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                             OutlinedButton(onClick = { viewModel.removePlayer(eventId, myPlayer.id) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text(stringResource(R.string.leave)) }
                                         }
-                                    }
-                                }
-                            }
-                            // Payments row
-                            if (ev.splitCostsEnabled || (state.balance?.callerBalance?.amount ?: 0.0) > 0) {
-                                Card(Modifier.fillMaxWidth().clickable(onClick = onPayments)) {
-                                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Payments, null, tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(10.dp))
-                                        Column(Modifier.weight(1f)) {
-                                            Text("Payments", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                            val owed = state.balance?.callerBalance?.amount ?: 0.0
-                                            if (owed > 0) Text("You owe %.2f".format(owed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold) else Text("All settled", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                        Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }
@@ -895,6 +954,9 @@ fun EventDetailScreen(
                                         Text("Players", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).semantics { heading() })
                                         if (active.size >= 2) AssistChip(onClick = { viewModel.randomize(eventId, ev.balanced) }, label = { Text(stringResource(R.string.randomize)) }, leadingIcon = { Icon(Icons.Default.Shuffle, null, Modifier.size(16.dp)) })
                                     }
+                                    // Add player first — the primary action, then the roster below it.
+                                    AddPlayerHeroSection(eventId, ds, viewModel, currentNames, pendingAddSetter = { pendingAdd = it })
+                                    HorizontalDivider()
                                     PlayerGroup(active, user, isOwner, false, viewModel, eventId, onUserClick)
                                     if (bench.isNotEmpty()) { HorizontalDivider(); Text(stringResource(R.string.bench_count, bench.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold); PlayerGroup(bench, user, isOwner, true, viewModel, eventId, onUserClick) }
                                     if (ev.invited.isNotEmpty()) { HorizontalDivider(); Text(stringResource(R.string.invited_count, ev.invited.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold); ev.invited.forEach { Text("\u00b7 ${it.name}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
@@ -902,8 +964,6 @@ fun EventDetailScreen(
                                         TextButton(onClick = { declinedOpen = !declinedOpen }) { Text(if (declinedOpen) "Hide declined" else stringResource(R.string.declined_count, ev.declined.size), style = MaterialTheme.typography.labelMedium) }
                                         if (declinedOpen) ev.declined.forEach { Text("\u00b7 ${it.name}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline) }
                                     }
-                                    HorizontalDivider()
-                                    AddPlayerHeroSection(eventId, ds, viewModel, currentNames, pendingAddSetter = { pendingAdd = it })
                                 }
                             }
                             // History
@@ -934,15 +994,29 @@ fun EventDetailScreen(
             }
         }
     }
-    // Add-player confirm
+    // Add-player confirm — Invite or Add for registered users (web parity),
+    // plain Add for anonymous/new names.
     pendingAdd?.let { pending ->
         val ev2 = state.event; val isBench = (ev2?.players?.size ?: 0) >= (ev2?.maxPlayers ?: 0)
-        AlertDialog(onDismissRequest = { pendingAdd = null }, title = { Text("Add ${pending.name}?") }, text = { Text(when {
-            pending.email != null && isBench -> "${pending.name} will be invited by email (${pending.email}) and placed on the bench."
-            pending.email != null -> "${pending.name} will be invited by email (${pending.email})."
-            isBench -> "${pending.name} joins ${ev2?.title} \u2014 the list is full, so they go to the bench."
-            else -> "${pending.name} joins ${ev2?.title}."
-        }) }, confirmButton = { TextButton(onClick = { viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email); pendingAdd = null }) { Text(stringResource(R.string.add_button)) } }, dismissButton = { TextButton(onClick = { pendingAdd = null }) { Text(stringResource(R.string.cancel)) } })
+        val isRegistered = pending.userId != null
+        AlertDialog(
+            onDismissRequest = { pendingAdd = null },
+            title = { Text(if (isRegistered) "Add or invite ${pending.name}?" else "Add ${pending.name}?") },
+            text = { Text(when {
+                pending.email != null && isBench -> "${pending.name} will be invited by email (${pending.email}) and placed on the bench."
+                pending.email != null -> "${pending.name} will be invited by email (${pending.email})."
+                isBench -> "${pending.name} joins ${ev2?.title} \u2014 the list is full, so they go to the bench."
+                else -> "${pending.name} joins ${ev2?.title}."
+            }) },
+            confirmButton = {
+                if (isRegistered) TextButton(onClick = { viewModel.inviteSuggestion(eventId, pending.userId!!); pendingAdd = null }) { Text(stringResource(R.string.invite)) }
+                else TextButton(onClick = { viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email); pendingAdd = null }) { Text(stringResource(R.string.add_button)) }
+            },
+            dismissButton = {
+                if (isRegistered) TextButton(onClick = { viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email); pendingAdd = null }) { Text(stringResource(R.string.add_to_list)) }
+                else TextButton(onClick = { pendingAdd = null }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
     }
     if (state.showPaymentNudge && user?.name != null) {
         val callerBalance = state.balance?.callerBalance
@@ -1087,14 +1161,27 @@ private fun HeroWrapUp(eventId: String, state: EventScreenState, viewModel: Even
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddPlayerHeroSection(eventId: String, state: EventScreenState, viewModel: EventDetailViewModel, currentNames: Set<String>, pendingAddSetter: (PendingAdd)->Unit) {
     var query by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
     var choice by remember { mutableStateOf<CoPlaySuggestion?>(null) }
     val context = LocalContext.current
-    val filtered by remember(currentNames, state.knownPlayers) {
-        derivedStateOf { if (query.length>=2) state.knownPlayers.filter { it.name.lowercase().contains(query.lowercase()) && it.name.lowercase() !in currentNames }.take(5) else emptyList() }
+    val isEmail = query.contains("@") && query.contains(".")
+    // Merged suggestions: this event's history + global co-players, with a
+    // transparent source label per entry.
+    val mergedSuggestions = remember(state.knownPlayers, state.coPlayers, currentNames) {
+        mergePlayerSuggestions(state.knownPlayers, state.coPlayers, currentNames)
     }
+    val filtered by remember(query, mergedSuggestions) {
+        derivedStateOf {
+            if (query.isBlank()) emptyList()
+            else mergedSuggestions.filter { it.name.lowercase().contains(query.lowercase()) }.take(5)
+        }
+    }
+    val showDropdown = expanded && (filtered.isNotEmpty() || query.isNotBlank())
+
     val contactPicker = rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
             result.data?.data?.let { uri ->
@@ -1103,55 +1190,180 @@ private fun AddPlayerHeroSection(eventId: String, state: EventScreenState, viewM
                         if (c.moveToFirst()) {
                             val n = c.getString(1)?.takeIf { it.isNotBlank() } ?: ""
                             val e = c.getString(0)?.takeIf { it.isNotBlank() }
-                            if (e != null) { viewModel.addPlayer(eventId, n, link=false, email=e); query="" } else query=n
+                            if (e != null) { viewModel.addPlayer(eventId, n, link=false, email=e); query=""; expanded=false } else { query=n; expanded=true }
                         }
                     }
                 }
             }
         }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(value = query, onValueChange = { query = it }, placeholder = { Text(stringResource(R.string.add_player_placeholder)) }, singleLine = true, modifier = Modifier.weight(1f), trailingIcon = {
-                IconButton(onClick = { contactPicker.launch(Intent(Intent.ACTION_PICK, android.provider.ContactsContract.CommonDataKinds.Email.CONTENT_URI)) }) { Icon(Icons.Default.Contacts, stringResource(R.string.add_from_contacts), tint = MaterialTheme.colorScheme.primary) }
-            })
-            Button(onClick = { viewModel.addPlayer(eventId, query.trim()); query="" }, enabled = query.isNotBlank()) { Text(stringResource(R.string.add_button), fontWeight = FontWeight.Bold) }
-        }
-        if (filtered.isNotEmpty()) {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column { filtered.forEach { s -> Text(stringResource(R.string.player_games_count, s.name, s.gamesPlayed), modifier = Modifier.fillMaxWidth().clickable { pendingAddSetter(PendingAdd(s.name)); query="" }.padding(horizontal=16.dp, vertical=10.dp), style = MaterialTheme.typography.bodyMedium) } }
-            }
-        }
-        val suggestions = state.knownPlayers.filter { it.name.lowercase() !in currentNames }.take(5)
-        if (suggestions.isNotEmpty() && query.isBlank()) {
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (s in suggestions) {
-                    AssistChip(onClick = { pendingAddSetter(PendingAdd(s.name)) }, label = { Text("${s.name} (${s.gamesPlayed}g)") })
-                }
-            }
-        }
-        if (state.coPlaySuggestions.isNotEmpty() && query.isBlank()) {
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (s in state.coPlaySuggestions) {
-                    AssistChip(onClick = { choice = s }, label = { Text(s.name) }, leadingIcon = { Icon(Icons.Default.PersonAdd, null, Modifier.size(16.dp)) })
-                }
-            }
-            choice?.let { sel ->
-                AlertDialog(
-                    onDismissRequest = { choice = null },
-                    title = { Text("Invite ${sel.name}?") },
-                    text = { Text("${sel.name} has played ${sel.gamesPlayed} games with you. Add them directly to the roster or send them an invite to join?") },
-                    confirmButton = {
-                        TextButton(onClick = { viewModel.inviteSuggestion(eventId, sel.userId); choice = null }) { Text("Invite") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { viewModel.addPlayer(eventId, sel.name, link = false); choice = null }) { Text("Add to list") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        ExposedDropdownMenuBox(
+            expanded = showDropdown,
+            onExpandedChange = { expanded = it }
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = {
+                    query = it
+                    expanded = it.isNotBlank()
+                },
+                placeholder = { Text(stringResource(R.string.add_player_placeholder)) },
+                leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                trailingIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (query.isNotBlank()) {
+                            IconButton(onClick = { query = ""; expanded = false }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.cancel), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                        IconButton(onClick = { contactPicker.launch(Intent(Intent.ACTION_PICK, android.provider.ContactsContract.CommonDataKinds.Email.CONTENT_URI)) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Contacts, contentDescription = stringResource(R.string.add_from_contacts), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        }
+                        FilledTonalIconButton(
+                            onClick = {
+                                if (query.isNotBlank()) {
+                                    // Exact match against merged suggestions → confirm dialog; otherwise direct add
+                                    val exact = mergedSuggestions.find { it.name.equals(query.trim(), ignoreCase = true) }
+                                    if (exact != null) pendingAddSetter(PendingAdd(exact.name, userId = exact.userId)) else viewModel.addPlayer(eventId, query.trim())
+                                    query = ""; expanded = false
+                                }
+                            },
+                            enabled = query.isNotBlank(),
+                            modifier = Modifier.size(36.dp),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_button), modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(Modifier.width(4.dp))
                     }
-                )
+                },
+                shape = RoundedCornerShape(28.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                ),
+                singleLine = true,
+                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable).fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = showDropdown,
+                onDismissRequest = { expanded = false }
+            ) {
+                filtered.forEach { s ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(s.name, style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    when {
+                                        s.gamesPlayedHere > 0 -> "${s.gamesPlayedHere} games here"
+                                        s.coPlayCount > 0 -> "played with you ${s.coPlayCount}\u00d7"
+                                        else -> "suggested"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        },
+                        leadingIcon = {
+                            Icon(
+                                if (s.source == SuggestionSource.EVENT) Icons.Default.History else Icons.Default.Group,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = if (s.source == SuggestionSource.EVENT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                            )
+                        },
+                        onClick = { pendingAddSetter(PendingAdd(s.name, userId = s.userId)); query = ""; expanded = false }
+                    )
+                }
+                if (query.isNotBlank() && filtered.none { it.name.equals(query.trim(), ignoreCase = true) }) {
+                    DropdownMenuItem(
+                        text = { Text("Add \"${query.trim()}\" as new player", fontStyle = androidx.compose.ui.text.font.FontStyle.Italic) },
+                        leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        onClick = { pendingAddSetter(PendingAdd(query.trim())); query = ""; expanded = false }
+                    )
+                }
+                if (isEmail) {
+                    DropdownMenuItem(
+                        text = { Text("Invite by email: ${query.trim()}") },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        onClick = {
+                            val namePart = query.substringBefore("@").ifBlank { query.trim() }
+                            viewModel.addPlayer(eventId, namePart, link = false, email = query.trim()); query = ""; expanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        // Quick suggestions when empty — merged list, labeled by source
+        if (query.isBlank() && mergedSuggestions.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Suggestions", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (s in mergedSuggestions.take(5)) {
+                        AssistChip(
+                            onClick = { pendingAddSetter(PendingAdd(s.name, userId = s.userId)) },
+                            label = {
+                                Column {
+                                    Text(s.name, style = MaterialTheme.typography.labelLarge)
+                                    Text(
+                                        when {
+                                            s.gamesPlayedHere > 0 -> "${s.gamesPlayedHere}g here"
+                                            s.coPlayCount > 0 -> "${s.coPlayCount}\u00d7 with you"
+                                            else -> "suggested"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    if (s.source == SuggestionSource.EVENT) Icons.Default.History else Icons.Default.Group,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (s.source == SuggestionSource.EVENT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        if (state.coPlaySuggestions.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Frequently played with", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (s in state.coPlaySuggestions) {
+                            AssistChip(
+                                onClick = { choice = s },
+                                label = { Text(s.name) },
+                                leadingIcon = { Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            )
+                        }
+                    }
+                }
+                choice?.let { sel ->
+                    AlertDialog(
+                        onDismissRequest = { choice = null },
+                        title = { Text("Invite ${sel.name}?") },
+                        text = { Text("${sel.name} has played ${sel.gamesPlayed} games with you. Add them directly to the roster or send them an invite to join?") },
+                        confirmButton = {
+                            TextButton(onClick = { viewModel.inviteSuggestion(eventId, sel.userId); choice = null }) { Text("Invite") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { viewModel.addPlayer(eventId, sel.name, link = false); choice = null }) { Text("Add to list") }
+                        }
+                    )
+                }
             }
         }
     }
-}
 
 @Composable
 private fun NotificationToggleRow(label: String, muted: Boolean?, onToggle: (Boolean?) -> Unit) {
@@ -1174,7 +1386,9 @@ private fun demoStateForHero(): EventScreenState {
     val postGame = PostGameStatus(gameEnded = true, hasScore = false, hasCost = true, allPaid = false, allComplete = false, isParticipant = true, isPlayer = true, latestHistoryId = "h1", costAmount = 15.0, hasPendingPastPayments = false, paymentsSnapshot = payments, mvpEnabled = true, mvpComplete = false, paidAggregate = PaidAggregate(2,3))
     val balance = BalanceResponse(enforcement = "nudge", callerBalance = PlayerBalance("João", 5.0, 1, 3), aggregate = BalanceAggregate(6,9))
     val demoMvp = MvpResponse(mvp = null, votes = emptyList(), isVotingOpen = true, hasVoted = false, totalVotes = 0)
-    return EventScreenState(loading = false, event = ev, history = history, knownPlayers = listOf(KnownPlayer("Rui",12), KnownPlayer("Sofia",8)), postGame = postGame, postGamePayments = payments, mvp = demoMvp, isFollowing = true, isPlayer = false, isAdmin = true, balance = balance, coPlaySuggestions = listOf(CoPlaySuggestion("u2","Marta", gamesPlayed=9), CoPlaySuggestion("u3","Alex", gamesPlayed=6)))
+    val demoCost = EventCost(totalAmount = 30.0, currency = "EUR")
+    val demoCoPlayers = listOf(CoPlayer("Bruno", "u-bruno", null, 6), CoPlayer("Diana", "u-diana", null, 3))
+    return EventScreenState(loading = false, event = ev, history = history, knownPlayers = listOf(KnownPlayer("Rui",12), KnownPlayer("Sofia",8)), postGame = postGame, postGamePayments = payments, mvp = demoMvp, cost = demoCost, coPlayers = demoCoPlayers, isFollowing = true, isPlayer = false, isAdmin = true, balance = balance, coPlaySuggestions = listOf(CoPlaySuggestion("u2","Marta", gamesPlayed=9), CoPlaySuggestion("u3","Alex", gamesPlayed=6)))
 }
 
 private fun demoEventForPreview(at: java.time.Instant, isRecurring: Boolean, nextResetAt: java.time.Instant?, recurrenceRule: String?): EventDetail {

@@ -4,11 +4,14 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
@@ -19,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -30,6 +34,8 @@ import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventSummary
 import dev.convocados.data.api.MyGamesResponse
 import dev.convocados.data.api.CoPlaySuggestion
+import dev.convocados.data.api.ProfileEvent
+import dev.convocados.data.repository.RecentlyViewedEvent
 import dev.convocados.data.repository.EventRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -87,6 +93,14 @@ class GamesViewModel @Inject constructor(
     val archivedOwned = repository.getEventsByType("archivedOwned")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Events opened recently (incl. link visits) — one-tap return. */
+    val recentlyViewed = repository.recentlyViewed()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Past events the user participated in (own profile `joined`), ELO-independent. */
+    private val _participatedEvents = MutableStateFlow<List<ProfileEvent>>(emptyList())
+    val participatedEvents: StateFlow<List<ProfileEvent>> = _participatedEvents
+
     // ADR 0025: "Suggested players for your games" — co-play invite candidates
     // for the 3 nearest upcoming managed games.
     private val _suggestionsPanel = MutableStateFlow<List<GameSuggestions>>(emptyList())
@@ -100,7 +114,13 @@ class GamesViewModel @Inject constructor(
             repository.refreshMyGames()
             _refreshing.value = false
             loadSuggestionsPanel()
+            loadParticipatedEvents()
         }
+    }
+
+    private suspend fun loadParticipatedEvents() {
+        val ownId = runCatching { api.fetchUserInfo().id }.getOrNull() ?: return
+        _participatedEvents.value = runCatching { api.fetchUserProfile(ownId) }.getOrNull()?.joined.orEmpty()
     }
 
     private suspend fun loadSuggestionsPanel() {
@@ -156,7 +176,10 @@ fun GamesScreen(
     val archivedOwned by viewModel.archivedOwned.collectAsState()
     val isRefreshing by viewModel.refreshing.collectAsState()
     val suggestionsPanel by viewModel.suggestionsPanel.collectAsState()
+    val recentlyViewed by viewModel.recentlyViewed.collectAsState()
+    val participated by viewModel.participatedEvents.collectAsState()
     var showArchived by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
 
     Scaffold(
         floatingActionButton = {
@@ -257,31 +280,75 @@ fun GamesScreen(
                     }
                 }
 
-                items(games, key = { it.id }) { game ->
-                    val ctx = LocalContext.current
-                    GameCard(
-                        game = game,
-                        onClick = { onEventClick(game.id) },
-                        onOpenSettings = { onOpenSettings(game.id) },
-                        onArchiveToggle = {
-                            if (game.archivedAt != null) viewModel.unarchive(game.id) else viewModel.archive(game.id)
-                        },
-                        onShare = {
-                            val text = "${game.title}\n${formatRelativeDate(game.dateTime)}" +
-                                (if (game.location.isNotBlank()) "\n${game.location}" else "") +
-                                "\n\n${viewModel.shareUrl(game.id)}"
-                            ctx.startActivity(
-                                android.content.Intent.createChooser(
-                                    android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, text)
-                                    },
-                                    null,
-                                )
-                            )
-                        },
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope,
+                // Recently viewed — one-tap return for link/invite-checked events.
+                if (!showArchived && recentlyViewed.isNotEmpty()) {
+                    item(key = "recently-viewed") {
+                        SectionHeader(stringResource(R.string.recently_viewed))
+                        RecentEventsRow(recentlyViewed.take(6), onEventClick)
+                    }
+                }
+
+                // Past events the player actually participated in.
+                if (!showArchived && participated.isNotEmpty()) {
+                    item(key = "participated") {
+                        SectionHeader(stringResource(R.string.games_you_played))
+                        ParticipatedEventsList(participated.take(6), onEventClick)
+                    }
+                }
+
+                val hostGames = owned + admin
+                val shareGame: (EventSummary) -> Unit = { game ->
+                    val text = "${game.title}\n${formatRelativeDate(game.dateTime)}" +
+                        (if (game.location.isNotBlank()) "\n${game.location}" else "") +
+                        "\n\n${viewModel.shareUrl(game.id)}"
+                    ctx.startActivity(
+                        android.content.Intent.createChooser(
+                            android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, text)
+                            },
+                            null,
+                        )
                     )
+                }
+
+                // Games I host / manage — labeled section.
+                if (hostGames.isNotEmpty()) {
+                    item(key = "sec-hosted") {
+                        SectionHeader(stringResource(R.string.games_you_host, hostGames.size))
+                    }
+                    items(hostGames, key = { it.id }) { game ->
+                        GameCard(
+                            game = game,
+                            onClick = { onEventClick(game.id) },
+                            onOpenSettings = { onOpenSettings(game.id) },
+                            onArchiveToggle = {
+                                if (game.archivedAt != null) viewModel.unarchive(game.id) else viewModel.archive(game.id)
+                            },
+                            onShare = { shareGame(game) },
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                    }
+                }
+
+                // Games I follow — labeled section.
+                if (followed.isNotEmpty()) {
+                    item(key = "sec-followed") {
+                        SectionHeader(stringResource(R.string.games_you_follow, followed.size))
+                    }
+                    items(followed, key = { it.id }) { game ->
+                        GameCard(
+                            game = game,
+                            onClick = { onEventClick(game.id) },
+                            onOpenSettings = { onOpenSettings(game.id) },
+                            onArchiveToggle = {
+                                if (game.archivedAt != null) viewModel.unarchive(game.id) else viewModel.archive(game.id)
+                            },
+                            onShare = { shareGame(game) },
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                    }
                 }
             }
         }  // PullToRefreshBox
@@ -457,6 +524,67 @@ private fun SuggestionsPanel(
                             modifier = Modifier.padding(bottom = 4.dp),
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+    )
+}
+
+/** Horizontal row of compact recently-viewed event cards (link/invite return). */
+@Composable
+private fun RecentEventsRow(events: List<RecentlyViewedEvent>, onEventClick: (String) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        events.forEach { ev ->
+            ElevatedCard(
+                modifier = Modifier.width(220.dp).clickable { onEventClick(ev.eventId) },
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(sportEmoji(ev.sport), style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text(ev.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(4.dp))
+                    if (ev.location.isNotBlank()) {
+                        Text(ev.location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(formatRelativeDate(ev.dateTime), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+    }
+}
+
+/** Vertical list of past events the player actually played in. */
+@Composable
+private fun ParticipatedEventsList(events: List<ProfileEvent>, onEventClick: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        events.forEach { ev ->
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth().clickable { onEventClick(ev.id) },
+            ) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(sportEmoji(ev.sport), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(end = 10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(ev.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            if (ev.dateTime.isNotEmpty()) formatRelativeDate(ev.dateTime) else "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 }
             }
         }
