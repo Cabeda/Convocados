@@ -260,6 +260,14 @@
     <string name="claim_player">Rivendica giocatore</string>
     <string name="claim_confirm">Vuoi davvero rivendicare \"%1$s\"? Questo giocatore sarà collegato al tuo account.</string>
     <string name="claim">Rivendica</string>
+    <string name="ratings_hidden">Le classifiche di questo evento sono nascoste dagli organizzatori.</string>
+    <string name="set_initial_rating">Imposta valutazione iniziale</string>
+    <string name="set_initial_rating_confirm">Imposta la valutazione iniziale per %1$s</string>
+    <string name="initial_rating">Iniziale</string>
+    <string name="purge_player">Rimuovi giocatore</string>
+    <string name="purge_player_confirm">Rimuovere %1$s dalla classifica? Lo storico sarà eliminato.</string>
+    <string name="mvp_awards">MVP</string>
+    <string name="elo_explainer">Le valutazioni sono calcolate dai risultati tramite ELO. I nuovi giocatori partono senza valutazione finché non viene assegnata o calcolata.</string>
 
     <string name="event_settings">Impostazioni evento</string>
     <string name="location">Luogo</string>

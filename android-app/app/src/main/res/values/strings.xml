@@ -299,6 +299,14 @@
     <string name="claim_player">Claim player</string>
     <string name="claim_confirm">Are you sure you want to claim \"%1$s\"? This player will be linked to your account.</string>
     <string name="claim">Claim</string>
+    <string name="ratings_hidden">Ratings for this event are hidden by the organizers.</string>
+    <string name="set_initial_rating">Set initial rating</string>
+    <string name="set_initial_rating_confirm">Set initial rating for %1$s</string>
+    <string name="initial_rating">Initial</string>
+    <string name="purge_player">Remove player</string>
+    <string name="purge_player_confirm">Remove %1$s from the rankings? Their rating history will be deleted.</string>
+    <string name="mvp_awards">MVP</string>
+    <string name="elo_explainer">Ratings are computed from match results using ELO. New players start unrated until a rating is assigned or calculated.</string>
 
     <!-- Event settings -->
     <string name="event_settings">Event Settings</string>

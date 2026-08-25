@@ -80,6 +80,7 @@ data class EventDetail(
     val hideEloInTeams: Boolean = false,
     val splitCostsEnabled: Boolean = false,
     val mvpEnabled: Boolean = true,
+    val allowManualRating: Boolean = false,
     val balanced: Boolean = false,
     val archivedAt: String? = null,
     val createdAt: String = "",
@@ -220,6 +221,7 @@ data class PlayerRating(
     val wins: Int = 0,
     val draws: Int = 0,
     val losses: Int = 0,
+    val mvpAwards: Int = 0,
 )
 
 @Serializable
@@ -415,6 +417,14 @@ data class PublicStats(
 
 @Serializable
 data class OkResponse(val ok: Boolean = true)
+
+@Serializable
+data class SetInitialRatingResponse(
+    val ok: Boolean = true,
+    val rating: Int? = null,
+    val initialRating: Int? = null,
+    val needsRecalculate: Boolean = false,
+)
 
 @Serializable
 data class AddPlayerResponse(val ok: Boolean = true, val invited: String? = null, val resolvedName: String? = null)

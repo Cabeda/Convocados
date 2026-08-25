@@ -260,6 +260,14 @@
     <string name="claim_player">Reivindicar jogador</string>
     <string name="claim_confirm">Tens a certeza de que queres reivindicar \"%1$s\"? Este jogador será associado à tua conta.</string>
     <string name="claim">Reivindicar</string>
+    <string name="ratings_hidden">As classificações deste evento estão ocultas pelos organizadores.</string>
+    <string name="set_initial_rating">Definir rating inicial</string>
+    <string name="set_initial_rating_confirm">Definir rating inicial para %1$s</string>
+    <string name="initial_rating">Inicial</string>
+    <string name="purge_player">Remover jogador</string>
+    <string name="purge_player_confirm">Remover %1$s das classificações? O histórico de rating será eliminado.</string>
+    <string name="mvp_awards">MVP</string>
+    <string name="elo_explainer">Os ratings são calculados a partir dos resultados dos jogos usando ELO. Novos jogadores começam sem rating até que um seja atribuído ou calculado.</string>
 
     <string name="event_settings">Definições do evento</string>
     <string name="location">Local</string>
