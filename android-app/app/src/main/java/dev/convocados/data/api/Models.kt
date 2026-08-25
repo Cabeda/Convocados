@@ -419,6 +419,65 @@ data class PublicStats(
 data class OkResponse(val ok: Boolean = true)
 
 @Serializable
+data class SettlementSummary(
+    val games: List<SettlementGame> = emptyList(),
+    val people: List<SettlementPerson> = emptyList(),
+    val currentGameId: String? = null,
+    val viewerRole: String = "player",
+    val viewerEventPlayerId: String? = null,
+    val activePlayerCount: Int = 0,
+    val maxPlayers: Int = 0,
+)
+
+@Serializable
+data class SettlementGame(
+    val gameId: String,
+    val dateTime: String = "",
+    val mode: String = "tracked",
+    val payerName: String? = null,
+    val payerIsPlayer: Boolean = false,
+    val total: Double = 0.0,
+    val paidCount: Int = 0,
+    val debtorCount: Int = 0,
+    val debtorNames: List<String> = emptyList(),
+    val rows: List<SettlementRow> = emptyList(),
+)
+
+@Serializable
+data class SettlementRow(
+    val eventPlayerId: String,
+    val name: String,
+    val amount: Double = 0.0,
+    val status: String = "pending",
+    val isPayer: Boolean = false,
+)
+
+@Serializable
+data class SettlementPerson(
+    val name: String,
+    val isPlayer: Boolean = false,
+    val isPayer: Boolean = false,
+    val owedToAmount: Double = 0.0,
+    val owedAmount: Double = 0.0,
+    val lines: List<SettlementLine> = emptyList(),
+)
+
+@Serializable
+data class SettlementLine(
+    val gameId: String = "",
+    val dateTime: String = "",
+    val amount: Double = 0.0,
+    val status: String = "",
+    val role: String = "",
+)
+
+@Serializable
+data class SettlementActionRequest(val gameId: String, val eventPlayerId: String = "")
+
+@Serializable
+data class SettlementBulkRequest(val gameId: String)
+
+@Serializable
 data class SetInitialRatingResponse(
     val ok: Boolean = true,
     val rating: Int? = null,

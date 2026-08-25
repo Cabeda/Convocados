@@ -145,6 +145,21 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun fetchPayments(eventId: String): PaymentsResponse =
         client.get("/api/events/$eventId/payments")
 
+    suspend fun fetchSettlement(eventId: String): SettlementSummary =
+        client.get("/api/events/$eventId/payments/settlement")
+
+    suspend fun settleShare(eventId: String, gameId: String, eventPlayerId: String): OkResponse =
+        client.put("/api/events/$eventId/payments/settlement", SettlementActionRequest(gameId, eventPlayerId))
+
+    suspend fun unsettleShare(eventId: String, gameId: String, eventPlayerId: String): OkResponse =
+        client.delete("/api/events/$eventId/payments/settlement", SettlementActionRequest(gameId, eventPlayerId))
+
+    suspend fun settleAll(eventId: String, gameId: String): OkResponse =
+        client.put("/api/events/$eventId/payments/settlement/bulk", SettlementBulkRequest(gameId))
+
+    suspend fun selfReportSent(eventId: String, gameId: String, eventPlayerId: String): OkResponse =
+        client.post("/api/events/$eventId/payments/settlement/self-report", SettlementActionRequest(gameId, eventPlayerId))
+
     suspend fun updatePaymentStatus(eventId: String, playerName: String, status: String): OkResponse =
         client.put("/api/events/$eventId/payments", PaymentUpdateRequest(playerName, status))
 

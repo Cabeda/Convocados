@@ -327,6 +327,58 @@ export const openApiSpec = {
         responses: { "200": { description: "All payments marked as paid" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/payments/settlement": {
+      get: {
+        summary: "People-first settlement summary (receivers public, debtor names owner/admin-only)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Settlement summary" }, ...errorResponses },
+      },
+      put: {
+        summary: "Settle one share (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, eventPlayerId: { type: "string" } }, required: ["gameId", "eventPlayerId"] } } },
+        },
+        responses: { "200": { description: "Share settled" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Revert a settled share (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, eventPlayerId: { type: "string" } }, required: ["gameId", "eventPlayerId"] } } },
+        },
+        responses: { "200": { description: "Share reverted" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/payments/settlement/bulk": {
+      put: {
+        summary: "Settle all unpaid shares for a game (owner/admin)",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" } }, required: ["gameId"] } } },
+        },
+        responses: { "200": { description: "Shares settled" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/payments/settlement/self-report": {
+      post: {
+        summary: "Self-report that a player sent their share",
+        tags: ["Payments"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { gameId: { type: "string" }, eventPlayerId: { type: "string" } }, required: ["gameId", "eventPlayerId"] } } },
+        },
+        responses: { "200": { description: "Self-report recorded" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/balance": {
       get: {
         summary: "Get outstanding balance and enforcement info for the caller",
