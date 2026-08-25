@@ -533,6 +533,16 @@ export const openApiSpec = {
         parameters: [eventIdParam],
         responses: { "200": { description: "Player ratings" } },
       },
+      patch: {
+        summary: "Set a player's initial rating",
+        tags: ["Ratings"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, initialRating: { type: "integer" } }, required: ["name", "initialRating"] } } },
+        },
+        responses: { "200": { description: "Initial rating set" }, ...errorResponses },
+      },
     },
     "/api/events/{id}/ratings/recalculate": {
       post: {
@@ -540,6 +550,18 @@ export const openApiSpec = {
         tags: ["Ratings"],
         parameters: [eventIdParam],
         responses: { "200": { description: "Ratings recalculated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/purge-player": {
+      delete: {
+        summary: "Delete a player and their rating history",
+        tags: ["Ratings"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } } },
+        },
+        responses: { "200": { description: "Player purged" }, ...errorResponses },
       },
     },
 
