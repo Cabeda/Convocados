@@ -953,10 +953,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onSnackbar={setSnackbar}
             />
 
-            {/* Post-game banner — only for authenticated users who can act on it */}
+            {/* Post-game banner — only for authenticated users who can act on it.
+                Seeded from the initial payload so an already-settled game never
+                flashes the banner before the client fetch resolves. */}
             {isAuthenticated && (
             <PostGameBanner
               eventId={eventId}
+              initialStatus={event?.postGameStatus ?? null}
               onStatusChange={setPostGameStatus}
               isManager={isOwner || isAdmin}
               onScrollToScore={() => {

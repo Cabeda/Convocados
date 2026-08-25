@@ -289,3 +289,63 @@ describe("PostGameBanner untracked mode (each one pays own share)", () => {
     await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
   });
 });
+
+describe("PostGameBanner initial payload gating (banner flash on load)", () => {
+  // Mirrors a fresh page load of an already-settled recurring game: the event
+  // moved to the next occurrence (gameEnded=false) but the last wrap-up is
+  // fully complete, so the banner must never appear.
+  const settledStatus: PostGameStatus = {
+    ...baseStatus,
+    gameEnded: false,
+    hasScore: true,
+    allPaid: true,
+    hasPendingPastPayments: true,
+    mvpEnabled: true,
+    mvpComplete: false,
+    bannerMvpComplete: false,
+    myMvpComplete: true,
+    allComplete: true,
+    scoreOne: 7,
+    scoreTwo: 7,
+  };
+
+  it("never renders when the initial payload says wrap-up is already complete", async () => {
+    vi.useFakeTimers();
+    mockFetchStatus(settledStatus);
+    renderWithTheme(<PostGameBanner eventId="evt1" initialStatus={settledStatus} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
+    // Past the celebration window and multiple poll intervals — still nothing.
+    await act(async () => { vi.advanceTimersByTime(50_000); });
+    expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
+  });
+
+  it("renders immediately from the initial payload without waiting for its own fetch", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => { /* never resolves */ })));
+    renderWithTheme(<PostGameBanner eventId="evt1" initialStatus={baseStatus} />);
+    await act(async () => {});
+    expect(screen.getByTestId("post-game-banner")).toBeInTheDocument();
+  });
+
+  it("still celebrates a completion that happens mid-session after an actionable initial payload", async () => {
+    vi.useFakeTimers();
+    let status = { ...baseStatus };
+    vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.includes("/payments/game")) {
+        return Promise.resolve({ ok: true, json: async () => ({ gameId: null, mode: "tracked", payerName: null, payerIsPlayer: false, hasCost: false, rows: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => status });
+    }));
+    renderWithTheme(<PostGameBanner eventId="evt1" initialStatus={baseStatus} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId("post-game-banner")).toBeInTheDocument();
+
+    status = { ...settledStatus, latestHistoryId: baseStatus.latestHistoryId };
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    // Completion arrived via poll — banner shows briefly (celebration), then hides.
+    expect(screen.getByTestId("post-game-banner")).toBeInTheDocument();
+    await act(async () => { vi.advanceTimersByTime(1700); });
+    expect(screen.queryByTestId("post-game-banner")).not.toBeInTheDocument();
+  });
+});
