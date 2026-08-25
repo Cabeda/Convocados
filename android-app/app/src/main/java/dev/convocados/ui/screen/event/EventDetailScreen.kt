@@ -267,6 +267,7 @@ class EventDetailViewModel @Inject constructor(
             viewModelScope.launch {
                 _state.value = _state.value.copy(isFollowing = false)
                 runCatching { api.unfollowEvent(eventId) }
+                    .onSuccess { repository.refreshMyGames() }
                     .onFailure { _state.value = _state.value.copy(isFollowing = true) }
             }
             return
@@ -274,6 +275,7 @@ class EventDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _state.value = _state.value.copy(isFollowing = true)
             runCatching { api.followEvent(eventId) }
+                .onSuccess { repository.refreshMyGames() }
                 .onFailure { _state.value = _state.value.copy(isFollowing = false) }
         }
     }

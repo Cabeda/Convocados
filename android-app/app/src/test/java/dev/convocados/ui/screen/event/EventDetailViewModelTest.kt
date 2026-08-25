@@ -210,6 +210,40 @@ class EventDetailViewModelTest {
     }
 
     @Test
+    fun `follow refreshes cached games list so followed section updates`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.followEvent(eventId) } returns FollowStateResponse(following = true)
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.toggleFollow(eventId)
+        advanceUntilIdle()
+
+        coVerify { api.followEvent(eventId) }
+        coVerify { repository.refreshMyGames() }
+    }
+
+    @Test
+    fun `unfollow refreshes cached games list so followed section updates`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        // Start already-following so toggleFollow goes down the unfollow path.
+        coEvery { api.getFollowState(eventId) } returns FollowStateResponse(following = true)
+        coEvery { api.unfollowEvent(eventId) } returns FollowStateResponse(following = false)
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.load(eventId)
+        advanceUntilIdle()
+        viewModel.toggleFollow(eventId)
+        advanceUntilIdle()
+
+        coVerify { api.unfollowEvent(eventId) }
+        coVerify { repository.refreshMyGames() }
+    }
+
+    @Test
     fun `refresh re-fetches post-game status`() = runTest {
         coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
