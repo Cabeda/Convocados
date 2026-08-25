@@ -58,6 +58,7 @@
     <string name="game_details">Dettagli partita</string>
     <string name="game_history">Cronologia partite</string>
     <string name="event_log">Registro evento</string>
+    <string name="event_log_subtitle">Modifiche recenti a questo evento</string>
     <string name="no_log_entries">Ancora nessuna voce</string>
     <string name="load_more">Carica altro</string>
     <string name="back">Indietro</string>

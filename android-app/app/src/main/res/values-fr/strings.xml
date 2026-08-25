@@ -58,6 +58,7 @@
     <string name="game_details">Détails du match</string>
     <string name="game_history">Historique des matchs</string>
     <string name="event_log">Journal de l\'événement</string>
+    <string name="event_log_subtitle">"Changements récents de cet 'événement"</string>
     <string name="no_log_entries">Aucune entrée pour l\'instant</string>
     <string name="load_more">Charger plus</string>
     <string name="back">Retour</string>
@@ -274,7 +275,7 @@
     <string name="claim_player">Revendiquer le joueur</string>
     <string name="claim_confirm">Voulez-vous vraiment revendiquer \"%1$s\" ? Ce joueur sera lié à votre compte.</string>
     <string name="claim">Revendiquer</string>
-    <string name="ratings_hidden">Les classements de cet événement sont masqués par les organisateurs.</string>
+    <string name="ratings_hidden">"Les classements de cet 'événement sont masqués par les organisateurs."</string>
     <string name="set_initial_rating">Définir le classement initial</string>
     <string name="set_initial_rating_confirm">Définir le classement initial pour %1$s</string>
     <string name="initial_rating">Initial</string>
