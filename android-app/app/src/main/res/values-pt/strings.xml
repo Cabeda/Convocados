@@ -57,6 +57,7 @@
     <string name="view_releases">Ver versões no GitHub</string>
     <string name="game_details">Detalhes do jogo</string>
     <string name="game_history">Histórico de jogos</string>
+    <string name="history_subtitle">Todos os jogos registados neste evento</string>
     <string name="event_log">Registo do evento</string>
     <string name="event_log_subtitle">Alterações recentes neste evento</string>
     <string name="no_log_entries">Ainda sem registos</string>

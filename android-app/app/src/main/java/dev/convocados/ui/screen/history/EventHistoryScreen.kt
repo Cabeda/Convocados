@@ -1,6 +1,10 @@
 package dev.convocados.ui.screen.history
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -71,36 +75,46 @@ fun EventHistoryScreen(
     val hasMore by viewModel.hasMore.collectAsState()
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(scrollBehavior = scrollBehavior, 
-                title = { Text(stringResource(R.string.game_history)) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { padding ->
-        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator() }; return@Scaffold }
+    val accent = MaterialTheme.colorScheme.primary
+    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
+        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = accent) }; return@Scaffold }
 
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(padding)) {
+            item {
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                        .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.35f), MaterialTheme.colorScheme.surface)))
+                        .padding(16.dp),
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+                        }
+                        Text(stringResource(R.string.game_history), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                        Text(stringResource(R.string.history_subtitle), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
             items(history, key = { it.id }) { h ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     modifier = Modifier.fillMaxWidth().clickable { onHistoryClick(h.id) },
                 ) {
                     Column(Modifier.padding(14.dp)) {
-                        Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                            if (h.status != "played") {
+                                Box(Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.secondaryContainer).padding(horizontal = 8.dp, vertical = 3.dp)) {
+                                    Text(h.status.replaceFirstChar { it.uppercase() }, color = MaterialTheme.colorScheme.onSecondaryContainer, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
                         if (h.scoreOne != null && h.scoreTwo != null) {
                             Text(
-                                "${h.teamOneName} ${h.scoreOne} — ${h.scoreTwo} ${h.teamTwoName}",
+                                "${h.teamOneName} ${h.scoreOne} \u2014 ${h.scoreTwo} ${h.teamTwoName}",
                                 style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(top = 4.dp),
                             )
-                        } else {
-                            Text(h.status.replaceFirstChar { it.uppercase() }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
                         }
                         h.eloUpdates?.takeIf { it.isNotEmpty() }?.let { updates ->
                             Row(modifier = Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

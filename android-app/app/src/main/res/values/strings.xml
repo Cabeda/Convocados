@@ -80,6 +80,7 @@
     <string name="view_releases">View releases on GitHub</string>
     <string name="game_details">Game Details</string>
     <string name="game_history">Game History</string>
+    <string name="history_subtitle">All recorded games for this event</string>
     <string name="event_log">Event Log</string>
     <string name="event_log_subtitle">Recent changes to this event</string>
     <string name="no_log_entries">No log entries yet</string>
