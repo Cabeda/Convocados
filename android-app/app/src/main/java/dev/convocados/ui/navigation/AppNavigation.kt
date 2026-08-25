@@ -28,6 +28,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import dev.convocados.BuildConfig
 import dev.convocados.ui.screen.login.LoginScreen
 import dev.convocados.ui.screen.games.GamesScreen
 import dev.convocados.ui.screen.stats.StatsScreen
@@ -48,6 +49,8 @@ import dev.convocados.ui.screen.history.EventHistoryScreen
 import dev.convocados.ui.screen.map.MapPickerScreen
 import dev.convocados.ui.screen.courts.CourtAlternativesScreen
 import dev.convocados.ui.screen.courts.CourtWatchesScreen
+import dev.convocados.ui.screen.event.prototype.EventDetailPrototypeScreen
+import dev.convocados.ui.screen.event.prototype.ProtoNav
 import dev.convocados.ui.screen.invite.InviteScreen
 
 data class BottomNavItem(val route: String, val label: String, val icon: @Composable () -> Unit)
@@ -66,7 +69,10 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processing
 
     // Handle deep link navigation
     LaunchedEffect(deepLink, isAuthenticated) {
-        if (!isAuthenticated || deepLink == null) return@LaunchedEffect
+        if (deepLink == null) return@LaunchedEffect
+        // PROTOTYPE (throwaway): allow demo variant even when unauthenticated
+        val isDemoVariant = deepLink.contains("variant=") || deepLink.contains("/demo")
+        if (!isAuthenticated && !isDemoVariant) return@LaunchedEffect
         val route = DeepLink.deepLinkToRoute(deepLink)
         if (route != null) {
             navController.navigate(route) { launchSingleTop = true }
@@ -181,14 +187,38 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processing
                     )
                 }
                 composable(
-                    Route.EventDetail().route + "?action={action}",
+                    Route.EventDetail().route + "?action={action}&variant={variant}",
                     arguments = listOf(
                         navArgument("eventId") { type = NavType.StringType },
                         navArgument("action") { type = NavType.StringType; defaultValue = "" },
+                        navArgument("variant") { type = NavType.StringType; defaultValue = "" },
                     ),
                 ) { entry ->
                     val eventId = entry.arguments?.getString("eventId") ?: return@composable
                     val autoOpenPay = entry.arguments?.getString("action") == "pay"
+                    // PROTOTYPE (throwaway): ?variant= routes to the event page
+                    // redesign variants, debug builds only.
+                    val prototypeVariant = entry.arguments?.getString("variant").orEmpty()
+                    if (prototypeVariant.isNotEmpty() && BuildConfig.DEBUG) {
+                        EventDetailPrototypeScreen(
+                            eventId = eventId,
+                            initialVariant = prototypeVariant,
+                            nav = ProtoNav(
+                                onBack = { navController.popBackStack() },
+                                onSettings = { navController.navigate(Route.EventSettings.create(eventId)) },
+                                onRankings = { navController.navigate(Route.EventRankings.create(eventId)) },
+                                onPayments = { navController.navigate(Route.EventPayments.create(eventId)) },
+                                onLog = { navController.navigate(Route.EventLog.create(eventId)) },
+                                onAttendance = { navController.navigate(Route.EventAttendance.create(eventId)) },
+                                onNotificationPrefs = { navController.navigate(Route.NotificationPrefs.route) },
+                                onUserClick = { navController.navigate(Route.UserProfile.create(it)) },
+                                onHistoryClick = { historyId -> navController.navigate(Route.HistoryDetail.create(eventId, historyId)) },
+                                onAllHistory = { navController.navigate(Route.EventHistory.create(eventId)) },
+                                onCourtAlternatives = { navController.navigate(Route.CourtAlternatives.create(eventId)) },
+                            ),
+                        )
+                        return@composable
+                    }
                     EventDetailScreen(
                         eventId = eventId,
                         autoOpenPay = autoOpenPay,
