@@ -53,11 +53,10 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
     fun load(eventId: String, historyId: String) {
         viewModelScope.launch {
             _loading.value = true
-            runCatching { api.fetchHistory(eventId) }.onSuccess { paginated ->
-                val entry = paginated.data.find { it.id == historyId }
+            runCatching { api.fetchHistoryDetail(eventId, historyId) }.onSuccess { entry ->
                 _history.value = entry
-                entry?.let { parseSnapshots(it) }
-            }
+                parseSnapshots(entry)
+            }.onFailure { _error.value = it.message }
             _loading.value = false
         }
     }

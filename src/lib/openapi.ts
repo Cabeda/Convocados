@@ -569,6 +569,12 @@ export const openApiSpec = {
       },
     },
     "/api/events/{id}/history/{historyId}": {
+      get: {
+        summary: "Get a single history entry",
+        tags: ["History"],
+        parameters: [eventIdParam, { name: "historyId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "History entry" }, ...errorResponses },
+      },
       patch: {
         summary: "Update a history entry (score, status)",
         tags: ["History"],
