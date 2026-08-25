@@ -144,6 +144,8 @@ interface PlayerSuggestion {
   gamesPlayed: number;
   userId?: string | null;
   image?: string | null;
+  /** Times the viewer has co-played with this person on OTHER events (global). */
+  coPlayCount?: number;
 }
 
 interface Props {
@@ -456,6 +458,7 @@ export function PlayerList({
                   gamesPlayed: s.gamesPlayed,
                   userId: s.userId ?? null,
                   image: s.image ?? null,
+                  coPlayCount: s.coPlayCount ?? 0,
                 }));
               // Add "Create new player" option when input doesn't exactly match an existing suggestion
               if (trimmed && !filtered.some((o) => o.name.toLowerCase() === trimmed.toLowerCase())) {
@@ -586,11 +589,24 @@ export function PlayerList({
                     )}
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{option.name}</span>
                   </Box>
-                  {option.gamesPlayed > 0 && (
-                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
-                      {t("nGamesPlayed", { n: option.gamesPlayed })}
-                    </Typography>
-                  )}
+                  {(() => {
+                    // Transparent source: per-event history vs global co-play.
+                    if (option.gamesPlayed > 0) {
+                      return (
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
+                          {t("nGamesHere", { n: option.gamesPlayed })}
+                        </Typography>
+                      );
+                    }
+                    if ((option.coPlayCount ?? 0) > 0) {
+                      return (
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
+                          {t("coPlayedWithYou", { n: option.coPlayCount ?? 0 })}
+                        </Typography>
+                      );
+                    }
+                    return null;
+                  })()}
                 </li>
               );
             }}

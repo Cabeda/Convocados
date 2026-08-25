@@ -174,6 +174,17 @@ export const openApiSpec = {
         responses: { "200": { description: "Split costs setting updated" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/cost": {
+      get: {
+        summary: "Get event cost",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: {
+          "200": { description: "Event cost" },
+          "404": { description: "Event not found" },
+        },
+      },
+    },
     "/api/events/{id}/cost/override": {
       put: {
         summary: "Override player cost amount",
@@ -688,6 +699,13 @@ export const openApiSpec = {
         summary: "Get authenticated user's games",
         tags: ["Users"],
         responses: { "200": { description: "Owned and joined games" }, "401": { description: "Unauthorized" } },
+      },
+    },
+    "/api/me/co-players": {
+      get: {
+        summary: "List registered users the caller has co-played with (all events, ranked by frequency)",
+        tags: ["Users"],
+        responses: { "200": { description: "Co-play list" }, "401": { description: "Unauthorized" } },
       },
     },
     "/api/me/stats": {

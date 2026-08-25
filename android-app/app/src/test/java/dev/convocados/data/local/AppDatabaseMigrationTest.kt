@@ -55,10 +55,11 @@ class AppDatabaseMigrationTest {
         val db = openWithMigration()
         try {
             val conn = db.openHelper.writableDatabase
-            assertEquals("5", queryScalar(conn, "PRAGMA user_version"))
+            assertEquals("6", queryScalar(conn, "PRAGMA user_version"))
             assertTrue("players.image column should exist after migration", hasColumn(conn, "players", "image"))
             assertEquals("Ana", queryScalar(conn, "SELECT name FROM players WHERE id = 'p1'"))
             assertNull(queryScalar(conn, "SELECT image FROM players WHERE id = 'p1'"))
+            assertTrue("recently_viewed_events table should exist after migration", tableExists(conn, "recently_viewed_events"))
         } finally {
             db.close()
         }
@@ -71,9 +72,10 @@ class AppDatabaseMigrationTest {
         val db = openWithMigration()
         try {
             val conn = db.openHelper.writableDatabase
-            assertEquals("5", queryScalar(conn, "PRAGMA user_version"))
+            assertEquals("6", queryScalar(conn, "PRAGMA user_version"))
             assertTrue("players.image column should survive migration", hasColumn(conn, "players", "image"))
             assertEquals("avatar.png", queryScalar(conn, "SELECT image FROM players WHERE id = 'p1'"))
+            assertTrue("recently_viewed_events table should exist after migration", tableExists(conn, "recently_viewed_events"))
         } finally {
             db.close()
         }
@@ -83,7 +85,7 @@ class AppDatabaseMigrationTest {
         context,
         AppDatabase::class.java,
         dbName,
-    ).addMigrations(AppDatabase.MIGRATION_4_5).build()
+    ).addMigrations(AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6).build()
 
     /** Creates the `convocados.db` schema exactly as Room v4 generated it, at version 4. */
     private fun createV4Database(playersImage: Boolean, identityHash: String) {
@@ -162,4 +164,8 @@ class AppDatabaseMigrationTest {
             }
             false
         }
+
+    private fun tableExists(db: SupportSQLiteDatabase, table: String): Boolean =
+        db.query("SELECT name FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table))
+            .use { cursor -> cursor.moveToFirst() }
 }

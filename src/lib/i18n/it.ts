@@ -119,6 +119,8 @@ const it: TranslationKeys = {
   noSuggestions: "Scrivi un nuovo nome",
   createNewPlayer: "Crea nuovo giocatore: {name}",
   nGamesPlayed: "{n} partite",
+  nGamesHere: "{n} partite qui",
+  coPlayedWithYou: "giocato con te {n}\u00d7",
 
   // Watch
   watchScore: "Punteggio su Orologio",

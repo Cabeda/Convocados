@@ -351,6 +351,20 @@ data class KnownPlayersResponse(
     val players: List<KnownPlayer> = emptyList(),
 )
 
+/** Person the viewer co-played with on OTHER events (global, ranked). userId null = guest (add-only). */
+@Serializable
+data class CoPlayer(
+    val name: String,
+    val userId: String? = null,
+    val image: String? = null,
+    val coPlayCount: Int = 0,
+)
+
+@Serializable
+data class CoPlayersResponse(
+    val players: List<CoPlayer> = emptyList(),
+)
+
 @Serializable
 data class UserPublicProfile(
     val id: String,
@@ -544,6 +558,17 @@ data class PaymentGateError(
     val gateAmount: Double = 0.0,
     val enforcement: String = "",
     val threshold: Double = 0.0,
+)
+
+@Serializable
+data class EventCost(
+    val id: String = "",
+    val eventId: String = "",
+    val totalAmount: Double = 0.0,
+    val currency: String = "EUR",
+    val paymentMethods: String? = null,
+    val effectivePaymentMethods: String? = null,
+    val hasOverride: Boolean = false,
 )
 
 // ── Invites (ADR 0025) ─────────────────────────────────────────────────────

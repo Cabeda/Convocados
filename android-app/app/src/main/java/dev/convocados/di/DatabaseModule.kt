@@ -15,6 +15,7 @@ import dev.convocados.data.crash.CrashReporter
 import dev.convocados.data.local.AppDatabase
 import dev.convocados.data.local.dao.EventDao
 import dev.convocados.data.local.dao.EventDetailDao
+import dev.convocados.data.local.dao.RecentlyViewedDao
 import dev.convocados.data.local.dao.UserDao
 import javax.inject.Singleton
 
@@ -29,7 +30,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "convocados.db"
-        ).addMigrations(AppDatabase.MIGRATION_4_5).fallbackToDestructiveMigration().build()
+        ).addMigrations(AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6).fallbackToDestructiveMigration().build()
     }
 
     @Provides
@@ -40,6 +41,9 @@ object DatabaseModule {
 
     @Provides
     fun provideUserDao(db: AppDatabase): UserDao = db.userDao()
+
+    @Provides
+    fun provideRecentlyViewedDao(db: AppDatabase): RecentlyViewedDao = db.recentlyViewedDao()
 
     @Provides
     @Singleton

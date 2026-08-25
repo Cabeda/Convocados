@@ -6,11 +6,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import dev.convocados.data.local.dao.EventDao
 import dev.convocados.data.local.dao.EventDetailDao
+import dev.convocados.data.local.dao.RecentlyViewedDao
 import dev.convocados.data.local.dao.UserDao
 import dev.convocados.data.local.entity.EventDetailEntity
 import dev.convocados.data.local.entity.EventEntity
 import dev.convocados.data.local.entity.GameHistoryEntity
 import dev.convocados.data.local.entity.PlayerEntity
+import dev.convocados.data.local.entity.RecentlyViewedEventEntity
 import dev.convocados.data.local.entity.UserProfileEntity
 
 @Database(
@@ -19,15 +21,17 @@ import dev.convocados.data.local.entity.UserProfileEntity
         UserProfileEntity::class,
         EventDetailEntity::class,
         PlayerEntity::class,
-        GameHistoryEntity::class
+        GameHistoryEntity::class,
+        RecentlyViewedEventEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun eventDao(): EventDao
     abstract fun eventDetailDao(): EventDetailDao
     abstract fun userDao(): UserDao
+    abstract fun recentlyViewedDao(): RecentlyViewedDao
 
     companion object {
         /**
@@ -50,6 +54,21 @@ abstract class AppDatabase : RoomDatabase() {
                 if (!hasImage) {
                     db.execSQL("ALTER TABLE `players` ADD COLUMN `image` TEXT")
                 }
+            }
+        }
+
+        /** v6: recently-viewed events (link visits included). */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `recently_viewed_events` (" +
+                        "`eventId` TEXT NOT NULL PRIMARY KEY, " +
+                        "`title` TEXT NOT NULL, " +
+                        "`location` TEXT NOT NULL, " +
+                        "`dateTime` TEXT NOT NULL, " +
+                        "`sport` TEXT NOT NULL, " +
+                        "`viewedAt` INTEGER NOT NULL)"
+                )
             }
         }
     }
