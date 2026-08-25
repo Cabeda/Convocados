@@ -82,6 +82,8 @@ data class EventDetail(
     val mvpEnabled: Boolean = true,
     val allowManualRating: Boolean = false,
     val balanced: Boolean = false,
+    val showCompetitiveData: Boolean = true,
+    val mvpEloEnabled: Boolean = true,
     val archivedAt: String? = null,
     val createdAt: String = "",
     val updatedAt: String = "",

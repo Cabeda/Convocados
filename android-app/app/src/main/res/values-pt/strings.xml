@@ -293,6 +293,12 @@
     <string name="access">Acesso</string>
     <string name="danger_zone">Zona de perigo</string>
     <string name="public_game">Jogo público</string>
+    <string name="balanced_teams">Equipas equilibradas</string>
+    <string name="duration">Duração</string>
+    <string name="allow_manual_rating">Permitir rating manual</string>
+    <string name="show_competitive_data">Mostrar dados competitivos</string>
+    <string name="mvp_voting">Votação MVP</string>
+    <string name="mvp_elo">ELO do MVP</string>
     <string name="elo_ratings">Classificações ELO</string>
     <string name="hide_elo_teams">Ocultar ELO nas equipas</string>
     <string name="split_costs">Dividir custos</string>

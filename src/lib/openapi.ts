@@ -141,6 +141,46 @@ export const openApiSpec = {
         responses: { "200": { description: "Balanced mode updated" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/show-competitive-data": {
+      put: {
+        summary: "Toggle competitive data visibility",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Competitive data visibility updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/manual-rating": {
+      put: {
+        summary: "Toggle manual rating",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Manual rating updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/mvp-enabled": {
+      put: {
+        summary: "Toggle MVP voting",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "MVP voting updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/mvp-elo-enabled": {
+      put: {
+        summary: "Toggle MVP ELO bonus",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "MVP ELO updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/duration": {
+      put: {
+        summary: "Update game duration",
+        tags: ["Events"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Duration updated" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/datetime": {
       put: {
         summary: "Update event date and time",

@@ -1,6 +1,10 @@
 package dev.convocados.ui.screen.settings
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -58,6 +62,12 @@ class EventSettingsViewModel @Inject constructor(
     fun toggleElo(id: String, v: Boolean) = exec { api.updateElo(id, v); load(id) }
     fun toggleHideEloInTeams(id: String, v: Boolean) = exec { api.updateHideEloInTeams(id, v); load(id) }
     fun toggleSplitCosts(id: String, v: Boolean) = exec { api.updateSplitCosts(id, v); load(id) }
+    fun toggleBalanced(id: String, v: Boolean) = exec { api.updateBalanced(id, v); load(id) }
+    fun toggleShowCompetitiveData(id: String, v: Boolean) = exec { api.updateShowCompetitiveData(id, v); load(id) }
+    fun toggleManualRating(id: String, v: Boolean) = exec { api.updateAllowManualRating(id, v); load(id) }
+    fun toggleMvp(id: String, v: Boolean) = exec { api.updateMvpEnabled(id, v); load(id) }
+    fun toggleMvpElo(id: String, v: Boolean) = exec { api.updateMvpEloEnabled(id, v); load(id) }
+    fun saveDuration(id: String, minutes: Int) = exec { api.updateDuration(id, minutes); load(id) }
     fun savePassword(id: String, pw: String?) = exec { api.updatePassword(id, pw); load(id) }
     fun archive(id: String) = exec { repository.archiveEvent(id); _event.value = _event.value?.copy(archivedAt = "archived") }
     fun unarchive(id: String) = exec { repository.unarchiveEvent(id); load(id) }
@@ -85,6 +95,12 @@ fun EventSettingsScreen(
     var eloEnabled by remember(event) { mutableStateOf(event?.eloEnabled ?: false) }
     var hideEloInTeams by remember(event) { mutableStateOf(event?.hideEloInTeams ?: false) }
     var splitCosts by remember(event) { mutableStateOf(event?.splitCostsEnabled ?: false) }
+    var balanced by remember(event) { mutableStateOf(event?.balanced ?: false) }
+    var showCompetitiveData by remember(event) { mutableStateOf(event?.showCompetitiveData ?: true) }
+    var allowManualRating by remember(event) { mutableStateOf(event?.allowManualRating ?: false) }
+    var mvpEnabled by remember(event) { mutableStateOf(event?.mvpEnabled ?: false) }
+    var mvpEloEnabled by remember(event) { mutableStateOf(event?.mvpEloEnabled ?: false) }
+    var durationMinutes by remember(event) { mutableStateOf(event?.durationMinutes?.toString() ?: "60") }
     var showPassword by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
 
@@ -100,6 +116,24 @@ fun EventSettingsScreen(
         val ev = event ?: return@Scaffold
 
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
+            // Hero header
+            val accent = MaterialTheme.colorScheme.primary
+            Box(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.35f), MaterialTheme.colorScheme.surface)))
+                    .padding(16.dp),
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+                        Spacer(Modifier.weight(1f))
+                    }
+                    Text(ev.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                    Text(stringResource(R.string.event_settings), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+
             // Title
             SettingsLabel(stringResource(R.string.game_title))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -114,6 +148,15 @@ fun EventSettingsScreen(
                 SaveButton { viewModel.saveLocation(eventId, location.trim()) }
             }
 
+            // Duration
+            SettingsLabel(stringResource(R.string.duration))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(value = durationMinutes, onValueChange = { durationMinutes = it.filter { c -> c.isDigit() } }, modifier = Modifier.width(100.dp), singleLine = true)
+                Text("min", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.weight(1f))
+                SaveButton { durationMinutes.toIntOrNull()?.let { viewModel.saveDuration(eventId, it) } }
+            }
+
             // Sport
             SettingsLabel(stringResource(R.string.sport))
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -126,15 +169,20 @@ fun EventSettingsScreen(
             // General
             SectionTitle(stringResource(R.string.general))
             ToggleRow(stringResource(R.string.public_game), isPublic) { isPublic = it; viewModel.togglePublic(eventId, it) }
+            ToggleRow(stringResource(R.string.balanced_teams), balanced) { balanced = it; viewModel.toggleBalanced(eventId, it) }
 
             // Teams & Ratings
             SectionTitle(stringResource(R.string.teams_ratings))
             ToggleRow(stringResource(R.string.elo_ratings), eloEnabled) { eloEnabled = it; viewModel.toggleElo(eventId, it) }
             ToggleRow(stringResource(R.string.hide_elo_teams), hideEloInTeams, enabled = ev.balanced) { hideEloInTeams = it; viewModel.toggleHideEloInTeams(eventId, it) }
+            ToggleRow(stringResource(R.string.allow_manual_rating), allowManualRating, enabled = ev.eloEnabled) { allowManualRating = it; viewModel.toggleManualRating(eventId, it) }
+            ToggleRow(stringResource(R.string.show_competitive_data), showCompetitiveData) { showCompetitiveData = it; viewModel.toggleShowCompetitiveData(eventId, it) }
 
             // Features
             SectionTitle(stringResource(R.string.features))
             ToggleRow(stringResource(R.string.split_costs), splitCosts) { splitCosts = it; viewModel.toggleSplitCosts(eventId, it) }
+            ToggleRow(stringResource(R.string.mvp_voting), mvpEnabled) { mvpEnabled = it; viewModel.toggleMvp(eventId, it) }
+            ToggleRow(stringResource(R.string.mvp_elo), mvpEloEnabled, enabled = mvpEnabled) { mvpEloEnabled = it; viewModel.toggleMvpElo(eventId, it) }
 
             // Password
             SectionTitle(stringResource(R.string.access))
