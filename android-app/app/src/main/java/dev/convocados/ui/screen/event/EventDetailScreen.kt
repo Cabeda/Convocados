@@ -108,12 +108,22 @@ data class EventScreenState(
     val showPaymentNudge: Boolean = false,
     // Contact-pick auto-add
     val addedPlayerName: String? = null,
+    // ADR 0025: pending-invite resend (owner/admin) — inviteId in flight for the
+    // button spinner; notice drives a snackbar (cooldownSeconds non-null = 429).
+    val resendingInviteId: String? = null,
+    val resendNotice: InviteResendNotice? = null,
     // ADR 0025: ranked co-play suggestions (owner/admin) — one-tap Invite
     val coPlaySuggestions: List<CoPlaySuggestion> = emptyList(),
     val mvp: MvpResponse? = null,
     val mvpLoading: Boolean = false,
     val cost: EventCost? = null,
     val coPlayers: List<CoPlayer> = emptyList(),
+)
+
+/** Result of a pending-invite resend, surfaced as a snackbar. */
+data class InviteResendNotice(
+    val playerName: String,
+    val cooldownSeconds: Long? = null,
 )
 
 data class TeamMoveUndo(
@@ -359,6 +369,10 @@ class EventDetailViewModel @Inject constructor(
         _state.value = _state.value.copy(addedPlayerName = null)
     }
 
+    fun dismissResendNotice() {
+        _state.value = _state.value.copy(resendNotice = null)
+    }
+
     /** ADR 0025: one-tap invite from a co-play suggestion chip. */
     fun inviteSuggestion(eventId: String, userId: String) {
         viewModelScope.launch {
@@ -370,6 +384,32 @@ class EventDetailViewModel @Inject constructor(
                     )
                 }
                 .onFailure { _state.value = _state.value.copy(error = it.message) }
+        }
+    }
+
+    /** ADR 0025: resend a pending invite (24h cooldown enforced server-side). */
+    fun resendInvite(eventId: String, inviteId: String, playerName: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(resendingInviteId = inviteId)
+            runCatching { api.resendInvite(eventId, inviteId) }
+                .onSuccess {
+                    _state.value = _state.value.copy(resendNotice = InviteResendNotice(playerName))
+                    load(eventId)
+                }
+                .onFailure { e ->
+                    val retryAfter = if (e is ApiException && e.code == 429) {
+                        runCatching {
+                            kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                                .decodeFromString<InviteResendErrorBody>(e.message ?: "")
+                        }.getOrNull()?.retryAfterSeconds
+                    } else null
+                    if (retryAfter != null) {
+                        _state.value = _state.value.copy(resendNotice = InviteResendNotice(playerName, retryAfter))
+                    } else {
+                        _state.value = _state.value.copy(error = e.message)
+                    }
+                }
+            _state.value = _state.value.copy(resendingInviteId = null)
         }
     }
 
@@ -736,6 +776,18 @@ fun EventDetailScreen(
         snackbarHostState.showSnackbar(message = context.getString(R.string.added_player_confirm, name), duration = SnackbarDuration.Short)
         viewModel.dismissAddedPlayerSnackbar()
     }
+    LaunchedEffect(state.resendNotice) {
+        val notice = state.resendNotice ?: return@LaunchedEffect
+        val msg = if (notice.cooldownSeconds != null) {
+            val mins = (notice.cooldownSeconds / 60).coerceAtLeast(1)
+            val time = if (mins >= 60) "${mins / 60}h ${mins % 60}m" else "${mins}m"
+            context.getString(R.string.invite_resend_cooldown, time)
+        } else {
+            context.getString(R.string.invite_resent, notice.playerName)
+        }
+        snackbarHostState.showSnackbar(message = msg, duration = SnackbarDuration.Short)
+        viewModel.dismissResendNotice()
+    }
     LaunchedEffect(eventId) { viewModel.load(eventId) }
     LaunchedEffect(autoOpenPay, state.balance) {
         if (autoOpenPay && state.balance?.callerBalance != null && state.balance!!.callerBalance!!.amount > 0) viewModel.showPaymentNudge()
@@ -961,7 +1013,14 @@ fun EventDetailScreen(
                                     HorizontalDivider()
                                     PlayerGroup(active, user, isOwner, false, viewModel, eventId, onUserClick)
                                     if (bench.isNotEmpty()) { HorizontalDivider(); Text(stringResource(R.string.bench_count, bench.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold); PlayerGroup(bench, user, isOwner, true, viewModel, eventId, onUserClick) }
-                                    if (ev.invited.isNotEmpty()) { HorizontalDivider(); Text(stringResource(R.string.invited_count, ev.invited.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold); ev.invited.forEach { Text("\u00b7 ${it.name}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+                                    if (ev.invited.isNotEmpty()) {
+                                        HorizontalDivider()
+                                        Text(stringResource(R.string.invited_count, ev.invited.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                        ev.invited.forEach { inv ->
+                                            val inviteActionId = inv.inviteId ?: inv.id
+                                            InvitedRow(player = inv, resending = state.resendingInviteId == inviteActionId, onResend = { viewModel.resendInvite(eventId, inviteActionId, inv.name) })
+                                        }
+                                    }
                                     if (ev.declined.isNotEmpty()) {
                                         TextButton(onClick = { declinedOpen = !declinedOpen }) { Text(if (declinedOpen) "Hide declined" else stringResource(R.string.declined_count, ev.declined.size), style = MaterialTheme.typography.labelMedium) }
                                         if (declinedOpen) ev.declined.forEach { Text("\u00b7 ${it.name}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline) }
@@ -993,32 +1052,33 @@ fun EventDetailScreen(
                         }
                     }
                 }
+                // Add-player confirm — Invite or Add for registered users (web parity),
+                // plain Add for anonymous/new names. Uses the display event `ev` so the
+                // demo event shows its own title/list instead of "joins null".
+                pendingAdd?.let { pending ->
+                    val isBench = ev.players.size >= ev.maxPlayers
+                    val isRegistered = pending.userId != null
+                    AlertDialog(
+                        onDismissRequest = { pendingAdd = null },
+                        title = { Text(if (isRegistered) "Add or invite ${pending.name}?" else "Add ${pending.name}?") },
+                        text = { Text(when {
+                            pending.email != null && isBench -> "${pending.name} will be invited by email (${pending.email}) and placed on the bench."
+                            pending.email != null -> "${pending.name} will be invited by email (${pending.email})."
+                            isBench -> "${pending.name} joins ${ev.title} \u2014 the list is full, so they go to the bench."
+                            else -> "${pending.name} joins ${ev.title}."
+                        }) },
+                        confirmButton = {
+                            if (isRegistered) TextButton(onClick = { viewModel.inviteSuggestion(eventId, pending.userId!!); pendingAdd = null }) { Text(stringResource(R.string.invite)) }
+                            else TextButton(onClick = { viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email); pendingAdd = null }) { Text(stringResource(R.string.add_button)) }
+                        },
+                        dismissButton = {
+                            if (isRegistered) TextButton(onClick = { viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email); pendingAdd = null }) { Text(stringResource(R.string.add_to_list)) }
+                            else TextButton(onClick = { pendingAdd = null }) { Text(stringResource(R.string.cancel)) }
+                        },
+                    )
+                }
             }
         }
-    }
-    // Add-player confirm — Invite or Add for registered users (web parity),
-    // plain Add for anonymous/new names.
-    pendingAdd?.let { pending ->
-        val ev2 = state.event; val isBench = (ev2?.players?.size ?: 0) >= (ev2?.maxPlayers ?: 0)
-        val isRegistered = pending.userId != null
-        AlertDialog(
-            onDismissRequest = { pendingAdd = null },
-            title = { Text(if (isRegistered) "Add or invite ${pending.name}?" else "Add ${pending.name}?") },
-            text = { Text(when {
-                pending.email != null && isBench -> "${pending.name} will be invited by email (${pending.email}) and placed on the bench."
-                pending.email != null -> "${pending.name} will be invited by email (${pending.email})."
-                isBench -> "${pending.name} joins ${ev2?.title} \u2014 the list is full, so they go to the bench."
-                else -> "${pending.name} joins ${ev2?.title}."
-            }) },
-            confirmButton = {
-                if (isRegistered) TextButton(onClick = { viewModel.inviteSuggestion(eventId, pending.userId!!); pendingAdd = null }) { Text(stringResource(R.string.invite)) }
-                else TextButton(onClick = { viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email); pendingAdd = null }) { Text(stringResource(R.string.add_button)) }
-            },
-            dismissButton = {
-                if (isRegistered) TextButton(onClick = { viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email); pendingAdd = null }) { Text(stringResource(R.string.add_to_list)) }
-                else TextButton(onClick = { pendingAdd = null }) { Text(stringResource(R.string.cancel)) }
-            },
-        )
     }
     if (state.showPaymentNudge && user?.name != null) {
         val callerBalance = state.balance?.callerBalance
@@ -1429,5 +1489,34 @@ private fun demoEventForPreview(at: java.time.Instant, isRecurring: Boolean, nex
 @Composable fun PlayerListCard(players: List<Player>, currentUserId: String?, isOwner: Boolean, onRemove:(String)->Unit, onUserClick:(String)->Unit={}, modifier:Modifier=Modifier, isBench:Boolean=false){ Card(modifier=modifier.fillMaxWidth()){ Column{ players.forEachIndexed{i,p-> PlayerRow(player=p, isMe=p.userId==currentUserId, isBench=isBench, onRemove={onRemove(p.id)}, onUserClick=p.userId?.let{{onUserClick(it)}}?:{}, canRemove=isOwner||p.userId==currentUserId||p.userId==null); if(i<players.lastIndex) HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant) } } } }
 @Composable fun PlayerAvatar(name:String,image:String?,isMe:Boolean,onClick:()->Unit,modifier:Modifier=Modifier){ val bg=if(isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant; val fg=if(isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant; Box(modifier.size(24.dp).clip(CircleShape).background(bg).clickable(onClick=onClick), Alignment.Center){ if(image!=null) SubcomposeAsyncImage(model=image, contentDescription=name, modifier=Modifier.fillMaxSize(), loading={ InitialAvatar(name, fg) }, error={ InitialAvatar(name, fg) }) else InitialAvatar(name, fg) } }
 @Composable fun PlayerRow(player: Player, isMe:Boolean=false, isBench:Boolean=false, canRemove:Boolean=false, onRemove:()->Unit={}, onUserClick:()->Unit={},){ ListItem(headlineContent={ Text("${player.name}${if(isMe) stringResource(R.string.you_suffix) else ""}", color=if(isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface, fontWeight=if(isMe) FontWeight.SemiBold else FontWeight.Normal, style=MaterialTheme.typography.bodyMedium)}, leadingContent={ if(player.userId!=null) PlayerAvatar(player.name, player.image, isMe, onUserClick) else Icon(Icons.Outlined.Person, stringResource(R.string.anonymous_player), tint=MaterialTheme.colorScheme.outline, modifier=Modifier.size(20.dp))}, trailingContent=if(canRemove){{IconButton(onClick=onRemove, modifier=Modifier.size(32.dp)){ Icon(Icons.Default.Close, stringResource(R.string.remove), tint=MaterialTheme.colorScheme.outline, modifier=Modifier.size(16.dp))}}} else null, colors=ListItemDefaults.colors(containerColor=Color.Transparent), modifier=Modifier.height(44.dp)) }
+
+@Composable fun InvitedRow(player: RosterPlayer, resending: Boolean, onResend: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(player.name, style = MaterialTheme.typography.bodyMedium) },
+        supportingContent = {
+            channelLabels(player.channels)?.let { channels ->
+                Text(channels, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        leadingContent = { PlayerAvatar(player.name, player.image, false, {}) },
+        trailingContent = {
+            TextButton(onClick = onResend, enabled = !resending) {
+                if (resending) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                else Text(stringResource(R.string.resend))
+            }
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.height(44.dp),
+    )
+}
+
+@Composable private fun channelLabels(channels: InviteChannels): String? {
+    val labels = buildList {
+        if (channels.email) add(stringResource(R.string.channel_email))
+        if (channels.webPush) add(stringResource(R.string.channel_web_push))
+        if (channels.appPush) add(stringResource(R.string.channel_app_push))
+    }
+    return labels.takeIf { it.isNotEmpty() }?.joinToString(", ")
+}
 @Composable fun HistoryCard(h: GameHistory, editingScoreId: String?, scoreOne: String, scoreTwo: String, onClick:()->Unit={}, onEditScore:()->Unit, onScoreOneChange:(String)->Unit, onScoreTwoChange:(String)->Unit, onSaveScore:()->Unit){ Card(modifier=Modifier.fillMaxWidth().padding(bottom=6.dp).clickable(onClick=onClick)){ Column(Modifier.padding(12.dp)){ Text(formatRelativeDate(h.dateTime), color=MaterialTheme.colorScheme.outline, style=MaterialTheme.typography.bodySmall); if(h.scoreOne!=null&&h.scoreTwo!=null) Text("${h.teamOneName} ${h.scoreOne} - ${h.scoreTwo} ${h.teamTwoName}", style=MaterialTheme.typography.titleSmall, modifier=Modifier.clickable(onClick=onEditScore)) else { if(editingScoreId==h.id){ Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp), modifier=Modifier.padding(top=4.dp)){ OutlinedTextField(value=scoreOne, onValueChange=onScoreOneChange, modifier=Modifier.width(50.dp), singleLine=true); Text("-", color=MaterialTheme.colorScheme.outline, fontWeight=FontWeight.Bold); OutlinedTextField(value=scoreTwo, onValueChange=onScoreTwoChange, modifier=Modifier.width(50.dp), singleLine=true); Button(onClick=onSaveScore){ Text(stringResource(R.string.save)) } } } else TextButton(onClick=onEditScore){ Text(stringResource(R.string.add_score), color=MaterialTheme.colorScheme.primary, fontWeight=FontWeight.SemiBold)} } ; h.eloUpdates?.takeIf{it.isNotEmpty()}?.let{ ups-> Row(Modifier.padding(top=6.dp), horizontalArrangement=Arrangement.spacedBy(6.dp)){ ups.forEach{eu-> Text("${eu.name} ${if(eu.delta>0) "+" else ""}${eu.delta}", color=if(eu.delta>0) MaterialTheme.colorScheme.primary else if(eu.delta<0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline, style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.SemiBold)}} } } } }
 

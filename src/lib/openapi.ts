@@ -970,6 +970,16 @@ export const openApiSpec = {
         parameters: [eventIdParam],
         responses: { "200": { description: "Invite retracted" }, ...errorResponses },
       },
+      patch: {
+        summary: "Resend a pending player invite",
+        tags: ["Invites"],
+        parameters: [eventIdParam],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { inviteId: { type: "string" } }, required: ["inviteId"] } } },
+        },
+        responses: { "200": { description: "Invite resent" }, ...errorResponses },
+      },
     },
     "/api/invite/{token}": {
       get: {

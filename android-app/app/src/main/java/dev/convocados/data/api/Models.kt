@@ -99,6 +99,10 @@ data class RosterPlayer(
     val name: String,
     val userId: String? = null,
     val image: String? = null,
+    // ADR 0025: pending-invite details — null/empty for declined rows.
+    val inviteId: String? = null,
+    val channels: InviteChannels = InviteChannels(),
+    val notifiedAt: String? = null,
 )
 
 @Serializable
@@ -621,6 +625,21 @@ data class SuggestionsResponse(val suggestions: List<CoPlaySuggestion> = emptyLi
 
 @Serializable
 data class InviteCreateRequest(val userId: String)
+
+@Serializable
+data class InviteResendRequest(val inviteId: String)
+
+@Serializable
+data class InviteResendResponse(
+    val ok: Boolean = true,
+    val channels: InviteChannels = InviteChannels(),
+)
+
+@Serializable
+data class InviteResendErrorBody(
+    val error: String? = null,
+    val retryAfterSeconds: Long? = null,
+)
 
 @Serializable
 data class InviteChannels(

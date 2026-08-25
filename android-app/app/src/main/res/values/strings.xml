@@ -11,6 +11,12 @@
     <string name="teams">Teams</string>
     <string name="randomize_teams">Randomize teams</string>
     <string name="invite">Invite</string>
+    <string name="resend">Resend</string>
+    <string name="invite_resent">Invite resent to %1$s.</string>
+    <string name="invite_resend_cooldown">You can resend again in %1$s.</string>
+    <string name="channel_email">Email</string>
+    <string name="channel_web_push">Web push</string>
+    <string name="channel_app_push">App push</string>
     <string name="add_to_list">Add to list</string>
     <string name="cancel">Cancel</string>
     <string name="score">Score</string>

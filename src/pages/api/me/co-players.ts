@@ -90,7 +90,7 @@ export const GET: APIRoute = async ({ request }) => {
       select: { id: true, image: true },
     });
     const imageById = new Map(userRows.map((u) => [u.id, u.image]));
-    for (const [key, entry] of byUserId) {
+    for (const entry of byUserId.values()) {
       entry.image = imageById.get(entry.userId ?? "") ?? null;
     }
   }

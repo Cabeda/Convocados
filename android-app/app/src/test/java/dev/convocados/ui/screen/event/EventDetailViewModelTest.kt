@@ -244,6 +244,57 @@ class EventDetailViewModelTest {
     }
 
     @Test
+    fun `resend invite calls api and surfaces success notice`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.resendInvite(eventId, "inv-1") } returns InviteResendResponse(ok = true, channels = InviteChannels(email = true))
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.resendInvite(eventId, "inv-1", "Bob")
+            advanceUntilIdle()
+
+            coVerify { api.resendInvite(eventId, "inv-1") }
+            val last = expectMostRecentItem()
+            assertTrue(last.resendingInviteId == null)
+            assertEquals(InviteResendNotice(playerName = "Bob"), last.resendNotice)
+        }
+    }
+
+    @Test
+    fun `resend invite failure surfaces error`() = runTest {
+        coEvery { api.resendInvite(eventId, "inv-1") } throws ApiException(400, "boom")
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.resendInvite(eventId, "inv-1", "Bob")
+            advanceUntilIdle()
+
+            assertEquals("boom", expectMostRecentItem().error)
+        }
+    }
+
+    @Test
+    fun `resend invite cooldown surfaces retry notice`() = runTest {
+        coEvery { api.resendInvite(eventId, "inv-1") } throws ApiException(
+            429,
+            """{"error":"cooldown","retryAfterSeconds":6000}""",
+        )
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.resendInvite(eventId, "inv-1", "Bob")
+            advanceUntilIdle()
+
+            assertEquals(
+                InviteResendNotice(playerName = "Bob", cooldownSeconds = 6000),
+                expectMostRecentItem().resendNotice,
+            )
+        }
+    }
+
+    @Test
     fun `refresh re-fetches post-game status`() = runTest {
         coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
