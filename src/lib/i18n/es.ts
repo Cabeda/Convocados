@@ -119,6 +119,8 @@ const es: TranslationKeys = {
   noSuggestions: "Escribe un nuevo nombre",
   createNewPlayer: "Crear nuevo jugador: {name}",
   nGamesPlayed: "{n} juegos",
+  nGamesHere: "{n} juegos aqu\u00ed",
+  coPlayedWithYou: "jug\u00f3 con usted {n}\u00d7",
 
   // Watch
   watchScore: "Marcador en Reloj",
@@ -659,6 +661,9 @@ sportBadmintonSingles: "Bádminton (individual)",
   inviteResend: "Reenviar invitación",
   inviteResendAria: "Reenviar invitación a {name}",
   inviteResendCooldown: "Puedes reenviar en {time}",
+  inviteRetractAria: "Quitar invitación a {name}",
+  inviteRetractConfirm: "¿Quitar la invitación a {name}?",
+  inviteRetracted: "Invitación quitada a {name}.",
   inviteResentVia: "Invitación reenviada a {name} vía {channels}",
   inviteNotForYou: "Esta invitación no es para tu cuenta.",
   notifyInviteOptOutLabel: "No me invites a este partido",

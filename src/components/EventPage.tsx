@@ -183,6 +183,18 @@ export default function EventPage({ eventId }: { eventId: string }) {
     return () => controller.abort();
   }, [eventId]);
 
+  // ── Global co-players (people I played with on ANY event) for autocomplete ──
+  const [coPlayersData, setCoPlayersData] = useState<{ players: Array<{ name: string; userId: string; image: string | null; coPlayCount: number }> } | null>(null);
+  useEffect(() => {
+    if (!session?.user) return;
+    const controller = new AbortController();
+    fetch(`/api/me/co-players`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : Promise.resolve({ players: [] })))
+      .then((d) => setCoPlayersData(d))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [eventId, session?.user]);
+
   // ── ADR 0025: co-play suggestions (owner/admin only) ───────────────────────
   interface CoPlaySuggestion { userId: string; name: string; image?: string | null; gamesPlayed?: number; score?: number; reason?: string }
   const [coPlaySuggestions, setCoPlaySuggestions] = useState<CoPlaySuggestion[]>([]);
@@ -202,6 +214,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   }, [eventId, event?.gameId, isOwnerFlag, isAdminFlag]);
 
   /** ADR 0025: send a PlayerInvite to a suggested user (owner/admin). */
+  const [invitingName, setInvitingName] = useState<string | null>(null);
   const invitePlayer = useCallback(async (userId: string, name: string) => {
     setPlayerError(null);
     setInvitingName(name);
@@ -284,6 +297,32 @@ export default function EventPage({ eventId }: { eventId: string }) {
     }
   }, [eventId, fetchEvent, t]);
 
+  // ── ADR 0025 follow-up: retract (remove) a pending invite ────────────────────
+  const [retractingInviteId, setRetractingInviteId] = useState<string | null>(null);
+  const retractInvite = useCallback(async (invite: { id: string; inviteId?: string | null; name: string }) => {
+    const inviteIdForAction = invite.inviteId ?? invite.id;
+    if (!window.confirm(t("inviteRetractConfirm", { name: invite.name }))) return;
+    setRetractingInviteId(inviteIdForAction);
+    try {
+      const res = await fetch(`/api/events/${eventId}/invites`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteId: inviteIdForAction }),
+      });
+      const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
+      if (!res.ok) {
+        setPlayerError(json.error ?? t("somethingWentWrong"));
+        return;
+      }
+      setSnackbar(t("inviteRetracted", { name: invite.name }));
+      fetchEvent();
+    } catch {
+      setPlayerError(t("somethingWentWrong"));
+    } finally {
+      setRetractingInviteId(null);
+    }
+  }, [eventId, fetchEvent, t]);
+
   // ── Payment-nudge state ────────────────────────────────────────────────────
   // Fetched lazily on first pill click; controls whether the Quick Join pill
   // routes through the payment-nudge dialog (when the user has a balance) or
@@ -321,19 +360,44 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const mergedSuggestions = useMemo(() => {
     const qjName = getQjName().trim();
-    return (knownPlayersData?.players ?? [])
-      .map((p) => ({
+    // This event's history first (transparent "X games here"), then global
+    // co-players (transparent "played with you Y×") — deduped by name, event
+    // history wins so the per-event count is shown when both exist.
+    const byName = new Map<string, { name: string; gamesPlayed: number; userId: string | null; image: string | null; coPlayCount: number }>();
+    for (const p of knownPlayersData?.players ?? []) {
+      byName.set(p.name.toLowerCase(), {
         name: p.name,
         gamesPlayed: p.gamesPlayed ?? 1,
         userId: p.userId ?? null,
         image: p.image ?? null,
-      }))
+        coPlayCount: 0,
+      });
+    }
+    for (const cp of coPlayersData?.players ?? []) {
+      const key = cp.name.toLowerCase();
+      const existing = byName.get(key);
+      if (existing) {
+        // Same person in both lists — keep the per-event count, absorb the
+        // co-play count so the "from another event" signal survives (matches
+        // Android mergePlayerSuggestions).
+        byName.set(key, { ...existing, coPlayCount: cp.coPlayCount });
+        continue;
+      }
+      byName.set(key, {
+        name: cp.name,
+        gamesPlayed: 0,
+        userId: cp.userId,
+        image: cp.image ?? null,
+        coPlayCount: cp.coPlayCount,
+      });
+    }
+    return [...byName.values()]
       .sort((a, b) => {
         if (qjName && a.name.toLowerCase() === qjName.toLowerCase()) return -1;
         if (qjName && b.name.toLowerCase() === qjName.toLowerCase()) return 1;
-        return b.gamesPlayed - a.gamesPlayed;
+        return (b.gamesPlayed + b.coPlayCount) - (a.gamesPlayed + a.coPlayCount);
       });
-  }, [knownPlayersData]);
+  }, [knownPlayersData, coPlayersData]);
 
   const currentPlayerNames = useMemo(
     () => new Set((event?.players ?? []).map((p) => p.name.toLowerCase())),
@@ -378,7 +442,6 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // return early and surface an "in flight" snackbar.
   const addInFlightRef = useRef<{ name: string; idempotencyKey: string } | null>(null);
   const [addInFlightName, setAddInFlightName] = useState<string | null>(null);
-  const [invitingName, setInvitingName] = useState<string | null>(null);
 
   // Confirmation dialog state. Lifted to EventPage so the dialog content
   // (bench/email footnotes) can read the same event state that addPlayer uses.
@@ -772,6 +835,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const isOwnerless = !event?.ownerId;
   const isAdmin = !!event?.isAdmin;
   const canEditSettings = isOwnerless || isOwner || isAdmin;
+  const canManageInvites = isOwner || isAdmin;
 
   // #463 high-intent: fetch the signed-in user's RSVP for this event so the
   // PushPromptBanner can render as a modal when the user has a pending RSVP
@@ -1030,9 +1094,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
               rosterLocked={gameEnded}
               declined={event.declined}
               invited={event.invited}
-              canManageInvites={isOwner || isAdminFlag}
+              canManageInvites={canManageInvites}
               onResendInvite={resendInvite}
               resendingInviteId={resendingInviteId}
+              onRetractInvite={retractInvite}
+              retractingInviteId={retractingInviteId}
               coPlaySuggestions={coPlaySuggestions}
               />
             </div>

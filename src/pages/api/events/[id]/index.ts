@@ -367,6 +367,9 @@ export const GET: APIRoute = async ({ params, request }) => {
 
     // The invitee's own pending entry is always visible to them.
     if (viewerId && (viewerSeesRosterExtras || viewerHasPendingHere)) {
+      const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";
+      const proto = request.headers.get("x-forwarded-proto") ?? "https";
+      const origin = `${proto}://${host}`;
       // ADR 0025 follow-up: attach the persisted per-invite delivery channels
       // (email / web push / app push) + last-notified time so admins can see
       // how an invite was sent and when a resend becomes available.
@@ -375,6 +378,7 @@ export const GET: APIRoute = async ({ params, request }) => {
         select: {
           id: true,
           eventPlayerId: true,
+          token: true,
           notifiedAt: true,
           sentViaEmail: true,
           sentViaWebPush: true,
@@ -388,6 +392,7 @@ export const GET: APIRoute = async ({ params, request }) => {
         return {
           id: gp.eventPlayer.id,
           inviteId: pi?.id ?? null,
+          inviteUrl: pi?.token ? `${origin}/invite/${pi.token}` : null,
           name: gp.eventPlayer.name,
           userId,
           image: userId ? (imageByUserId.get(userId) ?? null) : null,

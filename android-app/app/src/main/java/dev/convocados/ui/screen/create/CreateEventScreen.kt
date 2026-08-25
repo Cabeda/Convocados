@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -27,6 +28,7 @@ import kotlinx.coroutines.launch
 import java.time.*
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.Locale
 import java.util.TimeZone
 import javax.inject.Inject
 
@@ -105,7 +107,10 @@ fun CreateEventScreen(
     val creating by viewModel.creating.collectAsState()
     val error by viewModel.error.collectAsState()
 
-    var title by remember { mutableStateOf("") }
+    // Parity with web CreateEventForm: seed a random fun title on open and
+    // let the dice button (Casino icon) reroll it.
+    val titleLocale = remember { RandomTitles.resolveSupportedLocale(Locale.getDefault()) }
+    var title by remember { mutableStateOf(RandomTitles.getRandomTitle(titleLocale)) }
     var location by remember { mutableStateOf("") }
     // #454: keep the current minutes/seconds — don't snap to the top of the hour.
     // The user must be able to pick 18:30, 19:45, etc.
@@ -139,6 +144,15 @@ fun CreateEventScreen(
             OutlinedTextField(
                 value = title, onValueChange = { title = it },
                 placeholder = { Text(stringResource(R.string.game_title_placeholder)) },
+                trailingIcon = {
+                    IconButton(onClick = { title = RandomTitles.getRandomTitle(titleLocale) }) {
+                        Icon(
+                            Icons.Filled.Casino,
+                            contentDescription = stringResource(R.string.randomize_title),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(), singleLine = true,
                 colors = textFieldColors(),
             )

@@ -10,6 +10,23 @@
     <string name="players">Players</string>
     <string name="teams">Teams</string>
     <string name="randomize_teams">Randomize teams</string>
+    <string name="invite">Invite</string>
+    <string name="resend">Resend</string>
+    <string name="invite_resent">Invite resent to %1$s.</string>
+    <string name="invite_removed">Invite removed for %1$s.</string>
+    <string name="invite_resend_cooldown">You can resend again in %1$s.</string>
+    <string name="invite_resend_confirm_title">Resend invite to %1$s?</string>
+    <string name="invite_resend_confirm_body">This will re-deliver the invite.</string>
+    <string name="invite_resend_confirm">Resend</string>
+    <string name="invite_share_link">Share link</string>
+    <string name="invite_share_chose">Share invite via</string>
+    <string name="invite_retract_confirm_title">Remove invite to %1$s?</string>
+    <string name="invite_retract_confirm_body">The person will no longer receive the pending invite.</string>
+    <string name="invite_retract_confirm">Remove</string>
+    <string name="channel_email">Email</string>
+    <string name="channel_web_push">Web push</string>
+    <string name="channel_app_push">App push</string>
+    <string name="add_to_list">Add to list</string>
     <string name="cancel">Cancel</string>
     <string name="score">Score</string>
     <string name="ratings">Ratings</string>
@@ -119,6 +136,7 @@
     <!-- Create event -->
     <string name="game_title">Game title</string>
     <string name="game_title_placeholder">e.g. Tuesday 5-a-side</string>
+    <string name="randomize_title">Surprise me</string>
     <string name="sport">Sport</string>
     <string name="location_optional">Location (optional)</string>
     <string name="location_placeholder">e.g. Riverside Astro, Pitch 2</string>
@@ -325,6 +343,10 @@
     <string name="teams_balanced">Balanced</string>
     <string name="teams_random">Random</string>
     <string name="add_from_contacts">Add from contacts</string>
+    <string name="recently_viewed">Recently viewed</string>
+    <string name="games_you_host">Games you host (%1$d)</string>
+    <string name="games_you_follow">Games you follow (%1$d)</string>
+    <string name="games_you_played">Games you played</string>
     <string name="no_archived_games">No archived games</string>
     <string name="will_invite">Will invite %1$s</string>
     <string name="open_pickup">Open pickup</string>

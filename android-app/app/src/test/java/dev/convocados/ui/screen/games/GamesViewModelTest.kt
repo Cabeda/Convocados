@@ -3,7 +3,12 @@ package dev.convocados.ui.screen.games
 import app.cash.turbine.test
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventSummary
+import dev.convocados.data.api.ProfileEvent
+import dev.convocados.data.api.UserProfile
+import dev.convocados.data.api.UserProfileResponse
+import dev.convocados.data.api.UserPublicProfile
 import dev.convocados.data.repository.EventRepository
+import dev.convocados.data.repository.RecentlyViewedEvent
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -72,5 +77,46 @@ class GamesViewModelTest {
         }
 
         coVerify(atLeast = 2) { repository.refreshMyGames() }
+    }
+
+    @Test
+    fun `recentlyViewed exposes repository flow`() = runTest {
+        coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
+        val viewed = listOf(
+            RecentlyViewedEvent("ev-1", "Thursday 5-a-side", "Pitch 2", "2026-08-20T19:00:00Z", "football", 1000L),
+            RecentlyViewedEvent("ev-2", "Volleyball night", "Gym", "2026-08-22T20:00:00Z", "volleyball", 2000L),
+        )
+        coEvery { repository.recentlyViewed() } returns flowOf(viewed)
+
+        val viewModel = GamesViewModel(repository, api, tokenStore)
+        advanceUntilIdle()
+
+        viewModel.recentlyViewed.test {
+            val item = awaitItem()
+            if (item.isEmpty()) assertEquals(viewed, awaitItem()) else assertEquals(viewed, item)
+        }
+    }
+
+    @Test
+    fun `participatedEvents maps own profile joined games`() = runTest {
+        coEvery { repository.getEventsByType(any()) } returns flowOf(emptyList())
+        coEvery { api.fetchUserInfo() } returns UserProfile(id = "me", name = "Me", email = "me@test.com")
+        coEvery { api.fetchUserProfile("me") } returns UserProfileResponse(
+            user = UserPublicProfile(id = "me", name = "Me"),
+            joined = listOf(
+                ProfileEvent(id = "ev-9", title = "Monday Futsal", sport = "futsal", dateTime = "2026-08-01T19:00:00Z", playerCount = 8, maxPlayers = 10),
+            ),
+        )
+
+        val viewModel = GamesViewModel(repository, api, tokenStore)
+        advanceUntilIdle()
+
+        viewModel.participatedEvents.test {
+            val item = awaitItem()
+            val events = if (item.isEmpty()) awaitItem() else item
+            assertEquals(1, events.size)
+            assertEquals("ev-9", events[0].id)
+            assertEquals("Monday Futsal", events[0].title)
+        }
     }
 }

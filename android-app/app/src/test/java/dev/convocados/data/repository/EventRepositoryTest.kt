@@ -6,11 +6,14 @@ import dev.convocados.data.api.EventSummary
 import dev.convocados.data.api.MyGamesResponse
 import dev.convocados.data.local.dao.EventDao
 import dev.convocados.data.local.dao.EventDetailDao
+import dev.convocados.data.local.dao.RecentlyViewedDao
 import dev.convocados.data.local.entity.EventEntity
 import dev.convocados.ui.UiEventManager
 import io.mockk.coEvery
+import io.mockk.coJustRun
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -20,8 +23,9 @@ class EventRepositoryTest {
     private val api = mockk<ConvocadosApi>()
     private val dao = mockk<EventDao>()
     private val detailDao = mockk<EventDetailDao>()
+    private val recentlyViewedDao = mockk<RecentlyViewedDao>(relaxed = true)
     private val uiEventManager = mockk<UiEventManager>(relaxed = true)
-    private val repository = EventRepository(api, dao, detailDao, uiEventManager)
+    private val repository = EventRepository(api, dao, detailDao, recentlyViewedDao, uiEventManager)
 
     @Test
     fun `getEventsByType returns mapped summaries from dao`() = runTest {
@@ -65,5 +69,29 @@ class EventRepositoryTest {
         repository.refreshMyGames()
 
         coVerify { uiEventManager.showSnackbar("Failed to refresh games: Network error") }
+    }
+
+    @Test
+    fun `recordEventView upserts and prunes`() = runTest {
+        coJustRun { recentlyViewedDao.upsert(any()) }
+        coJustRun { recentlyViewedDao.prune(any()) }
+        val slot = slot<dev.convocados.data.local.entity.RecentlyViewedEventEntity>()
+
+        repository.recordEventView("e1", "Game", "Pitch", "2026-08-25T19:00:00Z", "football")
+
+        coVerify { recentlyViewedDao.upsert(capture(slot)) }
+        assertEquals("e1", slot.captured.eventId)
+        assertEquals("Game", slot.captured.title)
+        assertEquals("Pitch", slot.captured.location)
+        assertEquals("football", slot.captured.sport)
+        coVerify { recentlyViewedDao.prune(10) }
+    }
+
+    @Test
+    fun `recordEventView skips the demo placeholder`() = runTest {
+        repository.recordEventView("demo", "Demo", "", "", "")
+
+        coVerify(exactly = 0) { recentlyViewedDao.upsert(any()) }
+        coVerify(exactly = 0) { recentlyViewedDao.prune(any()) }
     }
 }

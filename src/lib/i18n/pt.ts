@@ -132,6 +132,8 @@ const pt: TranslationKeys = {
   noSuggestions: "Escreve um novo nome",
   createNewPlayer: "Criar novo jogador: {name}",
   nGamesPlayed: "{n} jogos",
+  nGamesHere: "{n} jogos aqui",
+  coPlayedWithYou: "jogou consigo {n}\u00d7",
 
   // Watch
   watchScore: "Resultado no Relógio",
@@ -708,6 +710,9 @@ sportBadmintonSingles: "Badminton (singles)",
   inviteResend: "Reenviar convite",
   inviteResendAria: "Reenviar convite para {name}",
   inviteResendCooldown: "Podes reenviar dentro de {time}",
+  inviteRetractAria: "Remover convite para {name}",
+  inviteRetractConfirm: "Remover o convite para {name}?",
+  inviteRetracted: "Convite removido para {name}.",
   inviteResentVia: "Convite reenviado para {name} via {channels}",
   inviteNotForYou: "Este convite não é para a tua conta.",
   notifyInviteOptOutLabel: "Não me convides para este jogo",

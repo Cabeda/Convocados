@@ -210,6 +210,148 @@ class EventDetailViewModelTest {
     }
 
     @Test
+    fun `follow refreshes cached games list so followed section updates`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.followEvent(eventId) } returns FollowStateResponse(following = true)
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.toggleFollow(eventId)
+        advanceUntilIdle()
+
+        coVerify { api.followEvent(eventId) }
+        coVerify { repository.refreshMyGames() }
+    }
+
+    @Test
+    fun `unfollow refreshes cached games list so followed section updates`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        // Start already-following so toggleFollow goes down the unfollow path.
+        coEvery { api.getFollowState(eventId) } returns FollowStateResponse(following = true)
+        coEvery { api.unfollowEvent(eventId) } returns FollowStateResponse(following = false)
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.load(eventId)
+        advanceUntilIdle()
+        viewModel.toggleFollow(eventId)
+        advanceUntilIdle()
+
+        coVerify { api.unfollowEvent(eventId) }
+        coVerify { repository.refreshMyGames() }
+    }
+
+    @Test
+    fun `resend invite calls api and surfaces success notice`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.resendInvite(eventId, "inv-1") } returns InviteResendResponse(ok = true, channels = InviteChannels(email = true))
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.resendInvite(eventId, "inv-1", "Bob")
+            advanceUntilIdle()
+
+            coVerify { api.resendInvite(eventId, "inv-1") }
+            val last = expectMostRecentItem()
+            assertTrue(last.resendingInviteId == null)
+            assertEquals(InviteResendNotice(playerName = "Bob"), last.resendNotice)
+        }
+    }
+
+    @Test
+    fun `resend invite failure surfaces error`() = runTest {
+        coEvery { api.resendInvite(eventId, "inv-1") } throws ApiException(400, "boom")
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.resendInvite(eventId, "inv-1", "Bob")
+            advanceUntilIdle()
+
+            assertEquals("boom", expectMostRecentItem().error)
+        }
+    }
+
+    @Test
+    fun `resend invite cooldown surfaces retry notice`() = runTest {
+        coEvery { api.resendInvite(eventId, "inv-1") } throws ApiException(
+            429,
+            """{"error":"cooldown","retryAfterSeconds":6000}""",
+        )
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.resendInvite(eventId, "inv-1", "Bob")
+            advanceUntilIdle()
+
+        assertEquals(
+            InviteResendNotice(playerName = "Bob", cooldownSeconds = 6000),
+            expectMostRecentItem().resendNotice,
+        )
+    }
+
+    @Test
+    fun `invite with no notification channel surfaces share invite`() = runTest {
+        coEvery { api.sendInvite(eventId, "u-new") } returns InviteCreateResponse(
+            ok = true,
+            inviteUrl = "https://convocados.cabeda.dev/invite/abc",
+            channels = InviteChannels(email = false, webPush = false, appPush = false),
+        )
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.inviteSuggestion(eventId, "u-new", "Luís")
+            advanceUntilIdle()
+
+            assertEquals(
+                PendingShareInvite("https://convocados.cabeda.dev/invite/abc", "Luís"),
+                expectMostRecentItem().pendingShareInvite,
+            )
+        }
+    }
+
+    @Test
+    fun `invite with a notification channel does not offer share`() = runTest {
+        coEvery { api.sendInvite(eventId, "u-new") } returns InviteCreateResponse(
+            ok = true,
+            inviteUrl = "https://convocados.cabeda.dev/invite/abc",
+            channels = InviteChannels(email = true, webPush = false, appPush = false),
+        )
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.inviteSuggestion(eventId, "u-new", "Luís")
+            advanceUntilIdle()
+
+            assertNull(expectMostRecentItem().pendingShareInvite)
+        }
+    }
+
+    @Test
+    fun `retract invite calls api and surfaces removed notice`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.retractInvite(eventId, "inv-1") } returns OkResponse(true)
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.retractInvite(eventId, "inv-1", "Bob")
+            advanceUntilIdle()
+
+            coVerify { api.retractInvite(eventId, "inv-1") }
+            val last = expectMostRecentItem()
+            assertTrue(last.retractingInviteId == null)
+            assertEquals("Bob", last.removedInviteName)
+        }
+    }
+
+    }
+
+    @Test
     fun `refresh re-fetches post-game status`() = runTest {
         coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())

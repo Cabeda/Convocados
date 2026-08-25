@@ -9,6 +9,8 @@
     <string name="players">Jugadores</string>
     <string name="teams">Equipos</string>
     <string name="randomize_teams">Sortear equipos</string>
+    <string name="invite">Invitar</string>
+    <string name="add_to_list">Añadir a la lista</string>
     <string name="cancel">Cancelar</string>
     <string name="score">Resultado</string>
     <string name="ratings">Valoraciones</string>
@@ -108,6 +110,7 @@
 
     <string name="game_title">Título del partido</string>
     <string name="game_title_placeholder">ej. Fútbol del martes</string>
+    <string name="randomize_title">Sorpréndeme</string>
     <string name="sport">Deporte</string>
     <string name="location_optional">Ubicación (opcional)</string>
     <string name="location_placeholder">ej. Campo del río, Pista 2</string>
@@ -298,6 +301,10 @@
     <string name="teams_balanced">Equilibrados</string>
     <string name="teams_random">Aleatorios</string>
     <string name="add_from_contacts">Añadir desde contactos</string>
+    <string name="recently_viewed">Vistos recientemente</string>
+    <string name="games_you_host">Partidos que organizas (%1$d)</string>
+    <string name="games_you_follow">Partidos que sigues (%1$d)</string>
+    <string name="games_you_played">Partidos en los que jugaste</string>
     <string name="no_archived_games">No hay partidos archivados</string>
     <string name="will_invite">Invitará a %1$s</string>
     <string name="open_pickup">Pickup abierto</string>

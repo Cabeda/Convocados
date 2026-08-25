@@ -99,6 +99,11 @@ data class RosterPlayer(
     val name: String,
     val userId: String? = null,
     val image: String? = null,
+    // ADR 0025: pending-invite details — null/empty for declined rows.
+    val inviteId: String? = null,
+    val inviteUrl: String? = null,
+    val channels: InviteChannels = InviteChannels(),
+    val notifiedAt: String? = null,
 )
 
 @Serializable
@@ -353,6 +358,20 @@ data class KnownPlayersResponse(
     val players: List<KnownPlayer> = emptyList(),
 )
 
+/** Person the viewer co-played with on OTHER events (global, ranked). userId null = guest (add-only). */
+@Serializable
+data class CoPlayer(
+    val name: String,
+    val userId: String? = null,
+    val image: String? = null,
+    val coPlayCount: Int = 0,
+)
+
+@Serializable
+data class CoPlayersResponse(
+    val players: List<CoPlayer> = emptyList(),
+)
+
 @Serializable
 data class UserPublicProfile(
     val id: String,
@@ -548,6 +567,17 @@ data class PaymentGateError(
     val threshold: Double = 0.0,
 )
 
+@Serializable
+data class EventCost(
+    val id: String = "",
+    val eventId: String = "",
+    val totalAmount: Double = 0.0,
+    val currency: String = "EUR",
+    val paymentMethods: String? = null,
+    val effectivePaymentMethods: String? = null,
+    val hasOverride: Boolean = false,
+)
+
 // ── Invites (ADR 0025) ─────────────────────────────────────────────────────
 
 @Serializable
@@ -598,6 +628,24 @@ data class SuggestionsResponse(val suggestions: List<CoPlaySuggestion> = emptyLi
 
 @Serializable
 data class InviteCreateRequest(val userId: String)
+
+@Serializable
+data class InviteResendRequest(val inviteId: String)
+
+@Serializable
+data class InviteRetractRequest(val inviteId: String)
+
+@Serializable
+data class InviteResendResponse(
+    val ok: Boolean = true,
+    val channels: InviteChannels = InviteChannels(),
+)
+
+@Serializable
+data class InviteResendErrorBody(
+    val error: String? = null,
+    val retryAfterSeconds: Long? = null,
+)
 
 @Serializable
 data class InviteChannels(

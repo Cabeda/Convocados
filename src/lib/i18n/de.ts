@@ -119,6 +119,8 @@ const de: TranslationKeys = {
   noSuggestions: "Neuen Namen eingeben",
   createNewPlayer: "Neuen Spieler erstellen: {name}",
   nGamesPlayed: "{n} Spiele",
+  nGamesHere: "{n} Spiele hier",
+  coPlayedWithYou: "mit dir {n}\u00d7 gespielt",
 
   // Watch
   watchScore: "Ergebnis auf Uhr",
@@ -659,6 +661,9 @@ sportBadmintonSingles: "Badminton (Einzel)",
   inviteResend: "Einladung erneut senden",
   inviteResendAria: "Einladung an {name} erneut senden",
   inviteResendCooldown: "Erneut senden möglich in {time}",
+  inviteRetractAria: "Einladung für {name} entfernen",
+  inviteRetractConfirm: "Einladung für {name} entfernen?",
+  inviteRetracted: "Einladung für {name} entfernt.",
   inviteResentVia: "Einladung erneut gesendet an {name} via {channels}",
   inviteNotForYou: "Diese Einladung ist nicht für dein Konto.",
   notifyInviteOptOutLabel: "Lade mich nicht zu diesem Spiel ein",

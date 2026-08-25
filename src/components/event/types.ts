@@ -87,5 +87,5 @@ export interface KnownPlayer {
 
 /** Option type for the player Autocomplete: either an existing player or a "create new" action. */
 export type PlayerOption =
-  | { type: "existing"; name: string; gamesPlayed: number; userId: string | null; image?: string | null }
+  | { type: "existing"; name: string; gamesPlayed: number; userId: string | null; image?: string | null; coPlayCount?: number }
   | { type: "create"; name: string };

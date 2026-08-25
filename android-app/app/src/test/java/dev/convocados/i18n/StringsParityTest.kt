@@ -18,6 +18,7 @@ class StringsParityTest {
         "add_player_in_flight",
         "anonymous_player",
         "view_releases",
+        "randomize_title",
     )
 
     @Test
