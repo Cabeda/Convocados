@@ -6,6 +6,7 @@ import {
   alpha, useTheme, LinearProgress, useMediaQuery, CircularProgress,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
 import CloseIcon from "@mui/icons-material/Close";
 import AirlineSeatReclineNormalIcon from "@mui/icons-material/AirlineSeatReclineNormal";
@@ -210,6 +211,10 @@ interface Props {
   onResendInvite?: (invite: { id: string; inviteId?: string | null; name: string }) => Promise<void>;
   /** Id of an invite currently being resent — disables that row's button. */
   resendingInviteId?: string | null;
+  /** ADR 0025 follow-up: retract (remove) a pending invite so it no longer applies. */
+  onRetractInvite?: (invite: { id: string; inviteId?: string | null; name: string }) => Promise<void>;
+  /** Id of an invite currently being retracted — disables that row's button. */
+  retractingInviteId?: string | null;
   /** ADR 0025: ranked co-play suggestions (owner/admin). Clicking one requests the
    *  add-or-invite choice (onRequestAdd) instead of inviting directly. */
   coPlaySuggestions?: Array<{ userId: string; name: string; image?: string | null; reason?: string }>;
@@ -237,6 +242,8 @@ export function PlayerList({
   canManageInvites = false,
   onResendInvite,
   resendingInviteId = null,
+  onRetractInvite,
+  retractingInviteId = null,
   coPlaySuggestions,
   onInviteUser: _onInviteUser,
 }: Props) {
@@ -841,6 +848,8 @@ export function PlayerList({
                   const inviteIdForAction = (d as { inviteId?: string | null }).inviteId ?? d.id;
                   const resending = resendingInviteId === inviteIdForAction || resendingInviteId === d.id;
                   const canResend = canManageInvites && !!onResendInvite;
+                  const retracting = retractingInviteId === inviteIdForAction || retractingInviteId === d.id;
+                  const canRetract = canManageInvites && !!onRetractInvite;
                   return (
                     <ListItem key={d.id} sx={{ borderRadius: 2, px: 1, py: 0.5, overflow: "hidden" }}>
                       {d.userId ? (
@@ -928,6 +937,23 @@ export function PlayerList({
                               data-testid={`resend-cooldown-${d.id}`}
                               aria-label={t("inviteResendCooldown", { time: formatCooldown(eligibility.remainingMs) })}
                             />
+                          </Tooltip>
+                        )}
+                        {canRetract && (
+                          <Tooltip title={t("inviteRetractAria", { name: d.name })}>
+                            <span>
+                              <IconButton
+                                edge="end"
+                                size="small"
+                                disabled={retracting}
+                                data-testid={`retract-invite-${inviteIdForAction}`}
+                                aria-label={t("inviteRetractAria", { name: d.name })}
+                                onClick={() => void onRetractInvite!({ id: d.id, inviteId: inviteIdForAction, name: d.name })}
+                                sx={{ p: 1, color: theme.palette.error.main }}
+                              >
+                                {retracting ? <CircularProgress size={16} /> : <PersonRemoveIcon fontSize="small" />}
+                              </IconButton>
+                            </span>
                           </Tooltip>
                         )}
                       </Stack>

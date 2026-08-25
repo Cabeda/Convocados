@@ -297,6 +297,32 @@ export default function EventPage({ eventId }: { eventId: string }) {
     }
   }, [eventId, fetchEvent, t]);
 
+  // ── ADR 0025 follow-up: retract (remove) a pending invite ────────────────────
+  const [retractingInviteId, setRetractingInviteId] = useState<string | null>(null);
+  const retractInvite = useCallback(async (invite: { id: string; inviteId?: string | null; name: string }) => {
+    const inviteIdForAction = invite.inviteId ?? invite.id;
+    if (!window.confirm(t("inviteRetractConfirm", { name: invite.name }))) return;
+    setRetractingInviteId(inviteIdForAction);
+    try {
+      const res = await fetch(`/api/events/${eventId}/invites`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteId: inviteIdForAction }),
+      });
+      const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
+      if (!res.ok) {
+        setPlayerError(json.error ?? t("somethingWentWrong"));
+        return;
+      }
+      setSnackbar(t("inviteRetracted", { name: invite.name }));
+      fetchEvent();
+    } catch {
+      setPlayerError(t("somethingWentWrong"));
+    } finally {
+      setRetractingInviteId(null);
+    }
+  }, [eventId, fetchEvent, t]);
+
   // ── Payment-nudge state ────────────────────────────────────────────────────
   // Fetched lazily on first pill click; controls whether the Quick Join pill
   // routes through the payment-nudge dialog (when the user has a balance) or
@@ -809,6 +835,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const isOwnerless = !event?.ownerId;
   const isAdmin = !!event?.isAdmin;
   const canEditSettings = isOwnerless || isOwner || isAdmin;
+  const canManageInvites = isOwner || isAdmin;
 
   // #463 high-intent: fetch the signed-in user's RSVP for this event so the
   // PushPromptBanner can render as a modal when the user has a pending RSVP
@@ -1064,9 +1091,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
               rosterLocked={gameEnded}
               declined={event.declined}
               invited={event.invited}
-              canManageInvites={isOwner || isAdminFlag}
+              canManageInvites={canManageInvites}
               onResendInvite={resendInvite}
               resendingInviteId={resendingInviteId}
+              onRetractInvite={retractInvite}
+              retractingInviteId={retractingInviteId}
               coPlaySuggestions={coPlaySuggestions}
               />
             </div>

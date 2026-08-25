@@ -631,6 +631,9 @@ data class InviteCreateRequest(val userId: String)
 data class InviteResendRequest(val inviteId: String)
 
 @Serializable
+data class InviteRetractRequest(val inviteId: String)
+
+@Serializable
 data class InviteResendResponse(
     val ok: Boolean = true,
     val channels: InviteChannels = InviteChannels(),
