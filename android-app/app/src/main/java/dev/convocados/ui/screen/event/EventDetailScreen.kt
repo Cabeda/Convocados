@@ -1014,7 +1014,9 @@ private fun HeroMoreMenu(ev: EventDetail, state: EventScreenState, viewModel: Ev
 private fun HeroWrapUp(eventId: String, state: EventScreenState, viewModel: EventDetailViewModel, user: UserProfile?, editingScoreId: String?, scoreOne: String, scoreTwo: String, onEditScore: (String,String,String)->Unit, onScoreChange: (String,String)->Unit, onSaveScore: ()->Unit, onVoteMvp: (String)->Unit) {
     val pg = state.postGame ?: return
     if (!(pg.isParticipant && !pg.allComplete && (pg.gameEnded || pg.hasPendingPastPayments || (pg.mvpEnabled && !pg.mvpComplete)))) return
-    val scoreDone = pg.hasScore; val paysDone = pg.allPaid || !pg.hasCost; val mvpDone = !pg.mvpEnabled || pg.mvpComplete
+    val scoreDone = pg.hasScore; val paysDone = pg.allPaid || !pg.hasCost
+    // Personal MVP task: my vote, not everyone's (server sends myMvpComplete).
+    val mvpDone = !pg.mvpEnabled || pg.myMvpComplete
     val done = (if (scoreDone) 1 else 0) + (if (paysDone) 1 else 0) + (if (mvpDone) 1 else 0); val total = 2 + (if (pg.mvpEnabled) 1 else 0)
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1042,7 +1044,7 @@ private fun HeroWrapUp(eventId: String, state: EventScreenState, viewModel: Even
                 if (state.postGamePaymentsDirty) Button(onClick = { viewModel.savePostGamePayments(eventId) }, enabled = !state.postGameSaving, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
             }
             if (pg.mvpEnabled) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Icon(if (mvpDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp)); Text(if (pg.mvpComplete) stringResource(R.string.post_game_mvp_done) else stringResource(R.string.post_game_mvp_pending), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)) }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Icon(if (mvpDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp)); Text(if (mvpDone) stringResource(R.string.post_game_mvp_done) else stringResource(R.string.post_game_mvp_pending), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)) }
                 val mvpData = state.mvp
                 LaunchedEffect(pg.latestHistoryId) {
                     if (pg.latestHistoryId != null && mvpData == null && !state.mvpLoading) viewModel.loadMvp(eventId, pg.latestHistoryId)

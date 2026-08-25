@@ -15,7 +15,7 @@ import { getWrapUpGameSettlement } from "../../../../lib/settlement.server";
  * - hasScore: whether the most recent GameHistory has scoreOne/scoreTwo set
  * - hasCost: whether an EventCost record exists with totalAmount > 0
  * - allPaid: whether all payments are paid (or no cost set)
- * - allComplete: hasScore && allPaid
+ * - allComplete: hasScore && allPaid && myMvpComplete (viewer-scoped dismissal)
  * - isParticipant: whether the current user is involved in settling the game
  *   (Owner/Admin, or name on the settled game's teams/payment roll, or the
  *   played Game's participants when no snapshot exists yet)
@@ -45,7 +45,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       allComplete: true, isParticipant: false, isPlayer: false, latestHistoryId: null,
       paymentsSnapshot: null, costCurrency: null, costAmount: null,
       hasPendingPastPayments: false, mvpEnabled: false, mvpComplete: true,
-      bannerMvpComplete: true, paidAggregate: { paidCount: 0, totalCount: 0 },
+      bannerMvpComplete: true, myMvpComplete: true, paidAggregate: { paidCount: 0, totalCount: 0 },
       scoreOne: null, scoreTwo: null,
       teamOneName: event.teamOneName, teamTwoName: event.teamTwoName,
     });
@@ -105,11 +105,25 @@ export const GET: APIRoute = async ({ params, request }) => {
     hasCost = false;
   }
 
+  // ─── Session-dependent flags (needed before the MVP block below) ──────
+  const session = await getSession(request);
+
+  // Whether the current user actually PLAYED the settled game (players-only).
+  // Unlike isParticipant, the Owner/Admin settlement override does NOT apply —
+  // MVP voting is restricted to players, so an admin who didn't play must not
+  // be offered the Vote MVP task nor have the banner held open by MVP state.
+  const isPlayer = session?.user ? isHistoryParticipant(latestHistory, session.user.name) : false;
+
   // ─── MVP voting completion ──────────────────────────────────────────
   let mvpComplete = true;
   // ponytail: bannerMvpComplete uses a 24h window for banner dismissal only.
   // Full MVP voting stays open for MVP_VOTING_WINDOW_DAYS via the history page.
   let bannerMvpComplete = true;
+  // The wrap-up checklist is personal: MY vote is the task, not everyone's.
+  // A player who has cast their vote is done — the banner must disappear for
+  // them even while other eligible voters haven't voted yet (they each keep
+  // their own task). Non-players have no MVP task at all.
+  let myMvpComplete = true;
   if (event.mvpEnabled && latestHistory && latestHistory.status === "played") {
     // Determine if voting window is still open
     const gameEndTime = new Date(latestHistory.dateTime.getTime() + (event.durationMinutes ?? 60) * 60_000);
@@ -151,15 +165,42 @@ export const GET: APIRoute = async ({ params, request }) => {
       }
       // If no eligible voters (no users matched), consider MVP complete
 
-      // Banner dismissal: all voted OR 24h since game ended
+      // Banner dismissal ceiling: all voted OR 24h since game ended
       bannerMvpComplete = mvpComplete || hoursSinceGameEnd >= 24;
+
+      // Personal task: has THIS user voted?
+      if (isPlayer && session?.user) {
+        let viewerVoted = false;
+        const userPlayers = await prisma.player.findMany({
+          where: { eventId: event.id, userId: session.user.id },
+          select: { id: true },
+        });
+        if (userPlayers.length > 0) {
+          const existing = await prisma.mvpVote.findFirst({
+            where: { gameHistoryId: latestHistory.id, voterPlayerId: { in: userPlayers.map((p) => p.id) } },
+            select: { id: true },
+          });
+          viewerVoted = !!existing;
+        } else {
+          // Participant with no Player record — votes are stored name-based.
+          const existing = await prisma.mvpVote.findFirst({
+            where: { gameHistoryId: latestHistory.id, voterPlayerId: `name:${session.user.name}` },
+            select: { id: true },
+          });
+          viewerVoted = !!existing;
+        }
+        // After 24h the banner stops nagging even without a vote (same
+        // ceiling as bannerMvpComplete); voting itself stays open on history.
+        myMvpComplete = viewerVoted || hoursSinceGameEnd >= 24;
+      }
     }
-    // If voting is not open (window expired or newer game), bannerMvpComplete stays true
+    // If voting is not open (window expired or newer game), both stay true
   }
 
-  // ponytail: allComplete gates banner dismissal — score + payments + MVP (24h ceiling).
-  // After 24h the banner hides even if not everyone voted; voting stays open on history page.
-  let allComplete = hasScore && allPaid && bannerMvpComplete;
+  // allComplete gates banner dismissal — score + payments + MY MVP vote.
+  // Personal, not global: the checklist disappears for a user once THEIR
+  // tasks are done; other voters keep their own banner (24h ceiling applies).
+  let allComplete = hasScore && allPaid && myMvpComplete;
 
   // Payment overhaul: the durable per-game payment view for the wrap-up banner.
   // When present, the banner renders these rows and settles via the settlement API.
@@ -216,7 +257,6 @@ export const GET: APIRoute = async ({ params, request }) => {
   // Owner/Admin always count (settlement role: confirm payments, set score).
   // Otherwise use the shared settled-game participant check.
   let isParticipant = false;
-  const session = await getSession(request);
   if (session?.user) {
     const ownership = await checkOwnership(request, event.ownerId, session, params.id);
     if (ownership?.isOwner || ownership?.isAdmin) {
@@ -236,7 +276,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   // Unlike isParticipant, the Owner/Admin settlement override does NOT apply —
   // MVP voting is restricted to players, so an admin who didn't play must not
   // be offered the Vote MVP task nor have the banner held open by MVP state.
-  const isPlayer = session?.user ? isHistoryParticipant(latestHistory, session.user.name) : false;
+  // (Computed before the MVP block; kept here as the canonical definition.)
 
   // Compute aggregate payment info for social proof
   let paidAggregate = { paidCount: 0, totalCount: 0 };
@@ -255,13 +295,14 @@ export const GET: APIRoute = async ({ params, request }) => {
       totalCount: wrapUpSettlement.rows.length,
     };
     // Recompute the wrap-up completion gate — allPaid may have flipped.
-    allComplete = hasScore && allPaid && bannerMvpComplete;
+    allComplete = hasScore && allPaid && myMvpComplete;
   }
 
   return Response.json({
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant, isPlayer,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
     hasPendingPastPayments, mvpEnabled: event.mvpEnabled, mvpComplete, bannerMvpComplete,
+    myMvpComplete,
     paidAggregate,
     scoreOne: latestHistory?.scoreOne ?? null,
     scoreTwo: latestHistory?.scoreTwo ?? null,
