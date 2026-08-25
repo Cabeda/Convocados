@@ -140,7 +140,7 @@ describe("PostGameBanner viewer-scoped dismissal (wrap-up todo-list)", () => {
 
   it("dismisses the banner once this user's own vote is in, without waiting for everyone else", async () => {
     vi.useFakeTimers();
-    const s = {
+    const status = {
       ...baseStatus,
       hasScore: true,
       allPaid: true,
@@ -150,7 +150,6 @@ describe("PostGameBanner viewer-scoped dismissal (wrap-up todo-list)", () => {
       myMvpComplete: true,
       allComplete: true,
     };
-    let status = s;
     vi.stubGlobal("fetch", vi.fn((url: RequestInfo | URL) => {
       const u = String(url);
       if (u.includes("/payments/game")) {
