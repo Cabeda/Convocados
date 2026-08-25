@@ -477,13 +477,28 @@ export async function declinePlayerInvite(opts: { token: string; userId: string;
 export async function retractPlayerInvite(opts: { inviteId: string; userId: string; eventId: string }): Promise<{ status: "cancelled" }> {
   const { inviteId, userId, eventId } = opts;
 
-  const invite = await prisma.playerInvite.findUnique({
-    where: { id: inviteId },
-    select: { invitedByUserId: true, eventPlayer: { select: { eventId: true } } },
-  });
-  if (!invite || invite.eventPlayer.eventId !== eventId) {
-    throw new Error("Invite not found.");
+  // Backward compat: pre-fix clients sent the EventPlayer id (invited[].id)
+  // instead of the PlayerInvite id (invited[].inviteId). Fall back to lookup
+  // by EventPlayer for the current game, mirroring resendPlayerInvite.
+  let invite: { id: string; gameId: string; invitedByUserId: string; eventPlayerId: string } | null =
+    await prisma.playerInvite.findUnique({
+      where: { id: inviteId },
+      select: { id: true, gameId: true, invitedByUserId: true, eventPlayerId: true },
+    });
+  if (!invite) {
+    const eventForFallback = await prisma.event.findUnique({ where: { id: eventId }, select: { currentGameId: true } });
+    if (eventForFallback?.currentGameId) {
+      invite = (await prisma.playerInvite.findFirst({
+        where: { eventPlayerId: inviteId, gameId: eventForFallback.currentGameId },
+        select: { id: true, gameId: true, invitedByUserId: true, eventPlayerId: true },
+      })) ?? null;
+    }
   }
+  if (!invite) throw new Error("Invite not found.");
+
+  // Verify the invite belongs to this event via its game.
+  const game = await prisma.game.findUnique({ where: { id: invite.gameId }, select: { eventId: true } });
+  if (!game || game.eventId !== eventId) throw new Error("Invite not found.");
 
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
   const isOwnerOrInviter = event?.ownerId === userId || invite.invitedByUserId === userId;
@@ -492,11 +507,21 @@ export async function retractPlayerInvite(opts: { inviteId: string; userId: stri
     throw new Error("Only the owner, an admin, or the inviter can retract an invite.");
   }
 
-  const res = await prisma.playerInvite.updateMany({
-    where: { id: inviteId, status: "pending" },
-    data: { status: "cancelled", respondedAt: new Date() },
+  // Cancel the pending invite and clear the roster ghost (pending GameParticipant
+  // + Rsvp) that createPlayerInvite planted. Without this the invitee lingers in
+  // pendingParticipants, still renders as "Invited" with a null inviteId, and a
+  // second remove sends the EventPlayer id → "Invite not found."
+  const res = await prisma.$transaction(async (tx) => {
+    const cancelled = await tx.playerInvite.updateMany({
+      where: { id: invite.id, status: "pending" },
+      data: { status: "cancelled", respondedAt: new Date() },
+    });
+    if (cancelled.count === 0) return 0;
+    await tx.gameParticipant.deleteMany({ where: { gameId: invite.gameId, eventPlayerId: invite.eventPlayerId, status: "pending" } });
+    await tx.rsvp.deleteMany({ where: { gameId: invite.gameId, eventPlayerId: invite.eventPlayerId } });
+    return cancelled.count;
   });
-  if (res.count === 0) throw new Error("Invite not found or no longer pending.");
+  if (res === 0) throw new Error("Invite not found or no longer pending.");
 
   return { status: "cancelled" };
 }
