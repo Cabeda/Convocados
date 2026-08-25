@@ -170,7 +170,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
       // Personal task: has THIS user voted?
       if (isPlayer && session?.user) {
-        let viewerVoted = false;
+        let viewerVoted: boolean;
         const userPlayers = await prisma.player.findMany({
           where: { eventId: event.id, userId: session.user.id },
           select: { id: true },
