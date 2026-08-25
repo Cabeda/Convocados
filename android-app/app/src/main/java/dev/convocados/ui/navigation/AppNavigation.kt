@@ -28,6 +28,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import dev.convocados.BuildConfig
 import dev.convocados.ui.screen.login.LoginScreen
 import dev.convocados.ui.screen.games.GamesScreen
 import dev.convocados.ui.screen.stats.StatsScreen
@@ -66,7 +67,8 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processing
 
     // Handle deep link navigation
     LaunchedEffect(deepLink, isAuthenticated) {
-        if (!isAuthenticated || deepLink == null) return@LaunchedEffect
+        if (deepLink == null) return@LaunchedEffect
+        if (!isAuthenticated && !(dev.convocados.BuildConfig.DEBUG && deepLink.contains("/demo"))) return@LaunchedEffect
         val route = DeepLink.deepLinkToRoute(deepLink)
         if (route != null) {
             navController.navigate(route) { launchSingleTop = true }
