@@ -1,6 +1,13 @@
 package dev.convocados.ui.screen.history
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -133,11 +140,10 @@ fun HistoryDetailScreen(
         }
     }
 
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val accent = MaterialTheme.colorScheme.primary
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(scrollBehavior = scrollBehavior, 
+            TopAppBar(
                 title = { Text(stringResource(R.string.game_details)) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
                 actions = {
@@ -146,13 +152,9 @@ fun HistoryDetailScreen(
                             if (editing) {
                                 val s1 = scoreOneText.toIntOrNull()
                                 val s2 = scoreTwoText.toIntOrNull()
-                                if (s1 != null && s2 != null) {
-                                    viewModel.updateScore(eventId, historyId, s1, s2)
-                                }
+                                if (s1 != null && s2 != null) viewModel.updateScore(eventId, historyId, s1, s2)
                                 editing = false
-                            } else {
-                                editing = true
-                            }
+                            } else editing = true
                         }) {
                             Icon(if (editing) Icons.Default.Check else Icons.Default.Edit, if (editing) stringResource(R.string.save) else stringResource(R.string.edit))
                         }
@@ -163,122 +165,112 @@ fun HistoryDetailScreen(
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (loading) {
-            Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator() }
-            return@Scaffold
-        }
-
+        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = accent) }; return@Scaffold }
         val h = history
-        if (h == null) {
-            Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { Text(stringResource(R.string.not_found), color = MaterialTheme.colorScheme.error) }
-            return@Scaffold
-        }
+        if (h == null) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { Text(stringResource(R.string.not_found), color = MaterialTheme.colorScheme.error) }; return@Scaffold }
 
-        LazyColumn(
-            contentPadding = PaddingValues(16.dp),
+        Column(
+            Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(padding).fillMaxSize(),
         ) {
-            // Date & status
-            item {
-                Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            // Hero — gradient score display
+            Box(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.30f), MaterialTheme.colorScheme.surface)))
+                    .padding(20.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ScoreColumn(h.teamOneName, h.scoreOne, accent, Modifier.weight(1f))
+                    Text(":", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.outline)
+                    ScoreColumn(h.teamTwoName, h.scoreTwo, MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
+                }
             }
 
-            // Score section
-            item {
-                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(stringResource(R.string.score), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                        Spacer(Modifier.height(8.dp))
-                        if (editing) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(h.teamOneName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    OutlinedTextField(value = scoreOneText, onValueChange = { scoreOneText = it }, modifier = Modifier.width(60.dp), singleLine = true)
-                                }
-                                Text("—", style = MaterialTheme.typography.titleLarge)
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(h.teamTwoName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    OutlinedTextField(value = scoreTwoText, onValueChange = { scoreTwoText = it }, modifier = Modifier.width(60.dp), singleLine = true)
-                                }
-                            }
-                            if (saving) { LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) }
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(h.teamOneName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("${h.scoreOne ?: "—"}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                                }
-                                Text(":", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.outline)
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(h.teamTwoName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("${h.scoreTwo ?: "—"}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                                }
-                            }
+            // Score editor (tap edit → editable score)
+            if (editing) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(h.teamOneName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            OutlinedTextField(value = scoreOneText, onValueChange = { scoreOneText = it }, modifier = Modifier.width(60.dp), singleLine = true)
+                        }
+                        Text("-", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold)
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(h.teamTwoName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            OutlinedTextField(value = scoreTwoText, onValueChange = { scoreTwoText = it }, modifier = Modifier.width(60.dp), singleLine = true)
                         }
                     }
+                    if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             }
 
-            // Teams section
-            if (teamOne.isNotEmpty() || teamTwo.isNotEmpty()) {
-                item {
-                    Text(stringResource(R.string.players), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp))
+            Text(formatRelativeDate(h.dateTime), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            if (h.status != "played") {
+                Box(Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.secondaryContainer).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                    Text(h.status.replaceFirstChar { it.uppercase() }, color = MaterialTheme.colorScheme.onSecondaryContainer, style = MaterialTheme.typography.labelMedium)
                 }
-                item {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Team One
-                        ElevatedCard(modifier = Modifier.weight(1f)) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text(h.teamOneName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.height(6.dp))
-                                teamOne.forEach { p -> Text(p.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface) }
-                            }
-                        }
-                        // Team Two
-                        ElevatedCard(modifier = Modifier.weight(1f)) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text(h.teamTwoName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
-                                Spacer(Modifier.height(6.dp))
-                                teamTwo.forEach { p -> Text(p.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface) }
-                            }
-                        }
+            }
+
+            // Teams
+            if (teamOne.isNotEmpty() || teamTwo.isNotEmpty()) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TeamPanel(h.teamOneName, teamOne, accent, Modifier.weight(1f))
+                        TeamPanel(h.teamTwoName, teamTwo, MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
                     }
                 }
             }
 
             // ELO updates
             h.eloUpdates?.takeIf { it.isNotEmpty() }?.let { updates ->
-                item {
-                    Text(stringResource(R.string.elo_changes), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp))
-                }
-                items(updates) { eu ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(eu.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-                        Text(
-                            "${if (eu.delta > 0) "+" else ""}${eu.delta}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (eu.delta > 0) MaterialTheme.colorScheme.primary else if (eu.delta < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
-                        )
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(stringResource(R.string.elo_changes), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        updates.forEach { eu ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(eu.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                Text("${if (eu.delta > 0) "+" else ""}${eu.delta}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+                                    color = if (eu.delta > 0) MaterialTheme.colorScheme.primary else if (eu.delta < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline)
+                            }
+                        }
                     }
                 }
             }
 
-            // Payments section
+            // Payments
             if (payments.isNotEmpty()) {
-                item {
-                    Text(stringResource(R.string.payments), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 4.dp))
-                }
-                items(payments) { p ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(p.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-                        Text(
-                            p.status.replaceFirstChar { it.uppercase() },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (p.status == "paid") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                        )
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(stringResource(R.string.payments), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        payments.forEach { p ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(p.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                Text(p.status.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelLarge,
+                                    color = if (p.status == "paid") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
+                            }
+                        }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable private fun ScoreColumn(name: String, score: Int?, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.titleSmall, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(6.dp))
+        Text("${score ?: "—"}", color = color, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.displayMedium)
+    }
+}
+
+@Composable private fun TeamPanel(name: String, members: List<TeamPlayer>, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    Column(modifier.clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.08f)).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(name, color = color, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        members.forEach { p ->
+            Box(Modifier.padding(vertical = 2.dp).clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 6.dp)) {
+                Text(p.name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
