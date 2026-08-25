@@ -115,7 +115,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     teamOneName: g.teamOneName,
     teamTwoName: g.teamTwoName,
     teamsSnapshot: teamsSnapshotForGame, // reconstructed from event teamResults
-    paymentsSnapshot: null,
+    paymentsSnapshot: g.payments.length
+      ? JSON.stringify(g.payments.map((p) => ({ playerName: p.eventPlayer?.name ?? "?", amount: p.amount, status: p.status })))
+      : null,
     createdAt: g.createdAt.toISOString(),
     source: "live" as const,
     eloUpdates: null,

@@ -96,9 +96,24 @@ export const GET: APIRoute = async ({ params, request }) => {
     });
   }
 
-  const game = await prisma.game.findUnique({ where: { id: params.historyId } });
+  const game = await prisma.game.findUnique({
+    where: { id: params.historyId },
+    include: {
+      payments: { where: { archivedAt: null }, include: { eventPlayer: { select: { name: true } } } },
+      payerEventPlayer: { select: { name: true } },
+    },
+  });
   if (game && game.status === "played") {
     const snap = await buildSnapshotForGame(eventId, game);
+    // Payments come from the game's settlement rows (who actually paid), not
+    // the stale eventCost snapshot.
+    const paymentsSnapshot = JSON.stringify(
+      game.payments.map((p) => ({
+        playerName: p.eventPlayer?.name ?? "?",
+        amount: p.amount,
+        status: p.status,
+      })),
+    );
     return Response.json({
       id: game.id,
       eventId,
@@ -109,7 +124,7 @@ export const GET: APIRoute = async ({ params, request }) => {
       teamOneName: game.teamOneName ?? event.teamOneName ?? "Team 1",
       teamTwoName: game.teamTwoName ?? event.teamTwoName ?? "Team 2",
       teamsSnapshot: JSON.stringify(snap.teamsSnapshot),
-      paymentsSnapshot: JSON.stringify(snap.paymentsSnapshot),
+      paymentsSnapshot,
       createdAt: game.createdAt.toISOString(),
       source: "live",
       eloUpdates: null,
