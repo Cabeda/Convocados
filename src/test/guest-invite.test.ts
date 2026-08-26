@@ -6,8 +6,8 @@
  *   POST /invites { name, deliver:false }  → anonymous EventPlayer shell +
  *   pending participant + pending PlayerInvite token (always silent — guests
  *   have no channel). The inviter shares the /invite/<token> URL; the first
- *   logged-in user who accepts CLAIMS the EventPlayer row
- *   (EventPlayer.userId = accepter) and joins as that player.
+ *   accepting while logged in CLAIMS the row; anonymous acceptance leaves it
+ *   unclaimed for a later bind (ADR 0026).
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "~/lib/db.server";
@@ -28,6 +28,7 @@ vi.mock("~/lib/logger.server", () => ({
 
 import { POST as createInviteRoute } from "~/pages/api/events/[id]/invites";
 import { GET as inviteLookup, POST as inviteTokenPost } from "~/pages/api/invite/[token]";
+import { POST as claimPlayerPost } from "~/pages/api/events/[id]/claim-player";
 
 function req(params: Record<string, string>, body?: unknown, method?: string) {
   const request = new Request("http://localhost/api/test", {
@@ -260,5 +261,51 @@ describe("frictionless guest acceptance (no account)", () => {
     expect(body.viewerName).toBe(owner.name);
     expect(body.claimPlayerId).toBeTruthy();
     expect(body.inviteeName).toBe("Manecas");
+  });
+});
+
+describe("binding an accepted guest row to an account", () => {
+  async function seedAcceptedGuest() {
+    const { owner, event, gameId, token } = await (async () => {
+      const s = await seedOwnerAndEvent();
+      mockGetSession.mockResolvedValue({ user: { id: s.owner.id } });
+      const res = await createInviteRoute(req({ id: s.event.id }, { name: "Manecas" }));
+      const { inviteUrl } = await res.json();
+      return { ...s, token: (inviteUrl as string).split("/invite/")[1] };
+    })();
+    mockGetSession.mockResolvedValue(null);
+    await inviteTokenPost(req({ token }, { action: "accept" }));
+    return { owner, event, gameId };
+  }
+
+  it("claim-player binds the anonymous EventPlayer to the signed-in account", async () => {
+    const { owner, event, gameId } = await seedAcceptedGuest();
+    const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: event.id, name: "Manecas" } });
+
+    mockGetSession.mockResolvedValue({ user: { id: owner.id, name: owner.name } });
+    const res = await claimPlayerPost(req({ id: event.id }, { playerId: ep.id }));
+    expect(res.status).toBe(200);
+
+    const bound = await prisma.eventPlayer.findUniqueOrThrow({ where: { id: ep.id } });
+    expect(bound.userId).toBe(owner.id);
+    expect(bound.name).toBe(owner.name);
+    // Roster membership survives the bind and stays active for the current game
+    const gp = await prisma.gameParticipant.findUniqueOrThrow({
+      where: { gameId_eventPlayerId: { gameId, eventPlayerId: ep.id } },
+    });
+    expect(gp.status).toBe("active");
+    // Follow created
+    expect(await prisma.eventFollow.count({ where: { eventId: event.id, userId: owner.id } })).toBe(1);
+  });
+
+  it("refuses when the viewer already has a linked row in the event", async () => {
+    const { owner, event } = await seedAcceptedGuest();
+    // Owner already linked as a different player row
+    await prisma.eventPlayer.create({ data: { eventId: event.id, name: owner.name, userId: owner.id } });
+    const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: event.id, name: "Manecas" } });
+
+    mockGetSession.mockResolvedValue({ user: { id: owner.id, name: owner.name } });
+    const res = await claimPlayerPost(req({ id: event.id }, { playerId: ep.id }));
+    expect(res.status).toBe(409);
   });
 });

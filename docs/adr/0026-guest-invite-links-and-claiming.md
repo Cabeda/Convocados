@@ -27,9 +27,12 @@ email/push delivery, which is intrusive for friend-to-friend invitations.
    someone's name to the viewer's account silently. Claimed rows inherit all
    history; claim is refused if it would collide with existing identity data.
 5. **Conversion is offered, never forced.** Post-accept guests get a one-time
-   "keep your spot" card (Google first, email register-link fallback) and a
-   slim same-browser banner afterwards (`localStorage` marker). Both doors
-   converge on one bind endpoint; name matching only *suggests*, never auto-binds.
+   "keep your spot" card and a slim same-browser banner afterwards
+   (`localStorage` marker). The claim door is Google one-tap → the existing
+   bind endpoint; an email-capture door was deferred — the register flow is
+   organizer/roster-gated and an open mail form on a public token page is a
+   spam vector. Email-registered users bind later from the event page.
+   Name matching only *suggests*, never auto-binds.
 6. **Email is retired from invite delivery.** Game invites notify via push
    only when the invitee opted in on web/app; otherwise the inviter shares the
    link. `sendGameInvite` remains solely for register-invite emails.
