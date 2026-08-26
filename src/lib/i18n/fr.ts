@@ -60,6 +60,8 @@ const fr: TranslationKeys = {
   invitedPlayers: "Invités ({n})",
   invitePendingLabel: "En attente",
   coPlaySuggestions: "Suggérés pour vous",
+  showMoreSuggestions: "Afficher plus de suggestions",
+  showFewerSuggestions: "Afficher moins de suggestions",
   inviteSent: "Invitation envoyée à {name}. Partagez le lien pour les faire rejoindre.",
   youAreOnBench: "Tu es sur le banc — tu seras promu si une place se libère.",
   youArePlaying: "Tu as rejoint en tant que {name}",
