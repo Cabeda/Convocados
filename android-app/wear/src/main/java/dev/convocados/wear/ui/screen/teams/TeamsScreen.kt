@@ -24,6 +24,7 @@ import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
+import dev.convocados.wear.ui.RememberKeepScreenOn
 import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
 import java.time.Instant
 import java.time.ZoneId
@@ -49,6 +50,11 @@ fun TeamsScreen(
     val context = LocalContext.current
     val columnState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
+
+    // Honor the per-event "Keep screen on" setting here too (roster editing),
+    // mirroring the scoring screen — otherwise the watch sleeps while the
+    // organizer is adding players.
+    RememberKeepScreenOn(settingsState.keepScreenOn)
 
     // Pull down at top -> back to score
     val pullThreshold = with(LocalDensity.current) { 72.dp.toPx() }
