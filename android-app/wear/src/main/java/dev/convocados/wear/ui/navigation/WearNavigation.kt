@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
@@ -22,7 +22,7 @@ import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
 import dev.convocados.wear.ui.screen.teams.TeamsScreen
 import dev.convocados.wear.ui.screen.teams.TeamsViewModel
 
-import com.google.android.horologist.compose.layout.AppScaffold
+import androidx.wear.compose.material3.AppScaffold
 
 @Composable
 fun WearNavigation(tokenStore: WearTokenStore, googleSignIn: WearGoogleSignIn) {

@@ -6,16 +6,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.items
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.*
-import com.google.android.horologist.annotations.ExperimentalHorologistApi
-import com.google.android.horologist.compose.layout.ScalingLazyColumn
-import com.google.android.horologist.compose.layout.ScalingLazyColumnDefaults
-import com.google.android.horologist.compose.layout.ScreenScaffold
-import com.google.android.horologist.compose.layout.rememberColumnState
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 
-@OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun QuickSetupScreen(
     onStart: (durationMinutes: Int, alarmIntervalMinutes: Int) -> Unit,
@@ -23,15 +20,23 @@ fun QuickSetupScreen(
     var duration by remember { mutableIntStateOf(60) }
     var vibrationEnabled by remember { mutableStateOf(false) }
     var alarmInterval by remember { mutableIntStateOf(5) }
-    val columnState = rememberColumnState(ScalingLazyColumnDefaults.responsive())
+    val columnState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
 
-    ScreenScaffold(scrollState = columnState) {
-        ScalingLazyColumn(
-            columnState = columnState,
+    ScreenScaffold(scrollState = columnState) { contentPadding ->
+        TransformingLazyColumn(
+            state = columnState,
+            contentPadding = contentPadding,
             modifier = Modifier.fillMaxSize(),
         ) {
             item {
-                ListHeader {
+                ListHeader(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .transformedHeight(this, transformationSpec)
+                        .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                    transformation = SurfaceTransformation(transformationSpec),
+                ) {
                     Text(
                         text = stringResource(R.string.quick_setup_title),
                         style = MaterialTheme.typography.titleMedium,

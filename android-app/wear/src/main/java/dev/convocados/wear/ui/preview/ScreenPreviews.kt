@@ -2,7 +2,8 @@ package dev.convocados.wear.ui.preview
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Alignment
@@ -33,9 +34,9 @@ import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 fun PreviewGamesScreen() {
     ConvocadosWearTheme {
         // Simulated games list
-        ScalingLazyColumn(
+        TransformingLazyColumn(
+            state = rememberTransformingLazyColumnState(),
             modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             item {
                 Text(
@@ -125,9 +126,9 @@ fun PreviewScoreScreen() {
 @Composable
 fun PreviewTeamsScreen() {
     ConvocadosWearTheme {
-        ScalingLazyColumn(
+        TransformingLazyColumn(
+            state = rememberTransformingLazyColumnState(),
             modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             item {
                 Text(
