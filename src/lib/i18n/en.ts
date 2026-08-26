@@ -64,6 +64,8 @@ const en = {
   invitedPlayers: "Invited ({n})",
   invitePendingLabel: "Pending",
   coPlaySuggestions: "Suggested for you",
+  showMoreSuggestions: "Show more suggestions",
+  showFewerSuggestions: "Show fewer suggestions",
   inviteSent: "Invite sent to {name}. Share the link to get them in.",
   youAreOnBench: "You're on the bench — you'll be promoted if a spot opens.",
   youArePlaying: "You joined as {name}",
