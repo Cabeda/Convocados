@@ -698,7 +698,10 @@ data class CoPlaySuggestion(
 data class SuggestionsResponse(val suggestions: List<CoPlaySuggestion> = emptyList())
 
 @Serializable
-data class InviteCreateRequest(val userId: String)
+data class InviteCreateRequest(val userId: String, val deliver: Boolean = true)
+
+@Serializable
+data class GuestInviteCreateRequest(val name: String)
 
 @Serializable
 data class InviteResendRequest(val inviteId: String)

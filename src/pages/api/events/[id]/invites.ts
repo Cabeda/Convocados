@@ -2,7 +2,8 @@ import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { getSession, checkEventAdmin } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
-import { createPlayerInvite, retractPlayerInvite, expirePendingInvites, resendPlayerInvite, InviteResendCooldownError } from "~/lib/invite.server";
+import { createPlayerInvite, createGuestPlayerInvite, retractPlayerInvite, expirePendingInvites, resendPlayerInvite, InviteResendCooldownError } from "~/lib/invite.server";
+import { upsertEventPlayerForRoster } from "~/lib/rosterCore.server";
 import { getNotificationPrefs, wantsInvites } from "~/lib/notificationPrefs.server";
 
 /**
@@ -124,8 +125,52 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!event.currentGameId) return Response.json({ error: "This event has no current game." }, { status: 400 });
   if (event.dateTime <= new Date()) return Response.json({ error: "This game has already started." }, { status: 400 });
 
-  let body: { userId?: unknown; email?: unknown };
+  let body: { userId?: unknown; email?: unknown; name?: unknown; deliver?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
+
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
+  const origin = `${proto}://${host}`;
+
+  // Guest invite (anonymous player, no account): { name } → silent link-only
+  // token on an anonymous EventPlayer shell. The inviter shares the URL; the
+  // accepting user claims the row.
+  if (typeof body.name === "string" && body.name.trim() && typeof body.userId !== "string" && typeof body.email !== "string") {
+    const guestName = body.name.trim().slice(0, 50);
+    const ep = await upsertEventPlayerForRoster(eventId, { name: guestName, userId: null, user: null });
+    // Guest-relevant blocks only — prefs/opt-out/no-show-by-user don't apply.
+    const [activeParticipant, pendingInvite, rsvpNo] = await Promise.all([
+      prisma.gameParticipant.findFirst({
+        where: { gameId: event.currentGameId, eventPlayerId: ep.id, archivedAt: null, status: { not: "pending" } },
+        select: { id: true },
+      }),
+      prisma.playerInvite.findFirst({ where: { gameId: event.currentGameId, eventPlayerId: ep.id, status: "pending" }, select: { id: true } }),
+      prisma.rsvp.findFirst({ where: { gameId: event.currentGameId, eventPlayerId: ep.id, status: "no" }, select: { id: true } }),
+    ]);
+    if (activeParticipant) return Response.json({ error: "This player is already on the player list." }, { status: 409 });
+    if (rsvpNo) return Response.json({ error: "This player declined this game." }, { status: 409 });
+    if (pendingInvite) {
+      // Re-share: refresh nothing, just hand back the live pending invite.
+      const existing = await prisma.playerInvite.findFirstOrThrow({
+        where: { gameId: event.currentGameId, eventPlayerId: ep.id, status: "pending" },
+      });
+      return Response.json({ ok: true, inviteId: existing.id, token: existing.token, inviteUrl: `${origin}/invite/${existing.token}`, channels: { email: false, webPush: false, appPush: false } });
+    }
+    try {
+      const result = await createGuestPlayerInvite({
+        eventId,
+        gameId: event.currentGameId,
+        eventPlayerId: ep.id,
+        invitedByUserId: session.user.id,
+        origin,
+      });
+      return Response.json({ ok: true, ...result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create invite.";
+      return Response.json({ error: message }, { status: 400 });
+    }
+  }
+
   let inviteeUserId: string;
   if (typeof body.userId === "string" && body.userId.trim()) {
     inviteeUserId = body.userId.trim();
@@ -137,15 +182,11 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
     inviteeUserId = user.id;
   } else {
-    return Response.json({ error: "userId or email is required." }, { status: 400 });
+    return Response.json({ error: "userId, email or name is required." }, { status: 400 });
   }
 
   const reason = await inviteBlockReason(eventId, event.currentGameId, inviteeUserId);
   if (reason) return Response.json({ error: reason }, { status: 409 });
-
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "convocados.cabeda.dev";
-  const proto = request.headers.get("x-forwarded-proto") ?? "https";
-  const origin = `${proto}://${host}`;
 
   try {
     const result = await createPlayerInvite({
@@ -154,6 +195,9 @@ export const POST: APIRoute = async ({ params, request }) => {
       inviteeUserId,
       invitedByUserId: session.user.id,
       origin,
+      // deliver:false → share-a-link flow: token created silently, the inviter
+      // delivers the URL themselves (no email/push/in-app notification).
+      delivery: body.deliver === false ? "link-only" : "auto",
     });
     return Response.json({ ok: true, ...result });
   } catch (err) {
