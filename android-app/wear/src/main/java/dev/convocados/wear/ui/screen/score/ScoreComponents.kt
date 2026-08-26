@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
@@ -36,6 +37,7 @@ import androidx.wear.compose.material3.LocalContentColor
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.rememberAnimatedTextFontRegistry
+import dev.convocados.wear.ui.theme.Warning
 
 /**
  * A full-height team tile: tap to add a point, long-press to subtract one.
@@ -124,13 +126,21 @@ internal fun TeamScoreButton(
 
 /** Game-progress indicator that hugs the screen edge, starting at 12 o'clock. */
 @Composable
-internal fun GameEdgeProgress(progress: Float, modifier: Modifier = Modifier) {
+internal fun GameEdgeProgress(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    alarmFractions: List<Float> = emptyList(),
+    nextAlarmFraction: Float? = null,
+) {
     if (progress <= 0f) return
 
     val isRound = LocalConfiguration.current.isScreenRound
     val fillColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.surfaceContainer
     val tickColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+    val alarmTickColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+    val nextAlarmTickColor = MaterialTheme.colorScheme.primary
+    val endColor = Warning
 
     Canvas(modifier = modifier.fillMaxSize()) {
         val stroke = 5.dp.toPx()
@@ -142,6 +152,7 @@ internal fun GameEdgeProgress(progress: Float, modifier: Modifier = Modifier) {
         val h = bottom - top
         val r = if (isRound) minOf(w, h) / 2f else 28.dp.toPx()
         val cx = left + w / 2f
+        val cy = top + h / 2f
 
         val path = Path().apply {
             moveTo(cx, top)
@@ -159,15 +170,57 @@ internal fun GameEdgeProgress(progress: Float, modifier: Modifier = Modifier) {
         drawPath(path, trackColor, style = Stroke(width = stroke))
 
         val measure = PathMeasure().apply { setPath(path, false) }
+
+        // Subtle reference dots (base ring). Alarm ticks render on top of these.
         val ticks = 12
         for (i in 0 until ticks) {
             drawCircle(tickColor, radius = 1.5.dp.toPx(), center = measure.getPosition(measure.length * i / ticks))
+        }
+
+        val center = Offset(cx, cy)
+
+        // End-of-game notch at full time.
+        val endPos = measure.getPosition(measure.length)
+        drawTick(center, endPos, endColor, stroke, length = 1.6f, thickness = 2.2f)
+
+        // Alarm tick marks: emphasise the next upcoming one, dim the rest.
+        alarmFractions.forEach { f ->
+            val pos = measure.getPosition(measure.length * f.coerceIn(0f, 1f))
+            val isNext = f == nextAlarmFraction
+            drawTick(
+                center = center,
+                pos = pos,
+                color = if (isNext) nextAlarmTickColor else alarmTickColor,
+                stroke = stroke,
+                length = if (isNext) 2.4f else 1.4f,
+                thickness = if (isNext) 2.4f else 1.6f,
+            )
         }
 
         val segment = Path()
         measure.getSegment(0f, measure.length * progress.coerceIn(0f, 1f), segment, true)
         drawPath(segment, fillColor, style = Stroke(width = stroke, cap = StrokeCap.Round))
     }
+}
+
+/** Draw a short radial tick mark extending outward from [center] through [pos]. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTick(
+    center: Offset,
+    pos: Offset,
+    color: Color,
+    stroke: Float,
+    length: Float,
+    thickness: Float,
+) {
+    val dx = pos.x - center.x
+    val dy = pos.y - center.y
+    val norm = kotlin.math.sqrt(dx * dx + dy * dy)
+    if (norm == 0f) return
+    val ux = dx / norm
+    val uy = dy / norm
+    val start = Offset(pos.x - ux * length * stroke, pos.y - uy * length * stroke)
+    val end = Offset(pos.x + ux * length * stroke, pos.y + uy * length * stroke)
+    drawLine(color, start, end, strokeWidth = thickness * stroke, cap = StrokeCap.Round)
 }
 
 /** Lightweight elapsed-time pill (m:ss). */

@@ -47,6 +47,20 @@ EventPlayer.name is mutable (owner/admin can rename for typo fixes or disambigua
 
 _Avoid_: PlayerRating (absorbed into EventPlayer), series player
 
+## Game Alarm
+A scheduled vibration on the Wear app, relative to kickoff — SINGLE fires once at `kickoff + minute`, RECURRING fires every `minute` from kickoff. Displayed and scheduled from the same `computeAlarmTimes()` so the marks on the ring and the `AlarmManager` fire never diverge.
+_Avoid_: alert, reminder, timer, notification
+
+## Game Window
+The interval `[kickoff, kickoff + sportDuration]` during which Game Alarms can fire. Game Alarm marks are bounded by it — recurring marks stop at the end so they never overhang beyond full time.
+
+## Alert Tick
+A visual mark on the Wear game-progress ring representing one Game Alarm fire point (a `minute/duration` fraction of the ring, computed from `computeAlarmTimes`). The next upcoming tick is emphasised; the progress head approaching it signals proximity. Not a timer — it shows *when* an alarm is planned, not how long until it fires.
+_Avoid_: timer, countdown, tick mark, alarm indicator
+
+## Elapsed Clock
+The live `m:ss` shown on the Wear score screen, time since the effective kickoff. Distinct from Game Alarm marks and from the system time — kept compact and clear of the progress arc.
+
 ## Account-linked Player
 An **EventPlayer** whose `userId` is set — the person has a Convocados **User** account. Represented in the player list by that user's profile identity (avatar, or first-initial placeholder when no image) rather than a badge: having an account is an *identity* statement, not a *protection* statement.
 
