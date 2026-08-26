@@ -5,9 +5,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,11 +53,43 @@ fun GamesScreen(
         }
     }
 
+    // Auto-refresh when returning to this screen (VM survives the detour), so
+    // the list picks up updates after the user was elsewhere — silently
+    // degrades to cached data when there is no internet.
+    LaunchedEffect(Unit) {
+        viewModel.onScreenEntered()
+    }
+
     val columnState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 
     val visiblePastGames = remember(state.pastGames, state.visiblePastCount) {
         state.pastGames.take(state.visiblePastCount)
+    }
+
+    // Pull-down at the top triggers a refresh (replaces the refresh button).
+    val pullThreshold = with(LocalDensity.current) { 72.dp.toPx() }
+    var pullDistance by remember { mutableFloatStateOf(0f) }
+    var refreshing by remember { mutableStateOf(false) }
+    val pullToRefresh = remember(viewModel) {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y > 0f && !columnState.canScrollBackward) {
+                    pullDistance += available.y
+                    if (pullDistance >= pullThreshold && !refreshing) {
+                        pullDistance = 0f
+                        refreshing = true
+                        viewModel.refresh()
+                    }
+                } else if (available.y < 0f) {
+                    pullDistance = 0f
+                }
+                return Offset.Zero
+            }
+        }
+    }
+    LaunchedEffect(state.isLoading) {
+        if (!state.isLoading) refreshing = false
     }
 
     ScreenScaffold(scrollState = columnState) { contentPadding ->
@@ -93,7 +133,7 @@ fun GamesScreen(
                 TransformingLazyColumn(
                     state = columnState,
                     contentPadding = contentPadding,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().nestedScroll(pullToRefresh),
                 ) {
                     item {
                         ListHeader(
@@ -111,12 +151,22 @@ fun GamesScreen(
                         }
                     }
 
-                    item {
-                        CompactButton(onClick = { viewModel.refresh() }) {
-                            Text(
-                                text = stringResource(R.string.refresh),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
+                    // Pull-to-refresh feedback while a refresh is in flight.
+                    if (refreshing || state.isLoading) {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.refreshing),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
 

@@ -50,6 +50,7 @@
     <string name="continue_quick_game">Continue game</string>
     <string name="restart_quick_game">Restart</string>
     <string name="quick_end_hint">Swipe up to end</string>
+    <string name="refreshing">Refreshing…</string>
     <string name="refresh">Refresh</string>
 
     <!-- Teams screen -->
