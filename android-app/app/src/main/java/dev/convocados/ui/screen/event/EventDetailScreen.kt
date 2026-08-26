@@ -408,6 +408,26 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Share-a-link flow (web parity, PR #833): create the invite token silently
+     * (deliver:false — no email/push/in-app notification) and always hand the
+     * URL to the share sheet so the inviter delivers it themselves.
+     */
+    fun shareInviteLink(eventId: String, userId: String, playerName: String) {
+        viewModelScope.launch {
+            runCatching { api.sendInvite(eventId, userId, deliver = false) }
+                .onSuccess { res ->
+                    _state.value = _state.value.copy(
+                        coPlaySuggestions = _state.value.coPlaySuggestions.filter { it.userId != userId },
+                    )
+                    if (res.inviteUrl.isNotBlank()) {
+                        _state.value = _state.value.copy(pendingShareInvite = PendingShareInvite(res.inviteUrl, playerName))
+                    }
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message) }
+        }
+    }
+
     fun dismissShareInvite() {
         _state.value = _state.value.copy(pendingShareInvite = null)
     }
@@ -1149,12 +1169,28 @@ fun EventDetailScreen(
                     AlertDialog(
                         onDismissRequest = { pendingAdd = null },
                         title = { Text(if (isRegistered) "Add or invite ${pending.name}?" else "Add ${pending.name}?") },
-                        text = { Text(when {
-                            pending.email != null && isBench -> "${pending.name} will be invited by email (${pending.email}) and placed on the bench."
-                            pending.email != null -> "${pending.name} will be invited by email (${pending.email})."
-                            isBench -> "${pending.name} joins ${ev.title} \u2014 the list is full, so they go to the bench."
-                            else -> "${pending.name} joins ${ev.title}."
-                        }) },
+                        text = {
+                            Column {
+                                Text(when {
+                                    pending.email != null && isBench -> "${pending.name} will be invited by email (${pending.email}) and placed on the bench."
+                                    pending.email != null -> "${pending.name} will be invited by email (${pending.email})."
+                                    isBench -> "${pending.name} joins ${ev.title} \u2014 the list is full, so they go to the bench."
+                                    else -> "${pending.name} joins ${ev.title}."
+                                })
+                                // Web parity (PR #833): silent link-only invite handed
+                                // straight to the share sheet — nothing sent to the invitee.
+                                if (isRegistered) {
+                                    Spacer(Modifier.height(8.dp))
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.shareInviteLink(eventId, pending.userId!!, pending.name)
+                                            pendingAdd = null
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) { Text(stringResource(R.string.invite_share_link), color = MaterialTheme.colorScheme.primary) }
+                                }
+                            }
+                        },
                         confirmButton = {
                             if (isRegistered) TextButton(onClick = { viewModel.inviteSuggestion(eventId, pending.userId!!, pending.name); pendingAdd = null }) { Text(stringResource(R.string.invite)) }
                             else TextButton(onClick = { viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email); pendingAdd = null }) { Text(stringResource(R.string.add_button)) }

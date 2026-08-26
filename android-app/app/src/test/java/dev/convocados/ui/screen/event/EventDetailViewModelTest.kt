@@ -295,7 +295,7 @@ class EventDetailViewModelTest {
 
     @Test
     fun `invite with no notification channel surfaces share invite`() = runTest {
-        coEvery { api.sendInvite(eventId, "u-new") } returns InviteCreateResponse(
+        coEvery { api.sendInvite(eventId, "u-new", any()) } returns InviteCreateResponse(
             ok = true,
             inviteUrl = "https://convocados.cabeda.dev/invite/abc",
             channels = InviteChannels(email = false, webPush = false, appPush = false),
@@ -315,7 +315,7 @@ class EventDetailViewModelTest {
 
     @Test
     fun `invite with a notification channel does not offer share`() = runTest {
-        coEvery { api.sendInvite(eventId, "u-new") } returns InviteCreateResponse(
+        coEvery { api.sendInvite(eventId, "u-new", any()) } returns InviteCreateResponse(
             ok = true,
             inviteUrl = "https://convocados.cabeda.dev/invite/abc",
             channels = InviteChannels(email = true, webPush = false, appPush = false),
@@ -327,6 +327,43 @@ class EventDetailViewModelTest {
             advanceUntilIdle()
 
             assertNull(expectMostRecentItem().pendingShareInvite)
+        }
+    }
+
+    @Test
+    fun `share-link invite requests silent delivery and always surfaces share`() = runTest {
+        // Even when the invitee HAS channels, the share-a-link flow must stay
+        // silent server-side and hand the URL to the inviter.
+        coEvery { api.sendInvite(eventId, "u-luis", false) } returns InviteCreateResponse(
+            ok = true,
+            inviteUrl = "https://convocados.cabeda.dev/invite/xyz",
+            channels = InviteChannels(email = true, webPush = true, appPush = true),
+        )
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.shareInviteLink(eventId, "u-luis", "Luís")
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { api.sendInvite(eventId, "u-luis", false) }
+            assertEquals(
+                PendingShareInvite("https://convocados.cabeda.dev/invite/xyz", "Luís"),
+                expectMostRecentItem().pendingShareInvite,
+            )
+        }
+    }
+
+    @Test
+    fun `share-link invite failure surfaces error`() = runTest {
+        coEvery { api.sendInvite(eventId, "u-luis", false) } throws ApiException(409, "This user already has a pending invite.")
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.shareInviteLink(eventId, "u-luis", "Luís")
+            advanceUntilIdle()
+
+            assertNull(expectMostRecentItem().pendingShareInvite)
+            assertEquals("This user already has a pending invite.", expectMostRecentItem().error)
         }
     }
 
