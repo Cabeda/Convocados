@@ -558,7 +558,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
         const res = await fetch(`/api/events/${eventId}/invites`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(intent.userId ? { userId: intent.userId } : { email: intent.email }),
+          body: JSON.stringify(
+            intent.userId
+              ? { userId: intent.userId, deliver: false }
+              : intent.email
+                ? { email: intent.email, deliver: false }
+                : { name: intent.name },
+          ),
         });
         const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
         if (res.ok && typeof json?.inviteUrl === "string") {

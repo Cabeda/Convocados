@@ -52,4 +52,19 @@ describe("AddPlayerConfirmDialog — share-link action", () => {
       "notify",
     );
   });
+
+  it("offers share-link to anonymous guests (their only invite path)", () => {
+    const onConfirm = vi.fn();
+    renderWithTheme(
+      <AddPlayerConfirmDialog
+        {...baseProps}
+        intent={{ kind: "single", name: "Manecas", source: "input" }}
+        onConfirm={onConfirm}
+      />,
+    );
+    // No notify option without an account — but Share link is present.
+    expect(screen.queryByTestId("add-player-confirm-invite")).toBeNull();
+    fireEvent.click(screen.getByTestId("add-player-confirm-share"));
+    expect(onConfirm).toHaveBeenCalledWith({ kind: "single", name: "Manecas", source: "input" }, true, "link");
+  });
 });

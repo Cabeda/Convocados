@@ -428,6 +428,19 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
+    /** Guest link invite for an anonymous player (no account) — always silent. */
+    fun shareGuestLink(eventId: String, playerName: String) {
+        viewModelScope.launch {
+            runCatching { api.sendGuestInvite(eventId, playerName) }
+                .onSuccess { res ->
+                    if (res.inviteUrl.isNotBlank()) {
+                        _state.value = _state.value.copy(pendingShareInvite = PendingShareInvite(res.inviteUrl, playerName))
+                    }
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message) }
+        }
+    }
+
     fun dismissShareInvite() {
         _state.value = _state.value.copy(pendingShareInvite = null)
     }
@@ -1179,11 +1192,21 @@ fun EventDetailScreen(
                                 })
                                 // Web parity (PR #833): silent link-only invite handed
                                 // straight to the share sheet — nothing sent to the invitee.
+                                // Available for guests too: their only invite path.
                                 if (isRegistered) {
                                     Spacer(Modifier.height(8.dp))
                                     TextButton(
                                         onClick = {
                                             viewModel.shareInviteLink(eventId, pending.userId!!, pending.name)
+                                            pendingAdd = null
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) { Text(stringResource(R.string.invite_share_link), color = MaterialTheme.colorScheme.primary) }
+                                } else {
+                                    Spacer(Modifier.height(8.dp))
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.shareGuestLink(eventId, pending.name)
                                             pendingAdd = null
                                         },
                                         modifier = Modifier.fillMaxWidth(),

@@ -338,6 +338,10 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun sendInvite(eventId: String, userId: String, deliver: Boolean = true): InviteCreateResponse =
         client.post("/api/events/$eventId/invites", InviteCreateRequest(userId, deliver))
 
+    /** Guest link invite for an anonymous player (no account) — always silent. */
+    suspend fun sendGuestInvite(eventId: String, name: String): InviteCreateResponse =
+        client.post("/api/events/$eventId/invites", GuestInviteCreateRequest(name))
+
     suspend fun resendInvite(eventId: String, inviteId: String): InviteResendResponse =
         client.patch("/api/events/$eventId/invites", InviteResendRequest(inviteId))
 

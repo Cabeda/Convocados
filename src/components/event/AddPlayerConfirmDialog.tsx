@@ -122,33 +122,33 @@ export function AddPlayerConfirmDialog({
               </DialogContentText>
             </Box>
           )}
-          {hasContactChannel && (
-            <ListItem
-              component="button"
-              type="button"
-              data-testid="add-player-confirm-share"
-              disabled={busy}
-              onClick={() => onConfirm(intent, true, "link")}
-              sx={{
-                display: "flex", alignItems: "flex-start", gap: 1.5, width: "100%",
-                border: 1, borderColor: "divider", borderRadius: 2,
-                px: 1.5, py: 1.25, textAlign: "left", bgcolor: "transparent",
-                cursor: "pointer", "&:hover": { bgcolor: "action.hover" },
+          {/* Link-share is available for every target — registered or guest.
+              Guests have no channel at all, so this is their only invite path. */}
+          <ListItem
+            component="button"
+            type="button"
+            data-testid="add-player-confirm-share"
+            disabled={busy}
+            onClick={() => onConfirm(intent, true, "link")}
+            sx={{
+              display: "flex", alignItems: "flex-start", gap: 1.5, width: "100%",
+              border: 1, borderColor: "divider", borderRadius: 2,
+              px: 1.5, py: 1.25, textAlign: "left", bgcolor: "transparent",
+              cursor: "pointer", "&:hover": { bgcolor: "action.hover" },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 0, mt: 0.25 }}>
+              <ShareIcon fontSize="small" color="primary" />
+            </ListItemIcon>
+            <ListItemText
+              primary={t("choiceShareLinkTitle")}
+              secondary={t("choiceShareLinkDesc", { name })}
+              slotProps={{
+                primary: { sx: { fontWeight: 600 } },
+                secondary: { sx: { mt: 0.25 } },
               }}
-            >
-              <ListItemIcon sx={{ minWidth: 0, mt: 0.25 }}>
-                <ShareIcon fontSize="small" color="primary" />
-              </ListItemIcon>
-              <ListItemText
-                primary={t("choiceShareLinkTitle")}
-                secondary={t("choiceShareLinkDesc", { name })}
-                slotProps={{
-                  primary: { sx: { fontWeight: 600 } },
-                  secondary: { sx: { mt: 0.25 } },
-                }}
-              />
-            </ListItem>
-          )}
+            />
+          </ListItem>
         </List>
       </DialogContent>
       <DialogActions>
