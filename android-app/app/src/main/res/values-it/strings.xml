@@ -144,6 +144,11 @@
     <string name="unlock">Sblocca</string>
     <string name="event_not_found">Evento non trovato</string>
     <string name="go_back">Indietro</string>
+    <string name="error_page_title">Qualcosa è andato storto</string>
+    <string name="error_offline_message">Siamo spiacenti — non è stato possibile caricare questa partita. Controlla la connessione internet e riprova.</string>
+    <string name="retry">Riprova</string>
+    <string name="back_to_games">Torna alle mie partite</string>
+    <string name="offline_stale_banner">Sei offline — vengono mostrati gli ultimi dati salvati di questa partita.</string>
     <string name="share">Condividi</string>
     <string name="randomize">Sorteggia</string>
     <string name="settings">Impostazioni</string>

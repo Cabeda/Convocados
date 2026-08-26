@@ -99,10 +99,13 @@ class GamesViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
             val result = repository.refreshGames()
             _uiState.update {
+                // Offline-first: the localized offline banner (isOffline) tells
+                // the story. Raw exception messages (e.g. "Socket timeout has
+                // expired") never belong on screen.
                 it.copy(
                     isLoading = false,
                     isOffline = result.isFailure,
-                    error = result.exceptionOrNull()?.message,
+                    error = null,
                 )
             }
         }

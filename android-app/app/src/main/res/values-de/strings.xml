@@ -144,6 +144,11 @@
     <string name="unlock">Entsperren</string>
     <string name="event_not_found">Ereignis nicht gefunden</string>
     <string name="go_back">Zurück</string>
+    <string name="error_page_title">Etwas ist schiefgelaufen</string>
+    <string name="error_offline_message">Es tut uns leid — wir konnten dieses Spiel nicht laden. Bitte prüfe deine Internetverbindung und versuche es erneut.</string>
+    <string name="retry">Erneut versuchen</string>
+    <string name="back_to_games">Zurück zu meinen Spielen</string>
+    <string name="offline_stale_banner">Du bist offline — die zuletzt gespeicherten Daten dieses Spiels werden angezeigt.</string>
     <string name="share">Teilen</string>
     <string name="randomize">Auslosen</string>
     <string name="settings">Einstellungen</string>
