@@ -1,6 +1,7 @@
 package dev.convocados.wear.ui.screen.score
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -25,13 +26,16 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.wear.compose.material3.AnimatedText
+import androidx.wear.compose.material3.LocalContentColor
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.rememberAnimatedTextFontRegistry
 
 /**
  * A full-height team tile: tap to add a point, long-press to subtract one.
@@ -52,6 +56,27 @@ internal fun TeamScoreButton(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed && enabled) 0.97f else 1f, label = "press")
+
+    // Flex-font registry drives the score's "roll" on each point: weight + width
+    // swell briefly so the tile feels responsive, using M3 Expressive AnimatedText.
+    val fontRegistry = rememberAnimatedTextFontRegistry(
+        startFontVariationSettings = FontVariation.Settings(
+            FontVariation.width(60f),
+            FontVariation.weight(600),
+        ),
+        endFontVariationSettings = FontVariation.Settings(
+            FontVariation.width(100f),
+            FontVariation.weight(800),
+        ),
+        startFontSize = 42.sp,
+        endFontSize = 48.sp,
+    )
+    val scoreAnim = remember { Animatable(0f) }
+    LaunchedEffect(score) {
+        scoreAnim.snapTo(0f)
+        scoreAnim.animateTo(1f)
+        scoreAnim.animateTo(0f)
+    }
     Column(
         modifier = modifier
             .scale(scale)
@@ -86,14 +111,14 @@ internal fun TeamScoreButton(
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
         )
-        Text(
-            text = "$score",
-            style = MaterialTheme.typography.displayLarge.copy(
-                fontSize = 44.sp,
-                fontWeight = FontWeight.Bold,
-            ),
-            color = contentColor,
-        )
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            AnimatedText(
+                text = "$score",
+                fontRegistry = fontRegistry,
+                progressFraction = { scoreAnim.value },
+                modifier = Modifier.semantics { contentDescription = score.toString() },
+            )
+        }
     }
 }
 
