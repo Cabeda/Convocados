@@ -86,11 +86,19 @@ class EventRepository @Inject constructor(
     fun getHistory(eventId: String): Flow<List<GameHistory>> =
         eventDetailDao.getHistory(eventId).map { entities -> entities.map { it.toDomain() } }
 
-    suspend fun refreshEventDetail(eventId: String) {
-        try {
+    /**
+     * Fetch the latest event detail into the local cache.
+     *
+     * Returns true when fresh data was persisted, false when the network call
+     * failed (timeout, no connection, server error). Never throws — callers
+     * decide how to degrade: keep showing cached data (stale) or surface an
+     * error page when nothing was ever cached.
+     */
+    suspend fun refreshEventDetail(eventId: String): Boolean {
+        return try {
             val event = api.fetchEvent(eventId)
             val history = runCatching { api.fetchHistory(eventId) }.getOrElse { PaginatedHistory() }
-            
+
             eventDetailDao.refreshEvent(
                 event.toEntity(),
                 event.players.map { it.toEntity(eventId) },
@@ -98,8 +106,9 @@ class EventRepository @Inject constructor(
             )
             // Every successful fetch counts as a "view" — link visits included.
             recordEventView(event.id, event.title, event.location, event.dateTime, event.sport)
+            true
         } catch (e: Exception) {
-            uiEventManager.showSnackbar("Offline: showing cached data")
+            false
         }
     }
 

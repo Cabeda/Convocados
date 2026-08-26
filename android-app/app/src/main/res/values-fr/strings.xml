@@ -142,6 +142,11 @@
     <string name="unlock">Déverrouiller</string>
     <string name="event_not_found">Événement introuvable</string>
     <string name="go_back">Retour</string>
+    <string name="error_page_title">Une erreur est survenue</string>
+    <string name="error_offline_message">Nous sommes désolés — nous n\'avons pas pu charger ce match. Vérifiez votre connexion internet et réessayez.</string>
+    <string name="retry">Réessayer</string>
+    <string name="back_to_games">Retour à mes matchs</string>
+    <string name="offline_stale_banner">Vous êtes hors ligne — affichage des dernières données enregistrées pour ce match.</string>
     <string name="share">Partager</string>
     <string name="randomize">Tirer au sort</string>
     <string name="settings">Paramètres</string>
