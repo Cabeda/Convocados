@@ -86,7 +86,15 @@ export const POST: APIRoute = async ({ params, request }) => {
   });
   if (!game) return Response.json({ error: "Game not found." }, { status: 404 });
   if (game.dateTime <= new Date()) {
-    await prisma.playerInvite.update({ where: { id: invite.id }, data: { status: "expired" } });
+    // Expire + clean the pending roster ghost the invite planted (same
+    // transactional shape as expirePendingInvites — see invite.server.ts).
+    await prisma.$transaction([
+      prisma.playerInvite.update({ where: { id: invite.id }, data: { status: "expired" } }),
+      prisma.gameParticipant.deleteMany({
+        where: { gameId: invite.gameId, eventPlayerId: invite.eventPlayerId, status: "pending" },
+      }),
+      prisma.rsvp.deleteMany({ where: { gameId: invite.gameId, eventPlayerId: invite.eventPlayerId } }),
+    ]);
     return Response.json({ error: "This invite has expired." }, { status: 410 });
   }
 
