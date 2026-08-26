@@ -7,6 +7,7 @@ import { getSession, checkEventAdmin } from "../../../../lib/auth.helpers.server
 import { checkAccess } from "../../../../lib/eventAccess";
 import { cancelEventJobs, scheduleEventReminders } from "../../../../lib/scheduler.server";
 import { computePostGameStatus } from "../../../../lib/postgame.server";
+import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({
@@ -243,11 +244,22 @@ export const GET: APIRoute = async ({ params, request }) => {
   let playersByName = new Map<string, string | null>();
   let imageByUserId = new Map<string, string | null>();
   if (event.currentGameId) {
-    const participants = await prisma.gameParticipant.findMany({
-      where: { gameId: event.currentGameId, archivedAt: null },
-      include: { eventPlayer: true },
-      orderBy: { order: "asc" },
-    });
+    // Use shared helper for active roster (status != pending) and a parallel
+    // query for pending ghosts (ADR 0025). Single where shape kept in one place (#803).
+    const [activeParticipants, pendingRows] = await Promise.all([
+      prisma.gameParticipant.findMany({
+        where: activeParticipantsWhere(event.currentGameId),
+        include: { eventPlayer: true },
+        orderBy: { order: "asc" },
+      }),
+      prisma.gameParticipant.findMany({
+        where: { gameId: event.currentGameId, archivedAt: null, status: "pending" },
+        include: { eventPlayer: true },
+        orderBy: { order: "asc" },
+      }),
+    ]);
+    pendingParticipants = pendingRows;
+    const participants = [...activeParticipants, ...pendingRows].sort((a, b) => a.order - b.order);
 
     // ponytail: EventPlayer.userId may be stale (null) if the player rejoined
     // after a reset and the upsert didn't update it. Fall back to the event-level
@@ -257,12 +269,6 @@ export const GET: APIRoute = async ({ params, request }) => {
         .filter((p) => p.userId)
         .map((p) => [p.name, p.userId]),
     );
-
-    // ADR 0025: pending invite entries (status="pending") are roster ghosts —
-    // shown separately as "invited", excluded from playersPayload so they never
-    // pollute roster/bench counts, payments or team draws.
-    const activeParticipants = participants.filter((gp) => gp.status !== "pending");
-    pendingParticipants = participants.filter((gp) => gp.status === "pending");
 
     // EventPlayer has no Prisma relation to User, so resolve profile images in
     // one batch query keyed by the resolved userId (account-linked identity).

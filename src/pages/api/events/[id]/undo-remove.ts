@@ -74,8 +74,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     if (ep) {
       await prisma.gameParticipant.upsert({
         where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: ep.id } },
-        create: { gameId: event.currentGameId, eventPlayerId: ep.id, order },
-        update: { archivedAt: null, order },
+        create: { gameId: event.currentGameId, eventPlayerId: ep.id, order, status: "active" },
+        update: { archivedAt: null, order, status: "active" },
       });
     }
   }

@@ -890,35 +890,48 @@ fun EventDetailScreen(
     var declinedOpen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(state.teamMoveUndo) {
-        val undo = state.teamMoveUndo ?: return@LaunchedEffect
+    // Hoisted string resources for LaunchedEffect snackbars — avoids
+    // LocalContextGetResourceValueCall (must use stringResource, not context.getString inside effects).
+    val teamMoveUndo = state.teamMoveUndo
+    val playerMovedMessage = teamMoveUndo?.let { stringResource(R.string.player_moved, it.playerName) } ?: ""
+    val undoLabel = stringResource(R.string.undo)
+    val addedPlayerNameForSnackbar = state.addedPlayerName
+    val addedPlayerMessage = addedPlayerNameForSnackbar?.let { stringResource(R.string.added_player_confirm, it) } ?: ""
+    val resendNoticeForSnackbar = state.resendNotice
+    val resendMessage = resendNoticeForSnackbar?.let { notice ->
+        if (notice.cooldownSeconds != null) {
+            val mins = (notice.cooldownSeconds / 60).coerceAtLeast(1)
+            val time = if (mins >= 60) "${mins / 60}h ${mins % 60}m" else "${mins}m"
+            stringResource(R.string.invite_resend_cooldown, time)
+        } else {
+            stringResource(R.string.invite_resent, notice.playerName)
+        }
+    } ?: ""
+    val removedInviteNameForSnackbar = state.removedInviteName
+    val inviteRemovedMessage = removedInviteNameForSnackbar?.let { stringResource(R.string.invite_removed, it) } ?: ""
+
+    LaunchedEffect(teamMoveUndo) {
+        if (teamMoveUndo == null) return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
-            message = context.getString(R.string.player_moved, undo.playerName),
-            actionLabel = context.getString(R.string.undo),
+            message = playerMovedMessage,
+            actionLabel = undoLabel,
             duration = SnackbarDuration.Short,
         )
         if (result == SnackbarResult.ActionPerformed) viewModel.undoTeamMove(eventId)
     }
-    LaunchedEffect(state.addedPlayerName) {
-        val name = state.addedPlayerName ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(message = context.getString(R.string.added_player_confirm, name), duration = SnackbarDuration.Short)
+    LaunchedEffect(addedPlayerNameForSnackbar) {
+        if (addedPlayerNameForSnackbar == null) return@LaunchedEffect
+        snackbarHostState.showSnackbar(message = addedPlayerMessage, duration = SnackbarDuration.Short)
         viewModel.dismissAddedPlayerSnackbar()
     }
-    LaunchedEffect(state.resendNotice) {
-        val notice = state.resendNotice ?: return@LaunchedEffect
-        val msg = if (notice.cooldownSeconds != null) {
-            val mins = (notice.cooldownSeconds / 60).coerceAtLeast(1)
-            val time = if (mins >= 60) "${mins / 60}h ${mins % 60}m" else "${mins}m"
-            context.getString(R.string.invite_resend_cooldown, time)
-        } else {
-            context.getString(R.string.invite_resent, notice.playerName)
-        }
-        snackbarHostState.showSnackbar(message = msg, duration = SnackbarDuration.Short)
+    LaunchedEffect(resendNoticeForSnackbar) {
+        if (resendNoticeForSnackbar == null) return@LaunchedEffect
+        snackbarHostState.showSnackbar(message = resendMessage, duration = SnackbarDuration.Short)
         viewModel.dismissResendNotice()
     }
-    LaunchedEffect(state.removedInviteName) {
-        val name = state.removedInviteName ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(message = context.getString(R.string.invite_removed, name), duration = SnackbarDuration.Short)
+    LaunchedEffect(removedInviteNameForSnackbar) {
+        if (removedInviteNameForSnackbar == null) return@LaunchedEffect
+        snackbarHostState.showSnackbar(message = inviteRemovedMessage, duration = SnackbarDuration.Short)
         viewModel.dismissRemovedInviteName()
     }
     LaunchedEffect(state.error) {
