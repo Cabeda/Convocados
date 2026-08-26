@@ -46,6 +46,7 @@ fun GamesScreen(
     onGameSelected: (String) -> Unit,
     onSignOut: () -> Unit,
     onQuickGame: () -> Unit = {},
+    onHistory: () -> Unit = {},
     continueQuickGame: Boolean = false,
     onContinueQuickGame: () -> Unit = {},
 ) {
@@ -310,8 +311,10 @@ fun GamesScreen(
                     }
 
                     item {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        CompactButton(onClick = onQuickGame) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        CompactButton(
+                            onClick = onQuickGame,
+                        ) {
                             Text(
                                 text = stringResource(R.string.quick_game),
                                 style = MaterialTheme.typography.labelSmall,
@@ -322,10 +325,10 @@ fun GamesScreen(
                     item {
                         Spacer(modifier = Modifier.height(4.dp))
                         CompactButton(
-                            onClick = onSignOut,
+                            onClick = onHistory,
                         ) {
                             Text(
-                                text = stringResource(R.string.sign_out),
+                                text = stringResource(R.string.history_title),
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
@@ -343,7 +346,7 @@ private fun GameChip(
     canScore: Boolean,
     onClick: () -> Unit,
 ) {
-    val timeLabel = formatRelativeTime(game.dateTime)
+    val timeLabel = remember(game.dateTime) { formatRelativeTime(game.dateTime) }
 
     Button(
         onClick = onClick,
@@ -357,9 +360,9 @@ private fun GameChip(
         },
         secondaryLabel = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isSuggested && canScore) {
+                if (timeLabel == stringResource(R.string.in_progress)) {
                     Text(
-                        text = stringResource(R.string.now_label),
+                        text = stringResource(R.string.live_badge),
                         style = MaterialTheme.typography.labelSmall,
                         color = Success,
                     )

@@ -50,6 +50,10 @@
     <string name="continue_quick_game">Continue game</string>
     <string name="restart_quick_game">Restart</string>
     <string name="quick_end_hint">Swipe up to end</string>
+    <string name="quick_swipe_hint">↑ End · ↓ Save</string>
+    <string name="save_quick_title">Save to event</string>
+    <string name="save_quick_score">Score %1$d - %2$d</string>
+    <string name="save_quick_saved">Saved</string>
     <string name="refreshing">Refreshing…</string>
     <string name="pull_to_refresh">Pull to refresh</string>
     <string name="refresh">Refresh</string>
@@ -62,4 +66,17 @@
     <string name="bench">Bench</string>
     <string name="move_to_team">→ Team %1$s</string>
     <string name="keep_screen_on_label">Keep screen on</string>
+    <string name="game_end_vibration_label">Vibrate at full time</string>
+    <string name="rotation_interval_label">Rotate every</string>
+    <string name="history_title">History</string>
+    <string name="no_history">No games yet</string>
+    <string name="finish_game">Finish</string>
+    <string name="add_player_title">Add player</string>
+    <string name="add_player_button">Add player</string>
+    <string name="no_known_players">No known players</string>
+    <string name="adding_label">Adding…</string>
+    <string name="done_label">Done</string>
+    <string name="arrived_label">arrived</string>
+    <string name="live_badge">LIVE</string>
+    <string name="ended_label">Ended</string>
 </resources>

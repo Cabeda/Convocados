@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.alarm.AlarmType
+import dev.convocados.wear.data.alarm.AlarmFire
 import dev.convocados.wear.data.alarm.GameAlarm
 import dev.convocados.wear.data.alarm.GameAlarmScheduler
 import dev.convocados.wear.data.alarm.GameSettings
@@ -28,6 +29,7 @@ data class GameSettingsUiState(
     val keepScreenOn: Boolean = true,
     val vibrationEnabled: Boolean = false,
     val vibrationIntervalMinutes: Int = 5,
+    val gameEndVibration: Boolean = false,
 )
 
 @HiltViewModel
@@ -66,6 +68,7 @@ class GameSettingsViewModel @Inject constructor(
                     keepScreenOn = s.keepScreenOn,
                     vibrationEnabled = s.vibrationEnabled,
                     vibrationIntervalMinutes = s.vibrationIntervalMinutes,
+                    gameEndVibration = s.gameEndVibration,
                 )
             }
         }
@@ -107,6 +110,10 @@ class GameSettingsViewModel @Inject constructor(
         it.copy(keepScreenOn = enabled)
     }
 
+    fun setGameEndVibration(enabled: Boolean) = apply {
+        it.copy(gameEndVibration = enabled)
+    }
+
     fun setVibrationEnabled(enabled: Boolean) = apply { s ->
         val updated = s.copy(vibrationEnabled = enabled)
         // When enabling, ensure a recurring alarm exists; when disabling, clear alarms
@@ -134,9 +141,13 @@ class GameSettingsViewModel @Inject constructor(
     /** Persist a change and re-schedule all alarms from the (possibly new) kickoff. */
     private fun apply(transform: (GameSettings) -> GameSettings) {
         val updated = store.update(eventId, transform)
-        scheduler.reschedule(
-            eventId,
-            computeAlarmTimes(effectiveKickoff(updated), updated.alarms, durationMinutes, System.currentTimeMillis()),
-        )
+        val kickoff = effectiveKickoff(updated)
+        val fires = computeAlarmTimes(kickoff, updated.alarms, durationMinutes, System.currentTimeMillis()).toMutableList()
+        // Optional full-time chime (pulses=3 = the "long" pattern).
+        if (updated.gameEndVibration) {
+            val endMs = kickoff + durationMinutes * 60_000L
+            if (endMs > System.currentTimeMillis()) fires += AlarmFire(endMs, pulses = 3)
+        }
+        scheduler.reschedule(eventId, fires)
     }
 }

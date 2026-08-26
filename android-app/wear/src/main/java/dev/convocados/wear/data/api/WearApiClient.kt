@@ -122,6 +122,13 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
     suspend inline fun <reified T> patch(path: String, body: Any? = null): T =
         authenticatedRequest(HttpMethod.Patch, path, body).body()
 
+    suspend fun post(path: String, body: Any? = null) {
+        authenticatedRequest(HttpMethod.Post, path, body)
+    }
+
+    suspend inline fun <reified T> postForResult(path: String, body: Any? = null): T =
+        authenticatedRequest(HttpMethod.Post, path, body).body()
+
     suspend fun getTeams(eventId: String): TeamsResponse =
         get("/api/events/$eventId/teams")
 

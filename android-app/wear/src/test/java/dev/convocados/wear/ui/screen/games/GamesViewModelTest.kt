@@ -39,9 +39,7 @@ class GamesViewModelTest {
     }
 
     private fun makeViewModel(): GamesViewModel {
-        val vm = GamesViewModel(repository, scoreRepository, workManager)
-        vm.tickProvider = { flowOf(Instant.now()) }
-        return vm
+        return GamesViewModel(repository, scoreRepository, workManager)
     }
 
     @Test
