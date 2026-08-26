@@ -48,7 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -77,6 +77,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 
 data class EventScreenState(
     val loading: Boolean = true,
@@ -94,6 +95,15 @@ data class EventScreenState(
     val postGamePaymentsDirty: Boolean = false,
     val postGameSaving: Boolean = false,
     val error: String? = null,
+    // Raw result of the last refresh attempt. Display flags (isStale /
+    // loadFailed) are derived against actual cache presence in the state
+    // combine, so they never race the Room flow.
+    val refreshFailed: Boolean = false,
+    // Offline-first: refresh failed but cached data is on screen — content
+    // may be outdated. Drives the "offline" banner.
+    val isStale: Boolean = false,
+    // The refresh failed AND nothing was ever cached — full error page.
+    val loadFailed: Boolean = false,
     val locked: Boolean = false,
     val undoData: UndoData? = null,
     val teamMoveUndo: TeamMoveUndo? = null,
@@ -150,6 +160,9 @@ data class TeamMoveUndo(
 
 /** Where an add-player suggestion comes from — drives the transparent label. */
 enum class SuggestionSource { EVENT, CO_PLAY }
+
+/** Shared lenient parser for API error bodies (PAYMENT_GATE, invite cooldown). */
+private val errorJson = Json { ignoreUnknownKeys = true }
 
 /**
  * A merged add-player suggestion. [gamesPlayedHere] is the per-event history
@@ -229,7 +242,12 @@ class EventDetailViewModel @Inject constructor(
             event = e,
             history = h,
             loading = s.loading && e == null,
-            locked = if (e?.locked == true) s.locked else false
+            locked = if (e?.locked == true) s.locked else false,
+            // Offline-first: a failed refresh never blanks the page. With
+            // cached data we keep it on screen and flag it stale; with no
+            // cache at all we surface the error page.
+            isStale = s.refreshFailed && e != null,
+            loadFailed = s.refreshFailed && e == null,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EventScreenState(locked = true))
 
@@ -251,7 +269,7 @@ class EventDetailViewModel @Inject constructor(
         _eventId.value = eventId
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = event.value == null)
-            repository.refreshEventDetail(eventId)
+            val refreshed = repository.refreshEventDetail(eventId)
             val postGame = runCatching { api.fetchPostGameStatus(eventId) }.getOrNull()
             val known = runCatching { api.fetchKnownPlayers(eventId) }.getOrNull()?.players ?: emptyList()
             val following = runCatching { api.getFollowState(eventId) }.getOrNull()
@@ -271,6 +289,7 @@ class EventDetailViewModel @Inject constructor(
             else postGame?.paymentsSnapshot
             _state.value = _state.value.copy(
                 loading = false, refreshing = false, postGame = postGame, knownPlayers = known,
+                refreshFailed = !refreshed,
                 postGamePayments = seededPayments,
                 isFollowing = following?.following ?: false,
                 isPlayer = following?.isPlayer ?: false,
@@ -348,6 +367,12 @@ class EventDetailViewModel @Inject constructor(
         load(eventId)
     }
 
+    /** Retry after the full-screen error page (nothing was cached). */
+    fun retry(eventId: String) {
+        _state.value = _state.value.copy(refreshFailed = false)
+        load(eventId)
+    }
+
     fun addPlayer(eventId: String, name: String, link: Boolean = true, email: String? = null) {
         // Generate a fresh UUID per add. Server replays the cached 2xx response
         // if the same key + same body is sent twice (e.g. on a network retry).
@@ -365,7 +390,7 @@ class EventDetailViewModel @Inject constructor(
                     if (e is ApiException && e.code == 402) {
                         // Parse the PAYMENT_GATE response
                         val gateError = runCatching {
-                            kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                            errorJson
                                 .decodeFromString<PaymentGateError>(e.message ?: "")
                         }.getOrNull()
                         _state.value = _state.value.copy(
@@ -401,6 +426,39 @@ class EventDetailViewModel @Inject constructor(
                     // No email/push channel for this invitee → the server intends
                     // the inviter to share the link directly (WhatsApp, SMS, ...).
                     if (!res.channels.email && !res.channels.webPush && !res.channels.appPush && res.inviteUrl.isNotBlank()) {
+                        _state.value = _state.value.copy(pendingShareInvite = PendingShareInvite(res.inviteUrl, playerName))
+                    }
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message) }
+        }
+    }
+
+    /**
+     * Share-a-link flow (web parity, PR #833): create the invite token silently
+     * (deliver:false — no email/push/in-app notification) and always hand the
+     * URL to the share sheet so the inviter delivers it themselves.
+     */
+    fun shareInviteLink(eventId: String, userId: String, playerName: String) {
+        viewModelScope.launch {
+            runCatching { api.sendInvite(eventId, userId, deliver = false) }
+                .onSuccess { res ->
+                    _state.value = _state.value.copy(
+                        coPlaySuggestions = _state.value.coPlaySuggestions.filter { it.userId != userId },
+                    )
+                    if (res.inviteUrl.isNotBlank()) {
+                        _state.value = _state.value.copy(pendingShareInvite = PendingShareInvite(res.inviteUrl, playerName))
+                    }
+                }
+                .onFailure { _state.value = _state.value.copy(error = it.message) }
+        }
+    }
+
+    /** Guest link invite for an anonymous player (no account) — always silent. */
+    fun shareGuestLink(eventId: String, playerName: String) {
+        viewModelScope.launch {
+            runCatching { api.sendGuestInvite(eventId, playerName) }
+                .onSuccess { res ->
+                    if (res.inviteUrl.isNotBlank()) {
                         _state.value = _state.value.copy(pendingShareInvite = PendingShareInvite(res.inviteUrl, playerName))
                     }
                 }
@@ -448,7 +506,7 @@ class EventDetailViewModel @Inject constructor(
                 .onFailure { e ->
                     val retryAfter = if (e is ApiException && e.code == 429) {
                         runCatching {
-                            kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                            errorJson
                                 .decodeFromString<InviteResendErrorBody>(e.message ?: "")
                         }.getOrNull()?.retryAfterSeconds
                     } else null
@@ -812,6 +870,7 @@ fun EventDetailScreen(
     onHistoryClick: (String) -> Unit = {},
     onAllHistory: () -> Unit = {},
     onCourtAlternatives: () -> Unit = {},
+    onBackToGames: () -> Unit = {},
     viewModel: EventDetailViewModel = hiltViewModel(),
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -873,7 +932,8 @@ fun EventDetailScreen(
     }
     LaunchedEffect(eventId) { viewModel.load(eventId) }
     LaunchedEffect(autoOpenPay, state.balance) {
-        if (autoOpenPay && state.balance?.callerBalance != null && state.balance!!.callerBalance!!.amount > 0) viewModel.showPaymentNudge()
+        val caller = state.balance?.callerBalance
+        if (autoOpenPay && caller != null && caller.amount > 0) viewModel.showPaymentNudge()
     }
     // Notification sheet
     if (state.showNotificationSheet) {
@@ -918,11 +978,12 @@ fun EventDetailScreen(
                     Button(onClick = { viewModel.verifyPassword(eventId, password.trim()) }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) { Text(stringResource(R.string.unlock), fontWeight = FontWeight.Bold) }
                 }
             }
-            state.error != null && state.event == null -> {
-                Column(Modifier.fillMaxSize().padding(padding).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text(state.error ?: stringResource(R.string.event_not_found), color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = onBack) { Text(stringResource(R.string.go_back)) }
-                }
+            (state.error != null || state.loadFailed) && state.event == null -> {
+                EventErrorPage(
+                    onRetry = { viewModel.retry(eventId) },
+                    onBackToGames = onBackToGames,
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                )
             }
             else -> {
                 val isDemo = dev.convocados.BuildConfig.DEBUG && state.event == null
@@ -942,6 +1003,7 @@ fun EventDetailScreen(
 
                 PullToRefreshBox(isRefreshing = ds.refreshing, onRefresh = { viewModel.refresh(eventId) }, modifier = Modifier.fillMaxSize().padding(padding)) {
                     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+                        if (ds.isStale) OfflineStaleBanner()
                         // ── HERO ───────────────────────────────────────────────
                         Box(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Brush.verticalGradient(listOf(bg, MaterialTheme.colorScheme.surface))).padding(16.dp)
@@ -970,7 +1032,7 @@ fun EventDetailScreen(
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.padding(top = 4.dp).let {
-                                            if (ev.ownerId != null) it.clickable { onUserClick(ev.ownerId!!) } else it
+                                            if (ev.ownerId != null) it.clickable { onUserClick(requireNotNull(ev.ownerId)) } else it
                                         }
                                     ) {
                                         Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
@@ -1043,9 +1105,10 @@ fun EventDetailScreen(
                                 if (myPlayer == null) {
                                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            if (hasDebt && enforcement != "off") Text(stringResource(R.string.owe_amount, "%.2f".format(callerBalance!!.amount), callerBalance.gamesOwed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                                            Button(onClick = { if (hasDebt && enforcement != "off") viewModel.showPaymentNudge() else viewModel.addPlayer(eventId, effectiveUser!!.name, true) }, enabled = !ds.paymentGateBlocked, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = if (hasDebt && enforcement != "off") MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary)) {
-                                                Text(if (hasDebt && enforcement != "off") stringResource(R.string.pay_and_join, "%.2f".format(callerBalance!!.amount)) else stringResource(R.string.join_as, effectiveUser!!.name), fontWeight = FontWeight.Bold)
+                                            if (hasDebt && enforcement != "off") Text(stringResource(R.string.owe_amount, "%.2f".format(callerBalance.amount), callerBalance.gamesOwed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                            val userName = effectiveUser.name
+                                            Button(onClick = { if (hasDebt && enforcement != "off") viewModel.showPaymentNudge() else viewModel.addPlayer(eventId, userName, true) }, enabled = !ds.paymentGateBlocked, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = if (hasDebt && enforcement != "off") MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary)) {
+                                                Text(if (hasDebt && enforcement != "off") stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.join_as, userName), fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     }
@@ -1149,14 +1212,40 @@ fun EventDetailScreen(
                     AlertDialog(
                         onDismissRequest = { pendingAdd = null },
                         title = { Text(if (isRegistered) "Add or invite ${pending.name}?" else "Add ${pending.name}?") },
-                        text = { Text(when {
-                            pending.email != null && isBench -> "${pending.name} will be invited by email (${pending.email}) and placed on the bench."
-                            pending.email != null -> "${pending.name} will be invited by email (${pending.email})."
-                            isBench -> "${pending.name} joins ${ev.title} \u2014 the list is full, so they go to the bench."
-                            else -> "${pending.name} joins ${ev.title}."
-                        }) },
+                        text = {
+                            Column {
+                                Text(when {
+                                    pending.email != null && isBench -> "${pending.name} will be invited by email (${pending.email}) and placed on the bench."
+                                    pending.email != null -> "${pending.name} will be invited by email (${pending.email})."
+                                    isBench -> "${pending.name} joins ${ev.title} \u2014 the list is full, so they go to the bench."
+                                    else -> "${pending.name} joins ${ev.title}."
+                                })
+                                // Web parity (PR #833): silent link-only invite handed
+                                // straight to the share sheet — nothing sent to the invitee.
+                                // Available for guests too: their only invite path.
+                                if (isRegistered) {
+                                    Spacer(Modifier.height(8.dp))
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.shareInviteLink(eventId, requireNotNull(pending.userId), pending.name)
+                                            pendingAdd = null
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) { Text(stringResource(R.string.invite_share_link), color = MaterialTheme.colorScheme.primary) }
+                                } else {
+                                    Spacer(Modifier.height(8.dp))
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.shareGuestLink(eventId, pending.name)
+                                            pendingAdd = null
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) { Text(stringResource(R.string.invite_share_link), color = MaterialTheme.colorScheme.primary) }
+                                }
+                            }
+                        },
                         confirmButton = {
-                            if (isRegistered) TextButton(onClick = { viewModel.inviteSuggestion(eventId, pending.userId!!, pending.name); pendingAdd = null }) { Text(stringResource(R.string.invite)) }
+                            if (isRegistered) TextButton(onClick = { viewModel.inviteSuggestion(eventId, requireNotNull(pending.userId), pending.name); pendingAdd = null }) { Text(stringResource(R.string.invite)) }
                             else TextButton(onClick = { viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email); pendingAdd = null }) { Text(stringResource(R.string.add_button)) }
                         },
                         dismissButton = {
@@ -1221,7 +1310,7 @@ fun EventDetailScreen(
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) { Text(stringResource(R.string.always_show_payment), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f)); Switch(checked = autoPayPref, onCheckedChange = { viewModel.setAutoPayOnJoin(it) }) }
             }
-        }, confirmButton = { Button(onClick = { viewModel.markSentAndJoin(eventId, user!!.name) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)) { Text(if (callerBalance != null) stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.sent_confirmation)) } }, dismissButton = { TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user!!.name) }) { Text(stringResource(R.string.join_pay_later)) } })
+        }, confirmButton = { val userName = user?.name ?: ""; Button(onClick = { viewModel.markSentAndJoin(eventId, userName) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)) { Text(if (callerBalance != null) stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.sent_confirmation)) } }, dismissButton = { TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user?.name ?: "") }) { Text(stringResource(R.string.join_pay_later)) } })
     }
 }
 
@@ -1481,7 +1570,7 @@ private fun AddPlayerHeroSection(eventId: String, state: EventScreenState, viewM
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface
                 ),
                 singleLine = true,
-                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable).fillMaxWidth()
+                modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth()
             )
             ExposedDropdownMenu(
                 expanded = showDropdown,
@@ -1659,6 +1748,60 @@ private fun demoEventForPreview(at: java.time.Instant, isRecurring: Boolean, nex
 @Composable private fun TeamColumn(team: TeamResult, players: List<Player>, toTeamOne:Boolean, onMovePlayer:(String,String,Boolean)->Unit, modifier:Modifier=Modifier){ Column(modifier, horizontalAlignment=Alignment.CenterHorizontally){ Text(team.name, color=MaterialTheme.colorScheme.primary, style=MaterialTheme.typography.labelMedium); team.members.forEach{ m -> val pid=players.find{it.name==m.name}?.id; Text(m.name, color=MaterialTheme.colorScheme.onSurfaceVariant, style=MaterialTheme.typography.bodySmall, modifier=if(pid!=null) Modifier.clickable{onMovePlayer(pid,m.name,toTeamOne)} else Modifier) } } }
 @Composable fun RosterStatusList(names: List<String>){ Card(modifier=Modifier.fillMaxWidth()){ Column{ names.forEachIndexed{i,n-> Text(n, style=MaterialTheme.typography.bodyMedium, color=MaterialTheme.colorScheme.onSurfaceVariant, modifier=Modifier.fillMaxWidth().padding(horizontal=16.dp, vertical=8.dp)); if(i<n.lastIndex) HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant) } } } }
 @Composable fun PlayerListCard(players: List<Player>, currentUserId: String?, isOwner: Boolean, onRemove:(String)->Unit, onUserClick:(String)->Unit={}, modifier:Modifier=Modifier, isBench:Boolean=false){ Card(modifier=modifier.fillMaxWidth()){ Column{ players.forEachIndexed{i,p-> PlayerRow(player=p, isMe=p.userId==currentUserId, isBench=isBench, onRemove={onRemove(p.id)}, onUserClick=p.userId?.let{{onUserClick(it)}}?:{}, canRemove=isOwner||p.userId==currentUserId||p.userId==null); if(i<players.lastIndex) HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant) } } } }
+/**
+ * Full-page error state when an event could not be fetched and nothing is
+ * cached. Friendly "sorry" copy plus retry and a way out to the games list.
+ */
+@Composable
+private fun EventErrorPage(onRetry: () -> Unit, onBackToGames: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier.padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            Modifier.size(88.dp).clip(CircleShape).background(MaterialTheme.colorScheme.errorContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.CloudOff, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(40.dp))
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(
+            stringResource(R.string.error_page_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            stringResource(R.string.error_offline_message),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.retry)) }
+        TextButton(onClick = onBackToGames, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.back_to_games)) }
+    }
+}
+
+/** Slim banner over stale (cached) content shown when a refresh fails offline. */
+@Composable
+private fun OfflineStaleBanner() {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.CloudOff, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.offline_stale_banner), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
 @Composable fun PlayerAvatar(name:String,image:String?,isMe:Boolean,onClick:()->Unit,modifier:Modifier=Modifier){ val bg=if(isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant; val fg=if(isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant; Box(modifier.size(24.dp).clip(CircleShape).background(bg).clickable(onClick=onClick), Alignment.Center){ if(image!=null) SubcomposeAsyncImage(model=image, contentDescription=name, modifier=Modifier.fillMaxSize(), loading={ InitialAvatar(name, fg) }, error={ InitialAvatar(name, fg) }) else InitialAvatar(name, fg) } }
 @Composable fun PlayerRow(player: Player, isMe:Boolean=false, isBench:Boolean=false, canRemove:Boolean=false, onRemove:()->Unit={}, onUserClick:()->Unit={},){ ListItem(headlineContent={ Text("${player.name}${if(isMe) stringResource(R.string.you_suffix) else ""}", color=if(isBench) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface, fontWeight=if(isMe) FontWeight.SemiBold else FontWeight.Normal, style=MaterialTheme.typography.bodyMedium)}, leadingContent={ if(player.userId!=null) PlayerAvatar(player.name, player.image, isMe, onUserClick) else Icon(Icons.Outlined.Person, stringResource(R.string.anonymous_player), tint=MaterialTheme.colorScheme.outline, modifier=Modifier.size(20.dp))}, trailingContent=if(canRemove){{IconButton(onClick=onRemove, modifier=Modifier.size(32.dp)){ Icon(Icons.Default.Close, stringResource(R.string.remove), tint=MaterialTheme.colorScheme.outline, modifier=Modifier.size(16.dp))}}} else null, colors=ListItemDefaults.colors(containerColor=Color.Transparent), modifier=Modifier.height(44.dp)) }
 
@@ -1682,12 +1825,12 @@ private fun demoEventForPreview(at: java.time.Instant, isRecurring: Boolean, nex
                     tooltip = {
                         PlainTooltip {
                             Text(
-                                if (inCooldown) stringResource(R.string.invite_resend_cooldown, formatCooldownRemaining(cooldown!!))
-                                else stringResource(R.string.resend),
+                                cooldown?.let { stringResource(R.string.invite_resend_cooldown, formatCooldownRemaining(it)) }
+                                    ?: stringResource(R.string.resend),
                             )
                         }
                     },
-                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
                 ) {
                     TextButton(
                         onClick = onResend,
@@ -1696,7 +1839,7 @@ private fun demoEventForPreview(at: java.time.Instant, isRecurring: Boolean, nex
                     ) {
                         when {
                             resending -> CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                            inCooldown -> Text(formatCooldownRemaining(cooldown!!), color = MaterialTheme.colorScheme.outline)
+                            inCooldown -> Text(formatCooldownRemaining(requireNotNull(cooldown)), color = MaterialTheme.colorScheme.outline)
                             else -> Text(stringResource(R.string.resend))
                         }
                     }

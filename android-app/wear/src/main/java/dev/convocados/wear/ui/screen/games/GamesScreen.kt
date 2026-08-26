@@ -75,17 +75,6 @@ fun GamesScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                         )
-                        state.error?.let { error ->
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = error,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error,
-                                textAlign = TextAlign.Center,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         CompactButton(onClick = { viewModel.refresh() }) {
                             Text(stringResource(R.string.refresh))

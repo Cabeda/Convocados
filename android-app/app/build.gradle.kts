@@ -1,5 +1,3 @@
-                // while we wait for KSP to support android.builtInKotlin=true.
-
 import java.util.Properties
 
 plugins {
@@ -105,12 +103,17 @@ play {
 // or they can no longer be updated. Guard against accidental regression.
 val googlePlayMinTargetSdk = 36
 
+// Read build values at configuration time and capture them as simple types —
+// referencing `android`/script objects inside doLast breaks the
+// configuration cache.
+val appTargetSdk = android.defaultConfig.targetSdk
 tasks.register("validateTargetSdk") {
+    val target = appTargetSdk
+    val minTargetSdk = googlePlayMinTargetSdk
     doLast {
-        val target = android.defaultConfig.targetSdk
-        if (target == null || target < googlePlayMinTargetSdk) {
+        if (target == null || target < minTargetSdk) {
             throw GradleException(
-                "targetSdk ($target) is below the Google Play minimum ($googlePlayMinTargetSdk). " +
+                "targetSdk ($target) is below the Google Play minimum ($minTargetSdk). " +
                 "Bump targetSdk in build.gradle.kts before publishing."
             )
         }

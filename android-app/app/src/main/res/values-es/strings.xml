@@ -107,6 +107,8 @@
     <string name="invite_invited_by">%1$s te invitó a jugar</string>
     <string name="invite_accept">Aceptar</string>
     <string name="invite_decline">Rechazar</string>
+    <string name="invite_join_as">Entrar como %1$s</string>
+    <string name="invite_join_as_guest">Entrar como %1$s (invitado)</string>
     <string name="invite_view_game">Ver partido</string>
     <string name="invite_sign_in">Iniciar sesión</string>
     <string name="invite_not_for_you">Esta invitación no es para tu cuenta.</string>
@@ -142,6 +144,11 @@
     <string name="unlock">Desbloquear</string>
     <string name="event_not_found">Evento no encontrado</string>
     <string name="go_back">Volver</string>
+    <string name="error_page_title">Algo salió mal</string>
+    <string name="error_offline_message">Lo sentimos — no pudimos cargar este partido. Comprueba tu conexión a internet e inténtalo de nuevo.</string>
+    <string name="retry">Reintentar</string>
+    <string name="back_to_games">Volver a mis partidos</string>
+    <string name="offline_stale_banner">Estás sin conexión — mostrando los últimos datos guardados de este partido.</string>
     <string name="share">Compartir</string>
     <string name="randomize">Sortear</string>
     <string name="settings">Ajustes</string>

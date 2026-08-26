@@ -14,6 +14,7 @@ import { detectLocale } from "~/lib/i18n";
 import { addKnownName, getQjName } from "~/lib/knownNames";
 import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
 import { isGameEnded } from "~/lib/gameStatus";
+import { mergeSuggestionPills } from "~/lib/suggestionPills";
 import { useSession } from "~/lib/auth.client";
 
 import {
@@ -409,6 +410,19 @@ export default function EventPage({ eventId }: { eventId: string }) {
     [mergedSuggestions, currentPlayerNames]
   );
 
+  // dex f79w7x29: while the roster has room the pills section must never be
+  // empty — ranked inviteable suggestions come first, then this event's known
+  // players + global co-players fill the rest (add-or-invite dialog handles
+  // anonymous guests as direct adds / link-share, since they can't be notified).
+  const suggestionPills = useMemo(
+    () => mergeSuggestionPills(
+      coPlaySuggestions,
+      availableSuggestions.map((s) => ({ name: s.name, userId: s.userId, image: s.image })),
+      { currentNames: currentPlayerNames },
+    ).pills,
+    [coPlaySuggestions, availableSuggestions, currentPlayerNames]
+  );
+
   const notFound = error?.status === 404;
 
   useEffect(() => {
@@ -532,8 +546,40 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // Both chip/dropdown/input paths funnel through here, so the add/invite
   // decision is in one spot and the two API flows (players vs invites) are
   // not duplicated across the codebase.
-  const handleConfirm = async (intent: AddPlayerIntent, asInvite: boolean) => {
+  const handleConfirm = async (intent: AddPlayerIntent, asInvite: boolean, via: "notify" | "link" = "notify") => {
     setAddIntent(null);
+    if (asInvite && via === "link") {
+      // Share-a-link flow: create the invite token silently (deliver:false —
+      // no email/push/in-app notification) and hand the URL to the Web Share
+      // API dialog so the inviter delivers it themselves.
+      setPlayerError(null);
+      setInvitingName(intent.name);
+      try {
+        const res = await fetch(`/api/events/${eventId}/invites`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            intent.userId
+              ? { userId: intent.userId, deliver: false }
+              : intent.email
+                ? { email: intent.email, deliver: false }
+                : { name: intent.name },
+          ),
+        });
+        const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
+        if (res.ok && typeof json?.inviteUrl === "string") {
+          setInviteShare({ url: json.inviteUrl, name: intent.name });
+          fetchEvent();
+          return;
+        }
+        setPlayerError(json.error ?? t("somethingWentWrong"));
+      } catch {
+        setPlayerError(t("somethingWentWrong"));
+      } finally {
+        setInvitingName(null);
+      }
+      return;
+    }
     if (asInvite) {
       if (intent.email) {
         // Invite by email: for registered users create a pending PlayerInvite
@@ -1099,7 +1145,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               resendingInviteId={resendingInviteId}
               onRetractInvite={retractInvite}
               retractingInviteId={retractingInviteId}
-              coPlaySuggestions={coPlaySuggestions}
+              coPlaySuggestions={suggestionPills}
               />
             </div>
 

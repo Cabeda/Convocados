@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -61,11 +61,11 @@ class InviteViewModel @Inject constructor(
         }
     }
 
-    fun respond(action: String) {
+    fun respond(action: String, asGuest: Boolean = false) {
         val token = _state.value.data?.token?.takeIf { it.isNotBlank() } ?: pendingToken ?: return
         _state.value = _state.value.copy(busy = true, error = null)
         viewModelScope.launch {
-            runCatching { api.respondToInvite(token, action) }
+            runCatching { api.respondToInvite(token, action, asGuest) }
                 .onSuccess { _state.value = _state.value.copy(busy = false, responded = true) }
                 .onFailure {
                     _state.value = _state.value.copy(
@@ -149,17 +149,40 @@ fun InviteScreen(
                                             }
                                             Text(stringResource(R.string.invite_invited_by, d.invitedByName), color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
                                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                                            // ADR 0026: guest link opened by a logged-in user →
+                                            // explicit identity choice, never silent binding.
+                                            // (The app is login-gated upstream; d.authenticated is
+                                            // defensive so an expired session falls back to the
+                                            // plain accept/decline pair rather than a broken claim.)
+                                            if (d.claimable && d.authenticated) {
                                                 Button(
                                                     onClick = { viewModel.respond("accept") },
                                                     enabled = !state.busy,
-                                                    modifier = Modifier.weight(1f),
-                                                ) { Text(stringResource(R.string.invite_accept), fontWeight = FontWeight.SemiBold) }
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                ) { Text(stringResource(R.string.invite_join_as, d.viewerName ?: d.inviteeName), fontWeight = FontWeight.SemiBold) }
                                                 OutlinedButton(
+                                                    onClick = { viewModel.respond("accept", asGuest = true) },
+                                                    enabled = !state.busy,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                ) { Text(stringResource(R.string.invite_join_as_guest, d.inviteeName)) }
+                                                TextButton(
                                                     onClick = { viewModel.respond("decline") },
                                                     enabled = !state.busy,
-                                                    modifier = Modifier.weight(1f),
-                                                ) { Text(stringResource(R.string.invite_decline)) }
+                                                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                                                ) { Text(stringResource(R.string.invite_decline), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                            } else {
+                                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                                                    Button(
+                                                        onClick = { viewModel.respond("accept") },
+                                                        enabled = !state.busy,
+                                                        modifier = Modifier.weight(1f),
+                                                    ) { Text(stringResource(R.string.invite_accept), fontWeight = FontWeight.SemiBold) }
+                                                    OutlinedButton(
+                                                        onClick = { viewModel.respond("decline") },
+                                                        enabled = !state.busy,
+                                                        modifier = Modifier.weight(1f),
+                                                    ) { Text(stringResource(R.string.invite_decline)) }
+                                                }
                                             }
                                             if (state.error != null) {
                                                 Text(state.error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
