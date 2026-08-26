@@ -132,6 +132,8 @@
     <string name="invite_invited_by">%1$s invited you to play</string>
     <string name="invite_accept">Accept</string>
     <string name="invite_decline">Decline</string>
+    <string name="invite_join_as">Join as %1$s</string>
+    <string name="invite_join_as_guest">Join as %1$s (guest)</string>
     <string name="invite_view_game">View game</string>
     <string name="invite_sign_in">Sign in</string>
     <string name="invite_not_for_you">This invite is not for your account.</string>
@@ -171,6 +173,11 @@
     <string name="unlock">Unlock</string>
     <string name="event_not_found">Event not found</string>
     <string name="go_back">Go back</string>
+    <string name="error_page_title">Something went wrong</string>
+    <string name="error_offline_message">We\'re sorry — we couldn\'t load this game. Check your internet connection and try again.</string>
+    <string name="retry">Try again</string>
+    <string name="back_to_games">Back to my games</string>
+    <string name="offline_stale_banner">You\'re offline — showing the last saved data for this game.</string>
     <string name="share">Share</string>
     <string name="randomize">Randomize</string>
     <string name="settings">Settings</string>
