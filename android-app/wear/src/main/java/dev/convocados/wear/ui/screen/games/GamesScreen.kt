@@ -12,13 +12,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.*
-import com.google.android.horologist.annotations.ExperimentalHorologistApi
-import com.google.android.horologist.compose.layout.ScalingLazyColumn
-import com.google.android.horologist.compose.layout.ScalingLazyColumnDefaults
-import com.google.android.horologist.compose.layout.ScreenScaffold
-import com.google.android.horologist.compose.layout.rememberColumnState
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.ui.theme.Success
@@ -26,7 +25,6 @@ import dev.convocados.wear.ui.theme.TextMuted
 import dev.convocados.wear.ui.theme.Warning
 import dev.convocados.wear.util.formatRelativeTime
 
-@OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun GamesScreen(
     viewModel: GamesViewModel,
@@ -45,15 +43,14 @@ fun GamesScreen(
         }
     }
 
-    val columnState = rememberColumnState(
-        ScalingLazyColumnDefaults.responsive()
-    )
+    val columnState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
 
     val visiblePastGames = remember(state.pastGames, state.visiblePastCount) {
         state.pastGames.take(state.visiblePastCount)
     }
 
-    ScreenScaffold(scrollState = columnState) {
+    ScreenScaffold(scrollState = columnState) { contentPadding ->
         when {
             state.isLoading && state.games.isEmpty() -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -91,12 +88,19 @@ fun GamesScreen(
                 }
             }
             else -> {
-                ScalingLazyColumn(
-                    columnState = columnState,
+                TransformingLazyColumn(
+                    state = columnState,
+                    contentPadding = contentPadding,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     item {
-                        ListHeader {
+                        ListHeader(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .transformedHeight(this, transformationSpec)
+                                .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                            transformation = SurfaceTransformation(transformationSpec),
+                        ) {
                             Text(
                                 text = stringResource(R.string.games_title),
                                 style = MaterialTheme.typography.titleMedium,

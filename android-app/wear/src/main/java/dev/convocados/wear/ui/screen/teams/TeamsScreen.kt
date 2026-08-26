@@ -16,13 +16,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.*
-import com.google.android.horologist.annotations.ExperimentalHorologistApi
-import com.google.android.horologist.compose.layout.ScalingLazyColumn
-import com.google.android.horologist.compose.layout.ScalingLazyColumnDefaults
-import com.google.android.horologist.compose.layout.ScreenScaffold
-import com.google.android.horologist.compose.layout.rememberColumnState
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
 import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
@@ -32,7 +31,6 @@ import java.time.format.DateTimeFormatter
 
 private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
 
-@OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun TeamsScreen(
     eventId: String,
@@ -49,7 +47,8 @@ fun TeamsScreen(
     val state by viewModel.uiState.collectAsState()
     val settingsState by settingsViewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val columnState = rememberColumnState(ScalingLazyColumnDefaults.responsive())
+    val columnState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
 
     // Pull down at top -> back to score
     val pullThreshold = with(LocalDensity.current) { 72.dp.toPx() }
@@ -57,7 +56,7 @@ fun TeamsScreen(
     val edgeNav = remember(onDone) {
         object : NestedScrollConnection {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0f && !columnState.state.canScrollBackward) {
+                if (available.y > 0f && !columnState.canScrollBackward) {
                     pulled += available.y
                     if (pulled >= pullThreshold) { pulled = 0f; onDone() }
                 } else if (available.y < 0f) pulled = 0f
@@ -66,7 +65,7 @@ fun TeamsScreen(
         }
     }
 
-    ScreenScaffold(scrollState = columnState) {
+    ScreenScaffold(scrollState = columnState) { contentPadding ->
         when {
             state.isLoading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -74,13 +73,20 @@ fun TeamsScreen(
                 }
             }
             else -> {
-                ScalingLazyColumn(
-                    columnState = columnState,
+                TransformingLazyColumn(
+                    state = columnState,
+                    contentPadding = contentPadding,
                     modifier = Modifier.fillMaxSize().nestedScroll(edgeNav),
                 ) {
                     // ── Teams section ──────────────────────────────────
                     item {
-                        ListHeader {
+                        ListHeader(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .transformedHeight(this, transformationSpec)
+                                .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                            transformation = SurfaceTransformation(transformationSpec),
+                        ) {
                             Text(
                                 text = stringResource(R.string.teams_title),
                                 style = MaterialTheme.typography.titleMedium,
@@ -212,7 +218,13 @@ fun TeamsScreen(
                     // ── Game Settings section ─────────────────────────
                     item { Spacer(modifier = Modifier.height(12.dp)) }
                     item {
-                        ListHeader { Text("Game settings", color = MaterialTheme.colorScheme.primary) }
+                        ListHeader(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .transformedHeight(this, transformationSpec)
+                                .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                            transformation = SurfaceTransformation(transformationSpec),
+                        ) { Text("Game settings", color = MaterialTheme.colorScheme.primary) }
                     }
 
                     // Kickoff

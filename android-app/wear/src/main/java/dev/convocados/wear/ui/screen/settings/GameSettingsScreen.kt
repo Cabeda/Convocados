@@ -16,19 +16,17 @@ import androidx.compose.ui.res.stringResource
 import dev.convocados.wear.R
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.*
-import com.google.android.horologist.annotations.ExperimentalHorologistApi
-import com.google.android.horologist.compose.layout.ScalingLazyColumn
-import com.google.android.horologist.compose.layout.ScalingLazyColumnDefaults
-import com.google.android.horologist.compose.layout.ScreenScaffold
-import com.google.android.horologist.compose.layout.rememberColumnState
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
 
-@OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun GameSettingsScreen(
     eventId: String,
@@ -39,7 +37,8 @@ fun GameSettingsScreen(
 
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val columnState = rememberColumnState(ScalingLazyColumnDefaults.responsive())
+    val columnState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
 
     // Pull down at the top to go back to Teams.
     val pullThreshold = with(LocalDensity.current) { 72.dp.toPx() }
@@ -47,7 +46,7 @@ fun GameSettingsScreen(
     val pullToBack = remember(onBack) {
         object : NestedScrollConnection {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0f && !columnState.state.canScrollBackward) {
+                if (available.y > 0f && !columnState.canScrollBackward) {
                     pulled += available.y
                     if (pulled >= pullThreshold) { pulled = 0f; onBack() }
                 } else if (available.y < 0f) pulled = 0f
@@ -56,13 +55,20 @@ fun GameSettingsScreen(
         }
     }
 
-    ScreenScaffold(scrollState = columnState) {
-        ScalingLazyColumn(
-            columnState = columnState,
+    ScreenScaffold(scrollState = columnState) { contentPadding ->
+        TransformingLazyColumn(
+            state = columnState,
+            contentPadding = contentPadding,
             modifier = Modifier.fillMaxSize().nestedScroll(pullToBack),
         ) {
             item {
-                ListHeader { Text("Game settings", color = MaterialTheme.colorScheme.primary) }
+                ListHeader(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .transformedHeight(this, transformationSpec)
+                        .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                    transformation = SurfaceTransformation(transformationSpec),
+                ) { Text("Game settings", color = MaterialTheme.colorScheme.primary) }
             }
 
             // ── Kickoff ─────────────────────────────────────────────
