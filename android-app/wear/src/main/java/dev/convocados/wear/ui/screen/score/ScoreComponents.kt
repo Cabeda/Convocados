@@ -7,6 +7,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -23,6 +26,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
@@ -38,6 +42,11 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.rememberAnimatedTextFontRegistry
 import dev.convocados.wear.ui.theme.Warning
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/** Interval between auto-repeats while a long-press is held (score decrement). */
+private const val REPEAT_DECREMENT_DELAY_MS = 160L
 
 /**
  * A full-height team tile: tap to add a point, long-press to subtract one.
@@ -58,6 +67,12 @@ internal fun TeamScoreButton(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed && enabled) 0.97f else 1f, label = "press")
+
+    // Holding state shared between the long-press (repeat loop) and a pointer
+    // watcher that tracks when the finger actually lifts, so a held long-press
+    // keeps decrementing at a steady pace until release.
+    val scope = rememberCoroutineScope()
+    val holding = remember { mutableStateOf(false) }
 
     // Flex-font registry drives the score's "roll" on each point: weight + width
     // swell briefly so the tile feels responsive, using M3 Expressive AnimatedText.
@@ -98,8 +113,29 @@ internal fun TeamScoreButton(
                 onLongClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                     onDecrement()
+                    // Keep decrementing while the finger stays down.
+                    scope.launch {
+                        while (holding.value) {
+                            delay(REPEAT_DECREMENT_DELAY_MS)
+                            onDecrement()
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        }
+                    }
                 },
             )
+            .pointerInput(Unit) {
+                // Observe down/up without consuming, so the repeat loop above
+                // knows when the hold ends.
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    holding.value = true
+                    try {
+                        waitForUpOrCancellation()
+                    } finally {
+                        holding.value = false
+                    }
+                }
+            }
             .semantics { contentDescription = "$teamName, $score points" }
             .padding(horizontal = 6.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
