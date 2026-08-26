@@ -51,6 +51,7 @@
     <string name="restart_quick_game">Restart</string>
     <string name="quick_end_hint">Swipe up to end</string>
     <string name="refreshing">Refreshing…</string>
+    <string name="pull_to_refresh">Pull to refresh</string>
     <string name="refresh">Refresh</string>
 
     <!-- Teams screen -->

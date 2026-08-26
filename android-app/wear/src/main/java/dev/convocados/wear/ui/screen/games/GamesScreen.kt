@@ -1,6 +1,12 @@
 package dev.convocados.wear.ui.screen.games
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -15,6 +21,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -67,30 +74,58 @@ fun GamesScreen(
         state.pastGames.take(state.visiblePastCount)
     }
 
-    // Pull-down at the top triggers a refresh (replaces the refresh button).
-    val pullThreshold = with(LocalDensity.current) { 72.dp.toPx() }
-    var pullDistance by remember { mutableFloatStateOf(0f) }
+    // Pull-down at the top triggers a refresh. Expressive M3 feel: finger
+    // travel is resisted (so a deliberate pull is needed), the indicator fills
+    // with the pull distance, and it springs back on release / into refresh.
+    val pullThreshold = with(LocalDensity.current) { 84.dp.toPx() }
+    val resistance = 0.55f
+    var pullProgress by remember { mutableFloatStateOf(0f) }
     var refreshing by remember { mutableStateOf(false) }
     val pullToRefresh = remember(viewModel) {
         object : NestedScrollConnection {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 if (available.y > 0f && !columnState.canScrollBackward) {
-                    pullDistance += available.y
-                    if (pullDistance >= pullThreshold && !refreshing) {
-                        pullDistance = 0f
+                    pullProgress = (pullProgress + available.y * resistance / pullThreshold).coerceIn(0f, 1f)
+                    if (pullProgress >= 1f && !refreshing) {
                         refreshing = true
                         viewModel.refresh()
                     }
                 } else if (available.y < 0f) {
-                    pullDistance = 0f
+                    pullProgress = 0f
                 }
                 return Offset.Zero
             }
         }
     }
-    LaunchedEffect(state.isLoading) {
-        if (!state.isLoading) refreshing = false
+    // When the finger lifts (or the gesture is cancelled), let the indicator
+    // spring back unless a refresh is in flight.
+    val pullPointer = Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            try {
+                waitForUpOrCancellation()
+            } finally {
+                if (!refreshing) pullProgress = 0f
+            }
+        }
     }
+    LaunchedEffect(state.isLoading) {
+        if (!state.isLoading) {
+            refreshing = false
+            pullProgress = 0f
+        }
+    }
+
+    // Expressive spring drives the displayed indicator (bouncy snap-back).
+    val springSpec = spring<Float>(
+        dampingRatio = Spring.DampingRatioMediumBouncy,
+        stiffness = Spring.StiffnessMediumLow,
+    )
+    val displayedPull by animateFloatAsState(
+        targetValue = if (refreshing) 1f else pullProgress,
+        animationSpec = springSpec,
+        label = "pullIndicator",
+    )
 
     ScreenScaffold(scrollState = columnState) { contentPadding ->
         when {
@@ -133,7 +168,7 @@ fun GamesScreen(
                 TransformingLazyColumn(
                     state = columnState,
                     contentPadding = contentPadding,
-                    modifier = Modifier.fillMaxSize().nestedScroll(pullToRefresh),
+                    modifier = Modifier.fillMaxSize().nestedScroll(pullToRefresh).then(pullPointer),
                 ) {
                     item {
                         ListHeader(
@@ -151,18 +186,28 @@ fun GamesScreen(
                         }
                     }
 
-                    // Pull-to-refresh feedback while a refresh is in flight.
-                    if (refreshing || state.isLoading) {
+                    // Pull-to-refresh feedback: the ring fills with the pull distance and
+                    // springs back on release; it spins while a refresh runs.
+                    if (refreshing || pullProgress > 0f) {
                         item {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                                if (refreshing) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                                } else {
+                                    CircularProgressIndicator(
+                                        progress = { displayedPull },
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = stringResource(R.string.refreshing),
+                                    text = stringResource(
+                                        if (refreshing) R.string.refreshing else R.string.pull_to_refresh
+                                    ),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
