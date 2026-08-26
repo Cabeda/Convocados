@@ -48,7 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -77,6 +77,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 
 data class EventScreenState(
     val loading: Boolean = true,
@@ -150,6 +151,9 @@ data class TeamMoveUndo(
 
 /** Where an add-player suggestion comes from — drives the transparent label. */
 enum class SuggestionSource { EVENT, CO_PLAY }
+
+/** Shared lenient parser for API error bodies (PAYMENT_GATE, invite cooldown). */
+private val errorJson = Json { ignoreUnknownKeys = true }
 
 /**
  * A merged add-player suggestion. [gamesPlayedHere] is the per-event history
@@ -365,7 +369,7 @@ class EventDetailViewModel @Inject constructor(
                     if (e is ApiException && e.code == 402) {
                         // Parse the PAYMENT_GATE response
                         val gateError = runCatching {
-                            kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                            errorJson
                                 .decodeFromString<PaymentGateError>(e.message ?: "")
                         }.getOrNull()
                         _state.value = _state.value.copy(
@@ -481,7 +485,7 @@ class EventDetailViewModel @Inject constructor(
                 .onFailure { e ->
                     val retryAfter = if (e is ApiException && e.code == 429) {
                         runCatching {
-                            kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                            errorJson
                                 .decodeFromString<InviteResendErrorBody>(e.message ?: "")
                         }.getOrNull()?.retryAfterSeconds
                     } else null
@@ -906,7 +910,8 @@ fun EventDetailScreen(
     }
     LaunchedEffect(eventId) { viewModel.load(eventId) }
     LaunchedEffect(autoOpenPay, state.balance) {
-        if (autoOpenPay && state.balance?.callerBalance != null && state.balance!!.callerBalance!!.amount > 0) viewModel.showPaymentNudge()
+        val caller = state.balance?.callerBalance
+        if (autoOpenPay && caller != null && caller.amount > 0) viewModel.showPaymentNudge()
     }
     // Notification sheet
     if (state.showNotificationSheet) {
@@ -1003,7 +1008,7 @@ fun EventDetailScreen(
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.padding(top = 4.dp).let {
-                                            if (ev.ownerId != null) it.clickable { onUserClick(ev.ownerId!!) } else it
+                                            if (ev.ownerId != null) it.clickable { onUserClick(requireNotNull(ev.ownerId)) } else it
                                         }
                                     ) {
                                         Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
@@ -1076,9 +1081,10 @@ fun EventDetailScreen(
                                 if (myPlayer == null) {
                                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            if (hasDebt && enforcement != "off") Text(stringResource(R.string.owe_amount, "%.2f".format(callerBalance!!.amount), callerBalance.gamesOwed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                                            Button(onClick = { if (hasDebt && enforcement != "off") viewModel.showPaymentNudge() else viewModel.addPlayer(eventId, effectiveUser!!.name, true) }, enabled = !ds.paymentGateBlocked, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = if (hasDebt && enforcement != "off") MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary)) {
-                                                Text(if (hasDebt && enforcement != "off") stringResource(R.string.pay_and_join, "%.2f".format(callerBalance!!.amount)) else stringResource(R.string.join_as, effectiveUser!!.name), fontWeight = FontWeight.Bold)
+                                            if (hasDebt && enforcement != "off") Text(stringResource(R.string.owe_amount, "%.2f".format(callerBalance.amount), callerBalance.gamesOwed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                            val userName = effectiveUser.name
+                                            Button(onClick = { if (hasDebt && enforcement != "off") viewModel.showPaymentNudge() else viewModel.addPlayer(eventId, userName, true) }, enabled = !ds.paymentGateBlocked, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = if (hasDebt && enforcement != "off") MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary)) {
+                                                Text(if (hasDebt && enforcement != "off") stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.join_as, userName), fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     }
@@ -1197,7 +1203,7 @@ fun EventDetailScreen(
                                     Spacer(Modifier.height(8.dp))
                                     TextButton(
                                         onClick = {
-                                            viewModel.shareInviteLink(eventId, pending.userId!!, pending.name)
+                                            viewModel.shareInviteLink(eventId, requireNotNull(pending.userId), pending.name)
                                             pendingAdd = null
                                         },
                                         modifier = Modifier.fillMaxWidth(),
@@ -1215,7 +1221,7 @@ fun EventDetailScreen(
                             }
                         },
                         confirmButton = {
-                            if (isRegistered) TextButton(onClick = { viewModel.inviteSuggestion(eventId, pending.userId!!, pending.name); pendingAdd = null }) { Text(stringResource(R.string.invite)) }
+                            if (isRegistered) TextButton(onClick = { viewModel.inviteSuggestion(eventId, requireNotNull(pending.userId), pending.name); pendingAdd = null }) { Text(stringResource(R.string.invite)) }
                             else TextButton(onClick = { viewModel.addPlayer(eventId, pending.name, link = false, email = pending.email); pendingAdd = null }) { Text(stringResource(R.string.add_button)) }
                         },
                         dismissButton = {
@@ -1280,7 +1286,7 @@ fun EventDetailScreen(
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) { Text(stringResource(R.string.always_show_payment), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f)); Switch(checked = autoPayPref, onCheckedChange = { viewModel.setAutoPayOnJoin(it) }) }
             }
-        }, confirmButton = { Button(onClick = { viewModel.markSentAndJoin(eventId, user!!.name) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)) { Text(if (callerBalance != null) stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.sent_confirmation)) } }, dismissButton = { TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user!!.name) }) { Text(stringResource(R.string.join_pay_later)) } })
+        }, confirmButton = { val userName = user?.name ?: ""; Button(onClick = { viewModel.markSentAndJoin(eventId, userName) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)) { Text(if (callerBalance != null) stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.sent_confirmation)) } }, dismissButton = { TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user?.name ?: "") }) { Text(stringResource(R.string.join_pay_later)) } })
     }
 }
 
@@ -1540,7 +1546,7 @@ private fun AddPlayerHeroSection(eventId: String, state: EventScreenState, viewM
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface
                 ),
                 singleLine = true,
-                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable).fillMaxWidth()
+                modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth()
             )
             ExposedDropdownMenu(
                 expanded = showDropdown,
@@ -1741,12 +1747,12 @@ private fun demoEventForPreview(at: java.time.Instant, isRecurring: Boolean, nex
                     tooltip = {
                         PlainTooltip {
                             Text(
-                                if (inCooldown) stringResource(R.string.invite_resend_cooldown, formatCooldownRemaining(cooldown!!))
-                                else stringResource(R.string.resend),
+                                cooldown?.let { stringResource(R.string.invite_resend_cooldown, formatCooldownRemaining(it)) }
+                                    ?: stringResource(R.string.resend),
                             )
                         }
                     },
-                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
                 ) {
                     TextButton(
                         onClick = onResend,
@@ -1755,7 +1761,7 @@ private fun demoEventForPreview(at: java.time.Instant, isRecurring: Boolean, nex
                     ) {
                         when {
                             resending -> CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                            inCooldown -> Text(formatCooldownRemaining(cooldown!!), color = MaterialTheme.colorScheme.outline)
+                            inCooldown -> Text(formatCooldownRemaining(requireNotNull(cooldown)), color = MaterialTheme.colorScheme.outline)
                             else -> Text(stringResource(R.string.resend))
                         }
                     }
