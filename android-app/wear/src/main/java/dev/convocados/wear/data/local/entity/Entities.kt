@@ -31,6 +31,10 @@ data class PendingScoreEntity(
     val scoreTwo: Int,
     val teamOneName: String,
     val teamTwoName: String,
+    // The score the server had when this edit was made — used to detect a
+    // concurrent edit from the phone before overwriting (optimistic concurrency).
+    val basedOnScoreOne: Int? = null,
+    val basedOnScoreTwo: Int? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val retryCount: Int = 0,
 )

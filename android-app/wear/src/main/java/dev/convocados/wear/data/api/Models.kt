@@ -84,3 +84,20 @@ data class UpdateTeamsRequest(
     val teamOnePlayerIds: List<String>,
     val teamTwoPlayerIds: List<String>,
 )
+
+@Serializable
+data class KnownPlayer(
+    val name: String,
+    val gamesPlayed: Int = 0,
+    val userId: String? = null,
+)
+
+@Serializable
+data class KnownPlayersResponse(
+    val players: List<KnownPlayer> = emptyList(),
+)
+
+@Serializable
+data class AddPlayerRequest(
+    val name: String,
+)

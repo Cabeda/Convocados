@@ -1,10 +1,12 @@
 package dev.convocados.wear.ui.screen.teams
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
+import dev.convocados.wear.data.local.CheckInStore
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.repository.WearTeamRepository
 import dev.convocados.wear.data.sync.ScoreSyncWorker
@@ -14,6 +16,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
+@Immutable
 data class TeamsUiState(
     val teamOneName: String = "Team 1",
     val teamTwoName: String = "Team 2",
@@ -21,6 +24,7 @@ data class TeamsUiState(
     val teamTwoPlayers: List<WearPlayerEntity> = emptyList(),
     val unassigned: List<WearPlayerEntity> = emptyList(),
     val bench: List<WearPlayerEntity> = emptyList(),
+    val arrivedIds: Set<String> = emptySet(),
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val saved: Boolean = false,
@@ -41,6 +45,7 @@ private data class SnapshotPlayer(val name: String, val order: Int = 0)
 class TeamsViewModel @Inject constructor(
     private val repository: WearTeamRepository,
     private val gameRepository: WearGameRepository,
+    private val checkInStore: CheckInStore,
     private val workManager: WorkManager,
 ) : ViewModel() {
 
@@ -53,6 +58,13 @@ class TeamsViewModel @Inject constructor(
     fun load(eventId: String) {
         if (this.eventId == eventId && !_uiState.value.isLoading) return
         this.eventId = eventId
+
+        viewModelScope.launch {
+            // Arrival flags (local check-in) react to toggles.
+            checkInStore.arrived.collect { ids ->
+                _uiState.update { it.copy(arrivedIds = ids) }
+            }
+        }
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
@@ -163,6 +175,11 @@ class TeamsViewModel @Inject constructor(
         )
         _uiState.value = optimisticState
         syncRoster(optimisticState.teamOnePlayers.map { it.id }, optimisticState.teamTwoPlayers.map { it.id })
+    }
+
+    /** Toggle the local "arrived" flag for a player (wrist check-in). */
+    fun toggleArrived(playerId: String) {
+        checkInStore.toggle(playerId)
     }
 
     private fun syncRoster(teamOneIds: List<String>, teamTwoIds: List<String>) {

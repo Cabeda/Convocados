@@ -79,6 +79,7 @@ class WearTeamRepository @Inject constructor(
         val json = kotlinx.serialization.json.Json
         var synced = 0
         for (change in pending) {
+            if (change.retryCount >= MAX_ATTEMPTS) continue
             try {
                 val teamOneIds = json.decodeFromString<List<String>>(change.teamOnePlayerIds)
                 val teamTwoIds = json.decodeFromString<List<String>>(change.teamTwoPlayerIds)
@@ -90,8 +91,18 @@ class WearTeamRepository @Inject constructor(
                 Log.w("WearTeamRepo", "Failed to sync roster change ${change.id}", e)
             }
         }
-        pendingRosterChangeDao.deleteStale()
         return synced
+    }
+
+    /** Discard stuck roster changes (user-initiated) — no silent drops. */
+    suspend fun discardStuckRosterChanges() {
+        pendingRosterChangeDao.getAll()
+            .filter { it.retryCount >= MAX_ATTEMPTS }
+            .forEach { pendingRosterChangeDao.deleteById(it.id) }
+    }
+
+    companion object {
+        private const val MAX_ATTEMPTS = 8
     }
 
     private fun TeamPlayer.toEntity(eventId: String, assignment: String) = WearPlayerEntity(

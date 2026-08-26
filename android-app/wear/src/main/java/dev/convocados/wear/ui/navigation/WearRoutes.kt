@@ -6,9 +6,12 @@ object WearRoutes {
     const val GAMES = "games"
     const val SCORE = "score/{eventId}"
     const val TEAMS = "teams/{eventId}"
+    const val ADD_PLAYER = "teams/{eventId}/add-player"
     const val QUICK_SETUP = "quick_setup"
     const val QUICK_SCORE = "quick_score"
+    const val HISTORY = "history"
 
     fun score(eventId: String) = "score/$eventId"
     fun teams(eventId: String) = "teams/$eventId"
+    fun addPlayer(eventId: String) = "teams/$eventId/add-player"
 }

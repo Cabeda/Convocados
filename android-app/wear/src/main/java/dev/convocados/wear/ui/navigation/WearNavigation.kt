@@ -14,12 +14,16 @@ import dev.convocados.wear.data.local.QuickGameStore
 import dev.convocados.wear.ui.screen.auth.AuthScreen
 import dev.convocados.wear.ui.screen.games.GamesScreen
 import dev.convocados.wear.ui.screen.games.GamesViewModel
+import dev.convocados.wear.ui.screen.history.HistoryScreen
+import dev.convocados.wear.ui.screen.history.HistoryViewModel
 import dev.convocados.wear.ui.screen.quick.QuickScoreScreen
 import dev.convocados.wear.ui.screen.quick.QuickScoreViewModel
 import dev.convocados.wear.ui.screen.quick.QuickSetupScreen
 import dev.convocados.wear.ui.screen.score.ScoreScreen
 import dev.convocados.wear.ui.screen.score.ScoreViewModel
 import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
+import dev.convocados.wear.ui.screen.teams.AddPlayerScreen
+import dev.convocados.wear.ui.screen.teams.AddPlayerViewModel
 import dev.convocados.wear.ui.screen.teams.TeamsScreen
 import dev.convocados.wear.ui.screen.teams.TeamsViewModel
 
@@ -72,6 +76,9 @@ fun WearNavigation(
                     onQuickGame = {
                         navController.navigate(WearRoutes.QUICK_SETUP)
                     },
+                    onHistory = {
+                        navController.navigate(WearRoutes.HISTORY)
+                    },
                     continueQuickGame = activeQuickGame.isLive(System.currentTimeMillis()),
                     onContinueQuickGame = {
                         launchQuickGame(navController, "continue", null, null)
@@ -88,6 +95,9 @@ fun WearNavigation(
                     onTeams = {
                         navController.navigate(WearRoutes.teams(eventId))
                     },
+                    onFinish = {
+                        navController.popBackStack()
+                    },
                 )
             }
 
@@ -101,6 +111,19 @@ fun WearNavigation(
                     settingsViewModel = settingsViewModel,
                     onDone = { navController.popBackStack() },
                     onKickoff = { navController.popBackStack() },
+                    onAddPlayer = {
+                        navController.navigate(WearRoutes.addPlayer(eventId))
+                    },
+                )
+            }
+
+            composable(WearRoutes.ADD_PLAYER) { backStackEntry ->
+                val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
+                val viewModel: AddPlayerViewModel = hiltViewModel()
+                AddPlayerScreen(
+                    eventId = eventId,
+                    viewModel = viewModel,
+                    onDone = { navController.popBackStack() },
                 )
             }
 
@@ -141,6 +164,11 @@ fun WearNavigation(
                         viewModel.restart()
                     },
                 )
+            }
+
+            composable(WearRoutes.HISTORY) {
+                val viewModel: HistoryViewModel = hiltViewModel()
+                HistoryScreen(viewModel = viewModel)
             }
         }
     }

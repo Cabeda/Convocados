@@ -62,4 +62,15 @@
     <string name="bench">Bench</string>
     <string name="move_to_team">→ Team %1$s</string>
     <string name="keep_screen_on_label">Keep screen on</string>
+    <string name="game_end_vibration_label">Vibrate at full time</string>
+    <string name="rotation_interval_label">Rotate every</string>
+    <string name="history_title">History</string>
+    <string name="no_history">No games yet</string>
+    <string name="finish_game">Finish</string>
+    <string name="add_player_title">Add player</string>
+    <string name="add_player_button">Add player</string>
+    <string name="no_known_players">No known players</string>
+    <string name="adding_label">Adding…</string>
+    <string name="done_label">Done</string>
+    <string name="arrived_label">arrived</string>
 </resources>
