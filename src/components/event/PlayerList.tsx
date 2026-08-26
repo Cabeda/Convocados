@@ -217,7 +217,7 @@ interface Props {
   retractingInviteId?: string | null;
   /** ADR 0025: ranked co-play suggestions (owner/admin). Clicking one requests the
    *  add-or-invite choice (onRequestAdd) instead of inviting directly. */
-  coPlaySuggestions?: Array<{ userId: string; name: string; image?: string | null; reason?: string }>;
+  coPlaySuggestions?: Array<{ userId: string | null; name: string; image?: string | null; reason?: string }>;
   /** @deprecated chip now requests choice via onRequestAdd */
   onInviteUser?: (userId: string, name: string) => Promise<void>;
 }
@@ -250,6 +250,7 @@ export function PlayerList({
   const t = useT();
   const theme = useTheme();
   const [playerInput, setPlayerInput] = useState("");
+  const [showAllPills, setShowAllPills] = useState(false);
   const [declinedOpen, setDeclinedOpen] = useState(false);
   // Ticking clock for invite resend cooldowns (ADR 0025 follow-up).
   const now = useNow();
@@ -652,22 +653,29 @@ export function PlayerList({
           </Typography>
         )}
 
-        {/* ADR 0025: co-play suggestions (owner/admin) — ranked players to invite.
+        {/* ADR 0025 + dex f79w7x29: co-play suggestions (owner/admin) with
+            fallback pills merged in by EventPage. Ranked inviteables first,
+            known players / co-players fill the rest while roster has room.
             Each chip opens the add-or-invite choice (dialog). */}
         {coPlaySuggestions && coPlaySuggestions.length > 0 && !playerInput.trim() && (
           <Box>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
               {t("coPlaySuggestions")}:
             </Typography>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-              {coPlaySuggestions.slice(0, 8).map((s) => {
-                const alreadyIn = players.some((p) => p.userId === s.userId)
-                  || (invited ?? []).some((i) => i.userId === s.userId);
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, alignItems: "center" }}>
+              {(showAllPills ? coPlaySuggestions : coPlaySuggestions.slice(0, 8)).map((s) => {
+                // Linked pills match roster/invited by userId; anonymous pills
+                // must never collide on the shared null userId (name instead).
+                const matchesPill = (row: { userId?: string | null; name?: string }) =>
+                  s.userId ? row.userId === s.userId : row.name?.toLowerCase() === s.name.toLowerCase();
+                const alreadyIn = players.some(matchesPill)
+                  || (invited ?? []).some((i) => matchesPill(i));
                 if (alreadyIn) return null;
+                const chipId = s.userId ?? `name:${s.name}`;
                 return (
                   <Chip
-                    key={s.userId}
-                    data-testid={`suggest-chip-${s.userId}`}
+                    key={chipId}
+                    data-testid={`suggest-chip-${chipId}`}
                     icon={s.image
                       ? <PlayerAvatar userId={s.userId} name={s.name} image={s.image} size={18} clickable={false} />
                       : <PersonAddIcon fontSize="small" />}
@@ -678,7 +686,7 @@ export function PlayerList({
                     title={s.reason}
                     onClick={() => {
                       if (onRequestAdd) {
-                        onRequestAdd({ kind: "single", name: s.name, userId: s.userId, source: "chip" });
+                        onRequestAdd({ kind: "single", name: s.name, userId: s.userId ?? undefined, source: "chip" });
                       } else {
                         onAddPlayer(s.name);
                       }
@@ -687,6 +695,17 @@ export function PlayerList({
                   />
                 );
               })}
+              {coPlaySuggestions.length > 8 && (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  clickable
+                  data-testid="suggest-pills-toggle"
+                  label={showAllPills ? t("showFewerSuggestions") : t("showMoreSuggestions")}
+                  onClick={() => setShowAllPills((v) => !v)}
+                  sx={{ cursor: "pointer" }}
+                />
+              )}
             </Box>
           </Box>
         )}
