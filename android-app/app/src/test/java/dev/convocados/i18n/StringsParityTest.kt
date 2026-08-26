@@ -19,6 +19,11 @@ class StringsParityTest {
         "anonymous_player",
         "view_releases",
         "randomize_title",
+        "error_page_title",
+        "error_offline_message",
+        "retry",
+        "back_to_games",
+        "offline_stale_banner",
     )
 
     @Test

@@ -16,6 +16,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -49,6 +50,8 @@ class EventDetailViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        // Default: loads succeed. Individual tests override for offline paths.
+        coEvery { repository.refreshEventDetail(any()) } returns true
     }
 
     @After
@@ -386,6 +389,70 @@ class EventDetailViewModelTest {
         }
     }
 
+    }
+
+    @Test
+    fun `load marks loadFailed when refresh fails and nothing is cached`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(null)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { repository.refreshEventDetail(eventId) } returns false
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            val state = expectMostRecentItem()
+            assertNull(state.event)
+            assertTrue(state.loadFailed)
+            assertFalse(state.isStale)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `load keeps cached event visible and flags stale when refresh fails`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { repository.refreshEventDetail(eventId) } returns false
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            val state = expectMostRecentItem()
+            // Offline-first: stale cache stays on screen, never a blank page.
+            assertEquals(mockEvent, state.event)
+            assertTrue(state.isStale)
+            assertTrue(!state.loadFailed)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `retry clears loadFailed and reloads`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(null)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { repository.refreshEventDetail(eventId) } returnsMany listOf(false, true)
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            assertTrue(expectMostRecentItem().loadFailed)
+
+            viewModel.retry(eventId)
+            advanceUntilIdle()
+
+            val s = expectMostRecentItem()
+            assertTrue(!s.loadFailed)
+            assertTrue(!s.loading)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test

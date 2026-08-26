@@ -205,6 +205,11 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processing
                         onHistoryClick = { historyId -> navController.navigate(Route.HistoryDetail.create(eventId, historyId)) },
                         onAllHistory = { navController.navigate(Route.EventHistory.create(eventId)) },
                         onCourtAlternatives = { navController.navigate(Route.CourtAlternatives.create(eventId)) },
+                        onBackToGames = {
+                            if (!navController.popBackStack(Route.Games.route, inclusive = false)) {
+                                navController.navigate(Route.Games.route) { launchSingleTop = true }
+                            }
+                        },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this@composable,
                     )
