@@ -17,6 +17,7 @@
 import { prisma, Prisma } from "./db.server";
 import { getActiveRosterState } from "./roster.server";
 import { recordReceived } from "./payments.server";
+import { activeParticipantsWhere } from "./activeParticipants.server";
 
 export type PaymentMode = "tracked" | "untracked";
 
@@ -51,10 +52,10 @@ export async function effectiveGameCost(gameId: string, eventId: string): Promis
   };
 }
 
-/** Active (non-archived) participants of a game, oldest-first. */
+/** Active (non-archived, non-pending) participants of a game, oldest-first. */
 export async function activeParticipants(gameId: string) {
   return prisma.gameParticipant.findMany({
-    where: { gameId, archivedAt: null },
+    where: activeParticipantsWhere(gameId),
     include: { eventPlayer: { select: { id: true, name: true, userId: true } } },
     orderBy: { order: "asc" },
   });
@@ -94,7 +95,7 @@ async function syncGamePaymentsCore(db: DbClient, gameId: string, eventId: strin
     effectiveGameCost(gameId, eventId),
     db.game.findUnique({ where: { id: gameId }, select: { payerEventPlayerId: true, status: true } }),
     db.gameParticipant.findMany({
-      where: { gameId, archivedAt: null, status: { not: "pending" } },
+      where: activeParticipantsWhere(gameId),
       include: { eventPlayer: { select: { id: true, name: true, userId: true } } },
       orderBy: { order: "asc" },
     }),
@@ -575,7 +576,7 @@ export async function getGameSettlement(eventId: string, gameId: string): Promis
 
   const { total, maxPlayers } = await effectiveGameCost(game.id, eventId);
   const participants = await prisma.gameParticipant.findMany({
-    where: { gameId: game.id, archivedAt: null },
+    where: activeParticipantsWhere(game.id),
     include: { eventPlayer: { select: { id: true, name: true } } },
     orderBy: { order: "asc" },
   });

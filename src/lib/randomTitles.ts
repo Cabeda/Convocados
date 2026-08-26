@@ -78,7 +78,7 @@ export const titles = {
     "Correria de Quarta",
     "Sábado em Grande",
     "O Especial Pós-Trabalho",
-    "Lendas da Hora de Alooço",
+    "Lendas da Hora de Almoço",
   ],
   es: [
     // Épico y dramático
