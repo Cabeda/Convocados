@@ -50,6 +50,10 @@
     <string name="continue_quick_game">Continue game</string>
     <string name="restart_quick_game">Restart</string>
     <string name="quick_end_hint">Swipe up to end</string>
+    <string name="quick_swipe_hint">↑ End · ↓ Save</string>
+    <string name="save_quick_title">Save to event</string>
+    <string name="save_quick_score">Score %1$d - %2$d</string>
+    <string name="save_quick_saved">Saved</string>
     <string name="refreshing">Refreshing…</string>
     <string name="pull_to_refresh">Pull to refresh</string>
     <string name="refresh">Refresh</string>

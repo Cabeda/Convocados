@@ -19,6 +19,8 @@ import dev.convocados.wear.ui.screen.history.HistoryViewModel
 import dev.convocados.wear.ui.screen.quick.QuickScoreScreen
 import dev.convocados.wear.ui.screen.quick.QuickScoreViewModel
 import dev.convocados.wear.ui.screen.quick.QuickSetupScreen
+import dev.convocados.wear.ui.screen.quick.SaveQuickGameScreen
+import dev.convocados.wear.ui.screen.quick.SaveQuickGameViewModel
 import dev.convocados.wear.ui.screen.score.ScoreScreen
 import dev.convocados.wear.ui.screen.score.ScoreViewModel
 import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
@@ -163,6 +165,17 @@ fun WearNavigation(
                     onRestart = {
                         viewModel.restart()
                     },
+                    onSave = {
+                        navController.navigate(WearRoutes.SAVE_QUICK)
+                    },
+                )
+            }
+
+            composable(WearRoutes.SAVE_QUICK) {
+                val viewModel: SaveQuickGameViewModel = hiltViewModel()
+                SaveQuickGameScreen(
+                    viewModel = viewModel,
+                    onDone = { navController.popBackStack() },
                 )
             }
 

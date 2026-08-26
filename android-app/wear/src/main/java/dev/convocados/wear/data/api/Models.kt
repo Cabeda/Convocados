@@ -101,3 +101,9 @@ data class KnownPlayersResponse(
 data class AddPlayerRequest(
     val name: String,
 )
+
+@Serializable
+data class WatchGameResponse(
+    val id: String,
+    val created: Boolean = false,
+)

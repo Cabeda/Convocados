@@ -126,6 +126,9 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
         authenticatedRequest(HttpMethod.Post, path, body)
     }
 
+    suspend inline fun <reified T> postForResult(path: String, body: Any? = null): T =
+        authenticatedRequest(HttpMethod.Post, path, body).body()
+
     suspend fun getTeams(eventId: String): TeamsResponse =
         get("/api/events/$eventId/teams")
 
