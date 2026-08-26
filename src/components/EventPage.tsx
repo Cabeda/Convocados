@@ -14,6 +14,7 @@ import { detectLocale } from "~/lib/i18n";
 import { addKnownName, getQjName } from "~/lib/knownNames";
 import { formatDateInTz, fromDateTimeLocalValue } from "~/lib/timezones";
 import { isGameEnded } from "~/lib/gameStatus";
+import { mergeSuggestionPills } from "~/lib/suggestionPills";
 import { useSession } from "~/lib/auth.client";
 
 import {
@@ -407,6 +408,19 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const availableSuggestions = useMemo(
     () => mergedSuggestions.filter((s) => !currentPlayerNames.has(s.name.toLowerCase())),
     [mergedSuggestions, currentPlayerNames]
+  );
+
+  // dex f79w7x29: while the roster has room the pills section must never be
+  // empty — ranked inviteable suggestions come first, then this event's known
+  // players + global co-players fill the rest (add-or-invite dialog handles
+  // anonymous guests as direct adds / link-share, since they can't be notified).
+  const suggestionPills = useMemo(
+    () => mergeSuggestionPills(
+      coPlaySuggestions,
+      availableSuggestions.map((s) => ({ name: s.name, userId: s.userId, image: s.image })),
+      { currentNames: currentPlayerNames },
+    ).pills,
+    [coPlaySuggestions, availableSuggestions, currentPlayerNames]
   );
 
   const notFound = error?.status === 404;
@@ -1099,7 +1113,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               resendingInviteId={resendingInviteId}
               onRetractInvite={retractInvite}
               retractingInviteId={retractingInviteId}
-              coPlaySuggestions={coPlaySuggestions}
+              coPlaySuggestions={suggestionPills}
               />
             </div>
 
