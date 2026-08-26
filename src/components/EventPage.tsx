@@ -33,7 +33,6 @@ import type { EventData, Player, KnownPlayer } from "./event";
 import { PostGameBanner } from "./PostGameBanner";
 import type { PostGameStatus } from "./PostGameBanner";
 import { PushPromptBanner } from "./PushPromptBanner";
-import { AttendanceCta } from "./event/AttendanceCta";
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -1081,37 +1080,58 @@ export default function EventPage({ eventId }: { eventId: string }) {
             />
             )}
 
-            {/* RSVP CTA — above the fold, the primary action for every visitor.
-                Hidden once the game has ended — the roster is frozen. */}
-            {!gameEnded && (isAuthenticated ? (
-              <AttendanceCta
-                myRsvpStatus={myRsvpStatus ?? null}
-                isOnList={!!(session?.user?.id && event.players.some((p) => p.userId === session.user!.id))}
-                onGoing={() => {
-                  const isOnList = session?.user?.id && event.players.some((p) => p.userId === session.user!.id);
-                  if (isOnList) {
-                    handleSetMyRsvp("yes");
-                  } else if (session?.user?.name) {
-                    handleQuickJoinPillClick(session.user.name);
-                  }
-                }}
-                onNotComing={() => {
-                  handleSetMyRsvp("no");
-                }}
-              />
-            ) : (
-              <Paper elevation={1} sx={{ borderRadius: 3, p: 2, textAlign: "center" }}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  href={`/auth/signin?callbackURL=/events/${eventId}`}
-                  sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700 }}
-                >
-                  {t("signInToJoin")}
-                </Button>
-              </Paper>
-            ))}
+            {/* Join / You joined — replaces YOUR RESPONSE (AttendanceCta) per #818.
+                Web parity with Android hero revamp: single CTA, not Going/Not coming. */}
+            {!gameEnded && (() => {
+              if (!isAuthenticated) {
+                return (
+                  <Paper elevation={1} sx={{ borderRadius: 3, p: 2, textAlign: "center" }}>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="large"
+                      href={`/auth/signin?callbackURL=/events/${eventId}`}
+                      sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700 }}
+                    >
+                      {t("signInToJoin")}
+                    </Button>
+                  </Paper>
+                );
+              }
+              const myPlayer = session?.user?.id ? event.players.find((p) => p.userId === session.user!.id) ?? null : null;
+              const isOnList = !!myPlayer;
+              const isOnBench = isOnList && event.players.findIndex((p) => p.id === myPlayer!.id) >= event.maxPlayers;
+              if (isOnList) {
+                return (
+                  <Paper elevation={1} sx={{ borderRadius: 3, p: 2, display: "flex", alignItems: "center", gap: 1.5 }}>
+                    <Typography variant="body2" fontWeight={600} sx={{ flex: 1, color: isOnBench ? "warning.main" : "primary.main" }}>
+                      {isOnBench ? t("onBench", { name: myPlayer!.name }) : t("youJoinedAs", { name: myPlayer!.name })}
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      onClick={() => handleSetMyRsvp("no")}
+                    >
+                      {t("leave")}
+                    </Button>
+                  </Paper>
+                );
+              }
+              return (
+                <Paper elevation={1} sx={{ borderRadius: 3, p: 2, textAlign: "center" }}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="large"
+                    onClick={() => session?.user?.name && handleQuickJoinPillClick(session.user.name)}
+                    sx={{ borderRadius: 2, textTransform: "none", fontWeight: 700 }}
+                  >
+                    {t("joinAs", { name: session?.user?.name ?? "" })}
+                  </Button>
+                </Paper>
+              );
+            })()}
 
             {/* Players — single merged component (name+email+contacts+pills).
                 The Quick Join pill is the first pill in the row when authenticated. */}

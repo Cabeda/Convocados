@@ -370,6 +370,10 @@ const en = {
   makePublicTooltip: "Make this game visible on the public games page",
   joinGame: "Join",
   signInToJoin: "Sign in to join this game",
+  joinAs: "Join as {name}",
+  youJoinedAs: "You joined as {name}",
+  onBench: "On bench — {name}",
+  leave: "Leave",
 
   // Sports
   sport: "Sport",

@@ -371,6 +371,10 @@ const pt: TranslationKeys = {
   makePublicTooltip: "Tornar este jogo visível na página de jogos públicos",
   joinGame: "Entrar",
   signInToJoin: "Inicia sessão para te juntares",
+  joinAs: "Entrar como {name}",
+  youJoinedAs: "Entraste como {name}",
+  onBench: "No banco — {name}",
+  leave: "Sair",
 
   // Sports
   sport: "Desporto",
