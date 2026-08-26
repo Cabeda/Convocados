@@ -334,8 +334,9 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun fetchEventSuggestions(eventId: String): SuggestionsResponse =
         client.get("/api/events/$eventId/suggestions")
 
-    suspend fun sendInvite(eventId: String, userId: String): InviteCreateResponse =
-        client.post("/api/events/$eventId/invites", InviteCreateRequest(userId))
+    /** deliver=false → share-a-link flow: token created silently, no notification. */
+    suspend fun sendInvite(eventId: String, userId: String, deliver: Boolean = true): InviteCreateResponse =
+        client.post("/api/events/$eventId/invites", InviteCreateRequest(userId, deliver))
 
     suspend fun resendInvite(eventId: String, inviteId: String): InviteResendResponse =
         client.patch("/api/events/$eventId/invites", InviteResendRequest(inviteId))
