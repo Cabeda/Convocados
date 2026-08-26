@@ -29,7 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -317,7 +317,7 @@ fun RankingsScreen(
                                         color = MaterialTheme.colorScheme.onSurface,
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = if (podiumColor != null) FontWeight.Bold else FontWeight.SemiBold,
-                                        modifier = if (r.userId != null) Modifier.clickable { onUserClick(r.userId!!) } else Modifier,
+                                        modifier = if (r.userId != null) Modifier.clickable { onUserClick(requireNotNull(r.userId)) } else Modifier,
                                     )
                                     if (r.rating != null) {
                                         Text("${r.gamesPlayed}g \u00B7 W${r.wins}/D${r.draws}/L${r.losses}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)

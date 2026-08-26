@@ -90,8 +90,9 @@ fun EventDetail.toEntity() = EventDetailEntity(
     teamOneName = teamOneName,
     teamTwoName = teamTwoName,
     teamResultsJson = teamResults?.let { EntityJson.encodeToString(it) },
-    invitedJson = invited?.takeIf { it.isNotEmpty() }?.let { EntityJson.encodeToString(it) },
-    declinedJson = declined?.takeIf { it.isNotEmpty() }?.let { EntityJson.encodeToString(it) },
+    // `invited`/`declined` are non-null lists — only takeIf can produce a null.
+    invitedJson = invited.takeIf { it.isNotEmpty() }?.let { EntityJson.encodeToString(it) },
+    declinedJson = declined.takeIf { it.isNotEmpty() }?.let { EntityJson.encodeToString(it) },
 )
 
 fun Player.toEntity(eventId: String) = PlayerEntity(

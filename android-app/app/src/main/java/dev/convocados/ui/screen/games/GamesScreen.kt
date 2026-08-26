@@ -25,7 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -400,8 +400,10 @@ fun GameCard(
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (game.lastScoreOne != null && game.lastScoreTwo != null) {
+                val scoreOne = game.lastScoreOne
+                val scoreTwo = game.lastScoreTwo
                 Text(
-                    stringResource(R.string.last_score, game.lastScoreOne!!, game.lastScoreTwo!!),
+                    stringResource(R.string.last_score, scoreOne, scoreTwo),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 2.dp),
                 )
