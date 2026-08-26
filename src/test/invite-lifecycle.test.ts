@@ -845,13 +845,13 @@ describe("getInviteChannels — ADR 0025 notification channels", () => {
     expect(channels.appPush).toBe(true);
   });
 
-  it("reports email when email prefs, a verified email and a provider are configured", async () => {
+  it("never reports email — invites are push-only + share-link (owner decision)", async () => {
     const user = await seedUser("ChanEmail");
     await prisma.notificationPreferences.create({ data: { userId: user.id, emailEnabled: true, gameInviteEmail: true } });
     process.env.RESEND_API_KEY = "test-key";
     try {
       const channels = await getInviteChannels(user.id);
-      expect(channels.email).toBe(true);
+      expect(channels.email).toBe(false);
     } finally {
       delete process.env.RESEND_API_KEY;
     }
@@ -880,7 +880,7 @@ describe("getInviteChannels — ADR 0025 notification channels", () => {
     expect(channels).toEqual({ email: false, webPush: false, appPush: false });
   });
 
-  it("sends the invite email when the email channel is enabled", async () => {
+  it("never sends an invite email, even when email prefs are on", async () => {
     const owner = await seedUser("Owner");
     const invitee = await seedUser("Invitee");
     await prisma.notificationPreferences.create({ data: { userId: invitee.id, emailEnabled: true, gameInviteEmail: true } });
@@ -890,10 +890,8 @@ describe("getInviteChannels — ADR 0025 notification channels", () => {
     const spy = vi.spyOn(emailServer, "sendGameInvite").mockResolvedValue(undefined);
     try {
       const res = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
-      expect(spy).toHaveBeenCalledTimes(1);
-      expect(res.channels.email).toBe(true);
-      expect(spy.mock.calls[0][0]).toBe(invitee.email);
-      expect(spy.mock.calls[0][1].eventUrl).toContain("/invite/");
+      expect(spy).not.toHaveBeenCalled();
+      expect(res.channels.email).toBe(false);
     } finally {
       spy.mockRestore();
       delete process.env.RESEND_API_KEY;

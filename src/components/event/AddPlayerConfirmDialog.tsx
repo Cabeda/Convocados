@@ -4,6 +4,7 @@ import {
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import ScheduleSendIcon from "@mui/icons-material/ScheduleSend";
+import ShareIcon from "@mui/icons-material/Share";
 import { useT } from "~/lib/useT";
 
 /**
@@ -23,8 +24,9 @@ export interface AddPlayerConfirmDialogProps {
   isAdding: boolean;
   /** True while the underlying invite request is in flight. Disables the options. */
   isInviting: boolean;
-  /** Single place for both Add (active) and Invite (pending) — asInvite flag selects the flow. */
-  onConfirm: (intent: AddPlayerIntent, asInvite: boolean) => void;
+  /** Single place for both Add (active) and Invite (pending) — asInvite flag selects the flow.
+   *  via distinguishes the notifying invite ("notify") from the share-a-link invite ("link"). */
+  onConfirm: (intent: AddPlayerIntent, asInvite: boolean, via?: "notify" | "link") => void;
   onClose: () => void;
 }
 
@@ -93,7 +95,7 @@ export function AddPlayerConfirmDialog({
               type="button"
               data-testid="add-player-confirm-invite"
               disabled={busy}
-              onClick={() => onConfirm(intent, true)}
+              onClick={() => onConfirm(intent, true, "notify")}
               sx={{
                 display: "flex", alignItems: "flex-start", gap: 1.5, width: "100%",
                 border: 1, borderColor: "divider", borderRadius: 2,
@@ -120,6 +122,33 @@ export function AddPlayerConfirmDialog({
               </DialogContentText>
             </Box>
           )}
+          {/* Link-share is available for every target — registered or guest.
+              Guests have no channel at all, so this is their only invite path. */}
+          <ListItem
+            component="button"
+            type="button"
+            data-testid="add-player-confirm-share"
+            disabled={busy}
+            onClick={() => onConfirm(intent, true, "link")}
+            sx={{
+              display: "flex", alignItems: "flex-start", gap: 1.5, width: "100%",
+              border: 1, borderColor: "divider", borderRadius: 2,
+              px: 1.5, py: 1.25, textAlign: "left", bgcolor: "transparent",
+              cursor: "pointer", "&:hover": { bgcolor: "action.hover" },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 0, mt: 0.25 }}>
+              <ShareIcon fontSize="small" color="primary" />
+            </ListItemIcon>
+            <ListItemText
+              primary={t("choiceShareLinkTitle")}
+              secondary={t("choiceShareLinkDesc", { name })}
+              slotProps={{
+                primary: { sx: { fontWeight: 600 } },
+                secondary: { sx: { mt: 0.25 } },
+              }}
+            />
+          </ListItem>
         </List>
       </DialogContent>
       <DialogActions>
