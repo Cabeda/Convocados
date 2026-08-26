@@ -130,8 +130,9 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
 
     /**
      * Start score tracking for an event: auto-creates today's game-history
-     * record (requires teams to be assigned). Idempotent — returns the
-     * existing record if one already exists for today.
+     * record. Teams are optional — a solo organizer can begin scoring before
+     * teams are set (history falls back to the event's default team names).
+     * Idempotent — returns the existing record if one already exists for today.
      */
     suspend fun startWatchGame(eventId: String) {
         authenticatedRequest(HttpMethod.Post, "/api/watch/events", mapOf("eventId" to eventId))

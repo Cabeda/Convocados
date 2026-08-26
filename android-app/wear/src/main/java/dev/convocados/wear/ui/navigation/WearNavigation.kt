@@ -10,6 +10,7 @@ import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import dev.convocados.wear.data.auth.WearGoogleSignIn
 import dev.convocados.wear.data.auth.WearTokenStore
+import dev.convocados.wear.data.local.QuickGameStore
 import dev.convocados.wear.ui.screen.auth.AuthScreen
 import dev.convocados.wear.ui.screen.games.GamesScreen
 import dev.convocados.wear.ui.screen.games.GamesViewModel
@@ -25,9 +26,14 @@ import dev.convocados.wear.ui.screen.teams.TeamsViewModel
 import androidx.wear.compose.material3.AppScaffold
 
 @Composable
-fun WearNavigation(tokenStore: WearTokenStore, googleSignIn: WearGoogleSignIn) {
+fun WearNavigation(
+    tokenStore: WearTokenStore,
+    googleSignIn: WearGoogleSignIn,
+    quickGameStore: QuickGameStore,
+) {
     val navController = rememberSwipeDismissableNavController()
     val isAuthenticated by tokenStore.isAuthenticated.collectAsState()
+    val activeQuickGame by quickGameStore.state.collectAsState()
 
     val startDestination = if (isAuthenticated) WearRoutes.GAMES else WearRoutes.AUTH
 
@@ -66,6 +72,10 @@ fun WearNavigation(tokenStore: WearTokenStore, googleSignIn: WearGoogleSignIn) {
                     onQuickGame = {
                         navController.navigate(WearRoutes.QUICK_SETUP)
                     },
+                    continueQuickGame = activeQuickGame.isLive(System.currentTimeMillis()),
+                    onContinueQuickGame = {
+                        launchQuickGame(navController, "continue", null, null)
+                    },
                 )
             }
 
@@ -96,30 +106,58 @@ fun WearNavigation(tokenStore: WearTokenStore, googleSignIn: WearGoogleSignIn) {
 
             composable(WearRoutes.QUICK_SETUP) {
                 QuickSetupScreen(
+                    activeGame = activeQuickGame.takeIf { it.isStarted },
                     onStart = { duration, alarmInterval ->
-                        navController.navigate(WearRoutes.QUICK_SCORE) {
-                            popUpTo(WearRoutes.QUICK_SETUP) { inclusive = true }
-                        }
-                        navController.currentBackStackEntry
-                            ?.savedStateHandle?.set("duration", duration)
-                        navController.currentBackStackEntry
-                            ?.savedStateHandle?.set("alarmInterval", alarmInterval)
+                        launchQuickGame(navController, "new", duration, alarmInterval)
+                    },
+                    onContinue = {
+                        launchQuickGame(navController, "continue", null, null)
+                    },
+                    onRestart = {
+                        launchQuickGame(navController, "restart", null, null)
                     },
                 )
             }
 
             composable(WearRoutes.QUICK_SCORE) { backStackEntry ->
                 val viewModel: QuickScoreViewModel = hiltViewModel()
-                val duration = backStackEntry.savedStateHandle.get<Int>("duration") ?: 60
-                val alarmInterval = backStackEntry.savedStateHandle.get<Int>("alarmInterval") ?: 10
-                LaunchedConfigure(viewModel, duration, alarmInterval)
-                QuickScoreScreen(viewModel = viewModel)
+                val mode = backStackEntry.savedStateHandle.get<String>("quickMode")
+                val duration = backStackEntry.savedStateHandle.get<Int>("duration")
+                val alarmInterval = backStackEntry.savedStateHandle.get<Int>("alarmInterval")
+                LaunchedEffect(mode) {
+                    when (mode) {
+                        "new" -> viewModel.startNew(duration ?: 60, alarmInterval ?: 10)
+                        "restart" -> viewModel.restart()
+                        else -> viewModel.continueGame()
+                    }
+                }
+                QuickScoreScreen(
+                    viewModel = viewModel,
+                    onEnd = {
+                        viewModel.endGame()
+                        navController.popBackStack()
+                    },
+                    onRestart = {
+                        viewModel.restart()
+                    },
+                )
             }
         }
     }
 }
 
-@Composable
-private fun LaunchedConfigure(viewModel: QuickScoreViewModel, duration: Int, alarmInterval: Int) {
-    LaunchedEffect(Unit) { viewModel.configure(duration, alarmInterval) }
+/** Navigate to the quick score, tagging the entry with how to (re)start it. */
+private fun launchQuickGame(
+    navController: androidx.navigation.NavController,
+    mode: String,
+    duration: Int?,
+    alarmInterval: Int?,
+) {
+    navController.navigate(WearRoutes.QUICK_SCORE) {
+        popUpTo(WearRoutes.QUICK_SETUP) { inclusive = true }
+    }
+    val handle = navController.currentBackStackEntry?.savedStateHandle ?: return
+    handle["quickMode"] = mode
+    if (duration != null) handle["duration"] = duration
+    if (alarmInterval != null) handle["alarmInterval"] = alarmInterval
 }

@@ -47,6 +47,13 @@ class GamesViewModel @Inject constructor(
     val uiState: StateFlow<GamesUiState> = _uiState.asStateFlow()
 
     private var hasAutoNavigated = false
+    private var hasEnteredOnce = false
+
+    /** Called on every screen entry; refreshes when returning (skips first load — init handles it). */
+    fun onScreenEntered() {
+        if (hasEnteredOnce) refresh()
+        else hasEnteredOnce = true
+    }
 
     @Volatile
     var tickProvider: () -> Flow<Instant> = { tickFlow() }

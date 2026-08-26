@@ -1,0 +1,5 @@
+# Score screen shows alarm marks, not a countdown
+
+The Wear score screen originally displayed a numeric "⏰ m:ss" countdown to the next game alarm, but it collided with the Wear OS `TimeText` clock at the top and read as a timer that never matched when the alarm actually vibrated (AlarmManager fire timing is OS-controlled and can lag the on-screen countdown by seconds, especially without exact-alarm permission). We replaced the countdown with **Game Alarm tick marks** projected onto the round game-progress ring: each enabled `GameAlarm` becomes a mark at `minute / duration` (recurring alarms produce evenly spaced marks), the next upcoming tick is emphasised, and an end notch marks full time. The progress ring's head approaching a tick is the proximity cue — there is no separate countdown. Elapsed `m:ss` stays, repositioned clear of the arc; the alarm window and tick positions are bounded by `kickoff + sportDuration` so recurring marks never overhang the end.
+
+Chosen over: keeping the numeric countdown (confusing + collides with system clock), an emphasised secondary "arc to next alarm" (redundant), or passive ticks only (too subtle when duration ≫ interval).

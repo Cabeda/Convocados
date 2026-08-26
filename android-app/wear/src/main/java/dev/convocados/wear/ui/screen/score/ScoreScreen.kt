@@ -13,20 +13,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.*
 import dev.convocados.wear.R
+import dev.convocados.wear.ui.LocalAmbientMode
+import dev.convocados.wear.ui.RememberKeepScreenOn
 import dev.convocados.wear.ui.theme.Warning
 import dev.convocados.wear.util.parseInstant
 import dev.convocados.wear.util.sportDurationMinutes
 import kotlinx.coroutines.delay
 import java.time.Instant
-
-import dev.convocados.wear.ui.LocalAmbientMode
 
 @Composable
 fun ScoreScreen(
@@ -39,16 +38,10 @@ fun ScoreScreen(
     val state by viewModel.uiState.collectAsState()
     val isAmbient = LocalAmbientMode.current
 
-    val shouldKeepScreenOn = state.history != null && state.keepScreenOn
-    if (shouldKeepScreenOn) {
-        val view = LocalView.current
-        DisposableEffect(view) {
-            view.keepScreenOn = true
-            onDispose {
-                view.keepScreenOn = false
-            }
-        }
-    }
+    // Hold the screen awake whenever the per-event setting is on — including
+    // the pre-start state, so a solo organizer can set up without the watch
+    // sleeping mid-game.
+    RememberKeepScreenOn(state.keepScreenOn)
 
     ScreenScaffold {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -127,14 +120,12 @@ private fun ScoreEditor(
     onDecrementTwo: () -> Unit,
     onTeams: () -> Unit,
 ) {
-    // Single 1s ticker drives both the edge progress and the clock.
-    var now by remember { mutableStateOf(Instant.now()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = Instant.now()
-            delay(1000)
-        }
-    }
+    // Stable callbacks so the tiles skip recomposition when the time overlay
+    // ticks every second (the tiles themselves don't depend on time).
+    val incOne = remember(onIncrementOne) { onIncrementOne }
+    val decOne = remember(onDecrementOne) { onDecrementOne }
+    val incTwo = remember(onIncrementTwo) { onIncrementTwo }
+    val decTwo = remember(onDecrementTwo) { onDecrementTwo }
 
     Box(
         modifier = Modifier
@@ -160,8 +151,8 @@ private fun ScoreEditor(
                 score = state.scoreOne,
                 container = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                onIncrement = onIncrementOne,
-                onDecrement = onDecrementOne,
+                onIncrement = incOne,
+                onDecrement = decOne,
                 enabled = true,
                 modifier = Modifier.weight(1f),
             )
@@ -170,15 +161,31 @@ private fun ScoreEditor(
                 score = state.scoreTwo,
                 container = MaterialTheme.colorScheme.tertiaryContainer,
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                onIncrement = onIncrementTwo,
-                onDecrement = onDecrementTwo,
+                onIncrement = incTwo,
+                onDecrement = decTwo,
                 enabled = true,
                 modifier = Modifier.weight(1f),
             )
         }
 
-        // Non-interactive overlays (no pointerInput, so taps fall through to the tiles).
-        // Non-interactive overlays (no pointerInput, so taps fall through to the tiles).
+        // Time-dependent overlays live in their own tick-scoped composable so
+        // the per-second clock/progress redraw doesn't recompose the tiles.
+        ScoreTimeOverlay(state = state)
+    }
+}
+
+/** Time-driven overlays (edge progress, game clock, alarm/teams hint, offline badge). */
+@Composable
+private fun ScoreTimeOverlay(state: ScoreUiState) {
+    var now by remember { mutableStateOf(Instant.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Instant.now()
+            delay(1000)
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
         state.game?.let { game ->
             val kickoffMs = state.kickoffEpochMs ?: parseInstant(game.dateTime)?.toEpochMilli()
             if (kickoffMs != null) {
@@ -186,6 +193,8 @@ private fun ScoreEditor(
                 val elapsedMs = now.toEpochMilli() - kickoffMs
                 GameEdgeProgress(
                     progress = (elapsedMs.toFloat() / durationMs).coerceIn(0f, 1f),
+                    alarmFractions = state.alarmFractions,
+                    nextAlarmFraction = state.nextAlarmFraction,
                     modifier = Modifier.fillMaxSize(),
                 )
                 if (elapsedMs >= 0) {
@@ -200,11 +209,8 @@ private fun ScoreEditor(
             }
         }
 
-        // Show the next-alarm countdown when armed, otherwise the Teams hint.
-        val nextSec = state.nextAlarmAtMs?.let { (it - now.toEpochMilli()) / 1000 }?.takeIf { it > 0 }
         Text(
-            text = if (nextSec != null) "⏰ %d:%02d".format(nextSec / 60, nextSec % 60)
-            else stringResource(R.string.teams_hint),
+            text = stringResource(R.string.teams_hint),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             modifier = Modifier
