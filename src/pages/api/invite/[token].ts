@@ -40,12 +40,19 @@ export const GET: APIRoute = async ({ params, request }) => {
   // Guest link: anonymous shell, claimable by any logged-in user on accept.
   const claimable = !!fresh && fresh.status === "pending" && !fresh.eventPlayer.userId;
 
+  let viewerName: string | null = null;
+  if (session?.user) {
+    viewerName = (await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } }))?.name ?? null;
+  }
+
   return Response.json({
     valid: true,
     status: fresh?.status ?? invite.status,
     token,
     isInvitee,
     claimable,
+    claimPlayerId: claimable ? invite.eventPlayerId : null,
+    viewerName,
     authenticated: !!session?.user,
     inviteeName: invite.eventPlayer.name,
     invitedByName: invite.invitedBy.name,
@@ -66,24 +73,31 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const token = params.token ?? "";
   const session = await getSession(request);
-  if (!session?.user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
-  let body: { action?: unknown };
+  let body: { action?: unknown; asGuest?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (body.action !== "accept" && body.action !== "decline") {
     return Response.json({ error: "action must be 'accept' or 'decline'." }, { status: 400 });
   }
+  const asGuest = body.asGuest === true;
 
   const invite = await prisma.playerInvite.findUnique({
     where: { token },
-    include: { eventPlayer: { select: { userId: true, eventId: true } } },
+    include: { eventPlayer: { select: { userId: true, name: true, eventId: true } } },
   });
   if (!invite) return Response.json({ error: "Invite not found." }, { status: 404 });
-  // Guest links (anonymous shell) are claimable by any logged-in account;
-  // claimed invites stay restricted to the owning account.
-  if (invite.eventPlayer.userId !== null && invite.eventPlayer.userId !== session.user.id) {
-    return Response.json({ error: "This invite is not for your account." }, { status: 403 });
+
+  // ADR 0026 caller classes:
+  //  - anonymous shell (guest link): the token IS the authority — anyone may
+  //    accept/decline; a logged-in viewer picks claim vs join-as-guest.
+  //  - claimed shell: only the owning account, authenticated.
+  if (invite.eventPlayer.userId !== null) {
+    if (!session?.user) return Response.json({ error: "Authentication required." }, { status: 401 });
+    if (invite.eventPlayer.userId !== session.user.id) {
+      return Response.json({ error: "This invite is not for your account." }, { status: 403 });
+    }
   }
+  const actingUserId = asGuest || !session?.user ? null : session.user.id;
 
   const game = await prisma.game.findUnique({
     where: { id: invite.gameId },
@@ -108,14 +122,17 @@ export const POST: APIRoute = async ({ params, request }) => {
       const event = await prisma.event.findUnique({ where: { id: invite.eventPlayer.eventId }, select: { maxPlayers: true } });
       const result = await acceptPlayerInvite({
         token,
-        userId: session.user.id,
+        userId: actingUserId,
         eventId: invite.eventPlayer.eventId,
         gameId: invite.gameId,
         maxPlayers: event?.maxPlayers ?? 0,
+        asGuest,
       });
 
       // Keep teams + per-game payments in sync with the new participant.
-      const playerName = (await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } }))?.name ?? "";
+      const playerName = actingUserId
+        ? (await prisma.user.findUnique({ where: { id: actingUserId }, select: { name: true } }))?.name ?? invite.eventPlayer.name
+        : invite.eventPlayer.name;
       await addPlayerToTeams(invite.eventPlayer.eventId, playerName, invite.gameId);
       await validateTeams(invite.eventPlayer.eventId, event?.maxPlayers ?? 0, invite.gameId);
       await syncGamePayments(invite.gameId, invite.eventPlayer.eventId);
@@ -123,11 +140,11 @@ export const POST: APIRoute = async ({ params, request }) => {
       return Response.json({ ok: true, action: "accepted", bench: result.bench });
     }
 
-    const result = await declinePlayerInvite({ token, userId: session.user.id, gameId: invite.gameId });
+    const result = await declinePlayerInvite({ token, userId: actingUserId, gameId: invite.gameId });
     return Response.json({ ok: true, action: "declined", status: result.status });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to process invite.";
-    const status = /expired/i.test(message) ? 410 : 400;
+    const status = /expired/i.test(message) ? 410 : /no longer pending/i.test(message) ? 409 : 400;
     return Response.json({ error: message }, { status });
   }
 };
