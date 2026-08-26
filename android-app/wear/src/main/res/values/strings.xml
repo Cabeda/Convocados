@@ -47,6 +47,11 @@
     <string name="alarm_label">Alarm</string>
     <string name="minutes_value">%1$d min</string>
     <string name="start_quick_game">Start</string>
+    <string name="continue_quick_game">Continue game</string>
+    <string name="restart_quick_game">Restart</string>
+    <string name="quick_end_hint">Swipe up to end</string>
+    <string name="refreshing">Refreshing…</string>
+    <string name="pull_to_refresh">Pull to refresh</string>
     <string name="refresh">Refresh</string>
 
     <!-- Teams screen -->

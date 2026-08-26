@@ -7,8 +7,10 @@ const HAPPENING_WINDOW_MS = 90 * 60 * 1000; // 90 minutes
 
 /**
  * POST /api/watch/events
- * Auto-creates a GameHistory record for an event that has teams but no history yet.
- * This allows the watch to start tracking scores without waiting for recurrence rollover.
+ * Auto-creates a GameHistory record for an event so the watch can start tracking
+ * scores without waiting for recurrence rollover. Teams are optional: a solo
+ * organizer may begin scoring before teams are set (history falls back to the
+ * event's default team names / empty snapshot).
  */
 export const POST: APIRoute = async ({ request }) => {
   const session = await getSession(request);
@@ -48,10 +50,6 @@ export const POST: APIRoute = async ({ request }) => {
 
   if (!isOwner && !isAdmin && !isPlayer) {
     return Response.json({ error: "You must be the event owner, an admin, or a player in this game to start scoring." }, { status: 403 });
-  }
-
-  if (event.teamResults.length < 2) {
-    return Response.json({ error: "Teams must be assigned first." }, { status: 400 });
   }
 
   // Check if there's already a history record for today

@@ -74,3 +74,34 @@ fun computeAlarmTimes(
     }
     return fires.sortedBy { it.triggerAtMs }
 }
+
+/**
+ * Projects every enabled alarm onto the game window as an edge fraction in
+ * 0..1 (for the score ring ticks). Unlike [computeAlarmTimes] this includes
+ * times already passed, so past ticks can be dimmed and the next emphasised —
+ * and it never emits beyond the game end. Pure and side-effect free.
+ */
+fun computeAlarmFractions(
+    alarms: List<GameAlarm>,
+    durationMinutes: Int,
+): List<Float> = buildList {
+    val totalMs = durationMinutes * 60_000L
+    for (alarm in alarms) {
+        if (!alarm.enabled || alarm.minute <= 0) continue
+        when (alarm.type) {
+            AlarmType.SINGLE -> {
+                val t = alarm.minute * 60_000L
+                if (t <= totalMs) add(t.toFloat() / totalMs)
+            }
+            AlarmType.RECURRING -> {
+                var i = 1
+                while (true) {
+                    val t = i * alarm.minute * 60_000L
+                    if (t > totalMs) break
+                    add(t.toFloat() / totalMs)
+                    i++
+                }
+            }
+        }
+    }
+}.sorted()

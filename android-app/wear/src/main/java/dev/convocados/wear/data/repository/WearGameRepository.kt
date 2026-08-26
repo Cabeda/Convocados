@@ -8,7 +8,10 @@ import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
 import dev.convocados.wear.data.repository.WearTeamRepository
 import dev.convocados.wear.util.todayBoundsIso
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,10 +45,14 @@ class WearGameRepository @Inject constructor(
         gameDao.refreshGames("admin", admin)
         gameDao.refreshGames("followed", followed)
         gameDao.refreshGames("archived_owned", archivedOwned)
-        // Pre-fetch teams for all active (non-archived) games
+        // Pre-fetch teams for all active (non-archived) games in parallel —
+        // on a low-end watch doing these serially on every open is the #1
+        // source of startup jank.
         val activeIds = (owned + admin + followed).map { it.id }
-        for (id in activeIds) {
-            try { teamRepository.refreshTeams(id) } catch (_: Exception) {}
+        coroutineScope {
+            activeIds.map { id ->
+                launch { runCatching { teamRepository.refreshTeams(id) } }
+            }.joinAll()
         }
         Result.success(Unit)
     } catch (e: Exception) {

@@ -12,10 +12,14 @@ import androidx.wear.compose.material3.*
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
+import dev.convocados.wear.data.local.QuickGameState
 
 @Composable
 fun QuickSetupScreen(
     onStart: (durationMinutes: Int, alarmIntervalMinutes: Int) -> Unit,
+    activeGame: QuickGameState? = null,
+    onContinue: () -> Unit = {},
+    onRestart: () -> Unit = {},
 ) {
     var duration by remember { mutableIntStateOf(60) }
     var vibrationEnabled by remember { mutableStateOf(false) }
@@ -42,6 +46,27 @@ fun QuickSetupScreen(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
+                }
+            }
+
+            // Continue an in-progress quick game (timer kept anchored to its start).
+            if (activeGame != null) {
+                item {
+                    Button(
+                        onClick = onContinue,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.filledTonalButtonColors(),
+                    ) {
+                        Text(stringResource(R.string.continue_quick_game))
+                    }
+                }
+                item {
+                    CompactButton(
+                        onClick = onRestart,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.restart_quick_game))
+                    }
                 }
             }
 
