@@ -126,4 +126,14 @@ describe("InvitePage — frictionless guest acceptance", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /^accept$/i })).toBeTruthy());
     expect(screen.queryByTestId("invite-join-guest")).toBeNull();
   });
+
+  it("anonymous visitor on a claimed invite sees game details, not a bare login wall", async () => {
+    mockLookup(lookup({ claimable: false, claimPlayerId: null, isInvitee: false, authenticated: false }));
+    renderWithTheme(<InvitePage token="tok-1" />);
+    const signIn = await waitFor(() => screen.getByRole("link", { name: /sign in/i }));
+    expect(signIn.getAttribute("href")).toBe("/auth/signin?callbackURL=/invite/tok-1");
+    expect(screen.getByText("Ninjas da Areosa")).toBeTruthy();
+    expect(screen.getByText("Pitch 2")).toBeTruthy();
+    expect(screen.getByText("Manecas")).toBeTruthy();
+  });
 });
