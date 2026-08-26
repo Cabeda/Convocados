@@ -15,7 +15,7 @@ describe("Google email auto-enable for invites", () => {
     await prisma.user.deleteMany();
   });
 
-  it("sends email for Google users with verified email even when prefs are off", async () => {
+  it("never enables the invite email channel, even for Google users with verified email", async () => {
     const user = await prisma.user.create({
       data: {
         id: "u-google-1",
@@ -43,8 +43,8 @@ describe("Google email auto-enable for invites", () => {
     });
 
     const channels = await getInviteChannels(user.id);
-    // Should be true for Google users even though prefs are off
-    expect(channels.email).toBe(true);
+    // Owner decision: game invites never send email, even for Google users.
+    expect(channels.email).toBe(false);
   });
 
   it("does not send email for non-Google users when prefs are off", async () => {

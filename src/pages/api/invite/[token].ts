@@ -33,16 +33,19 @@ export const GET: APIRoute = async ({ params, request }) => {
   if (!invite) return Response.json({ valid: false, status: "not_found" });
 
   await expirePendingInvites(invite.gameId);
-  const fresh = await prisma.playerInvite.findUnique({ where: { token } });
+  const fresh = await prisma.playerInvite.findUnique({ where: { token }, include: { eventPlayer: { select: { userId: true } } } });
 
   const session = await getSession(request);
   const isInvitee = !!session?.user && session.user.id === invite.eventPlayer.userId;
+  // Guest link: anonymous shell, claimable by any logged-in user on accept.
+  const claimable = !!fresh && fresh.status === "pending" && !fresh.eventPlayer.userId;
 
   return Response.json({
     valid: true,
     status: fresh?.status ?? invite.status,
     token,
     isInvitee,
+    claimable,
     authenticated: !!session?.user,
     inviteeName: invite.eventPlayer.name,
     invitedByName: invite.invitedBy.name,
@@ -76,7 +79,9 @@ export const POST: APIRoute = async ({ params, request }) => {
     include: { eventPlayer: { select: { userId: true, eventId: true } } },
   });
   if (!invite) return Response.json({ error: "Invite not found." }, { status: 404 });
-  if (invite.eventPlayer.userId !== session.user.id) {
+  // Guest links (anonymous shell) are claimable by any logged-in account;
+  // claimed invites stay restricted to the owning account.
+  if (invite.eventPlayer.userId !== null && invite.eventPlayer.userId !== session.user.id) {
     return Response.json({ error: "This invite is not for your account." }, { status: 403 });
   }
 
