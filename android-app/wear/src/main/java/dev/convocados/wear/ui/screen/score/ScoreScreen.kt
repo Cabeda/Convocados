@@ -193,6 +193,8 @@ private fun ScoreTimeOverlay(state: ScoreUiState) {
                 val elapsedMs = now.toEpochMilli() - kickoffMs
                 GameEdgeProgress(
                     progress = (elapsedMs.toFloat() / durationMs).coerceIn(0f, 1f),
+                    alarmFractions = state.alarmFractions,
+                    nextAlarmFraction = state.nextAlarmFraction,
                     modifier = Modifier.fillMaxSize(),
                 )
                 if (elapsedMs >= 0) {
@@ -207,11 +209,8 @@ private fun ScoreTimeOverlay(state: ScoreUiState) {
             }
         }
 
-        // Show the next-alarm countdown when armed, otherwise the Teams hint.
-        val nextSec = state.nextAlarmAtMs?.let { (it - now.toEpochMilli()) / 1000 }?.takeIf { it > 0 }
         Text(
-            text = if (nextSec != null) "⏰ %d:%02d".format(nextSec / 60, nextSec % 60)
-            else stringResource(R.string.teams_hint),
+            text = stringResource(R.string.teams_hint),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             modifier = Modifier

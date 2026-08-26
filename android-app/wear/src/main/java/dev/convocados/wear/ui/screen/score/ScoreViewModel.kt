@@ -6,6 +6,7 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.alarm.GameSettingsStore
+import dev.convocados.wear.data.alarm.computeAlarmFractions
 import dev.convocados.wear.data.alarm.computeAlarmTimes
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
@@ -35,6 +36,10 @@ data class ScoreUiState(
     val nextAlarmAtMs: Long? = null,
     val error: String? = null,
     val keepScreenOn: Boolean = true,
+    // ADR 0027: alarm tick positions on the progress ring (fraction 0..1 of the
+    // game window, from computeAlarmTimes) + the next upcoming tick to emphasise.
+    val alarmFractions: List<Float> = emptyList(),
+    val nextAlarmFraction: Float? = null,
 )
 
 @HiltViewModel
@@ -76,6 +81,11 @@ class ScoreViewModel @Inject constructor(
                 val nextAlarm = kickoffMs?.let {
                     computeAlarmTimes(it, settings.alarms, durationMinutes, now).firstOrNull()?.triggerAtMs
                 }
+                // ADR 0027: project every enabled alarm onto the ring as a fraction
+                // of the game window, and highlight the next upcoming one.
+                val alarmFractions = computeAlarmFractions(settings.alarms, durationMinutes)
+                val totalMs = durationMinutes * 60_000L
+                val nextAlarmFraction = nextAlarm?.let { n -> kickoffMs?.let { k -> ((n - k).toFloat() / totalMs).coerceIn(0f, 1f) } }
                 _uiState.update { state ->
                     state.copy(
                         game = game,
@@ -86,6 +96,8 @@ class ScoreViewModel @Inject constructor(
                         teamTwoName = history?.teamTwoName ?: game?.teamTwoName ?: "Team 2",
                         kickoffEpochMs = kickoffMs,
                         nextAlarmAtMs = nextAlarm,
+                        alarmFractions = alarmFractions,
+                        nextAlarmFraction = nextAlarmFraction,
                         keepScreenOn = settings.keepScreenOn,
                         isLoading = false,
                     )

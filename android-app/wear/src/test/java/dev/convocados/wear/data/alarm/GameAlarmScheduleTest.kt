@@ -60,4 +60,26 @@ class GameAlarmScheduleTest {
             fires.map { it.triggerAtMs },
         )
     }
+
+    @Test
+    fun `alarm fractions include past ticks and never exceed the window`() {
+        val alarms = listOf(
+            GameAlarm("switch", AlarmType.SINGLE, minute = 25),
+            GameAlarm("rotate", AlarmType.RECURRING, minute = 10),
+        )
+        assertEquals(
+            listOf(0.2f, 0.4f, 0.5f, 0.6f, 0.8f, 1.0f),
+            computeAlarmFractions(alarms, durationMinutes = 50),
+        )
+    }
+
+    @Test
+    fun `alarm fractions drop alarms past the window and disabled ones`() {
+        val alarms = listOf(
+            GameAlarm("gone", AlarmType.SINGLE, minute = 90),
+            GameAlarm("off", AlarmType.RECURRING, minute = 5, enabled = false),
+            GameAlarm("ok", AlarmType.RECURRING, minute = 15),
+        )
+        assertEquals(listOf(0.25f, 0.5f, 0.75f, 1.0f), computeAlarmFractions(alarms, durationMinutes = 60))
+    }
 }
