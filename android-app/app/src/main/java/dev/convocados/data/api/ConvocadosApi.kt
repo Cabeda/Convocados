@@ -328,8 +328,8 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun fetchInvite(token: String): InviteLookupResponse =
         client.get("/api/invite/$token")
 
-    suspend fun respondToInvite(token: String, action: String): InviteActionResponse =
-        client.post("/api/invite/$token", InviteActionRequest(action))
+    suspend fun respondToInvite(token: String, action: String, asGuest: Boolean = false): InviteActionResponse =
+        client.post("/api/invite/$token", InviteActionRequest(action, asGuest))
 
     suspend fun fetchEventSuggestions(eventId: String): SuggestionsResponse =
         client.get("/api/events/$eventId/suggestions")

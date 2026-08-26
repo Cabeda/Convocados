@@ -107,6 +107,8 @@
     <string name="invite_invited_by">%1$s te invitó a jugar</string>
     <string name="invite_accept">Aceptar</string>
     <string name="invite_decline">Rechazar</string>
+    <string name="invite_join_as">Entrar como %1$s</string>
+    <string name="invite_join_as_guest">Entrar como %1$s (invitado)</string>
     <string name="invite_view_game">Ver partido</string>
     <string name="invite_sign_in">Iniciar sesión</string>
     <string name="invite_not_for_you">Esta invitación no es para tu cuenta.</string>

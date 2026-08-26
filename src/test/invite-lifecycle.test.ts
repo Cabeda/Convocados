@@ -509,7 +509,7 @@ describe("acceptPlayerInvite", () => {
 });
 
 describe("declinePlayerInvite", () => {
-  it("marks declined and removes GameParticipant + Rsvp", async () => {
+  it("marks declined, removes the GameParticipant and records RSVP=no", async () => {
     const owner = await seedUser("Owner");
     const invitee = await seedUser("Invitee");
     const ev = await seedEventWithGame(owner.id);
@@ -522,7 +522,8 @@ describe("declinePlayerInvite", () => {
     expect(saved.status).toBe("declined");
     const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: ev.id, userId: invitee.id } });
     expect(await prisma.gameParticipant.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(0);
-    expect(await prisma.rsvp.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(0);
+    const rsvp = await prisma.rsvp.findFirstOrThrow({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } });
+    expect(rsvp.status).toBe("no");
     // EventPlayer shell persists
     expect(ep).toBeTruthy();
   });
@@ -729,10 +730,22 @@ describe("POST /api/invite/[token] (accept/decline via link)", () => {
     expect(res.status).toBe(410);
   });
 
-  it("401 when unauthenticated", async () => {
+  it("401 when unauthenticated on a CLAIMED invite", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+    // createPlayerInvite links the shell to the invitee ⇒ claimed semantics
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+
+    mockGetSession.mockResolvedValue(null);
+    const res = await inviteTokenPost(ctx({ token: invite.token }, { action: "accept" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("unknown token is 404 even unauthenticated", async () => {
     mockGetSession.mockResolvedValue(null);
     const res = await inviteTokenPost(ctx({ token: "t-1" }, { action: "accept" }));
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(404);
   });
 
   it("400 on malformed JSON", async () => {

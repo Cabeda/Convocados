@@ -666,6 +666,9 @@ data class InviteLookupResponse(
     val status: String = "",
     val token: String = "",
     val isInvitee: Boolean = false,
+    val claimable: Boolean = false,
+    val claimPlayerId: String? = null,
+    val viewerName: String? = null,
     val authenticated: Boolean = false,
     val inviteeName: String = "",
     val invitedByName: String = "",
@@ -674,7 +677,7 @@ data class InviteLookupResponse(
 )
 
 @Serializable
-data class InviteActionRequest(val action: String)
+data class InviteActionRequest(val action: String, val asGuest: Boolean = false)
 
 @Serializable
 data class InviteActionResponse(

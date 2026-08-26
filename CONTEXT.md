@@ -55,6 +55,16 @@ Its complement is the **Anonymous** EventPlayer — an unlinked, name-keyed gues
 Distinct from the **account-link protection rule** (a behavior, not a display): an Account-linked Player can only be removed from the list by themselves or the Event Owner/Admin.
 _Avoid_: protected player (implies a security status rather than an identity)
 
+## Guest Invite Link
+A shareable `/invite/<token>` URL bound to an **Anonymous** EventPlayer (no account targeted). The inviter delivers it themselves (Web Share / WhatsApp / SMS) — nothing is sent by Convocados. Whoever opens it may **accept as guest** or, if logged in, **claim** instead. The token is a capability: unguessable, and the accept/decline answer is final until the Owner retracts.
+
+_Avoid_: magic link (that term is reserved for authentication emails), open invite
+
+## Claiming
+Binding an Anonymous EventPlayer to a User account so the human's history becomes authenticated. Two trigger paths: (1) a logged-in user accepting a Guest Invite Link claims it at accept time; (2) an accepted-as-guest player later creates an account via the claim flow. Blocked when identities would collide (see merge rules).
+
+_Avoid_: merging (that is the owner-driven duplicate-name tool), upgrading
+
 ## Owner
 The User who created the Game or to whom ownership was transferred. Has full management control. A Game has exactly zero or one Owner.
 
