@@ -32,11 +32,7 @@ class ApiClient @Inject constructor(
         coerceInputValues = true
     }
 
-    private lateinit var client: HttpClient
-
-    init {
-        client = buildClient(OkHttp.create())
-    }
+    private var client: HttpClient = buildClient(OkHttp.create())
 
     private fun buildClient(engine: HttpClientEngine): HttpClient = HttpClient(engine) {
         install(ContentNegotiation) { json(this@ApiClient.json) }

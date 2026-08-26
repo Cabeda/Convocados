@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
@@ -24,7 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import dev.convocados.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -142,9 +143,9 @@ private fun logSeverity(action: String): LogSeverity = when {
 
 private fun logIcon(action: String) = when {
     action.contains("player") -> Icons.Default.Person
-    action.contains("team") || action.contains("order") -> Icons.Default.List
-    action.contains("cost") || action.contains("payment") -> Icons.Default.List
-    action.contains("history") || action.contains("rating") -> Icons.Default.List
+    action.contains("team") || action.contains("order") -> Icons.AutoMirrored.Filled.List
+    action.contains("cost") || action.contains("payment") -> Icons.AutoMirrored.Filled.List
+    action.contains("history") || action.contains("rating") -> Icons.AutoMirrored.Filled.List
     action.contains("cancelled") || action.contains("archived") -> Icons.Default.Close
     action.contains("recurrence") -> Icons.Default.Refresh
     else -> Icons.Default.Settings
