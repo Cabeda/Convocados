@@ -73,4 +73,6 @@
     <string name="adding_label">Adding…</string>
     <string name="done_label">Done</string>
     <string name="arrived_label">arrived</string>
+    <string name="live_badge">LIVE</string>
+    <string name="ended_label">Ended</string>
 </resources>

@@ -300,14 +300,16 @@ private fun AmbientScoreDisplay(state: ScoreUiState) {
                 style = MaterialTheme.typography.labelSmall,
                 color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
             )
-            // Game clock
+            // Game clock (or "Ended" once the game window has elapsed).
             val kickoffMs = state.kickoffEpochMs
             if (kickoffMs != null) {
+                val durationMs = state.game?.let { sportDurationMinutes(it.sport) * 60_000L } ?: 0L
                 val elapsedMs = now.toEpochMilli() - kickoffMs
+                val ended = durationMs > 0 && elapsedMs >= durationMs
                 if (elapsedMs >= 0) {
                     val s = elapsedMs / 1000
                     Text(
-                        text = "%d:%02d".format(s / 60, s % 60),
+                        text = if (ended) stringResource(R.string.ended_label) else "%d:%02d".format(s / 60, s % 60),
                         style = MaterialTheme.typography.labelMedium,
                         color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.padding(top = 4.dp),

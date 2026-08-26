@@ -311,16 +311,6 @@ fun GamesScreen(
                     }
 
                     item {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        CompactButton(onClick = onQuickGame) {
-                            Text(
-                                text = stringResource(R.string.quick_game),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
-                    }
-
-item {
                         Spacer(modifier = Modifier.height(4.dp))
                         CompactButton(
                             onClick = onQuickGame,
@@ -370,9 +360,9 @@ private fun GameChip(
         },
         secondaryLabel = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isSuggested && canScore) {
+                if (timeLabel == stringResource(R.string.in_progress)) {
                     Text(
-                        text = stringResource(R.string.now_label),
+                        text = stringResource(R.string.live_badge),
                         style = MaterialTheme.typography.labelSmall,
                         color = Success,
                     )
