@@ -10,6 +10,7 @@ import dev.convocados.wear.data.repository.WearTeamRepository
 import dev.convocados.wear.util.todayBoundsIso
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -33,6 +34,13 @@ class WearGameRepository @Inject constructor(
         val (start, end) = todayBoundsIso()
         return historyDao.observeLatestTodayHistory(eventId, start, end)
     }
+
+    /** All cached history, most recent first (wrist history screen). */
+    fun observeAllHistory(): Flow<List<WearHistoryEntity>> = historyDao.observeAllHistory()
+
+    /** Cached game titles by id (to render history rows with event names). */
+    suspend fun gameTitles(): Map<String, String> =
+        gameDao.getAllGames().first().associate { it.id to it.title }
 
     /** Refresh games from the API, falling back to cache on failure. Also pre-fetches teams for active games. */
     suspend fun refreshGames(): Result<Unit> = try {

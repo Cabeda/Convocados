@@ -1,6 +1,6 @@
 package dev.convocados.wear.ui.screen.games
 
-import androidx.compose.runtime.Stable
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
@@ -13,15 +13,15 @@ import dev.convocados.wear.data.sync.ScoreSyncWorker
 import dev.convocados.wear.util.canScoreGame
 import dev.convocados.wear.util.isStalePastGame
 import dev.convocados.wear.util.parseInstant
-import dev.convocados.wear.util.tickFlow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import kotlin.math.abs
 
-@Stable
+@Immutable
 data class GamesUiState(
     val games: List<WearGameEntity> = emptyList(),
     val pastGames: List<WearGameEntity> = emptyList(),
@@ -55,9 +55,6 @@ class GamesViewModel @Inject constructor(
         else hasEnteredOnce = true
     }
 
-    @Volatile
-    var tickProvider: () -> Flow<Instant> = { tickFlow() }
-
     init {
         ScoreSyncWorker.schedulePeriodic(workManager)
 
@@ -66,7 +63,6 @@ class GamesViewModel @Inject constructor(
                 repository.observeGames(),
                 repository.observeArchivedGames(),
                 scoreRepository.observePendingCount(),
-                tickProvider(),
             ) { values ->
                 @Suppress("UNCHECKED_CAST")
                 Triple(
@@ -74,28 +70,29 @@ class GamesViewModel @Inject constructor(
                     values[1] as List<WearGameEntity>,
                     values[2] as Int,
                 )
-            }.collect { (games, archived, pending) ->
-                val upcoming = games.filter { !isStalePastGame(it.dateTime, it.isRecurring) }
-                val suggested = findBestGame(upcoming)
-                val scorable = upcoming.filter { canScoreGame(it.dateTime) }.map { it.id }.toSet()
-                // Pre-sort: suggested first, then by proximity to now
-                val sorted = upcoming.sortedWith(
-                    compareBy<WearGameEntity> { it.id != suggested?.id }
-                        .thenBy { parseInstant(it.dateTime)?.let { t -> abs(ChronoUnit.MINUTES.between(Instant.now(), t)) } ?: Long.MAX_VALUE }
-                )
-                _uiState.value = _uiState.value.copy(
-                    games = sorted,
-                    pastGames = archived,
-                    suggestedGameId = suggested?.id,
-                    autoNavigateEventId = if (!hasAutoNavigated && suggested != null && suggested.id in scorable) {
-                        hasAutoNavigated = true
-                        suggested.id
-                    } else _uiState.value.autoNavigateEventId,
-                    isLoading = false,
-                    pendingSyncCount = pending,
-                    canScoreGameIds = scorable,
-                )
-            }
+            } // combine emits only when data changes — no 1-minute tick re-emits.
+                .collect { (games, archived, pending) ->
+                    val now = Instant.now()
+                    val upcoming = games.filter { !isStalePastGame(it.dateTime, it.isRecurring) }
+                    val suggested = findBestGame(upcoming, now)
+                    val scorable = upcoming.filter { canScoreGame(it.dateTime) }.map { it.id }.toSet()
+                    val sorted = upcoming.sortedWith(
+                        compareBy<WearGameEntity> { it.id != suggested?.id }
+                            .thenBy { parseInstant(it.dateTime)?.let { t -> abs(ChronoUnit.MINUTES.between(now, t)) } ?: Long.MAX_VALUE }
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        games = sorted,
+                        pastGames = archived,
+                        suggestedGameId = suggested?.id,
+                        autoNavigateEventId = if (!hasAutoNavigated && suggested != null && suggested.id in scorable) {
+                            hasAutoNavigated = true
+                            suggested.id
+                        } else _uiState.value.autoNavigateEventId,
+                        isLoading = false,
+                        pendingSyncCount = pending,
+                        canScoreGameIds = scorable,
+                    )
+                }
         }
 
         refresh()
@@ -130,9 +127,8 @@ class GamesViewModel @Inject constructor(
         _uiState.update { it.copy(visiblePastCount = it.visiblePastCount + 5) }
     }
 
-    private fun findBestGame(games: List<WearGameEntity>): WearGameEntity? {
+    private fun findBestGame(games: List<WearGameEntity>, now: Instant): WearGameEntity? {
         if (games.isEmpty()) return null
-        val now = Instant.now()
 
         return games.minByOrNull { game ->
             val gameTime = parseInstant(game.dateTime) ?: return@minByOrNull Long.MAX_VALUE

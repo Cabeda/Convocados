@@ -2,10 +2,13 @@ package dev.convocados.wear.ui.screen.teams
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -39,6 +42,7 @@ fun TeamsScreen(
     settingsViewModel: GameSettingsViewModel,
     onDone: () -> Unit = {},
     onKickoff: () -> Unit = {},
+    onAddPlayer: () -> Unit = {},
 ) {
     LaunchedEffect(eventId) {
         viewModel.load(eventId)
@@ -124,7 +128,13 @@ fun TeamsScreen(
                         if (state.isReadOnly) {
                             ReadOnlyPlayerChip(player)
                         } else {
-                            PlayerChip(player = player, targetTeam = "2", onMove = { viewModel.movePlayerToTeamTwo(player) })
+                            PlayerChip(
+                                player = player,
+                                targetTeam = "2",
+                                isArrived = player.id in state.arrivedIds,
+                                onMove = { viewModel.movePlayerToTeamTwo(player) },
+                                onToggleArrived = { viewModel.toggleArrived(player.id) },
+                            )
                         }
                     }
 
@@ -153,7 +163,13 @@ fun TeamsScreen(
                         if (state.isReadOnly) {
                             ReadOnlyPlayerChip(player)
                         } else {
-                            PlayerChip(player = player, targetTeam = "1", onMove = { viewModel.movePlayerToTeamOne(player) })
+                            PlayerChip(
+                                player = player,
+                                targetTeam = "1",
+                                isArrived = player.id in state.arrivedIds,
+                                onMove = { viewModel.movePlayerToTeamOne(player) },
+                                onToggleArrived = { viewModel.toggleArrived(player.id) },
+                            )
                         }
                     }
 
@@ -273,6 +289,16 @@ fun TeamsScreen(
                         )
                     }
 
+                    // Full-time chime toggle
+                    item {
+                        SwitchButton(
+                            checked = settingsState.gameEndVibration,
+                            onCheckedChange = { settingsViewModel.setGameEndVibration(it) },
+                            label = { Text(stringResource(R.string.game_end_vibration_label)) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
                     // Vibration alerts toggle
                     item {
                         SwitchButton(
@@ -332,6 +358,14 @@ fun TeamsScreen(
                         }
                     }
 
+                    // Add player button
+                    item {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        CompactButton(onClick = onAddPlayer) {
+                            Text(stringResource(R.string.add_player_button))
+                        }
+                    }
+
                     // Done button
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -358,14 +392,42 @@ private fun ReadOnlyPlayerChip(player: WearPlayerEntity) {
     )
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun PlayerChip(player: WearPlayerEntity, targetTeam: String, onMove: () -> Unit) {
-    Button(
-        onClick = onMove,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(text = player.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        secondaryLabel = { Text(text = stringResource(R.string.move_to_team, targetTeam), style = MaterialTheme.typography.labelSmall) },
-    )
+private fun PlayerChip(
+    player: WearPlayerEntity,
+    targetTeam: String,
+    isArrived: Boolean,
+    onMove: () -> Unit,
+    onToggleArrived: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .combinedClickable(
+                onClick = onMove,
+                onLongClick = onToggleArrived,
+            )
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text = if (isArrived) "✓ ${player.name}" else player.name,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = stringResource(R.string.move_to_team, targetTeam) +
+                if (isArrived) " · " + stringResource(R.string.arrived_label) else "",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable

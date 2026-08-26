@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,11 +33,13 @@ fun ScoreScreen(
     eventId: String,
     viewModel: ScoreViewModel,
     onTeams: () -> Unit = {},
+    onFinish: () -> Unit = {},
 ) {
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
     val state by viewModel.uiState.collectAsState()
     val isAmbient = LocalAmbientMode.current
+    val view = LocalView.current
 
     // Hold the screen awake whenever the per-event setting is on — including
     // the pre-start state, so a solo organizer can set up without the watch
@@ -103,6 +106,11 @@ fun ScoreScreen(
                             onIncrementTwo = viewModel::incrementScoreTwo,
                             onDecrementTwo = viewModel::decrementScoreTwo,
                             onTeams = onTeams,
+                            onFinish = onFinish,
+                            onUndo = {
+                                viewModel.undoLastScore()
+                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            },
                         )
                     }
                 }
@@ -119,6 +127,8 @@ private fun ScoreEditor(
     onIncrementTwo: () -> Unit,
     onDecrementTwo: () -> Unit,
     onTeams: () -> Unit,
+    onFinish: () -> Unit,
+    onUndo: () -> Unit,
 ) {
     // Stable callbacks so the tiles skip recomposition when the time overlay
     // ticks every second (the tiles themselves don't depend on time).
@@ -131,12 +141,17 @@ private fun ScoreEditor(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                // Swipe up (within the content) opens the Teams screen.
+                // Swipe up opens Teams; swipe down undoes the last score edit.
                 val threshold = 64.dp.toPx()
                 var dragY = 0f
                 detectVerticalDragGestures(
                     onDragStart = { dragY = 0f },
-                    onDragEnd = { if (dragY < -threshold) onTeams() },
+                    onDragEnd = {
+                        when {
+                            dragY < -threshold -> onTeams()
+                            dragY > threshold -> onUndo()
+                        }
+                    },
                 ) { _, dy -> dragY += dy }
             },
     ) {
@@ -170,13 +185,13 @@ private fun ScoreEditor(
 
         // Time-dependent overlays live in their own tick-scoped composable so
         // the per-second clock/progress redraw doesn't recompose the tiles.
-        ScoreTimeOverlay(state = state)
+        ScoreTimeOverlay(state = state, onFinish = onFinish)
     }
 }
 
 /** Time-driven overlays (edge progress, game clock, alarm/teams hint, offline badge). */
 @Composable
-private fun ScoreTimeOverlay(state: ScoreUiState) {
+private fun ScoreTimeOverlay(state: ScoreUiState, onFinish: () -> Unit) {
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -209,14 +224,28 @@ private fun ScoreTimeOverlay(state: ScoreUiState) {
             }
         }
 
-        Text(
-            text = stringResource(R.string.teams_hint),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 14.dp),
-        )
+        // Once the game window elapses, offer to finish (persist + return).
+        val kickoffMs = state.kickoffEpochMs
+        val gameOver = kickoffMs != null && state.game != null &&
+            now.toEpochMilli() >= kickoffMs + sportDurationMinutes(state.game.sport) * 60_000L
+
+        if (gameOver) {
+            CompactButton(
+                onClick = onFinish,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 14.dp),
+            ) {
+                Text(stringResource(R.string.finish_game))
+            }
+        } else {
+            Text(
+                text = stringResource(R.string.teams_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 14.dp),
+            )
+        }
 
         if (state.isOfflineQueued) {
             Text(
@@ -271,14 +300,16 @@ private fun AmbientScoreDisplay(state: ScoreUiState) {
                 style = MaterialTheme.typography.labelSmall,
                 color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
             )
-            // Game clock
+            // Game clock (or "Ended" once the game window has elapsed).
             val kickoffMs = state.kickoffEpochMs
             if (kickoffMs != null) {
+                val durationMs = state.game?.let { sportDurationMinutes(it.sport) * 60_000L } ?: 0L
                 val elapsedMs = now.toEpochMilli() - kickoffMs
+                val ended = durationMs > 0 && elapsedMs >= durationMs
                 if (elapsedMs >= 0) {
                     val s = elapsedMs / 1000
                     Text(
-                        text = "%d:%02d".format(s / 60, s % 60),
+                        text = if (ended) stringResource(R.string.ended_label) else "%d:%02d".format(s / 60, s % 60),
                         style = MaterialTheme.typography.labelMedium,
                         color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.padding(top = 4.dp),

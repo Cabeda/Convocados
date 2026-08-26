@@ -45,6 +45,10 @@ interface WearHistoryDao {
     @Query("SELECT * FROM wear_history WHERE eventId = :eventId AND dateTime >= :startOfDayIso AND dateTime < :endOfDayIso ORDER BY dateTime DESC LIMIT 1")
     fun observeLatestTodayHistory(eventId: String, startOfDayIso: String, endOfDayIso: String): Flow<WearHistoryEntity?>
 
+    /** All cached history, most recent first (for the wrist history screen). */
+    @Query("SELECT * FROM wear_history ORDER BY dateTime DESC")
+    fun observeAllHistory(): Flow<List<WearHistoryEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(history: List<WearHistoryEntity>)
 
@@ -69,6 +73,10 @@ interface PendingScoreDao {
     @Query("SELECT COUNT(*) FROM pending_scores")
     fun observeCount(): Flow<Int>
 
+    /** Items that have hit the retry cap and are no longer auto-attempted. */
+    @Query("SELECT COUNT(*) FROM pending_scores WHERE retryCount >= :cap")
+    fun observeStuckCount(cap: Int): Flow<Int>
+
     @Insert
     suspend fun insert(score: PendingScoreEntity)
 
@@ -78,8 +86,8 @@ interface PendingScoreDao {
     @Query("UPDATE pending_scores SET retryCount = retryCount + 1 WHERE id = :id")
     suspend fun incrementRetry(id: Long)
 
-    @Query("DELETE FROM pending_scores WHERE retryCount >= 5")
-    suspend fun deleteStale()
+    @Query("DELETE FROM pending_scores WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }
 
 @Dao
@@ -105,6 +113,13 @@ interface PendingRosterChangeDao {
     @Query("SELECT * FROM pending_roster_changes ORDER BY createdAt ASC")
     suspend fun getAll(): List<PendingRosterChangeEntity>
 
+    @Query("SELECT COUNT(*) FROM pending_roster_changes")
+    fun observeCount(): Flow<Int>
+
+    /** Items that have hit the retry cap and are no longer auto-attempted. */
+    @Query("SELECT COUNT(*) FROM pending_roster_changes WHERE retryCount >= :cap")
+    fun observeStuckCount(cap: Int): Flow<Int>
+
     @Insert
     suspend fun insert(change: PendingRosterChangeEntity)
 
@@ -114,6 +129,6 @@ interface PendingRosterChangeDao {
     @Query("UPDATE pending_roster_changes SET retryCount = retryCount + 1 WHERE id = :id")
     suspend fun incrementRetry(id: Long)
 
-    @Query("DELETE FROM pending_roster_changes WHERE retryCount >= 5")
-    suspend fun deleteStale()
+    @Query("DELETE FROM pending_roster_changes WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }

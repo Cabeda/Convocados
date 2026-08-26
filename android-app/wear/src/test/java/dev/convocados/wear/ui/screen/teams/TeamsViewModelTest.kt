@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import dev.convocados.wear.data.api.TeamInfo
 import dev.convocados.wear.data.api.TeamsResponse
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
+import dev.convocados.wear.data.local.CheckInStore
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.repository.WearTeamRepository
 import androidx.work.WorkManager
@@ -22,6 +23,7 @@ class TeamsViewModelTest {
 
     private val repository = mockk<WearTeamRepository>(relaxed = true)
     private val gameRepository = mockk<WearGameRepository>(relaxed = true)
+    private val checkInStore = mockk<CheckInStore>(relaxed = true)
     private val workManager = mockk<WorkManager>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
@@ -40,6 +42,7 @@ class TeamsViewModelTest {
         // that would send load() down the read-only snapshot path. Default to
         // "no active game session" so tests exercise the live roster.
         coEvery { gameRepository.getLatestTodayHistory(any()) } returns null
+        every { checkInStore.arrived } returns kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
     }
 
     @After
@@ -54,7 +57,7 @@ class TeamsViewModelTest {
         )
         every { repository.observePlayers("event1") } returns flowOf(samplePlayers)
 
-        viewModel = TeamsViewModel(repository, gameRepository, workManager)
+        viewModel = TeamsViewModel(repository, gameRepository, checkInStore, workManager)
         viewModel.load("event1")
         advanceUntilIdle()
 
@@ -79,7 +82,7 @@ class TeamsViewModelTest {
         every { repository.observePlayers("event1") } returns flowOf(samplePlayers)
         coEvery { repository.updateTeams(any(), any(), any()) } returns Result.success(Unit)
 
-        viewModel = TeamsViewModel(repository, gameRepository, workManager)
+        viewModel = TeamsViewModel(repository, gameRepository, checkInStore, workManager)
         viewModel.load("event1")
         advanceUntilIdle()
 
@@ -97,7 +100,7 @@ class TeamsViewModelTest {
         every { repository.observePlayers("event1") } returns flowOf(samplePlayers)
         coEvery { repository.updateTeams(any(), any(), any()) } returns Result.success(Unit)
 
-        viewModel = TeamsViewModel(repository, gameRepository, workManager)
+        viewModel = TeamsViewModel(repository, gameRepository, checkInStore, workManager)
         viewModel.load("event1")
         advanceUntilIdle()
 
@@ -115,7 +118,7 @@ class TeamsViewModelTest {
         every { repository.observePlayers("event1") } returns flowOf(samplePlayers)
         coEvery { repository.updateTeams(any(), any(), any()) } returns Result.success(Unit)
 
-        viewModel = TeamsViewModel(repository, gameRepository, workManager)
+        viewModel = TeamsViewModel(repository, gameRepository, checkInStore, workManager)
         viewModel.load("event1")
         advanceUntilIdle()
 
@@ -133,7 +136,7 @@ class TeamsViewModelTest {
         every { repository.observePlayers("event1") } returns flowOf(samplePlayers)
         coEvery { repository.updateTeams(any(), any(), any()) } returns Result.success(Unit)
 
-        viewModel = TeamsViewModel(repository, gameRepository, workManager)
+        viewModel = TeamsViewModel(repository, gameRepository, checkInStore, workManager)
         viewModel.load("event1")
         advanceUntilIdle()
 
@@ -155,7 +158,7 @@ class TeamsViewModelTest {
         )
         every { repository.observePlayers("event1") } returns flowOf(playersWithBench)
 
-        viewModel = TeamsViewModel(repository, gameRepository, workManager)
+        viewModel = TeamsViewModel(repository, gameRepository, checkInStore, workManager)
         viewModel.load("event1")
         advanceUntilIdle()
 

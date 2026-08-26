@@ -31,6 +31,7 @@ data class GameSettings(
     val keepScreenOn: Boolean = true,
     val vibrationEnabled: Boolean = false,
     val vibrationIntervalMinutes: Int = 5,
+    val gameEndVibration: Boolean = false,
 ) {
     /** Effective kickoff: user override ?: scheduled game time. */
     val effectiveKickoffMs: Long? get() = kickoffEpochMs ?: scheduledKickoffMs

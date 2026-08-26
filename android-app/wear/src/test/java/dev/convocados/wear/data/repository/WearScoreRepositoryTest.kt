@@ -70,12 +70,16 @@ class WearScoreRepositoryTest {
             id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
             scoreOne = 3, scoreTwo = 2, teamOneName = "A", teamTwoName = "B",
         )
+        // Server already holds h1's value (idempotent drop); h2 needs patching.
+        coEvery { client.get<GameHistory>(any()) } returns GameHistory(
+            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 3, scoreTwo = 2, teamOneName = "A", teamTwoName = "B",
+        )
 
         val synced = repository.syncPendingScores()
 
         assertEquals(2, synced)
         coVerify(exactly = 2) { pendingScoreDao.delete(any()) }
-        coVerify { pendingScoreDao.deleteStale() }
     }
 
     @Test
@@ -88,6 +92,5 @@ class WearScoreRepositoryTest {
 
         assertEquals(0, synced)
         coVerify { pendingScoreDao.incrementRetry(1) }
-        coVerify { pendingScoreDao.deleteStale() }
     }
 }

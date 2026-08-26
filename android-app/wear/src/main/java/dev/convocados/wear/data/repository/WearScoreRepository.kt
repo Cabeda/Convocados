@@ -18,6 +18,8 @@ class WearScoreRepository @Inject constructor(
 ) {
     fun observePendingCount(): Flow<Int> = pendingScoreDao.observeCount()
 
+    fun observeStuckCount(): Flow<Int> = pendingScoreDao.observeStuckCount(MAX_ATTEMPTS)
+
     suspend fun submitScore(
         eventId: String,
         historyId: String,
@@ -26,6 +28,8 @@ class WearScoreRepository @Inject constructor(
         teamOneName: String,
         teamTwoName: String,
     ): Result<Unit> {
+        // Snapshot the pre-edit value so a later sync can detect concurrent edits.
+        val base = historyDao.getLatestHistory(historyId)?.let { it.scoreOne to it.scoreTwo }
         historyDao.updateScore(historyId, scoreOne, scoreTwo)
         return try {
             client.patch<dev.convocados.wear.data.api.GameHistory>(
@@ -43,29 +47,62 @@ class WearScoreRepository @Inject constructor(
                     scoreTwo = scoreTwo,
                     teamOneName = teamOneName,
                     teamTwoName = teamTwoName,
+                    basedOnScoreOne = base?.first,
+                    basedOnScoreTwo = base?.second,
                 )
             )
             Result.failure(e)
         }
     }
 
+    /** Attempt every pending score once. Stops auto-retrying past the cap (items
+     *  stay queued and surfaced, never silently dropped). A server value that
+     *  changed since our base is a concurrent phone edit — left queued rather
+     *  than clobbered. */
     suspend fun syncPendingScores(): Int {
         val pending = pendingScoreDao.getAll()
         var synced = 0
         for (score in pending) {
+            if (score.retryCount >= MAX_ATTEMPTS) continue
             try {
-                client.patch<dev.convocados.wear.data.api.GameHistory>(
-                    "/api/events/${score.eventId}/history/${score.historyId}",
-                    ScoreRequest(score.scoreOne, score.scoreTwo),
+                val server = client.get<dev.convocados.wear.data.api.GameHistory>(
+                    "/api/events/${score.eventId}/history/${score.historyId}"
                 )
-                pendingScoreDao.delete(score)
-                synced++
+                // Already synced (idempotent).
+                if (server.scoreOne == score.scoreOne && server.scoreTwo == score.scoreTwo) {
+                    pendingScoreDao.delete(score)
+                    synced++
+                    continue
+                }
+                val baseMatches = score.basedOnScoreOne == null ||
+                    (server.scoreOne == score.basedOnScoreOne && server.scoreTwo == score.basedOnScoreTwo)
+                if (baseMatches) {
+                    client.patch<dev.convocados.wear.data.api.GameHistory>(
+                        "/api/events/${score.eventId}/history/${score.historyId}",
+                        ScoreRequest(score.scoreOne, score.scoreTwo),
+                    )
+                    pendingScoreDao.delete(score)
+                    synced++
+                } else {
+                    // Concurrent edit from the phone — keep local queued as a conflict.
+                    pendingScoreDao.incrementRetry(score.id)
+                }
             } catch (e: Exception) {
                 pendingScoreDao.incrementRetry(score.id)
                 Log.w("WearScoreRepo", "Failed to sync score ${score.id}", e)
             }
         }
-        pendingScoreDao.deleteStale()
         return synced
+    }
+
+    /** Discard stuck pending scores (user-initiated). */
+    suspend fun discardStuckScores() {
+        pendingScoreDao.getAll()
+            .filter { it.retryCount >= MAX_ATTEMPTS }
+            .forEach { pendingScoreDao.deleteById(it.id) }
+    }
+
+    companion object {
+        private const val MAX_ATTEMPTS = 8
     }
 }

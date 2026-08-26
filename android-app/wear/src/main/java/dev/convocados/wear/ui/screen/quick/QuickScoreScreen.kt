@@ -26,6 +26,7 @@ fun QuickScoreScreen(
     viewModel: QuickScoreViewModel,
     onEnd: () -> Unit = {},
     onRestart: () -> Unit = {},
+    onSave: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -63,12 +64,17 @@ fun QuickScoreScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
-                    // Swipe up ends the quick game (durable state is cleared).
+                    // Swipe up ends the quick game; swipe down saves it to an event.
                     val threshold = 64.dp.toPx()
                     var dragY = 0f
                     detectVerticalDragGestures(
                         onDragStart = { dragY = 0f },
-                        onDragEnd = { if (dragY < -threshold) onEnd() },
+                        onDragEnd = {
+                            when {
+                                dragY < -threshold -> onEnd()
+                                dragY > threshold -> onSave()
+                            }
+                        },
                     ) { _, dy -> dragY += dy }
                 },
         ) {
@@ -114,9 +120,9 @@ fun QuickScoreScreen(
                 )
             }
 
-            // Swipe-up hint (no numeric countdown — ADR 0027).
+            // Swipe hint (no numeric countdown — ADR 0027).
             Text(
-                text = stringResource(R.string.quick_end_hint),
+                text = stringResource(R.string.quick_swipe_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,

@@ -1,5 +1,6 @@
 package dev.convocados.wear.ui.screen.score
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
@@ -22,6 +23,7 @@ import javax.inject.Inject
 
 enum class Team { ONE, TWO }
 
+@Immutable
 data class ScoreUiState(
     val game: WearGameEntity? = null,
     val history: WearHistoryEntity? = null,
@@ -118,22 +120,40 @@ class ScoreViewModel @Inject constructor(
     }
 
     fun incrementScoreOne() {
+        rememberScore()
         _uiState.update { it.copy(scoreOne = it.scoreOne + 1) }
         persist()
     }
 
     fun decrementScoreOne() {
+        rememberScore()
         _uiState.update { it.copy(scoreOne = maxOf(0, it.scoreOne - 1)) }
         persist()
     }
 
     fun incrementScoreTwo() {
+        rememberScore()
         _uiState.update { it.copy(scoreTwo = it.scoreTwo + 1) }
         persist()
     }
 
     fun decrementScoreTwo() {
+        rememberScore()
         _uiState.update { it.copy(scoreTwo = maxOf(0, it.scoreTwo - 1)) }
+        persist()
+    }
+
+    private var previousScore: Pair<Int, Int>? = null
+
+    private fun rememberScore() {
+        previousScore = _uiState.value.scoreOne to _uiState.value.scoreTwo
+    }
+
+    /** Revert the last score edit (single-level undo). */
+    fun undoLastScore() {
+        val prev = previousScore ?: return
+        previousScore = null
+        _uiState.update { it.copy(scoreOne = prev.first, scoreTwo = prev.second) }
         persist()
     }
 

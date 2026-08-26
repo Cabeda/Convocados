@@ -108,10 +108,26 @@ fun QuickSetupScreen(
                 item {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            text = "Every",
+                            text = stringResource(R.string.rotation_interval_label),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        // Rotation presets (padel/tennis-friendly intervals).
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            listOf(5, 10, 15).forEach { preset ->
+                                CompactButton(
+                                    onClick = { alarmInterval = preset },
+                                    colors = if (alarmInterval == preset) {
+                                        ButtonDefaults.buttonColors()
+                                    } else {
+                                        ButtonDefaults.filledTonalButtonColors()
+                                    },
+                                ) { Text("$preset") }
+                            }
+                        }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center,
