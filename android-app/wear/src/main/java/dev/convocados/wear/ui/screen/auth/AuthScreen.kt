@@ -13,18 +13,15 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.wear.compose.material3.*
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.input.RemoteInputIntentHelper
-import com.google.android.horologist.annotations.ExperimentalHorologistApi
-import com.google.android.horologist.compose.layout.ScalingLazyColumn
-import com.google.android.horologist.compose.layout.ScreenScaffold
-import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.BuildConfig
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.theme.TextMuted
 
-@OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun AuthScreen(
     onAuthenticated: () -> Unit,
@@ -33,7 +30,7 @@ fun AuthScreen(
 ) {
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
-    val columnState = rememberColumnState()
+    val columnState = rememberTransformingLazyColumnState()
 
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated) onAuthenticated()
@@ -44,9 +41,10 @@ fun AuthScreen(
     val devPassword = if (BuildConfig.DEBUG) BuildConfig.WEAR_DEV_PASSWORD else ""
     val hasDevCreds = devEmail.isNotBlank() && devPassword.isNotBlank()
 
-    ScreenScaffold(scrollState = columnState) {
-        ScalingLazyColumn(
-            columnState = columnState,
+    ScreenScaffold(scrollState = columnState) { contentPadding ->
+        TransformingLazyColumn(
+            state = columnState,
+            contentPadding = contentPadding,
             modifier = Modifier.fillMaxSize(),
         ) {
             item {

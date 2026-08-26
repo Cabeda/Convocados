@@ -39,7 +39,8 @@ class WearScoreRepositoryTest {
     @Test
     fun `submitScore updates local cache optimistically`() = runTest {
         coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
-            "h1", "2025-01-01T10:00:00Z", "played", 5, 3, "Red", "Blue", true,
+            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 5, scoreTwo = 3, teamOneName = "Red", teamTwoName = "Blue",
         )
 
         val result = repository.submitScore("e1", "h1", 5, 3, "Red", "Blue")
@@ -66,7 +67,8 @@ class WearScoreRepositoryTest {
         )
         coEvery { pendingScoreDao.getAll() } returns pending
         coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
-            "h1", "2025-01-01T10:00:00Z", "played", 3, 2, "A", "B", true,
+            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 3, scoreTwo = 2, teamOneName = "A", teamTwoName = "B",
         )
 
         val synced = repository.syncPendingScores()
