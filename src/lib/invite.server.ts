@@ -94,15 +94,30 @@ export function generateInviteToken(): string {
 /**
  * Lazy expiry: mark a game's pending invites as expired once kickoff has passed.
  * Called on every invite lookup/read path so invites never outlive their game.
+ * Also deletes the pending GameParticipant + Rsvp the invite planted — without
+ * this the invitee lingers in pendingParticipants as an unremovable "Invited"
+ * ghost (prod repro: Luís Lopes / David Ribeiro on Ninjas da Areosa).
  */
 export async function expirePendingInvites(gameId: string, now: Date = new Date()): Promise<number> {
   const game = await prisma.game.findUnique({ where: { id: gameId }, select: { dateTime: true } });
   if (!game || game.dateTime > now) return 0;
-  const res = await prisma.playerInvite.updateMany({
+  const expiring = await prisma.playerInvite.findMany({
     where: { gameId, status: "pending" },
-    data: { status: "expired" },
+    select: { id: true, eventPlayerId: true },
   });
-  return res.count;
+  if (expiring.length === 0) return 0;
+  const eventPlayerIds = expiring.map((i) => i.eventPlayerId);
+  await prisma.$transaction([
+    prisma.playerInvite.updateMany({
+      where: { id: { in: expiring.map((i) => i.id) } },
+      data: { status: "expired" },
+    }),
+    prisma.gameParticipant.deleteMany({
+      where: { gameId, eventPlayerId: { in: eventPlayerIds }, status: "pending" },
+    }),
+    prisma.rsvp.deleteMany({ where: { gameId, eventPlayerId: { in: eventPlayerIds } } }),
+  ]);
+  return expiring.length;
 }
 
 /**
@@ -521,7 +536,21 @@ export async function retractPlayerInvite(opts: { inviteId: string; userId: stri
     await tx.rsvp.deleteMany({ where: { gameId: invite.gameId, eventPlayerId: invite.eventPlayerId } });
     return cancelled.count;
   });
-  if (res === 0) throw new Error("Invite not found or no longer pending.");
+  if (res === 0) {
+    // Invite exists but isn't pending (expired by a read path, cancelled by a
+    // concurrent retract, cascade-orphaned by a merge…). The roster must never
+    // keep the pending GameParticipant ghost it planted — heal it and report
+    // success instead of stranding the owner with an unremovable "Invited" chip.
+    await prisma.$transaction([
+      prisma.gameParticipant.deleteMany({
+        where: { gameId: invite.gameId, eventPlayerId: invite.eventPlayerId, status: "pending" },
+      }),
+      prisma.rsvp.deleteMany({ where: { gameId: invite.gameId, eventPlayerId: invite.eventPlayerId } }),
+    ]);
+    return { status: "cancelled" };
+  }
+
+  return { status: "cancelled" };
 
   return { status: "cancelled" };
 }
