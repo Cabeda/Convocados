@@ -3,14 +3,17 @@ import { prisma } from "../../../../lib/db.server";
 import { authenticateRequest } from "../../../../lib/authenticate.server";
 import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
 
 /** Resolve the active player list for an event.
  * ADR 0016: when currentGameId exists, use GameParticipant (game-scoped).
- * Falls back to the legacy Player table for events without a current game. */
+ * Falls back to the legacy Player table for events without a current game.
+ * Excludes pending invite ghosts (ADR 0025) so they never occupy a team slot
+ * or push a real player onto the bench. */
 async function getActivePlayers(eventId: string, currentGameId: string | null) {
 	if (currentGameId) {
 		const participants = await prisma.gameParticipant.findMany({
-			where: { gameId: currentGameId, archivedAt: null },
+			where: activeParticipantsWhere(currentGameId),
 			include: { eventPlayer: { select: { id: true, name: true, userId: true } } },
 			orderBy: { order: "asc" },
 		});
