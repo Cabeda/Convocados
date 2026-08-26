@@ -25,7 +25,6 @@ import { getNotificationPrefs, wantsInvites } from "./notificationPrefs.server";
 import { sendPushToUser } from "./push.server";
 import { fireWebhooks } from "./webhook.server";
 import { enqueueNotification } from "./notificationQueue.server";
-import { sendGameInvite, isEmailConfigured } from "./email.server";
 import { createT, type Locale } from "./i18n";
 import { checkEventAdmin } from "./auth.helpers.server";
 import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "./rosterCore.server";
@@ -66,21 +65,17 @@ export async function getInviteChannels(userId: string): Promise<InviteChannels>
   const prefs = await getNotificationPrefs(userId);
   if (!wantsInvites(prefs)) return NO_CHANNELS;
 
-  const [user, webSubs, appTokens, googleAccount] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { email: true, emailVerified: true } }),
+  const [webSubs, appTokens] = await Promise.all([
     prisma.pushSubscription.count({ where: { userId } }),
     prisma.appPushToken.count({ where: { userId } }),
-    prisma.account.findFirst({ where: { userId, providerId: "google" }, select: { id: true } }),
   ]);
 
   const pushWanted = prefs.pushEnabled && prefs.gameInvitePush;
-  // Google users have verified email via OAuth — auto-enable email channel for invites
-  // even if they haven't explicitly opted into email prefs yet. Their email is
-  // already stored in User.email and is verified by Google.
-  const isGoogleUser = !!googleAccount;
-  const emailWanted = (prefs.emailEnabled && prefs.gameInviteEmail) || (isGoogleUser && !!user?.emailVerified);
+  // Decision (owner): game invites never send email — too intrusive. Push only
+  // when the invitee opted in; otherwise the inviter falls back to sharing the
+  // link themselves. sendGameInvite remains solely for register-invite emails.
   return {
-    email: emailWanted && !!user?.email && !!user.emailVerified && isEmailConfigured(),
+    email: false,
     webPush: pushWanted && webSubs > 0,
     appPush: pushWanted && appTokens > 0,
   };
@@ -321,11 +316,10 @@ async function deliverInviteNotification(opts: { userId: string; eventId: string
   if (!wantsInvites(prefs)) return NO_CHANNELS;
   const channels = await getInviteChannels(opts.userId);
 
-  const [event, inviterToken, inviteeUser] = await Promise.all([
+  const [event, inviterToken] = await Promise.all([
     prisma.event.findUnique({ where: { id: opts.eventId }, select: { title: true, dateTime: true, location: true, sport: true } }),
     // The inviter's push locale (AppPushToken) — the push is composed by them.
     prisma.appPushToken.findFirst({ where: { userId: opts.invitedByUserId }, select: { locale: true } }),
-    prisma.user.findUnique({ where: { id: opts.userId }, select: { email: true } }),
   ]);
   const title = event?.title ?? "Game";
 
@@ -361,16 +355,67 @@ async function deliverInviteNotification(opts: { userId: string; eventId: string
     }).catch(() => {});
   }
 
-  if (channels.email && event && inviteeUser?.email) {
-    sendGameInvite(inviteeUser.email, {
-      eventTitle: title,
-      dateTime: event.dateTime.toISOString(),
-      location: event.location,
-      eventUrl: opts.inviteUrl,
-    }).catch(() => {});
-  }
+  // No email channel: game invites are push-only (if opted in) + share-link.
 
   return channels;
+}
+
+/**
+ * Create a silent (link-only) invite for an ANONYMOUS EventPlayer shell —
+ * guests have no account, so there is nobody to notify. The inviter shares
+ * the /invite/<token> URL themselves; the first logged-in user who opens it
+ * claims the EventPlayer row and joins as that player.
+ */
+export async function createGuestPlayerInvite(opts: {
+  eventId: string;
+  gameId: string;
+  eventPlayerId: string;
+  invitedByUserId: string;
+  origin: string;
+}): Promise<{ inviteId: string; token: string; inviteUrl: string; channels: InviteChannels }> {
+  const { eventId, gameId, eventPlayerId, invitedByUserId } = opts;
+  const token = generateInviteToken();
+
+  const invite = await prisma.$transaction(async (tx) => {
+    // Same active-roster guard as account invites.
+    const existingParticipant = await tx.gameParticipant.findUnique({
+      where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
+    });
+    if (existingParticipant && existingParticipant.status === "active" && !existingParticipant.archivedAt) {
+      throw new Error("This player is already on the player list.");
+    }
+
+    const inv = await tx.playerInvite.upsert({
+      where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
+      create: {
+        gameId,
+        eventPlayerId,
+        invitedByUserId,
+        status: "pending",
+        token,
+        notifiedAt: null,
+      },
+      update: {
+        invitedByUserId,
+        status: "pending",
+        token,
+        notifiedAt: null,
+        respondedAt: null,
+      },
+    });
+    await upsertGameParticipantForRoster({ gameId, eventPlayerId, status: "pending" }, tx);
+    return inv;
+  });
+
+  const inviteUrl = `${opts.origin}/invite/${token}`;
+  const playerName = (await prisma.eventPlayer.findUniqueOrThrow({
+    where: { id: eventPlayerId },
+    select: { name: true },
+  })).name;
+  fireWebhooks(eventId, "player_invited", { playerName, inviteUrl }).catch(() => {});
+  log.info({ inviteId: invite.id, eventId, gameId, eventPlayerId, delivery: "guest-link" }, "Guest invite created");
+
+  return { inviteId: invite.id, token, inviteUrl, channels: NO_CHANNELS };
 }
 
 /**
@@ -397,7 +442,11 @@ export async function acceptPlayerInvite(opts: {
   if (invite.status !== "pending") {
     throw new Error(invite.status === "expired" ? "This invite has expired." : "This invite is no longer pending.");
   }
-  if (invite.eventPlayer.userId !== userId) {
+  // Guest link: the EventPlayer shell is anonymous until someone claims it by
+  // accepting while logged in. Any authenticated user may claim; the accepting
+  // account becomes the player's identity.
+  const claimingGuest = invite.eventPlayer.userId === null;
+  if (!claimingGuest && invite.eventPlayer.userId !== userId) {
     throw new Error("This invite is not for your account.");
   }
 
@@ -414,6 +463,15 @@ export async function acceptPlayerInvite(opts: {
   const bench = order >= maxPlayers;
 
   await prisma.$transaction(async (tx) => {
+    if (claimingGuest) {
+      // Claim the anonymous shell for the accepting account. Guard against a
+      // concurrent claim: only update while the row is still unlinked.
+      const claimed = await tx.eventPlayer.updateMany({
+        where: { id: invite.eventPlayerId, userId: null },
+        data: { userId },
+      });
+      if (claimed.count === 0) throw new Error("This invite was already claimed by another account.");
+    }
     await tx.playerInvite.update({
       where: { id: invite.id },
       data: { status: "accepted", respondedAt: new Date() },
