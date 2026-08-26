@@ -142,6 +142,11 @@
     <string name="unlock">Desbloquear</string>
     <string name="event_not_found">Evento no encontrado</string>
     <string name="go_back">Volver</string>
+    <string name="error_page_title">Algo salió mal</string>
+    <string name="error_offline_message">Lo sentimos — no pudimos cargar este partido. Comprueba tu conexión a internet e inténtalo de nuevo.</string>
+    <string name="retry">Reintentar</string>
+    <string name="back_to_games">Volver a mis partidos</string>
+    <string name="offline_stale_banner">Estás sin conexión — mostrando los últimos datos guardados de este partido.</string>
     <string name="share">Compartir</string>
     <string name="randomize">Sortear</string>
     <string name="settings">Ajustes</string>
