@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../../lib/authenticate.server";
+import { normalizeForMatch } from "../../../../lib/stringMatch";
 import {
   applyDeclinePenalty,
   computeCoPlayScore,
@@ -115,6 +116,51 @@ export const GET: APIRoute = async ({ params, request }) => {
     const list = recordsByUser.get(candidateUserId) ?? [];
     list.push(record);
     recordsByUser.set(candidateUserId, list);
+  }
+  if (recordsByUser.size === 0 && !coPlayRows.some((row) => !row.eventPlayer.userId)) {
+    return Response.json({ suggestions: [] });
+  }
+
+  // Identity recovery (mirrors /api/me/co-players): EventPlayers added by name
+  // before the human registered carry userId=null, which used to make entire
+  // co-play histories invisible to suggestions. Group those anonymous rows by
+  // normalized name and upgrade them to the matching registered User — only
+  // when exactly one account matches, and never to system ledger placeholders
+  // (they exist for wallet bookkeeping, not notification).
+  const anonRecordsByName = new Map<string, CoPlayRecord[]>();
+  for (const row of coPlayRows) {
+    if (row.eventPlayer.userId) continue;
+    const key = normalizeForMatch(row.eventPlayer.name);
+    if (!key) continue;
+    const record: CoPlayRecord = {
+      userId: "",
+      name: row.eventPlayer.name,
+      gamesPlayed: row.eventPlayer.gamesPlayed,
+      gameDateTime: row.game.dateTime,
+    };
+    const list = anonRecordsByName.get(key) ?? [];
+    list.push(record);
+    anonRecordsByName.set(key, list);
+  }
+  if (anonRecordsByName.size > 0) {
+    const anonNames = [...anonRecordsByName.keys()];
+    const allUsers = await prisma.user.findMany({ select: { id: true, name: true } });
+    const matchesByKey = new Map<string, string[]>();
+    for (const u of allUsers) {
+      if (!u.name || u.id.startsWith("system:")) continue;
+      const key = normalizeForMatch(u.name);
+      if (!anonNames.includes(key)) continue;
+      const list = matchesByKey.get(key) ?? [];
+      list.push(u.id);
+      matchesByKey.set(key, list);
+    }
+    for (const [key, records] of anonRecordsByName) {
+      const matches = matchesByKey.get(key);
+      if (!matches || matches.length !== 1) continue; // ambiguous or unmatched → stays a guest
+      const userId = matches[0];
+      if (userId === sessionUserId || recordsByUser.has(userId)) continue;
+      for (const record of records) recordsByUser.set(userId, [...(recordsByUser.get(userId) ?? []), { ...record, userId }]);
+    }
   }
   if (recordsByUser.size === 0) {
     return Response.json({ suggestions: [] });
