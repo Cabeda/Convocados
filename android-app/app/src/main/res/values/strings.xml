@@ -173,6 +173,11 @@
     <string name="unlock">Unlock</string>
     <string name="event_not_found">Event not found</string>
     <string name="go_back">Go back</string>
+    <string name="error_page_title">Something went wrong</string>
+    <string name="error_offline_message">We\'re sorry — we couldn\'t load this game. Check your internet connection and try again.</string>
+    <string name="retry">Try again</string>
+    <string name="back_to_games">Back to my games</string>
+    <string name="offline_stale_banner">You\'re offline — showing the last saved data for this game.</string>
     <string name="share">Share</string>
     <string name="randomize">Randomize</string>
     <string name="settings">Settings</string>
