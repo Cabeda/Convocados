@@ -95,7 +95,7 @@ beforeEach(async () => {
 });
 
 describe("invite channel persistence — ADR 0025 follow-up", () => {
-  it("persists sentViaEmail=true when the invitee has the email channel enabled", async () => {
+  it("never persists sentViaEmail — the invite email channel is retired (owner decision)", async () => {
     const owner = await seedUser("owner");
     const invitee = await seedUser("invitee-email");
     await prisma.notificationPreferences.create({
@@ -111,12 +111,12 @@ describe("invite channel persistence — ADR 0025 follow-up", () => {
       origin: "http://localhost",
     });
 
-    expect(res.channels.email).toBe(true);
+    expect(res.channels.email).toBe(false);
     const invite = await prisma.playerInvite.findUnique({ where: { token: res.token } });
-    expect(invite?.sentViaEmail).toBe(true);
+    expect(invite?.sentViaEmail).toBe(false);
     expect(invite?.sentViaWebPush).toBe(false);
     expect(invite?.sentViaAppPush).toBe(false);
-    expect(sendGameInviteMock).toHaveBeenCalledTimes(1);
+    expect(sendGameInviteMock).not.toHaveBeenCalled();
   });
 
   it("persists sentViaAppPush=true when the invitee has an app push token", async () => {
