@@ -66,6 +66,8 @@ const en = {
   coPlaySuggestions: "Suggested for you",
   showMoreSuggestions: "Show more suggestions",
   showFewerSuggestions: "Show fewer suggestions",
+  choiceShareLinkTitle: "Share an invite link",
+  choiceShareLinkDesc: "Creates a personal link for  that you send yourself — no notification is sent.",
   inviteSent: "Invite sent to {name}. Share the link to get them in.",
   youAreOnBench: "You're on the bench — you'll be promoted if a spot opens.",
   youArePlaying: "You joined as {name}",

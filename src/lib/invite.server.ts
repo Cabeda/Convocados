@@ -135,8 +135,17 @@ export async function createPlayerInvite(opts: {
   inviteeUserId: string;
   invitedByUserId: string;
   origin: string;
+  /**
+   * "auto" (default) delivers through every channel the invitee opted into
+   * (email / web push / app push + in-app feed). "link-only" creates the
+   * token silently — no notification at all — for the share-a-link flow where
+   * the inviter delivers the URL themselves (less intrusive friend-to-friend
+   * invites). notifiedAt stays null so the 24h resend cooldown never blocks.
+   */
+  delivery?: "auto" | "link-only";
 }): Promise<{ inviteId: string; token: string; inviteUrl: string; channels: InviteChannels }> {
   const { eventId, gameId, inviteeUserId, invitedByUserId, origin } = opts;
+  const linkOnly = opts.delivery === "link-only";
   const user = await prisma.user.findUnique({
     where: { id: inviteeUserId },
     select: { id: true, name: true },
@@ -164,13 +173,15 @@ export async function createPlayerInvite(opts: {
         invitedByUserId,
         status: "pending",
         token,
-        notifiedAt: new Date(),
+        // link-only invites stay silent — notifiedAt null means "never delivered",
+        // which also keeps the resend cooldown from ever blocking.
+        notifiedAt: linkOnly ? null : new Date(),
       },
       update: {
         invitedByUserId,
         status: "pending",
         token,
-        notifiedAt: new Date(),
+        notifiedAt: linkOnly ? null : new Date(),
         respondedAt: null,
       },
     });
@@ -187,21 +198,25 @@ export async function createPlayerInvite(opts: {
 
   const inviteUrl = `${origin}/invite/${token}`;
 
-  const channels = await deliverInviteNotification({ userId: inviteeUserId, eventId, inviteUrl, inviteToken: token, invitedByUserId });
-  // Persist which channels were used so admins can see delivery info on the
-  // roster (and the resend cooldown can be enforced per invite).
-  await prisma.playerInvite.update({
-    where: { id: invite.id },
-    data: {
-      sentViaEmail: channels.email,
-      sentViaWebPush: channels.webPush,
-      sentViaAppPush: channels.appPush,
-      notifiedAt: new Date(),
-    },
-  });
+  const channels = linkOnly
+    ? NO_CHANNELS
+    : await deliverInviteNotification({ userId: inviteeUserId, eventId, inviteUrl, inviteToken: token, invitedByUserId });
+  if (!linkOnly) {
+    // Persist which channels were used so admins can see delivery info on the
+    // roster (and the resend cooldown can be enforced per invite).
+    await prisma.playerInvite.update({
+      where: { id: invite.id },
+      data: {
+        sentViaEmail: channels.email,
+        sentViaWebPush: channels.webPush,
+        sentViaAppPush: channels.appPush,
+        notifiedAt: new Date(),
+      },
+    });
+  }
   fireWebhooks(eventId, "player_invited", { playerName: user.name, inviteUrl }).catch(() => {});
 
-  log.info({ inviteId: invite.id, eventId, inviteeUserId, invitedByUserId, channels }, "Player invite created");
+  log.info({ inviteId: invite.id, eventId, inviteeUserId, invitedByUserId, delivery: opts.delivery ?? "auto", channels }, "Player invite created");
   return { inviteId: invite.id, token, inviteUrl, channels };
 }
 
