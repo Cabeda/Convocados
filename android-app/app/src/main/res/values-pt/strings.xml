@@ -142,6 +142,11 @@
     <string name="unlock">Desbloquear</string>
     <string name="event_not_found">Evento não encontrado</string>
     <string name="go_back">Voltar</string>
+    <string name="error_page_title">Algo correu mal</string>
+    <string name="error_offline_message">Lamentamos — não conseguimos carregar este jogo. Verifique a sua ligação à internet e tente novamente.</string>
+    <string name="retry">Tentar novamente</string>
+    <string name="back_to_games">Voltar aos meus jogos</string>
+    <string name="offline_stale_banner">Está offline — a mostrar os últimos dados guardados deste jogo.</string>
     <string name="share">Partilhar</string>
     <string name="randomize">Sortear</string>
     <string name="settings">Definições</string>
