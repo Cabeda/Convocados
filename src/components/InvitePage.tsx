@@ -248,13 +248,12 @@ export function InvitePage({ token }: { token: string }) {
   }
 
   if (!data.authenticated) {
-    // Claimed invite opened while logged out → sign in, then come straight back.
+    // Claimed invite opened while logged out → show the game details alongside
+    // the sign-in CTA, then come straight back. No bare login wall.
     return (
       <StatusCard>
         <Typography variant="h6" fontWeight={700}>{t("invitePageTitle")}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ my: 1 }}>
-          {t("inviteInvitedBy").replace("{name}", data.invitedByName)}
-        </Typography>
+        {gameCard}
         <Alert severity="info" sx={{ mb: 2 }}>{t("inviteSignInCta")}</Alert>
         <Button
           variant="contained"
