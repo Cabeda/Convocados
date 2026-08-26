@@ -422,13 +422,20 @@ export async function createGuestPlayerInvite(opts: {
  * Accept a pending invite. Returns { status, bench } where bench=true means the
  * invitee joined the bench (roster full). Throws on invalid/expired/claimed
  * invites.
+ *
+ * Three caller shapes (ADR 0026):
+ *  - registered invitee: userId set, eventPlayer.userId matches → joins + follows
+ *  - claim: userId set, eventPlayer anonymous → binds the row to that account
+ *  - guest accept: userId null OR asGuest → joins without binding any account
  */
 export async function acceptPlayerInvite(opts: {
   token: string;
-  userId: string;
+  userId: string | null;
   eventId: string;
   gameId: string;
   maxPlayers: number;
+  /** Force guest semantics even for an authenticated viewer ("Join as <guest>"). */
+  asGuest?: boolean;
 }): Promise<{ status: "accepted"; bench: boolean }> {
   const { token, userId, eventId, gameId, maxPlayers } = opts;
 
@@ -436,17 +443,14 @@ export async function acceptPlayerInvite(opts: {
 
   const invite = await prisma.playerInvite.findUnique({
     where: { token },
-    include: { eventPlayer: { select: { userId: true } } },
+    include: { eventPlayer: { select: { userId: true, name: true } } },
   });
   if (!invite || invite.gameId !== gameId) throw new Error("Invite not found.");
   if (invite.status !== "pending") {
     throw new Error(invite.status === "expired" ? "This invite has expired." : "This invite is no longer pending.");
   }
-  // Guest link: the EventPlayer shell is anonymous until someone claims it by
-  // accepting while logged in. Any authenticated user may claim; the accepting
-  // account becomes the player's identity.
-  const claimingGuest = invite.eventPlayer.userId === null;
-  if (!claimingGuest && invite.eventPlayer.userId !== userId) {
+  const claimingGuest = !!userId && !opts.asGuest && invite.eventPlayer.userId === null;
+  if (invite.eventPlayer.userId !== null && invite.eventPlayer.userId !== userId) {
     throw new Error("This invite is not for your account.");
   }
 
@@ -489,21 +493,25 @@ export async function acceptPlayerInvite(opts: {
       update: { status: "yes", respondedAt: new Date() },
     });
 
-    // Auto-follow on accept
-    await tx.eventFollow.upsert({
-      where: { eventId_userId: { eventId, userId } },
-      create: { eventId, userId },
-      update: {},
-    });
+    // Auto-follow on accept (only meaningful for an authenticated joiner)
+    if (userId) {
+      await tx.eventFollow.upsert({
+        where: { eventId_userId: { eventId, userId } },
+        create: { eventId, userId },
+        update: {},
+      });
+    }
   });
 
   const url = `${process.env.PUBLIC_URL ?? "https://convocados.cabeda.dev"}/events/${eventId}`;
   const [event, user] = await Promise.all([
     prisma.event.findUnique({ where: { id: eventId }, select: { title: true } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
+    userId
+      ? prisma.user.findUnique({ where: { id: userId }, select: { name: true } })
+      : Promise.resolve(null),
   ]);
   const eventTitle = event?.title ?? "Game";
-  const userName = user?.name ?? "Someone";
+  const userName = user?.name ?? invite.eventPlayer.name;
   const spotsLeft = bench ? 0 : Math.max(0, maxPlayers - order - 1);
 
   if (bench) {
@@ -536,7 +544,7 @@ export async function acceptPlayerInvite(opts: {
  * keeps the PlayerInvite record (status=declined) and the EventPlayer shell.
  * Fires no webhook. Throws when the invite isn't for the caller or not pending.
  */
-export async function declinePlayerInvite(opts: { token: string; userId: string; gameId: string }): Promise<{ status: "declined" }> {
+export async function declinePlayerInvite(opts: { token: string; userId: string | null; gameId: string }): Promise<{ status: "declined" }> {
   const { token, userId, gameId } = opts;
 
   await expirePendingInvites(gameId);
@@ -544,7 +552,10 @@ export async function declinePlayerInvite(opts: { token: string; userId: string;
   const invite = await prisma.playerInvite.findUnique({ where: { token }, include: { eventPlayer: { select: { userId: true } } } });
   if (!invite || invite.gameId !== gameId) throw new Error("Invite not found.");
   if (invite.status !== "pending") throw new Error(invite.status === "expired" ? "This invite has expired." : "This invite is no longer pending.");
-  if (invite.eventPlayer.userId !== userId) throw new Error("This invite is not for your account.");
+  // Guest links (anonymous shell) may be declined by anyone with the token.
+  if (invite.eventPlayer.userId !== null && invite.eventPlayer.userId !== userId) {
+    throw new Error("This invite is not for your account.");
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.playerInvite.update({
@@ -552,7 +563,14 @@ export async function declinePlayerInvite(opts: { token: string; userId: string;
       data: { status: "declined", respondedAt: new Date() },
     });
     await tx.gameParticipant.deleteMany({ where: { gameId, eventPlayerId: invite.eventPlayerId } });
-    await tx.rsvp.deleteMany({ where: { gameId, eventPlayerId: invite.eventPlayerId } });
+    // Persist the answer as RSVP=no (not just delete): it's the only
+    // suppression signal for GUEST rows (no prefs/invite history to key on)
+    // and keeps suggestion/recruitment exclusion consistent for everyone.
+    await tx.rsvp.upsert({
+      where: { eventPlayerId_gameId: { eventPlayerId: invite.eventPlayerId, gameId } },
+      create: { eventPlayerId: invite.eventPlayerId, gameId, status: "no", respondedAt: new Date() },
+      update: { status: "no", respondedAt: new Date() },
+    });
   });
 
   return { status: "declined" };
