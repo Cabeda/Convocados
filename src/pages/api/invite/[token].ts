@@ -37,8 +37,11 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const session = await getSession(request);
   const isInvitee = !!session?.user && session.user.id === invite.eventPlayer.userId;
-  // Guest link: anonymous shell, claimable by any logged-in user on accept.
-  const claimable = !!fresh && fresh.status === "pending" && !fresh.eventPlayer.userId;
+  // Guest link: anonymous shell — claimable while pending; after acceptance the
+  // unclaimed row id powers the "this is me" bind CTA (capability stays with
+  // the token holder, which is who we issued it to).
+  const unclaimedShell = !!fresh && !fresh.eventPlayer.userId;
+  const claimable = !!fresh && fresh.status === "pending" && unclaimedShell;
 
   let viewerName: string | null = null;
   if (session?.user) {
@@ -51,7 +54,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     token,
     isInvitee,
     claimable,
-    claimPlayerId: claimable ? invite.eventPlayerId : null,
+    claimPlayerId: unclaimedShell ? invite.eventPlayerId : null,
     viewerName,
     authenticated: !!session?.user,
     inviteeName: invite.eventPlayer.name,
