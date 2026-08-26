@@ -1,52 +1,79 @@
 package dev.convocados.wear.ui.screen.quick
 
-import androidx.compose.runtime.Stable
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.alarm.AlarmFire
 import dev.convocados.wear.data.alarm.GameAlarmScheduler
+import dev.convocados.wear.data.local.QuickGameState
+import dev.convocados.wear.data.local.QuickGameStore
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-@Stable
-data class QuickScoreUiState(
-    val scoreOne: Int = 0,
-    val scoreTwo: Int = 0,
-    val durationMinutes: Int = 60,
-    val alarmIntervalMinutes: Int = 10,
-    val kickoffEpochMs: Long = System.currentTimeMillis(),
-)
+typealias QuickScoreUiState = QuickGameState
 
 private const val QUICK_EVENT_ID = "quick-game"
 
 @HiltViewModel
 class QuickScoreViewModel @Inject constructor(
-    private val savedState: SavedStateHandle,
+    private val quickGameStore: QuickGameStore,
     private val alarmScheduler: GameAlarmScheduler,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(
-        QuickScoreUiState(
-            scoreOne = savedState["scoreOne"] ?: 0,
-            scoreTwo = savedState["scoreTwo"] ?: 0,
-            durationMinutes = savedState["duration"] ?: 60,
-            alarmIntervalMinutes = savedState["alarmInterval"] ?: 10,
-            kickoffEpochMs = savedState["kickoff"] ?: System.currentTimeMillis(),
-        )
-    )
-    val uiState: StateFlow<QuickScoreUiState> = _uiState.asStateFlow()
+    val uiState: StateFlow<QuickScoreUiState> = quickGameStore.state
+        .stateIn(viewModelScope, SharingStarted.Eagerly, quickGameStore.state.value)
 
-    fun configure(durationMinutes: Int, alarmIntervalMinutes: Int) {
-        val kickoff = System.currentTimeMillis()
-        _uiState.update { it.copy(durationMinutes = durationMinutes, alarmIntervalMinutes = alarmIntervalMinutes, kickoffEpochMs = kickoff) }
-        savedState["duration"] = durationMinutes
-        savedState["alarmInterval"] = alarmIntervalMinutes
-        savedState["kickoff"] = kickoff
-        scheduleAlarms(kickoff, durationMinutes, alarmIntervalMinutes)
+    /** Start a brand-new quick game: kickoff anchored to now, score reset. */
+    fun startNew(durationMinutes: Int, alarmIntervalMinutes: Int) {
+        applyAndSchedule { it.copy(
+            scoreOne = 0,
+            scoreTwo = 0,
+            durationMinutes = durationMinutes,
+            alarmIntervalMinutes = alarmIntervalMinutes,
+            kickoffEpochMs = System.currentTimeMillis(),
+        ) }
+    }
+
+    /** Restart the current quick game: same config, fresh timer, score reset. */
+    fun restart() {
+        applyAndSchedule { it.copy(
+            scoreOne = 0,
+            scoreTwo = 0,
+            kickoffEpochMs = System.currentTimeMillis(),
+        ) }
+    }
+
+    /** Resume a persisted quick game — timer stays anchored to the original kickoff. */
+    fun continueGame() {
+        val s = quickGameStore.state.value.kickoffEpochMs ?: return
+        scheduleAlarms(s, quickGameStore.state.value.durationMinutes, quickGameStore.state.value.alarmIntervalMinutes)
+    }
+
+    fun endGame() {
+        alarmScheduler.cancelAll(QUICK_EVENT_ID)
+        quickGameStore.clear()
+    }
+
+    fun incrementScoreOne() = updateScore { it.copy(scoreOne = it.scoreOne + 1) }
+
+    fun decrementScoreOne() = updateScore { it.copy(scoreOne = maxOf(0, it.scoreOne - 1)) }
+
+    fun incrementScoreTwo() = updateScore { it.copy(scoreTwo = it.scoreTwo + 1) }
+
+    fun decrementScoreTwo() = updateScore { it.copy(scoreTwo = maxOf(0, it.scoreTwo - 1)) }
+
+    private fun updateScore(transform: (QuickGameState) -> QuickGameState) {
+        quickGameStore.update(transform)
+    }
+
+    private fun applyAndSchedule(transform: (QuickGameState) -> QuickGameState) {
+        val updated = quickGameStore.state.value.let(transform)
+        quickGameStore.update { updated }
+        scheduleAlarms(updated.kickoffEpochMs ?: System.currentTimeMillis(), updated.durationMinutes, updated.alarmIntervalMinutes)
     }
 
     private fun scheduleAlarms(kickoffMs: Long, durationMinutes: Int, intervalMinutes: Int) {
@@ -66,27 +93,7 @@ class QuickScoreViewModel @Inject constructor(
         alarmScheduler.reschedule(QUICK_EVENT_ID, fires)
     }
 
-    override fun onCleared() {
-        alarmScheduler.cancelAll(QUICK_EVENT_ID)
-    }
-
-    fun incrementScoreOne() {
-        _uiState.update { it.copy(scoreOne = it.scoreOne + 1) }
-        savedState["scoreOne"] = _uiState.value.scoreOne
-    }
-
-    fun decrementScoreOne() {
-        _uiState.update { it.copy(scoreOne = maxOf(0, it.scoreOne - 1)) }
-        savedState["scoreOne"] = _uiState.value.scoreOne
-    }
-
-    fun incrementScoreTwo() {
-        _uiState.update { it.copy(scoreTwo = it.scoreTwo + 1) }
-        savedState["scoreTwo"] = _uiState.value.scoreTwo
-    }
-
-    fun decrementScoreTwo() {
-        _uiState.update { it.copy(scoreTwo = maxOf(0, it.scoreTwo - 1)) }
-        savedState["scoreTwo"] = _uiState.value.scoreTwo
-    }
+    // NOTE: no onCleared alarm cancellation — the quick game is durable and
+    // may still be live after the user leaves. Alarms are only cancelled on
+    // endGame() (or they naturally stop at the game end).
 }

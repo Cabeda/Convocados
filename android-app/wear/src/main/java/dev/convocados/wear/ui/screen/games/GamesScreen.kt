@@ -31,6 +31,8 @@ fun GamesScreen(
     onGameSelected: (String) -> Unit,
     onSignOut: () -> Unit,
     onQuickGame: () -> Unit = {},
+    continueQuickGame: Boolean = false,
+    onContinueQuickGame: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -115,6 +117,24 @@ fun GamesScreen(
                                 text = stringResource(R.string.refresh),
                                 style = MaterialTheme.typography.labelSmall,
                             )
+                        }
+                    }
+
+                    if (continueQuickGame) {
+                        item {
+                            Button(
+                                onClick = onContinueQuickGame,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                ),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.continue_quick_game),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
                         }
                     }
 

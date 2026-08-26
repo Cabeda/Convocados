@@ -12,6 +12,7 @@ import androidx.wear.ambient.AmbientLifecycleObserver
 import dagger.hilt.android.AndroidEntryPoint
 import dev.convocados.wear.data.auth.WearGoogleSignIn
 import dev.convocados.wear.data.auth.WearTokenStore
+import dev.convocados.wear.data.local.QuickGameStore
 import dev.convocados.wear.ui.navigation.WearNavigation
 import dev.convocados.wear.ui.theme.ConvocadosWearTheme
 import javax.inject.Inject
@@ -27,6 +28,9 @@ class WearActivity : ComponentActivity() {
 
     @Inject
     lateinit var googleSignIn: WearGoogleSignIn
+
+    @Inject
+    lateinit var quickGameStore: QuickGameStore
 
     private var isAmbient by mutableStateOf(false)
 
@@ -50,7 +54,7 @@ class WearActivity : ComponentActivity() {
         setContent {
             ConvocadosWearTheme {
                 CompositionLocalProvider(LocalAmbientMode provides isAmbient) {
-                    WearNavigation(tokenStore, googleSignIn)
+                    WearNavigation(tokenStore, googleSignIn, quickGameStore)
                 }
             }
         }
