@@ -386,7 +386,21 @@ export const GET: APIRoute = async ({ params, request }) => {
         },
       });
       const inviteByEventPlayerId = new Map(pendingInviteRows.map((pi) => [pi.eventPlayerId, pi]));
-      invited = pendingParticipants.map((gp) => {
+      // Invariant heal (ADR 0025): a pending GameParticipant without a pending
+      // PlayerInvite is an orphan ghost left by expiry/merge/retract races.
+      // Delete it instead of rendering an "Invited" chip with a null inviteId
+      // that can never be retracted ("Invite not found or no longer pending.").
+      const orphanEpIds = pendingParticipants
+        .filter((gp) => !inviteByEventPlayerId.has(gp.eventPlayer.id))
+        .map((gp) => gp.eventPlayer.id);
+      if (orphanEpIds.length > 0) {
+        await prisma.gameParticipant
+          .deleteMany({ where: { gameId: event.currentGameId, eventPlayerId: { in: orphanEpIds }, status: "pending" } })
+          .catch(() => {});
+      }
+      invited = pendingParticipants
+        .filter((gp) => inviteByEventPlayerId.has(gp.eventPlayer.id))
+        .map((gp) => {
         const userId = gp.eventPlayer.userId ?? playersByName.get(gp.eventPlayer.name) ?? null;
         const pi = inviteByEventPlayerId.get(gp.eventPlayer.id);
         return {
