@@ -1,0 +1,13 @@
+#Wed Aug 26 12:01:23 WEST 2026
+base.0=/Users/jose.cabeda/Git/Convocados.worktrees/chore-builtin-kotlin/android-app/baselineprofile/build/intermediates/dex/benchmarkRelease/mergeExtDexBenchmarkRelease/classes.dex
+base.1=/Users/jose.cabeda/Git/Convocados.worktrees/chore-builtin-kotlin/android-app/baselineprofile/build/intermediates/dex/benchmarkRelease/mergeProjectDexBenchmarkRelease/0/classes.dex
+base.2=/Users/jose.cabeda/Git/Convocados.worktrees/chore-builtin-kotlin/android-app/baselineprofile/build/intermediates/dex/benchmarkRelease/mergeProjectDexBenchmarkRelease/9/classes.dex
+base.3=/Users/jose.cabeda/Git/Convocados.worktrees/chore-builtin-kotlin/android-app/baselineprofile/build/intermediates/global_synthetics_dex/benchmarkRelease/generateBenchmarkReleaseGlobalSynthetics/classes.dex
+path.0=classes.dex
+path.1=0/classes.dex
+path.2=9/classes.dex
+path.3=classes.dex
+renamed.0=classes.dex
+renamed.1=classes2.dex
+renamed.2=classes3.dex
+renamed.3=classes4.dex

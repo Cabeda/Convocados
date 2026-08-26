@@ -1,0 +1,8 @@
+dev.convocados.baselineprofile-pngs-0 /Users/jose.cabeda/Git/Convocados.worktrees/chore-builtin-kotlin/android-app/baselineprofile/build/generated/res/pngs/benchmarkRelease
+dev.convocados.baselineprofile-updated_navigation_xml-1 /Users/jose.cabeda/Git/Convocados.worktrees/chore-builtin-kotlin/android-app/baselineprofile/build/generated/updated_navigation_xml/benchmarkRelease
+dev.convocados.baselineprofile-packageBenchmarkReleaseResources-2 /Users/jose.cabeda/Git/Convocados.worktrees/chore-builtin-kotlin/android-app/baselineprofile/build/intermediates/incremental/benchmarkRelease/packageBenchmarkReleaseResources/merged.dir
+dev.convocados.baselineprofile-packageBenchmarkReleaseResources-3 /Users/jose.cabeda/Git/Convocados.worktrees/chore-builtin-kotlin/android-app/baselineprofile/build/intermediates/incremental/benchmarkRelease/packageBenchmarkReleaseResources/stripped.dir
+dev.convocados.baselineprofile-benchmarkRelease-4 /Users/jose.cabeda/Git/Convocados.worktrees/chore-builtin-kotlin/android-app/baselineprofile/build/intermediates/merged_res/benchmarkRelease/mergeBenchmarkReleaseResources
+dev.convocados.baselineprofile-benchmarkRelease-5 /Users/jose.cabeda/Git/Convocados.worktrees/chore-builtin-kotlin/android-app/baselineprofile/src/benchmarkRelease/res
+dev.convocados.baselineprofile-main-6 /Users/jose.cabeda/Git/Convocados.worktrees/chore-builtin-kotlin/android-app/baselineprofile/src/main/res
+gradleHome-0 /Users/jose.cabeda/.gradle

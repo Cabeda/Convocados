@@ -1,0 +1,8 @@
+lib/arm64-v8a/libbenchmarkNative.so->androidx.benchmark:benchmark-common:1.3.4
+lib/armeabi-v7a/libbenchmarkNative.so->androidx.benchmark:benchmark-common:1.3.4
+lib/x86/libbenchmarkNative.so->androidx.benchmark:benchmark-common:1.3.4
+lib/x86_64/libbenchmarkNative.so->androidx.benchmark:benchmark-common:1.3.4
+lib/arm64-v8a/libtracing_perfetto.so->androidx.tracing:tracing-perfetto-binary:1.0.0
+lib/armeabi-v7a/libtracing_perfetto.so->androidx.tracing:tracing-perfetto-binary:1.0.0
+lib/x86/libtracing_perfetto.so->androidx.tracing:tracing-perfetto-binary:1.0.0
+lib/x86_64/libtracing_perfetto.so->androidx.tracing:tracing-perfetto-binary:1.0.0
