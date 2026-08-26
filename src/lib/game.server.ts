@@ -1,6 +1,7 @@
 /** ADR 0016 — Game lifecycle helpers */
 
 import { prisma } from "./db.server";
+import { activeOrderedParticipantsWhere, activeParticipantsWhere } from "./activeParticipants.server";
 
 /** Returns true if a Game is eligible for ELO processing (played + not friendly). */
 export async function shouldProcessGameElo(gameId: string): Promise<boolean> {
@@ -22,7 +23,7 @@ export async function shouldProcessGameElo(gameId: string): Promise<boolean> {
  */
 export async function nextGameParticipantOrder(gameId: string): Promise<number> {
   const agg = await prisma.gameParticipant.aggregate({
-    where: { gameId, status: { not: "pending" } },
+    where: activeParticipantsWhere(gameId),
     _max: { order: true },
   });
   return (agg._max.order ?? -1) + 1;
@@ -54,12 +55,12 @@ export async function grantActiveSpot(
   const existing = await prisma.gameParticipant.findUnique({
     where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
   });
-  if (existing && !existing.archivedAt && existing.order < maxPlayers) {
+  if (existing && !existing.archivedAt && existing.status !== "pending" && existing.order < maxPlayers) {
     return { active: true };
   }
 
   const active = await prisma.gameParticipant.findMany({
-    where: { gameId, archivedAt: null, order: { lt: maxPlayers } },
+    where: activeOrderedParticipantsWhere(gameId, maxPlayers),
     include: { eventPlayer: { select: { userId: true, name: true } } },
     orderBy: { order: "asc" },
   });
@@ -68,8 +69,8 @@ export async function grantActiveSpot(
     const order = await nextGameParticipantOrder(gameId);
     await prisma.gameParticipant.upsert({
       where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
-      create: { gameId, eventPlayerId, order },
-      update: { archivedAt: null, order },
+      create: { gameId, eventPlayerId, order, status: "active" },
+      update: { archivedAt: null, order, status: "active" },
     });
     return { active: true };
   }
@@ -90,8 +91,8 @@ export async function grantActiveSpot(
     const order = await nextGameParticipantOrder(gameId);
     await prisma.gameParticipant.upsert({
       where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
-      create: { gameId, eventPlayerId, order },
-      update: { archivedAt: null, order },
+      create: { gameId, eventPlayerId, order, status: "active" },
+      update: { archivedAt: null, order, status: "active" },
     });
     return { active: false };
   }
@@ -104,8 +105,8 @@ export async function grantActiveSpot(
     }),
     prisma.gameParticipant.upsert({
       where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
-      create: { gameId, eventPlayerId, order: victim.order },
-      update: { archivedAt: null, order: victim.order },
+      create: { gameId, eventPlayerId, order: victim.order, status: "active" },
+      update: { archivedAt: null, order: victim.order, status: "active" },
     }),
   ]);
   return { active: true, evictedEventPlayerId: victim.eventPlayerId };

@@ -52,7 +52,7 @@ export async function isSettledGameParticipant(context: SettledGameParticipantCo
       where: { eventId: event.id, dateTime: event.dateTime },
       include: {
         participants: {
-          where: { archivedAt: null },
+          where: { archivedAt: null, status: { not: "pending" } }, // same as activeParticipantsWhere — nested relation has no gameId
           include: { eventPlayer: { select: { name: true, userId: true } } },
         },
       },

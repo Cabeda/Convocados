@@ -5,6 +5,7 @@ import { balanceTeams } from "../../../../lib/elo.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
+import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
 
 const log = createLogger("randomize");
 
@@ -22,7 +23,7 @@ export const POST: APIRoute = async ({ params, url, request }) => {
   let allPlayers: { name: string; order: number }[];
   if (event.currentGameId) {
     const participants = await prisma.gameParticipant.findMany({
-      where: { gameId: event.currentGameId, archivedAt: null, status: { not: "pending" } },
+      where: activeParticipantsWhere(event.currentGameId),
       include: { eventPlayer: { select: { name: true } } },
       orderBy: { order: "asc" },
     });
