@@ -124,7 +124,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!event.currentGameId) return Response.json({ error: "This event has no current game." }, { status: 400 });
   if (event.dateTime <= new Date()) return Response.json({ error: "This game has already started." }, { status: 400 });
 
-  let body: { userId?: unknown; email?: unknown };
+  let body: { userId?: unknown; email?: unknown; deliver?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   let inviteeUserId: string;
   if (typeof body.userId === "string" && body.userId.trim()) {
@@ -154,6 +154,9 @@ export const POST: APIRoute = async ({ params, request }) => {
       inviteeUserId,
       invitedByUserId: session.user.id,
       origin,
+      // deliver:false → share-a-link flow: token created silently, the inviter
+      // delivers the URL themselves (no email/push/in-app notification).
+      delivery: body.deliver === false ? "link-only" : "auto",
     });
     return Response.json({ ok: true, ...result });
   } catch (err) {

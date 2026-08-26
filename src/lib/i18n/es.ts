@@ -62,6 +62,8 @@ const es: TranslationKeys = {
   coPlaySuggestions: "Sugeridos para ti",
   showMoreSuggestions: "Mostrar más sugerencias",
   showFewerSuggestions: "Mostrar menos sugerencias",
+  choiceShareLinkTitle: "Compartir enlace de invitación",
+  choiceShareLinkDesc: "Crea un enlace personal para  que envías tú — no se envía ninguna notificación.",
   inviteSent: "Invitación enviada a {name}. Comparte el enlace para que se unan.",
   youAreOnBench: "Estás en el banco — serás promovido si se abre un lugar.",
   youArePlaying: "Te uniste como {name}",

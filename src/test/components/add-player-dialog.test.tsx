@@ -83,7 +83,7 @@ describe("AddPlayerConfirmDialog — invite vs add choice", () => {
     const intent: AddPlayerIntent = { kind: "single", name: "Charlie", userId: "u-charlie", source: "chip" };
     const { props } = renderDialog(intent);
     fireEvent.click(screen.getByText("Invite"));
-    expect(props.onConfirm).toHaveBeenCalledWith(intent, true);
+    expect(props.onConfirm).toHaveBeenCalledWith(intent, true, "notify");
   });
 
   it("disables the options while an add or invite is in flight", () => {

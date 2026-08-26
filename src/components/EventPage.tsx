@@ -546,8 +546,34 @@ export default function EventPage({ eventId }: { eventId: string }) {
   // Both chip/dropdown/input paths funnel through here, so the add/invite
   // decision is in one spot and the two API flows (players vs invites) are
   // not duplicated across the codebase.
-  const handleConfirm = async (intent: AddPlayerIntent, asInvite: boolean) => {
+  const handleConfirm = async (intent: AddPlayerIntent, asInvite: boolean, via: "notify" | "link" = "notify") => {
     setAddIntent(null);
+    if (asInvite && via === "link") {
+      // Share-a-link flow: create the invite token silently (deliver:false —
+      // no email/push/in-app notification) and hand the URL to the Web Share
+      // API dialog so the inviter delivers it themselves.
+      setPlayerError(null);
+      setInvitingName(intent.name);
+      try {
+        const res = await fetch(`/api/events/${eventId}/invites`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(intent.userId ? { userId: intent.userId } : { email: intent.email }),
+        });
+        const json = await res.json().catch(() => ({ error: t("somethingWentWrong") }));
+        if (res.ok && typeof json?.inviteUrl === "string") {
+          setInviteShare({ url: json.inviteUrl, name: intent.name });
+          fetchEvent();
+          return;
+        }
+        setPlayerError(json.error ?? t("somethingWentWrong"));
+      } catch {
+        setPlayerError(t("somethingWentWrong"));
+      } finally {
+        setInvitingName(null);
+      }
+      return;
+    }
     if (asInvite) {
       if (intent.email) {
         // Invite by email: for registered users create a pending PlayerInvite
