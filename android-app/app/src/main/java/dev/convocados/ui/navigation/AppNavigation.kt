@@ -7,7 +7,9 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.navigation.NavDestination
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
@@ -94,10 +96,12 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processing
     )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = navBackStackEntry?.destination
-    val showBottomBar = currentDestination?.hierarchy?.any { dest ->
-        bottomItems.any { it.route == dest.route }
-    } == true
+    // Explicit nullable type — `destination` comes from a Java getter, so the
+    // inferred platform type makes K2's nullability analysis inconsistent.
+    val currentDestination: NavDestination? = navBackStackEntry?.destination
+    fun inDestination(route: String) =
+        currentDestination?.hierarchy?.any { it.route == route } == true
+    val showBottomBar = bottomItems.any { inDestination(it.route) }
 
     // Adaptive navigation: bottom bar on phones, navigation rail/drawer on larger
     // windows (tablets, foldables, landscape). NavigationSuiteScaffold also applies
@@ -106,7 +110,7 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processing
         navigationSuiteItems = {
             if (showBottomBar) {
                 bottomItems.forEach { item ->
-                    val selected = currentDestination?.hierarchy?.any { it.route == item.route } == true
+                    val selected = inDestination(item.route)
                     item(
                         selected = selected,
                         onClick = {
@@ -123,7 +127,7 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processing
             }
         },
         layoutType = if (showBottomBar) {
-            NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(currentWindowAdaptiveInfo())
+            NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(currentWindowAdaptiveInfoV2())
         } else {
             NavigationSuiteType.None
         },
@@ -205,6 +209,11 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processing
                         onHistoryClick = { historyId -> navController.navigate(Route.HistoryDetail.create(eventId, historyId)) },
                         onAllHistory = { navController.navigate(Route.EventHistory.create(eventId)) },
                         onCourtAlternatives = { navController.navigate(Route.CourtAlternatives.create(eventId)) },
+                        onBackToGames = {
+                            if (!navController.popBackStack(Route.Games.route, inclusive = false)) {
+                                navController.navigate(Route.Games.route) { launchSingleTop = true }
+                            }
+                        },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this@composable,
                     )

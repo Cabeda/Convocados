@@ -509,7 +509,7 @@ describe("acceptPlayerInvite", () => {
 });
 
 describe("declinePlayerInvite", () => {
-  it("marks declined and removes GameParticipant + Rsvp", async () => {
+  it("marks declined, removes the GameParticipant and records RSVP=no", async () => {
     const owner = await seedUser("Owner");
     const invitee = await seedUser("Invitee");
     const ev = await seedEventWithGame(owner.id);
@@ -522,7 +522,8 @@ describe("declinePlayerInvite", () => {
     expect(saved.status).toBe("declined");
     const ep = await prisma.eventPlayer.findFirstOrThrow({ where: { eventId: ev.id, userId: invitee.id } });
     expect(await prisma.gameParticipant.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(0);
-    expect(await prisma.rsvp.count({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } })).toBe(0);
+    const rsvp = await prisma.rsvp.findFirstOrThrow({ where: { gameId: ev.currentGameId, eventPlayerId: ep.id } });
+    expect(rsvp.status).toBe("no");
     // EventPlayer shell persists
     expect(ep).toBeTruthy();
   });
@@ -729,10 +730,22 @@ describe("POST /api/invite/[token] (accept/decline via link)", () => {
     expect(res.status).toBe(410);
   });
 
-  it("401 when unauthenticated", async () => {
+  it("401 when unauthenticated on a CLAIMED invite", async () => {
+    const owner = await seedUser("Owner");
+    const invitee = await seedUser("Invitee");
+    const ev = await seedEventWithGame(owner.id);
+    // createPlayerInvite links the shell to the invitee ⇒ claimed semantics
+    const invite = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
+
+    mockGetSession.mockResolvedValue(null);
+    const res = await inviteTokenPost(ctx({ token: invite.token }, { action: "accept" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("unknown token is 404 even unauthenticated", async () => {
     mockGetSession.mockResolvedValue(null);
     const res = await inviteTokenPost(ctx({ token: "t-1" }, { action: "accept" }));
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(404);
   });
 
   it("400 on malformed JSON", async () => {
@@ -845,13 +858,13 @@ describe("getInviteChannels — ADR 0025 notification channels", () => {
     expect(channels.appPush).toBe(true);
   });
 
-  it("reports email when email prefs, a verified email and a provider are configured", async () => {
+  it("never reports email — invites are push-only + share-link (owner decision)", async () => {
     const user = await seedUser("ChanEmail");
     await prisma.notificationPreferences.create({ data: { userId: user.id, emailEnabled: true, gameInviteEmail: true } });
     process.env.RESEND_API_KEY = "test-key";
     try {
       const channels = await getInviteChannels(user.id);
-      expect(channels.email).toBe(true);
+      expect(channels.email).toBe(false);
     } finally {
       delete process.env.RESEND_API_KEY;
     }
@@ -880,7 +893,7 @@ describe("getInviteChannels — ADR 0025 notification channels", () => {
     expect(channels).toEqual({ email: false, webPush: false, appPush: false });
   });
 
-  it("sends the invite email when the email channel is enabled", async () => {
+  it("never sends an invite email, even when email prefs are on", async () => {
     const owner = await seedUser("Owner");
     const invitee = await seedUser("Invitee");
     await prisma.notificationPreferences.create({ data: { userId: invitee.id, emailEnabled: true, gameInviteEmail: true } });
@@ -890,10 +903,8 @@ describe("getInviteChannels — ADR 0025 notification channels", () => {
     const spy = vi.spyOn(emailServer, "sendGameInvite").mockResolvedValue(undefined);
     try {
       const res = await createPlayerInvite({ eventId: ev.id, gameId: ev.currentGameId, inviteeUserId: invitee.id, invitedByUserId: owner.id, origin: "https://x.dev" });
-      expect(spy).toHaveBeenCalledTimes(1);
-      expect(res.channels.email).toBe(true);
-      expect(spy.mock.calls[0][0]).toBe(invitee.email);
-      expect(spy.mock.calls[0][1].eventUrl).toContain("/invite/");
+      expect(spy).not.toHaveBeenCalled();
+      expect(res.channels.email).toBe(false);
     } finally {
       spy.mockRestore();
       delete process.env.RESEND_API_KEY;

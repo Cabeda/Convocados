@@ -1,5 +1,3 @@
-                // wait for KSP to support android.builtInKotlin=true.
-
 
 plugins {
     alias(libs.plugins.android.test)

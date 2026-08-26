@@ -37,9 +37,18 @@ export const POST: APIRoute = async ({ params, request }) => {
         ?? event.players.find((p: Player) => p.name === ep.name);
     }
   }
-  if (!target) return Response.json({ error: "Player not found." }, { status: 404 });
+  // ADR 0026: guest invite rows have no legacy Player at all. The EventPlayer
+  // itself is a valid claim target while it is still anonymous.
+  let guestEp: { id: string; userId: string | null; name: string } | null = null;
+  if (!target) {
+    const ep = await prisma.eventPlayer.findFirst({ where: { id: playerId, eventId } });
+    if (ep && !ep.userId) {
+      guestEp = { id: ep.id, userId: ep.userId, name: ep.name };
+    }
+  }
+  if (!target && !guestEp) return Response.json({ error: "Player not found." }, { status: 404 });
 
-  if (target.userId) {
+  if (target?.userId) {
     return Response.json({ error: "This player is already linked to an account." }, { status: 409 });
   }
 
@@ -48,32 +57,44 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (existing) {
     return Response.json({ error: "You already have a linked player in this event." }, { status: 409 });
   }
+  // ADR 0026: also consider EventPlayer-native rows (guest invite links leave
+  // only an EventPlayer, no legacy Player row).
+  const existingEp = await prisma.eventPlayer.findFirst({
+    where: { eventId, userId: session.user.id },
+    select: { id: true },
+  });
+  if (existingEp) {
+    return Response.json({ error: "You already have a linked player in this event." }, { status: 409 });
+  }
 
   const userName = session.user.name;
-  const oldName = target.name;
+  const oldName: string = target?.name ?? guestEp?.name ?? "";
 
   try {
     await prisma.$transaction(async (tx) => {
-      // Replace the anonymous player: set name to user's name and link userId
-      // Use updateMany with userId: null guard for atomicity (race protection)
-      const claimed = await tx.player.updateMany({
-        where: { id: target.id, eventId, userId: null },
-        data: { userId: session.user.id, name: userName },
-      });
-      if (claimed.count === 0) {
-        throw new Error("CLAIM_RACE");
+      if (target) {
+        // Legacy path: replace the anonymous Player row.
+        const claimed = await tx.player.updateMany({
+          where: { id: target.id, eventId, userId: null },
+          data: { userId: session.user.id, name: userName },
+        });
+        if (claimed.count === 0) throw new Error("CLAIM_RACE");
+      } else {
+        // ADR 0026 guest-row path: the claim target is an anonymous
+        // EventPlayer with no legacy Player. Bind it atomically.
+        const claimed = await tx.eventPlayer.updateMany({
+          where: { id: playerId, eventId, userId: null },
+          data: { userId: session.user.id, name: userName },
+        });
+        if (claimed.count === 0) throw new Error("CLAIM_RACE");
       }
 
-      // Update team members: rename from old anonymous name to user's name
+      // Shared rename fan-out (both paths)
       await tx.teamMember.updateMany({
-        where: {
-          name: oldName,
-          team: { eventId },
-        },
+        where: { name: oldName, team: { eventId } },
         data: { name: userName },
       });
 
-      // Transfer PlayerRating: if the anonymous player had a rating, rename it
       const anonRating = await tx.playerRating.findUnique({
         where: { eventId_name: { eventId, name: oldName } },
       });
@@ -84,7 +105,6 @@ export const POST: APIRoute = async ({ params, request }) => {
         });
       }
 
-      // Update GameHistory teamsSnapshot: rename old anonymous name in all snapshots
       const histories = await tx.gameHistory.findMany({
         where: { eventId },
         select: { id: true, teamsSnapshot: true },
@@ -129,6 +149,6 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   return Response.json({
     ok: true,
-    claimedPlayerId: target.id,
+    claimedPlayerId: target?.id ?? playerId,
   });
 };

@@ -93,6 +93,27 @@ class GamesViewModelTest {
     }
 
     @Test
+    fun `refresh failure does not surface raw exception message`() = runTest {
+        coEvery { repository.observeGames() } returns flowOf(emptyList())
+        coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())
+        coEvery { scoreRepository.observePendingCount() } returns flowOf(0)
+        coEvery { repository.refreshGames() } returns
+            Result.failure(Exception("Socket timeout has expired"))
+
+        val viewModel = makeViewModel()
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertTrue(state.isOffline)
+            // Raw exception text ("Socket timeout has expired" etc.) must never
+            // reach the UI — the localized offline banner covers it.
+            assertNull(state.error)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `pending sync count is observed`() = runTest {
         coEvery { repository.observeGames() } returns flowOf(emptyList())
         coEvery { repository.observeArchivedGames() } returns flowOf(emptyList())

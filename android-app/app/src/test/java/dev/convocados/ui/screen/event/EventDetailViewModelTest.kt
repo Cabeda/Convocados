@@ -16,6 +16,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -49,6 +50,8 @@ class EventDetailViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        // Default: loads succeed. Individual tests override for offline paths.
+        coEvery { repository.refreshEventDetail(any()) } returns true
     }
 
     @After
@@ -295,7 +298,7 @@ class EventDetailViewModelTest {
 
     @Test
     fun `invite with no notification channel surfaces share invite`() = runTest {
-        coEvery { api.sendInvite(eventId, "u-new") } returns InviteCreateResponse(
+        coEvery { api.sendInvite(eventId, "u-new", any()) } returns InviteCreateResponse(
             ok = true,
             inviteUrl = "https://convocados.cabeda.dev/invite/abc",
             channels = InviteChannels(email = false, webPush = false, appPush = false),
@@ -315,7 +318,7 @@ class EventDetailViewModelTest {
 
     @Test
     fun `invite with a notification channel does not offer share`() = runTest {
-        coEvery { api.sendInvite(eventId, "u-new") } returns InviteCreateResponse(
+        coEvery { api.sendInvite(eventId, "u-new", any()) } returns InviteCreateResponse(
             ok = true,
             inviteUrl = "https://convocados.cabeda.dev/invite/abc",
             channels = InviteChannels(email = true, webPush = false, appPush = false),
@@ -327,6 +330,43 @@ class EventDetailViewModelTest {
             advanceUntilIdle()
 
             assertNull(expectMostRecentItem().pendingShareInvite)
+        }
+    }
+
+    @Test
+    fun `share-link invite requests silent delivery and always surfaces share`() = runTest {
+        // Even when the invitee HAS channels, the share-a-link flow must stay
+        // silent server-side and hand the URL to the inviter.
+        coEvery { api.sendInvite(eventId, "u-luis", false) } returns InviteCreateResponse(
+            ok = true,
+            inviteUrl = "https://convocados.cabeda.dev/invite/xyz",
+            channels = InviteChannels(email = true, webPush = true, appPush = true),
+        )
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.shareInviteLink(eventId, "u-luis", "Luís")
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { api.sendInvite(eventId, "u-luis", false) }
+            assertEquals(
+                PendingShareInvite("https://convocados.cabeda.dev/invite/xyz", "Luís"),
+                expectMostRecentItem().pendingShareInvite,
+            )
+        }
+    }
+
+    @Test
+    fun `share-link invite failure surfaces error`() = runTest {
+        coEvery { api.sendInvite(eventId, "u-luis", false) } throws ApiException(409, "This user already has a pending invite.")
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.shareInviteLink(eventId, "u-luis", "Luís")
+            advanceUntilIdle()
+
+            assertNull(expectMostRecentItem().pendingShareInvite)
+            assertEquals("This user already has a pending invite.", expectMostRecentItem().error)
         }
     }
 
@@ -349,6 +389,70 @@ class EventDetailViewModelTest {
         }
     }
 
+    }
+
+    @Test
+    fun `load marks loadFailed when refresh fails and nothing is cached`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(null)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { repository.refreshEventDetail(eventId) } returns false
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            val state = expectMostRecentItem()
+            assertNull(state.event)
+            assertTrue(state.loadFailed)
+            assertFalse(state.isStale)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `load keeps cached event visible and flags stale when refresh fails`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { repository.refreshEventDetail(eventId) } returns false
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            val state = expectMostRecentItem()
+            // Offline-first: stale cache stays on screen, never a blank page.
+            assertEquals(mockEvent, state.event)
+            assertTrue(state.isStale)
+            assertTrue(!state.loadFailed)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `retry clears loadFailed and reloads`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(null)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { repository.refreshEventDetail(eventId) } returnsMany listOf(false, true)
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            assertTrue(expectMostRecentItem().loadFailed)
+
+            viewModel.retry(eventId)
+            advanceUntilIdle()
+
+            val s = expectMostRecentItem()
+            assertTrue(!s.loadFailed)
+            assertTrue(!s.loading)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
