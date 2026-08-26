@@ -19,9 +19,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.*
-import com.google.android.horologist.annotations.ExperimentalHorologistApi
-import com.google.android.horologist.compose.layout.ScreenScaffold
-import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.theme.Warning
 import dev.convocados.wear.util.parseInstant
@@ -31,7 +28,6 @@ import java.time.Instant
 
 import dev.convocados.wear.ui.LocalAmbientMode
 
-@OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun ScoreScreen(
     eventId: String,
@@ -41,7 +37,6 @@ fun ScoreScreen(
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
     val state by viewModel.uiState.collectAsState()
-    val columnState = rememberColumnState()
     val isAmbient = LocalAmbientMode.current
 
     val shouldKeepScreenOn = state.history != null && state.keepScreenOn
@@ -55,7 +50,7 @@ fun ScoreScreen(
         }
     }
 
-    ScreenScaffold(scrollState = columnState) {
+    ScreenScaffold {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             when {
                 state.isLoading -> {

@@ -21,12 +21,13 @@ class WearGameRepositoryTest {
     private val client = mockk<WearApiClient>()
     private val gameDao = mockk<WearGameDao>(relaxed = true)
     private val historyDao = mockk<WearHistoryDao>(relaxed = true)
+    private val teamRepository = mockk<WearTeamRepository>(relaxUnitFun = true)
 
     private lateinit var repository: WearGameRepository
 
     @Before
     fun setup() {
-        repository = WearGameRepository(client, gameDao, historyDao)
+        repository = WearGameRepository(client, gameDao, historyDao, teamRepository)
     }
 
     @Test
@@ -43,8 +44,8 @@ class WearGameRepositoryTest {
     @Test
     fun `refreshGames fetches from API and updates dao`() = runTest {
         val response = MyGamesResponse(
-            owned = listOf(EventSummary("1", "Game 1", "Field A", "2025-01-01T10:00:00Z", "Soccer", 10, 5, false, null)),
-            joined = listOf(EventSummary("2", "Game 2", "Field B", "2025-01-02T10:00:00Z", "Basketball", 8, 4, false, null)),
+            owned = listOf(EventSummary("1", "Game 1", "Field A", "2025-01-01T10:00:00Z", "Soccer", 10, 5)),
+            followed = listOf(EventSummary("2", "Game 2", "Field B", "2025-01-02T10:00:00Z", "Basketball", 8, 4)),
         )
         coEvery { client.get<MyGamesResponse>(any()) } returns response
 
@@ -69,7 +70,10 @@ class WearGameRepositoryTest {
     fun `refreshHistory fetches and caches history`() = runTest {
         val history = PaginatedHistory(
             data = listOf(
-                GameHistory("h1", "2025-01-01T10:00:00Z", "played", 3, 2, "Red", "Blue", true),
+                GameHistory(
+                    id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+                    scoreOne = 3, scoreTwo = 2, teamOneName = "Red", teamTwoName = "Blue",
+                ),
             ),
         )
         coEvery { client.get<PaginatedHistory>(any()) } returns history
