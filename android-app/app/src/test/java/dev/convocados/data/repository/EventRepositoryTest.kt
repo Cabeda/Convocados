@@ -17,6 +17,8 @@ import io.mockk.slot
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EventRepositoryTest {
@@ -93,5 +95,31 @@ class EventRepositoryTest {
 
         coVerify(exactly = 0) { recentlyViewedDao.upsert(any()) }
         coVerify(exactly = 0) { recentlyViewedDao.prune(any()) }
+    }
+
+    @Test
+    fun `refreshEventDetail persists api data and reports success`() = runTest {
+        val event = dev.convocados.data.api.EventDetail(
+            id = "e1", title = "Game", location = "Pitch",
+            dateTime = "2026-08-25T19:00:00Z", maxPlayers = 10,
+        )
+        coEvery { api.fetchEvent("e1") } returns event
+        coEvery { api.fetchHistory("e1") } returns dev.convocados.data.api.PaginatedHistory()
+        coJustRun { detailDao.refreshEvent(any(), any(), any()) }
+
+        val result = repository.refreshEventDetail("e1")
+
+        assertTrue(result)
+        coVerify { detailDao.refreshEvent(any(), any(), any()) }
+    }
+
+    @Test
+    fun `refreshEventDetail reports failure and keeps cache untouched on network error`() = runTest {
+        coEvery { api.fetchEvent("e1") } throws RuntimeException("Socket timeout")
+
+        val result = repository.refreshEventDetail("e1")
+
+        assertFalse(result)
+        coVerify(exactly = 0) { detailDao.refreshEvent(any(), any(), any()) }
     }
 }
