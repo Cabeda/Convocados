@@ -21,7 +21,6 @@ firebaseBom = "33.14.0"
 accompanist = "0.37.3"
 room = "2.8.4"
 wearCompose = "1.6.2"
-horologistComposeLayout = "0.7.15"
 playServicesWearable = "20.0.1"
 playServicesAuth = "21.3.0"
 googleIdIdentity = "1.2.0"
@@ -86,7 +85,6 @@ wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-fou
 wear-compose-material = { group = "androidx.wear.compose", name = "compose-material", version.ref = "wearCompose" }
 wear-compose-material3 = { group = "androidx.wear.compose", name = "compose-material3", version.ref = "wearCompose" }
 wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "wearCompose" }
-horologist-compose-layout = { group = "com.google.android.horologist", name = "horologist-compose-layout", version.ref = "horologistComposeLayout" }
 play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
 play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 google-id-identity = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleIdIdentity" }

@@ -8,10 +8,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.MaterialTheme
+import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
-import com.google.android.horologist.annotations.ExperimentalHorologistApi
-import com.google.android.horologist.compose.layout.ScreenScaffold
-import com.google.android.horologist.compose.layout.rememberColumnState
 import dev.convocados.wear.R
 import dev.convocados.wear.ui.screen.score.GameClock
 import dev.convocados.wear.ui.screen.score.GameEdgeProgress
@@ -19,11 +17,9 @@ import dev.convocados.wear.ui.screen.score.TeamScoreButton
 import kotlinx.coroutines.delay
 import java.time.Instant
 
-@OptIn(ExperimentalHorologistApi::class)
 @Composable
 fun QuickScoreScreen(viewModel: QuickScoreViewModel) {
     val state by viewModel.uiState.collectAsState()
-    val columnState = rememberColumnState()
 
     val view = LocalView.current
     DisposableEffect(view) {
@@ -52,7 +48,7 @@ fun QuickScoreScreen(viewModel: QuickScoreViewModel) {
         else null
     } else null
 
-    ScreenScaffold(scrollState = columnState) {
+    ScreenScaffold {
         Box(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(2.dp),

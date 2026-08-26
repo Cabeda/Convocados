@@ -2,7 +2,6 @@ package dev.convocados.wear.ui.screen.score
 
 import app.cash.turbine.test
 import dev.convocados.wear.data.api.ApiException
-import dev.convocados.wear.data.alarm.GameAlarmScheduler
 import dev.convocados.wear.data.alarm.GameSettings
 import dev.convocados.wear.data.alarm.GameSettingsStore
 import dev.convocados.wear.data.local.entity.WearGameEntity
@@ -32,7 +31,6 @@ class ScoreViewModelTest {
     private val repository = mockk<WearGameRepository>(relaxed = true)
     private val scoreRepository = mockk<WearScoreRepository>(relaxed = true)
     private val settingsStore = mockk<GameSettingsStore>(relaxed = true)
-    private val scheduler = mockk<GameAlarmScheduler>(relaxed = true)
     private val workManager = mockk<WorkManager>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
@@ -48,14 +46,14 @@ class ScoreViewModelTest {
     }
 
     private fun makeViewModel(): ScoreViewModel {
-        val vm = ScoreViewModel(repository, scoreRepository, settingsStore, scheduler, workManager)
+        val vm = ScoreViewModel(repository, scoreRepository, settingsStore, workManager)
         vm.tickProvider = { flowOf(Instant.now()) }
         return vm
     }
 
     @Test
     fun `initial state is loading`() = runTest {
-        val viewModel = ScoreViewModel(repository, scoreRepository, settingsStore, scheduler, workManager)
+        val viewModel = ScoreViewModel(repository, scoreRepository, settingsStore, workManager)
 
         viewModel.uiState.test {
             val state = awaitItem()
