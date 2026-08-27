@@ -400,3 +400,15 @@ _Avoid_: MCP function, action, command (overloaded)
 The MCP `2026-07-28` protocol core: no `initialize`/`Mcp-Session-Id`, mandatory `MCP-Protocol-Version` + `Mcp-Method`/`Mcp-Name` headers, deterministic `tools/list` with `ttlMs`/`cacheScope`, and self-contained JSON-RPC per request behind plain round-robin.
 _Avoid_: sessionless API, REST wrapper
 
+## Preview App
+An ephemeral Fly.io deployment of a specific pull request (`convocados-pr-<N>`), reachable at `https://convocados-pr-<N>.fly.dev`. Created on request, destroyed when the PR closes (or earlier via explicit stop). Its database starts empty and is disposable — never carries production data. Distinct from the production app (`convocados`) and from the scheduler app; a Preview App is per-PR and short-lived.
+_Avoid_: staging environment (implies shared long-lived env), review app (Vercel/Heroku jargon), test deploy
+
+## Preview Allowlist
+The set of GitHub usernames authorized to request Preview Apps: the repository owner plus any username listed in `.github/CODEOWNERS`. Both the pull-request author and the person issuing the command must be on the allowlist. Usernames only — teams and email entries in CODEOWNERS do not grant access. Adding a contributor handle there is the single act that grants preview access.
+_Avoid_: codeowners permission (overloaded — the file also routes reviews), whitelist
+
+## Preview Request
+A `/preview` comment command on a pull request that triggers deploying that PR's current head to its Preview App. `/preview-stop` is the matching teardown command. Requests are opt-in per deploy: pushes to the PR never trigger deployments by themselves.
+_Avoid_: preview trigger, redeploy comment
+
