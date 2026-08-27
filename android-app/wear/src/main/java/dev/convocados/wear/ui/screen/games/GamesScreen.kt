@@ -1,8 +1,5 @@
 package dev.convocados.wear.ui.screen.games
 
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -21,7 +18,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -38,6 +34,7 @@ import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.ui.theme.Success
 import dev.convocados.wear.ui.theme.TextMuted
 import dev.convocados.wear.ui.theme.Warning
+import dev.convocados.wear.util.PullToRefreshProgress
 import dev.convocados.wear.util.formatRelativeTime
 
 @Composable
@@ -78,41 +75,50 @@ fun GamesScreen(
     // Pull-down at the top triggers a refresh. Expressive M3 feel: finger
     // travel is resisted (so a deliberate pull is needed), the indicator fills
     // with the pull distance, and it springs back on release / into refresh.
-    val pullThreshold = with(LocalDensity.current) { 84.dp.toPx() }
-    val resistance = 0.55f
+    //
+    // Progress accumulates across gestures so a user who pulls in short bursts
+    // still reaches the threshold — the Wear screen is too small to cover the
+    // whole distance in a single pull.
+    val density = LocalDensity.current
+    val pullProgressState = remember(viewModel) {
+        PullToRefreshProgress(
+            threshold = with(density) { 48.dp.toPx() },
+            resistance = 0.75f,
+        )
+    }
     var pullProgress by remember { mutableFloatStateOf(0f) }
     var refreshing by remember { mutableStateOf(false) }
     val pullToRefresh = remember(viewModel) {
         object : NestedScrollConnection {
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0f && !columnState.canScrollBackward) {
-                    pullProgress = (pullProgress + available.y * resistance / pullThreshold).coerceIn(0f, 1f)
-                    if (pullProgress >= 1f && !refreshing) {
+            // Read the raw overscroll in onPreScroll, BEFORE the TransformingLazyColumn
+            // consumes it for its stretch animation. The column reports only a fraction
+            // of the finger travel as leftover (available.y) in onPostScroll, so counting
+            // there made the indicator barely fill and the trigger nearly unreachable.
+            // We observe (return Zero) so the column's own physics are untouched.
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val dy = available.y
+                if (dy > 0f && !columnState.canScrollBackward) {
+                    if (pullProgressState.onScroll(dy) && !refreshing) {
                         refreshing = true
                         viewModel.refresh()
                     }
-                } else if (available.y < 0f) {
+                    pullProgress = pullProgressState.progress()
+                } else if (dy < 0f) {
+                    pullProgressState.reset()
                     pullProgress = 0f
                 }
                 return Offset.Zero
             }
         }
     }
-    // When the finger lifts (or the gesture is cancelled), let the indicator
-    // spring back unless a refresh is in flight.
-    val pullPointer = Modifier.pointerInput(Unit) {
-        awaitEachGesture {
-            awaitFirstDown(requireUnconsumed = false)
-            try {
-                waitForUpOrCancellation()
-            } finally {
-                if (!refreshing) pullProgress = 0f
-            }
-        }
-    }
+    // Progress is deliberately NOT reset when the finger lifts before reaching
+    // the threshold: a user who pulls in short bursts ("pull, pull, pull") still
+    // gets their first deliberate refresh, and progress only resets when the
+    // scroll goes back up or the refresh completes.
     LaunchedEffect(state.isLoading) {
         if (!state.isLoading) {
             refreshing = false
+            pullProgressState.reset()
             pullProgress = 0f
         }
     }
@@ -169,7 +175,7 @@ fun GamesScreen(
                 TransformingLazyColumn(
                     state = columnState,
                     contentPadding = contentPadding,
-                    modifier = Modifier.fillMaxSize().nestedScroll(pullToRefresh).then(pullPointer),
+                    modifier = Modifier.fillMaxSize().nestedScroll(pullToRefresh),
                 ) {
                     item {
                         ListHeader(

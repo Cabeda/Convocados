@@ -23,6 +23,9 @@ import dev.convocados.wear.R
 import dev.convocados.wear.ui.LocalAmbientMode
 import dev.convocados.wear.ui.RememberKeepScreenOn
 import dev.convocados.wear.ui.theme.Warning
+import dev.convocados.wear.util.GameScorePhase
+import dev.convocados.wear.util.formatRelativeTime
+import dev.convocados.wear.util.gameScorePhase
 import dev.convocados.wear.util.parseInstant
 import dev.convocados.wear.util.sportDurationMinutes
 import kotlinx.coroutines.delay
@@ -40,6 +43,7 @@ fun ScoreScreen(
     val state by viewModel.uiState.collectAsState()
     val isAmbient = LocalAmbientMode.current
     val view = LocalView.current
+    val scorePhase = gameScorePhase(state.game?.dateTime, state.game?.sport ?: "futsal")
 
     // Hold the screen awake whenever the per-event setting is on — including
     // the pre-start state, so a solo organizer can set up without the watch
@@ -51,6 +55,18 @@ fun ScoreScreen(
             when {
                 state.isLoading -> {
                     CircularProgressIndicator()
+                }
+                // Gate by game phase so a game that hasn't started (or has
+                // finished) never shows a dead "Start scoring" button. We
+                // explain why and offer a useful alternative instead.
+                scorePhase == GameScorePhase.NOT_STARTED -> {
+                    OffWindowGameContent(
+                        state = state,
+                        onTeams = onTeams,
+                    )
+                }
+                scorePhase == GameScorePhase.ENDED -> {
+                    EndedGameContent(state = state)
                 }
                 state.history == null -> {
                     Column(
@@ -115,6 +131,86 @@ fun ScoreScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun OffWindowGameContent(
+    state: ScoreUiState,
+    onTeams: () -> Unit,
+) {
+    val startsIn = remember(state.game?.dateTime) {
+        state.game?.dateTime?.let { formatRelativeTime(it) }.orEmpty()
+    }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(16.dp),
+    ) {
+        Text(
+            text = state.game?.title ?: stringResource(R.string.score_title),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.game_starts_in, startsIn),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = stringResource(R.string.game_get_ready),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        CompactButton(onClick = onTeams) {
+            Text(stringResource(R.string.open_teams))
+        }
+    }
+}
+
+@Composable
+private fun EndedGameContent(state: ScoreUiState) {
+    val hasScore = state.history != null
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(16.dp),
+    ) {
+        Text(
+            text = state.game?.title ?: stringResource(R.string.score_title),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.game_ended),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (hasScore) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.game_ended_result, state.scoreOne, state.scoreTwo),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center,
+            )
+        } else {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = stringResource(R.string.game_ended_no_score),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

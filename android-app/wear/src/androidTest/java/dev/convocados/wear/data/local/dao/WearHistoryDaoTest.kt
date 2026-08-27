@@ -87,6 +87,32 @@ class WearHistoryDaoTest {
         }
     }
 
+    /** The score screen scopes history by the game's own dateTime (a one-off game
+     *  may be in the past or future), so "today" is the wrong boundary: without
+     *  observeLatestHistoryForEvent a started past/future game never surfaces. */
+    @Test
+    fun observeLatestHistoryForEvent_returns_off_day_entry() = runTest {
+        dao.insertAll(listOf(makeHistory("h1", "e1", "2026-08-20T19:00:00Z", 2, 1)))
+
+        // The entry is 7 days ago — the today-scoped query would miss it, but the
+        // event-scoped one must still surface it.
+        dao.observeLatestHistoryForEvent("e1").test {
+            val item = awaitItem()
+            assertNotNull(item)
+            assertEquals("h1", item!!.id)
+            assertEquals(2, item.scoreOne)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun observeLatestHistoryForEvent_returns_null_for_missing_event() = runTest {
+        dao.observeLatestHistoryForEvent("nonexistent").test {
+            assertNull(awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun refreshHistory_replaces_all_for_event() = runTest {
         dao.insertAll(listOf(

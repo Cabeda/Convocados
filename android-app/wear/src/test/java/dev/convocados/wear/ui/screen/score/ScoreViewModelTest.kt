@@ -71,7 +71,7 @@ class ScoreViewModelTest {
 
         coEvery { repository.getGame("e1") } returns game
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
-        coEvery { repository.observeLatestHistory("e1") } returns flowOf(history)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(history)
 
         val viewModel = makeViewModel()
         viewModel.load("e1")
@@ -99,7 +99,7 @@ class ScoreViewModelTest {
         every { settingsStore.settings("e1") } returns settingsFlow
         coEvery { repository.getGame("e1") } returns game
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
-        coEvery { repository.observeLatestHistory("e1") } returns flowOf(history)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(history)
 
         val viewModel = makeViewModel()
         viewModel.load("e1")
@@ -116,7 +116,7 @@ class ScoreViewModelTest {
     fun `load is idempotent for same eventId`() = runTest {
         coEvery { repository.getGame("e1") } returns makeGame("e1")
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
-        coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
 
         val viewModel = makeViewModel()
         viewModel.load("e1")
@@ -130,7 +130,7 @@ class ScoreViewModelTest {
     fun `incrementScoreOne increments team one`() = runTest {
         coEvery { repository.getGame("e1") } returns makeGame("e1")
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
-        coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
 
         val viewModel = makeViewModel()
         viewModel.load("e1")
@@ -148,7 +148,7 @@ class ScoreViewModelTest {
     fun `decrementScoreTwo does not go below zero`() = runTest {
         coEvery { repository.getGame("e1") } returns makeGame("e1")
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
-        coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
 
         val viewModel = makeViewModel()
         viewModel.load("e1")
@@ -166,7 +166,7 @@ class ScoreViewModelTest {
     fun `incrementScoreTwo increments team two`() = runTest {
         coEvery { repository.getGame("e1") } returns makeGame("e1")
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
-        coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
 
         val viewModel = makeViewModel()
         viewModel.load("e1")
@@ -185,7 +185,7 @@ class ScoreViewModelTest {
     fun `incrementing persists the latest score`() = runTest {
         coEvery { repository.getGame("e1") } returns makeGame("e1")
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
-        coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
         coEvery { scoreRepository.submitScore(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
 
         val viewModel = makeViewModel()
@@ -202,7 +202,7 @@ class ScoreViewModelTest {
     fun `rapid taps coalesce into one save with the final score`() = runTest {
         coEvery { repository.getGame("e1") } returns makeGame("e1")
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
-        coEvery { repository.observeLatestHistory("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(makeHistory("h1", "e1", 0, 0))
         coEvery { scoreRepository.submitScore(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
 
         val viewModel = makeViewModel()

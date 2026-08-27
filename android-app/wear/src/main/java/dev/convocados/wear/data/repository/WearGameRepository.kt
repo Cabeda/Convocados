@@ -35,6 +35,11 @@ class WearGameRepository @Inject constructor(
         return historyDao.observeLatestTodayHistory(eventId, start, end)
     }
 
+    /** Observable latest history for a game regardless of day. The score screen
+     *  scopes by the game's own dateTime, not today. */
+    fun observeLatestHistoryForEvent(eventId: String): Flow<WearHistoryEntity?> =
+        historyDao.observeLatestHistoryForEvent(eventId)
+
     /** All cached history, most recent first (wrist history screen). */
     fun observeAllHistory(): Flow<List<WearHistoryEntity>> = historyDao.observeAllHistory()
 
