@@ -85,34 +85,29 @@ class PendingScoreDaoTest {
     }
 
     @Test
-    fun deleteStale_removes_entries_with_retryCount_gte_5() = runTest {
+    fun observeStuckCount_counts_entries_at_or_above_the_cap() = runTest {
         dao.insert(makePending("e1", "h1"))
         val entry = dao.getAll().first()
 
-        // Increment to 5
-        repeat(5) { dao.incrementRetry(entry.id) }
+        // Increment to the cap
+        repeat(8) { dao.incrementRetry(entry.id) }
 
-        // Also insert a fresh one
-        dao.insert(makePending("e2", "h2"))
-
-        dao.deleteStale()
-
-        val remaining = dao.getAll()
-        assertEquals(1, remaining.size)
-        assertEquals("e2", remaining[0].eventId)
+        dao.observeStuckCount(8).test {
+            assertEquals(1, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
-    fun deleteStale_keeps_entries_with_retryCount_below_5() = runTest {
+    fun deleteById_removes_a_specific_stuck_entry() = runTest {
         dao.insert(makePending("e1", "h1"))
         val entry = dao.getAll().first()
 
-        repeat(4) { dao.incrementRetry(entry.id) }
-
-        dao.deleteStale()
+        repeat(8) { dao.incrementRetry(entry.id) }
+        dao.deleteById(entry.id)
 
         val remaining = dao.getAll()
-        assertEquals(1, remaining.size) // retryCount=4, not stale
+        assertEquals(0, remaining.size)
     }
 
     private fun makePending(

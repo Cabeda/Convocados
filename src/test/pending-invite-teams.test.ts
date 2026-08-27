@@ -11,6 +11,7 @@ import { prisma } from "~/lib/db.server";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { POST as addPlayer } from "~/pages/api/events/[id]/players";
+import { GET as getTeams } from "~/pages/api/events/[id]/teams";
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
@@ -160,5 +161,39 @@ describe("join path ignores pending invite ghosts when syncing teams", () => {
     expect(names).toContain("Player 5");
     expect(names.filter((n) => n === "Player 5")).toHaveLength(1);
     expect(names).not.toContain("Invited Guest");
+  });
+
+  it("#847 teams endpoint excludes pending invitees from teams/bench/unassigned", async () => {
+    const { event, gameId } = await seedEventWithGame(4);
+
+    // Two real players assigned to teams via teamResults
+    await seedActiveParticipant(gameId, event.id, "Alpha", 0);
+    await seedActiveParticipant(gameId, event.id, "Bravo", 1);
+    const t1 = await prisma.teamResult.create({ data: { name: "Red", eventId: event.id } });
+    const t2 = await prisma.teamResult.create({ data: { name: "Blue", eventId: event.id } });
+    await prisma.teamMember.create({ data: { name: "Alpha", order: 0, teamResultId: t1.id } });
+    await prisma.teamMember.create({ data: { name: "Bravo", order: 0, teamResultId: t2.id } });
+
+    // A pending invite sits in the queue — a ghost, not an active player
+    await seedPendingInvite(gameId, event.id, "Invited Ghost", 2);
+
+    const res = await getTeams({
+      params: { id: event.id },
+      request: new Request(`http://localhost/api/events/${event.id}/teams`, { method: "GET" }),
+      url: new URL(`http://localhost/api/events/${event.id}/teams`),
+    } as any);
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    const allNames = [
+      ...body.teamOne.players,
+      ...body.teamTwo.players,
+      ...body.unassigned,
+      ...body.bench,
+    ].map((p: any) => p.name);
+
+    expect(allNames).toContain("Alpha");
+    expect(allNames).toContain("Bravo");
+    expect(allNames).not.toContain("Invited Ghost");
   });
 });
