@@ -64,7 +64,7 @@ describe("POST /api/watch/events with no teams", () => {
 
     const history = await prisma.gameHistory.findFirstOrThrow({ where: { eventId: event.id } });
     expect(history.teamOneName).toBe("Ninjas"); // falls back to event default
-    expect(history.teamsSnapshot).toBe("[]");
+    expect(history.teamsSnapshot).toBeNull(); // no teams — null, not "[]" (avoids ELO guards)
   });
 
   it("returns the existing history when called twice (idempotent)", async () => {

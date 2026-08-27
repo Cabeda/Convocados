@@ -75,20 +75,25 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 
-  // Create a new history record
-  const teamsSnapshot = JSON.stringify(
-    event.teamResults.map((tr) => ({
-      team: tr.name,
-      players: tr.members.map((m) => ({ name: m.name, order: m.order })),
-    }))
-  );
+  // Create a new history record. teamsSnapshot is null when the event has no
+  // teamResults yet (watch can start scoring without teams) — an empty-array
+  // snapshot is still truthy and would trip the ELO/processGame "needs teams"
+  // guards downstream.
+  const teamsSnapshot = event.teamResults.length
+    ? JSON.stringify(
+        event.teamResults.map((tr) => ({
+          team: tr.name,
+          players: tr.members.map((m) => ({ name: m.name, order: m.order })),
+        }))
+      )
+    : null;
 
   const history = await prisma.gameHistory.create({
     data: {
       eventId: event.id,
       dateTime: event.dateTime,
-      teamOneName: event.teamOneName,
-      teamTwoName: event.teamTwoName,
+      teamOneName: event.teamOneName || "Team 1",
+      teamTwoName: event.teamTwoName || "Team 2",
       teamsSnapshot,
     },
   });

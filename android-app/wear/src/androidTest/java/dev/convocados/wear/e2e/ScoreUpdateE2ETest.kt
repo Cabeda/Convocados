@@ -16,6 +16,7 @@ import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
 import dev.convocados.wear.data.repository.WearGameRepository
 import dev.convocados.wear.data.repository.WearScoreRepository
+import dev.convocados.wear.data.repository.WearTeamRepository
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.okhttp.*
@@ -80,6 +81,7 @@ class ScoreUpdateE2ETest {
     private lateinit var gameDao: WearGameDao
     private lateinit var historyDao: WearHistoryDao
     private lateinit var pendingScoreDao: PendingScoreDao
+    private lateinit var teamRepository: WearTeamRepository
     private lateinit var repository: WearGameRepository
     private lateinit var scoreRepository: WearScoreRepository
 
@@ -115,7 +117,8 @@ class ScoreUpdateE2ETest {
         historyDao = db.historyDao()
         pendingScoreDao = db.pendingScoreDao()
 
-        repository = WearGameRepository(apiClient, gameDao, historyDao)
+        teamRepository = WearTeamRepository(apiClient, db.playerDao(), db.pendingRosterChangeDao())
+        repository = WearGameRepository(apiClient, gameDao, historyDao, teamRepository)
         scoreRepository = WearScoreRepository(apiClient, historyDao, pendingScoreDao)
     }
 
@@ -196,7 +199,7 @@ class ScoreUpdateE2ETest {
 
         // ── Step 3: Fetch games via API ──────────────────────────────────
         val gamesResponse: MyGamesResponse = apiClient.get("/api/me/games")
-        val allGames = gamesResponse.owned + gamesResponse.joined
+        val allGames = gamesResponse.owned + gamesResponse.followed + gamesResponse.admin
         assumeTrue(
             "No games found for user $testEmail. Create at least one event with history first.",
             allGames.isNotEmpty(),
