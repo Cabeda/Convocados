@@ -45,6 +45,12 @@ interface WearHistoryDao {
     @Query("SELECT * FROM wear_history WHERE eventId = :eventId AND dateTime >= :startOfDayIso AND dateTime < :endOfDayIso ORDER BY dateTime DESC LIMIT 1")
     fun observeLatestTodayHistory(eventId: String, startOfDayIso: String, endOfDayIso: String): Flow<WearHistoryEntity?>
 
+    /** Observe the most recent history entry for the event regardless of day.
+     *  The score screen scopes by the game's own dateTime (a one-off game may be
+     *  in the past or future), so "today" is the wrong boundary there. */
+    @Query("SELECT * FROM wear_history WHERE eventId = :eventId ORDER BY dateTime DESC LIMIT 1")
+    fun observeLatestHistoryForEvent(eventId: String): Flow<WearHistoryEntity?>
+
     /** All cached history, most recent first (for the wrist history screen). */
     @Query("SELECT * FROM wear_history ORDER BY dateTime DESC")
     fun observeAllHistory(): Flow<List<WearHistoryEntity>>
