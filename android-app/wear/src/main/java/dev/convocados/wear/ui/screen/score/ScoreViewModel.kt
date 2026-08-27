@@ -73,7 +73,7 @@ class ScoreViewModel @Inject constructor(
             repository.refreshHistory(eventId)
 
             combine(
-                repository.observeLatestHistory(eventId),
+                repository.observeLatestHistoryForEvent(eventId),
                 settingsStore.settings(eventId),
                 tickProvider(),
             ) { history, settings, _ ->
