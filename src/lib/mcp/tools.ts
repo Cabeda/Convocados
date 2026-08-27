@@ -3,6 +3,7 @@ import type { AuthContext } from "../authenticate.server";
 import { fetchMyGames } from "../myGames.server";
 import { getEventBalanceSummary } from "../balance.server";
 import { McpError } from "./errors";
+import { WRITE_TOOLS } from "./writeTools";
 
 export interface ToolDef {
   name: string;
@@ -83,7 +84,7 @@ async function getRatings(args: Record<string, unknown>, _ctx: AuthContext) {
   return { ratings: fallback };
 }
 
-export const TOOLS: ToolDef[] = [
+const READ_TOOLS: ToolDef[] = [
   {
     name: "convocados_get_balance",
     description: "Get outstanding balance and payment summary for a Game (Event). Requires eventId.",
@@ -126,4 +127,6 @@ export const TOOLS: ToolDef[] = [
     scope: "read:events",
     handler: listPlayers,
   },
-].sort((a, b) => a.name.localeCompare(b.name));
+];
+
+export const TOOLS: ToolDef[] = [...READ_TOOLS, ...WRITE_TOOLS].sort((a, b) => a.name.localeCompare(b.name));
