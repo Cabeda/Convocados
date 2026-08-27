@@ -219,14 +219,20 @@ internal fun GameEdgeProgress(
         val endPos = measure.getPosition(measure.length)
         drawTick(center, endPos, endColor, stroke, length = 1.6f, thickness = 2.2f)
 
-        // Alarm tick marks: emphasise the next upcoming one, dim the rest.
+        // Alarm tick marks: emphasise the next upcoming one, dim passed ones.
         alarmFractions.forEach { f ->
             val pos = measure.getPosition(measure.length * f.coerceIn(0f, 1f))
             val isNext = f == nextAlarmFraction
+            val isPassed = f < progress
+            val color = when {
+                isNext -> nextAlarmTickColor
+                isPassed -> alarmTickColor.copy(alpha = 0.3f) // dim passed ticks
+                else -> alarmTickColor
+            }
             drawTick(
                 center = center,
                 pos = pos,
-                color = if (isNext) nextAlarmTickColor else alarmTickColor,
+                color = color,
                 stroke = stroke,
                 length = if (isNext) 2.4f else 1.4f,
                 thickness = if (isNext) 2.4f else 1.6f,
