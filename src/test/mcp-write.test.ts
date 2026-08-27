@@ -473,3 +473,266 @@ describe("MCP write tools — tools/list surface", () => {
     expect(names).toHaveLength(12);
   });
 });
+
+describe("MCP write tools — additional validation and auth gaps", () => {
+  it("add_player rejects when scope is missing (403 via requireScope)", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["read:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "Alice" })));
+    expect(res.status).toBe(403);
+  });
+
+  it("add_player is idempotent when the same name is added twice", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    const first = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "Alice" })));
+    expect(first.status).toBe(200);
+    const second = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "Alice" })));
+    expect(second.status).toBe(200);
+    const count = await prisma.player.count({ where: { eventId: event.id, name: "Alice" } });
+    expect(count).toBe(1);
+  });
+
+  it("add_player resolves target by email", async () => {
+    const owner = await createOwner();
+    const member = await prisma.user.create({ data: { id: `mcpw-${crypto.randomUUID().slice(0, 8)}`, name: "Emailed", email: `mcpw-${crypto.randomUUID().slice(0, 8)}@test.com`, emailVerified: true } });
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, email: member.email })));
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    const data = JSON.parse(body.result.content[0].text);
+    expect(data.name).toBe(member.name);
+    expect(data.userId).toBe(member.id);
+  });
+
+  it("add_player to bench does not call team sync (isActive false)", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id, { maxPlayers: 2 });
+    await addActivePlayer(event.id, event.currentGameId!, "A", 0);
+    await addActivePlayer(event.id, event.currentGameId!, "B", 1);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_add_player", { eventId: event.id, name: "BenchGuy" })));
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    const data = JSON.parse(body.result.content[0].text);
+    expect(data.isActive).toBe(false);
+  });
+
+  it("remove_player errors when eventId is missing", async () => {
+    mockAuth.mockResolvedValue({ userId: "u1", scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_remove_player", { playerId: "x" })));
+    const body: any = await res.json();
+    expect(body.error.code).toBe(-32602);
+  });
+
+  it("remove_player via EventPlayer id fallback still 404 when no Player row", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Ghost" } });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_remove_player", { eventId: event.id, playerId: ep.id })));
+    expect(res.status).toBe(404);
+  });
+
+  it("randomize_teams errors when eventId is missing", async () => {
+    mockAuth.mockResolvedValue({ userId: "u1", scopes: ["manage:teams"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_randomize_teams", {})));
+    const body: any = await res.json();
+    expect(body.error.code).toBe(-32602);
+  });
+
+  it("randomize_teams 404 when event not found", async () => {
+    mockAuth.mockResolvedValue({ userId: "u1", scopes: ["manage:teams"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_randomize_teams", { eventId: "missing" })));
+    expect(res.status).toBe(404);
+  });
+
+  it("randomize_teams rejects when scope is missing", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["read:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_randomize_teams", { eventId: event.id })));
+    expect(res.status).toBe(403);
+  });
+
+  it("randomize_teams rejects for non-owner", async () => {
+    const owner = await createOwner();
+    const outsider = await prisma.user.create({ data: { id: `mcpw-${crypto.randomUUID().slice(0, 8)}`, name: "OutR", email: `mcpw-${crypto.randomUUID().slice(0, 8)}@test.com`, emailVerified: true } });
+    const event = await createEvent(owner.id);
+    for (const [i, n] of ["A", "B"].entries()) await addActivePlayer(event.id, event.currentGameId!, n, i);
+    mockAuth.mockResolvedValue({ userId: outsider.id, scopes: ["manage:teams"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_randomize_teams", { eventId: event.id })));
+    expect(res.status).toBe(403);
+  });
+
+  it("update_payment errors when eventId is missing", async () => {
+    mockAuth.mockResolvedValue({ userId: "u1", scopes: ["manage:payments"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_update_payment", { playerName: "Alice", status: "paid" })));
+    const body: any = await res.json();
+    expect(body.error.code).toBe(-32602);
+  });
+
+  it("update_payment errors when playerName is missing", async () => {
+    mockAuth.mockResolvedValue({ userId: "u1", scopes: ["manage:payments"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_update_payment", { eventId: "evt", status: "paid" })));
+    const body: any = await res.json();
+    expect(body.error.code).toBe(-32602);
+  });
+
+  it("update_payment 404 when payment row not found", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 20 } });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:payments"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_update_payment", { eventId: event.id, playerName: "Nope", status: "paid" })));
+    expect(res.status).toBe(404);
+  });
+
+  it("update_payment rejects when scope is missing", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["read:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_update_payment", { eventId: event.id, playerName: "Alice", status: "paid" })));
+    expect(res.status).toBe(403);
+  });
+
+  it("update_payment rejects for non-owner", async () => {
+    const owner = await createOwner();
+    const outsider = await prisma.user.create({ data: { id: `mcpw-${crypto.randomUUID().slice(0, 8)}`, name: "OutP", email: `mcpw-${crypto.randomUUID().slice(0, 8)}@test.com`, emailVerified: true } });
+    const event = await createEvent(owner.id);
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 10 } });
+    mockAuth.mockResolvedValue({ userId: outsider.id, scopes: ["manage:payments"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_update_payment", { eventId: event.id, playerName: "Alice", status: "paid" })));
+    expect(res.status).toBe(403);
+  });
+
+  it("update_payment accepts method null and paid with ledger", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    await addActivePlayer(event.id, event.currentGameId!, "Alice");
+    const cost = await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 30 } });
+    await prisma.playerPayment.create({ data: { eventCostId: cost.id, playerName: "Alice", amount: 10, status: "pending" } });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:payments"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_update_payment", { eventId: event.id, playerName: "Alice", status: "paid", method: null })));
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    const data = JSON.parse(body.result.content[0].text);
+    expect(data.status).toBe("paid");
+    expect(data.method).toBeNull();
+  });
+
+  it("set_score errors when eventId is missing", async () => {
+    mockAuth.mockResolvedValue({ userId: "u1", scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_set_score", { scoreOne: 1, scoreTwo: 0 })));
+    const body: any = await res.json();
+    expect(body.error.code).toBe(-32602);
+  });
+
+  it("set_score 404 when event not found", async () => {
+    mockAuth.mockResolvedValue({ userId: "u1", scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_set_score", { eventId: "missing", scoreOne: 1, scoreTwo: 0 })));
+    expect(res.status).toBe(404);
+  });
+
+  it("set_score rejects when scope is missing", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["read:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_set_score", { eventId: event.id, scoreOne: 1, scoreTwo: 0 })));
+    expect(res.status).toBe(403);
+  });
+
+  it("set_score rejects for non-owner", async () => {
+    const owner = await createOwner();
+    const outsider = await prisma.user.create({ data: { id: `mcpw-${crypto.randomUUID().slice(0, 8)}`, name: "OutS", email: `mcpw-${crypto.randomUUID().slice(0, 8)}@test.com`, emailVerified: true } });
+    const event = await createEvent(owner.id);
+    await prisma.gameHistory.create({ data: { eventId: event.id, dateTime: event.dateTime, teamOneName: "A", teamTwoName: "B" } });
+    mockAuth.mockResolvedValue({ userId: outsider.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_set_score", { eventId: event.id, scoreOne: 1, scoreTwo: 0 })));
+    expect(res.status).toBe(403);
+  });
+
+  it("set_score rejects non-integer floats", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    await prisma.gameHistory.create({ data: { eventId: event.id, dateTime: event.dateTime, teamOneName: "A", teamTwoName: "B" } });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_set_score", { eventId: event.id, scoreOne: 1.5, scoreTwo: 0 })));
+    expect(res.status).toBe(400);
+  });
+
+  it("set_score succeeds even when history has no teamsSnapshot (no ELO)", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    const history = await prisma.gameHistory.create({ data: { eventId: event.id, dateTime: event.dateTime, teamOneName: "A", teamTwoName: "B", status: "played" } });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_set_score", { eventId: event.id, scoreOne: 2, scoreTwo: 2 })));
+    expect(res.status).toBe(200);
+    const updated = await prisma.gameHistory.findUnique({ where: { id: history.id } });
+    expect(updated?.scoreOne).toBe(2);
+    expect(updated?.eloProcessed).toBe(false);
+  });
+
+  it("set_score skips ELO when already processed", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    const history = await prisma.gameHistory.create({
+      data: {
+        eventId: event.id, dateTime: event.dateTime, teamOneName: "Ninjas", teamTwoName: "Gunas", status: "played", eloProcessed: true,
+        teamsSnapshot: JSON.stringify([{ team: "Ninjas", players: [{ name: "Alice", order: 0 }] }, { team: "Gunas", players: [{ name: "Bob", order: 0 }] }]),
+        scoreOne: 1, scoreTwo: 0,
+      },
+    });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_set_score", { eventId: event.id, scoreOne: 2, scoreTwo: 1 })));
+    expect(res.status).toBe(200);
+    const updated = await prisma.gameHistory.findUnique({ where: { id: history.id } });
+    expect(updated?.eloProcessed).toBe(true);
+  });
+
+  it("create_event errors when dateTime is missing", async () => {
+    const owner = await createOwner();
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["create:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_create_event", { title: "NoDate" })));
+    const body: any = await res.json();
+    expect(body.error.code).toBe(-32602);
+  });
+
+  it("create_event with invalid timezone falls back to UTC", async () => {
+    const owner = await createOwner();
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["create:events"], authMethod: "oauth", clientId: "c1" });
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const res = await POST(ctx(callTool("convocados_create_event", { title: "TZ Fallback", dateTime: future, timezone: "Not/A_Zone" })));
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    const data = JSON.parse(body.result.content[0].text);
+    const event = await prisma.event.findUnique({ where: { id: data.id } });
+    expect(event?.timezone).toBe("UTC");
+  });
+
+  it("create_event with isRecurring true but no valid freq creates no recurrence", async () => {
+    const owner = await createOwner();
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["create:events"], authMethod: "oauth", clientId: "c1" });
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const res = await POST(ctx(callTool("convocados_create_event", { title: "NoFreq", dateTime: future, isRecurring: true })));
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    const data = JSON.parse(body.result.content[0].text);
+    const event = await prisma.event.findUnique({ where: { id: data.id } });
+    expect(event?.recurrenceRule).toBeNull();
+    expect(event?.nextResetAt).toBeNull();
+  });
+
+  it("create_event via datetime-local + timezone branch", async () => {
+    const owner = await createOwner();
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["create:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_create_event", { title: "LocalTime", dateTime: "2099-06-15T18:00", timezone: "Europe/Lisbon" })));
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    const data = JSON.parse(body.result.content[0].text);
+    expect(data.id).toBeTruthy();
+  });
+});
