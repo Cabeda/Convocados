@@ -44,9 +44,8 @@ fun isStalePastGame(dateTime: String, isRecurring: Boolean): Boolean {
 }
 
 /** Human-friendly relative time label for wear UI. */
-fun formatRelativeTime(dateTime: String): String {
+fun formatRelativeTime(dateTime: String, now: Instant = Instant.now()): String {
     val instant = parseInstant(dateTime) ?: return dateTime
-    val now = Instant.now()
     val minutes = ChronoUnit.MINUTES.between(now, instant)
 
     return when {

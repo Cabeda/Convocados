@@ -1,4 +1,5 @@
 import java.util.Properties
+import javax.imageio.ImageIO
 
 plugins {
     id("com.android.application")
@@ -122,6 +123,77 @@ tasks.register("validateTargetSdk") {
 
 tasks.matching { it.name.contains("Release") && it.name.startsWith("assemble") || it.name.startsWith("bundle") }
     .configureEach { dependsOn("validateTargetSdk") }
+
+val storeListingSource = project.file("src/test/screenshots/store-listing")
+val storeListingOutput = rootProject.file("artifacts/store-listing")
+val storeListingNames = listOf(
+    "event_dark.png",
+    "event_light.png",
+    "games_dark.png",
+    "games_light.png",
+    "profile_dark.png",
+    "profile_light.png",
+    "stats_dark.png",
+    "stats_light.png",
+)
+val storeListingDimensions = mapOf(
+    "phone" to (411 to 891),
+    "tablet" to (840 to 900),
+    "foldable" to (673 to 841),
+)
+
+tasks.register("generateStoreListing") {
+    notCompatibleWithConfigurationCache("The task validates and copies generated PNGs using JVM image tooling")
+    dependsOn("verifyRoborazziDebug")
+
+    doLast {
+        if (!storeListingSource.isDirectory) {
+            throw GradleException("Store-listing screenshot source directory is missing: $storeListingSource")
+        }
+
+        val expectedFiles = storeListingDimensions.keys
+            .flatMap { formFactor -> storeListingNames.map { name -> "$formFactor/$name" } }
+            .toSet()
+        val actualFiles = storeListingSource.walkTopDown()
+            .filter { it.isFile && it.extension == "png" }
+            .map { it.relativeTo(storeListingSource).invariantSeparatorsPath }
+            .toSet()
+        if (actualFiles != expectedFiles) {
+            throw GradleException(
+                "Expected exactly ${expectedFiles.size} store-listing PNGs, " +
+                    "but found ${actualFiles.size}: ${actualFiles.sorted()}"
+            )
+        }
+
+        storeListingDimensions.keys.forEach { formFactor ->
+            storeListingOutput.resolve(formFactor).deleteRecursively()
+        }
+        storeListingOutput.mkdirs()
+        storeListingSource.copyRecursively(storeListingOutput, overwrite = true)
+
+        storeListingDimensions.forEach { (formFactor, dimensions) ->
+            storeListingNames.forEach { name ->
+                val relativePath = "$formFactor/$name"
+                val source = storeListingSource.resolve(relativePath)
+                val artifact = storeListingOutput.resolve(relativePath)
+                listOf(source, artifact).forEach { imageFile ->
+                    val image = ImageIO.read(imageFile)
+                        ?: throw GradleException("Unable to read store-listing PNG: $imageFile")
+                    if (image.width != dimensions.first || image.height != dimensions.second) {
+                        throw GradleException(
+                            "$imageFile is ${image.width}x${image.height}; " +
+                                "expected ${dimensions.first}x${dimensions.second} for $formFactor"
+                        )
+                    }
+                }
+            }
+        }
+
+        println(
+            "Generated ${expectedFiles.size} store-listing screenshots in ${storeListingOutput.absolutePath}"
+        )
+    }
+}
 
 
 dependencies {

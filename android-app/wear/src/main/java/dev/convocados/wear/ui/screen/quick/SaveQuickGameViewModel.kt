@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.api.ScoreRequest
-import dev.convocados.wear.data.api.WatchGameResponse
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.QuickGameState
 import dev.convocados.wear.data.local.QuickGameStore
@@ -60,11 +59,8 @@ class SaveQuickGameViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(saving = eventId, error = null) }
             try {
-                val history = client.postForResult<WatchGameResponse>(
-                    "/api/watch/events",
-                    mapOf("eventId" to eventId),
-                )
-                client.patch<dev.convocados.wear.data.api.GameHistory>(
+                val history = client.createWatchGameHistory(eventId)
+                client.patchGameHistory(
                     "/api/events/$eventId/history/${history.id}",
                     ScoreRequest(
                         scoreOne = quick.scoreOne,

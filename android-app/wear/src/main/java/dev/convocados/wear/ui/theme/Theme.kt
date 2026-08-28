@@ -1,6 +1,7 @@
 package dev.convocados.wear.ui.theme
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.wear.compose.material3.ColorScheme
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.MotionScheme
@@ -53,8 +54,19 @@ fun ConvocadosWearTheme(content: @Composable () -> Unit) {
         // Expressive motion: dynamic component animations (pulse, press, entrance)
         // so the score/editing surfaces feel alive rather than static.
         motionScheme = MotionScheme.expressive(),
-        content = content,
-    )
+    ) {
+        CompositionLocalProvider(
+            LocalWearExpressiveTokens provides WearExpressiveTokens(
+                success = Success,
+                warning = Warning,
+                live = Tertiary,
+                offline = TextMuted,
+                pending = Secondary,
+                onStatus = OnTeam,
+            ),
+            content = content,
+        )
+    }
 }
 
 // M3 default Wear shapes + typography are left at their defaults — they are

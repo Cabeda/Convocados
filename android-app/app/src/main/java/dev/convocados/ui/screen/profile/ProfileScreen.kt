@@ -99,7 +99,13 @@ fun ProfileScreen(
     var showEditName by remember { mutableStateOf(false) }
     var editName by remember { mutableStateOf("") }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
         // Profile card
         user?.let { u ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
