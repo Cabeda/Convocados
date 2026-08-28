@@ -50,6 +50,8 @@
     <string name="server_url">URL do servidor</string>
     <string name="language">Idioma</string>
     <string name="notifications_title">Notificações</string>
+    <string name="enable_notifications">Ativar notificações</string>
+    <string name="enable_notifications_desc">Escolhe quando o Convocados pode enviar lembretes e atualizações dos jogos.</string>
     <string name="notifications_subtitle">Gerir preferências de push e email</string>
     <string name="sign_out">Sair</string>
     <string name="edit_name">Editar nome</string>

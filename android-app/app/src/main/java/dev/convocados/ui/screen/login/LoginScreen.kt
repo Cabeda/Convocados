@@ -134,6 +134,33 @@ fun LoginScreen(
     val activity = context as android.app.Activity
     val credentialManager = remember { CredentialManager.create(context) }
     val uiState by viewModel.uiState.collectAsState()
+
+    LoginContent(
+        uiState = uiState,
+        onGoogleSignIn = { viewModel.signInWithGoogle(credentialManager, activity) },
+        onSignIn = viewModel::signInWithEmail,
+        onSignUp = viewModel::signUpWithEmail,
+        onSendMagicLink = viewModel::sendMagicLink,
+        onClearMessages = {
+            viewModel.clearError()
+            viewModel.clearMessage()
+        },
+        getServerUrl = viewModel::getServerUrl,
+        setServerUrl = viewModel::setServerUrl,
+    )
+}
+
+@Composable
+fun LoginContent(
+    uiState: LoginUiState,
+    onGoogleSignIn: () -> Unit,
+    onSignIn: (email: String, password: String) -> Unit,
+    onSignUp: (name: String, email: String, password: String) -> Unit,
+    onSendMagicLink: (email: String) -> Unit,
+    onClearMessages: () -> Unit,
+    getServerUrl: () -> String,
+    setServerUrl: (url: String) -> Unit,
+) {
     val focusManager = LocalFocusManager.current
 
     var mode by remember { mutableStateOf(LoginMode.SIGN_IN) }
@@ -174,7 +201,7 @@ fun LoginScreen(
 
             // ── Google Sign-In Button ────────────────────────────────────
             Button(
-                onClick = { viewModel.signInWithGoogle(credentialManager, activity) },
+                onClick = onGoogleSignIn,
                 enabled = !uiState.isLoading,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -213,19 +240,19 @@ fun LoginScreen(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 FilterChip(
                     selected = mode == LoginMode.SIGN_IN,
-                    onClick = { mode = LoginMode.SIGN_IN; viewModel.clearError(); viewModel.clearMessage() },
+                    onClick = { mode = LoginMode.SIGN_IN; onClearMessages() },
                     label = { Text(stringResource(R.string.sign_in)) },
                 )
                 Spacer(Modifier.width(8.dp))
                 FilterChip(
                     selected = mode == LoginMode.SIGN_UP,
-                    onClick = { mode = LoginMode.SIGN_UP; viewModel.clearError(); viewModel.clearMessage() },
+                    onClick = { mode = LoginMode.SIGN_UP; onClearMessages() },
                     label = { Text(stringResource(R.string.sign_up)) },
                 )
                 Spacer(Modifier.width(8.dp))
                 FilterChip(
                     selected = mode == LoginMode.MAGIC_LINK,
-                    onClick = { mode = LoginMode.MAGIC_LINK; viewModel.clearError(); viewModel.clearMessage() },
+                    onClick = { mode = LoginMode.MAGIC_LINK; onClearMessages() },
                     label = { Text(stringResource(R.string.magic_link)) },
                 )
             }
@@ -266,7 +293,7 @@ fun LoginScreen(
                     onDone = {
                         if (mode == LoginMode.MAGIC_LINK) {
                             focusManager.clearFocus()
-                            viewModel.sendMagicLink(email.trim())
+                            onSendMagicLink(email.trim())
                         }
                     },
                 ),
@@ -299,8 +326,8 @@ fun LoginScreen(
                         keyboardActions = KeyboardActions(onDone = {
                             focusManager.clearFocus()
                             when (mode) {
-                                LoginMode.SIGN_IN -> viewModel.signInWithEmail(email.trim(), password)
-                                LoginMode.SIGN_UP -> viewModel.signUpWithEmail(name.trim(), email.trim(), password)
+                                LoginMode.SIGN_IN -> onSignIn(email.trim(), password)
+                                LoginMode.SIGN_UP -> onSignUp(name.trim(), email.trim(), password)
                                 else -> {}
                             }
                         }),
@@ -315,9 +342,9 @@ fun LoginScreen(
                 onClick = {
                     focusManager.clearFocus()
                     when (mode) {
-                        LoginMode.SIGN_IN -> viewModel.signInWithEmail(email.trim(), password)
-                        LoginMode.SIGN_UP -> viewModel.signUpWithEmail(name.trim(), email.trim(), password)
-                        LoginMode.MAGIC_LINK -> viewModel.sendMagicLink(email.trim())
+                        LoginMode.SIGN_IN -> onSignIn(email.trim(), password)
+                        LoginMode.SIGN_UP -> onSignUp(name.trim(), email.trim(), password)
+                        LoginMode.MAGIC_LINK -> onSendMagicLink(email.trim())
                     }
                 },
                 enabled = !uiState.isLoading && email.isNotBlank() &&
@@ -370,7 +397,7 @@ fun LoginScreen(
             // ── Server settings ──────────────────────────────────────────
             Spacer(Modifier.height(32.dp))
             TextButton(onClick = {
-                serverUrl = viewModel.getServerUrl()
+                serverUrl = getServerUrl()
                 showServerSettings = !showServerSettings
             }) {
                 Text(
@@ -398,7 +425,7 @@ fun LoginScreen(
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                viewModel.setServerUrl(serverUrl.trim().trimEnd('/'))
+                                setServerUrl(serverUrl.trim().trimEnd('/'))
                                 showServerSettings = false
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),

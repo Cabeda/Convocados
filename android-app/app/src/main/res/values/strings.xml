@@ -73,6 +73,8 @@
     <string name="server_url">Server URL</string>
     <string name="language">Language</string>
     <string name="notifications_title">Notifications</string>
+    <string name="enable_notifications">Enable notifications</string>
+    <string name="enable_notifications_desc">Choose when Convocados can send game reminders and updates.</string>
     <string name="notifications_subtitle">Manage push &amp; email preferences</string>
     <string name="sign_out">Sign out</string>
     <string name="edit_name">Edit name</string>

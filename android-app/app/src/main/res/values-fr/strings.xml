@@ -50,6 +50,8 @@
     <string name="server_url">URL du serveur</string>
     <string name="language">Langue</string>
     <string name="notifications_title">Notifications</string>
+    <string name="enable_notifications">Activer les notifications</string>
+    <string name="enable_notifications_desc">Choisissez quand Convocados peut envoyer des rappels et des mises à jour de matchs.</string>
     <string name="notifications_subtitle">Gérer les préférences push et e-mail</string>
     <string name="sign_out">Se déconnecter</string>
     <string name="edit_name">Modifier le nom</string>
