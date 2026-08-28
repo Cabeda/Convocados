@@ -57,7 +57,12 @@ data class BottomNavItem(val route: String, val label: String, val icon: @Compos
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processingAuth: Boolean = false) {
+fun AppNavigation(
+    isAuthenticated: Boolean,
+    isReady: Boolean,
+    deepLink: String? = null,
+    processingAuth: Boolean = false,
+) {
     val navController = rememberNavController()
 
     // While processing OAuth callback, don't navigate — show current screen
@@ -269,7 +274,11 @@ fun AppNavigation(isAuthenticated: Boolean, deepLink: String? = null, processing
                     )
                 }
                 composable(Route.NotificationPrefs.route) {
-                    NotificationPrefsScreen(onBack = { navController.popBackStack() })
+                    NotificationPrefsScreen(
+                        onBack = { navController.popBackStack() },
+                        isAuthenticated = isAuthenticated,
+                        isReady = isReady,
+                    )
                 }
                 composable(
                     Route.UserProfile().route,

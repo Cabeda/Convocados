@@ -1,17 +1,12 @@
 package dev.convocados.ui
 
-import android.Manifest
 import android.content.Intent
-import android.os.Build
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.UserProfile
@@ -112,20 +107,12 @@ class RootViewModel @Inject constructor(
     }
 }
 
-@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun ConvocadosRoot(deepLink: String? = null, intentVersion: Int = 0, viewModel: RootViewModel = hiltViewModel()) {
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
 
-    // Request notification permission on Android 13+
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        val permissionState = rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
-        LaunchedEffect(Unit) {
-            if (!permissionState.status.isGranted) {
-                permissionState.launchPermissionRequest()
-            }
-        }
-    }
+    // Notification permission is requested contextually from an authenticated,
+    // user-initiated action. Never interrupt the signed-out login experience.
 
     // Handle OAuth callback and deep link intents (re-runs when intentVersion changes)
     val context = LocalContext.current
@@ -144,6 +131,11 @@ fun ConvocadosRoot(deepLink: String? = null, intentVersion: Int = 0, viewModel: 
         // Don't render navigation until we've confirmed auth state (avoids Login flash)
         if (!ready) return@ConvocadosTheme
 
-        AppNavigation(isAuthenticated = isAuthenticated, deepLink = deepLink, processingAuth = processingAuth)
+        AppNavigation(
+            isAuthenticated = isAuthenticated,
+            isReady = ready,
+            deepLink = deepLink,
+            processingAuth = processingAuth,
+        )
     }
 }
