@@ -4,6 +4,7 @@ import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.EventSummary
 import dev.convocados.data.api.EventDetail
 import dev.convocados.data.api.GameHistory
+import dev.convocados.data.api.SetScore
 import dev.convocados.data.api.OkResponse
 import dev.convocados.data.api.PaginatedHistory
 import dev.convocados.data.api.Player

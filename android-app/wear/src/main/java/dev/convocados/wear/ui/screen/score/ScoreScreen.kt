@@ -123,7 +123,8 @@ fun ScoreScreen(
                                 onIncrementTwo = viewModel::incrementScoreTwo,
                                 onDecrementTwo = viewModel::decrementScoreTwo,
                                 onNextSet = viewModel::advanceSet,
-                                onToggleTiebreak = viewModel::toggleTiebreak,                                onTeams = onTeams,
+                                onToggleTiebreak = viewModel::toggleTiebreak,
+                                onTeams = onTeams,
                                 onFinish = onFinish,
                                 onUndo = {
                                     viewModel.undoLastScore()
@@ -131,19 +132,20 @@ fun ScoreScreen(
                                 },
                             )
                         } else {
-                        ScoreEditor(
-                            state = state,
-                            onIncrementOne = viewModel::incrementScoreOne,
-                            onDecrementOne = viewModel::decrementScoreOne,
-                            onIncrementTwo = viewModel::incrementScoreTwo,
-                            onDecrementTwo = viewModel::decrementScoreTwo,
-                            onTeams = onTeams,
-                            onFinish = onFinish,
-                            onUndo = {
-                                viewModel.undoLastScore()
-                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            },
-                        )
+                            ScoreEditor(
+                                state = state,
+                                onIncrementOne = viewModel::incrementScoreOne,
+                                onDecrementOne = viewModel::decrementScoreOne,
+                                onIncrementTwo = viewModel::incrementScoreTwo,
+                                onDecrementTwo = viewModel::decrementScoreTwo,
+                                onTeams = onTeams,
+                                onFinish = onFinish,
+                                onUndo = {
+                                    viewModel.undoLastScore()
+                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                },
+                            )
+                        }
                     }
                 }
             }
