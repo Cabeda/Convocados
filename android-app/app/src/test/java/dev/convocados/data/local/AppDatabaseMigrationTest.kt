@@ -55,7 +55,7 @@ class AppDatabaseMigrationTest {
         val db = openWithMigration()
         try {
             val conn = db.openHelper.writableDatabase
-            assertEquals("8", queryScalar(conn, "PRAGMA user_version"))
+            assertEquals("9", queryScalar(conn, "PRAGMA user_version"))
             assertTrue("players.image column should exist after migration", hasColumn(conn, "players", "image"))
             assertEquals("Ana", queryScalar(conn, "SELECT name FROM players WHERE id = 'p1'"))
             assertNull(queryScalar(conn, "SELECT image FROM players WHERE id = 'p1'"))
@@ -63,6 +63,9 @@ class AppDatabaseMigrationTest {
             assertTrue("invitedJson column should exist after migration", hasColumn(conn, "event_details", "invitedJson"))
             assertTrue("declinedJson column should exist after migration", hasColumn(conn, "event_details", "declinedJson"))
             assertTrue("game_history.scoreSetsJson column should exist after migration", hasColumn(conn, "game_history", "scoreSetsJson"))
+            assertTrue("eloEnabled column should exist after migration", hasColumn(conn, "event_details", "eloEnabled"))
+            assertTrue("hideEloInTeams column should exist after migration", hasColumn(conn, "event_details", "hideEloInTeams"))
+            assertTrue("showCompetitiveData column should exist after migration", hasColumn(conn, "event_details", "showCompetitiveData"))
         } finally {
             db.close()
         }
@@ -75,13 +78,16 @@ class AppDatabaseMigrationTest {
         val db = openWithMigration()
         try {
             val conn = db.openHelper.writableDatabase
-            assertEquals("8", queryScalar(conn, "PRAGMA user_version"))
+            assertEquals("9", queryScalar(conn, "PRAGMA user_version"))
             assertTrue("players.image column should survive migration", hasColumn(conn, "players", "image"))
             assertEquals("avatar.png", queryScalar(conn, "SELECT image FROM players WHERE id = 'p1'"))
             assertTrue("recently_viewed_events table should exist after migration", tableExists(conn, "recently_viewed_events"))
             assertTrue("invitedJson column should exist after migration", hasColumn(conn, "event_details", "invitedJson"))
             assertTrue("declinedJson column should exist after migration", hasColumn(conn, "event_details", "declinedJson"))
             assertTrue("game_history.scoreSetsJson column should exist after migration", hasColumn(conn, "game_history", "scoreSetsJson"))
+            assertTrue("eloEnabled column should exist after migration", hasColumn(conn, "event_details", "eloEnabled"))
+            assertTrue("hideEloInTeams column should exist after migration", hasColumn(conn, "event_details", "hideEloInTeams"))
+            assertTrue("showCompetitiveData column should exist after migration", hasColumn(conn, "event_details", "showCompetitiveData"))
         } finally {
             db.close()
         }
@@ -91,7 +97,7 @@ class AppDatabaseMigrationTest {
         context,
         AppDatabase::class.java,
         dbName,
-    ).addMigrations(AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8).build()
+    ).addMigrations(AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9).build()
 
     /** Creates the `convocados.db` schema exactly as Room v4 generated it, at version 4. */
     private fun createV4Database(playersImage: Boolean, identityHash: String) {
