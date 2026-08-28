@@ -13,6 +13,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -57,6 +58,92 @@ class EventDetailViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `enabled event exposes player ratings for team totals`() = runTest {
+        val eloEvent = mockEvent.copy(
+            eloEnabled = true,
+            showCompetitiveData = true,
+            players = listOf(Player("p1", "Alice", 0), Player("p2", "Bob", 1)),
+            teamResults = listOf(
+                TeamResult("t1", "Ninjas", listOf(TeamMember("p1", "Alice", 0))),
+                TeamResult("t2", "Gunas", listOf(TeamMember("p2", "Bob", 0))),
+            ),
+        )
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(eloEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(eloEvent.players)
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        coEvery { api.fetchRatings(eventId, null) } returns PaginatedRatings(
+            data = listOf(
+                PlayerRating("r1", "Alice", 1200),
+                PlayerRating("r2", "Bob", 980),
+            )
+        )
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+
+            assertEquals(mapOf("Alice" to 1200, "Bob" to 980), expectMostRecentItem().teamRatings)
+            coVerify { api.fetchRatings(eventId, null) }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `hidden competitive data does not fetch team ratings`() = runTest {
+        val hiddenEvent = mockEvent.copy(eloEnabled = true, showCompetitiveData = false)
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(hiddenEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+
+            assertNull(expectMostRecentItem().teamRatings)
+            coVerify(exactly = 0) { api.fetchRatings(any(), any()) }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `moving a player updates visible teams before the network request completes`() = runTest {
+        val teamEvent = mockEvent.copy(
+            players = listOf(
+                Player("p1", "Alice", 0),
+                Player("p2", "Bob", 1),
+            ),
+            teamResults = listOf(
+                TeamResult("t1", "Ninjas", listOf(TeamMember("p1", "Alice", 0))),
+                TeamResult("t2", "Gunas", listOf(TeamMember("p2", "Bob", 0))),
+            ),
+        )
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(teamEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(teamEvent.players)
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        val releaseUpdate = CompletableDeferred<OkResponse>()
+        coEvery { api.updateTeams(eventId, any(), any()) } coAnswers { releaseUpdate.await() }
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+
+            viewModel.movePlayerToTeam(eventId, "p1", "Alice", toTeamOne = false)
+            runCurrent()
+
+            val visibleTeams = expectMostRecentItem().event?.teamResults
+            assertEquals(emptyList<TeamMember>(), visibleTeams?.get(0)?.members)
+            assertEquals(listOf("Bob", "Alice"), visibleTeams?.get(1)?.members?.map { it.name })
+
+            releaseUpdate.complete(OkResponse(true))
+            advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test

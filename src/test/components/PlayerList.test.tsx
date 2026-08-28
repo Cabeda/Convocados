@@ -675,6 +675,16 @@ describe("PlayerList — roster locked after game end (issue #716)", () => {
   });
 });
 
+describe("PlayerList — randomize motion state", () => {
+  it("keeps the randomize action busy while teams are being shuffled", () => {
+    renderWithTheme(<PlayerList {...baseProps} players={[...basePlayers, { id: "p3", name: "Cara", userId: null }]} isRandomizing />);
+
+    const button = screen.getByRole("button", { name: /randomize teams/i });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-busy", "true");
+  });
+});
+
 describe("PlayerList — invited roster: channel chips + resend (ADR 0025 follow-up)", () => {
   const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 

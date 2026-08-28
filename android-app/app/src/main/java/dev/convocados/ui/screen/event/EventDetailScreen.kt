@@ -4,9 +4,13 @@ import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,14 +29,17 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -78,6 +85,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -110,6 +118,9 @@ data class EventScreenState(
     val locked: Boolean = false,
     val undoData: UndoData? = null,
     val teamMoveUndo: TeamMoveUndo? = null,
+    val teamMoveAnimation: TeamMoveAnimation? = null,
+    val teamShuffleAnimation: Boolean = false,
+    val teamRatings: Map<String, Int>? = null,
     val isFollowing: Boolean = false,
     val isPlayer: Boolean = false,
     val isAdmin: Boolean = false,
@@ -153,6 +164,11 @@ data class InviteResendNotice(
 data class PendingShareInvite(
     val inviteUrl: String,
     val playerName: String,
+)
+
+data class TeamMoveAnimation(
+    val playerName: String,
+    val destinationTeamOne: Boolean,
 )
 
 data class TeamMoveUndo(
@@ -226,9 +242,12 @@ class EventDetailViewModel @Inject constructor(
     private val settingsStore: SettingsStore,
 ) : ViewModel() {
     private val _eventId = MutableStateFlow<String?>(null)
+    private val _optimisticTeamResults = MutableStateFlow<List<TeamResult>?>(null)
 
     val event = _eventId.flatMapLatest { id ->
         if (id == null) flowOf(null) else repository.getEventDetail(id)
+    }.combine(_optimisticTeamResults) { event, optimisticTeams ->
+        if (event == null || optimisticTeams == null) event else event.copy(teamResults = optimisticTeams)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val players = _eventId.flatMapLatest { id ->
@@ -240,17 +259,20 @@ class EventDetailViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _state = MutableStateFlow(EventScreenState(locked = true))
-    val state: StateFlow<EventScreenState> = combine(_state, event, history) { s, e, h ->
+    val state: StateFlow<EventScreenState> = combine(_state, event, history, _optimisticTeamResults) { s, e, h, optimisticTeams ->
+        val visibleEvent = e?.let { currentEvent ->
+            if (optimisticTeams == null) currentEvent else currentEvent.copy(teamResults = optimisticTeams)
+        }
         s.copy(
-            event = e,
+            event = visibleEvent,
             history = h,
-            loading = s.loading && e == null,
-            locked = if (e?.locked == true) s.locked else false,
+            loading = s.loading && visibleEvent == null,
+            locked = if (visibleEvent?.locked == true) s.locked else false,
             // Offline-first: a failed refresh never blanks the page. With
             // cached data we keep it on screen and flag it stale; with no
             // cache at all we surface the error page.
-            isStale = s.refreshFailed && e != null,
-            loadFailed = s.refreshFailed && e == null,
+            isStale = s.refreshFailed && visibleEvent != null,
+            loadFailed = s.refreshFailed && visibleEvent == null,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EventScreenState(locked = true))
 
@@ -269,6 +291,7 @@ class EventDetailViewModel @Inject constructor(
     }
 
     fun load(eventId: String) {
+        _optimisticTeamResults.value = null
         _eventId.value = eventId
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = event.value == null)
@@ -278,7 +301,16 @@ class EventDetailViewModel @Inject constructor(
             val following = runCatching { api.getFollowState(eventId) }.getOrNull()
             val balance = runCatching { api.fetchBalance(eventId) }.getOrNull()
             // ADR 0025: co-play suggestions are owner/admin-only (server-gated).
-            val ev = event.value
+            val ev = repository.getEventDetail(eventId).firstOrNull() ?: event.value
+            val teamRatings = if (
+                ev?.eloEnabled == true && !ev.hideEloInTeams && ev.showCompetitiveData
+            ) {
+                runCatching {
+                    api.fetchRatings(eventId).data.associate { it.name to it.rating }
+                }.getOrNull()
+            } else {
+                null
+            }
             val isOwner = _user.value?.id != null && ev?.ownerId == _user.value?.id
             val coPlay = if (isOwner || following?.isAdmin == true)
                 runCatching { api.fetchEventSuggestions(eventId) }.getOrNull()?.suggestions ?: emptyList()
@@ -303,6 +335,7 @@ class EventDetailViewModel @Inject constructor(
                 muteEventDetails = following?.muteEventDetails,
                 balance = balance,
                 coPlaySuggestions = coPlay,
+                teamRatings = teamRatings,
                 cost = cost,
                 coPlayers = coPlayers,
             )
@@ -584,9 +617,17 @@ class EventDetailViewModel @Inject constructor(
     }
 
     fun randomize(eventId: String, balanced: Boolean) {
+        _state.value = _state.value.copy(teamShuffleAnimation = true)
         viewModelScope.launch {
             runCatching { api.randomizeTeams(eventId, balanced) }
-                .onSuccess { repository.refreshEventDetail(eventId) }
+                .onSuccess {
+                    repository.refreshEventDetail(eventId)
+                    delay(700)
+                    _state.value = _state.value.copy(teamShuffleAnimation = false)
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(teamShuffleAnimation = false)
+                }
         }
     }
 
@@ -597,10 +638,28 @@ class EventDetailViewModel @Inject constructor(
 
         val oldTeamOneIds = teams[0].members.map { m -> event.players.find { it.name == m.name }?.id }.filterNotNull()
         val oldTeamTwoIds = teams[1].members.map { m -> event.players.find { it.name == m.name }?.id }.filterNotNull()
+        val sourceTeamOne = playerId in oldTeamOneIds
+        if (sourceTeamOne == toTeamOne) return
 
         val newTeamOneIds = if (toTeamOne) (oldTeamOneIds + playerId).distinct() else oldTeamOneIds.filter { it != playerId }
         val newTeamTwoIds = if (toTeamOne) oldTeamTwoIds.filter { it != playerId } else (oldTeamTwoIds + playerId).distinct()
-
+        val movedTeams = teams.mapIndexed { index, team ->
+            val isDestination = (toTeamOne && index == 0) || (!toTeamOne && index == 1)
+            val isSource = (sourceTeamOne && index == 0) || (!sourceTeamOne && index == 1)
+            val remainingMembers = team.members.filterNot { member ->
+                member.id == playerId || (isSource && member.name == playerName)
+            }
+            val updatedMembers = if (isDestination) {
+                remainingMembers + TeamMember(playerId, playerName, remainingMembers.size)
+            } else {
+                remainingMembers
+            }
+            team.copy(members = updatedMembers.mapIndexed { order, member -> member.copy(order = order) })
+        }
+        _optimisticTeamResults.value = movedTeams
+        _state.value = _state.value.copy(
+            teamMoveAnimation = TeamMoveAnimation(playerName, toTeamOne),
+        )
         viewModelScope.launch {
             runCatching { api.updateTeams(eventId, newTeamOneIds, newTeamTwoIds) }
                 .onSuccess {
@@ -608,10 +667,15 @@ class EventDetailViewModel @Inject constructor(
                         teamMoveUndo = TeamMoveUndo(playerName, oldTeamOneIds, oldTeamTwoIds)
                     )
                     repository.refreshEventDetail(eventId)
-                    delay(3000)
+                    _optimisticTeamResults.value = null
+                    delay(700)
+                    _state.value = _state.value.copy(teamMoveAnimation = null)
+                    delay(2300)
                     _state.value = _state.value.copy(teamMoveUndo = null)
                 }
                 .onFailure { e ->
+                    _optimisticTeamResults.value = null
+                    _state.value = _state.value.copy(teamMoveAnimation = null)
                     val msg = parseApiErrorMessage(e) ?: "Failed to update teams"
                     _state.value = _state.value.copy(error = msg)
                 }
@@ -1152,9 +1216,9 @@ fun EventDetailScreen(
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                         Text("Teams", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            HeroTeamColumn(teams[0], ev, false, viewModel, eventId, Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+                                            HeroTeamColumn(teams[0], ev, false, viewModel, eventId, state.teamMoveAnimation, state.teamShuffleAnimation, state.teamRatings, Modifier.weight(1f), MaterialTheme.colorScheme.primary)
                                             VsBadge()
-                                            HeroTeamColumn(teams[1], ev, true, viewModel, eventId, Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+                                            HeroTeamColumn(teams[1], ev, true, viewModel, eventId, state.teamMoveAnimation, state.teamShuffleAnimation, state.teamRatings, Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
                                         }
                                     }
                                 }
@@ -1346,9 +1410,53 @@ private fun PulsingDot(color: Color) {
 }
 
 @Composable
-private fun HeroTeamColumn(team: TeamResult, event: EventDetail, toTeamOne: Boolean, viewModel: EventDetailViewModel, eventId: String, modifier: Modifier = Modifier, headerColor: Color) {
+internal fun TeamTotalElo(
+    totalElo: Int,
+    color: Color = MaterialTheme.colorScheme.primary,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = stringResource(R.string.team_total_elo, totalElo),
+        color = color,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun HeroTeamColumn(
+    team: TeamResult,
+    event: EventDetail,
+    toTeamOne: Boolean,
+    viewModel: EventDetailViewModel,
+    eventId: String,
+    teamMoveAnimation: TeamMoveAnimation?,
+    teamShuffleAnimation: Boolean,
+    teamRatings: Map<String, Int>?,
+    modifier: Modifier = Modifier,
+    headerColor: Color,
+) {
+    val shuffleOffset by animateFloatAsState(
+        targetValue = if (teamShuffleAnimation) (if (toTeamOne) -5f else 5f) else 0f,
+        animationSpec = spring(dampingRatio = 0.45f, stiffness = 900f),
+        label = "team-shuffle-offset",
+    )
+    val totalElo = if (
+        event.eloEnabled && !event.hideEloInTeams && event.showCompetitiveData &&
+        teamRatings != null && team.members.isNotEmpty()
+    ) {
+        team.members.sumOf { teamRatings[it.name] ?: 1000 }
+    } else {
+        null
+    }
     Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(headerColor.copy(alpha = 0.08f)).padding(12.dp),
+        modifier
+            .offset(x = shuffleOffset.dp)
+            .graphicsLayer(rotationZ = shuffleOffset * 0.35f)
+            .clip(RoundedCornerShape(16.dp))
+            .background(headerColor.copy(alpha = 0.08f))
+            .padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1358,30 +1466,50 @@ private fun HeroTeamColumn(team: TeamResult, event: EventDetail, toTeamOne: Bool
             Spacer(Modifier.height(6.dp))
             Text(team.name, color = headerColor, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
             Text("${team.members.size}", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium)
+            totalElo?.let { TeamTotalElo(totalElo = it, color = headerColor) }
         }
         // Player chips — tap to move to the other team. The arrow shows the
         // direction of the move, making the action obvious without hint text.
         team.members.forEach { m ->
-            val pid = event.players.find { it.name == m.name }?.id
-            val tappable = pid != null
-            Row(
-                Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(headerColor.copy(alpha = if (tappable) 0.14f else 0.04f))
-                    .then(if (tappable) Modifier.clickable { viewModel.movePlayerToTeam(eventId, pid, m.name, toTeamOne) } else Modifier)
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Text(m.name, style = MaterialTheme.typography.bodyMedium, fontWeight = if (tappable) FontWeight.SemiBold else FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                if (tappable) {
-                    Spacer(Modifier.width(4.dp))
-                    Icon(
-                        if (toTeamOne) Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Move ${m.name} to the other team",
-                        tint = headerColor,
-                        modifier = Modifier.size(16.dp),
-                    )
+            key(m.name) {
+                val pid = event.players.find { it.name == m.name }?.id
+                val tappable = pid != null
+                val isArriving = teamMoveAnimation?.playerName == m.name && teamMoveAnimation.destinationTeamOne == toTeamOne
+                val playerRow: @Composable () -> Unit = {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(headerColor.copy(alpha = if (tappable) 0.14f else 0.04f))
+                            .then(if (tappable) Modifier.clickable { viewModel.movePlayerToTeam(eventId, pid, m.name, toTeamOne) } else Modifier)
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(m.name, style = MaterialTheme.typography.bodyMedium, fontWeight = if (tappable) FontWeight.SemiBold else FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        if (tappable) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                if (toTeamOne) Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "Move ${m.name} to the other team",
+                                tint = headerColor,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                }
+                if (isArriving) {
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(tween(120)) +
+                            scaleIn(initialScale = 0.78f, animationSpec = spring(dampingRatio = 0.68f, stiffness = 520f)) +
+                            slideInVertically(
+                                initialOffsetY = { -it / 2 },
+                                animationSpec = spring(dampingRatio = 0.68f, stiffness = 520f),
+                            ),
+                        label = "team-player-arrival",
+                    ) { playerRow() }
+                } else {
+                    playerRow()
                 }
             }
         }

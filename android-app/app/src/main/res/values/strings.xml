@@ -390,4 +390,5 @@
     <string name="will_invite">Will invite %1$s</string>
     <string name="open_pickup">Open pickup</string>
     <string name="claim_pickup">Claim this pickup</string>
+    <string name="team_total_elo">Total Elo: %1$d</string>
 </resources>

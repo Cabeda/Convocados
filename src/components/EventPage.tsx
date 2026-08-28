@@ -114,6 +114,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [localMatches, setLocalMatches] = useState<Imatch[] | null>(null);
   const [teamOneName, setTeamOneName] = useState("");
   const [teamTwoName, setTeamTwoName] = useState("");
+  const [isRandomizing, setIsRandomizing] = useState(false);
+  const [shuffleVersion, setShuffleVersion] = useState(0);
 
   // ── Event data ──────────────────────────────────────────────────────────────
   const [event, setEvent] = useState<EventData | null>(null);
@@ -755,14 +757,20 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const doRandomize = async () => {
     setConfirmOpen(false);
-    const qs = balanced ? "?balanced=true" : "";
-    const res = await fetch(`/api/events/${eventId}/randomize${qs}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    const json = await res.json();
-    if (!res.ok) { setPlayerError(json.error); return; }
-    fetchEvent();
+    setIsRandomizing(true);
+    setShuffleVersion((version) => version + 1);
+    try {
+      const qs = balanced ? "?balanced=true" : "";
+      const res = await fetch(`/api/events/${eventId}/randomize${qs}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const json = await res.json();
+      if (!res.ok) { setPlayerError(json.error); return; }
+      await fetchEvent();
+    } finally {
+      setIsRandomizing(false);
+    }
   };
 
   const handleTeamChange = async (matches: Imatch[]) => {
@@ -1151,6 +1159,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
               onResetPlayerOrder={resetPlayerOrder}
               onRandomize={doRandomize}
               onConfirmReRandomize={() => setConfirmOpen(true)}
+              isRandomizing={isRandomizing}
               canRemovePlayer={canRemovePlayer}
               onSetMyRsvp={handleSetMyRsvp}
               onJoinAsSelf={isAuthenticated && session?.user?.name
@@ -1195,6 +1204,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                         : m.team === event.teamTwoName ? teamTwoName : m.team,
                     }))}
                     onResultChange={handleTeamChange}
+                    shuffleKey={shuffleVersion}
                     ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
                     onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
                       if (teamIdx === 0) {

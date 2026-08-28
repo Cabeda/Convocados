@@ -24,7 +24,7 @@ import dev.convocados.data.local.entity.UserProfileEntity
         GameHistoryEntity::class,
         RecentlyViewedEventEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -84,6 +84,15 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `game_history` ADD COLUMN `scoreSetsJson` TEXT")
+            }
+        }
+
+        /** v9: cache Elo visibility settings with event details. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `event_details` ADD COLUMN `eloEnabled` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `event_details` ADD COLUMN `hideEloInTeams` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `event_details` ADD COLUMN `showCompetitiveData` INTEGER NOT NULL DEFAULT 1")
             }
         }
     }
