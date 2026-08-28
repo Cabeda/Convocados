@@ -3,6 +3,7 @@ package dev.convocados.wear.ui.screen.quick
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.convocados.wear.data.api.ApiException
 import dev.convocados.wear.data.api.ScoreRequest
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.QuickGameState
@@ -43,7 +44,8 @@ class SaveQuickGameViewModel @Inject constructor(
                 it.copy(
                     quick = quick,
                     events = events.filter { event ->
-                        quick == null || isQuickSaveCompatible(quick.sport, event.sport)
+                        (event.type == "owned" || event.type == "admin") &&
+                            (quick == null || isQuickSaveCompatible(quick.sport, event.sport))
                     },
                 )
             }
@@ -55,9 +57,12 @@ class SaveQuickGameViewModel @Inject constructor(
         val quick = _uiState.value.quick ?: return
         val event = _uiState.value.events.firstOrNull { it.id == eventId } ?: return
         if (!isQuickSaveCompatible(quick.sport, event.sport)) return
-        if (_uiState.value.saving != null) return
+        while (true) {
+            val current = _uiState.value
+            if (current.saving != null || current.saved) return
+            if (_uiState.compareAndSet(current, current.copy(saving = eventId, error = null))) break
+        }
         viewModelScope.launch {
-            _uiState.update { it.copy(saving = eventId, error = null) }
             try {
                 val history = client.createWatchGameHistory(eventId)
                 client.patchGameHistory(
@@ -70,16 +75,35 @@ class SaveQuickGameViewModel @Inject constructor(
                         },
                     ),
                 )
+                runCatching { gameRepository.refreshHistory(eventId) }
+                quickGameStore.clear()
                 _uiState.update { it.copy(saving = null, saved = true, error = null) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(saving = null, error = e.message ?: "Failed to save") }
+                _uiState.update {
+                    it.copy(saving = null, error = saveErrorMessage(e))
+                }
             }
         }
+    }
+
+    private fun saveErrorMessage(error: Exception): String = when (error) {
+        is ApiException -> when (error.code) {
+            401 -> "Please sign in again to save this game."
+            403 -> "You do not have permission to save to this event."
+            404 -> "Event not found. Refresh your games and try again."
+            else -> "Couldn't save quick game. Check your connection and try again."
+        }
+        else -> "Couldn't save quick game. Check your connection and try again."
     }
 }
 
 
 internal fun isQuickSaveCompatible(quickSport: String, eventSport: String): Boolean {
-    if (!isQuickStructuredSport(quickSport)) return true
-    return eventSport.lowercase() in setOf("tennis", "tennis-singles", "tennis-doubles", "padel")
+    val normalizedEventSport = eventSport.lowercase()
+    val structuredEventSports = setOf("tennis", "tennis-singles", "tennis-doubles", "padel")
+    return if (isQuickStructuredSport(quickSport)) {
+        normalizedEventSport in structuredEventSports
+    } else {
+        normalizedEventSport !in structuredEventSports
+    }
 }
