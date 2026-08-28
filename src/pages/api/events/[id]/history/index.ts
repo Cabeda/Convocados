@@ -5,6 +5,7 @@ import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.serv
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { buildSettlementRows, type PaymentMode } from "../../../../../lib/settlement.server";
+import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
 
 // GET /api/events/[id]/history — paginated history entries
 export const GET: APIRoute = async ({ params, request }) => {
@@ -96,6 +97,8 @@ export const GET: APIRoute = async ({ params, request }) => {
     status: h.status,
     scoreOne: hideCompetitive ? null : h.scoreOne,
     scoreTwo: hideCompetitive ? null : h.scoreTwo,
+    scoreSets: hideCompetitive ? null : parseScoreSets(h.scoreSets),
+    scoringType: getScoringType(event.sport),
     teamOneName: h.teamOneName,
     teamTwoName: h.teamTwoName,
     teamsSnapshot: h.teamsSnapshot,
@@ -112,6 +115,8 @@ export const GET: APIRoute = async ({ params, request }) => {
     status: g.status,
     scoreOne: hideCompetitive ? null : g.scoreOne,
     scoreTwo: hideCompetitive ? null : g.scoreTwo,
+    scoreSets: hideCompetitive ? null : parseScoreSets(g.scoreSets),
+    scoringType: getScoringType(event.sport),
     teamOneName: g.teamOneName,
     teamTwoName: g.teamTwoName,
     teamsSnapshot: teamsSnapshotForGame, // reconstructed from event teamResults
@@ -228,14 +233,44 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const body = await request.json();
 
-  // Validate required fields
-  const { dateTime, teamOneName, teamTwoName, scoreOne, scoreTwo, teamsSnapshot } = body;
+  const { dateTime, teamOneName, teamTwoName, scoreOne, scoreTwo, scoreSets: scoreSetsInput, teamsSnapshot } = body;
+  const scoringType = getScoringType(event.sport);
 
-  if (!dateTime || !teamOneName || !teamTwoName || scoreOne === undefined || scoreTwo === undefined || !teamsSnapshot) {
+  if (!dateTime || !teamOneName || !teamTwoName || !teamsSnapshot) {
     return Response.json(
-      { error: "Missing required fields: dateTime, teamOneName, teamTwoName, scoreOne, scoreTwo, teamsSnapshot" },
+      { error: "Missing required fields: dateTime, teamOneName, teamTwoName, teamsSnapshot" },
       { status: 400 },
     );
+  }
+
+  let parsedScoreSets: SetScore[] | null = null;
+  let parsedScoreOne: number | null;
+  let parsedScoreTwo: number | null;
+  if (scoreSetsInput !== undefined) {
+    if (scoringType !== "tennis") {
+      return Response.json({ error: "scoreSets are only supported for tennis and padel events." }, { status: 400 });
+    }
+    const scoreSetErrors = validateScoreSets(scoreSetsInput);
+    if (scoreSetErrors.length > 0) return Response.json({ error: scoreSetErrors[0] }, { status: 400 });
+    parsedScoreSets = scoreSetsInput as SetScore[];
+    const matchScore = matchScoreFromSets(parsedScoreSets);
+    const hasCompleted = hasCompletedMatch(parsedScoreSets);
+    parsedScoreOne = hasCompleted ? matchScore.teamOne : null;
+    parsedScoreTwo = hasCompleted ? matchScore.teamTwo : null;
+  } else {
+    if (scoreOne === undefined || scoreTwo === undefined) {
+      return Response.json(
+        { error: "Missing required fields: scoreOne, scoreTwo (or scoreSets)" },
+        { status: 400 },
+      );
+    }
+    const parsedOne = parseScalarScore(scoreOne);
+    const parsedTwo = parseScalarScore(scoreTwo);
+    if (scoreOne === null || scoreTwo === null || parsedOne === undefined || parsedTwo === undefined) {
+      return Response.json({ error: "Scores must be non-negative integers." }, { status: 400 });
+    }
+    parsedScoreOne = parsedOne;
+    parsedScoreTwo = parsedTwo;
   }
 
   // Parse and validate teamsSnapshot structure
@@ -260,8 +295,9 @@ export const POST: APIRoute = async ({ params, request }) => {
       dateTime: new Date(dateTime),
       teamOneName,
       teamTwoName,
-      scoreOne: parseInt(String(scoreOne), 10),
-      scoreTwo: parseInt(String(scoreTwo), 10),
+      scoreOne: parsedScoreOne,
+      scoreTwo: parsedScoreTwo,
+      scoreSets: parsedScoreSets ? JSON.stringify(parsedScoreSets) : null,
       teamsSnapshot: JSON.stringify(teamsSnapshot),
       status: "played",
       source: "historical",
@@ -283,6 +319,8 @@ export const POST: APIRoute = async ({ params, request }) => {
       status: history.status,
       scoreOne: history.scoreOne,
       scoreTwo: history.scoreTwo,
+      scoreSets: parseScoreSets(history.scoreSets),
+      scoringType,
       teamOneName: history.teamOneName,
       teamTwoName: history.teamTwoName,
       teamsSnapshot: history.teamsSnapshot,

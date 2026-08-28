@@ -247,6 +247,101 @@ class ScoreViewModelTest {
         assertEquals("Couldn't start — check connection", startErrorMessage(java.io.IOException("offline")))
     }
 
+    @Test
+    fun `incrementing a team one tiebreak winner updates match score`() = runTest {
+        coEvery { repository.getGame("e1") } returns makeGame("e1").copy(sport = "tennis")
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(
+            makeHistory("h1", "e1", 0, 0, """[{"teamOne":6,"teamTwo":6,"tiebreakTeamOne":7,"tiebreakTeamTwo":5}]"""),
+        )
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+        viewModel.incrementScoreOne()
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.scoreOne)
+        assertEquals(0, viewModel.uiState.value.scoreTwo)
+    }
+
+    @Test
+    fun `incrementing a team two tiebreak winner updates match score`() = runTest {
+        coEvery { repository.getGame("e1") } returns makeGame("e1").copy(sport = "padel")
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(
+            makeHistory("h1", "e1", 0, 0, """[{"teamOne":6,"teamTwo":6,"tiebreakTeamOne":5,"tiebreakTeamTwo":7}]"""),
+        )
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+        viewModel.incrementScoreTwo()
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.uiState.value.scoreOne)
+        assertEquals(1, viewModel.uiState.value.scoreTwo)
+    }
+
+    @Test
+    fun `legacy scalar tennis history stays in scalar scoring mode`() = runTest {
+        coEvery { repository.getGame("e1") } returns makeGame("e1").copy(sport = "tennis")
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(makeHistory("h1", "e1", 2, 1))
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isTennisScoring)
+        viewModel.incrementScoreOne()
+        advanceUntilIdle()
+
+        assertEquals(3, viewModel.uiState.value.scoreOne)
+        coVerify { scoreRepository.submitScore("e1", "h1", 3, 1, any(), any()) }
+    }
+
+    @Test
+    fun `adding a new set makes a previously final structured match incomplete`() = runTest {
+        coEvery { repository.getGame("e1") } returns makeGame("e1").copy(sport = "tennis")
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(
+            makeHistory("h1", "e1", 1, 0, """[{"teamOne":6,"teamTwo":4}]"""),
+        )
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.hasFinalScore)
+
+        viewModel.advanceSet()
+
+        assertFalse(viewModel.uiState.value.hasFinalScore)
+    }
+
+    @Test
+    fun `incomplete structured score is not treated as final`() = runTest {
+        coEvery { repository.getGame("e1") } returns makeGame("e1").copy(sport = "tennis")
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(
+            makeHistory("h1", "e1", 0, 0, """[{"teamOne":1,"teamTwo":0}]"""),
+        )
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.hasFinalScore)
+        assertEquals(0, viewModel.uiState.value.scoreOne)
+        assertEquals(0, viewModel.uiState.value.scoreTwo)
+    }
+
+    @Test
+    fun `structured match is final only when every recorded set is complete`() {
+        assertFalse(hasCompletedMatch(listOf(dev.convocados.wear.data.api.SetScore(6, 4), dev.convocados.wear.data.api.SetScore(1, 0))))
+        assertTrue(hasCompletedMatch(listOf(dev.convocados.wear.data.api.SetScore(6, 4), dev.convocados.wear.data.api.SetScore(7, 5))))
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private fun makeGame(id: String, time: Instant = Instant.now().minus(10, ChronoUnit.MINUTES)) = WearGameEntity(
@@ -264,7 +359,7 @@ class ScoreViewModelTest {
         type = "owned",
     )
 
-    private fun makeHistory(id: String, eventId: String, scoreOne: Int, scoreTwo: Int) =
+    private fun makeHistory(id: String, eventId: String, scoreOne: Int, scoreTwo: Int, scoreSetsJson: String? = null) =
         WearHistoryEntity(
             id = id,
             eventId = eventId,
@@ -274,5 +369,6 @@ class ScoreViewModelTest {
             teamOneName = "Red",
             teamTwoName = "Blue",
             editable = true,
+            scoreSetsJson = scoreSetsJson,
         )
 }

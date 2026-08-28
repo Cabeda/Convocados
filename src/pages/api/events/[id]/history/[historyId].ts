@@ -8,6 +8,7 @@ import { computeHistoryDeltas } from "./index";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
 import { isSettledGameParticipant } from "../../../../../lib/participants.server";
+import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
 
 const log = createLogger("history-patch");
 
@@ -18,7 +19,7 @@ const log = createLogger("history-patch");
  * payments from the current EventCost. Used when the history PATCH is hit with
  * a Game id that has no GameHistory snapshot yet (ADR 0016).
  */
-async function buildSnapshotForGame(eventId: string, game: { id: string; dateTime: Date; status: string; scoreOne: number | null; scoreTwo: number | null; teamOneName: string | null; teamTwoName: string | null; isFriendly: boolean }) {
+async function buildSnapshotForGame(eventId: string, game: { id: string; dateTime: Date; status: string; scoreOne: number | null; scoreTwo: number | null; scoreSets: string | null; teamOneName: string | null; teamTwoName: string | null; isFriendly: boolean }) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     include: {
@@ -53,6 +54,7 @@ async function buildSnapshotForGame(eventId: string, game: { id: string; dateTim
     status: "played" as const,
     scoreOne: game.scoreOne,
     scoreTwo: game.scoreTwo,
+    scoreSets: game.scoreSets,
     teamOneName: game.teamOneName ?? event?.teamOneName ?? "Team 1",
     teamTwoName: game.teamTwoName ?? event?.teamTwoName ?? "Team 2",
     teamsSnapshot,
@@ -85,6 +87,8 @@ export const GET: APIRoute = async ({ params, request }) => {
       status: gh.status,
       scoreOne: hideCompetitive ? null : gh.scoreOne,
       scoreTwo: hideCompetitive ? null : gh.scoreTwo,
+      scoreSets: hideCompetitive ? null : parseScoreSets(gh.scoreSets),
+      scoringType: getScoringType(event.sport),
       teamOneName: gh.teamOneName,
       teamTwoName: gh.teamTwoName,
       teamsSnapshot: gh.teamsSnapshot,
@@ -121,6 +125,8 @@ export const GET: APIRoute = async ({ params, request }) => {
       status: "played",
       scoreOne: hideCompetitive ? null : game.scoreOne,
       scoreTwo: hideCompetitive ? null : game.scoreTwo,
+      scoreSets: hideCompetitive ? null : parseScoreSets(game.scoreSets),
+      scoringType: getScoringType(event.sport),
       teamOneName: game.teamOneName ?? event.teamOneName ?? "Team 1",
       teamTwoName: game.teamTwoName ?? event.teamTwoName ?? "Team 2",
       teamsSnapshot: JSON.stringify(snap.teamsSnapshot),
@@ -194,6 +200,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     return Response.json({
       ...updated,
       id: params.historyId, // ponytail: use original requested id so client can match state
+      scoreSets: parseScoreSets(updated.scoreSets),
+      scoringType: getScoringType(event.sport),
       dateTime: updated.dateTime.toISOString(),
       createdAt: updated.createdAt.toISOString(),
       isFriendly: updated.isFriendly,
@@ -374,6 +382,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     return Response.json({
       ...refreshed,
       id: params.historyId,
+      scoreSets: parseScoreSets(refreshed!.scoreSets),
+      scoringType: getScoringType(event.sport),
       dateTime: refreshed!.dateTime.toISOString(),
       createdAt: refreshed!.createdAt.toISOString(),
       costUpdated: true,
@@ -382,8 +392,41 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   }
 
   const status = ["played", "cancelled"].includes(body.status) ? body.status : undefined;
-  const scoreOne = body.scoreOne !== undefined ? (body.scoreOne === null ? null : parseInt(String(body.scoreOne), 10)) : undefined;
-  const scoreTwo = body.scoreTwo !== undefined ? (body.scoreTwo === null ? null : parseInt(String(body.scoreTwo), 10)) : undefined;
+  const scoreSetsProvided = body.scoreSets !== undefined;
+  let scoreOne: number | null | undefined;
+  let scoreTwo: number | null | undefined;
+  let scoreSets: string | null | undefined;
+  let clearStructuredScore = false;
+
+  if (scoreSetsProvided) {
+    if (getScoringType(event.sport) !== "tennis") {
+      return Response.json({ error: "scoreSets are only supported for tennis and padel events." }, { status: 400 });
+    }
+    if (body.scoreSets === null) {
+      scoreOne = null;
+      scoreTwo = null;
+      scoreSets = null;
+    } else {
+      const scoreSetErrors = validateScoreSets(body.scoreSets);
+      if (scoreSetErrors.length > 0) return Response.json({ error: scoreSetErrors[0] }, { status: 400 });
+      const parsedSets = body.scoreSets as SetScore[];
+      const matchScore = matchScoreFromSets(parsedSets);
+      const hasCompleted = hasCompletedMatch(parsedSets);
+      scoreOne = hasCompleted ? matchScore.teamOne : null;
+      scoreTwo = hasCompleted ? matchScore.teamTwo : null;
+      scoreSets = JSON.stringify(parsedSets);
+    }
+  } else {
+    if (body.scoreOne !== undefined) {
+      scoreOne = parseScalarScore(body.scoreOne);
+      if (scoreOne === undefined) return Response.json({ error: "Scores must be non-negative integers." }, { status: 400 });
+    }
+    if (body.scoreTwo !== undefined) {
+      scoreTwo = parseScalarScore(body.scoreTwo);
+      if (scoreTwo === undefined) return Response.json({ error: "Scores must be non-negative integers." }, { status: 400 });
+    }
+    clearStructuredScore = body.scoreOne !== undefined || body.scoreTwo !== undefined;
+  }
   const teamsSnapshot = body.teamsSnapshot !== undefined ? JSON.stringify(body.teamsSnapshot) : undefined;
   const paymentsSnapshot = body.paymentsSnapshot !== undefined
     ? (body.paymentsSnapshot === null ? null : JSON.stringify(body.paymentsSnapshot))
@@ -395,6 +438,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       ...(status !== undefined && { status }),
       ...(scoreOne !== undefined && { scoreOne: isNaN(scoreOne as number) ? null : scoreOne }),
       ...(scoreTwo !== undefined && { scoreTwo: isNaN(scoreTwo as number) ? null : scoreTwo }),
+      ...(scoreSetsProvided && { scoreSets }),
+      ...(clearStructuredScore && { scoreSets: null }),
       ...(teamsSnapshot !== undefined && { teamsSnapshot }),
       ...(paymentsSnapshot !== undefined && { paymentsSnapshot }),
     },
@@ -405,10 +450,11 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   const actorId = session.user.id;
   const historyDate = entry.dateTime.toISOString().slice(0, 10);
 
-  if (scoreOne !== undefined || scoreTwo !== undefined) {
+  if (scoreOne !== undefined || scoreTwo !== undefined || scoreSetsProvided) {
     logEvent((params.id ?? ""), "history_score_updated", actor, actorId, {
       historyId: entry.id, date: historyDate,
       scoreOne: updated.scoreOne, scoreTwo: updated.scoreTwo,
+      scoreSets: parseScoreSets(updated.scoreSets),
     });
   }
   if (teamsSnapshot !== undefined) {
@@ -480,7 +526,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   // Recalculate all ratings when teams or scores change on an already-processed game
   if (
     updated.eloProcessed &&
-    (teamsSnapshot !== undefined || scoreOne !== undefined || scoreTwo !== undefined)
+    (teamsSnapshot !== undefined || scoreOne !== undefined || scoreTwo !== undefined || scoreSetsProvided)
   ) {
     try {
       await recalculateAllRatings((params.id ?? ""));
@@ -532,6 +578,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   return Response.json({
     ...updated,
     id: params.historyId, // ponytail: use original requested id so client can match state
+    scoreSets: parseScoreSets(updated.scoreSets),
+    scoringType: getScoringType(event.sport),
     dateTime: updated.dateTime.toISOString(),
     createdAt: updated.createdAt.toISOString(),
     eloUpdates,

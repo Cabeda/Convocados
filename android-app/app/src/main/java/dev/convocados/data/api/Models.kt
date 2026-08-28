@@ -113,12 +113,22 @@ data class RosterPlayer(
 data class EloUpdate(val name: String, val delta: Int)
 
 @Serializable
+data class SetScore(
+    val teamOne: Int,
+    val teamTwo: Int,
+    val tiebreakTeamOne: Int? = null,
+    val tiebreakTeamTwo: Int? = null,
+)
+
+@Serializable
 data class GameHistory(
     val id: String,
     val dateTime: String,
     val status: String = "played",
     val scoreOne: Int? = null,
     val scoreTwo: Int? = null,
+    val scoreSets: List<SetScore>? = null,
+    val scoringType: String = "standard",
     val teamOneName: String = "",
     val teamTwoName: String = "",
     val teamsSnapshot: String? = null,

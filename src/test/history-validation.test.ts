@@ -114,3 +114,83 @@ describe("POST /api/events/[id]/history — validation", () => {
     expect(body.id).toBeDefined();
   });
 });
+
+
+describe("tennis/padel score API", () => {
+  it("rejects structured scores for standard-sport events", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Football", location: "Field", dateTime: new Date(), maxPlayers: 10, sport: "football" },
+    });
+    const res = await POST(ctx(event.id, {
+      dateTime: new Date().toISOString(),
+      teamOneName: "A", teamTwoName: "B",
+      scoreSets: [{ teamOne: 6, teamTwo: 4 }],
+      teamsSnapshot: [{ team: "A", players: [] }, { team: "B", players: [] }],
+    }));
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("only supported for tennis and padel");
+  });
+
+  it("stores set scores and derives the match score", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Padel", location: "Court", dateTime: new Date(), maxPlayers: 4, sport: "padel" },
+    });
+    const scoreSets = [
+      { teamOne: 6, teamTwo: 4 },
+      { teamOne: 6, teamTwo: 6, tiebreakTeamOne: 7, tiebreakTeamTwo: 5 },
+    ];
+
+    const res = await POST(ctx(event.id, {
+      dateTime: new Date().toISOString(),
+      teamOneName: "A", teamTwoName: "B", scoreSets,
+      teamsSnapshot: [{ team: "A", players: [] }, { team: "B", players: [] }],
+    }));
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.scoringType).toBe("tennis");
+    expect(body.scoreOne).toBe(2);
+    expect(body.scoreTwo).toBe(0);
+    expect(body.scoreSets).toEqual(scoreSets);
+
+    const saved = await prisma.gameHistory.findUnique({ where: { id: body.id } });
+    expect(JSON.parse(saved!.scoreSets!)).toEqual(scoreSets);
+  });
+
+  it("keeps scalar scores null while a structured match has an incomplete set", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Tennis", location: "Court", dateTime: new Date(), maxPlayers: 2, sport: "tennis-singles" },
+    });
+    const scoreSets = [
+      { teamOne: 6, teamTwo: 4 },
+      { teamOne: 2, teamTwo: 1 },
+    ];
+
+    const res = await POST(ctx(event.id, {
+      dateTime: new Date().toISOString(),
+      teamOneName: "A", teamTwoName: "B", scoreSets,
+      teamsSnapshot: [{ team: "A", players: [] }, { team: "B", players: [] }],
+    }));
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.scoreOne).toBeNull();
+    expect(body.scoreTwo).toBeNull();
+    expect(body.scoreSets).toEqual(scoreSets);
+  });
+
+  it("rejects malformed set scores", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Tennis", location: "Court", dateTime: new Date(), maxPlayers: 2, sport: "tennis-singles" },
+    });
+    const res = await POST(ctx(event.id, {
+      dateTime: new Date().toISOString(),
+      teamOneName: "A", teamTwoName: "B", scoreSets: [{ teamOne: 6, teamTwo: 4, tiebreakTeamOne: 7 }],
+      teamsSnapshot: [{ team: "A", players: [] }, { team: "B", players: [] }],
+    }));
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("Tiebreak scores");
+  });
+});

@@ -86,8 +86,8 @@ describe("POST /api/watch/events without teams (#846)", () => {
 
     const body = await res.json();
     expect(body.created).toBe(true);
-    expect(body.scoreOne).toBe(0);
-    expect(body.scoreTwo).toBe(0);
+    expect(body.scoreOne).toBeNull();
+    expect(body.scoreTwo).toBeNull();
 
     const history = await prisma.gameHistory.findUnique({ where: { id: body.id } });
     expect(history).not.toBeNull();

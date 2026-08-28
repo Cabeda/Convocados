@@ -24,7 +24,7 @@ import dev.convocados.data.local.entity.UserProfileEntity
         GameHistoryEntity::class,
         RecentlyViewedEventEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -77,6 +77,13 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `event_details` ADD COLUMN `invitedJson` TEXT")
                 db.execSQL("ALTER TABLE `event_details` ADD COLUMN `declinedJson` TEXT")
+            }
+        }
+
+        /** v8: cache structured tennis/padel set scores as JSON. */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `game_history` ADD COLUMN `scoreSetsJson` TEXT")
             }
         }
     }

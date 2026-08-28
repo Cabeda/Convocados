@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
 import { getSession, checkOwnership } from "../../../lib/auth.helpers.server";
+import { getScoringType, parseScoreSets } from "../../../lib/scoring";
 
 /** How many minutes before/after the event dateTime we consider it "happening now" */
 const HAPPENING_WINDOW_MS = 90 * 60 * 1000; // 90 minutes
@@ -67,8 +68,10 @@ export const POST: APIRoute = async ({ request }) => {
     // Already has a history record — return it
     return Response.json({
       id: existingToday.id,
-      scoreOne: existingToday.scoreOne ?? 0,
-      scoreTwo: existingToday.scoreTwo ?? 0,
+      scoreOne: existingToday.scoreOne,
+      scoreTwo: existingToday.scoreTwo,
+      scoreSets: parseScoreSets(existingToday.scoreSets),
+      scoringType: getScoringType(event.sport),
       teamOneName: existingToday.teamOneName,
       teamTwoName: existingToday.teamTwoName,
       created: false,
@@ -100,8 +103,10 @@ export const POST: APIRoute = async ({ request }) => {
 
   return Response.json({
     id: history.id,
-    scoreOne: history.scoreOne ?? 0,
-    scoreTwo: history.scoreTwo ?? 0,
+    scoreOne: history.scoreOne,
+    scoreTwo: history.scoreTwo,
+    scoreSets: parseScoreSets(history.scoreSets),
+    scoringType: getScoringType(event.sport),
     teamOneName: history.teamOneName,
     teamTwoName: history.teamTwoName,
     created: true,
@@ -169,6 +174,7 @@ export const GET: APIRoute = async ({ request }) => {
           id: true,
           scoreOne: true,
           scoreTwo: true,
+          scoreSets: true,
           teamOneName: true,
           teamTwoName: true,
         },
@@ -195,8 +201,10 @@ export const GET: APIRoute = async ({ request }) => {
       latestGame: e.history[0]
         ? {
             id: e.history[0].id,
-            scoreOne: e.history[0].scoreOne ?? 0,
-            scoreTwo: e.history[0].scoreTwo ?? 0,
+            scoreOne: e.history[0].scoreOne,
+            scoreTwo: e.history[0].scoreTwo,
+            scoreSets: parseScoreSets(e.history[0].scoreSets),
+            scoringType: getScoringType(e.sport),
             teamOneName: e.history[0].teamOneName,
             teamTwoName: e.history[0].teamTwoName,
           }
@@ -240,6 +248,7 @@ async function getSingleEvent(eventId: string) {
           id: true,
           scoreOne: true,
           scoreTwo: true,
+          scoreSets: true,
           teamOneName: true,
           teamTwoName: true,
         },
@@ -269,8 +278,10 @@ async function getSingleEvent(eventId: string) {
     latestGame: event.history[0]
       ? {
           id: event.history[0].id,
-          scoreOne: event.history[0].scoreOne ?? 0,
-          scoreTwo: event.history[0].scoreTwo ?? 0,
+          scoreOne: event.history[0].scoreOne,
+          scoreTwo: event.history[0].scoreTwo,
+          scoreSets: parseScoreSets(event.history[0].scoreSets),
+          scoringType: getScoringType(event.sport),
           teamOneName: event.history[0].teamOneName,
           teamTwoName: event.history[0].teamTwoName,
         }
