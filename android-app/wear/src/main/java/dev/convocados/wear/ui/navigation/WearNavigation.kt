@@ -16,6 +16,8 @@ import dev.convocados.wear.ui.screen.games.GamesScreen
 import dev.convocados.wear.ui.screen.games.GamesViewModel
 import dev.convocados.wear.ui.screen.history.HistoryScreen
 import dev.convocados.wear.ui.screen.history.HistoryViewModel
+import dev.convocados.wear.ui.screen.mvp.MvpVotingScreen
+import dev.convocados.wear.ui.screen.mvp.MvpVotingViewModel
 import dev.convocados.wear.ui.screen.quick.QuickScoreScreen
 import dev.convocados.wear.ui.screen.quick.QuickScoreViewModel
 import dev.convocados.wear.ui.screen.quick.QuickSetupScreen
@@ -182,7 +184,23 @@ fun WearNavigation(
 
             composable(WearRoutes.HISTORY) {
                 val viewModel: HistoryViewModel = hiltViewModel()
-                HistoryScreen(viewModel = viewModel)
+                HistoryScreen(
+                    viewModel = viewModel,
+                    onHistorySelected = { eventId, historyId ->
+                        navController.navigate(WearRoutes.mvp(eventId, historyId))
+                    },
+                )
+            }
+
+            composable(WearRoutes.MVP) { backStackEntry ->
+                val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
+                val historyId = backStackEntry.arguments?.getString("historyId") ?: return@composable
+                val viewModel: MvpVotingViewModel = hiltViewModel()
+                MvpVotingScreen(
+                    eventId = eventId,
+                    historyId = historyId,
+                    viewModel = viewModel,
+                )
             }
         }
     }

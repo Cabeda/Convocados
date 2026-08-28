@@ -120,3 +120,47 @@ data class WatchGameResponse(
     val id: String,
     val created: Boolean = false,
 )
+
+
+@Serializable
+data class MvpParticipant(
+    @SerialName("id") val playerId: String,
+    @SerialName("name") val playerName: String,
+    val voteCount: Int = 0,
+)
+
+@Serializable
+data class MvpWinner(
+    val playerId: String,
+    val playerName: String,
+    val voteCount: Int,
+)
+
+@Serializable
+data class MvpVoteRecord(
+    val voterName: String,
+    val votedForName: String,
+)
+
+@Serializable
+data class MvpResponse(
+    val mvp: List<MvpWinner>? = null,
+    val votes: List<MvpVoteRecord> = emptyList(),
+    val isVotingOpen: Boolean = false,
+    val hasVoted: Boolean? = null,
+    val totalVotes: Int = 0,
+    val eligibleVoters: Int = 0,
+    val participants: List<MvpParticipant> = emptyList(),
+)
+
+@Serializable
+data class MvpVoteResult(
+    val id: String,
+    val votedForName: String,
+)
+
+@Serializable
+data class MvpVoteResponse(
+    val ok: Boolean,
+    val vote: MvpVoteResult,
+)
