@@ -58,8 +58,19 @@ fun SaveQuickGameScreen(
             } else {
                 state.quick?.let { quick ->
                     item {
+                        val setSummary = quick.scoreSets.joinToString(" · ") { set ->
+                            if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) {
+                                "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})"
+                            } else {
+                                "${set.teamOne}-${set.teamTwo}"
+                            }
+                        }
                         Text(
-                            text = stringResource(R.string.save_quick_score, quick.scoreOne, quick.scoreTwo),
+                            text = if (isQuickStructuredSport(quick.sport) && setSummary.isNotEmpty()) {
+                                stringResource(R.string.save_quick_score_sets, setSummary, quick.scoreOne, quick.scoreTwo)
+                            } else {
+                                stringResource(R.string.save_quick_score, quick.scoreOne, quick.scoreTwo)
+                            },
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -76,6 +87,17 @@ fun SaveQuickGameScreen(
                             Text(text = event.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
                     )
+                }
+
+                if (state.events.isEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.save_quick_no_events),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        )
+                    }
                 }
             }
 

@@ -50,6 +50,14 @@
     <!-- Quick Game -->
     <string name="quick_game">Quick Game</string>
     <string name="quick_setup_title">Setup</string>
+    <string name="quick_sport_label">Sport</string>
+    <string name="sport_standard">Standard</string>
+    <string name="sport_tennis">Tennis</string>
+    <string name="sport_padel">Padel</string>
+    <string name="quick_set_number">Set %1$d</string>
+    <string name="quick_tiebreak">Tiebreak</string>
+    <string name="quick_games">Games</string>
+    <string name="quick_next_set">Next set</string>
     <string name="duration_label">Game</string>
     <string name="alarm_label">Alarm</string>
     <string name="minutes_value">%1$d min</string>
@@ -60,7 +68,9 @@
     <string name="quick_swipe_hint">↑ End · ↓ Save</string>
     <string name="save_quick_title">Save to event</string>
     <string name="save_quick_score">Score %1$d - %2$d</string>
+    <string name="save_quick_score_sets">Sets %1$s · Match %2$d - %3$d</string>
     <string name="save_quick_saved">Saved</string>
+    <string name="save_quick_no_events">No compatible events available</string>
     <string name="refreshing">Refreshing…</string>
     <string name="pull_to_refresh">Pull to refresh</string>
     <string name="refresh">Refresh</string>

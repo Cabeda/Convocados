@@ -2,6 +2,7 @@ package dev.convocados.wear.data.local
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.convocados.wear.data.api.SetScore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,6 +11,10 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
+
+const val QUICK_SPORT_STANDARD = "standard"
+const val QUICK_SPORT_TENNIS = "tennis"
+const val QUICK_SPORT_PADEL = "padel"
 
 /**
  * A quick game's live state (score, config, kickoff), persisted across app
@@ -21,6 +26,8 @@ import javax.inject.Singleton
 data class QuickGameState(
     val scoreOne: Int = 0,
     val scoreTwo: Int = 0,
+    val sport: String = QUICK_SPORT_STANDARD,
+    val scoreSets: List<SetScore> = emptyList(),
     val durationMinutes: Int = 60,
     val alarmIntervalMinutes: Int = 10,
     val kickoffEpochMs: Long? = null,

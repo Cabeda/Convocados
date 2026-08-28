@@ -132,8 +132,8 @@ fun WearNavigation(
             composable(WearRoutes.QUICK_SETUP) {
                 QuickSetupScreen(
                     activeGame = activeQuickGame.takeIf { it.isStarted },
-                    onStart = { duration, alarmInterval ->
-                        launchQuickGame(navController, "new", duration, alarmInterval)
+                    onStart = { duration, alarmInterval, sport ->
+                        launchQuickGame(navController, "new", duration, alarmInterval, sport)
                     },
                     onContinue = {
                         launchQuickGame(navController, "continue", null, null)
@@ -149,9 +149,10 @@ fun WearNavigation(
                 val mode = backStackEntry.savedStateHandle.get<String>("quickMode")
                 val duration = backStackEntry.savedStateHandle.get<Int>("duration")
                 val alarmInterval = backStackEntry.savedStateHandle.get<Int>("alarmInterval")
+                val sport = backStackEntry.savedStateHandle.get<String>("sport")
                 LaunchedEffect(mode) {
                     when (mode) {
-                        "new" -> viewModel.startNew(duration ?: 60, alarmInterval ?: 10)
+                        "new" -> viewModel.startNew(duration ?: 60, alarmInterval ?: 10, sport ?: "standard")
                         "restart" -> viewModel.restart()
                         else -> viewModel.continueGame()
                     }
@@ -193,6 +194,7 @@ private fun launchQuickGame(
     mode: String,
     duration: Int?,
     alarmInterval: Int?,
+    sport: String? = null,
 ) {
     navController.navigate(WearRoutes.QUICK_SCORE) {
         popUpTo(WearRoutes.QUICK_SETUP) { inclusive = true }
@@ -201,4 +203,5 @@ private fun launchQuickGame(
     handle["quickMode"] = mode
     if (duration != null) handle["duration"] = duration
     if (alarmInterval != null) handle["alarmInterval"] = alarmInterval
+    if (sport != null) handle["sport"] = sport
 }
