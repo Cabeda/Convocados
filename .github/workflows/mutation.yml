@@ -1,0 +1,42 @@
+name: Mutation
+
+on:
+  workflow_dispatch:
+
+# Mutation testing is intentionally serialized. Concurrent Stryker sandboxes
+# can load better-sqlite3 and Vitest workers at the same time, which has caused
+# native crashes and orphaned workers in local pre-push runs.
+concurrency:
+  group: mutation-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    name: Mutation testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+      - name: Run mutation tests
+        run: pnpm test:mutation
+        env:
+          CI: "1"
+          MUTATION_TIMEOUT_MINUTES: "110"
+          VITEST_SINGLE_THREAD: "1"
