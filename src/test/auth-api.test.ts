@@ -856,6 +856,46 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
     expect(body.scoreTwo).toBe(1);
   });
 
+  it("rejects malformed scalar scores", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent({ ownerId: user.id });
+    const history = await seedHistory(id);
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: "3x", scoreTwo: 1 }));
+    expect(res.status).toBe(400);
+  });
+
+  it("derives a structured tennis score from a completed tiebreak", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent({ ownerId: user.id, sport: "tennis" });
+    const history = await seedHistory(id);
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, {
+      scoreSets: [{ teamOne: 6, teamTwo: 6, tiebreakTeamOne: 7, tiebreakTeamTwo: 5 }],
+    }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scoreOne).toBe(1);
+    expect(body.scoreTwo).toBe(0);
+  });
+
+  it("clears structured scores when both scalar scores replace them", async () => {
+    const user = await seedUser();
+    mockAuth(user.id);
+    const id = await seedEvent({ ownerId: user.id, sport: "tennis" });
+    const history = await seedHistory(id, {
+      scoreOne: 1,
+      scoreTwo: 0,
+      scoreSets: JSON.stringify([{ teamOne: 6, teamTwo: 4 }]),
+    });
+    const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 2, scoreTwo: 1 }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scoreOne).toBe(2);
+    expect(body.scoreTwo).toBe(1);
+    expect(body.scoreSets).toBeNull();
+  });
+
   it("returns 404 for unknown event", async () => {
     const user = await seedUser();
     mockAuth(user.id);

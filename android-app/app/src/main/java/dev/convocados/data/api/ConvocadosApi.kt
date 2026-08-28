@@ -125,8 +125,14 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
         client.post("/api/events/$eventId/access/verify", PasswordVerifyRequest(password))
 
     // ── History / Score ───────────────────────────────────────────────────
-    suspend fun updateScore(eventId: String, historyId: String, scoreOne: Int, scoreTwo: Int): GameHistory =
-        client.patch("/api/events/$eventId/history/$historyId", ScoreRequest(scoreOne, scoreTwo))
+    suspend fun updateScore(eventId: String, historyId: String, scoreOne: Int? = null, scoreTwo: Int? = null, scoreSets: List<SetScore>? = null): GameHistory {
+        val body: Any = when {
+            scoreSets != null -> ScoreRequest(scoreOne, scoreTwo, scoreSets)
+            scoreOne != null && scoreTwo != null -> ScalarScoreRequest(scoreOne, scoreTwo)
+            else -> ScoreRequest(scoreOne, scoreTwo, scoreSets)
+        }
+        return client.patch("/api/events/$eventId/history/$historyId", body)
+    }
 
     suspend fun updateHistorySnapshot(eventId: String, historyId: String, paymentsSnapshot: List<SnapshotPaymentEntry>? = null, teamsSnapshot: List<SnapshotTeam>? = null): GameHistory =
         client.patch("/api/events/$eventId/history/$historyId", UpdateHistorySnapshotRequest(paymentsSnapshot, teamsSnapshot))
@@ -387,7 +393,8 @@ data class CreateEventRequest(
 @Serializable data class DurationRequest(val durationMinutes: Int)
 @Serializable data class PasswordRequest(val password: String?)
 @Serializable data class PasswordVerifyRequest(val password: String)
-@Serializable data class ScoreRequest(val scoreOne: Int, val scoreTwo: Int)
+@Serializable data class ScoreRequest(val scoreOne: Int? = null, val scoreTwo: Int? = null, val scoreSets: List<SetScore>? = null)
+@Serializable data class ScalarScoreRequest(val scoreOne: Int, val scoreTwo: Int)
 @Serializable data class HistoryPaymentsRequest(val paymentsSnapshot: List<PaymentSnapshotEntry>)
 @Serializable data class PaymentUpdateRequest(val playerName: String, val status: String)
 @Serializable data class SnapshotPaymentEntry(val name: String, val status: String, val amount: Double? = null)

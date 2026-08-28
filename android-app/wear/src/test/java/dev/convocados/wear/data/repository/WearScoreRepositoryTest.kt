@@ -2,7 +2,9 @@ package dev.convocados.wear.data.repository
 
 import app.cash.turbine.test
 import dev.convocados.wear.data.api.GameHistory
+import dev.convocados.wear.data.api.ScalarScoreRequest
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.api.SetScore
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
@@ -83,6 +85,125 @@ class WearScoreRepositoryTest {
     }
 
     @Test
+    fun `syncPendingScores replays queued tennis sets`() = runTest {
+        val sets = listOf(SetScore(6, 6, 7, 5))
+        val pending = PendingScoreEntity(
+            id = 1,
+            eventId = "e1",
+            historyId = "h1",
+            scoreOne = 1,
+            scoreTwo = 0,
+            teamOneName = "A",
+            teamTwoName = "B",
+            basedOnScoreOne = 0,
+            basedOnScoreTwo = 0,
+            scoreSetsJson = "[{\"teamOne\":6,\"teamTwo\":6,\"tiebreakTeamOne\":7,\"tiebreakTeamTwo\":5}]",
+        )
+        coEvery { pendingScoreDao.getAll() } returns listOf(pending)
+        coEvery { client.get<GameHistory>(any()) } returns GameHistory(
+            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 0, scoreTwo = 0, teamOneName = "A", teamTwoName = "B",
+        )
+        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
+            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 1, scoreTwo = 0, scoreSets = sets, teamOneName = "A", teamTwoName = "B",
+        )
+
+        assertEquals(1, repository.syncPendingScores())
+        coVerify {
+            client.patch<GameHistory>(
+                "/api/events/e1/history/h1",
+                match { (it as dev.convocados.wear.data.api.ScoreRequest).scoreSets == sets },
+            )
+        }
+        coVerify { pendingScoreDao.delete(pending) }
+    }
+
+    @Test
+    fun `syncPendingScores replays queued scalar scores with scalar payload`() = runTest {
+        val pending = PendingScoreEntity(
+            id = 1,
+            eventId = "e1",
+            historyId = "h1",
+            scoreOne = 3,
+            scoreTwo = 2,
+            teamOneName = "A",
+            teamTwoName = "B",
+            basedOnScoreOne = 0,
+            basedOnScoreTwo = 0,
+        )
+        coEvery { pendingScoreDao.getAll() } returns listOf(pending)
+        coEvery { client.get<GameHistory>(any()) } returns GameHistory(
+            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 0, scoreTwo = 0, teamOneName = "A", teamTwoName = "B",
+        )
+        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
+            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 3, scoreTwo = 2, teamOneName = "A", teamTwoName = "B",
+        )
+
+        assertEquals(1, repository.syncPendingScores())
+        coVerify {
+            client.patch<GameHistory>(
+                "/api/events/e1/history/h1",
+                match { it is ScalarScoreRequest && it.scoreOne == 3 && it.scoreTwo == 2 },
+            )
+        }
+        coVerify { pendingScoreDao.delete(pending) }
+    }
+
+    @Test
+    fun `syncPendingScores preserves legacy unknown-baseline replay behavior`() = runTest {
+        val pending = PendingScoreEntity(
+            id = 1,
+            eventId = "e1",
+            historyId = "h1",
+            scoreOne = 3,
+            scoreTwo = 2,
+            teamOneName = "A",
+            teamTwoName = "B",
+            baselineCaptured = false,
+        )
+        coEvery { pendingScoreDao.getAll() } returns listOf(pending)
+        coEvery { client.get<GameHistory>(any()) } returns GameHistory(
+            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 1, scoreTwo = 0, teamOneName = "A", teamTwoName = "B",
+        )
+        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
+            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 3, scoreTwo = 2, teamOneName = "A", teamTwoName = "B",
+        )
+
+        assertEquals(1, repository.syncPendingScores())
+        coVerify { pendingScoreDao.delete(pending) }
+    }
+
+    @Test
+    fun `syncPendingScores keeps queued score when server changed from its baseline`() = runTest {
+        val pending = PendingScoreEntity(
+            id = 1,
+            eventId = "e1",
+            historyId = "h1",
+            scoreOne = 3,
+            scoreTwo = 2,
+            teamOneName = "A",
+            teamTwoName = "B",
+            basedOnScoreOne = null,
+            basedOnScoreTwo = null,
+            baselineCaptured = true,
+        )
+        coEvery { pendingScoreDao.getAll() } returns listOf(pending)
+        coEvery { client.get<GameHistory>(any()) } returns GameHistory(
+            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 2, scoreTwo = 0, teamOneName = "A", teamTwoName = "B",
+        )
+
+        assertEquals(0, repository.syncPendingScores())
+        coVerify { pendingScoreDao.incrementRetry(1) }
+        coVerify(exactly = 0) { client.patch<GameHistory>(any(), any()) }
+    }
+
+    @Test
     fun `syncPendingScores increments retry on failure`() = runTest {
         val pending = listOf(PendingScoreEntity(1, "e1", "h1", 3, 2, "A", "B"))
         coEvery { pendingScoreDao.getAll() } returns pending
@@ -93,4 +214,21 @@ class WearScoreRepositoryTest {
         assertEquals(0, synced)
         coVerify { pendingScoreDao.incrementRetry(1) }
     }
+
+    @Test
+    fun `submitScore persists tennis sets and sends structured payload`() = runTest {
+        val sets = listOf(SetScore(6, 4), SetScore(7, 6, 7, 5))
+        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
+            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 2, scoreTwo = 0, scoreSets = sets, scoringType = "tennis",
+            teamOneName = "Red", teamTwoName = "Blue",
+        )
+
+        val result = repository.submitScore("e1", "h1", 2, 0, "Red", "Blue", sets)
+
+        assertTrue(result.isSuccess)
+        coVerify { historyDao.updateScore("h1", 2, 0, any()) }
+        coVerify { client.patch<GameHistory>("/api/events/e1/history/h1", match { (it as dev.convocados.wear.data.api.ScoreRequest).scoreSets == sets }) }
+    }
+
 }

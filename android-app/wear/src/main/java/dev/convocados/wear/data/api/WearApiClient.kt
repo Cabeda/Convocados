@@ -30,6 +30,7 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
         ignoreUnknownKeys = true
         isLenient = true
         coerceInputValues = true
+        explicitNulls = false
     }
 
     private val client = HttpClient(OkHttp) {

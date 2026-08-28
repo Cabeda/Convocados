@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -133,6 +135,7 @@ class WearGameRepository @Inject constructor(
             dateTime = dateTime,
             scoreOne = scoreOne,
             scoreTwo = scoreTwo,
+            scoreSetsJson = scoreSets?.let { Json.encodeToString(it) },
             teamOneName = teamOneName,
             teamTwoName = teamTwoName,
             teamsSnapshot = teamsSnapshot,

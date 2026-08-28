@@ -34,6 +34,7 @@ import dev.convocados.data.api.GameHistory
 import dev.convocados.data.api.SnapshotPaymentEntry
 import dev.convocados.data.api.SnapshotTeam
 import dev.convocados.data.api.SnapshotTeamPlayer
+import dev.convocados.data.api.SetScore
 import dev.convocados.ui.screen.games.formatRelativeDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -153,10 +154,10 @@ class HistoryDetailViewModel @Inject constructor(private val api: ConvocadosApi)
         }
     }
 
-    fun updateScore(eventId: String, historyId: String, scoreOne: Int, scoreTwo: Int) {
+    fun updateScore(eventId: String, historyId: String, scoreOne: Int? = null, scoreTwo: Int? = null, scoreSets: List<SetScore>? = null) {
         viewModelScope.launch {
             _saving.value = true
-            runCatching { api.updateScore(eventId, historyId, scoreOne, scoreTwo) }
+            runCatching { api.updateScore(eventId, historyId, scoreOne, scoreTwo, scoreSets) }
                 .onSuccess { _history.value = it }
                 .onFailure { e ->
                     val body = e.message ?: ""
@@ -185,12 +186,14 @@ fun HistoryDetailScreen(
     var editing by remember { mutableStateOf(false) }
     var scoreOneText by remember { mutableStateOf("") }
     var scoreTwoText by remember { mutableStateOf("") }
+    var scoreSets by remember { mutableStateOf<List<SetScore>>(emptyList()) }
 
     LaunchedEffect(eventId, historyId) { viewModel.load(eventId, historyId) }
     LaunchedEffect(history) {
         history?.let {
             scoreOneText = it.scoreOne?.toString() ?: ""
             scoreTwoText = it.scoreTwo?.toString() ?: ""
+            scoreSets = it.scoreSets ?: emptyList()
         }
     }
 
@@ -204,9 +207,19 @@ fun HistoryDetailScreen(
                     if (history != null) {
                         IconButton(onClick = {
                             if (editing) {
-                                val s1 = scoreOneText.toIntOrNull()
-                                val s2 = scoreTwoText.toIntOrNull()
-                                if (s1 != null && s2 != null) viewModel.updateScore(eventId, historyId, s1, s2)
+                                if (history?.scoringType == "tennis") {
+                                    if (scoreSets.isNotEmpty()) {
+                                        viewModel.updateScore(eventId, historyId, scoreSets = scoreSets)
+                                    } else {
+                                        val s1 = scoreOneText.toIntOrNull()
+                                        val s2 = scoreTwoText.toIntOrNull()
+                                        if (s1 != null && s2 != null) viewModel.updateScore(eventId, historyId, s1, s2)
+                                    }
+                                } else {
+                                    val s1 = scoreOneText.toIntOrNull()
+                                    val s2 = scoreTwoText.toIntOrNull()
+                                    if (s1 != null && s2 != null) viewModel.updateScore(eventId, historyId, s1, s2)
+                                }
                                 editing = false
                             } else editing = true
                         }) {
@@ -234,15 +247,18 @@ fun HistoryDetailScreen(
                     .padding(20.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ScoreColumn(h.teamOneName, h.scoreOne, accent, Modifier.weight(1f))
+                    ScoreColumn(h.teamOneName, h.scoreOne, accent, h.scoreSets, true, Modifier.weight(1f))
                     Text(":", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.outline)
-                    ScoreColumn(h.teamTwoName, h.scoreTwo, MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
+                    ScoreColumn(h.teamTwoName, h.scoreTwo, MaterialTheme.colorScheme.tertiary, h.scoreSets, false, Modifier.weight(1f))
                 }
             }
 
             // Score editor (tap edit → editable score)
             if (editing) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                    if (h.scoringType == "tennis") {
+                        TennisSetEditor(scoreSets) { scoreSets = it }
+                    } else {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(h.teamOneName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -253,6 +269,7 @@ fun HistoryDetailScreen(
                             Text(h.teamTwoName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             OutlinedTextField(value = scoreTwoText, onValueChange = { scoreTwoText = it }, modifier = Modifier.width(60.dp), singleLine = true)
                         }
+                    }
                     }
                     if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
@@ -322,11 +339,83 @@ fun HistoryDetailScreen(
     }
 }
 
-@Composable private fun ScoreColumn(name: String, score: Int?, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+@Composable private fun ScoreColumn(name: String, score: Int?, color: androidx.compose.ui.graphics.Color, scoreSets: List<SetScore>?, teamOne: Boolean, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.titleSmall, textAlign = TextAlign.Center)
         Spacer(Modifier.height(6.dp))
-        Text("${score ?: "—"}", color = color, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.displayMedium)
+        val formattedSets = scoreSets.orEmpty().joinToString(" · ") { set ->
+            val own = if (teamOne) set.teamOne else set.teamTwo
+            val other = if (teamOne) set.teamTwo else set.teamOne
+            if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) {
+                val tbOwn = if (teamOne) set.tiebreakTeamOne else set.tiebreakTeamTwo
+                val tbOther = if (teamOne) set.tiebreakTeamTwo else set.tiebreakTeamOne
+                "$own-$other ($tbOwn-$tbOther)"
+            } else "$own-$other"
+        }
+        Text(if (formattedSets.isNotEmpty()) formattedSets else "${score ?: "—"}", color = color, fontWeight = FontWeight.ExtraBold, style = if (formattedSets.isNotEmpty()) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.displayMedium, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+internal fun TennisSetEditor(sets: List<SetScore>, onChange: (List<SetScore>) -> Unit) {
+    fun updateSet(index: Int, update: (SetScore) -> SetScore) {
+        onChange(sets.mapIndexed { i, set -> if (i == index) update(set) else set })
+    }
+
+    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        sets.forEachIndexed { index, set ->
+            val hasTiebreak = set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Set ${index + 1}", modifier = Modifier.width(48.dp), style = MaterialTheme.typography.labelMedium)
+                OutlinedTextField(
+                    value = set.teamOne.toString(),
+                    onValueChange = { value -> updateSet(index) { it.copy(teamOne = value.toIntOrNull()?.coerceAtLeast(0) ?: 0) } },
+                    modifier = Modifier.width(72.dp),
+                    singleLine = true,
+                    label = { Text("Games 1") },
+                )
+                Text("-", fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = set.teamTwo.toString(),
+                    onValueChange = { value -> updateSet(index) { it.copy(teamTwo = value.toIntOrNull()?.coerceAtLeast(0) ?: 0) } },
+                    modifier = Modifier.width(72.dp),
+                    singleLine = true,
+                    label = { Text("Games 2") },
+                )
+            }
+            OutlinedButton(
+                onClick = {
+                    updateSet(index) {
+                        if (hasTiebreak) it.copy(tiebreakTeamOne = null, tiebreakTeamTwo = null)
+                        else it.copy(tiebreakTeamOne = 0, tiebreakTeamTwo = 0)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (hasTiebreak) "Remove tiebreak" else "Add tiebreak")
+            }
+            if (hasTiebreak) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Tiebreak", modifier = Modifier.width(72.dp), style = MaterialTheme.typography.labelMedium)
+                    OutlinedTextField(
+                        value = set.tiebreakTeamOne.toString(),
+                        onValueChange = { value -> updateSet(index) { it.copy(tiebreakTeamOne = value.toIntOrNull()?.coerceAtLeast(0) ?: 0) } },
+                        modifier = Modifier.width(72.dp),
+                        singleLine = true,
+                        label = { Text("Points 1") },
+                    )
+                    Text("-", fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = set.tiebreakTeamTwo.toString(),
+                        onValueChange = { value -> updateSet(index) { it.copy(tiebreakTeamTwo = value.toIntOrNull()?.coerceAtLeast(0) ?: 0) } },
+                        modifier = Modifier.width(72.dp),
+                        singleLine = true,
+                        label = { Text("Points 2") },
+                    )
+                }
+            }
+        }
+        Button(onClick = { onChange(sets + SetScore(0, 0)) }, enabled = sets.size < 5, modifier = Modifier.fillMaxWidth()) { Text("Add set") }
     }
 }
 
