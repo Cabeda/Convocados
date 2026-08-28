@@ -22,6 +22,7 @@ data class HistoryUiState(
 @Immutable
 data class HistoryRow(
     val historyId: String,
+    val eventId: String,
     val title: String,
     val dateTime: String,
     val scoreOne: Int?,
@@ -46,6 +47,7 @@ class HistoryViewModel @Inject constructor(
                     history.map { h ->
                         HistoryRow(
                             historyId = h.id,
+                            eventId = h.eventId,
                             title = gameTitles[h.eventId] ?: h.eventId,
                             dateTime = h.dateTime,
                             scoreOne = h.scoreOne,

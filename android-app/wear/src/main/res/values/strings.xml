@@ -96,4 +96,12 @@
     <string name="arrived_label">arrived</string>
     <string name="live_badge">LIVE</string>
     <string name="ended_label">Ended</string>
+    <string name="mvp_title">MVP</string>
+    <string name="mvp_vote_prompt">Vote for MVP</string>
+    <string name="mvp_votes">%1$d votes</string>
+    <string name="mvp_vote_recorded">Vote recorded</string>
+    <string name="mvp_not_eligible">Only players in this game can vote</string>
+    <string name="mvp_voting_closed">Voting closed</string>
+    <string name="mvp_no_votes">No votes recorded</string>
+    <string name="mvp_retry">Retry</string>
 </resources>

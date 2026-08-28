@@ -15,7 +15,10 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 
 @Composable
-fun HistoryScreen(viewModel: HistoryViewModel) {
+fun HistoryScreen(
+    viewModel: HistoryViewModel,
+    onHistorySelected: (eventId: String, historyId: String) -> Unit = { _, _ -> },
+) {
     val state by viewModel.uiState.collectAsState()
     val columnState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
@@ -54,7 +57,7 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
             } else {
                 items(state.rows, key = { it.historyId }) { row ->
                     Button(
-                        onClick = {},
+                        onClick = { onHistorySelected(row.eventId, row.historyId) },
                         modifier = Modifier.fillMaxWidth(),
                         label = {
                             Text(
