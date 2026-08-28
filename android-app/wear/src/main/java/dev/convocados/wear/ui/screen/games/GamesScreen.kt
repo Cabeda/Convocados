@@ -35,9 +35,7 @@ import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearGameEntity
-import dev.convocados.wear.ui.theme.Success
-import dev.convocados.wear.ui.theme.TextMuted
-import dev.convocados.wear.ui.theme.Warning
+import dev.convocados.wear.ui.theme.expressiveTokens
 import dev.convocados.wear.util.PullToRefreshProgress
 import dev.convocados.wear.util.formatRelativeTime
 
@@ -53,6 +51,7 @@ fun GamesScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val isOnline = rememberNetworkAvailable()
+    val tokens = expressiveTokens()
     val showOfflineBanner = shouldShowOfflineGamesBanner(state.isOffline, isOnline)
 
     // Auto-navigate to the scorable suggested game on first load
@@ -251,7 +250,7 @@ fun GamesScreen(
                             Text(
                                 text = stringResource(R.string.pending_sync, state.pendingSyncCount),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Warning,
+                                color = tokens.warning,
                                 modifier = Modifier.fillMaxWidth(),
                                 textAlign = TextAlign.Center
                             )
@@ -263,7 +262,7 @@ fun GamesScreen(
                             Text(
                                 text = stringResource(R.string.offline_cached),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = TextMuted,
+                                color = tokens.offline,
                                 modifier = Modifier.fillMaxWidth(),
                                 textAlign = TextAlign.Center
                             )
@@ -352,13 +351,17 @@ fun GamesScreen(
 }
 
 @Composable
-private fun GameChip(
+internal fun GameChip(
     game: WearGameEntity,
     isSuggested: Boolean,
     canScore: Boolean,
     onClick: () -> Unit,
+    nowOverride: java.time.Instant? = null,
 ) {
-    val timeLabel = remember(game.dateTime) { formatRelativeTime(game.dateTime) }
+    val timeLabel = remember(game.dateTime, nowOverride) {
+        formatRelativeTime(game.dateTime, nowOverride ?: java.time.Instant.now())
+    }
+    val tokens = expressiveTokens()
 
     Button(
         onClick = onClick,
@@ -376,7 +379,7 @@ private fun GameChip(
                     Text(
                         text = stringResource(R.string.live_badge),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Success,
+                        color = tokens.success,
                     )
                 }
                 Text(
@@ -393,7 +396,7 @@ private fun GameChip(
             )
             canScore -> ButtonDefaults.filledTonalButtonColors()
             else -> ButtonDefaults.filledTonalButtonColors(
-                contentColor = TextMuted,
+                contentColor = tokens.offline,
             )
         }
     )

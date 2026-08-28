@@ -35,8 +35,10 @@ import dev.convocados.data.api.EventSummary
 import dev.convocados.data.api.MyGamesResponse
 import dev.convocados.data.api.CoPlaySuggestion
 import dev.convocados.data.api.ProfileEvent
-import dev.convocados.data.repository.RecentlyViewedEvent
 import dev.convocados.data.repository.EventRepository
+import dev.convocados.data.repository.RecentlyViewedEvent
+import dev.convocados.ui.theme.contentMaxWidthDp
+import dev.convocados.ui.theme.layoutForWidthDp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -193,7 +195,20 @@ fun GamesScreen(
         val archived = archivedOwned
         val games = if (showArchived) archived else active
 
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        BoxWithConstraints(
+            Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
+            val layout = layoutForWidthDp(maxWidth.value.toInt())
+            val contentMaxWidth = contentMaxWidthDp(layout).dp
+
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .widthIn(max = contentMaxWidth)
+                    .align(Alignment.TopCenter),
+            ) {
             // Fixed tab header — stays visible while content scrolls.
             // SecondaryScrollableTabRow adapts: scrollable when tabs overflow,
             // fills width otherwise. Better than chips that clip on small screens.
@@ -352,7 +367,8 @@ fun GamesScreen(
                 }
             }
         }  // PullToRefreshBox
-        }  // Column
+            }  // Column
+        }  // BoxWithConstraints
     }
 }
 
@@ -386,7 +402,8 @@ fun GameCard(
                 }
             ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.large,
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

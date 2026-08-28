@@ -180,6 +180,7 @@ fun LoginContent(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
+                .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(32.dp)
                 .verticalScroll(rememberScrollState())
                 .widthIn(max = 400.dp),

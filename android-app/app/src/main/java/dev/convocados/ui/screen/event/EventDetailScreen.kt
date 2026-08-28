@@ -1019,7 +1019,14 @@ fun EventDetailScreen(
                 val fillFraction = if (ev.maxPlayers > 0) active.size.toFloat() / ev.maxPlayers else 0f
 
                 PullToRefreshBox(isRefreshing = ds.refreshing, onRefresh = { viewModel.refresh(eventId) }, modifier = Modifier.fillMaxSize().padding(padding)) {
-                    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 1200.dp)
+                            .align(Alignment.TopCenter)
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp),
+                    ) {
                         if (shouldShowOfflineStaleBanner(state.refreshFailed, event != null, isOnline)) OfflineStaleBanner()
                         // ── HERO ───────────────────────────────────────────────
                         Box(

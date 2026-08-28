@@ -1,4 +1,5 @@
 import java.util.Properties
+import javax.imageio.ImageIO
 
 plugins {
     alias(libs.plugins.android.application)
@@ -7,6 +8,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.play.publisher)
+    alias(libs.plugins.roborazzi)
 }
 
 val localProperties = Properties().apply {
@@ -73,6 +75,7 @@ android {
     }
 
     testOptions {
+        unitTests.isIncludeAndroidResources = true
         unitTests.isReturnDefaultValues = true
     }
 
@@ -147,6 +150,50 @@ tasks.register("validateTargetSdk") {
 tasks.matching { it.name.contains("Release") && it.name.startsWith("assemble") || it.name.startsWith("bundle") }
     .configureEach { dependsOn("validateGoogleClientId", "validateTargetSdk") }
 
+val wearStoreListingSource = project.file("src/test/screenshots/store-listing")
+val wearStoreListingOutput = rootProject.file("artifacts/store-listing/wear")
+val wearStoreListingNames = listOf("games.png", "live_score.png", "quick_game.png", "history.png")
+val wearStoreListingDimensions = 390 to 390
+
+tasks.register("generateWearStoreListing") {
+    notCompatibleWithConfigurationCache("The task validates and copies generated PNGs using JVM image tooling")
+    dependsOn("verifyRoborazziDebug")
+
+    doLast {
+        if (!wearStoreListingSource.isDirectory) {
+            throw GradleException("Wear store-listing screenshot source directory is missing: $wearStoreListingSource")
+        }
+
+        val actualFiles = wearStoreListingSource.listFiles()
+            ?.filter { it.isFile && it.extension == "png" }
+            ?.map { it.name }
+            ?.toSet()
+            .orEmpty()
+        val expectedFiles = wearStoreListingNames.toSet()
+        if (actualFiles != expectedFiles) {
+            throw GradleException(
+                "Expected Wear store-listing files $expectedFiles, but found ${actualFiles.sorted()}"
+            )
+        }
+
+        wearStoreListingOutput.deleteRecursively()
+        wearStoreListingSource.copyRecursively(wearStoreListingOutput, overwrite = true)
+        wearStoreListingNames.forEach { name ->
+            val imageFile = wearStoreListingOutput.resolve(name)
+            val image = ImageIO.read(imageFile)
+                ?: throw GradleException("Unable to read Wear store-listing PNG: $imageFile")
+            if (image.width != wearStoreListingDimensions.first || image.height != wearStoreListingDimensions.second) {
+                throw GradleException(
+                    "$imageFile is ${image.width}x${image.height}; " +
+                        "expected ${wearStoreListingDimensions.first}x${wearStoreListingDimensions.second}"
+                )
+            }
+        }
+        println("Generated ${expectedFiles.size} Wear store-listing screenshots in ${wearStoreListingOutput.absolutePath}")
+    }
+}
+
+
 dependencies {
     // Wear Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -213,6 +260,13 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Deterministic JVM Compose screenshots for round-form-factor fixtures.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     // Instrumented tests (Room DAOs, TokenStore, ApiClient)
     androidTestImplementation(libs.junit)

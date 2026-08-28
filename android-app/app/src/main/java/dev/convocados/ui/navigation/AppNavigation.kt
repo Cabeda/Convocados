@@ -4,11 +4,7 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.navigation.NavDestination
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
@@ -21,7 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -31,6 +27,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.convocados.BuildConfig
+import dev.convocados.R
 import dev.convocados.ui.screen.login.LoginScreen
 import dev.convocados.ui.screen.games.GamesScreen
 import dev.convocados.ui.screen.stats.StatsScreen
@@ -95,9 +92,15 @@ fun AppNavigation(
     }
 
     val bottomItems = listOf(
-        BottomNavItem(Route.Games.route, "Games") { Icon(Icons.Default.SportsScore, "Games") },
-        BottomNavItem(Route.Stats.route, "Stats") { Icon(Icons.Default.BarChart, "Stats") },
-        BottomNavItem(Route.Profile.route, "Profile") { Icon(Icons.Default.Person, "Profile") },
+        BottomNavItem(Route.Games.route, stringResource(R.string.games_tab)) {
+            Icon(Icons.Default.SportsScore, contentDescription = stringResource(R.string.games_tab))
+        },
+        BottomNavItem(Route.Stats.route, stringResource(R.string.stats)) {
+            Icon(Icons.Default.BarChart, contentDescription = stringResource(R.string.stats))
+        },
+        BottomNavItem(Route.Profile.route, stringResource(R.string.profile)) {
+            Icon(Icons.Default.Person, contentDescription = stringResource(R.string.profile))
+        },
     )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -141,7 +144,6 @@ fun AppNavigation(
             NavHost(
                 navController = navController,
                 startDestination = startDestination,
-                modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars),
             ) {
                 composable(Route.Login.route) {
                     // ADR-0012: post-login navigation is owned by the LaunchedEffect
