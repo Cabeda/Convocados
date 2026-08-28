@@ -105,6 +105,98 @@ class DateTimeUtilTest {
         )
     }
 
+    @Test
+    fun `formatRelativeTime keeps a future sub-minute game as a countdown`() {
+        val now = Instant.parse("2026-08-28T10:00:00Z")
+
+        assertEquals(
+            "In 1m",
+            formatRelativeTime("2026-08-28T10:00:30Z", now),
+        )
+    }
+
+    // ── gameListTimeState ─────────────────────────────────────────────────
+
+    @Test
+    fun `gameListTimeState is upcoming before kickoff`() {
+        val now = Instant.parse("2026-08-28T10:00:00Z")
+
+        assertEquals(
+            GameListTimeState.UPCOMING,
+            gameListTimeState("2026-08-28T10:30:00Z", "football-5v5", now),
+        )
+    }
+
+    @Test
+    fun `gameListTimeState is live at kickoff and until sport duration ends`() {
+        val kickoff = Instant.parse("2026-08-28T10:00:00Z")
+
+        assertEquals(
+            GameListTimeState.LIVE,
+            gameListTimeState("2026-08-28T10:00:00Z", "football-5v5", kickoff),
+        )
+        assertEquals(
+            GameListTimeState.LIVE,
+            gameListTimeState(
+                "2026-08-28T10:00:00Z",
+                "football-5v5",
+                kickoff.plusSeconds(3_599),
+            ),
+        )
+    }
+
+    @Test
+    fun `gameListTimeState is ended at the sport duration boundary`() {
+        val kickoff = Instant.parse("2026-08-28T10:00:00Z")
+
+        assertEquals(
+            GameListTimeState.ENDED,
+            gameListTimeState(
+                "2026-08-28T10:00:00Z",
+                "football-5v5",
+                kickoff.plus(1, ChronoUnit.HOURS),
+            ),
+        )
+        assertEquals(
+            GameListTimeState.ENDED,
+            gameListTimeState(
+                "2026-08-28T10:00:00Z",
+                "football-5v5",
+                kickoff.plus(90, ChronoUnit.MINUTES),
+            ),
+        )
+    }
+
+    @Test
+    fun `gameListTimeState uses each sports configured duration`() {
+        val kickoff = Instant.parse("2026-08-28T10:00:00Z")
+
+        assertEquals(
+            GameListTimeState.ENDED,
+            gameListTimeState(
+                "2026-08-28T10:00:00Z",
+                "basketball",
+                kickoff.plus(48, ChronoUnit.MINUTES),
+            ),
+        )
+        assertEquals(
+            GameListTimeState.LIVE,
+            gameListTimeState(
+                "2026-08-28T10:00:00Z",
+                "football-7v7",
+                kickoff.plus(60, ChronoUnit.MINUTES),
+            ),
+        )
+    }
+
+    @Test
+    fun `gameListTimeState returns unknown for an invalid date`() {
+        assertEquals(
+            GameListTimeState.UNKNOWN,
+            gameListTimeState("not-a-date", "football-5v5", Instant.EPOCH),
+        )
+    }
+
     // ── canScoreGame ──────────────────────────────────────────────────────
 
     @Test

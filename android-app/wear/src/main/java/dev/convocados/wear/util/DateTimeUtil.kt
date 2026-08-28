@@ -46,9 +46,11 @@ fun isStalePastGame(dateTime: String, isRecurring: Boolean): Boolean {
 /** Human-friendly relative time label for wear UI. */
 fun formatRelativeTime(dateTime: String, now: Instant = Instant.now()): String {
     val instant = parseInstant(dateTime) ?: return dateTime
+    val seconds = ChronoUnit.SECONDS.between(now, instant)
     val minutes = ChronoUnit.MINUTES.between(now, instant)
 
     return when {
+        seconds > 0 && minutes == 0L -> "In 1m"
         minutes in -120..0 -> "In progress"
         minutes in 1..59 -> "In ${minutes}m"
         minutes in 60..1440 -> "In ${minutes / 60}h ${minutes % 60}m"
@@ -78,6 +80,29 @@ fun sportDurationMinutes(sport: String): Int = when (sport) {
     "tennis-singles", "tennis-doubles" -> 90
     "padel" -> 90
     else -> 60
+}
+
+enum class GameListTimeState {
+    UPCOMING,
+    LIVE,
+    ENDED,
+    UNKNOWN,
+}
+
+/** Classifies the games-list label using kickoff and the sport's expected duration. */
+fun gameListTimeState(
+    dateTime: String,
+    sport: String,
+    now: Instant = Instant.now(),
+): GameListTimeState {
+    val start = parseInstant(dateTime) ?: return GameListTimeState.UNKNOWN
+    val end = start.plus(sportDurationMinutes(sport).toLong(), ChronoUnit.MINUTES)
+
+    return when {
+        now.isBefore(start) -> GameListTimeState.UPCOMING
+        now.isBefore(end) -> GameListTimeState.LIVE
+        else -> GameListTimeState.ENDED
+    }
 }
 
 /** Returns elapsed fraction (0f..1f) of a game given its start time and sport. */
