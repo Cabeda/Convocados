@@ -348,4 +348,5 @@
     <string name="will_invite">Inviterà %1$s</string>
     <string name="open_pickup">Pickup aperto</string>
     <string name="claim_pickup">Adotta questo pickup</string>
+    <string name="team_total_elo">ELO totale: %1$d</string>
 </resources>

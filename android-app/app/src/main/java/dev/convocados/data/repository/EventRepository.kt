@@ -177,7 +177,9 @@ class EventRepository @Inject constructor(
     private fun EventDetailEntity.toDomain(players: List<PlayerEntity>, history: List<GameHistoryEntity>) = EventDetail(
         id = id, title = title, location = location, dateTime = dateTime,
         maxPlayers = maxPlayers, sport = sport, ownerId = ownerId,
-        isAdmin = isAdmin, locked = locked, teamOneName = teamOneName, teamTwoName = teamTwoName,
+        isAdmin = isAdmin, eloEnabled = eloEnabled, hideEloInTeams = hideEloInTeams,
+        showCompetitiveData = showCompetitiveData, locked = locked,
+        teamOneName = teamOneName, teamTwoName = teamTwoName,
         players = players.map { it.toDomain() },
         teamResults = teamResultsJson?.let {
             runCatching { EntityJson.decodeFromString<List<TeamResult>>(it) }.getOrNull()

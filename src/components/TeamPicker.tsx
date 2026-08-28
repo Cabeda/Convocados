@@ -15,6 +15,8 @@ interface Props {
   onResultChange: (matches: Imatch[]) => void;
   onTeamNameSave?: (teamIndex: number, newName: string) => void;
   ratingsMap?: Record<string, number>;
+  /** Increment when a server-side randomization starts to animate the reshuffle. */
+  shuffleKey?: number;
 }
 
 interface DragState {
@@ -24,7 +26,16 @@ interface DragState {
   ghostY: number;
 }
 
-export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap }: Props) {
+const PLAYER_ARRIVAL_DURATION_MS = 650;
+const TEAM_SHUFFLE_DURATION_MS = 700;
+
+export function TeamPicker({
+  matches,
+  onResultChange,
+  onTeamNameSave,
+  ratingsMap,
+  shuffleKey = 0,
+}: Props) {
   const theme = useTheme();
   const t = useT();
   const isDark = theme.palette.mode === "dark";
@@ -38,7 +49,30 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
   const [activeDropZone, setActiveDropZone] = useState<string | null>(null);
   const [editingTeam, setEditingTeam] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState("");
+  const [playerMotion, setPlayerMotion] = useState<{
+    name: string;
+    destinationTeam: string;
+  } | null>(null);
+  const [isShuffling, setIsShuffling] = useState(false);
+  const previousShuffleKey = useRef<number | null>(null);
   const teamsRef = useRef<Record<string, HTMLElement | null>>({});
+
+  useEffect(() => {
+    if (!playerMotion) return;
+    const timer = window.setTimeout(() => setPlayerMotion(null), PLAYER_ARRIVAL_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [playerMotion]);
+
+  useEffect(() => {
+    const isFirstRender = previousShuffleKey.current === null;
+    const changed = previousShuffleKey.current !== shuffleKey;
+    previousShuffleKey.current = shuffleKey;
+    if (!changed || (isFirstRender && shuffleKey === 0)) return;
+
+    setIsShuffling(true);
+    const timer = window.setTimeout(() => setIsShuffling(false), TEAM_SHUFFLE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [shuffleKey]);
 
   const teamAtPoint = useCallback((x: number, y: number): string | null => {
     for (const [teamName, el] of Object.entries(teamsRef.current)) {
@@ -53,6 +87,7 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
 
   const commitMove = useCallback((destinationTeam: string | null, sourceName: string, sourceTeam: string) => {
     if (!destinationTeam || destinationTeam === sourceTeam) return;
+    setPlayerMotion({ name: sourceName, destinationTeam });
     const updated = matches.map((match) => {
       if (match.team === sourceTeam) {
         return { ...match, players: match.players.filter((p) => p.name !== sourceName) };
@@ -70,7 +105,9 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
 
   const handlePointerDown = useCallback((e: React.PointerEvent, playerName: string, teamName: string) => {
     if (e.button !== undefined && e.button !== 0) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (typeof e.currentTarget.setPointerCapture === "function") {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
     e.preventDefault();
     setDrag({ name: playerName, team: teamName, ghostX: e.clientX, ghostY: e.clientY });
     setActiveDropZone(null);
@@ -122,10 +159,27 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
         </Box>
       )}
       <Box
+        data-testid="team-picker"
+        data-shuffling={isShuffling ? "true" : "false"}
+        data-shuffle-key={shuffleKey}
         sx={{
           display: "grid",
           gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
           gap: 2,
+          "@keyframes team-player-arrival": {
+            "0%": { opacity: 0, transform: "translateY(-18px) scale(0.92) rotate(-2deg)" },
+            "65%": { opacity: 1, transform: "translateY(3px) scale(1.015) rotate(0.5deg)" },
+            "100%": { opacity: 1, transform: "translateY(0) scale(1) rotate(0)" },
+          },
+          "@keyframes team-player-shuffle": {
+            "0%": { transform: "translateX(0) rotate(0)" },
+            "30%": { transform: "translateX(-8px) rotate(-1deg)" },
+            "60%": { transform: "translateX(8px) rotate(1deg)" },
+            "100%": { transform: "translateX(0) rotate(0)" },
+          },
+          "@media (prefers-reduced-motion: reduce)": {
+            "& *": { animationDuration: "1ms !important", transitionDuration: "1ms !important" },
+          },
         }}
         onPointerMove={drag ? handlePointerMove : undefined}
         onPointerUp={drag ? handlePointerUp : undefined}
@@ -134,6 +188,7 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
         {matches.map((team, teamIdx) => {
           const colors = TEAM_COLORS[teamIdx % TEAM_COLORS.length];
           const isActive = activeDropZone === team.team;
+          const isMotionDestination = playerMotion?.destinationTeam === team.team;
           const n = team.players.length;
           const headerBg = alpha(colors.main, isDark ? 0.15 : 0.08);
           const headerColor = theme.palette.text.primary;
@@ -147,6 +202,9 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
           return (
             <Paper
               key={team.team}
+              data-testid="team-panel"
+              data-team={team.team}
+              data-motion={isMotionDestination ? "destination" : undefined}
               ref={(el: HTMLElement | null) => { teamsRef.current[team.team] = el; }}
               elevation={isActive ? 6 : 1}
               sx={{
@@ -251,15 +309,25 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
                   py: 0.5,
                   bgcolor: isActive ? alpha(accentColor, 0.04) : "transparent",
                   transition: "background-color 0.15s",
+                  animation: isShuffling
+                    ? "team-player-shuffle 700ms cubic-bezier(0.22, 1, 0.36, 1) both"
+                    : undefined,
+                  animationDelay: isShuffling ? `${teamIdx * 55}ms` : undefined,
                 }}>
                   {team.players.map((player, i) => {
                     const isBeingDragged = drag?.name === player.name && drag?.team === team.team;
+                    const isArriving = playerMotion?.name === player.name && playerMotion.destinationTeam === team.team;
                     return (
                       <ListItem
                         key={player.name}
+                        data-testid={`team-player-${player.name}`}
+                        data-motion={isArriving ? "arriving" : undefined}
                         sx={{
                           userSelect: "none",
                           opacity: isBeingDragged ? 0.3 : 1,
+                          animation: isArriving
+                            ? "team-player-arrival 650ms cubic-bezier(0.22, 1, 0.36, 1) both"
+                            : undefined,
                           transition: "opacity 0.15s, background-color 0.1s",
                           borderRadius: 2,
                           mx: 0.5,
@@ -295,6 +363,7 @@ export function TeamPicker({ matches, onResultChange, onTeamNameSave, ratingsMap
                             }
                           }} />
                         <Box
+                          data-testid={`team-player-handle-${player.name}`}
                           onPointerDown={(e) => handlePointerDown(e, player.name, team.team)}
                           sx={{
                             cursor: drag ? "grabbing" : "grab",
