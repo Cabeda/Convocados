@@ -143,6 +143,18 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
     suspend fun getTeams(eventId: String): TeamsResponse =
         get("/api/events/$eventId/teams")
 
+    suspend fun getMvp(eventId: String, historyId: String): MvpResponse =
+        get("/api/events/$eventId/history/$historyId/mvp")
+
+    suspend fun castMvpVote(
+        eventId: String,
+        historyId: String,
+        votedForPlayerId: String,
+    ): MvpVoteResponse = postForResult(
+        "/api/events/$eventId/history/$historyId/mvp-vote",
+        mapOf("votedForPlayerId" to votedForPlayerId),
+    )
+
     suspend fun updateTeams(eventId: String, request: UpdateTeamsRequest): TeamsResponse =
         patch("/api/events/$eventId/teams", request)
 

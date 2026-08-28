@@ -11,8 +11,10 @@ object WearRoutes {
     const val QUICK_SCORE = "quick_score"
     const val SAVE_QUICK = "save_quick"
     const val HISTORY = "history"
+    const val MVP = "mvp/{eventId}/{historyId}"
 
     fun score(eventId: String) = "score/$eventId"
+    fun mvp(eventId: String, historyId: String) = "mvp/$eventId/$historyId"
     fun teams(eventId: String) = "teams/$eventId"
     fun addPlayer(eventId: String) = "teams/$eventId/add-player"
 }
