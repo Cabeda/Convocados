@@ -1,5 +1,8 @@
 package dev.convocados.wear.data.local
 
+import dev.convocados.wear.data.api.SetScore
+import kotlinx.serialization.json.Json
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -8,6 +11,27 @@ class QuickGameStateTest {
 
     private val kickoff = 1_000_000_000_000L
     private fun min(m: Int) = m * 60_000L
+
+    @Test
+    fun `legacy json defaults to standard sport and empty sets`() {
+        val legacy = """{"scoreOne":2,"scoreTwo":1,"durationMinutes":60,"alarmIntervalMinutes":10,"kickoffEpochMs":1000}"""
+        val game = Json { ignoreUnknownKeys = true }.decodeFromString<QuickGameState>(legacy)
+
+        assertEquals("standard", game.sport)
+        assertTrue(game.scoreSets.isEmpty())
+        assertEquals(2, game.scoreOne)
+    }
+
+    @Test
+    fun `sport and structured score are part of persisted state`() {
+        val game = QuickGameState(
+            sport = "padel",
+            scoreSets = listOf(SetScore(6, 4)),
+        )
+
+        assertEquals("padel", game.sport)
+        assertEquals(6, game.scoreSets.single().teamOne)
+    }
 
     @Test
     fun `not started until a kickoff is set`() {

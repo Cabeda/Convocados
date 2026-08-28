@@ -1,6 +1,8 @@
 package dev.convocados.ui.screen.event
 
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -880,6 +882,7 @@ fun EventDetailScreen(
     val event by viewModel.event.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val isOnline = rememberNetworkAvailable()
     var newPlayer by remember { mutableStateOf("") }
     var editingScoreId by remember { mutableStateOf<String?>(null) }
     var scoreOne by remember { mutableStateOf("") }
@@ -1017,7 +1020,7 @@ fun EventDetailScreen(
 
                 PullToRefreshBox(isRefreshing = ds.refreshing, onRefresh = { viewModel.refresh(eventId) }, modifier = Modifier.fillMaxSize().padding(padding)) {
                     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
-                        if (ds.isStale) OfflineStaleBanner()
+                        if (shouldShowOfflineStaleBanner(state.refreshFailed, event != null, isOnline)) OfflineStaleBanner()
                         // ── HERO ───────────────────────────────────────────────
                         Box(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Brush.verticalGradient(listOf(bg, MaterialTheme.colorScheme.surface))).padding(16.dp)
@@ -1833,6 +1836,49 @@ private fun EventErrorPage(onRetry: () -> Unit, onBackToGames: () -> Unit, modif
         TextButton(onClick = onBackToGames, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.back_to_games)) }
     }
 }
+
+internal fun shouldShowOfflineStaleBanner(
+    refreshFailed: Boolean,
+    hasCachedEvent: Boolean,
+    isOnline: Boolean,
+): Boolean = refreshFailed && hasCachedEvent && !isOnline
+
+@Composable
+private fun rememberNetworkAvailable(): Boolean {
+    val connectivityManager = LocalContext.current
+        .getSystemService(ConnectivityManager::class.java)
+    var isOnline by remember(connectivityManager) {
+        mutableStateOf(connectivityManager?.hasValidatedNetwork() == true)
+    }
+
+    DisposableEffect(connectivityManager) {
+        if (connectivityManager == null) return@DisposableEffect onDispose {}
+
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                isOnline = connectivityManager.hasValidatedNetwork()
+            }
+
+            override fun onLost(network: android.net.Network) {
+                isOnline = connectivityManager.hasValidatedNetwork()
+            }
+
+            override fun onCapabilitiesChanged(
+                network: android.net.Network,
+                networkCapabilities: NetworkCapabilities,
+            ) {
+                isOnline = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            }
+        }
+        connectivityManager.registerDefaultNetworkCallback(callback)
+        onDispose { connectivityManager.unregisterNetworkCallback(callback) }
+    }
+    return isOnline
+}
+
+private fun ConnectivityManager.hasValidatedNetwork(): Boolean =
+    activeNetwork?.let { getNetworkCapabilities(it) }
+        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
 
 /** Slim banner over stale (cached) content shown when a refresh fails offline. */
 @Composable
