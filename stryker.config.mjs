@@ -30,6 +30,9 @@ export default {
     low: 85,
     break: 80,
   },
-  concurrency: 2,
+  // better-sqlite3 is a native addon; running multiple Stryker test runners
+  // concurrently can SIGSEGV and leave Vitest workers holding moved databases.
+  // Keep the mutation run serialized and let CI bound the overall job.
+  concurrency: 1,
   timeoutMS: 30000,
 };
