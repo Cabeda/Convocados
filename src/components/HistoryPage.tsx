@@ -17,9 +17,10 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
 import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
+import { hasCompletedMatch, matchScoreFromSets, type SetScore } from "~/lib/scoring";
 import { ScoreRoller } from "./event/ScoreRoller";
 import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
-import { HistoryCardFull, type HistoryCardFullEntry } from "./HistoryCardFull";
+import { HistoryCardFull, TennisScoreBand, type HistoryCardFullEntry } from "./HistoryCardFull";
 
 type HistoryEntry = HistoryCardFullEntry;
 
@@ -29,6 +30,7 @@ interface AddHistoricalGameDialogProps {
   eventId: string;
   defaultTeamOneName: string;
   defaultTeamTwoName: string;
+  sport: string;
   knownPlayers: { name: string; gamesPlayed: number; userId?: string | null; image?: string | null }[];
   playerRatings: { name: string; rating: number; gamesPlayed: number }[];
   onSuccess: (entry: HistoryEntry) => void;
@@ -40,6 +42,7 @@ function AddHistoricalGameDialog({
   eventId,
   defaultTeamOneName,
   defaultTeamTwoName,
+  sport,
   knownPlayers,
   playerRatings,
   onSuccess,
@@ -55,6 +58,8 @@ function AddHistoricalGameDialog({
   const [teamTwoName, setTeamTwoName] = useState(defaultTeamTwoName);
   const [scoreOne, setScoreOne] = useState("");
   const [scoreTwo, setScoreTwo] = useState("");
+  const [scoreSets, setScoreSets] = useState<SetScore[]>([]);
+  const isTennisScoring = ["tennis", "tennis-singles", "tennis-doubles", "padel"].includes(sport.toLowerCase());
   const [team1Players, setTeam1Players] = useState<{ name: string; order: number }[]>([]);
   const [team2Players, setTeam2Players] = useState<{ name: string; order: number }[]>([]);
   const [newPlayerInputs, setNewPlayerInputs] = useState<Record<number, string>>({});
@@ -68,25 +73,27 @@ function AddHistoricalGameDialog({
       setTeamTwoName(defaultTeamTwoName);
       setScoreOne("");
       setScoreTwo("");
+      setScoreSets([]);
       setTeam1Players([]);
       setTeam2Players([]);
       setNewPlayerInputs({});
       setError(null);
     }
-  }, [open, defaultTeamOneName, defaultTeamTwoName]);
+  }, [open, defaultTeamOneName, defaultTeamTwoName, sport]);
 
   // ELO preview computation
   const eloPreview: EloUpdate[] = useMemo(() => {
     if (team1Players.length === 0 || team2Players.length === 0) return [];
-    const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
-    const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
+    const tennisScore = isTennisScoring && hasCompletedMatch(scoreSets) ? matchScoreFromSets(scoreSets) : null;
+    const s1 = isTennisScoring ? tennisScore?.teamOne ?? null : scoreOne === "" ? null : parseInt(scoreOne, 10);
+    const s2 = isTennisScoring ? tennisScore?.teamTwo ?? null : scoreTwo === "" ? null : parseInt(scoreTwo, 10);
     if (s1 === null || s2 === null) return [];
     const teams = [
       { team: teamOneName, players: team1Players },
       { team: teamTwoName, players: team2Players },
     ];
     return computeGameUpdates(playerRatings, teams, s1, s2);
-  }, [team1Players, team2Players, teamOneName, teamTwoName, scoreOne, scoreTwo, playerRatings]);
+  }, [team1Players, team2Players, teamOneName, teamTwoName, scoreOne, scoreTwo, scoreSets, isTennisScoring, playerRatings]);
 
   const addPlayerToTeam = (teamIdx: number, playerName?: string) => {
     const name = (playerName ?? newPlayerInputs[teamIdx] ?? "").trim();
@@ -111,7 +118,7 @@ function AddHistoricalGameDialog({
   };
 
   const handleSubmit = async () => {
-    if (!dateTime || !teamOneName || !teamTwoName || scoreOne === "" || scoreTwo === "") {
+    if (!dateTime || !teamOneName || !teamTwoName || (isTennisScoring ? scoreSets.length === 0 : scoreOne === "" || scoreTwo === "")) {
       setError(t("errorPlayerNameRequired"));
       return;
     }
@@ -136,8 +143,9 @@ function AddHistoricalGameDialog({
           dateTime: new Date(dateTime).toISOString(),
           teamOneName,
           teamTwoName,
-          scoreOne: parseInt(scoreOne, 10),
-          scoreTwo: parseInt(scoreTwo, 10),
+          ...(isTennisScoring
+            ? { scoreSets }
+            : { scoreOne: parseInt(scoreOne, 10), scoreTwo: parseInt(scoreTwo, 10) }),
           teamsSnapshot,
         }),
       });
@@ -207,24 +215,39 @@ function AddHistoricalGameDialog({
             />
           </Stack>
 
-          <Box sx={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
-            py: 2, px: 3, borderRadius: 3,
-            backgroundColor: alpha(theme.palette.action.hover, 0.04),
-            border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-          }}>
-            <ScoreRoller
-              value={scoreOne}
-              onChange={setScoreOne}
-              teamName={teamOneName}
+          {isTennisScoring ? (
+            <TennisScoreBand
+              teamOneName={teamOneName}
+              teamTwoName={teamTwoName}
+              scoreSets={scoreSets}
+              fallbackScoreOne={null}
+              fallbackScoreTwo={null}
+              canEdit
+              onChange={setScoreSets}
+              setLabel={t("scoreSetLabel")}
+              addSetLabel={t("addScoreSet")}
+              tiebreakLabel={t("tiebreakLabel")}
             />
-            <Typography variant="h4" color="text.disabled" fontWeight={300}>:</Typography>
-            <ScoreRoller
-              value={scoreTwo}
-              onChange={setScoreTwo}
-              teamName={teamTwoName}
-            />
-          </Box>
+          ) : (
+            <Box sx={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
+              py: 2, px: 3, borderRadius: 3,
+              backgroundColor: alpha(theme.palette.action.hover, 0.04),
+              border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+            }}>
+              <ScoreRoller
+                value={scoreOne}
+                onChange={setScoreOne}
+                teamName={teamOneName}
+              />
+              <Typography variant="h4" color="text.disabled" fontWeight={300}>:</Typography>
+              <ScoreRoller
+                value={scoreTwo}
+                onChange={setScoreTwo}
+                teamName={teamTwoName}
+              />
+            </Box>
+          )}
 
           <Typography variant="subtitle2" fontWeight={700}>{t("selectPlayers")}</Typography>
 
@@ -319,6 +342,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [title, setTitle] = useState("");
   const [teamOneName, setTeamOneName] = useState("");
   const [teamTwoName, setTeamTwoName] = useState("");
+  const [sport, setSport] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -350,6 +374,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
     setTitle(ev.title);
     setTeamOneName(ev.teamOneName ?? "Team A");
     setTeamTwoName(ev.teamTwoName ?? "Team B");
+    setSport(ev.sport ?? "");
     setOwnerId(ev.ownerId ?? null);
     setIsAdmin(!!ev.isAdmin);
     setTimezone(ev.timezone || "UTC");
@@ -521,6 +546,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
             eventId={eventId}
             defaultTeamOneName={teamOneName}
             defaultTeamTwoName={teamTwoName}
+            sport={sport}
             knownPlayers={knownPlayers}
             playerRatings={playerRatings}
             onSuccess={handleAddHistoricalSuccess}

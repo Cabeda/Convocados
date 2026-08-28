@@ -24,8 +24,8 @@ object WearDatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): WearDatabase =
         Room.databaseBuilder(context, WearDatabase::class.java, "convocados_wear.db")
+            .addMigrations(WearDatabase.MIGRATION_5_6, WearDatabase.MIGRATION_6_7)
             .fallbackToDestructiveMigration()
-            .build()
 
     @Provides
     fun provideGameDao(db: WearDatabase): WearGameDao = db.gameDao()

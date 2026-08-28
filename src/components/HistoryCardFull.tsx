@@ -38,6 +38,7 @@ import { matchesWithName } from "~/lib/stringMatch";
 import { computeGameUpdates, expectedScore, kFactor, type EloUpdate } from "~/lib/elo";
 import { formatDateInTz } from "~/lib/timezones";
 import { isNameInPaymentsSnapshot, isNameInTeamsSnapshot } from "~/lib/snapshotParticipants";
+import { formatSetScore, hasCompletedMatch, matchScoreFromSets, type SetScore } from "~/lib/scoring";
 import { PaymentConfigDialog, type PaymentConfigGame } from "./PaymentConfigDialog";
 import { playerInputPasswordManagerProps } from "./event/PlayerAutocomplete";
 
@@ -52,6 +53,8 @@ export interface HistoryCardFullEntry {
   status: "played" | "cancelled";
   scoreOne: number | null;
   scoreTwo: number | null;
+  scoreSets?: SetScore[] | null;
+  scoringType?: "standard" | "tennis";
   teamOneName: string;
   teamTwoName: string;
   teamsSnapshot: string | null;
@@ -184,6 +187,123 @@ function EloChipWithPopover({ label, color, variant, tooltipText }: {
   );
 }
 
+export function TennisScoreBand({
+  teamOneName,
+  teamTwoName,
+  scoreSets,
+  fallbackScoreOne,
+  fallbackScoreTwo,
+  fallbackScoreOneText,
+  fallbackScoreTwoText,
+  canEdit,
+  onChange,
+  onFallbackChange,
+  setLabel,
+  addSetLabel,
+  tiebreakLabel,
+}: {
+  teamOneName: string;
+  teamTwoName: string;
+  scoreSets: SetScore[];
+  fallbackScoreOne: number | null;
+  fallbackScoreTwo: number | null;
+  fallbackScoreOneText?: string;
+  fallbackScoreTwoText?: string;
+  canEdit: boolean;
+  onChange: React.Dispatch<React.SetStateAction<SetScore[]>>;
+  onFallbackChange?: (teamOne: string, teamTwo: string) => void;
+  setLabel: string;
+  addSetLabel: string;
+  tiebreakLabel: string;
+}) {
+  const updateScore = (index: number, side: "teamOne" | "teamTwo", delta: number) => {
+    onChange((current) => current.map((set, i) => i === index ? { ...set, [side]: Math.max(0, set[side] + delta) } : set));
+  };
+  const updateTiebreak = (index: number, side: "tiebreakTeamOne" | "tiebreakTeamTwo", delta: number) => {
+    onChange((current) => current.map((set, i) => i === index ? { ...set, [side]: Math.max(0, (set[side] ?? 0) + delta) } : set));
+  };
+  const toggleTiebreak = (index: number) => {
+    onChange((current) => current.map((set, i) => {
+      if (i !== index) return set;
+      return set.tiebreakTeamOne === undefined || set.tiebreakTeamOne === null
+        ? { ...set, tiebreakTeamOne: 0, tiebreakTeamTwo: 0 }
+        : { teamOne: set.teamOne, teamTwo: set.teamTwo };
+    }));
+  };
+
+  if (!canEdit) {
+    return (
+      <Stack alignItems="center" spacing={1}>
+        <Typography variant="h3" fontWeight={800} sx={{ fontVariantNumeric: "tabular-nums" }}>
+          {scoreSets.length > 0
+            ? scoreSets.map(formatSetScore).join(" · ")
+            : fallbackScoreOne !== null && fallbackScoreTwo !== null
+              ? `${fallbackScoreOne}-${fallbackScoreTwo}`
+              : "—"}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">{teamOneName} · {teamTwoName}</Typography>
+      </Stack>
+    );
+  }
+
+  return (
+    <Stack spacing={1.25} alignItems="stretch">
+      {scoreSets.length === 0 && fallbackScoreOneText !== undefined && fallbackScoreTwoText !== undefined && onFallbackChange && (
+        <Stack direction="row" spacing={1} justifyContent="center">
+          <TextField
+            type="number"
+            size="small"
+            label={teamOneName}
+            value={fallbackScoreOneText}
+            onChange={(event) => onFallbackChange(event.target.value, fallbackScoreTwoText)}
+            slotProps={{ htmlInput: { min: 0, step: 1 } }}
+          />
+          <TextField
+            type="number"
+            size="small"
+            label={teamTwoName}
+            value={fallbackScoreTwoText}
+            onChange={(event) => onFallbackChange(fallbackScoreOneText, event.target.value)}
+            slotProps={{ htmlInput: { min: 0, step: 1 } }}
+          />
+        </Stack>
+      )}
+      {scoreSets.map((set, index) => (
+        <Paper key={index} variant="outlined" sx={{ p: 1, borderRadius: 2 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+            <Typography variant="caption" fontWeight={700} sx={{ minWidth: 42 }}>{setLabel} {index + 1}</Typography>
+            {(["teamOne", "teamTwo"] as const).map((side) => (
+              <Stack key={side} direction="row" alignItems="center" spacing={0.25}>
+                <IconButton size="small" onClick={() => updateScore(index, side, -1)} aria-label={`Decrease ${side} set score`}><RemoveIcon fontSize="small" /></IconButton>
+                <Typography sx={{ minWidth: "2ch", textAlign: "center", fontWeight: 800 }}>{set[side]}</Typography>
+                <IconButton size="small" color="primary" onClick={() => updateScore(index, side, 1)} aria-label={`Increase ${side} set score`}><AddIcon fontSize="small" /></IconButton>
+              </Stack>
+            ))}
+            <Button size="small" onClick={() => toggleTiebreak(index)} sx={{ minWidth: 0, textTransform: "none" }}>
+              {(set.tiebreakTeamOne === undefined || set.tiebreakTeamOne === null) ? tiebreakLabel : `× ${tiebreakLabel}`}
+            </Button>
+          </Stack>
+          {(set.tiebreakTeamOne !== undefined && set.tiebreakTeamOne !== null && set.tiebreakTeamTwo !== undefined && set.tiebreakTeamTwo !== null) && (
+            <Stack direction="row" justifyContent="center" spacing={1} sx={{ pt: 0.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>{tiebreakLabel}</Typography>
+              {(["tiebreakTeamOne", "tiebreakTeamTwo"] as const).map((side) => (
+                <Stack key={side} direction="row" alignItems="center" spacing={0.25}>
+                  <IconButton size="small" onClick={() => updateTiebreak(index, side, -1)} aria-label={`Decrease ${side}`}><RemoveIcon fontSize="small" /></IconButton>
+                  <Typography variant="body2" sx={{ minWidth: "2ch", textAlign: "center" }}>{set[side]}</Typography>
+                  <IconButton size="small" color="primary" onClick={() => updateTiebreak(index, side, 1)} aria-label={`Increase ${side}`}><AddIcon fontSize="small" /></IconButton>
+                </Stack>
+              ))}
+            </Stack>
+          )}
+        </Paper>
+      ))}
+      <Button variant="outlined" size="small" disabled={scoreSets.length >= 5} onClick={() => onChange((current) => [...current, { teamOne: 0, teamTwo: 0 }])} sx={{ textTransform: "none" }}>
+        {addSetLabel}
+      </Button>
+    </Stack>
+  );
+}
+
 export function HistoryCardFull({
   entry,
   eventId,
@@ -224,6 +344,8 @@ export function HistoryCardFull({
 
   const [scoreOne, setScoreOne] = useState(entry.scoreOne !== null ? String(entry.scoreOne) : "");
   const [scoreTwo, setScoreTwo] = useState(entry.scoreTwo !== null ? String(entry.scoreTwo) : "");
+  const isTennisScoring = entry.scoringType === "tennis";
+  const [scoreSets, setScoreSets] = useState<SetScore[]>(entry.scoreSets ?? []);
   const [savingTeams, setSavingTeams] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -326,6 +448,33 @@ export function HistoryCardFull({
     };
   }, [scoreOne, scoreTwo, canEditScore, patch]);
 
+  const scoreSetsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedScoreSets = useRef(JSON.stringify(entry.scoreSets ?? []));
+
+  // Keep local editors aligned with server responses, including explicit nulls
+  // when a scalar update replaces structured scoring.
+  useEffect(() => {
+    setScoreOne(entry.scoreOne !== null ? String(entry.scoreOne) : "");
+    setScoreTwo(entry.scoreTwo !== null ? String(entry.scoreTwo) : "");
+    setScoreSets(entry.scoreSets ?? []);
+    lastSavedScore.current = { one: entry.scoreOne, two: entry.scoreTwo };
+    lastSavedScoreSets.current = JSON.stringify(entry.scoreSets ?? []);
+  }, [entry.id, entry.scoreOne, entry.scoreTwo, entry.scoreSets]);
+
+  useEffect(() => {
+    if (!isTennisScoring || !canEditScore) return;
+    const serialized = JSON.stringify(scoreSets);
+    if (serialized === lastSavedScoreSets.current) return;
+    if (scoreSetsSaveTimer.current) clearTimeout(scoreSetsSaveTimer.current);
+    scoreSetsSaveTimer.current = setTimeout(async () => {
+      const result = await patch({ scoreSets });
+      if (result) lastSavedScoreSets.current = serialized;
+    }, SCORE_AUTOSAVE_DEBOUNCE_MS);
+    return () => {
+      if (scoreSetsSaveTimer.current) clearTimeout(scoreSetsSaveTimer.current);
+    };
+  }, [scoreSets, isTennisScoring, canEditScore, patch]);
+
   // ── Status change ──────────────────────────────────────────────────────────
   const handleStatusChange = async (newStatus: "played" | "cancelled" | "upcoming") => {
     setStatusMenuAnchor(null);
@@ -370,12 +519,13 @@ export function HistoryCardFull({
 
   // ── ELO preview ────────────────────────────────────────────────────────────
   const liveEloUpdates: EloUpdate[] = useMemo(() => {
-    if (isCancelled || editableTeams.length !== 2) return [];
-    const s1 = scoreOne === "" ? null : parseInt(scoreOne, 10);
-    const s2 = scoreTwo === "" ? null : parseInt(scoreTwo, 10);
+    if (isCancelled || editableTeams.length !== 2 || (isTennisScoring && !hasCompletedMatch(scoreSets))) return [];
+    const matchScore = matchScoreFromSets(scoreSets);
+    const s1 = isTennisScoring ? matchScore.teamOne : scoreOne === "" ? null : parseInt(scoreOne, 10);
+    const s2 = isTennisScoring ? matchScore.teamTwo : scoreTwo === "" ? null : parseInt(scoreTwo, 10);
     if (s1 === null || s2 === null || isNaN(s1) || isNaN(s2)) return [];
     return computeGameUpdates(playerRatings, editableTeams, s1, s2);
-  }, [editableTeams, scoreOne, scoreTwo, playerRatings, isCancelled]);
+  }, [editableTeams, scoreOne, scoreTwo, scoreSets, isTennisScoring, playerRatings, isCancelled]);
 
   const duplicateNames = useMemo(() => {
     if (editableTeams.length < 2) return [];
@@ -699,6 +849,24 @@ export function HistoryCardFull({
         {/* Score band — same hero zone, no divider */}
         {!isCancelled ? (
           <Box sx={{ pt: 2.5, pb: 1 }}>
+            {isTennisScoring && (
+              <TennisScoreBand
+                teamOneName={entry.teamOneName}
+                teamTwoName={entry.teamTwoName}
+                scoreSets={scoreSets}
+                fallbackScoreOne={entry.scoreOne}
+                fallbackScoreTwo={entry.scoreTwo}
+                canEdit={canEditScore}
+                onChange={setScoreSets}
+                onFallbackChange={(one, two) => { setScoreOne(one); setScoreTwo(two); }}
+                fallbackScoreOneText={scoreOne}
+                fallbackScoreTwoText={scoreTwo}
+                setLabel={t("scoreSetLabel")}
+                addSetLabel={t("addScoreSet")}
+                tiebreakLabel={t("tiebreakLabel")}
+              />
+            )}
+            {!isTennisScoring && (
             <Box sx={{
               display: "grid",
               gridTemplateColumns: "1fr auto 1fr",
@@ -786,8 +954,7 @@ export function HistoryCardFull({
                 )}
               </Stack>
             </Box>
-
-            {/* Status: small text below score, like FotMob "Full time" */}
+            )}
           </Box>
         ) : null}
 

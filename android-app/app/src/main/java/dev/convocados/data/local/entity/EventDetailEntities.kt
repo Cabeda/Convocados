@@ -73,6 +73,7 @@ data class GameHistoryEntity(
     val dateTime: String,
     val scoreOne: Int?,
     val scoreTwo: Int?,
+    val scoreSetsJson: String? = null,
     val teamOneName: String,
     val teamTwoName: String,
 )
@@ -110,6 +111,7 @@ fun GameHistory.toEntity(eventId: String) = GameHistoryEntity(
     dateTime = dateTime,
     scoreOne = scoreOne,
     scoreTwo = scoreTwo,
+    scoreSetsJson = scoreSets?.let { EntityJson.encodeToString(it) },
     teamOneName = teamOneName,
     teamTwoName = teamTwoName
 )

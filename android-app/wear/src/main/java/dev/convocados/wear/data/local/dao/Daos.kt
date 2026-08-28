@@ -37,6 +37,9 @@ interface WearHistoryDao {
     @Query("SELECT * FROM wear_history WHERE eventId = :eventId ORDER BY dateTime DESC LIMIT 1")
     suspend fun getLatestHistory(eventId: String): WearHistoryEntity?
 
+    @Query("SELECT * FROM wear_history WHERE id = :historyId LIMIT 1")
+    suspend fun getHistoryById(historyId: String): WearHistoryEntity?
+
     /** Latest history entry whose dateTime falls within [startOfDayIso, endOfDayIso) — the active game (issue #691). */
     @Query("SELECT * FROM wear_history WHERE eventId = :eventId AND dateTime >= :startOfDayIso AND dateTime < :endOfDayIso ORDER BY dateTime DESC LIMIT 1")
     suspend fun getLatestTodayHistory(eventId: String, startOfDayIso: String, endOfDayIso: String): WearHistoryEntity?
@@ -67,8 +70,8 @@ interface WearHistoryDao {
         insertAll(history)
     }
 
-    @Query("UPDATE wear_history SET scoreOne = :scoreOne, scoreTwo = :scoreTwo WHERE id = :historyId")
-    suspend fun updateScore(historyId: String, scoreOne: Int, scoreTwo: Int)
+    @Query("UPDATE wear_history SET scoreOne = :scoreOne, scoreTwo = :scoreTwo, scoreSetsJson = :scoreSetsJson WHERE id = :historyId")
+    suspend fun updateScore(historyId: String, scoreOne: Int, scoreTwo: Int, scoreSetsJson: String? = null)
 }
 
 @Dao

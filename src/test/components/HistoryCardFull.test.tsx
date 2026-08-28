@@ -488,3 +488,25 @@ describe("HistoryCardFull — typography floor", () => {
     expect(offenders, `fontSize below 12px found:\n${offenders.join("\n")}`).toEqual([]);
   });
 });
+
+
+describe("HistoryCardFull — tennis/padel score", () => {
+  it("falls back to scalar scores for legacy tennis rows", () => {
+    renderCard({ scoringType: "tennis", scoreSets: null, scoreOne: 2, scoreTwo: 1 }, null);
+    expect(screen.getByText("2-1")).toBeInTheDocument();
+  });
+
+  it("renders set scores and tiebreaks for spectators", () => {
+    renderCard({
+      scoringType: "tennis",
+      scoreOne: 2,
+      scoreTwo: 0,
+      scoreSets: [
+        { teamOne: 6, teamTwo: 4 },
+        { teamOne: 7, teamTwo: 6, tiebreakTeamOne: 7, tiebreakTeamTwo: 5 },
+      ],
+    }, null);
+
+    expect(screen.getByText("6-4 · 7-6 (7-5)")).toBeInTheDocument();
+  });
+});

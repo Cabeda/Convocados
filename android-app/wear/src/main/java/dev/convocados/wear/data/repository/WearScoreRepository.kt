@@ -1,12 +1,18 @@
 package dev.convocados.wear.data.repository
 
 import android.util.Log
+import dev.convocados.wear.data.api.ApiException
+import dev.convocados.wear.data.api.ScalarScoreRequest
 import dev.convocados.wear.data.api.ScoreRequest
+import dev.convocados.wear.data.api.SetScore
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,16 +33,25 @@ class WearScoreRepository @Inject constructor(
         scoreTwo: Int,
         teamOneName: String,
         teamTwoName: String,
+        scoreSets: List<SetScore>? = null,
     ): Result<Unit> {
         // Snapshot the pre-edit value so a later sync can detect concurrent edits.
-        val base = historyDao.getLatestHistory(historyId)?.let { it.scoreOne to it.scoreTwo }
-        historyDao.updateScore(historyId, scoreOne, scoreTwo)
+        val base = historyDao.getHistoryById(historyId)
+        val baseScoreSetsJson = base?.scoreSetsJson
+        val scoreSetsJson = scoreSets?.let { Json.encodeToString(it) }
+        historyDao.updateScore(historyId, scoreOne, scoreTwo, scoreSetsJson)
         return try {
             client.patch<dev.convocados.wear.data.api.GameHistory>(
                 "/api/events/$eventId/history/$historyId",
-                ScoreRequest(scoreOne, scoreTwo),
+                if (scoreSets != null) ScoreRequest(scoreOne, scoreTwo, scoreSets)
+                else ScalarScoreRequest(scoreOne, scoreTwo),
             )
             Result.success(Unit)
+        } catch (e: ApiException) {
+            // A server-side validation/authentication failure is not an offline
+            // condition; retrying it would only duplicate an invalid queue item.
+            Log.w("WearScoreRepo", "Score submit rejected by server", e)
+            Result.failure(e)
         } catch (e: Exception) {
             Log.w("WearScoreRepo", "Score submit failed, queuing for sync", e)
             pendingScoreDao.insert(
@@ -47,8 +62,11 @@ class WearScoreRepository @Inject constructor(
                     scoreTwo = scoreTwo,
                     teamOneName = teamOneName,
                     teamTwoName = teamTwoName,
-                    basedOnScoreOne = base?.first,
-                    basedOnScoreTwo = base?.second,
+                    basedOnScoreOne = base?.scoreOne,
+                    basedOnScoreTwo = base?.scoreTwo,
+                    scoreSetsJson = scoreSetsJson,
+                    basedOnScoreSetsJson = baseScoreSetsJson,
+                    baselineCaptured = true,
                 )
             )
             Result.failure(e)
@@ -68,18 +86,30 @@ class WearScoreRepository @Inject constructor(
                 val server = client.get<dev.convocados.wear.data.api.GameHistory>(
                     "/api/events/${score.eventId}/history/${score.historyId}"
                 )
+                val serverScoreSetsJson = server.scoreSets?.let { Json.encodeToString(it) }
                 // Already synced (idempotent).
-                if (server.scoreOne == score.scoreOne && server.scoreTwo == score.scoreTwo) {
+                if (server.scoreOne == score.scoreOne && server.scoreTwo == score.scoreTwo && serverScoreSetsJson == score.scoreSetsJson) {
                     pendingScoreDao.delete(score)
                     synced++
                     continue
                 }
-                val baseMatches = score.basedOnScoreOne == null ||
-                    (server.scoreOne == score.basedOnScoreOne && server.scoreTwo == score.basedOnScoreTwo)
+                val baseMatches = if (!score.baselineCaptured) {
+                    // v6 queue rows predate the marker. Preserve their old
+                    // fail-open behavior for an unknown scalar baseline.
+                    score.basedOnScoreOne == null ||
+                        (server.scoreOne == score.basedOnScoreOne && server.scoreTwo == score.basedOnScoreTwo)
+                } else {
+                    server.scoreOne == score.basedOnScoreOne &&
+                        server.scoreTwo == score.basedOnScoreTwo &&
+                        serverScoreSetsJson == score.basedOnScoreSetsJson
+                }
                 if (baseMatches) {
+                    val request: Any = score.scoreSetsJson?.let {
+                        ScoreRequest(score.scoreOne, score.scoreTwo, Json.decodeFromString<List<SetScore>>(it))
+                    } ?: ScalarScoreRequest(score.scoreOne, score.scoreTwo)
                     client.patch<dev.convocados.wear.data.api.GameHistory>(
                         "/api/events/${score.eventId}/history/${score.historyId}",
-                        ScoreRequest(score.scoreOne, score.scoreTwo),
+                        request,
                     )
                     pendingScoreDao.delete(score)
                     synced++

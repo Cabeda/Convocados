@@ -37,6 +37,10 @@ data class PendingScoreEntity(
     val basedOnScoreTwo: Int? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val retryCount: Int = 0,
+    val scoreSetsJson: String? = null,
+    val basedOnScoreSetsJson: String? = null,
+    /** True when the nullable baseline fields were actually read from Room. */
+    val baselineCaptured: Boolean = true,
 )
 
 /** Cached latest game history entry per event (for knowing the historyId). */
@@ -51,6 +55,7 @@ data class WearHistoryEntity(
     val teamTwoName: String,
     val teamsSnapshot: String? = null,
     val editable: Boolean,
+    val scoreSetsJson: String? = null,
 )
 
 /** Cached team player for a specific event. */

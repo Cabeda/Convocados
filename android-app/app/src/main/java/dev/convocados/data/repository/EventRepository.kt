@@ -84,7 +84,9 @@ class EventRepository @Inject constructor(
         eventDetailDao.getPlayers(eventId).map { entities -> entities.map { it.toDomain() } }
 
     fun getHistory(eventId: String): Flow<List<GameHistory>> =
-        eventDetailDao.getHistory(eventId).map { entities -> entities.map { it.toDomain() } }
+        combine(eventDetailDao.getEvent(eventId), eventDetailDao.getHistory(eventId)) { event, history ->
+            history.map { it.toDomain(event?.sport) }
+        }
 
     /**
      * Fetch the latest event detail into the local cache.
@@ -191,8 +193,10 @@ class EventRepository @Inject constructor(
         id = id, name = name, order = order, userId = userId, image = image
     )
 
-    private fun GameHistoryEntity.toDomain() = GameHistory(
+    private fun GameHistoryEntity.toDomain(sport: String?) = GameHistory(
         id = id, dateTime = dateTime, scoreOne = scoreOne, scoreTwo = scoreTwo,
+        scoreSets = scoreSetsJson?.let { runCatching { EntityJson.decodeFromString<List<SetScore>>(it) }.getOrNull() },
+        scoringType = if (sport?.lowercase() in setOf("tennis", "tennis-singles", "tennis-doubles", "padel")) "tennis" else "standard",
         teamOneName = teamOneName, teamTwoName = teamTwoName
     )
 }

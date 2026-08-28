@@ -222,6 +222,7 @@ model GameHistory {
   status           String   @default("played") // "played" | "cancelled"
   scoreOne         Int?
   scoreTwo         Int?
+  scoreSets        String? // JSON: [{teamOne, teamTwo, tiebreakTeamOne?, tiebreakTeamTwo?}]
   teamOneName      String
   teamTwoName      String
   teamsSnapshot    String? // JSON: [{team, players:[{name,order}]}]
@@ -294,6 +295,7 @@ model Game {
   isFriendly      Boolean   @default(false)
   scoreOne        Int?
   scoreTwo        Int?
+  scoreSets       String? // JSON: [{teamOne, teamTwo, tiebreakTeamOne?, tiebreakTeamTwo?}]
   teamOneName     String?
   teamTwoName     String?
   eloProcessed    Boolean   @default(false)

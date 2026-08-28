@@ -115,6 +115,22 @@ fun ScoreScreen(
                     if (isAmbient) {
                         AmbientScoreDisplay(state = state)
                     } else {
+                        if (state.isTennisScoring) {
+                            TennisScoreEditor(
+                                state = state,
+                                onIncrementOne = viewModel::incrementScoreOne,
+                                onDecrementOne = viewModel::decrementScoreOne,
+                                onIncrementTwo = viewModel::incrementScoreTwo,
+                                onDecrementTwo = viewModel::decrementScoreTwo,
+                                onNextSet = viewModel::advanceSet,
+                                onToggleTiebreak = viewModel::toggleTiebreak,                                onTeams = onTeams,
+                                onFinish = onFinish,
+                                onUndo = {
+                                    viewModel.undoLastScore()
+                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                },
+                            )
+                        } else {
                         ScoreEditor(
                             state = state,
                             onIncrementOne = viewModel::incrementScoreOne,
@@ -178,7 +194,8 @@ private fun OffWindowGameContent(
 
 @Composable
 private fun EndedGameContent(state: ScoreUiState) {
-    val hasScore = state.history != null
+    val hasStructuredScore = state.isTennisScoring && state.scoreSets.isNotEmpty()
+    val hasScore = if (hasStructuredScore) hasCompletedMatch(state.scoreSets) else state.hasFinalScore
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(16.dp),
@@ -204,6 +221,16 @@ private fun EndedGameContent(state: ScoreUiState) {
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
             )
+        } else if (hasStructuredScore) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = state.scoreSets.joinToString(" · ") { set ->
+                    if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
+                },
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center,
+            )
         } else {
             Spacer(modifier = Modifier.height(2.dp))
             Text(
@@ -212,6 +239,61 @@ private fun EndedGameContent(state: ScoreUiState) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun TennisScoreEditor(
+    state: ScoreUiState,
+    onIncrementOne: () -> Unit,
+    onDecrementOne: () -> Unit,
+    onIncrementTwo: () -> Unit,
+    onDecrementTwo: () -> Unit,
+    onNextSet: () -> Unit,
+    onToggleTiebreak: () -> Unit,
+    onTeams: () -> Unit,
+    onFinish: () -> Unit,
+    onUndo: () -> Unit,
+) {
+    val currentSet = state.scoreSets.lastOrNull()
+    Column(Modifier.fillMaxSize().padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = state.scoreSets.joinToString(" · ") { set ->
+                if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
+            }.ifEmpty { "${state.scoreOne}-${state.scoreTwo}" },
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text("${if (state.isTiebreakScoring) "Tiebreak" else "Set"} ${state.scoreSets.size.coerceAtLeast(1)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TeamScoreButton(
+                teamName = state.teamOneName,
+                score = if (state.isTiebreakScoring) currentSet?.tiebreakTeamOne ?: 0 else currentSet?.teamOne ?: 0,
+                container = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                onIncrement = onIncrementOne,
+                onDecrement = onDecrementOne,
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+            TeamScoreButton(
+                teamName = state.teamTwoName,
+                score = if (state.isTiebreakScoring) currentSet?.tiebreakTeamTwo ?: 0 else currentSet?.teamTwo ?: 0,
+                container = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                onIncrement = onIncrementTwo,
+                onDecrement = onDecrementTwo,
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            CompactButton(onClick = onNextSet, enabled = state.scoreSets.size < 5) { Text("Next set") }
+            CompactButton(onClick = onToggleTiebreak) { Text(if (state.isTiebreakScoring) "Games" else "Tiebreak") }
+            CompactButton(onClick = onUndo) { Text("Undo") }
+            CompactButton(onClick = onTeams) { Text(stringResource(R.string.teams_title)) }
+        }
+        ScoreTimeOverlay(state = state, onFinish = onFinish)
     }
 }
 

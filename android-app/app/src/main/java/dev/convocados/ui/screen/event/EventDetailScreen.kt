@@ -61,6 +61,7 @@ import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.repository.EventRepository
 import dev.convocados.ui.components.InitialAvatar
 import dev.convocados.ui.screen.courts.PLAYTOMIC_SPORTS
+import dev.convocados.ui.screen.history.TennisSetEditor
 import dev.convocados.ui.screen.games.formatEventDateInTz
 import dev.convocados.ui.screen.games.formatRelativeDate
 import dev.convocados.ui.screen.games.sportEmoji
@@ -638,9 +639,9 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
-    fun saveScore(eventId: String, historyId: String, s1: Int, s2: Int) {
+    fun saveScore(eventId: String, historyId: String, s1: Int? = null, s2: Int? = null, scoreSets: List<SetScore>? = null) {
         viewModelScope.launch {
-            runCatching { api.updateScore(eventId, historyId, s1, s2) }
+            runCatching { api.updateScore(eventId, historyId, s1, s2, scoreSets) }
                 .onSuccess {
                     repository.refreshEventDetail(eventId)
                     // Refresh post-game status so banner hides when allComplete
@@ -1420,10 +1421,22 @@ private fun HeroMoreMenu(ev: EventDetail, state: EventScreenState, viewModel: Ev
     }
 }
 
+internal fun usesStructuredTennisScore(eventSport: String?, history: GameHistory?): Boolean {
+    val isTennis = eventSport?.lowercase() in setOf("tennis", "tennis-singles", "tennis-doubles", "padel") || history?.scoringType == "tennis"
+    if (!isTennis) return false
+    // A nullable scoreSets field distinguishes a legacy scalar tennis result
+    // from a structured editor that has been explicitly started. A blank
+    // history has no scalar baseline, so it should open the set editor.
+    return history?.scoreSets != null || history?.scoreOne == null || history.scoreTwo == null
+}
+
 @Composable
 private fun HeroWrapUp(eventId: String, state: EventScreenState, viewModel: EventDetailViewModel, user: UserProfile?, editingScoreId: String?, scoreOne: String, scoreTwo: String, onEditScore: (String,String,String)->Unit, onScoreChange: (String,String)->Unit, onSaveScore: ()->Unit, onVoteMvp: (String)->Unit) {
     val pg = state.postGame ?: return
     if (!(pg.isParticipant && !pg.allComplete && (pg.gameEnded || pg.hasPendingPastPayments || (pg.mvpEnabled && !pg.mvpComplete)))) return
+    val pastHistory = state.history.firstOrNull { it.id == pg.latestHistoryId }
+    val hasStructuredScore = usesStructuredTennisScore(state.event?.sport, pastHistory)
+    var scoreSets by remember(pg.latestHistoryId, pastHistory?.scoreSets) { mutableStateOf(pastHistory?.scoreSets ?: emptyList()) }
     val scoreDone = pg.hasScore; val paysDone = pg.allPaid || !pg.hasCost; val mvpDone = !pg.mvpEnabled || pg.mvpComplete
     val done = (if (scoreDone) 1 else 0) + (if (paysDone) 1 else 0) + (if (mvpDone) 1 else 0); val total = 2 + (if (pg.mvpEnabled) 1 else 0)
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
@@ -1436,13 +1449,36 @@ private fun HeroWrapUp(eventId: String, state: EventScreenState, viewModel: Even
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Icon(if (scoreDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp)); Text(if (scoreDone) stringResource(R.string.post_game_score_done) else stringResource(R.string.record_final_score), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)) }
             if (!scoreDone && pg.latestHistoryId != null) {
                 if (editingScoreId == pg.latestHistoryId) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (hasStructuredScore) {
+                        TennisSetEditor(scoreSets) { scoreSets = it }
+                        Button(
+                            onClick = {
+                                if (scoreSets.isNotEmpty()) {
+                                    viewModel.saveScore(eventId, pg.latestHistoryId, scoreSets = scoreSets)
+                                    onSaveScore()
+                                }
+                            },
+                            enabled = scoreSets.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(value = scoreOne, onValueChange = { onScoreChange(it.filter { c -> c.isDigit() }, scoreTwo) }, modifier = Modifier.width(64.dp), singleLine = true, placeholder = { Text("0") })
                         Text("\u2013", style = MaterialTheme.typography.titleLarge)
                         OutlinedTextField(value = scoreTwo, onValueChange = { onScoreChange(scoreOne, it.filter { c -> c.isDigit() }) }, modifier = Modifier.width(64.dp), singleLine = true, placeholder = { Text("0") })
                         Button(onClick = { val s1=scoreOne.toIntOrNull()?:return@Button; val s2=scoreTwo.toIntOrNull()?:return@Button; viewModel.saveScore(eventId, pg.latestHistoryId, s1, s2); onSaveScore() }) { Text(stringResource(R.string.save), fontWeight = FontWeight.Bold) }
+                        }
                     }
-                } else Button(onClick = { onEditScore(pg.latestHistoryId, "", "") }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.record_score)) }
+                } else Button(
+                    onClick = {
+                        onEditScore(
+                            pg.latestHistoryId,
+                            pastHistory?.scoreOne?.toString().orEmpty(),
+                            pastHistory?.scoreTwo?.toString().orEmpty(),
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.record_score)) }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Icon(if (paysDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp)); val label = when { !pg.hasCost -> stringResource(R.string.post_game_no_cost); paysDone -> stringResource(R.string.post_game_payments_done); state.postGamePayments != null -> stringResource(R.string.post_game_payments_summary, state.postGamePayments.count { it.status=="paid" }, state.postGamePayments.size); else -> stringResource(R.string.post_game_payments_label) }; Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)) }
             if (pg.hasCost && !paysDone && !state.postGamePayments.isNullOrEmpty()) {

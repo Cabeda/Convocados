@@ -29,12 +29,22 @@ data class MyGamesResponse(
 )
 
 @Serializable
+data class SetScore(
+    val teamOne: Int,
+    val teamTwo: Int,
+    val tiebreakTeamOne: Int? = null,
+    val tiebreakTeamTwo: Int? = null,
+)
+
+@Serializable
 data class GameHistory(
     val id: String,
     val dateTime: String,
     val status: String = "played",
     val scoreOne: Int? = null,
     val scoreTwo: Int? = null,
+    val scoreSets: List<SetScore>? = null,
+    val scoringType: String = "standard",
     val teamOneName: String = "",
     val teamTwoName: String = "",
     val teamsSnapshot: String? = null,
@@ -48,7 +58,10 @@ data class PaginatedHistory(
 )
 
 @Serializable
-data class ScoreRequest(val scoreOne: Int, val scoreTwo: Int)
+data class ScoreRequest(val scoreOne: Int? = null, val scoreTwo: Int? = null, val scoreSets: List<SetScore>? = null)
+
+@Serializable
+data class ScalarScoreRequest(val scoreOne: Int, val scoreTwo: Int)
 
 @Serializable
 data class OAuthTokenResponse(
