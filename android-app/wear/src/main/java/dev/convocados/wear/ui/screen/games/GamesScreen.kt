@@ -1,10 +1,13 @@
 package dev.convocados.wear.ui.screen.games
 
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.compose.foundation.layout.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -19,6 +22,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,6 +52,8 @@ fun GamesScreen(
     onContinueQuickGame: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
+    val isOnline = rememberNetworkAvailable()
+    val showOfflineBanner = shouldShowOfflineGamesBanner(state.isOffline, isOnline)
 
     // Auto-navigate to the scorable suggested game on first load
     val autoNavId = state.autoNavigateEventId
@@ -149,7 +155,7 @@ fun GamesScreen(
                     ) {
                         Text(
                             text = stringResource(
-                                if (state.isOffline) R.string.offline_cached
+                                if (showOfflineBanner) R.string.offline_cached
                                 else R.string.no_games,
                             ),
                             style = MaterialTheme.typography.bodyMedium,
@@ -252,7 +258,7 @@ fun GamesScreen(
                         }
                     }
 
-                    if (state.isOffline) {
+                    if (showOfflineBanner) {
                         item {
                             Text(
                                 text = stringResource(R.string.offline_cached),
@@ -392,3 +398,44 @@ private fun GameChip(
         }
     )
 }
+
+
+internal fun shouldShowOfflineGamesBanner(isOffline: Boolean, isOnline: Boolean): Boolean =
+    isOffline && !isOnline
+
+@Composable
+private fun rememberNetworkAvailable(): Boolean {
+    val connectivityManager = LocalContext.current
+        .getSystemService(ConnectivityManager::class.java)
+    var isOnline by remember(connectivityManager) {
+        mutableStateOf(connectivityManager?.hasValidatedNetwork() == true)
+    }
+
+    DisposableEffect(connectivityManager) {
+        if (connectivityManager == null) return@DisposableEffect onDispose {}
+
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                isOnline = connectivityManager.hasValidatedNetwork()
+            }
+
+            override fun onLost(network: android.net.Network) {
+                isOnline = connectivityManager.hasValidatedNetwork()
+            }
+
+            override fun onCapabilitiesChanged(
+                network: android.net.Network,
+                networkCapabilities: NetworkCapabilities,
+            ) {
+                isOnline = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            }
+        }
+        connectivityManager.registerDefaultNetworkCallback(callback)
+        onDispose { connectivityManager.unregisterNetworkCallback(callback) }
+    }
+    return isOnline
+}
+
+private fun ConnectivityManager.hasValidatedNetwork(): Boolean =
+    activeNetwork?.let { getNetworkCapabilities(it) }
+        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true

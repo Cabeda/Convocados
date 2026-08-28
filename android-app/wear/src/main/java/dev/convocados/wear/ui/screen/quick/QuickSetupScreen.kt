@@ -12,15 +12,19 @@ import androidx.wear.compose.material3.*
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
+import dev.convocados.wear.data.local.QUICK_SPORT_PADEL
+import dev.convocados.wear.data.local.QUICK_SPORT_STANDARD
+import dev.convocados.wear.data.local.QUICK_SPORT_TENNIS
 import dev.convocados.wear.data.local.QuickGameState
 
 @Composable
 fun QuickSetupScreen(
-    onStart: (durationMinutes: Int, alarmIntervalMinutes: Int) -> Unit,
+    onStart: (durationMinutes: Int, alarmIntervalMinutes: Int, sport: String) -> Unit,
     activeGame: QuickGameState? = null,
     onContinue: () -> Unit = {},
     onRestart: () -> Unit = {},
 ) {
+    var sport by remember(activeGame?.sport) { mutableStateOf(activeGame?.sport ?: QUICK_SPORT_STANDARD) }
     var duration by remember { mutableIntStateOf(60) }
     var vibrationEnabled by remember { mutableStateOf(false) }
     var alarmInterval by remember { mutableIntStateOf(5) }
@@ -66,6 +70,42 @@ fun QuickSetupScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.restart_quick_game))
+                    }
+                }
+            }
+
+            // Sport picker stays at the top so the scoring mode is chosen before
+            // the timer starts and cannot be accidentally changed mid-game.
+            item {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = stringResource(R.string.quick_sport_label),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        listOf(
+                            QUICK_SPORT_STANDARD to R.string.sport_standard,
+                            QUICK_SPORT_TENNIS to R.string.sport_tennis,
+                            QUICK_SPORT_PADEL to R.string.sport_padel,
+                        ).forEach { (value, labelRes) ->
+                            CompactButton(
+                                onClick = { sport = value },
+                                colors = if (sport == value) {
+                                    ButtonDefaults.buttonColors()
+                                } else {
+                                    ButtonDefaults.filledTonalButtonColors()
+                                },
+                            ) {
+                                Text(stringResource(labelRes))
+                            }
+                        }
                     }
                 }
             }
@@ -148,7 +188,7 @@ fun QuickSetupScreen(
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = { onStart(duration, if (vibrationEnabled) alarmInterval else 0) },
+                    onClick = { onStart(duration, if (vibrationEnabled) alarmInterval else 0, sport) },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(stringResource(R.string.start_quick_game))

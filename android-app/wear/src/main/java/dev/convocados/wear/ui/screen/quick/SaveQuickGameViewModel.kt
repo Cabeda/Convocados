@@ -38,10 +38,14 @@ class SaveQuickGameViewModel @Inject constructor(
 
     fun load() {
         viewModelScope.launch {
+            val quick = quickGameStore.state.value.takeIf { it.isStarted }
+            val events = gameRepository.observeGames().first()
             _uiState.update {
                 it.copy(
-                    quick = quickGameStore.state.value.takeIf { q -> q.isStarted },
-                    events = gameRepository.observeGames().first(),
+                    quick = quick,
+                    events = events.filter { event ->
+                        quick == null || isQuickSaveCompatible(quick.sport, event.sport)
+                    },
                 )
             }
         }
@@ -50,6 +54,8 @@ class SaveQuickGameViewModel @Inject constructor(
     /** Promote the quick game's score into [eventId]'s history. */
     fun saveTo(eventId: String) {
         val quick = _uiState.value.quick ?: return
+        val event = _uiState.value.events.firstOrNull { it.id == eventId } ?: return
+        if (!isQuickSaveCompatible(quick.sport, event.sport)) return
         if (_uiState.value.saving != null) return
         viewModelScope.launch {
             _uiState.update { it.copy(saving = eventId, error = null) }
@@ -60,7 +66,13 @@ class SaveQuickGameViewModel @Inject constructor(
                 )
                 client.patch<dev.convocados.wear.data.api.GameHistory>(
                     "/api/events/$eventId/history/${history.id}",
-                    ScoreRequest(quick.scoreOne, quick.scoreTwo),
+                    ScoreRequest(
+                        scoreOne = quick.scoreOne,
+                        scoreTwo = quick.scoreTwo,
+                        scoreSets = quick.scoreSets.takeIf {
+                            isQuickStructuredSport(quick.sport) && it.isNotEmpty()
+                        },
+                    ),
                 )
                 _uiState.update { it.copy(saving = null, saved = true, error = null) }
             } catch (e: Exception) {
@@ -68,4 +80,10 @@ class SaveQuickGameViewModel @Inject constructor(
             }
         }
     }
+}
+
+
+internal fun isQuickSaveCompatible(quickSport: String, eventSport: String): Boolean {
+    if (!isQuickStructuredSport(quickSport)) return true
+    return eventSport.lowercase() in setOf("tennis", "tennis-singles", "tennis-doubles", "padel")
 }
