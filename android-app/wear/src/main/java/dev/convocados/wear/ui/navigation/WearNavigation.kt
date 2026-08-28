@@ -178,7 +178,13 @@ fun WearNavigation(
                 val viewModel: SaveQuickGameViewModel = hiltViewModel()
                 SaveQuickGameScreen(
                     viewModel = viewModel,
-                    onDone = { navController.popBackStack() },
+                    onDone = {
+                        if (viewModel.uiState.value.saved) {
+                            finishQuickGame(navController)
+                        } else {
+                            navController.popBackStack()
+                        }
+                    },
                 )
             }
 
@@ -204,6 +210,18 @@ fun WearNavigation(
             }
         }
     }
+}
+
+/** Return to Games after a successful quick-game save, removing the quick-game flow. */
+internal fun finishQuickGame(navController: androidx.navigation.NavController) {
+    if (navController.popBackStack(WearRoutes.GAMES, false)) return
+
+    navController.navigate(
+        WearRoutes.GAMES,
+        androidx.navigation.NavOptions.Builder()
+            .setPopUpTo(WearRoutes.AUTH, true, false)
+            .build(),
+    )
 }
 
 /** Navigate to the quick score, tagging the entry with how to (re)start it. */
