@@ -36,8 +36,12 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.ui.theme.expressiveTokens
+import dev.convocados.wear.util.GameListTimeState
 import dev.convocados.wear.util.PullToRefreshProgress
 import dev.convocados.wear.util.formatRelativeTime
+import dev.convocados.wear.util.gameListTimeState
+import dev.convocados.wear.util.tickFlow
+import java.time.Instant
 
 @Composable
 fun GamesScreen(
@@ -50,6 +54,7 @@ fun GamesScreen(
     onContinueQuickGame: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
+    val now by remember { tickFlow() }.collectAsState(initial = Instant.now())
     val isOnline = rememberNetworkAvailable()
     val tokens = expressiveTokens()
     val showOfflineBanner = shouldShowOfflineGamesBanner(state.isOffline, isOnline)
@@ -276,6 +281,7 @@ fun GamesScreen(
                             isSuggested = game.id == state.suggestedGameId,
                             canScore = canScore,
                             onClick = { onGameSelected(game.id) },
+                            nowOverride = now,
                         )
                     }
 
@@ -303,6 +309,7 @@ fun GamesScreen(
                                     isSuggested = false,
                                     canScore = canScore,
                                     onClick = { onGameSelected(game.id) },
+                                    nowOverride = now,
                                 )
                             }
 
@@ -358,8 +365,15 @@ internal fun GameChip(
     onClick: () -> Unit,
     nowOverride: java.time.Instant? = null,
 ) {
-    val timeLabel = remember(game.dateTime, nowOverride) {
-        formatRelativeTime(game.dateTime, nowOverride ?: java.time.Instant.now())
+    val now = nowOverride ?: Instant.now()
+    val timeState = remember(game.dateTime, game.sport, now) {
+        gameListTimeState(game.dateTime, game.sport, now)
+    }
+    val timeLabel = when (timeState) {
+        GameListTimeState.LIVE -> stringResource(R.string.in_progress)
+        GameListTimeState.ENDED -> stringResource(R.string.ended_label)
+        GameListTimeState.UPCOMING,
+        GameListTimeState.UNKNOWN -> formatRelativeTime(game.dateTime, now)
     }
     val tokens = expressiveTokens()
 
@@ -375,7 +389,7 @@ internal fun GameChip(
         },
         secondaryLabel = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (timeLabel == stringResource(R.string.in_progress)) {
+                if (timeState == GameListTimeState.LIVE) {
                     Text(
                         text = stringResource(R.string.live_badge),
                         style = MaterialTheme.typography.labelSmall,
