@@ -130,6 +130,16 @@ class WearApiClient @Inject constructor(private val tokenStore: WearTokenStore) 
     suspend inline fun <reified T> postForResult(path: String, body: Any? = null): T =
         authenticatedRequest(HttpMethod.Post, path, body).body()
 
+    /** Non-inline history boundary used by repositories and ViewModels. */
+    suspend fun getGameHistory(path: String): GameHistory = get(path)
+
+    /** Non-inline history boundary keeps score request calls mockable in unit tests. */
+    suspend fun patchGameHistory(path: String, body: Any): GameHistory = patch(path, body)
+
+    /** Create or retrieve the watch history for an event. */
+    suspend fun createWatchGameHistory(eventId: String): WatchGameResponse =
+        postForResult("/api/watch/events", mapOf("eventId" to eventId))
+
     suspend fun getTeams(eventId: String): TeamsResponse =
         get("/api/events/$eventId/teams")
 

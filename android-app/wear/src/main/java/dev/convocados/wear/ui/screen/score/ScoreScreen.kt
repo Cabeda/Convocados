@@ -153,6 +153,61 @@ fun ScoreScreen(
     }
 }
 
+/**
+ * Stateless live-score renderer for deterministic previews and screenshot fixtures.
+ * Production navigation keeps lifecycle, loading, and repository orchestration in
+ * [ScoreScreen]; this function only renders a supplied state.
+ */
+@Composable
+fun ScoreFixtureContent(
+    state: ScoreUiState,
+    isAmbient: Boolean = false,
+    now: Instant,
+    onTeams: () -> Unit = {},
+    onFinish: () -> Unit = {},
+    onIncrementOne: () -> Unit = {},
+    onDecrementOne: () -> Unit = {},
+    onIncrementTwo: () -> Unit = {},
+    onDecrementTwo: () -> Unit = {},
+    onNextSet: () -> Unit = {},
+    onToggleTiebreak: () -> Unit = {},
+    onUndo: () -> Unit = {},
+) {
+    ScreenScaffold {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (isAmbient) {
+                AmbientScoreDisplay(state)
+            } else if (state.isTennisScoring) {
+                TennisScoreEditor(
+                    state = state,
+                    onIncrementOne = onIncrementOne,
+                    onDecrementOne = onDecrementOne,
+                    onIncrementTwo = onIncrementTwo,
+                    onDecrementTwo = onDecrementTwo,
+                    onNextSet = onNextSet,
+                    onToggleTiebreak = onToggleTiebreak,
+                    onTeams = onTeams,
+                    onFinish = onFinish,
+                    onUndo = onUndo,
+                    nowOverride = now,
+                )
+            } else {
+                ScoreEditor(
+                    state = state,
+                    onIncrementOne = onIncrementOne,
+                    onDecrementOne = onDecrementOne,
+                    onIncrementTwo = onIncrementTwo,
+                    onDecrementTwo = onDecrementTwo,
+                    onTeams = onTeams,
+                    onFinish = onFinish,
+                    onUndo = onUndo,
+                    nowOverride = now,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun OffWindowGameContent(
     state: ScoreUiState,
@@ -245,7 +300,7 @@ private fun EndedGameContent(state: ScoreUiState) {
 }
 
 @Composable
-private fun TennisScoreEditor(
+internal fun TennisScoreEditor(
     state: ScoreUiState,
     onIncrementOne: () -> Unit,
     onDecrementOne: () -> Unit,
@@ -256,6 +311,7 @@ private fun TennisScoreEditor(
     onTeams: () -> Unit,
     onFinish: () -> Unit,
     onUndo: () -> Unit,
+    nowOverride: Instant? = null,
 ) {
     val currentSet = state.scoreSets.lastOrNull()
     Column(Modifier.fillMaxSize().padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -295,12 +351,12 @@ private fun TennisScoreEditor(
             CompactButton(onClick = onUndo) { Text("Undo") }
             CompactButton(onClick = onTeams) { Text(stringResource(R.string.teams_title)) }
         }
-        ScoreTimeOverlay(state = state, onFinish = onFinish)
+        ScoreTimeOverlay(state = state, onFinish = onFinish, nowOverride = nowOverride)
     }
 }
 
 @Composable
-private fun ScoreEditor(
+internal fun ScoreEditor(
     state: ScoreUiState,
     onIncrementOne: () -> Unit,
     onDecrementOne: () -> Unit,
@@ -309,6 +365,7 @@ private fun ScoreEditor(
     onTeams: () -> Unit,
     onFinish: () -> Unit,
     onUndo: () -> Unit,
+    nowOverride: Instant? = null,
 ) {
     // Stable callbacks so the tiles skip recomposition when the time overlay
     // ticks every second (the tiles themselves don't depend on time).
@@ -365,18 +422,23 @@ private fun ScoreEditor(
 
         // Time-dependent overlays live in their own tick-scoped composable so
         // the per-second clock/progress redraw doesn't recompose the tiles.
-        ScoreTimeOverlay(state = state, onFinish = onFinish)
+        ScoreTimeOverlay(state = state, onFinish = onFinish, nowOverride = nowOverride)
     }
 }
 
-/** Time-driven overlays (edge progress, game clock, alarm/teams hint, offline badge). */
 @Composable
-private fun ScoreTimeOverlay(state: ScoreUiState, onFinish: () -> Unit) {
-    var now by remember { mutableStateOf(Instant.now()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = Instant.now()
-            delay(1000)
+internal fun ScoreTimeOverlay(
+    state: ScoreUiState,
+    onFinish: () -> Unit,
+    nowOverride: Instant? = null,
+) {
+    var now by remember(nowOverride) { mutableStateOf(nowOverride ?: Instant.now()) }
+    if (nowOverride == null) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                now = Instant.now()
+                delay(1000)
+            }
         }
     }
 

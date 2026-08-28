@@ -26,6 +26,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.R
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.NotificationPrefs
+import dev.convocados.data.push.shouldRequestNotificationPermission
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -119,17 +120,19 @@ class NotificationPrefsViewModel @Inject constructor(private val api: Convocados
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
-fun NotificationPrefsScreen(onBack: () -> Unit, viewModel: NotificationPrefsViewModel = hiltViewModel()) {
+fun NotificationPrefsScreen(
+    onBack: () -> Unit,
+    isAuthenticated: Boolean,
+    isReady: Boolean,
+    viewModel: NotificationPrefsViewModel = hiltViewModel(),
+) {
     val prefs by viewModel.prefs.collectAsState()
     val loading by viewModel.loading.collectAsState()
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        val permissionState = rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
-        LaunchedEffect(permissionState.status) {
-            if (!permissionState.status.isGranted) {
-                permissionState.launchPermissionRequest()
-            }
-        }
+    val notificationPermissionState = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
+    } else {
+        null
     }
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
@@ -142,6 +145,23 @@ fun NotificationPrefsScreen(onBack: () -> Unit, viewModel: NotificationPrefsView
         val p = prefs ?: return@Scaffold
 
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
+            if (notificationPermissionState != null && !notificationPermissionState.status.isGranted) {
+                NotificationPermissionBanner(
+                    onEnable = {
+                        if (shouldRequestNotificationPermission(
+                                sdkInt = Build.VERSION.SDK_INT,
+                                isAuthenticated = isAuthenticated,
+                                isReady = isReady,
+                                isGranted = notificationPermissionState.status.isGranted,
+                                userInitiated = true,
+                            )
+                        ) {
+                            notificationPermissionState.launchPermissionRequest()
+                        }
+                    },
+                )
+            }
+
             // ADR 0017: Tier explanation
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Column(Modifier.padding(14.dp)) {
@@ -170,6 +190,41 @@ fun NotificationPrefsScreen(onBack: () -> Unit, viewModel: NotificationPrefsView
                 }
             }
             Spacer(Modifier.height(40.dp))
+        }
+    }
+}
+
+
+@Composable
+fun NotificationPermissionBanner(onEnable: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+        ),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.enable_notifications),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.enable_notifications_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            TextButton(onClick = onEnable) {
+                Text(stringResource(R.string.enable_push))
+            }
         }
     }
 }

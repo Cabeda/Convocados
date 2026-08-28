@@ -92,6 +92,19 @@ class DateTimeUtilTest {
         assertEquals("garbage", formatRelativeTime("garbage"))
     }
 
+    @Test
+    fun `formatRelativeTime accepts a fixed clock for deterministic fixtures`() {
+        val now = Instant.parse("2026-08-28T10:30:00Z")
+        assertEquals(
+            "In progress",
+            formatRelativeTime("2026-08-28T10:15:00Z", now),
+        )
+        assertEquals(
+            "In 1h 30m",
+            formatRelativeTime("2026-08-28T12:00:00Z", now),
+        )
+    }
+
     // ── canScoreGame ──────────────────────────────────────────────────────
 
     @Test

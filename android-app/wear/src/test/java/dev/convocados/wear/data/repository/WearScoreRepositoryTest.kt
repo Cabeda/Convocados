@@ -40,7 +40,7 @@ class WearScoreRepositoryTest {
 
     @Test
     fun `submitScore updates local cache optimistically`() = runTest {
-        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
+        coEvery { client.patchGameHistory(any(), any()) } returns GameHistory(
             id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
             scoreOne = 5, scoreTwo = 3, teamOneName = "Red", teamTwoName = "Blue",
         )
@@ -53,7 +53,7 @@ class WearScoreRepositoryTest {
 
     @Test
     fun `submitScore queues pending score on network failure`() = runTest {
-        coEvery { client.patch<GameHistory>(any(), any()) } throws Exception("Offline")
+        coEvery { client.patchGameHistory(any(), any()) } throws Exception("Offline")
 
         val result = repository.submitScore("e1", "h1", 5, 3, "Red", "Blue")
 
@@ -64,18 +64,29 @@ class WearScoreRepositoryTest {
     @Test
     fun `syncPendingScores syncs all pending and deletes them`() = runTest {
         val pending = listOf(
-            PendingScoreEntity(1, "e1", "h1", 3, 2, "A", "B"),
-            PendingScoreEntity(2, "e2", "h2", 1, 0, "C", "D"),
+            PendingScoreEntity(
+                1, "e1", "h1", 3, 2, "A", "B",
+                basedOnScoreOne = 3,
+                basedOnScoreTwo = 2,
+            ),
+            PendingScoreEntity(
+                2, "e2", "h2", 1, 0, "C", "D",
+                basedOnScoreOne = 0,
+                basedOnScoreTwo = 0,
+            ),
         )
         coEvery { pendingScoreDao.getAll() } returns pending
-        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
+        coEvery { client.patchGameHistory(any(), any()) } returns GameHistory(
+            id = "h2", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 1, scoreTwo = 0, teamOneName = "C", teamTwoName = "D",
+        )
+        coEvery { client.getGameHistory("/api/events/e1/history/h1") } returns GameHistory(
             id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
             scoreOne = 3, scoreTwo = 2, teamOneName = "A", teamTwoName = "B",
         )
-        // Server already holds h1's value (idempotent drop); h2 needs patching.
-        coEvery { client.get<GameHistory>(any()) } returns GameHistory(
-            id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
-            scoreOne = 3, scoreTwo = 2, teamOneName = "A", teamTwoName = "B",
+        coEvery { client.getGameHistory("/api/events/e2/history/h2") } returns GameHistory(
+            id = "h2", dateTime = "2025-01-01T10:00:00Z", status = "played",
+            scoreOne = 0, scoreTwo = 0, teamOneName = "C", teamTwoName = "D",
         )
 
         val synced = repository.syncPendingScores()
@@ -100,18 +111,18 @@ class WearScoreRepositoryTest {
             scoreSetsJson = "[{\"teamOne\":6,\"teamTwo\":6,\"tiebreakTeamOne\":7,\"tiebreakTeamTwo\":5}]",
         )
         coEvery { pendingScoreDao.getAll() } returns listOf(pending)
-        coEvery { client.get<GameHistory>(any()) } returns GameHistory(
+        coEvery { client.getGameHistory(any()) } returns GameHistory(
             id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
             scoreOne = 0, scoreTwo = 0, teamOneName = "A", teamTwoName = "B",
         )
-        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
+        coEvery { client.patchGameHistory(any(), any()) } returns GameHistory(
             id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
             scoreOne = 1, scoreTwo = 0, scoreSets = sets, teamOneName = "A", teamTwoName = "B",
         )
 
         assertEquals(1, repository.syncPendingScores())
         coVerify {
-            client.patch<GameHistory>(
+            client.patchGameHistory(
                 "/api/events/e1/history/h1",
                 match { (it as dev.convocados.wear.data.api.ScoreRequest).scoreSets == sets },
             )
@@ -133,18 +144,18 @@ class WearScoreRepositoryTest {
             basedOnScoreTwo = 0,
         )
         coEvery { pendingScoreDao.getAll() } returns listOf(pending)
-        coEvery { client.get<GameHistory>(any()) } returns GameHistory(
+        coEvery { client.getGameHistory(any()) } returns GameHistory(
             id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
             scoreOne = 0, scoreTwo = 0, teamOneName = "A", teamTwoName = "B",
         )
-        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
+        coEvery { client.patchGameHistory(any(), any()) } returns GameHistory(
             id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
             scoreOne = 3, scoreTwo = 2, teamOneName = "A", teamTwoName = "B",
         )
 
         assertEquals(1, repository.syncPendingScores())
         coVerify {
-            client.patch<GameHistory>(
+            client.patchGameHistory(
                 "/api/events/e1/history/h1",
                 match { it is ScalarScoreRequest && it.scoreOne == 3 && it.scoreTwo == 2 },
             )
@@ -165,11 +176,11 @@ class WearScoreRepositoryTest {
             baselineCaptured = false,
         )
         coEvery { pendingScoreDao.getAll() } returns listOf(pending)
-        coEvery { client.get<GameHistory>(any()) } returns GameHistory(
+        coEvery { client.getGameHistory(any()) } returns GameHistory(
             id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
             scoreOne = 1, scoreTwo = 0, teamOneName = "A", teamTwoName = "B",
         )
-        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
+        coEvery { client.patchGameHistory(any(), any()) } returns GameHistory(
             id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
             scoreOne = 3, scoreTwo = 2, teamOneName = "A", teamTwoName = "B",
         )
@@ -193,21 +204,21 @@ class WearScoreRepositoryTest {
             baselineCaptured = true,
         )
         coEvery { pendingScoreDao.getAll() } returns listOf(pending)
-        coEvery { client.get<GameHistory>(any()) } returns GameHistory(
+        coEvery { client.getGameHistory(any()) } returns GameHistory(
             id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
             scoreOne = 2, scoreTwo = 0, teamOneName = "A", teamTwoName = "B",
         )
 
         assertEquals(0, repository.syncPendingScores())
         coVerify { pendingScoreDao.incrementRetry(1) }
-        coVerify(exactly = 0) { client.patch<GameHistory>(any(), any()) }
+        coVerify(exactly = 0) { client.patchGameHistory(any(), any()) }
     }
 
     @Test
     fun `syncPendingScores increments retry on failure`() = runTest {
         val pending = listOf(PendingScoreEntity(1, "e1", "h1", 3, 2, "A", "B"))
         coEvery { pendingScoreDao.getAll() } returns pending
-        coEvery { client.patch<GameHistory>(any(), any()) } throws Exception("Still offline")
+        coEvery { client.patchGameHistory(any(), any()) } throws Exception("Still offline")
 
         val synced = repository.syncPendingScores()
 
@@ -218,7 +229,7 @@ class WearScoreRepositoryTest {
     @Test
     fun `submitScore persists tennis sets and sends structured payload`() = runTest {
         val sets = listOf(SetScore(6, 4), SetScore(7, 6, 7, 5))
-        coEvery { client.patch<GameHistory>(any(), any()) } returns GameHistory(
+        coEvery { client.patchGameHistory(any(), any()) } returns GameHistory(
             id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
             scoreOne = 2, scoreTwo = 0, scoreSets = sets, scoringType = "tennis",
             teamOneName = "Red", teamTwoName = "Blue",
@@ -228,7 +239,7 @@ class WearScoreRepositoryTest {
 
         assertTrue(result.isSuccess)
         coVerify { historyDao.updateScore("h1", 2, 0, any()) }
-        coVerify { client.patch<GameHistory>("/api/events/e1/history/h1", match { (it as dev.convocados.wear.data.api.ScoreRequest).scoreSets == sets }) }
+        coVerify { client.patchGameHistory("/api/events/e1/history/h1", match { (it as dev.convocados.wear.data.api.ScoreRequest).scoreSets == sets }) }
     }
 
 }

@@ -50,6 +50,8 @@
     <string name="server_url">URL del server</string>
     <string name="language">Lingua</string>
     <string name="notifications_title">Notifiche</string>
+    <string name="enable_notifications">Attiva le notifiche</string>
+    <string name="enable_notifications_desc">Scegli quando Convocados può inviare promemoria e aggiornamenti sulle partite.</string>
     <string name="notifications_subtitle">Gestisci le preferenze push ed e-mail</string>
     <string name="sign_out">Esci</string>
     <string name="edit_name">Modifica nome</string>

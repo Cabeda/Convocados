@@ -41,7 +41,7 @@ class WearScoreRepository @Inject constructor(
         val scoreSetsJson = scoreSets?.let { Json.encodeToString(it) }
         historyDao.updateScore(historyId, scoreOne, scoreTwo, scoreSetsJson)
         return try {
-            client.patch<dev.convocados.wear.data.api.GameHistory>(
+            client.patchGameHistory(
                 "/api/events/$eventId/history/$historyId",
                 if (scoreSets != null) ScoreRequest(scoreOne, scoreTwo, scoreSets)
                 else ScalarScoreRequest(scoreOne, scoreTwo),
@@ -83,7 +83,7 @@ class WearScoreRepository @Inject constructor(
         for (score in pending) {
             if (score.retryCount >= MAX_ATTEMPTS) continue
             try {
-                val server = client.get<dev.convocados.wear.data.api.GameHistory>(
+                val server = client.getGameHistory(
                     "/api/events/${score.eventId}/history/${score.historyId}"
                 )
                 val serverScoreSetsJson = server.scoreSets?.let { Json.encodeToString(it) }
@@ -107,7 +107,7 @@ class WearScoreRepository @Inject constructor(
                     val request: Any = score.scoreSetsJson?.let {
                         ScoreRequest(score.scoreOne, score.scoreTwo, Json.decodeFromString<List<SetScore>>(it))
                     } ?: ScalarScoreRequest(score.scoreOne, score.scoreTwo)
-                    client.patch<dev.convocados.wear.data.api.GameHistory>(
+                    client.patchGameHistory(
                         "/api/events/${score.eventId}/history/${score.historyId}",
                         request,
                     )

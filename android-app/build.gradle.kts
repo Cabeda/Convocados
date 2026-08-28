@@ -12,6 +12,10 @@ plugins {
     alias(libs.plugins.roborazzi) apply false
 }
 
+tasks.register("generateStoreListings") {
+    dependsOn(":app:generateStoreListing", ":wear:generateWearStoreListing")
+}
+
 // Hilt 2.60.1 natively supports Kotlin 2.3.21 metadata.
 // Force kotlin-metadata-jvm to match Kotlin version as a safety net.
 allprojects {
