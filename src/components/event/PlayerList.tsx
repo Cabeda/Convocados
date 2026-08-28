@@ -165,6 +165,8 @@ interface Props {
   onResetPlayerOrder: () => Promise<void>;
   onRandomize: () => void;
   onConfirmReRandomize: () => void;
+  /** True while the server is applying a team randomization. */
+  isRandomizing?: boolean;
   canRemovePlayer: (player: Player) => boolean;
   // #XXX Attendance UI (simplified — Quick Join / Quick Leave / You row are gone; replaced by AttendanceCta)
   /** Current authenticated user's id, if any. When set, the AttendanceCta is rendered above the list. */
@@ -226,7 +228,7 @@ export function PlayerList({
   players, maxPlayers, isOwner, hasTeams,
   availableSuggestions, playerError, onPlayerErrorChange,
   onAddPlayer, onRequestAdd, onRemovePlayer, onReorderPlayers, onResetPlayerOrder,
-  onRandomize, onConfirmReRandomize, canRemovePlayer,
+  onRandomize, onConfirmReRandomize, isRandomizing = false, canRemovePlayer,
   currentUserId: _currentUserId,
   myRsvpStatus: _myRsvpStatus,
   guestRsvpMap: _guestRsvpMap,
@@ -1044,7 +1046,9 @@ export function PlayerList({
 
         <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2 }}>
           <Button variant="contained" size="large" startIcon={<ShuffleIcon />}
-            disabled={active.length < 2} sx={{ px: 4, py: 1.5 }}
+            disabled={active.length < 2 || isRandomizing}
+            aria-busy={isRandomizing ? "true" : undefined}
+            sx={{ px: 4, py: 1.5 }}
             onClick={() => hasTeams ? onConfirmReRandomize() : onRandomize()}>
             {t("randomizeTeams")}
           </Button>
