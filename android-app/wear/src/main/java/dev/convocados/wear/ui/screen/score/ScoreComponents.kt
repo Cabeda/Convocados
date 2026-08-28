@@ -41,7 +41,7 @@ import androidx.wear.compose.material3.LocalContentColor
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.rememberAnimatedTextFontRegistry
-import dev.convocados.wear.ui.theme.Warning
+import dev.convocados.wear.ui.theme.expressiveTokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -176,7 +176,8 @@ internal fun GameEdgeProgress(
     val tickColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
     val alarmTickColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
     val nextAlarmTickColor = MaterialTheme.colorScheme.primary
-    val endColor = Warning
+    val tokens = expressiveTokens()
+    val endColor = tokens.warning
 
     Canvas(modifier = modifier.fillMaxSize()) {
         val stroke = 5.dp.toPx()

@@ -4,7 +4,6 @@ import dev.convocados.wear.data.alarm.GameAlarmScheduler
 import dev.convocados.wear.data.local.QuickGameState
 import dev.convocados.wear.data.local.QuickGameStore
 import io.mockk.every
-import io.mockk.firstArg
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
@@ -18,7 +17,8 @@ class QuickScoreViewModelTest {
         val store = mockk<QuickGameStore>()
         every { store.state } returns state
         every { store.update(any()) } answers {
-            val transform = firstArg<(QuickGameState) -> QuickGameState>()
+            @Suppress("UNCHECKED_CAST")
+            val transform = invocation.args[0] as (QuickGameState) -> QuickGameState
             state.value = transform(state.value)
         }
         val scheduler = mockk<GameAlarmScheduler>(relaxed = true)

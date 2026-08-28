@@ -29,13 +29,25 @@ fun SectionCard(
     contentPadding: androidx.compose.ui.unit.Dp = Spacing.md,
     content: @Composable () -> Unit,
 ) {
-    val colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    val colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    val shape = MaterialTheme.shapes.medium
     if (onClick != null) {
-        Card(onClick = onClick, colors = colors, modifier = modifier.fillMaxWidth()) {
+        Card(
+            onClick = onClick,
+            colors = colors,
+            shape = shape,
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            modifier = modifier.fillMaxWidth(),
+        ) {
             Column(Modifier.padding(contentPadding)) { content() }
         }
     } else {
-        Card(colors = colors, modifier = modifier.fillMaxWidth()) {
+        Card(
+            colors = colors,
+            shape = shape,
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            modifier = modifier.fillMaxWidth(),
+        ) {
             Column(Modifier.padding(contentPadding)) { content() }
         }
     }
@@ -67,7 +79,9 @@ fun StatTile(
     valueColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.medium,
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = modifier,
     ) {
         Column(

@@ -50,6 +50,8 @@
     <string name="server_url">Server-URL</string>
     <string name="language">Sprache</string>
     <string name="notifications_title">Benachrichtigungen</string>
+    <string name="enable_notifications">Benachrichtigungen aktivieren</string>
+    <string name="enable_notifications_desc">Wähle, wann Convocados Erinnerungen und Spiel-Updates senden darf.</string>
     <string name="notifications_subtitle">Push- und E-Mail-Einstellungen verwalten</string>
     <string name="sign_out">Abmelden</string>
     <string name="edit_name">Name bearbeiten</string>
