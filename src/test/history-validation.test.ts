@@ -180,6 +180,40 @@ describe("tennis/padel score API", () => {
     expect(body.scoreSets).toEqual(scoreSets);
   });
 
+  it("persists in-progress tennis point scores", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Padel", location: "Court", dateTime: new Date(), maxPlayers: 4, sport: "padel" },
+    });
+    const scoreSets = [{ teamOne: 3, teamTwo: 2, pointTeamOne: 2, pointTeamTwo: 3, pointGameActive: true }];
+
+    const res = await POST(ctx(event.id, {
+      dateTime: new Date().toISOString(),
+      teamOneName: "A", teamTwoName: "B", scoreSets,
+      teamsSnapshot: [{ team: "A", players: [] }, { team: "B", players: [] }],
+    }));
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.scoreSets).toEqual(scoreSets);
+    const saved = await prisma.gameHistory.findUnique({ where: { id: body.id } });
+    expect(JSON.parse(saved!.scoreSets!)).toEqual(scoreSets);
+  });
+
+  it("rejects impossible tennis point pairs", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Tennis", location: "Court", dateTime: new Date(), maxPlayers: 2, sport: "tennis" },
+    });
+    const res = await POST(ctx(event.id, {
+      dateTime: new Date().toISOString(),
+      teamOneName: "A", teamTwoName: "B",
+      scoreSets: [{ teamOne: 3, teamTwo: 2, pointTeamOne: 4, pointTeamTwo: 4 }],
+      teamsSnapshot: [{ team: "A", players: [] }, { team: "B", players: [] }],
+    }));
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("valid 0-15-30-40");
+  });
+
   it("rejects malformed set scores", async () => {
     const event = await prisma.event.create({
       data: { title: "Tennis", location: "Court", dateTime: new Date(), maxPlayers: 2, sport: "tennis-singles" },

@@ -34,6 +34,21 @@ class QuickGameStateTest {
     }
 
     @Test
+    fun `active tennis points survive the persisted state round trip`() {
+        val game = QuickGameState(
+            sport = "tennis",
+            scoreSets = listOf(SetScore(3, 2, pointTeamOne = 2, pointTeamTwo = 3, pointGameActive = true)),
+        )
+
+        val restored = Json.encodeToString(game).let {
+            Json { ignoreUnknownKeys = true }.decodeFromString<QuickGameState>(it)
+        }
+
+        assertEquals(2, restored.scoreSets.single().pointTeamOne)
+        assertEquals(3, restored.scoreSets.single().pointTeamTwo)
+    }
+
+    @Test
     fun `not started until a kickoff is set`() {
         assertFalse(QuickGameState().isStarted)
         assertFalse(QuickGameState().isLive(kickoff))
