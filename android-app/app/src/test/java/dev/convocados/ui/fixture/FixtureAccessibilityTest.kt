@@ -34,6 +34,18 @@ class FixtureAccessibilityTest {
     }
 
     @Test
+    fun adaptiveListDetailKeepsBothSurfacesActionable() {
+        composeRule.setContent {
+            ConvocadosTheme(themeMode = ThemeMode.Light) {
+                AdaptiveGamesFixtureContent(FixtureData.games, FixtureData.event, {}, {}, {}, {})
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Create game").assertHasClickAction()
+        composeRule.onNodeWithText("View game").assertHasClickAction()
+    }
+
+    @Test
     fun eventExposesPrimaryAction() {
         composeRule.setContent {
             ConvocadosTheme(themeMode = ThemeMode.Light) {
@@ -42,5 +54,40 @@ class FixtureAccessibilityTest {
         }
 
         composeRule.onNodeWithText("View game").assertHasClickAction()
+    }
+
+    @Test
+    fun `state fixtures communicate payment and offline states without color`() {
+        composeRule.setContent {
+            ConvocadosTheme(themeMode = ThemeMode.Light) {
+                EventStateFixtureContent(FixtureState.Payment)
+            }
+        }
+
+        composeRule.onNodeWithText("Payment due").assertExists()
+        composeRule.onNodeWithText("Offline cached").assertDoesNotExist()
+    }
+
+    @Test
+    fun urgent_fixture_communicates_time_sensitive_state() {
+        composeRule.setContent {
+            ConvocadosTheme(themeMode = ThemeMode.Light) {
+                EventStateFixtureContent(FixtureState.Urgent)
+            }
+        }
+
+        composeRule.onNodeWithText("Starting soon").assertExists()
+        composeRule.onNodeWithText("The game starts in less than two hours.").assertExists()
+    }
+
+    @Test
+    fun offline_fixture_communicates_cached_state() {
+        composeRule.setContent {
+            ConvocadosTheme(themeMode = ThemeMode.Light) {
+                EventStateFixtureContent(FixtureState.Offline)
+            }
+        }
+
+        composeRule.onNodeWithText("Offline cached").assertExists()
     }
 }

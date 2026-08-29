@@ -17,12 +17,13 @@ androidxDataStore = "1.2.1"
 androidxSecurity = "1.1.0"
 androidxBrowser = "1.10.0"
 androidxSplashscreen = "1.2.0"
-firebaseBom = "33.14.0"
+firebaseBom = "34.18.0"
 accompanist = "0.37.3"
 room = "2.8.4"
 wearCompose = "1.6.2"
 playServicesWearable = "20.0.1"
-playServicesAuth = "21.3.0"
+playServicesAuth = "22.0.0"
+playServicesAuthLegacy = "21.3.0"
 googleIdIdentity = "1.2.0"
 workRuntime = "2.10.1"
 hiltWork = "1.4.0"
@@ -73,7 +74,7 @@ ktor-client-logging = { group = "io.ktor", name = "ktor-client-logging", version
 ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref = "ktor" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
-firebase-messaging-ktx = { group = "com.google.firebase", name = "firebase-messaging-ktx" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
 accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanist" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
@@ -86,7 +87,7 @@ wear-compose-material = { group = "androidx.wear.compose", name = "compose-mater
 wear-compose-material3 = { group = "androidx.wear.compose", name = "compose-material3", version.ref = "wearCompose" }
 wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "wearCompose" }
 play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
-play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
+play-services-auth-legacy = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuthLegacy" }
 google-id-identity = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleIdIdentity" }
 androidx-credentials = { group = "androidx.credentials", name = "credentials", version = "1.6.0" }
 androidx-credentials-play = { group = "androidx.credentials", name = "credentials-play-services-auth", version = "1.6.0" }
@@ -118,6 +119,7 @@ coil-test = { group = "io.coil-kt.coil3", name = "coil-test", version.ref = "coi
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
