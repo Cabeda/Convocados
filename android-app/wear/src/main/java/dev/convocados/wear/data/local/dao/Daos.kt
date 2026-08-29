@@ -37,6 +37,9 @@ interface WearHistoryDao {
     @Query("SELECT * FROM wear_history WHERE eventId = :eventId ORDER BY dateTime DESC LIMIT 1")
     suspend fun getLatestHistory(eventId: String): WearHistoryEntity?
 
+    @Query("SELECT * FROM wear_history WHERE eventId = :eventId")
+    suspend fun getByEvent(eventId: String): List<WearHistoryEntity>
+
     @Query("SELECT * FROM wear_history WHERE id = :historyId LIMIT 1")
     suspend fun getHistoryById(historyId: String): WearHistoryEntity?
 
@@ -71,7 +74,7 @@ interface WearHistoryDao {
     }
 
     @Query("UPDATE wear_history SET scoreOne = :scoreOne, scoreTwo = :scoreTwo, scoreSetsJson = :scoreSetsJson WHERE id = :historyId")
-    suspend fun updateScore(historyId: String, scoreOne: Int, scoreTwo: Int, scoreSetsJson: String? = null)
+    suspend fun updateScore(historyId: String, scoreOne: Int?, scoreTwo: Int?, scoreSetsJson: String? = null)
 }
 
 @Dao
@@ -85,6 +88,12 @@ interface PendingScoreDao {
     /** Items that have hit the retry cap and are no longer auto-attempted. */
     @Query("SELECT COUNT(*) FROM pending_scores WHERE retryCount >= :cap")
     fun observeStuckCount(cap: Int): Flow<Int>
+
+    @Query("SELECT * FROM pending_scores WHERE eventId = :eventId AND historyId = :historyId ORDER BY createdAt ASC")
+    suspend fun getByHistory(eventId: String, historyId: String): List<PendingScoreEntity>
+
+    @Query("DELETE FROM pending_scores WHERE eventId = :eventId AND historyId = :historyId")
+    suspend fun deleteByHistory(eventId: String, historyId: String)
 
     @Insert
     suspend fun insert(score: PendingScoreEntity)
