@@ -2,6 +2,7 @@ package dev.convocados.wear.ui.screen.score
 
 import app.cash.turbine.test
 import dev.convocados.wear.data.api.ApiException
+import dev.convocados.wear.data.api.SetScore
 import dev.convocados.wear.data.alarm.GameSettings
 import dev.convocados.wear.data.alarm.GameSettingsStore
 import dev.convocados.wear.data.local.entity.WearGameEntity
@@ -235,6 +236,14 @@ class ScoreViewModelTest {
     }
 
     @Test
+    fun `score failure only shows offline state for retryable errors`() {
+        assertTrue(isRetryableScoreFailure(java.io.IOException("offline")))
+        assertTrue(isRetryableScoreFailure(ApiException(401, "expired")))
+        assertTrue(isRetryableScoreFailure(ApiException(500, "server")))
+        assertFalse(isRetryableScoreFailure(ApiException(422, "invalid")))
+    }
+
+    @Test
     fun `startGame failure with 400 asks to assign teams`() {
         assertEquals("Assign teams first", startErrorMessage(ApiException(400, "Teams must be assigned first.")))
     }
@@ -284,7 +293,7 @@ class ScoreViewModelTest {
     }
 
     @Test
-    fun `legacy scalar tennis history stays in scalar scoring mode`() = runTest {
+    fun `legacy scalar tennis history opens structured scoring without guessing sets`() = runTest {
         coEvery { repository.getGame("e1") } returns makeGame("e1").copy(sport = "tennis")
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
         coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(makeHistory("h1", "e1", 2, 1))
@@ -293,12 +302,103 @@ class ScoreViewModelTest {
         viewModel.load("e1")
         advanceUntilIdle()
 
-        assertFalse(viewModel.uiState.value.isTennisScoring)
+        assertTrue(viewModel.uiState.value.isTennisScoring)
+        assertEquals(2, viewModel.uiState.value.scoreOne)
+        assertEquals(1, viewModel.uiState.value.scoreTwo)
+        assertTrue(viewModel.uiState.value.scoreSets.isEmpty())
+        assertEquals(2 to 1, viewModel.uiState.value.legacyScalarScore)
+
         viewModel.incrementScoreOne()
         advanceUntilIdle()
 
-        assertEquals(3, viewModel.uiState.value.scoreOne)
-        coVerify { scoreRepository.submitScore("e1", "h1", 3, 1, any(), any()) }
+        assertEquals(1, viewModel.uiState.value.scoreSets.single().pointTeamOne)
+        assertNull(viewModel.uiState.value.legacyScalarScore)
+        assertEquals(0, viewModel.uiState.value.scoreSets.single().pointTeamTwo)
+    }
+
+    @Test
+    fun `undoing the first point restores legacy scalar state and payload`() = runTest {
+        coEvery { repository.getGame("e1") } returns makeGame("e1").copy(sport = "tennis")
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(makeHistory("h1", "e1", 2, 1))
+        coEvery { scoreRepository.submitScore(any(), any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+        viewModel.incrementScoreOne()
+        advanceUntilIdle()
+        viewModel.undoLastScore()
+        advanceUntilIdle()
+
+        assertEquals(2 to 1, viewModel.uiState.value.legacyScalarScore)
+        assertTrue(viewModel.uiState.value.scoreSets.isEmpty())
+        coVerify {
+            scoreRepository.submitScore(
+                eventId = "e1",
+                historyId = "h1",
+                scoreOne = 2,
+                scoreTwo = 1,
+                teamOneName = "Red",
+                teamTwoName = "Blue",
+                scoreSets = null,
+            )
+        }
+    }
+
+    @Test
+    fun `legacy scalar history ignores decrement tiebreak and next-set before conversion`() = runTest {
+        coEvery { repository.getGame("e1") } returns makeGame("e1").copy(sport = "tennis")
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(makeHistory("h1", "e1", 2, 1))
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+        viewModel.decrementScoreOne()
+        viewModel.toggleTiebreak()
+        viewModel.advanceSet()
+
+        assertEquals(2 to 1, viewModel.uiState.value.legacyScalarScore)
+        assertTrue(viewModel.uiState.value.scoreSets.isEmpty())
+        coVerify(exactly = 0) { scoreRepository.submitScore(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `completed set ignores further point increments until a new set is added`() = runTest {
+        coEvery { repository.getGame("e1") } returns makeGame("e1").copy(sport = "tennis")
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(
+            makeHistory("h1", "e1", 1, 0, "[{\"teamOne\":6,\"teamTwo\":4,\"pointTeamOne\":0,\"pointTeamTwo\":0,\"pointGameActive\":false,\"pointGameCompletedBy\":1}]")
+        )
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+        val completedSet = viewModel.uiState.value.scoreSets.single()
+        viewModel.incrementScoreOne()
+        advanceUntilIdle()
+
+        assertEquals(listOf(completedSet), viewModel.uiState.value.scoreSets)
+    }
+
+    @Test
+    fun `structured tennis history edits the active game points`() = runTest {
+        coEvery { repository.getGame("e1") } returns makeGame("e1").copy(sport = "padel")
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(
+            makeHistory("h1", "e1", 0, 0, "[{\"teamOne\":3,\"teamTwo\":2,\"pointTeamOne\":2,\"pointTeamTwo\":3}]")
+        )
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+        viewModel.incrementScoreOne()
+        advanceUntilIdle()
+
+        val set = viewModel.uiState.value.scoreSets.single()
+        assertEquals(3, set.pointTeamOne)
+        assertEquals(3, set.pointTeamTwo)
     }
 
     @Test
