@@ -1,6 +1,8 @@
 package dev.convocados.wear.ui.screen.quick
 
 import dev.convocados.wear.data.alarm.GameAlarmScheduler
+import dev.convocados.wear.data.api.displayTennisPoint
+import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.data.local.QuickGameState
 import dev.convocados.wear.data.local.QuickGameStore
 import io.mockk.every
@@ -44,13 +46,61 @@ class QuickScoreViewModelTest {
         val (viewModel, state) = viewModel()
 
         viewModel.startNew(60, 0, "tennis")
-        repeat(6) { viewModel.incrementScoreOne() }
-        repeat(4) { viewModel.incrementScoreTwo() }
+        repeat(4) { repeat(4) { viewModel.incrementScoreTwo() } }
+        repeat(6) { repeat(4) { viewModel.incrementScoreOne() } }
 
         assertEquals(1, state.value.scoreOne)
         assertEquals(0, state.value.scoreTwo)
         assertEquals(6, state.value.scoreSets.single().teamOne)
         assertEquals(4, state.value.scoreSets.single().teamTwo)
+        viewModel.incrementScoreOne()
+        assertEquals(6, state.value.scoreSets.single().teamOne)
+        assertEquals(4, state.value.scoreSets.single().teamTwo)
+    }
+
+    @Test
+    fun `tennis points support deuce advantage and game completion`() {
+        val (viewModel, state) = viewModel()
+
+        viewModel.startNew(60, 0, "tennis")
+        repeat(3) { viewModel.incrementScoreOne() }
+        repeat(3) { viewModel.incrementScoreTwo() }
+
+        assertEquals(3, state.value.scoreSets.single().pointTeamOne)
+        assertEquals(3, state.value.scoreSets.single().pointTeamTwo)
+        assertEquals("Deuce", displayTennisPoint(state.value.scoreSets.single().tennisGameScore()))
+
+        viewModel.incrementScoreOne()
+        assertEquals(4, state.value.scoreSets.single().pointTeamOne)
+        assertEquals(3, state.value.scoreSets.single().pointTeamTwo)
+        viewModel.incrementScoreTwo()
+        assertEquals(3, state.value.scoreSets.single().pointTeamOne)
+        assertEquals(3, state.value.scoreSets.single().pointTeamTwo)
+
+        viewModel.incrementScoreOne()
+        viewModel.incrementScoreOne()
+        val set = state.value.scoreSets.single()
+        assertEquals(0, state.value.scoreOne)
+        assertEquals(1, set.teamOne)
+        assertEquals(0, set.teamTwo)
+        assertEquals(0, set.pointTeamOne)
+        assertEquals(0, set.pointTeamTwo)
+        assertTrue(!set.pointGameActive)
+    }
+
+    @Test
+    fun `padel uses the same point scoring before tiebreak mode`() {
+        val (viewModel, state) = viewModel()
+
+        viewModel.startNew(60, 0, "padel")
+        repeat(3) { viewModel.incrementScoreOne() }
+        repeat(2) { viewModel.incrementScoreTwo() }
+
+        val set = state.value.scoreSets.single()
+        assertEquals(3, set.pointTeamOne)
+        assertEquals(2, set.pointTeamTwo)
+        assertEquals(0, set.teamOne)
+        assertEquals(0, set.teamTwo)
     }
 
     @Test
@@ -59,12 +109,16 @@ class QuickScoreViewModelTest {
 
         viewModel.startNew(60, 0, "padel")
         repeat(6) {
+            repeat(4) { viewModel.incrementScoreOne() }
+            repeat(4) { viewModel.incrementScoreTwo() }
+        }
+        viewModel.toggleTiebreak()
+        repeat(5) {
             viewModel.incrementScoreOne()
             viewModel.incrementScoreTwo()
         }
-        viewModel.toggleTiebreak()
-        repeat(7) { viewModel.incrementScoreOne() }
-        repeat(5) { viewModel.incrementScoreTwo() }
+        viewModel.incrementScoreOne()
+        viewModel.incrementScoreOne()
 
         val set = state.value.scoreSets.single()
         assertEquals(1, state.value.scoreOne)

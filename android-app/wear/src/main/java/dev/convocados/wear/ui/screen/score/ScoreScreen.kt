@@ -20,6 +20,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.*
 import dev.convocados.wear.R
+import dev.convocados.wear.data.api.TennisTeam
+import dev.convocados.wear.data.api.displayTennisPoint
+import dev.convocados.wear.data.api.displayTennisPointForTeam
+import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.LocalAmbientMode
 import dev.convocados.wear.ui.RememberKeepScreenOn
 import dev.convocados.wear.ui.theme.Warning
@@ -314,19 +318,33 @@ internal fun TennisScoreEditor(
     nowOverride: Instant? = null,
 ) {
     val currentSet = state.scoreSets.lastOrNull()
+    val currentGame = currentSet?.tennisGameScore() ?: dev.convocados.wear.data.api.TennisGameScore()
     Column(Modifier.fillMaxSize().padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = state.scoreSets.joinToString(" · ") { set ->
                 if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
-            }.ifEmpty { "${state.scoreOne}-${state.scoreTwo}" },
+            }.ifEmpty { "New set" } + "  ·  ${displayTennisPoint(currentGame)}",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        state.legacyScalarScore?.let { (one, two) ->
+            Text(
+                text = "Legacy result $one-$two · tap a team to start point scoring",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
         Text("${if (state.isTiebreakScoring) "Tiebreak" else "Set"} ${state.scoreSets.size.coerceAtLeast(1)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TeamScoreButton(
                 teamName = state.teamOneName,
                 score = if (state.isTiebreakScoring) currentSet?.tiebreakTeamOne ?: 0 else currentSet?.teamOne ?: 0,
+                scoreLabel = if (state.isTiebreakScoring) {
+                    (currentSet?.tiebreakTeamOne ?: 0).toString()
+                } else {
+                    displayTennisPointForTeam(currentGame, TennisTeam.ONE)
+                },
                 container = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 onIncrement = onIncrementOne,
@@ -337,6 +355,11 @@ internal fun TennisScoreEditor(
             TeamScoreButton(
                 teamName = state.teamTwoName,
                 score = if (state.isTiebreakScoring) currentSet?.tiebreakTeamTwo ?: 0 else currentSet?.teamTwo ?: 0,
+                scoreLabel = if (state.isTiebreakScoring) {
+                    (currentSet?.tiebreakTeamTwo ?: 0).toString()
+                } else {
+                    displayTennisPointForTeam(currentGame, TennisTeam.TWO)
+                },
                 container = MaterialTheme.colorScheme.tertiaryContainer,
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                 onIncrement = onIncrementTwo,
@@ -536,6 +559,20 @@ private fun AmbientScoreDisplay(state: ScoreUiState) {
                 style = MaterialTheme.typography.displayMedium,
                 color = androidx.compose.ui.graphics.Color.White,
             )
+            if (state.isTennisScoring) {
+                state.scoreSets.lastOrNull()?.let { activeSet ->
+                    val setDetails = if (activeSet.tiebreakTeamOne != null && activeSet.tiebreakTeamTwo != null) {
+                        "${activeSet.teamOne}-${activeSet.teamTwo} (${activeSet.tiebreakTeamOne}-${activeSet.tiebreakTeamTwo})"
+                    } else {
+                        "${activeSet.teamOne}-${activeSet.teamTwo} · ${displayTennisPoint(activeSet.tennisGameScore())}"
+                    }
+                    Text(
+                        text = setDetails,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f),
+                    )
+                }
+            }
             // Team names
             Text(
                 text = "${state.teamOneName} vs ${state.teamTwoName}",

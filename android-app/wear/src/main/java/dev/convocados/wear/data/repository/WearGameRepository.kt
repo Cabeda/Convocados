@@ -2,6 +2,7 @@ package dev.convocados.wear.data.repository
 
 import android.util.Log
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
 import dev.convocados.wear.data.local.entity.WearGameEntity
@@ -24,6 +25,7 @@ class WearGameRepository @Inject constructor(
     private val gameDao: WearGameDao,
     private val historyDao: WearHistoryDao,
     private val teamRepository: WearTeamRepository,
+    private val pendingScoreDao: PendingScoreDao,
 ) {
     /** Observable list of all cached games, sorted by dateTime. */
     fun observeGames(): Flow<List<WearGameEntity>> = gameDao.getAllGames()
@@ -75,12 +77,28 @@ class WearGameRepository @Inject constructor(
         Result.failure(e)
     }
 
-    /** Refresh history for a specific event. */
-    suspend fun refreshHistory(eventId: String): Result<Unit> = try {        val history = client.get<dev.convocados.wear.data.api.PaginatedHistory>("/api/events/$eventId/history")
-        historyDao.refreshHistory(
-            eventId,
-            history.data.map { it.toHistoryEntity(eventId) }
-        )
+    /** Refresh history for a specific event, preserving optimistic queued score targets. */
+    suspend fun refreshHistory(eventId: String): Result<Unit> = try {
+        val history = client.get<dev.convocados.wear.data.api.PaginatedHistory>("/api/events/$eventId/history")
+        val cached = historyDao.getByEvent(eventId)
+        val pendingByHistory = pendingScoreDao.getAll()
+            .filter { it.eventId == eventId }
+            .associateBy { it.historyId }
+        val remoteHistory = history.data.map { it.toHistoryEntity(eventId) }
+        val remoteIds = remoteHistory.mapTo(mutableSetOf()) { it.id }
+        val mergedHistory = (remoteHistory + cached.filter { it.id !in remoteIds && it.id in pendingByHistory })
+            .map { local ->
+                pendingByHistory[local.id]?.let { pending ->
+                    local.copy(
+                        scoreOne = pending.scoreOne,
+                        scoreTwo = pending.scoreTwo,
+                        scoreSetsJson = pending.scoreSetsJson,
+                        teamOneName = pending.teamOneName,
+                        teamTwoName = pending.teamTwoName,
+                    )
+                } ?: local
+            }
+        historyDao.refreshHistory(eventId, mergedHistory)
         Result.success(Unit)
     } catch (e: Exception) {
         Log.w("WearGameRepo", "Failed to refresh history for $eventId", e)

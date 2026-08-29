@@ -34,6 +34,13 @@ data class SetScore(
     val teamTwo: Int,
     val tiebreakTeamOne: Int? = null,
     val tiebreakTeamTwo: Int? = null,
+    /** In-progress tennis/padel game points: 0 love, 1 fifteen, 2 thirty, 3 forty, 4 advantage. */
+    val pointTeamOne: Int? = null,
+    val pointTeamTwo: Int? = null,
+    /** Distinguishes an active 0-0 game from a fresh set or completed-game reset. */
+    val pointGameActive: Boolean = false,
+    /** Team that won the game whose points were reset; 1 or 2. */
+    val pointGameCompletedBy: Int? = null,
 )
 
 @Serializable

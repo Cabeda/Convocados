@@ -5,6 +5,10 @@ export interface SetScore {
   teamTwo: number;
   tiebreakTeamOne?: number;
   tiebreakTeamTwo?: number;
+  pointTeamOne?: number;
+  pointTeamTwo?: number;
+  pointGameActive?: boolean;
+  pointGameCompletedBy?: number;
 }
 
 const TENNIS_SPORTS = new Set(["tennis", "tennis-singles", "tennis-doubles", "padel"]);
@@ -33,6 +37,38 @@ export function validateScoreSets(value: unknown): string[] {
       errors.push("Tiebreak scores must be provided together.");
     } else if ((hasTiebreakOne && !isNonNegativeInteger(score.tiebreakTeamOne)) || (hasTiebreakTwo && !isNonNegativeInteger(score.tiebreakTeamTwo))) {
       errors.push("Tiebreak scores must be non-negative integers.");
+    }
+    const hasPointOne = score.pointTeamOne !== undefined && score.pointTeamOne !== null;
+    const hasPointTwo = score.pointTeamTwo !== undefined && score.pointTeamTwo !== null;
+    if (hasPointOne !== hasPointTwo) {
+      errors.push("Tennis point scores must be provided together.");
+    } else if ((hasPointOne || hasPointTwo) && !isValidTennisPointPair(score.pointTeamOne, score.pointTeamTwo)) {
+      errors.push("Tennis point scores must be a valid 0-15-30-40 or advantage pair.");
+    }
+    const hasTiebreak = hasTiebreakOne && hasTiebreakTwo;
+    const pointGameActive = score.pointGameActive;
+    if (pointGameActive !== undefined && typeof pointGameActive !== "boolean") {
+      errors.push("pointGameActive must be a boolean.");
+    }
+    const pointGameCompletedBy = score.pointGameCompletedBy;
+    const hasCompletedBy = pointGameCompletedBy !== undefined && pointGameCompletedBy !== null;
+    if (hasCompletedBy && (!isNonNegativeInteger(pointGameCompletedBy) || (pointGameCompletedBy !== 1 && pointGameCompletedBy !== 2))) {
+      errors.push("pointGameCompletedBy must be team 1 or team 2.");
+    }
+    if (pointGameActive === true && hasCompletedBy) {
+      errors.push("An active point game cannot have a completed-game marker.");
+    }
+    if (pointGameActive === true && (!hasPointOne || !hasPointTwo)) {
+      errors.push("An active point game must include both point scores.");
+    }
+    if ((hasPointOne || hasPointTwo) && pointGameActive !== true && !hasCompletedBy) {
+      errors.push("Non-love point scores must belong to an active point game.");
+    }
+    if ((hasPointOne || hasPointTwo) && hasTiebreak) {
+      errors.push("Tennis point scores cannot be combined with a tiebreak.");
+    }
+    if (hasCompletedBy && (!hasPointOne || !hasPointTwo || score.pointTeamOne !== 0 || score.pointTeamTwo !== 0 || pointGameActive === true || hasTiebreak)) {
+      errors.push("A completed-game marker requires an inactive love-all point score.");
     }
   }
   return [...new Set(errors)];
@@ -106,6 +142,17 @@ function isCompletedSet(set: SetScore): boolean {
 
 function isCompletedTiebreak(teamOne: number, teamTwo: number): boolean {
   return Math.max(teamOne, teamTwo) >= 7 && Math.abs(teamOne - teamTwo) >= 2;
+}
+
+function isValidTennisPointPair(one: unknown, two: unknown): boolean {
+  if (!isTennisPoint(one) || !isTennisPoint(two)) return false;
+  if (one === 4) return two === 3;
+  if (two === 4) return one === 3;
+  return true;
+}
+
+function isTennisPoint(value: unknown): value is number {
+  return isNonNegativeInteger(value) && value <= 4;
 }
 
 function isNonNegativeInteger(value: unknown): value is number {

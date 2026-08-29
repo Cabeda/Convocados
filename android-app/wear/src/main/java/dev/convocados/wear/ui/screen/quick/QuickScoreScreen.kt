@@ -15,6 +15,10 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import dev.convocados.wear.R
+import dev.convocados.wear.data.api.TennisTeam
+import dev.convocados.wear.data.api.displayTennisPoint
+import dev.convocados.wear.data.api.displayTennisPointForTeam
+import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.RememberKeepScreenOn
 import dev.convocados.wear.ui.screen.score.GameClock
 import dev.convocados.wear.ui.screen.score.GameEdgeProgress
@@ -159,6 +163,7 @@ private fun QuickSetScoreEditor(
     onToggleTiebreak: () -> Unit,
 ) {
     val currentSet = state.scoreSets.lastOrNull()
+    val currentGame = currentSet?.tennisGameScore() ?: dev.convocados.wear.data.api.TennisGameScore()
     val isTiebreak = currentSet?.tiebreakTeamOne != null && currentSet.tiebreakTeamTwo != null
     val setSummary = state.scoreSets.joinToString(" · ") { set ->
         if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) {
@@ -175,7 +180,7 @@ private fun QuickSetScoreEditor(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "$setSummary  ·  ${state.scoreOne}-${state.scoreTwo}",
+            text = "$setSummary  ·  ${state.scoreOne}-${state.scoreTwo}  ·  ${displayTennisPoint(currentGame)}",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -196,6 +201,11 @@ private fun QuickSetScoreEditor(
             TeamScoreButton(
                 teamName = stringResource(R.string.team_default_1),
                 score = if (isTiebreak) currentSet?.tiebreakTeamOne ?: 0 else currentSet?.teamOne ?: 0,
+                scoreLabel = if (isTiebreak) {
+                    (currentSet?.tiebreakTeamOne ?: 0).toString()
+                } else {
+                    displayTennisPointForTeam(currentGame, TennisTeam.ONE)
+                },
                 container = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 onIncrement = onIncrementOne,
@@ -206,6 +216,11 @@ private fun QuickSetScoreEditor(
             TeamScoreButton(
                 teamName = stringResource(R.string.team_default_2),
                 score = if (isTiebreak) currentSet?.tiebreakTeamTwo ?: 0 else currentSet?.teamTwo ?: 0,
+                scoreLabel = if (isTiebreak) {
+                    (currentSet?.tiebreakTeamTwo ?: 0).toString()
+                } else {
+                    displayTennisPointForTeam(currentGame, TennisTeam.TWO)
+                },
                 container = MaterialTheme.colorScheme.tertiaryContainer,
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                 onIncrement = onIncrementTwo,
