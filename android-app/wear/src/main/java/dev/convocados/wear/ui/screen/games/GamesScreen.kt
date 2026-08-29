@@ -5,6 +5,7 @@ import android.net.NetworkCapabilities
 import androidx.compose.foundation.layout.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -33,6 +34,9 @@ import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.*
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
+import dev.convocados.designsystem.ExpressiveMotion
+import dev.convocados.designsystem.ExpressiveSemanticRole
+import dev.convocados.wear.ui.theme.expressiveMotion
 import dev.convocados.wear.R
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.ui.theme.expressiveTokens
@@ -134,13 +138,17 @@ fun GamesScreen(
     }
 
     // Expressive spring drives the displayed indicator (bouncy snap-back).
-    val springSpec = spring<Float>(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessMediumLow,
-    )
+    val motion = expressiveMotion()
     val displayedPull by animateFloatAsState(
         targetValue = if (refreshing) 1f else pullProgress,
-        animationSpec = springSpec,
+        animationSpec = if (motion == ExpressiveMotion.Reduced) {
+            snap()
+        } else {
+            spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            )
+        },
         label = "pullIndicator",
     )
 
@@ -255,7 +263,7 @@ fun GamesScreen(
                             Text(
                                 text = stringResource(R.string.pending_sync, state.pendingSyncCount),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = tokens.warning,
+                                color = tokens.colorFor(ExpressiveSemanticRole.Pending),
                                 modifier = Modifier.fillMaxWidth(),
                                 textAlign = TextAlign.Center
                             )
@@ -267,7 +275,7 @@ fun GamesScreen(
                             Text(
                                 text = stringResource(R.string.offline_cached),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = tokens.offline,
+                                color = tokens.colorFor(ExpressiveSemanticRole.Offline),
                                 modifier = Modifier.fillMaxWidth(),
                                 textAlign = TextAlign.Center
                             )
@@ -393,7 +401,7 @@ internal fun GameChip(
                     Text(
                         text = stringResource(R.string.live_badge),
                         style = MaterialTheme.typography.labelSmall,
-                        color = tokens.success,
+                        color = tokens.colorFor(ExpressiveSemanticRole.Live),
                     )
                 }
                 Text(
@@ -410,7 +418,7 @@ internal fun GameChip(
             )
             canScore -> ButtonDefaults.filledTonalButtonColors()
             else -> ButtonDefaults.filledTonalButtonColors(
-                contentColor = tokens.offline,
+                contentColor = tokens.colorFor(ExpressiveSemanticRole.Offline),
             )
         }
     )

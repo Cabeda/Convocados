@@ -99,6 +99,8 @@
     <string name="profile">Profile</string>
     <string name="stats">Stats</string>
     <string name="games_tab">Games</string>
+    <string name="live_indicator_pulsing">Live indicator (pulsing)</string>
+    <string name="live_indicator_steady">Live indicator (steady)</string>
     <string name="elo_changes">ELO Changes</string>
     <string name="payments">Payments</string>
     <string name="overview">OVERVIEW</string>

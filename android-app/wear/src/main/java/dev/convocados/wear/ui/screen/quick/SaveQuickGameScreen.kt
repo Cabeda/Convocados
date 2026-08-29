@@ -13,6 +13,8 @@ import androidx.wear.compose.material3.*
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
+import dev.convocados.designsystem.ExpressiveSemanticRole
+import dev.convocados.wear.ui.theme.expressiveTokens
 
 @Composable
 fun SaveQuickGameScreen(
@@ -20,6 +22,7 @@ fun SaveQuickGameScreen(
     onDone: () -> Unit = {},
 ) {
     LaunchedEffect(Unit) { viewModel.load() }
+    val tokens = expressiveTokens()
     val state by viewModel.uiState.collectAsState()
     val columnState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
@@ -51,7 +54,7 @@ fun SaveQuickGameScreen(
                     Text(
                         text = stringResource(R.string.save_quick_saved),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = tokens.colorFor(ExpressiveSemanticRole.Success),
                         modifier = Modifier.fillMaxWidth().padding(8.dp),
                     )
                 }
@@ -106,7 +109,7 @@ fun SaveQuickGameScreen(
                     Text(
                         text = error,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
+                        color = tokens.colorFor(ExpressiveSemanticRole.Error),
                         modifier = Modifier.fillMaxWidth().padding(8.dp),
                     )
                 }

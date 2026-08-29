@@ -3,6 +3,8 @@ package dev.convocados.wear.ui.screen.score
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -41,6 +43,9 @@ import androidx.wear.compose.material3.LocalContentColor
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.rememberAnimatedTextFontRegistry
+import dev.convocados.designsystem.ExpressiveMotion
+import dev.convocados.designsystem.ExpressiveSemanticRole
+import dev.convocados.wear.ui.theme.expressiveMotion
 import dev.convocados.wear.ui.theme.expressiveTokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -56,6 +61,7 @@ private const val REPEAT_DECREMENT_DELAY_MS = 160L
 internal fun TeamScoreButton(
     teamName: String,
     score: Int,
+    scoreLabel: String = score.toString(),
     container: Color,
     contentColor: Color,
     onIncrement: () -> Unit,
@@ -66,7 +72,12 @@ internal fun TeamScoreButton(
     val view = LocalView.current
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed && enabled) 0.97f else 1f, label = "press")
+    val motion = expressiveMotion()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled) 0.97f else 1f,
+        animationSpec = if (motion == ExpressiveMotion.Reduced) snap() else spring(),
+        label = "press",
+    )
 
     // Holding state shared between the long-press (repeat loop) and a pointer
     // watcher that tracks when the finger actually lifts, so a held long-press
@@ -89,10 +100,12 @@ internal fun TeamScoreButton(
         endFontSize = 48.sp,
     )
     val scoreAnim = remember { Animatable(0f) }
-    LaunchedEffect(score) {
+    LaunchedEffect(score, scoreLabel, motion) {
         scoreAnim.snapTo(0f)
-        scoreAnim.animateTo(1f)
-        scoreAnim.animateTo(0f)
+        if (motion == ExpressiveMotion.Expressive) {
+            scoreAnim.animateTo(1f)
+            scoreAnim.animateTo(0f)
+        }
     }
     Column(
         modifier = modifier
@@ -136,7 +149,7 @@ internal fun TeamScoreButton(
                     }
                 }
             }
-            .semantics { contentDescription = "$teamName, $score points" }
+            .semantics { contentDescription = "$teamName, $scoreLabel" }
             .padding(horizontal = 6.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -151,10 +164,10 @@ internal fun TeamScoreButton(
         )
         CompositionLocalProvider(LocalContentColor provides contentColor) {
             AnimatedText(
-                text = "$score",
+                text = scoreLabel,
                 fontRegistry = fontRegistry,
                 progressFraction = { scoreAnim.value },
-                modifier = Modifier.semantics { contentDescription = score.toString() },
+                modifier = Modifier.semantics { contentDescription = scoreLabel },
             )
         }
     }
@@ -177,7 +190,7 @@ internal fun GameEdgeProgress(
     val alarmTickColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
     val nextAlarmTickColor = MaterialTheme.colorScheme.primary
     val tokens = expressiveTokens()
-    val endColor = tokens.warning
+    val endColor = tokens.colorFor(ExpressiveSemanticRole.Warning)
 
     Canvas(modifier = modifier.fillMaxSize()) {
         val stroke = 5.dp.toPx()

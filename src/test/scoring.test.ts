@@ -62,6 +62,34 @@ describe("scoring domain", () => {
     expect(validateScoreSets(Array.from({ length: 6 }, () => ({ teamOne: 1, teamTwo: 0 })))).toContain("A match cannot contain more than five sets.");
   });
 
+  it("validates point-game metadata and completed-game markers", () => {
+    expect(validateScoreSets([{
+      teamOne: 1,
+      teamTwo: 0,
+      pointTeamOne: 2,
+      pointTeamTwo: 0,
+      pointGameActive: true,
+    }])).toEqual([]);
+    expect(validateScoreSets([{ teamOne: 1, teamTwo: 0, pointGameActive: "yes" }])).toContain("pointGameActive must be a boolean.");
+    expect(validateScoreSets([{ teamOne: 1, teamTwo: 0, pointGameCompletedBy: 3 }])).toContain("pointGameCompletedBy must be team 1 or team 2.");
+    expect(validateScoreSets([{
+      teamOne: 1,
+      teamTwo: 0,
+      pointTeamOne: 0,
+      pointTeamTwo: 0,
+      pointGameActive: false,
+      pointGameCompletedBy: 1,
+    }])).toEqual([]);
+    expect(validateScoreSets([{
+      teamOne: 1,
+      teamTwo: 0,
+      pointTeamOne: 0,
+      pointTeamTwo: 0,
+      pointGameActive: true,
+      pointGameCompletedBy: 1,
+    }])).toContain("An active point game cannot have a completed-game marker.");
+  });
+
   it("parses scalar scores only when they are non-negative integers", () => {
     expect(parseScalarScore(3)).toBe(3);
     expect(parseScalarScore("03")).toBe(3);

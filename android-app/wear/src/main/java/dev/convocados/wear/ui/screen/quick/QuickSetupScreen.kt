@@ -86,9 +86,9 @@ fun QuickSetupScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         listOf(
                             QUICK_SPORT_STANDARD to R.string.sport_standard,
@@ -97,6 +97,7 @@ fun QuickSetupScreen(
                         ).forEach { (value, labelRes) ->
                             CompactButton(
                                 onClick = { sport = value },
+                                modifier = Modifier.fillMaxWidth(),
                                 colors = if (sport == value) {
                                     ButtonDefaults.buttonColors()
                                 } else {

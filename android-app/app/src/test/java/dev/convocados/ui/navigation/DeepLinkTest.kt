@@ -176,7 +176,10 @@ class DeepLinkTest {
     }
 
     @Test
-    fun `deepLinkToRoute returns null for unknown url`() {
-        assertNull(DeepLink.deepLinkToRoute("convocados://settings/unknown"))
+    fun `deepLinkToRoute does not treat similarly named actions as payment`() {
+        assertEquals(
+            "event/evt-abc",
+            DeepLink.deepLinkToRoute("convocados://events/evt-abc?action=payroll"),
+        )
     }
 }
