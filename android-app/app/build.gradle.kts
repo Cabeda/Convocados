@@ -197,6 +197,8 @@ tasks.register("generateStoreListing") {
 
 
 dependencies {
+    implementation(project(":design-system"))
+
     // Compose BOM
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)
@@ -264,7 +266,7 @@ dependencies {
 
     // Firebase
     implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.messaging.ktx)
+    implementation(libs.firebase.messaging)
     implementation(libs.firebase.crashlytics)
 
     // Accompanist (Permissions)

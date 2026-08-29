@@ -412,3 +412,16 @@ _Avoid_: codeowners permission (overloaded — the file also routes reviews), wh
 A `/preview` comment command on a pull request that triggers deploying that PR's current head to its Preview App. `/preview-stop` is the matching teardown command. Requests are opt-in per deploy: pushes to the PR never trigger deployments by themselves.
 _Avoid_: preview trigger, redeploy comment
 
+
+
+## Expressive Semantic Foundation
+The cross-device design-system contract for Convocados UI meaning and interaction states. It defines semantic roles (for example success, warning, live, offline, payment, and error), motion policy, and component-state vocabulary without prescribing one rendered palette or layout. Phone and Wear map the same roles to platform-appropriate values; phone may preserve brand roles while adapting neutral surfaces with user-enabled dynamic color, and Wear remains OLED/round-device optimized.
+_Avoid_: shared palette, identical UI, global theme (those imply rendered values or a single platform)
+
+## Adaptive Scene
+A width/posture-aware relationship between destinations, such as the phone Games list and Event Detail supporting pane. Compact phone and Wear use full-screen navigation; medium/expanded phone may show list and detail together. An Adaptive Scene owns selection, deep-link, back, and restoration behavior rather than merely changing padding.
+_Avoid_: responsive screen (too vague), tablet-only layout
+
+## Reduced Motion
+The system accessibility instruction to simplify or remove expressive animations. It takes precedence over the app's default expressive motion policy on phone and Wear. Reduced Motion changes transitions and feedback timing, not domain state or interaction availability.
+_Avoid_: disabled animation (too broad), slow mode

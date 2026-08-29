@@ -29,6 +29,18 @@ class PhoneFixtureScreenshotTest {
     @Test fun event_dark() = snapshot("phone/event_dark", ThemeMode.Dark) { EventFixtureContent(FixtureData.event, {}, {}) }
     @Test fun profile_light() = snapshot("phone/profile_light", ThemeMode.Light) { ProfileFixtureContent(FixtureData.user, {}, {}) }
     @Test fun profile_dark() = snapshot("phone/profile_dark", ThemeMode.Dark) { ProfileFixtureContent(FixtureData.user, {}, {}) }
+    @Test fun state_empty_light() = stateSnapshot("phone", FixtureState.Empty)
+    @Test fun state_loading_light() = stateSnapshot("phone", FixtureState.Loading)
+    @Test fun state_error_light() = stateSnapshot("phone", FixtureState.Error)
+    @Test fun state_offline_light() = stateSnapshot("phone", FixtureState.Offline)
+    @Test fun state_live_light() = stateSnapshot("phone", FixtureState.Live)
+    @Test fun state_urgent_light() = stateSnapshot("phone", FixtureState.Urgent)
+    @Test fun state_payment_light() = stateSnapshot("phone", FixtureState.Payment)
+
+    private fun stateSnapshot(formFactor: String, state: FixtureState) {
+        composeRule.setContent { ConvocadosTheme(themeMode = ThemeMode.Light) { EventStateFixtureContent(state) } }
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/goldens/$formFactor/state_${state.name.lowercase()}.png")
+    }
 
     @androidx.compose.runtime.Composable
     private fun StatsFixture() {

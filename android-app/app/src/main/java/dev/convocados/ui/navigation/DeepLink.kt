@@ -49,6 +49,35 @@ object DeepLink {
         return intent.data?.toString()
     }
 
+    /** Return an event id when the URL targets an Event Detail deep link. */
+    fun eventId(url: String): String? {
+        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return null
+        if (uri.scheme == "convocados" && uri.host == "auth") return null
+        val segments = deepLinkPath(uri).trim('/').split('/')
+        return segments.getOrNull(1)
+            ?.takeIf { segments.firstOrNull() == "event" || segments.firstOrNull() == "events" }
+            ?.substringBefore('?')
+            ?.takeIf(String::isNotBlank)
+    }
+
+    /** Return whether an event deep link requests the payment prompt. */
+    fun shouldAutoOpenPayment(url: String): Boolean {
+        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+        return eventId(url) != null && uri.getQueryParameter("action") == "pay"
+    }
+
+    /** Return whether a pending payment action belongs to the selected event. */
+    fun shouldAutoOpenPaymentForEvent(
+        pending: Boolean,
+        targetEventId: String,
+        deepLink: String,
+    ): Boolean = pending && eventId(deepLink) == targetEventId
+
+    private fun deepLinkPath(uri: Uri): String = when {
+        uri.scheme == "convocados" -> "/" + (uri.host.orEmpty() + uri.path.orEmpty()).removePrefix("/")
+        else -> uri.path.orEmpty()
+    }
+
     /**
      * Resolve a deep-link URL to a Compose [Route] path. Returns `null` when the
      * URL is not a navigation target (e.g. the OAuth callback, or an unknown host).
@@ -67,18 +96,12 @@ object DeepLink {
 
         // OAuth callback is never a navigation target
         if (uri.scheme == "convocados" && uri.host == "auth") return null
-
-        // Strip the scheme://host prefix to a path
-        val path = when {
-            uri.scheme == "convocados" -> "/" + (uri.host.orEmpty() + uri.path.orEmpty()).removePrefix("/")
-            else -> uri.path.orEmpty()
-        }
+        val path = deepLinkPath(uri)
 
         // Event detail: /events/<id> or /event/<id>
-        val eventMatch = Regex("^/?events?/([^/?]+)").find(path)
-        if (eventMatch != null) {
-            val id = eventMatch.groupValues[1]
-            val actionPay = url.contains("action=pay")
+        val id = eventId(url)
+        if (id != null) {
+            val actionPay = uri.getQueryParameter("action") == "pay"
             return Route.EventDetail.create(id) + if (actionPay) "?action=pay" else ""
         }
 

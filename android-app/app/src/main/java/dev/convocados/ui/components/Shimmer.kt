@@ -19,6 +19,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import dev.convocados.designsystem.ExpressiveMotion
+import dev.convocados.ui.theme.expressiveMotion
 
 @Composable
 fun ShimmerItem(
@@ -26,21 +28,26 @@ fun ShimmerItem(
     shimmerColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
     baseColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
 ) {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val translateAnim = transition.animateFloat(
-        initialValue = -200f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmer"
-    )
+    val motion = expressiveMotion()
+    val translate = if (motion == ExpressiveMotion.Reduced) {
+        0f
+    } else {
+        val transition = rememberInfiniteTransition(label = "shimmer")
+        transition.animateFloat(
+            initialValue = -200f,
+            targetValue = 1000f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "shimmer",
+        ).value
+    }
 
     val brush = Brush.linearGradient(
         colors = listOf(baseColor, shimmerColor, baseColor),
-        start = Offset(x = translateAnim.value - 200f, y = translateAnim.value - 200f),
-        end = Offset(x = translateAnim.value, y = translateAnim.value)
+        start = Offset(x = translate - 200f, y = translate - 200f),
+        end = Offset(x = translate, y = translate),
     )
 
     Card(
