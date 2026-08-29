@@ -5,9 +5,12 @@ import dev.convocados.wear.data.api.EventSummary
 import dev.convocados.wear.data.api.GameHistory
 import dev.convocados.wear.data.api.MyGamesResponse
 import dev.convocados.wear.data.api.PaginatedHistory
+import dev.convocados.wear.data.api.SetScore
 import dev.convocados.wear.data.api.WearApiClient
+import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearHistoryDao
+import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
@@ -21,13 +24,14 @@ class WearGameRepositoryTest {
     private val client = mockk<WearApiClient>()
     private val gameDao = mockk<WearGameDao>(relaxed = true)
     private val historyDao = mockk<WearHistoryDao>(relaxed = true)
+    private val pendingScoreDao = mockk<PendingScoreDao>(relaxed = true)
     private val teamRepository = mockk<WearTeamRepository>(relaxUnitFun = true)
 
     private lateinit var repository: WearGameRepository
 
     @Before
     fun setup() {
-        repository = WearGameRepository(client, gameDao, historyDao, teamRepository)
+        repository = WearGameRepository(client, gameDao, historyDao, teamRepository, pendingScoreDao)
     }
 
     @Test
@@ -82,6 +86,38 @@ class WearGameRepositoryTest {
 
         assertTrue(result.isSuccess)
         coVerify { historyDao.refreshHistory("event1", any()) }
+    }
+
+    @Test
+    fun `refreshHistory preserves pending optimistic structured score`() = runTest {
+        val sets = listOf(SetScore(1, 0, pointTeamOne = 2, pointTeamTwo = 0, pointGameActive = true))
+        val pending = PendingScoreEntity(
+            eventId = "event1",
+            historyId = "h1",
+            scoreOne = 0,
+            scoreTwo = 0,
+            teamOneName = "Red",
+            teamTwoName = "Blue",
+            scoreSetsJson = kotlinx.serialization.json.Json.encodeToString(sets),
+        )
+        val remote = PaginatedHistory(
+            data = listOf(
+                GameHistory(
+                    id = "h1", dateTime = "2025-01-01T10:00:00Z", status = "played",
+                    scoreOne = null, scoreTwo = null, teamOneName = "Red", teamTwoName = "Blue",
+                ),
+            ),
+        )
+        val refreshed = slot<List<dev.convocados.wear.data.local.entity.WearHistoryEntity>>()
+        coEvery { client.get<PaginatedHistory>(any()) } returns remote
+        coEvery { pendingScoreDao.getAll() } returns listOf(pending)
+        coEvery { historyDao.getByEvent("event1") } returns emptyList()
+        coEvery { historyDao.refreshHistory("event1", capture(refreshed)) } just Runs
+
+        assertTrue(repository.refreshHistory("event1").isSuccess)
+        assertEquals(pending.scoreSetsJson, refreshed.captured.single().scoreSetsJson)
+        assertEquals(0, refreshed.captured.single().scoreOne)
+        assertEquals(0, refreshed.captured.single().scoreTwo)
     }
 
     @Test

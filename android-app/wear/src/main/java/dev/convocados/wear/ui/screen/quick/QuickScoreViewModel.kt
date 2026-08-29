@@ -6,6 +6,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.alarm.AlarmFire
 import dev.convocados.wear.data.alarm.GameAlarmScheduler
 import dev.convocados.wear.data.api.SetScore
+import dev.convocados.wear.data.api.TennisTeam
+import dev.convocados.wear.data.api.advanceTennisPoint
+import dev.convocados.wear.data.api.rewindTennisSetPoint
+import dev.convocados.wear.data.api.tennisGameScore
+import dev.convocados.wear.data.api.withTennisGameScore
 import dev.convocados.wear.data.local.QUICK_SPORT_PADEL
 import dev.convocados.wear.data.local.QUICK_SPORT_STANDARD
 import dev.convocados.wear.data.local.QUICK_SPORT_TENNIS
@@ -79,9 +84,23 @@ class QuickScoreViewModel @Inject constructor(
         val last = current.last()
         val entering = last.tiebreakTeamOne == null || last.tiebreakTeamTwo == null
         val updated = current.dropLast(1) + if (entering) {
-            last.copy(tiebreakTeamOne = 0, tiebreakTeamTwo = 0)
+            last.copy(
+                tiebreakTeamOne = 0,
+                tiebreakTeamTwo = 0,
+                pointTeamOne = null,
+                pointTeamTwo = null,
+                pointGameActive = false,
+                pointGameCompletedBy = null,
+            )
         } else {
-            last.copy(tiebreakTeamOne = null, tiebreakTeamTwo = null)
+            last.copy(
+                tiebreakTeamOne = null,
+                tiebreakTeamTwo = null,
+                pointTeamOne = null,
+                pointTeamTwo = null,
+                pointGameActive = false,
+                pointGameCompletedBy = null,
+            )
         }
         val match = matchScoreFromSets(updated)
         quickGameStore.update {
@@ -116,6 +135,8 @@ class QuickScoreViewModel @Inject constructor(
         }
 
         val current = state.scoreSets.ifEmpty { listOf(SetScore(0, 0)) }
+        if (delta < 0 && state.scoreSets.isEmpty()) return
+        if (delta > 0 && isCompletedSet(current.last())) return
         val updated = current.dropLast(1) + current.last().let { set ->
             if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) {
                 if (side == "one") {
@@ -123,10 +144,27 @@ class QuickScoreViewModel @Inject constructor(
                 } else {
                     set.copy(tiebreakTeamTwo = maxOf(0, set.tiebreakTeamTwo + delta))
                 }
-            } else if (side == "one") {
-                set.copy(teamOne = maxOf(0, set.teamOne + delta))
             } else {
-                set.copy(teamTwo = maxOf(0, set.teamTwo + delta))
+                val team = if (side == "one") TennisTeam.ONE else TennisTeam.TWO
+                if (delta < 0) {
+                    rewindTennisSetPoint(set, team)
+                } else {
+                    val pointResult = advanceTennisPoint(set.tennisGameScore(), team)
+                    val withPoints = set.withTennisGameScore(pointResult.score)
+                    when (pointResult.completedTeam) {
+                        TennisTeam.ONE -> withPoints.copy(
+                            teamOne = set.teamOne + 1,
+                            pointGameActive = false,
+                            pointGameCompletedBy = TennisTeam.ONE.serializedValue,
+                        )
+                        TennisTeam.TWO -> withPoints.copy(
+                            teamTwo = set.teamTwo + 1,
+                            pointGameActive = false,
+                            pointGameCompletedBy = TennisTeam.TWO.serializedValue,
+                        )
+                        null -> withPoints
+                    }
+                }
             }
         }
         val match = matchScoreFromSets(updated)

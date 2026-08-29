@@ -61,6 +61,7 @@ private const val REPEAT_DECREMENT_DELAY_MS = 160L
 internal fun TeamScoreButton(
     teamName: String,
     score: Int,
+    scoreLabel: String = score.toString(),
     container: Color,
     contentColor: Color,
     onIncrement: () -> Unit,
@@ -99,7 +100,7 @@ internal fun TeamScoreButton(
         endFontSize = 48.sp,
     )
     val scoreAnim = remember { Animatable(0f) }
-    LaunchedEffect(score, motion) {
+    LaunchedEffect(score, scoreLabel, motion) {
         scoreAnim.snapTo(0f)
         if (motion == ExpressiveMotion.Expressive) {
             scoreAnim.animateTo(1f)
@@ -148,7 +149,7 @@ internal fun TeamScoreButton(
                     }
                 }
             }
-            .semantics { contentDescription = "$teamName, $score points" }
+            .semantics { contentDescription = "$teamName, $scoreLabel" }
             .padding(horizontal = 6.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -163,10 +164,10 @@ internal fun TeamScoreButton(
         )
         CompositionLocalProvider(LocalContentColor provides contentColor) {
             AnimatedText(
-                text = "$score",
+                text = scoreLabel,
                 fontRegistry = fontRegistry,
                 progressFraction = { scoreAnim.value },
-                modifier = Modifier.semantics { contentDescription = score.toString() },
+                modifier = Modifier.semantics { contentDescription = scoreLabel },
             )
         }
     }
