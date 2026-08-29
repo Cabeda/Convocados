@@ -17,6 +17,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -69,13 +72,17 @@ fun AppNavigation(
         else -> Route.Login.route
     }
 
+    val initialOpenPayment = DeepLink.shouldAutoOpenPayment(deepLink ?: "")
+    var pendingAutoOpenPayment by rememberSaveable(deepLink) { mutableStateOf(initialOpenPayment) }
+
     // Handle deep link navigation
     LaunchedEffect(deepLink, isAuthenticated) {
         if (deepLink == null) return@LaunchedEffect
         if (!isAuthenticated && !(dev.convocados.BuildConfig.DEBUG && deepLink.contains("/demo"))) return@LaunchedEffect
         val route = DeepLink.deepLinkToRoute(deepLink)
+        val eventId = DeepLink.eventId(deepLink)
         if (route != null) {
-            navController.navigate(route) { launchSingleTop = true }
+            navController.navigate(if (eventId != null) Route.Games.route else route) { launchSingleTop = true }
         }
     }
 
@@ -153,11 +160,47 @@ fun AppNavigation(
                     LoginScreen()
                 }
                 composable(Route.Games.route) {
-                    GamesScreen(
-                        onEventClick = { navController.navigate(Route.EventDetail.create(it)) },
+                    AdaptiveGamesRoute(
+                        onCompactEventClick = { eventId ->
+                            val shouldOpenPayment = DeepLink.shouldAutoOpenPaymentForEvent(
+                                pending = pendingAutoOpenPayment,
+                                targetEventId = eventId,
+                                deepLink = deepLink ?: "",
+                            )
+                            if (shouldOpenPayment) pendingAutoOpenPayment = false
+                            val route = Route.EventDetail.create(eventId) +
+                                if (shouldOpenPayment) "?action=pay" else ""
+                            navController.navigate(route)
+                        },
                         onCreateClick = { navController.navigate(Route.CreateEvent.route) },
                         onPublicClick = { navController.navigate(Route.PublicGames.route) },
                         onOpenSettings = { navController.navigate(Route.EventSettings.create(it)) },
+                        initialSelectedEventId = DeepLink.eventId(deepLink ?: ""),
+                        detailContent = { eventId, onClose ->
+                            EventDetailScreen(
+                                eventId = eventId,
+                                autoOpenPay = DeepLink.shouldAutoOpenPaymentForEvent(
+                                    pending = pendingAutoOpenPayment,
+                                    targetEventId = eventId,
+                                    deepLink = deepLink ?: "",
+                                ),
+                                onAutoOpenPaymentConsumed = { pendingAutoOpenPayment = false },
+                                onBack = onClose,
+                                onSettings = { navController.navigate(Route.EventSettings.create(eventId)) },
+                                onRankings = { navController.navigate(Route.EventRankings.create(eventId)) },
+                                onPayments = { navController.navigate(Route.EventPayments.create(eventId)) },
+                                onLog = { navController.navigate(Route.EventLog.create(eventId)) },
+                                onAttendance = { navController.navigate(Route.EventAttendance.create(eventId)) },
+                                onNotificationPrefs = { navController.navigate(Route.NotificationPrefs.route) },
+                                onUserClick = { navController.navigate(Route.UserProfile.create(it)) },
+                                onHistoryClick = { historyId -> navController.navigate(Route.HistoryDetail.create(eventId, historyId)) },
+                                onAllHistory = { navController.navigate(Route.EventHistory.create(eventId)) },
+                                onCourtAlternatives = { navController.navigate(Route.CourtAlternatives.create(eventId)) },
+                                onBackToGames = onClose,
+                                sharedTransitionScope = this@SharedTransitionLayout,
+                                animatedVisibilityScope = this@composable,
+                            )
+                        },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this@composable,
                     )
@@ -201,10 +244,16 @@ fun AppNavigation(
                     ),
                 ) { entry ->
                     val eventId = entry.arguments?.getString("eventId") ?: return@composable
-                    val autoOpenPay = entry.arguments?.getString("action") == "pay"
+                    var routeAutoOpenPay by rememberSaveable(eventId) {
+                        mutableStateOf(entry.arguments?.getString("action") == "pay")
+                    }
                     EventDetailScreen(
                         eventId = eventId,
-                        autoOpenPay = autoOpenPay,
+                        autoOpenPay = routeAutoOpenPay,
+                        onAutoOpenPaymentConsumed = {
+                            routeAutoOpenPay = false
+                            pendingAutoOpenPayment = false
+                        },
                         onBack = { navController.popBackStack() },
                         onSettings = { navController.navigate(Route.EventSettings.create(eventId)) },
                         onRankings = { navController.navigate(Route.EventRankings.create(eventId)) },

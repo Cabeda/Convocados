@@ -28,6 +28,8 @@ import dev.convocados.R
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.SettlementGame
 import dev.convocados.data.api.SettlementSummary
+import dev.convocados.designsystem.ExpressiveSemanticRole
+import dev.convocados.ui.theme.expressiveTokens
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -83,12 +85,12 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
         error?.let { snackbarHostState.showSnackbar(it); viewModel.clearError() }
     }
 
-    val accent = MaterialTheme.colorScheme.primary
+    val paymentColor = expressiveTokens().colorFor(ExpressiveSemanticRole.Payment)
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = accent) }; return@Scaffold }
+        if (loading) { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator(color = paymentColor) }; return@Scaffold }
         val d = data ?: run { Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { Text(stringResource(R.string.no_payments), color = MaterialTheme.colorScheme.outline) }; return@Scaffold }
 
         val isManager = d.viewerRole == "owner" || d.viewerRole == "admin"
@@ -97,7 +99,7 @@ fun PaymentsScreen(eventId: String, onBack: () -> Unit, viewModel: PaymentsViewM
             item {
                 Box(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                        .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.35f), MaterialTheme.colorScheme.surface)))
+                        .background(Brush.verticalGradient(listOf(paymentColor.copy(alpha = 0.35f), MaterialTheme.colorScheme.surface)))
                         .padding(16.dp),
                 ) {
                     Column {

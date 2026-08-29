@@ -195,6 +195,8 @@ tasks.register("generateWearStoreListing") {
 
 
 dependencies {
+    implementation(project(":design-system"))
+
     // Wear Compose
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.wear.compose.foundation)
@@ -243,7 +245,8 @@ dependencies {
     implementation(libs.play.services.wearable)
 
     // Google Sign-In (direct login on watch)
-    implementation(libs.play.services.auth)
+    // WearGoogleSignIn uses the legacy client, which was removed from auth 22.0.0.
+    implementation(libs.play.services.auth.legacy)
     implementation(libs.google.id.identity)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play)

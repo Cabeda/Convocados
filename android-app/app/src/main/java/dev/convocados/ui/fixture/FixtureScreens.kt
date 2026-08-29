@@ -174,6 +174,26 @@ fun EventFixtureContent(
 }
 
 @Composable
+fun AdaptiveGamesFixtureContent(
+    games: List<EventSummary>,
+    event: EventDetail,
+    onGameClick: (String) -> Unit,
+    onCreateClick: () -> Unit,
+    onBack: () -> Unit,
+    onPrimaryAction: () -> Unit,
+) {
+    Row(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(0.45f)) {
+            GamesFixtureContent(games, onGameClick, onCreateClick)
+        }
+        VerticalDivider()
+        Box(Modifier.weight(0.55f)) {
+            EventFixtureContent(event, onBack, onPrimaryAction)
+        }
+    }
+}
+
+@Composable
 fun ProfileFixtureContent(
     user: UserProfile,
     onNotifications: () -> Unit,
@@ -207,5 +227,39 @@ fun ProfileFixtureContent(
         OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.sign_out))
         }
+    }
+}
+
+
+
+enum class FixtureState {
+    Empty,
+    Loading,
+    Error,
+    Offline,
+    Live,
+    Urgent,
+    Payment,
+}
+
+/** Deterministic state matrix surface for visual and accessibility verification. */
+@Composable
+fun EventStateFixtureContent(state: FixtureState) {
+    val tokens = dev.convocados.ui.theme.expressiveTokens()
+    val (title, description, color) = when (state) {
+        FixtureState.Empty -> Triple("No games yet", "Create a game to get started.", MaterialTheme.colorScheme.onSurfaceVariant)
+        FixtureState.Loading -> Triple("Loading games", "Please wait while games are refreshed.", MaterialTheme.colorScheme.onSurfaceVariant)
+        FixtureState.Error -> Triple("Could not load games", "Try again when you have a connection.", tokens.colorFor(dev.convocados.designsystem.ExpressiveSemanticRole.Error))
+        FixtureState.Offline -> Triple("Offline cached", "Showing the last saved games.", tokens.colorFor(dev.convocados.designsystem.ExpressiveSemanticRole.Offline))
+        FixtureState.Live -> Triple("Live now", "The game is in progress.", tokens.colorFor(dev.convocados.designsystem.ExpressiveSemanticRole.Live))
+        FixtureState.Urgent -> Triple("Starting soon", "The game starts in less than two hours.", tokens.colorFor(dev.convocados.designsystem.ExpressiveSemanticRole.Warning))
+        FixtureState.Payment -> Triple("Payment due", "Review the amount before joining.", tokens.colorFor(dev.convocados.designsystem.ExpressiveSemanticRole.Payment))
+    }
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = color)
+        Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

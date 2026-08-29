@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeIn
@@ -15,7 +16,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -52,6 +52,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,6 +75,10 @@ import dev.convocados.ui.screen.history.TennisSetEditor
 import dev.convocados.ui.screen.games.formatEventDateInTz
 import dev.convocados.ui.screen.games.formatRelativeDate
 import dev.convocados.ui.screen.games.sportEmoji
+import dev.convocados.ui.theme.expressiveMotion
+import dev.convocados.ui.theme.expressiveTokens
+import dev.convocados.designsystem.ExpressiveMotion
+import dev.convocados.designsystem.ExpressiveSemanticRole
 import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
@@ -888,17 +893,30 @@ internal fun rememberPhaseUi(event: EventDetail): PhaseUi {
     }.value
 }
 
+internal fun phaseSemanticRole(phase: EventPhase): ExpressiveSemanticRole? = when (phase) {
+    EventPhase.NORMAL -> null
+    EventPhase.SOON -> ExpressiveSemanticRole.Warning
+    EventPhase.URGENT -> ExpressiveSemanticRole.Error
+    EventPhase.LIVE -> ExpressiveSemanticRole.Live
+    EventPhase.PAST -> ExpressiveSemanticRole.Offline
+}
+
+internal fun shouldShowAutoPaymentPrompt(
+    autoOpenPay: Boolean,
+    balance: BalanceResponse?,
+): Boolean = autoOpenPay && balance?.callerBalance != null
+
 @Composable
 internal fun phaseColors(phase: EventPhase): Pair<Color, Color> {
-    val dark = isSystemInDarkTheme()
-    val soonColor = if (dark) Color(0xFFFFC94D) else Color(0xFF9A6700)
     val base = MaterialTheme.colorScheme.surface
-    val accent = when (phase) {
+    val tokens = expressiveTokens()
+    val accent = phaseSemanticRole(phase)?.let(tokens::colorFor) ?: when (phase) {
         EventPhase.NORMAL -> MaterialTheme.colorScheme.primary
-        EventPhase.SOON -> soonColor
-        EventPhase.URGENT -> MaterialTheme.colorScheme.error
-        EventPhase.LIVE -> MaterialTheme.colorScheme.primary
-        EventPhase.PAST -> MaterialTheme.colorScheme.outline
+        EventPhase.SOON,
+        EventPhase.URGENT,
+        EventPhase.LIVE,
+        EventPhase.PAST,
+        -> MaterialTheme.colorScheme.outline
     }
     val bgAlpha = when (phase) {
         EventPhase.NORMAL -> 0.08f
@@ -926,6 +944,7 @@ internal fun spotsLabelOf(e: EventDetail): String {
 fun EventDetailScreen(
     eventId: String,
     autoOpenPay: Boolean = false,
+    onAutoOpenPaymentConsumed: () -> Unit = {},
     onBack: () -> Unit,
     onSettings: () -> Unit,
     onRankings: () -> Unit,
@@ -938,7 +957,7 @@ fun EventDetailScreen(
     onAllHistory: () -> Unit = {},
     onCourtAlternatives: () -> Unit = {},
     onBackToGames: () -> Unit = {},
-    viewModel: EventDetailViewModel = hiltViewModel(),
+    viewModel: EventDetailViewModel = hiltViewModel(key = "event-detail-$eventId"),
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
 ) {
@@ -1013,8 +1032,10 @@ fun EventDetailScreen(
     }
     LaunchedEffect(eventId) { viewModel.load(eventId) }
     LaunchedEffect(autoOpenPay, state.balance) {
-        val caller = state.balance?.callerBalance
-        if (autoOpenPay && caller != null && caller.amount > 0) viewModel.showPaymentNudge()
+        if (shouldShowAutoPaymentPrompt(autoOpenPay, state.balance)) {
+            viewModel.showPaymentNudge()
+            onAutoOpenPaymentConsumed()
+        }
     }
     // Notification sheet
     if (state.showNotificationSheet) {
@@ -1389,6 +1410,7 @@ fun EventDetailScreen(
         )
     }
     if (state.showPaymentNudge && user?.name != null) {
+        val paymentTokens = expressiveTokens()
         val callerBalance = state.balance?.callerBalance
         val autoPayPref by viewModel.autoPayOnJoin.collectAsStateWithLifecycle()
         AlertDialog(onDismissRequest = { viewModel.dismissPaymentNudge() }, title = { Text(stringResource(R.string.settle_up_title)) }, text = {
@@ -1398,15 +1420,33 @@ fun EventDetailScreen(
                 Spacer(Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) { Text(stringResource(R.string.always_show_payment), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f)); Switch(checked = autoPayPref, onCheckedChange = { viewModel.setAutoPayOnJoin(it) }) }
             }
-        }, confirmButton = { val userName = user?.name ?: ""; Button(onClick = { viewModel.markSentAndJoin(eventId, userName) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)) { Text(if (callerBalance != null) stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.sent_confirmation)) } }, dismissButton = { TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user?.name ?: "") }) { Text(stringResource(R.string.join_pay_later)) } })
+        }, confirmButton = { val userName = user?.name ?: ""; Button(onClick = { viewModel.markSentAndJoin(eventId, userName) }, colors = ButtonDefaults.buttonColors(containerColor = paymentTokens.colorFor(ExpressiveSemanticRole.Payment), contentColor = paymentTokens.onColorFor(ExpressiveSemanticRole.Payment))) { Text(if (callerBalance != null) stringResource(R.string.pay_and_join, "%.2f".format(callerBalance.amount)) else stringResource(R.string.sent_confirmation)) } }, dismissButton = { TextButton(onClick = { viewModel.joinWithoutPaying(eventId, user?.name ?: "") }) { Text(stringResource(R.string.join_pay_later)) } })
     }
 }
 
+internal fun shouldAnimateLiveIndicator(motion: ExpressiveMotion): Boolean = motion == ExpressiveMotion.Expressive
+
 @Composable
-private fun PulsingDot(color: Color) {
-    val t = rememberInfiniteTransition(label = "pulse")
-    val a by t.animateFloat(initialValue = 1f, targetValue = 0.2f, animationSpec = infiniteRepeatable(tween(750), androidx.compose.animation.core.RepeatMode.Reverse), label = "pulseA")
-    Box(Modifier.size(14.dp).alpha(a).background(color, CircleShape))
+internal fun PulsingDot(color: Color) {
+    val motion = expressiveMotion()
+    val description = stringResource(
+        if (shouldAnimateLiveIndicator(motion)) R.string.live_indicator_pulsing else R.string.live_indicator_steady,
+    )
+    if (!shouldAnimateLiveIndicator(motion)) {
+        Box(Modifier.size(14.dp).semantics { contentDescription = description }.background(color, CircleShape))
+    } else {
+        val t = rememberInfiniteTransition(label = "pulse")
+        val a by t.animateFloat(
+            initialValue = 1f,
+            targetValue = 0.2f,
+            animationSpec = infiniteRepeatable(
+                tween(750),
+                RepeatMode.Reverse,
+            ),
+            label = "pulseA",
+        )
+        Box(Modifier.size(14.dp).semantics { contentDescription = description }.alpha(a).background(color, CircleShape))
+    }
 }
 
 @Composable
@@ -1437,9 +1477,10 @@ private fun HeroTeamColumn(
     modifier: Modifier = Modifier,
     headerColor: Color,
 ) {
+    val motion = expressiveMotion()
     val shuffleOffset by animateFloatAsState(
         targetValue = if (teamShuffleAnimation) (if (toTeamOne) -5f else 5f) else 0f,
-        animationSpec = spring(dampingRatio = 0.45f, stiffness = 900f),
+        animationSpec = if (motion == ExpressiveMotion.Reduced) tween(0) else spring(dampingRatio = 0.45f, stiffness = 900f),
         label = "team-shuffle-offset",
     )
     val totalElo = if (
@@ -1500,12 +1541,16 @@ private fun HeroTeamColumn(
                 if (isArriving) {
                     AnimatedVisibility(
                         visible = true,
-                        enter = fadeIn(tween(120)) +
-                            scaleIn(initialScale = 0.78f, animationSpec = spring(dampingRatio = 0.68f, stiffness = 520f)) +
-                            slideInVertically(
-                                initialOffsetY = { -it / 2 },
-                                animationSpec = spring(dampingRatio = 0.68f, stiffness = 520f),
-                            ),
+                        enter = if (motion == ExpressiveMotion.Reduced) {
+                            EnterTransition.None
+                        } else {
+                            fadeIn(tween(120)) +
+                                scaleIn(initialScale = 0.78f, animationSpec = spring(dampingRatio = 0.68f, stiffness = 520f)) +
+                                slideInVertically(
+                                    initialOffsetY = { -it / 2 },
+                                    animationSpec = spring(dampingRatio = 0.68f, stiffness = 520f),
+                                )
+                        },
                         label = "team-player-arrival",
                     ) { playerRow() }
                 } else {

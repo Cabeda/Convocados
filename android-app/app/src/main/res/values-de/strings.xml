@@ -76,6 +76,8 @@
     <string name="profile">Profil</string>
     <string name="stats">Statistiken</string>
     <string name="games_tab">Spiele</string>
+    <string name="live_indicator_pulsing">Live-Anzeige (pulsierend)</string>
+    <string name="live_indicator_steady">Live-Anzeige (statisch)</string>
     <string name="elo_changes">ELO-Änderungen</string>
     <string name="payments">Zahlungen</string>
     <string name="overview">ÜBERSICHT</string>

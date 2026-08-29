@@ -5,6 +5,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.wear.compose.material3.ColorScheme
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.MotionScheme
+import dev.convocados.designsystem.ExpressiveMotion
 
 // Material 3 Expressive lexical palette, mapped 1:1 to the M3 ColorScheme roles
 // (ADR 0019/ADR 0027 design language, "Tactile Minimalism, Nordic"). Keeping the
@@ -49,21 +50,17 @@ private val WearColorScheme: ColorScheme = ColorScheme(
 
 @Composable
 fun ConvocadosWearTheme(content: @Composable () -> Unit) {
+    val motion = rememberSystemMotion()
+
     MaterialTheme(
         colorScheme = WearColorScheme,
-        // Expressive motion: dynamic component animations (pulse, press, entrance)
-        // so the score/editing surfaces feel alive rather than static.
-        motionScheme = MotionScheme.expressive(),
+        // Expressive motion is the default, but system animator reduction wins
+        // for accessibility and battery-conscious device settings.
+        motionScheme = if (motion == ExpressiveMotion.Reduced) MotionScheme.standard() else MotionScheme.expressive(),
     ) {
         CompositionLocalProvider(
-            LocalWearExpressiveTokens provides WearExpressiveTokens(
-                success = Success,
-                warning = Warning,
-                live = Tertiary,
-                offline = TextMuted,
-                pending = Secondary,
-                onStatus = OnTeam,
-            ),
+            LocalWearExpressiveTokens provides WearExpressiveTokens.default,
+            LocalWearMotion provides motion,
             content = content,
         )
     }
