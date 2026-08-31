@@ -100,6 +100,9 @@ export function SignInForm({ callbackURL, onSuccess, showSignUpLink = true }: Si
   const gisContainerRef = React.useRef<HTMLDivElement>(null);
   const authErrorMessage = t("authError");
   const useGoogleIdentityServices = isIosPwa();
+  const safeCallbackURL = callbackURL.startsWith("/") && !callbackURL.startsWith("//") && !callbackURL.includes("\\")
+    ? callbackURL
+    : "/dashboard";
 
   const handleGoogleCredential = React.useCallback(async (credential: string) => {
     setError(null);
@@ -115,14 +118,14 @@ export function SignInForm({ callbackURL, onSuccess, showSignUpLink = true }: Si
       } else if (onSuccess) {
         onSuccess();
       } else {
-        window.location.href = callbackURL;
+        window.location.href = safeCallbackURL;
       }
     } catch {
       setError(authErrorMessage);
     } finally {
       setLoading(false);
     }
-  }, [authErrorMessage, callbackURL, onSuccess]);
+  }, [authErrorMessage, onSuccess, safeCallbackURL]);
 
   React.useEffect(() => {
     if (!useGoogleIdentityServices) return;
