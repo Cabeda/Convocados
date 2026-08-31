@@ -4,11 +4,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import dev.convocados.wear.data.auth.WearGoogleSignIn
+import dev.convocados.wear.data.auth.WearRestoreCredentialCoordinator
 import dev.convocados.wear.data.auth.WearTokenStore
 import dev.convocados.wear.data.local.QuickGameStore
 import dev.convocados.wear.ui.screen.auth.AuthScreen
@@ -32,13 +34,16 @@ import dev.convocados.wear.ui.screen.teams.TeamsScreen
 import dev.convocados.wear.ui.screen.teams.TeamsViewModel
 
 import androidx.wear.compose.material3.AppScaffold
+import kotlinx.coroutines.launch
 
 @Composable
 fun WearNavigation(
     tokenStore: WearTokenStore,
     googleSignIn: WearGoogleSignIn,
+    restoreCredentialCoordinator: WearRestoreCredentialCoordinator,
     quickGameStore: QuickGameStore,
 ) {
+    val coroutineScope = rememberCoroutineScope()
     val navController = rememberSwipeDismissableNavController()
     val isAuthenticated by tokenStore.isAuthenticated.collectAsState()
     val activeQuickGame by quickGameStore.state.collectAsState()
@@ -71,6 +76,7 @@ fun WearNavigation(
                         navController.navigate(WearRoutes.score(eventId))
                     },
                     onSignOut = {
+                        coroutineScope.launch { restoreCredentialCoordinator.clearCredentialState() }
                         googleSignIn.signOut()
                         tokenStore.clearTokens()
                         navController.navigate(WearRoutes.AUTH) {

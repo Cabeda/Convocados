@@ -55,6 +55,7 @@ class AuthManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val tokenStore: TokenStore,
     private val wearAuthSync: WearAuthSync,
+    private val restoreCredentialCoordinator: RestoreCredentialCoordinator,
 ) {
     private val scope = CoroutineScope(Dispatchers.IO)
     private val credentialManager = CredentialManager.create(context)
@@ -203,7 +204,10 @@ class AuthManager @Inject constructor(
 
     fun logout() {
         tokenStore.clearTokens()
-        scope.launch { wearAuthSync.clearTokens() }
+        scope.launch {
+            restoreCredentialCoordinator.clearCredentialState()
+            wearAuthSync.clearTokens()
+        }
     }
 
     // ── Private Helpers ──────────────────────────────────────────────────────
@@ -230,7 +234,10 @@ class AuthManager @Inject constructor(
                 expiresAt = System.currentTimeMillis() + tokenResponse.expiresIn * 1000,
             )
         )
-        scope.launch { wearAuthSync.syncTokens() }
+        scope.launch {
+            wearAuthSync.syncTokens()
+            restoreCredentialCoordinator.ensureCreated()
+        }
     }
 
     private fun getWebClientId(): String {

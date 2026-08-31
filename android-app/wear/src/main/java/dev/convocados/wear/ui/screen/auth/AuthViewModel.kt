@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.auth.OAuthTokens
 import dev.convocados.wear.data.auth.WearGoogleSignIn
+import dev.convocados.wear.data.auth.WearRestoreCredentialCoordinator
 import dev.convocados.wear.data.auth.WearTokenStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,7 @@ class AuthViewModel @Inject constructor(
     private val tokenStore: WearTokenStore,
     private val googleSignIn: WearGoogleSignIn,
     private val apiClient: WearApiClient,
+    private val restoreCredentialCoordinator: WearRestoreCredentialCoordinator,
 ) : ViewModel() {
 
     val isAuthenticated: StateFlow<Boolean> = tokenStore.isAuthenticated
@@ -71,6 +73,7 @@ class AuthViewModel @Inject constructor(
                         expiresAt = System.currentTimeMillis() + tokenResponse.expiresIn * 1000,
                     )
                 )
+                restoreCredentialCoordinator.ensureCreated()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Login failed: ${e.message}") }
             } finally {
@@ -88,6 +91,7 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSigningIn = true) }
             val success = googleSignIn.trySilentSignIn()
+            if (success) restoreCredentialCoordinator.ensureCreated()
             _uiState.update { it.copy(isSigningIn = false) }
         }
     }
@@ -97,6 +101,7 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSigningIn = true, error = null) }
             val success = googleSignIn.handleSignInResult(data)
+            if (success) restoreCredentialCoordinator.ensureCreated()
             _uiState.update {
                 it.copy(
                     isSigningIn = false,
@@ -109,6 +114,7 @@ class AuthViewModel @Inject constructor(
     fun signOut() {
         googleSignIn.signOut()
         tokenStore.clearTokens()
+        viewModelScope.launch { restoreCredentialCoordinator.clearCredentialState() }
     }
 
     fun getServerUrl() = tokenStore.getServerUrl()
