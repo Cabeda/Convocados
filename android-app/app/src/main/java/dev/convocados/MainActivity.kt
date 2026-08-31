@@ -10,17 +10,21 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import dev.convocados.data.auth.OAuthTokens
+import dev.convocados.data.auth.RestoreCredentialCoordinator
 import dev.convocados.data.auth.TokenStore
 import dev.convocados.ui.ConvocadosRoot
 import dev.convocados.ui.navigation.DeepLink
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
     @Inject lateinit var tokenStore: TokenStore
+    @Inject lateinit var restoreCredentialCoordinator: RestoreCredentialCoordinator
 
     private var deepLink by mutableStateOf<String?>(null)
     private var intentVersion by mutableIntStateOf(0)
@@ -36,6 +40,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         deepLink = DeepLink.extract(intent)
+        lifecycleScope.launch {
+            restoreCredentialCoordinator.restoreOrCreate(this@MainActivity)
+        }
         setContent { ConvocadosRoot(deepLink = deepLink, intentVersion = intentVersion) }
     }
 

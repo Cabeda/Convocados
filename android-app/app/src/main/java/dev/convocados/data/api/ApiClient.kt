@@ -115,6 +115,22 @@ class ApiClient @Inject constructor(
         )
     }
 
+    /** Raw authenticated POST used by WebAuthn-compatible auth adapters. */
+    internal suspend fun postAuthenticatedRaw(path: String, body: Any? = null): String =
+        authenticatedRequest(HttpMethod.Post, path, body).bodyAsText()
+
+    /** Raw unauthenticated POST used by auth flows that establish a new session. */
+    internal suspend fun postUnauthenticatedRaw(path: String, body: Any? = null): String {
+        val response = client.post("$baseUrl$path") {
+            contentType(ContentType.Application.Json)
+            if (body != null) setBody(body)
+        }
+        if (!response.status.isSuccess()) {
+            throw ApiException(response.status.value, "Request failed (${response.status.value})")
+        }
+        return response.bodyAsText()
+    }
+
     suspend inline fun <reified T> get(path: String): T =
         authenticatedRequest(HttpMethod.Get, path).body()
 
