@@ -47,7 +47,11 @@ fun ScoreScreen(
     val state by viewModel.uiState.collectAsState()
     val isAmbient = LocalAmbientMode.current
     val view = LocalView.current
-    val scorePhase = gameScorePhase(state.game?.dateTime, state.game?.sport ?: "futsal")
+    val scorePhase = gameScorePhase(
+        dateTime = state.game?.dateTime,
+        sport = state.game?.sport ?: "futsal",
+        kickoffEpochMs = state.kickoffEpochMs,
+    )
 
     // Hold the screen awake whenever the per-event setting is on — including
     // the pre-start state, so a solo organizer can set up without the watch
@@ -217,8 +221,11 @@ private fun OffWindowGameContent(
     state: ScoreUiState,
     onTeams: () -> Unit,
 ) {
-    val startsIn = remember(state.game?.dateTime) {
-        state.game?.dateTime?.let { formatRelativeTime(it) }.orEmpty()
+    val startsIn = remember(state.game?.dateTime, state.kickoffEpochMs) {
+        when {
+            state.kickoffEpochMs != null -> formatRelativeTime(Instant.ofEpochMilli(state.kickoffEpochMs).toString())
+            else -> state.game?.dateTime?.let { formatRelativeTime(it) }.orEmpty()
+        }
     }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
