@@ -14,8 +14,15 @@ enum class GameScorePhase { NOT_STARTED, SCORABLE, ENDED }
  * its sport window. Before that it is [NOT_STARTED]; after the window elapses
  * it is [ENDED].
  */
-fun gameScorePhase(dateTime: String?, sport: String, now: Instant = Instant.now()): GameScorePhase {
-    val start = dateTime?.let { parseInstant(it) } ?: return GameScorePhase.ENDED
+fun gameScorePhase(
+    dateTime: String?,
+    sport: String,
+    now: Instant = Instant.now(),
+    kickoffEpochMs: Long? = null,
+): GameScorePhase {
+    val start = kickoffEpochMs?.let(Instant::ofEpochMilli)
+        ?: dateTime?.let { parseInstant(it) }
+        ?: return GameScorePhase.ENDED
     val minutesUntil = ChronoUnit.MINUTES.between(now, start)
     val windowMinutes = sportDurationMinutes(sport)
     return when {

@@ -58,7 +58,7 @@ fun TeamsScreen(
     // Honor the per-event "Keep screen on" setting here too (roster editing),
     // mirroring the scoring screen — otherwise the watch sleeps while the
     // organizer is adding players.
-    RememberKeepScreenOn(settingsState.keepScreenOn)
+    RememberKeepScreenOn(settingsState.keepScreenOn && !settingsState.isLoading)
 
     // Pull down at top -> back to score
     val pullThreshold = with(LocalDensity.current) { 72.dp.toPx() }

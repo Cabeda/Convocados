@@ -13,15 +13,23 @@ import androidx.wear.compose.material3.*
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
+import dev.convocados.wear.ui.RememberKeepScreenOn
+import dev.convocados.wear.ui.screen.settings.GameSettingsViewModel
 
 @Composable
 fun AddPlayerScreen(
     eventId: String,
     viewModel: AddPlayerViewModel,
+    settingsViewModel: GameSettingsViewModel,
     onDone: () -> Unit = {},
 ) {
-    LaunchedEffect(eventId) { viewModel.load(eventId) }
+    LaunchedEffect(eventId) {
+        viewModel.load(eventId)
+        settingsViewModel.load(eventId)
+    }
     val state by viewModel.uiState.collectAsState()
+    val settingsState by settingsViewModel.uiState.collectAsState()
+    RememberKeepScreenOn(settingsState.keepScreenOn && !settingsState.isLoading)
     val columnState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 

@@ -114,6 +114,22 @@ class ScoreViewModelTest {
     }
 
     @Test
+    fun `load exposes the effective kickoff override`() = runTest {
+        val game = makeGame("e1", Instant.now().plus(2, ChronoUnit.HOURS))
+        val kickoffOverride = Instant.now().minus(5, ChronoUnit.MINUTES).toEpochMilli()
+        every { settingsStore.settings("e1") } returns MutableStateFlow(GameSettings(kickoffEpochMs = kickoffOverride))
+        coEvery { repository.getGame("e1") } returns game
+        coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)
+        coEvery { repository.observeLatestHistoryForEvent("e1") } returns flowOf(null)
+
+        val viewModel = makeViewModel()
+        viewModel.load("e1")
+        advanceUntilIdle()
+
+        assertEquals(kickoffOverride, viewModel.uiState.value.kickoffEpochMs)
+    }
+
+    @Test
     fun `load is idempotent for same eventId`() = runTest {
         coEvery { repository.getGame("e1") } returns makeGame("e1")
         coEvery { repository.refreshHistory("e1") } returns Result.success(Unit)

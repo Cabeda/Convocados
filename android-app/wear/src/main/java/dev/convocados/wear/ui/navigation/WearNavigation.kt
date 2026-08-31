@@ -130,9 +130,11 @@ fun WearNavigation(
             composable(WearRoutes.ADD_PLAYER) { backStackEntry ->
                 val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
                 val viewModel: AddPlayerViewModel = hiltViewModel()
+                val settingsViewModel: GameSettingsViewModel = hiltViewModel()
                 AddPlayerScreen(
                     eventId = eventId,
                     viewModel = viewModel,
+                    settingsViewModel = settingsViewModel,
                     onDone = { navController.popBackStack() },
                 )
             }
