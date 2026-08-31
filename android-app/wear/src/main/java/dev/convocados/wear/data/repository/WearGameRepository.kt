@@ -65,7 +65,7 @@ class WearGameRepository @Inject constructor(
         // Pre-fetch teams for all active (non-archived) games in parallel —
         // on a low-end watch doing these serially on every open is the #1
         // source of startup jank.
-        val activeIds = (owned + admin + followed).map { it.id }
+        val activeIds = (owned + admin + followed).map { it.id }.distinct()
         coroutineScope {
             activeIds.map { id ->
                 launch { runCatching { teamRepository.refreshTeams(id) } }
