@@ -183,7 +183,7 @@ jobs:
           key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
       - if: steps.nm-cache.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile --prefer-offline
-      - if: steps.nm-cache.outputs.cache-hit != 'true'
+      - name: Generate Prisma client for test shards
         run: pnpm prisma generate
         env:
           DATABASE_URL: file:./prisma/dev.db
