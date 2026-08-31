@@ -50,6 +50,8 @@ model User {
   appOpens                UserAppOpen[]
   walletTransactions      WalletTransaction[]
   playerInvitesSent       PlayerInvite[]       @relation("PlayerInviteBy")
+  createdSeasons           Season[]            @relation("SeasonCreator")
+  seasonMemberships        SeasonMembership[]  @relation("SeasonMembershipUser")
 }
 
 model Session {
@@ -142,6 +144,7 @@ model Event {
   currentGameId   String?
   games           Game[]
   eventPlayers    EventPlayer[]
+  seasons         Season[]
 
   // Priority enrollment settings
   priorityEnabled       Boolean @default(false)
@@ -340,6 +343,7 @@ model EventPlayer {
   rsvps          Rsvp[]
   playerInvites  PlayerInvite[]
   paidGames      Game[]          @relation("GamePayer")
+  seasonMemberships SeasonMembership[]
 
   // ADR 0025: per-event invite opt-out — "not interested in this event anymore".
   // Reversible; cleared automatically on rejoin. Excluded from RSVP/recruitment
@@ -347,6 +351,50 @@ model EventPlayer {
   invitationOptOutAt DateTime?
 
   @@unique([eventId, name])
+  @@index([userId])
+}
+
+model Season {
+  id                    String    @id @default(cuid())
+  eventId               String
+  event                 Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name                  String
+  status                String    @default("registration") // "registration" | "active" | "review" | "completed" | "cancelled"
+  registrationOpensAt   DateTime
+  registrationClosesAt  DateTime
+  activatedAt           DateTime?
+  reviewStartedAt       DateTime?
+  completedAt           DateTime?
+  cancelledAt           DateTime?
+  cancellationReason    String?
+  ruleVersion           String    @default("season-v1")
+  createdByUserId       String?
+  createdByUser         User?     @relation("SeasonCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  memberships           SeasonMembership[]
+
+  @@index([eventId, status])
+  @@index([createdByUserId])
+}
+
+model SeasonMembership {
+  id             String       @id @default(cuid())
+  seasonId       String
+  season         Season       @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  eventPlayerId  String
+  eventPlayer    EventPlayer  @relation(fields: [eventPlayerId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("SeasonMembershipUser", fields: [userId], references: [id], onDelete: Cascade)
+  status         String       @default("active") // "active" | "withdrawn"
+  joinedAt       DateTime     @default(now())
+  withdrawnAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([seasonId, eventPlayerId])
+  @@unique([seasonId, userId])
+  @@index([eventPlayerId])
   @@index([userId])
 }
 
