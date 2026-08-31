@@ -4,6 +4,7 @@ import dev.convocados.wear.data.api.OAuthTokenResponse
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.auth.OAuthTokens
 import dev.convocados.wear.data.auth.WearGoogleSignIn
+import dev.convocados.wear.data.auth.WearRestoreCredentialCoordinator
 import dev.convocados.wear.data.auth.WearTokenStore
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +22,7 @@ class AuthViewModelTest {
     private val tokenStore = mockk<WearTokenStore>(relaxed = true)
     private val googleSignIn = mockk<WearGoogleSignIn>(relaxed = true)
     private val apiClient = mockk<WearApiClient>(relaxed = true)
+    private val restoreCredentialCoordinator = mockk<WearRestoreCredentialCoordinator>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var viewModel: AuthViewModel
@@ -32,7 +34,7 @@ class AuthViewModelTest {
         Dispatchers.setMain(testDispatcher)
         every { tokenStore.isAuthenticated } returns isAuthenticatedFlow
         every { tokenStore.getServerUrl() } returns "https://convocados.cabeda.dev"
-        viewModel = AuthViewModel(tokenStore, googleSignIn, apiClient)
+        viewModel = AuthViewModel(tokenStore, googleSignIn, apiClient, restoreCredentialCoordinator)
     }
 
     @After
