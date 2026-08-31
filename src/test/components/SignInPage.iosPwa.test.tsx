@@ -43,6 +43,8 @@ function renderAtUrl(path: string) {
 
 afterEach(() => {
   cleanup();
+  document.querySelectorAll('script[src="https://accounts.google.com/gsi/client"]').forEach((script) => script.remove());
+  Reflect.deleteProperty(globalThis, "google");
   vi.clearAllMocks();
 });
 
@@ -56,56 +58,110 @@ beforeEach(() => {
 });
 
 describe("SignInPage — iOS PWA Google sign-in", () => {
-  it("keeps the Google sign-in button on iOS PWA", () => {
+  it("renders a GIS button container on iOS PWA", () => {
     vi.mocked(isIosPwa).mockReturnValue(true);
+    renderAtUrl("/auth/signin?callbackURL=/events/abc");
+    expect(screen.getByTestId("google-gis-signin")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /signInWithGoogle/ })).toBeNull();
+  });
+
+  it("keeps the normal Google redirect button on desktop browsers", () => {
     renderAtUrl("/auth/signin?callbackURL=/events/abc");
     expect(screen.getByRole("button", { name: /signInWithGoogle/ })).toBeInTheDocument();
+    expect(screen.queryByTestId("google-gis-signin")).toBeNull();
   });
 
-  it("keeps the Google sign-in button on desktop browsers", () => {
-    renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    expect(screen.getByRole("button", { name: /signInWithGoogle/ })).toBeInTheDocument();
-  });
-
-  it("does NOT show the old misleading iOS PWA popup notice", () => {
-    vi.mocked(isIosPwa).mockReturnValue(true);
-    renderAtUrl("/auth/signin?callbackURL=/events/abc");
-    expect(screen.queryByTestId("ios-pwa-notice")).toBeNull();
-  });
-
-  it("on iOS PWA, clicking Google uses the plain top-level redirect flow (no disableRedirect, no popup)", async () => {
-    const { default: userEvent } = await import("@testing-library/user-event");
-    const user = userEvent.setup();
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+  it("initializes GIS and exchanges the returned credential for a same-origin session", async () => {
+    const googleId = {
+      initialize: vi.fn(),
+      renderButton: vi.fn(),
+    };
+    vi.stubGlobal("google", { accounts: { id: googleId } });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ clientId: "test-client-id" }),
+    }));
     vi.mocked(isIosPwa).mockReturnValue(true);
     renderAtUrl("/auth/signin?callbackURL=/events/abc");
 
-    await user.click(screen.getByRole("button", { name: /signInWithGoogle/ }));
+    await vi.waitFor(() => expect(googleId.initialize).toHaveBeenCalled());
+    expect(googleId.initialize).toHaveBeenCalledWith(expect.objectContaining({
+      client_id: "test-client-id",
+      callback: expect.any(Function),
+    }));
+    expect(googleId.renderButton).toHaveBeenCalledWith(
+      screen.getByTestId("google-gis-signin"),
+      expect.any(Object),
+    );
 
-    // Same path as web/Android: redirect flow, no popup, no disableRedirect.
-    expect(mockSignInSocial).toHaveBeenCalledWith({
-      provider: "google",
-      callbackURL: "/events/abc",
-    });
-    expect(openSpy).not.toHaveBeenCalled();
-    openSpy.mockRestore();
-  });
-
-  it("on desktop, clicking Google uses the same redirect flow (no popup)", async () => {
-    const { default: userEvent } = await import("@testing-library/user-event");
-    const user = userEvent.setup();
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-    vi.mocked(isIosPwa).mockReturnValue(false);
-    renderAtUrl("/auth/signin?callbackURL=/events/abc");
-
-    await user.click(screen.getByRole("button", { name: /signInWithGoogle/ }));
+    const [[{ callback }]] = googleId.initialize.mock.calls;
+    await callback({ credential: "google-id-token" });
 
     expect(mockSignInSocial).toHaveBeenCalledWith({
       provider: "google",
-      callbackURL: "/events/abc",
+      idToken: { token: "google-id-token" },
     });
-    expect(openSpy).not.toHaveBeenCalled();
-    openSpy.mockRestore();
+  });
+
+  it("loads the GIS script when it is not already present", async () => {
+    vi.stubGlobal("google", undefined);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ clientId: "test-client-id" }),
+    }));
+    vi.mocked(isIosPwa).mockReturnValue(true);
+    renderAtUrl("/auth/signin?callbackURL=/events/abc");
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('script[src="https://accounts.google.com/gsi/client"]')).toBeInTheDocument();
+    });
+
+    const googleId = {
+      initialize: vi.fn(),
+      renderButton: vi.fn(),
+    };
+    vi.stubGlobal("google", { accounts: { id: googleId } });
+    document.querySelector('script[src="https://accounts.google.com/gsi/client"]')
+      ?.dispatchEvent(new Event("load"));
+
+    await vi.waitFor(() => expect(googleId.initialize).toHaveBeenCalled());
+  });
+
+  it("removes a failed GIS script so a later mount can retry", async () => {
+    vi.stubGlobal("google", undefined);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ clientId: "test-client-id" }),
+    }));
+    vi.mocked(isIosPwa).mockReturnValue(true);
+    const firstRender = renderAtUrl("/auth/signin?callbackURL=/events/abc");
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('script[src="https://accounts.google.com/gsi/client"]')).toBeInTheDocument();
+    });
+    document.querySelector('script[src="https://accounts.google.com/gsi/client"]')
+      ?.dispatchEvent(new Event("error"));
+    await vi.waitFor(() => {
+      expect(document.querySelector('script[src="https://accounts.google.com/gsi/client"]')).toBeNull();
+    });
+
+    firstRender.unmount();
+    renderAtUrl("/auth/signin?callbackURL=/events/abc");
+    await vi.waitFor(() => {
+      expect(document.querySelector('script[src="https://accounts.google.com/gsi/client"]')).toBeInTheDocument();
+    });
+  });
+
+  it("leaves email/password available when GIS configuration cannot be loaded", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ clientId: "" }),
+    }));
+    vi.mocked(isIosPwa).mockReturnValue(true);
+    renderAtUrl("/auth/signin?callbackURL=/events/abc");
+
+    await vi.waitFor(() => expect(screen.getByRole("tab", { name: /signInWithPassword/ })).toBeInTheDocument());
+    expect(screen.getByRole("tab", { name: /signInWithEmail/ })).toBeInTheDocument();
   });
 });
 

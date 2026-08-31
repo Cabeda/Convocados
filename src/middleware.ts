@@ -36,11 +36,13 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Cross-Origin-Resource-Policy": "same-origin",
   "Content-Security-Policy": [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://maps.googleapis.com",
+    "script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://accounts.google.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https://*.tile.openstreetmap.org https://maps.googleapis.com https://maps.gstatic.com https://*.googleusercontent.com",
-    "connect-src 'self' https://maps.googleapis.com",
+    "connect-src 'self' https://maps.googleapis.com https://accounts.google.com",
+    // GIS renders its sign-in control in a Google-hosted iframe.
+    "frame-src 'self' https://accounts.google.com",
     // frame-ancestors 'self' (not 'none') so Astro's ClientRouter can embed
     // the next page in a same-origin hidden iframe while preparing the view
     // transition. External framing is still blocked.
