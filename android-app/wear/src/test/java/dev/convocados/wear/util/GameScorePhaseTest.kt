@@ -19,6 +19,19 @@ class GameScorePhaseTest {
     }
 
     @Test
+    fun `kickoff override is used instead of scheduled start`() {
+        assertEquals(
+            GameScorePhase.SCORABLE,
+            gameScorePhase(
+                dateTime = iso(mins(120)),
+                sport = "futsal",
+                now = now,
+                kickoffEpochMs = now.toEpochMilli(),
+            ),
+        )
+    }
+
+    @Test
     fun `game within 1h before start is SCORABLE`() {
         assertEquals(GameScorePhase.SCORABLE, gameScorePhase(iso(mins(30)), "futsal", now))
     }
