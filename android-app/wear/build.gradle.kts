@@ -246,7 +246,7 @@ dependencies {
 
     // Google Sign-In (direct login on watch)
     // WearGoogleSignIn uses the legacy client, which was removed from auth 22.0.0.
-    implementation(libs.play.services.auth.legacy)
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
     implementation(libs.google.id.identity)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play)
