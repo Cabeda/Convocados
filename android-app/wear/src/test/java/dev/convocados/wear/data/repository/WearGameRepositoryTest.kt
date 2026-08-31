@@ -6,6 +6,8 @@ import dev.convocados.wear.data.api.GameHistory
 import dev.convocados.wear.data.api.MyGamesResponse
 import dev.convocados.wear.data.api.PaginatedHistory
 import dev.convocados.wear.data.api.SetScore
+import dev.convocados.wear.data.api.TeamInfo
+import dev.convocados.wear.data.api.TeamsResponse
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.dao.PendingScoreDao
 import dev.convocados.wear.data.local.dao.WearGameDao
@@ -13,6 +15,9 @@ import dev.convocados.wear.data.local.dao.WearHistoryDao
 import dev.convocados.wear.data.local.entity.PendingScoreEntity
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import io.mockk.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -58,6 +63,54 @@ class WearGameRepositoryTest {
         assertTrue(result.isSuccess)
         coVerify { gameDao.refreshGames("owned", any()) }
         coVerify { gameDao.refreshGames("followed", any()) }
+    }
+
+    @Test
+    fun `refreshGames prefetches distinct active teams concurrently`() = runTest {
+        val response = MyGamesResponse(
+            owned = listOf(eventSummary("1"), eventSummary("2")),
+            admin = listOf(eventSummary("2"), eventSummary("3")),
+            followed = listOf(eventSummary("3"), eventSummary("4")),
+        )
+        val started = Channel<String>(Channel.UNLIMITED)
+        val release = CompletableDeferred<Unit>()
+        val teamsResponse = TeamsResponse(TeamInfo("Team 1"), TeamInfo("Team 2"), maxPlayers = 10)
+        coEvery { client.get<MyGamesResponse>(any()) } returns response
+        coEvery { teamRepository.refreshTeams(any()) } coAnswers {
+            started.send(firstArg())
+            release.await()
+            Result.success(teamsResponse)
+        }
+
+        val refresh = async { repository.refreshGames() }
+        val startedIds = buildSet {
+            repeat(4) { add(started.receive()) }
+        }
+
+        assertEquals(setOf("1", "2", "3", "4"), startedIds)
+        release.complete(Unit)
+        assertTrue(refresh.await().isSuccess)
+        coVerify(exactly = 1) { teamRepository.refreshTeams("1") }
+        coVerify(exactly = 1) { teamRepository.refreshTeams("2") }
+        coVerify(exactly = 1) { teamRepository.refreshTeams("3") }
+        coVerify(exactly = 1) { teamRepository.refreshTeams("4") }
+    }
+
+    @Test
+    fun `refreshGames keeps successful team prefetches when one game fails`() = runTest {
+        val response = MyGamesResponse(
+            owned = listOf(eventSummary("1"), eventSummary("2")),
+        )
+        val teamsResponse = TeamsResponse(TeamInfo("Team 1"), TeamInfo("Team 2"), maxPlayers = 10)
+        coEvery { client.get<MyGamesResponse>(any()) } returns response
+        coEvery { teamRepository.refreshTeams("1") } throws IllegalStateException("team unavailable")
+        coEvery { teamRepository.refreshTeams("2") } returns Result.success(teamsResponse)
+
+        val result = repository.refreshGames()
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { teamRepository.refreshTeams("1") }
+        coVerify(exactly = 1) { teamRepository.refreshTeams("2") }
     }
 
     @Test
@@ -143,6 +196,16 @@ class WearGameRepositoryTest {
 
         assertNull(repository.getGame("missing"))
     }
+
+    private fun eventSummary(id: String) = EventSummary(
+        id = id,
+        title = "Game $id",
+        location = "Field",
+        dateTime = "2025-01-01T10:00:00Z",
+        sport = "Soccer",
+        maxPlayers = 10,
+        playerCount = 5,
+    )
 
     private fun makeGame(id: String) = WearGameEntity(
         id = id,
