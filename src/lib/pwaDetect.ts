@@ -24,26 +24,41 @@ function getUserAgent(): string {
   return navigator.userAgent ?? "";
 }
 
+function isIosUserAgent(): boolean {
+  const ua = getUserAgent();
+  // iPadOS can identify as macOS in desktop browsing mode; touch points
+  // distinguish that form from a Mac without changing desktop detection.
+  return /iPad|iPhone|iPod/.test(ua) ||
+    (/Macintosh/.test(ua) && typeof navigator !== "undefined" && navigator.maxTouchPoints > 1);
+}
+
+function isStandaloneDisplayMode(): boolean {
+  if (typeof window === "undefined") return false;
+  const displayModeStandalone = typeof window.matchMedia === "function" &&
+    window.matchMedia("(display-mode: standalone)").matches;
+  const legacyStandalone = "standalone" in navigator &&
+    Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+  return displayModeStandalone || legacyStandalone;
+}
+
 /** True when running as an installed PWA on iOS. */
 export function isIosPwa(): boolean {
   if (typeof window === "undefined") return false;
-  const ua = getUserAgent();
-  if (!/iPad|iPhone|iPod/.test(ua)) return false;
-  // The PWA standalone display mode is set on iOS when the user taps
-  // "Add to Home Screen" and opens the app from there.
-  return "standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+  if (!isIosUserAgent()) return false;
+  // Modern browsers expose the display mode; older iOS exposes the legacy
+  // navigator.standalone flag.
+  return isStandaloneDisplayMode();
 }
 
 /** True when running in mobile Safari (not installed as a PWA). */
 export function isIosSafariStandalone(): boolean {
   if (typeof window === "undefined") return false;
-  const ua = getUserAgent();
-  if (!/iPad|iPhone|iPod/.test(ua)) return false;
+  if (!isIosUserAgent()) return false;
   // On iOS Safari, the opposite of the PWA case: standalone is false.
   return !isIosPwa() && window.innerWidth <= 1024;
 }
 
 /** True for any iOS browser (PWA or Safari). */
 export function isIos(): boolean {
-  return /iPad|iPhone|iPod/.test(getUserAgent());
+  return isIosUserAgent();
 }

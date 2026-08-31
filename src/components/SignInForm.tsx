@@ -6,6 +6,56 @@ import GoogleIcon from "@mui/icons-material/Google";
 import EmailIcon from "@mui/icons-material/Email";
 import { useT } from "~/lib/useT";
 import { signIn } from "~/lib/auth.client";
+import { isIosPwa } from "~/lib/pwaDetect";
+
+type GoogleIdentityCredential = { credential: string };
+type GoogleIdentityServices = {
+  initialize: (config: {
+    client_id: string;
+    callback: (response: GoogleIdentityCredential) => void;
+  }) => void;
+  renderButton: (parent: HTMLElement, options: Record<string, string | number>) => void;
+};
+
+type GoogleWindow = Window & {
+  google?: { accounts?: { id?: GoogleIdentityServices } };
+};
+
+const GOOGLE_IDENTITY_SCRIPT = "https://accounts.google.com/gsi/client";
+
+function getGoogleIdentityServices(): GoogleIdentityServices | undefined {
+  return (window as GoogleWindow).google?.accounts?.id;
+}
+
+function loadGoogleIdentityServices(): Promise<GoogleIdentityServices> {
+  const loaded = getGoogleIdentityServices();
+  if (loaded) return Promise.resolve(loaded);
+
+  return new Promise((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      `script[src="${GOOGLE_IDENTITY_SCRIPT}"]`,
+    );
+    const script = existingScript ?? document.createElement("script");
+    const onLoad = () => {
+      const services = getGoogleIdentityServices();
+      if (services) resolve(services);
+      else reject(new Error("Google Identity Services did not initialize"));
+    };
+    const onError = () => {
+      script.remove();
+      reject(new Error("Google Identity Services failed to load"));
+    };
+
+    script.addEventListener("load", onLoad, { once: true });
+    script.addEventListener("error", onError, { once: true });
+    if (!existingScript) {
+      script.async = true;
+      script.defer = true;
+      script.src = GOOGLE_IDENTITY_SCRIPT;
+      document.head.appendChild(script);
+    }
+  });
+}
 
 function TabPanel({ children, value, index }: { children: React.ReactNode; value: number; index: number }) {
   return value === index ? <Box>{children}</Box> : null;
@@ -32,16 +82,10 @@ export interface SignInFormProps {
  *   - full page → `window.location.href = callbackURL`
  *   - modal     → `onSuccess()` (close + revalidate, no navigation)
  *
- * Google sign-in always uses the plain top-level redirect flow on every
- * platform — including iOS PWA. The earlier popup flow was removed because
- * `window.open` on iOS always opens Safari/SFSafariViewController, which has
- * a separate cookie jar from the standalone PWA, so the session cookie was
- * lost. A same-window top-level redirect stays inside the PWA's browsing
- * context on iOS 16.4+.
- *
- * ponytail: iOS < 16.4 may still hand the cross-origin Google redirect to
- * Safari (cookie lost). Those users fall back to email/password. Upgrade
- * path: Sign in with Apple JS (in-jar, needs Apple Developer credentials).
+ * Google sign-in uses the Google Identity Services ID-token flow in an
+ * installed iOS PWA. That flow keeps Google authentication and the resulting
+ * same-origin session cookie inside the PWA's cookie jar. Other platforms use
+ * better-auth's normal top-level redirect flow.
  */
 export function SignInForm({ callbackURL, onSuccess, showSignUpLink = true }: SignInFormProps) {
   const t = useT();
@@ -52,6 +96,74 @@ export function SignInForm({ callbackURL, onSuccess, showSignUpLink = true }: Si
   const [unverified, setUnverified] = useState(false);
   const [loading, setLoading] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [gisError, setGisError] = useState(false);
+  const gisContainerRef = React.useRef<HTMLDivElement>(null);
+  const authErrorMessage = t("authError");
+  const useGoogleIdentityServices = isIosPwa();
+
+  const handleGoogleCredential = React.useCallback(async (credential: string) => {
+    setError(null);
+    setGisError(false);
+    setLoading(true);
+    try {
+      const result = await signIn.social({
+        provider: "google",
+        idToken: { token: credential },
+      });
+      if (result.error) {
+        setError(authErrorMessage);
+      } else if (onSuccess) {
+        onSuccess();
+      } else {
+        window.location.href = callbackURL;
+      }
+    } catch {
+      setError(authErrorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [authErrorMessage, callbackURL, onSuccess]);
+
+  React.useEffect(() => {
+    if (!useGoogleIdentityServices) return;
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const initializeGoogleIdentityServices = async () => {
+      try {
+        const response = await fetch("/api/auth/google-client-id", {
+          credentials: "same-origin",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("Google client ID request failed");
+        const body = await response.json() as { clientId?: unknown };
+        if (typeof body.clientId !== "string" || !body.clientId) {
+          throw new Error("Google client ID is not configured");
+        }
+
+        const googleIdentity = await loadGoogleIdentityServices();
+        if (cancelled || !gisContainerRef.current) return;
+
+        googleIdentity.initialize({
+          client_id: body.clientId,
+          callback: ({ credential }) => void handleGoogleCredential(credential),
+        });
+        googleIdentity.renderButton(gisContainerRef.current, {
+          theme: "outline",
+          size: "large",
+          width: "100%",
+        });
+      } catch {
+        if (!cancelled && !controller.signal.aborted) setGisError(true);
+      }
+    };
+
+    void initializeGoogleIdentityServices();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [handleGoogleCredential, useGoogleIdentityServices]);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,7 +212,6 @@ export function SignInForm({ callbackURL, onSuccess, showSignUpLink = true }: Si
   };
 
   const handleGoogleSignIn = async () => {
-    // Plain top-level redirect on every platform (see component doc comment).
     await signIn.social({ provider: "google", callbackURL });
   };
 
@@ -127,17 +238,31 @@ export function SignInForm({ callbackURL, onSuccess, showSignUpLink = true }: Si
         </Alert>
       )}
 
-      <Button
-        variant="outlined"
-        size="large"
-        fullWidth
-        startIcon={<GoogleIcon />}
-        onClick={handleGoogleSignIn}
-        type="button"
-        data-testid="google-signin"
-      >
-        {t("signInWithGoogle")}
-      </Button>
+      {useGoogleIdentityServices ? (
+        <>
+          <Box
+            ref={gisContainerRef}
+            data-testid="google-gis-signin"
+            aria-label={t("signInWithGoogle")}
+            sx={{ minHeight: 44, display: "flex", justifyContent: "center" }}
+          />
+          {gisError && (
+            <Alert severity="info">{t("authError")}</Alert>
+          )}
+        </>
+      ) : (
+        <Button
+          variant="outlined"
+          size="large"
+          fullWidth
+          startIcon={<GoogleIcon />}
+          onClick={handleGoogleSignIn}
+          type="button"
+          data-testid="google-signin"
+        >
+          {t("signInWithGoogle")}
+        </Button>
+      )}
 
       <Divider>{t("or")}</Divider>
 

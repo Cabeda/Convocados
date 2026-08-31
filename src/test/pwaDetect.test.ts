@@ -10,12 +10,21 @@ import { isIosPwa, isIosSafariStandalone, isIos } from "~/lib/pwaDetect";
 let originalNavigator: PropertyDescriptor | undefined;
 let originalWindow: PropertyDescriptor | undefined;
 
-function stubEnv(ua: string, standalone: boolean, innerWidth = 1024) {
+function stubEnv(
+  ua: string,
+  standalone: boolean,
+  innerWidth = 1024,
+  displayModeStandalone = false,
+  maxTouchPoints = 0,
+) {
   // jsdom provides window. We re-define both to ensure they're mutable.
   originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
   originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   const fakeWindow = {
     innerWidth,
+    matchMedia: (query: string) => ({
+      matches: query === "(display-mode: standalone)" && displayModeStandalone,
+    }),
   };
   Object.defineProperty(globalThis, "window", {
     value: fakeWindow,
@@ -23,7 +32,7 @@ function stubEnv(ua: string, standalone: boolean, innerWidth = 1024) {
     configurable: true,
   });
   Object.defineProperty(globalThis, "navigator", {
-    value: { userAgent: ua, standalone },
+    value: { userAgent: ua, standalone, maxTouchPoints },
     writable: true,
     configurable: true,
   });
@@ -40,6 +49,22 @@ describe("pwaDetect", () => {
   afterEach(() => {
     restoreEnv();
     vi.restoreAllMocks();
+  });
+
+  it("isIosPwa returns true when the standalone display mode matches", () => {
+    stubEnv("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)", false, 375, true);
+    expect(isIosPwa()).toBe(true);
+  });
+
+  it("isIosPwa returns true for desktop-mode iPadOS with touch points", () => {
+    stubEnv(
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15",
+      false,
+      1024,
+      true,
+      5,
+    );
+    expect(isIosPwa()).toBe(true);
   });
 
   it("isIosPwa returns true on iOS with standalone=true", () => {

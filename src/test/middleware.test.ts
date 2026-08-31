@@ -32,6 +32,16 @@ describe("security middleware", () => {
     expect(imgSrc).toContain("https://*.googleusercontent.com");
   });
 
+  it("allows GIS script, connection, and iframe origins in the CSP", async () => {
+    const res = await run(ctx("GET", "https://convocados.cabeda.dev/"), async () =>
+      new Response("ok", { status: 200 }),
+    );
+    const csp = res.headers.get("Content-Security-Policy") ?? "";
+    expect(csp).toContain("script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://accounts.google.com");
+    expect(csp).toContain("connect-src 'self' https://maps.googleapis.com https://accounts.google.com");
+    expect(csp).toContain("frame-src 'self' https://accounts.google.com");
+  });
+
   it("does not throw on redirect responses with immutable headers", async () => {
     const res = await run(
       ctx("GET", "https://convocados.cabeda.dev/api/auth/mobile-callback"),
