@@ -95,6 +95,23 @@ describe("SeasonPage", () => {
     expect(await screen.findByText("Season setup saved.")).toBeInTheDocument();
   });
 
+  it("keeps the admin crew-editing UI available on an active Season", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
+        { id: "crew-1", name: "North", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
+        { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
+      ], "active")), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    expect(screen.getByRole("button", { name: "Recommend Crews" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Season setup" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start season" })).not.toBeInTheDocument();
+  });
+
   it("renders a completed Season as read-only even for an administrator", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([

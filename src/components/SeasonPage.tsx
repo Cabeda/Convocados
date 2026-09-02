@@ -124,7 +124,10 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   // the admin signal — admins keep management access after activation too.
   const isManager = !!season?.activeMembers;
   const isRegistration = season?.status === "registration";
-  const isAdmin = isManager && isRegistration;
+  const isTerminal = season?.status === "completed" || season?.status === "cancelled";
+  // Admins may edit Crews at any non-terminal stage (registration, active,
+  // review); completed and cancelled Seasons are read-only for everyone.
+  const isAdmin = isManager && !isTerminal;
   const isRegistrationOpen = season?.registrationOpen ?? false;
   const isSeasonMember = season?.viewerMembership?.status === "active";
   const assignedIds = useMemo(() => new Set(crews.flatMap((crew) => crew.membershipIds)), [crews]);
@@ -256,7 +259,13 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
             </Box>
             <Box>
               <Typography variant="h4" component="h1" fontWeight={700}>{season.name}</Typography>
-              <Typography color="text.secondary" sx={{ mt: 0.5 }}>{season.status === "registration" ? t("seasonSetupDescription") : t("seasonReadOnlyDescription")}</Typography>
+              <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                {isRegistration
+                  ? t("seasonSetupDescription")
+                  : isAdmin
+                    ? t("seasonAdminEditDescription")
+                    : t("seasonReadOnlyDescription")}
+              </Typography>
             </Box>
 
             {isManager && (
