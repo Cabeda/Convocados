@@ -21,6 +21,7 @@ import { Randomize } from "../../../../lib/random";
 import { nextGameParticipantOrder } from "../../../../lib/game.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 import { getActiveRosterState } from "../../../../lib/roster.server";
+import { acceptPendingAccountInviteForDirectJoin } from "../../../../lib/invite.server";
 import { upsertEventPlayerForRoster, upsertGameParticipantForRoster } from "../../../../lib/rosterCore.server";
 import {
   IDEMPOTENCY_HEADER,
@@ -540,6 +541,35 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
   }
 
+  let pendingSelfInviteEventPlayerId: string | null = null;
+  if (linkToAccount === true && session?.user?.id && event.currentGameId) {
+    const pendingSelfInvites = await prisma.playerInvite.findMany({
+      where: {
+        gameId: event.currentGameId,
+        status: "pending",
+        eventPlayer: { eventId, userId: session.user.id },
+      },
+      select: { eventPlayerId: true, eventPlayer: { select: { name: true } } },
+    });
+    if (pendingSelfInvites.length > 1) {
+      return Response.json({ error: "Your account has conflicting player identities in this event." }, { status: 409 });
+    }
+    const pendingSelfInvite = pendingSelfInvites[0];
+    if (pendingSelfInvite) {
+      const linkedIdentities = await prisma.eventPlayer.findMany({
+        where: { eventId, userId: session.user.id },
+        select: { id: true },
+      });
+      if (linkedIdentities.some((identity) => identity.id !== pendingSelfInvite.eventPlayerId)) {
+        return Response.json({ error: "Your account has conflicting player identities in this event." }, { status: 409 });
+      }
+      // The invitation's account-linked identity is authoritative. The typed
+      // name is only input context and must not create a second identity.
+      pendingSelfInviteEventPlayerId = pendingSelfInvite.eventPlayerId;
+      trimmed = pendingSelfInvite.eventPlayer.name;
+    }
+  }
+
   // Email-based invite resolution
   let notifyRegisteredUserId: string | null = null;
   let inviteUnregisteredEmail: string | null = null;
@@ -651,6 +681,34 @@ export const POST: APIRoute = async ({ params, request }) => {
         const alreadyInGame = await prisma.gameParticipant.findUnique({
           where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: eventPlayer.id } },
         });
+        if (pendingSelfInviteEventPlayerId === eventPlayer.id && alreadyInGame) {
+          if (existing.userId && existing.userId !== linkedUserId) {
+            return Response.json({ error: "This player is linked to a different account." }, { status: 409 });
+          }
+          await prisma.player.update({
+            where: { id: existing.id },
+            data: { userId: linkedUserId },
+          });
+          await upsertGameParticipantForRoster({ gameId: event.currentGameId, eventPlayerId: eventPlayer.id, status: "active" });
+          await acceptPendingAccountInviteForDirectJoin({
+            eventId,
+            gameId: event.currentGameId,
+            userId: linkedUserId!,
+          });
+          await prisma.eventFollow.upsert({
+            where: { eventId_userId: { eventId, userId: linkedUserId! } },
+            create: { eventId, userId: linkedUserId! },
+            update: {},
+          });
+          enqueuePushSetupHintSafe(linkedUserId!, eventId);
+          const promotedIsOnBench = activeBefore >= event.maxPlayers;
+          if (!promotedIsOnBench) {
+            await addPlayerToTeams(eventId, trimmed, event.currentGameId);
+            await autoRandomizeIfFull(eventId, event.maxPlayers, event.currentGameId);
+          }
+          notifyPlayerJoined(event, trimmed, activeBefore, joinActor);
+          return Response.json({ ok: true, invited: null, resolvedName: trimmed, anonymous: false });
+        }
         if (alreadyInGame && alreadyInGame.archivedAt) {
           // Re-join after a leave: the GameParticipant was soft-archived by the
           // leave flow. Un-archive it (at the end of the list) instead of
@@ -753,6 +811,13 @@ export const POST: APIRoute = async ({ params, request }) => {
       { name: trimmed, userId: linkedUserId, user: linkedUserId ? { id: linkedUserId, name: trimmed } : null },
     );
     await upsertGameParticipantForRoster({ gameId: event.currentGameId, eventPlayerId: eventPlayer.id, status: "active" });
+    if (pendingSelfInviteEventPlayerId && linkedUserId) {
+      await acceptPendingAccountInviteForDirectJoin({
+        eventId,
+        gameId: event.currentGameId,
+        userId: linkedUserId,
+      });
+    }
     // Payment overhaul: keep per-game payment rows in sync with the roster.
     await syncGamePayments(event.currentGameId, eventId);
   }
