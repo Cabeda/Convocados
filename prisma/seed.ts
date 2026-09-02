@@ -15,6 +15,7 @@
 import { PrismaClient } from "@prisma/client";
 import { computeGameUpdates } from "../src/lib/elo";
 import { getDefaultDurationMinutes } from "../src/lib/sports";
+import { seedCrewSeason } from "./seed-crew-season";
 
 const prisma = new PrismaClient();
 
@@ -523,6 +524,11 @@ async function main() {
     console.log(`     ${justEndedPlayers.length} players, €${totalAmount} cost, all payments pending, no score`);
     console.log(`     URL: /events/${justEndedEvent.id}`);
     console.log(`     Sign in: ${demoEmail} / ${demoPassword}`);
+
+    // ── Guaranteed Crew Season scenario (leaderboard + crews demo) ──────────
+    // Reuses the same demo user so one `npm run db:seed` yields a complete
+    // environment that also exercises Seasons, Crews and standings.
+    await seedCrewSeason(prisma, demoUser, now);
   }
 
   const pastCount = await prisma.gameHistory.count();
