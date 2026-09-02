@@ -7,7 +7,7 @@ import { LeaderboardTables, type LeaderboardPayload } from "~/components/Leaderb
 const data: LeaderboardPayload = {
   scope: { type: "season", seasonId: "season-1", name: "Spring League", startsAt: null, endsAt: null },
   gamesCount: 4,
-  players: [{ rank: 1, name: "Alice", points: 10, played: 4, wins: 3, draws: 1, losses: 0, goalsFor: 12, goalsAgainst: 4, goalDifference: 8 }],
+  players: [{ rank: 1, name: "Alice", crewName: "Red", points: 10, played: 4, wins: 3, draws: 1, losses: 0, goalsFor: 12, goalsAgainst: 4, goalDifference: 8 }],
   crews: [{
     rank: 1,
     name: "Red",
@@ -39,6 +39,9 @@ describe("LeaderboardTables", () => {
     expect(screen.getByText("+8")).toBeInTheDocument();
     expect(screen.getByText("10.00")).toBeInTheDocument();
     expect(screen.getByText("4/4")).toBeInTheDocument();
+    // Player league shows each player's Crew next to the name; "Red" also
+    // appears as the Crew league row, so expect at least two occurrences.
+    expect(screen.getAllByText("Red").length).toBeGreaterThanOrEqual(2);
   });
 
   it("explains when no Crew standings exist", () => {

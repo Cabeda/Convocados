@@ -7,6 +7,7 @@ import {
 import GroupsIcon from "@mui/icons-material/Groups";
 import RecommendIcon from "@mui/icons-material/Recommend";
 import SaveIcon from "@mui/icons-material/Save";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -248,6 +249,11 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       <ResponsiveLayout>
         <Container maxWidth="md" sx={{ py: { xs: 2, sm: 4 } }}>
           <Stack spacing={3}>
+            <Box sx={{ display: "flex" }}>
+              <Button variant="outlined" size="small" startIcon={<ArrowBackIcon />} href={`/events/${eventId}/seasons`}>
+                {t("backToSeasons")}
+              </Button>
+            </Box>
             <Box>
               <Typography variant="h4" component="h1" fontWeight={700}>{season.name}</Typography>
               <Typography color="text.secondary" sx={{ mt: 0.5 }}>{season.status === "registration" ? t("seasonSetupDescription") : t("seasonReadOnlyDescription")}</Typography>

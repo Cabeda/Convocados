@@ -242,6 +242,19 @@ describe("GET /api/events/:id/history/leaderboard", () => {
     expect(body.players).toEqual([]);
   });
 
+  it("returns 404 for an unknown seasonId scope", async () => {
+    const event = await prisma.event.create({ data: { title: "Scope 404", location: "Pitch", dateTime: new Date("2026-02-01") } });
+    await prisma.gameHistory.create({
+      data: {
+        eventId: event.id, dateTime: new Date("2026-01-05"), status: "played", scoreOne: 1, scoreTwo: 0,
+        teamOneName: "A", teamTwoName: "B",
+        teamsSnapshot: JSON.stringify([{ team: "A", players: [{ name: "Alice" }] }, { team: "B", players: [{ name: "Bob" }] }]),
+      },
+    });
+    const response = await getLeaderboard(context(event.id, "?seasonId=does-not-exist"));
+    expect(response.status).toBe(404);
+  });
+
   it("hides standings for anonymous viewers of ownerless private events", async () => {
     const event = await prisma.event.create({ data: { title: "Private", location: "Pitch", dateTime: new Date("2026-02-01"), showCompetitiveData: false } });
     await prisma.gameHistory.create({

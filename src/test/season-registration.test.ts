@@ -395,4 +395,183 @@ describe("Season activation gate", () => {
     expect(response.status).toBe(200);
     expect(await prisma.crew.findFirst({ where: { seasonId: season.id, name: "Renamed 1" } })).not.toBeNull();
   });
+
+  it("rejects activation on a non-registration Season", async () => {
+    const { event, season } = await seedQualifyingSeason(3, 3);
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", { action: "activate" }));
+
+    const again = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", { action: "activate" }));
+    expect(again.status).toBe(409);
+    expect((await again.json()).error).toMatch(/registration/i);
+  });
+
+  it("rejects an unsupported PATCH action", async () => {
+    const { event, season } = await seedQualifyingSeason(3, 3);
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", { action: "explode" }));
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects invalid JSON on activation", async () => {
+    const { event, season } = await seedQualifyingSeason(3, 3);
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const req = new Request("http://localhost/api/events/test", { method: "PATCH", headers: { "content-type": "application/json" }, body: "not json" });
+    const ctx = { request: req, params: { id: event.id, seasonId: season.id }, url: new URL(req.url) } as unknown as APIContext;
+    const response = await patchSeason(ctx);
+    expect(response.status).toBe(400);
+  });
+
+  it("requires authentication to activate", async () => {
+    const { event, season } = await seedQualifyingSeason(3, 3);
+    mockGetSession.mockResolvedValue(null);
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", { action: "activate" }));
+    expect(response.status).toBe(401);
+  });
+
+  it("returns 404 activating a Season that does not belong to the Event", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const response = await patchSeason(context({ id: "missing-event", seasonId: "missing-season" }, "PATCH", { action: "activate" }));
+    expect(response.status).toBe(404);
+  });
+
+  it("blocks activation when a Crew exceeds the maximum size", async () => {
+    const { event, season } = await seedQualifyingSeason(3, 3);
+    // Push a 4th crew that is oversized (6 members) so it is neither qualifying nor allowed.
+    const crew = await prisma.crew.create({ data: { seasonId: season.id, name: "Oversized", sortOrder: 9 } });
+    for (let i = 0; i < 6; i++) {
+      const userId = `big-${i}`;
+      await prisma.user.upsert({ where: { id: userId }, update: {}, create: { id: userId, name: userId, email: `${userId}@t.test` } });
+      const ep = await prisma.eventPlayer.create({ data: { eventId: event.id, name: `Big ${i}`, userId } });
+      await prisma.seasonMembership.create({ data: { seasonId: season.id, eventPlayerId: ep.id, userId, crewId: crew.id, status: "active" } });
+    }
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", { action: "activate" }));
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toMatch(/more than/i);
+  });
+});
+
+describe("Season create validation", () => {
+  it("rejects invalid JSON", async () => {
+    const event = await seedEvent();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const req = new Request("http://localhost/api/events/test", { method: "POST", headers: { "content-type": "application/json" }, body: "{bad" });
+    const ctx = { request: req, params: { id: event.id }, url: new URL(req.url) } as unknown as APIContext;
+    const response = await createSeason(ctx);
+    expect(response.status).toBe(400);
+  });
+
+  it("requires a name and both registration dates", async () => {
+    const event = await seedEvent();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const response = await createSeason(context({ id: event.id }, "POST", { name: "", ...seasonWindow() }));
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects a registration window that closes before it opens", async () => {
+    const event = await seedEvent();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const response = await createSeason(context({ id: event.id }, "POST", {
+      name: "Backwards",
+      registrationOpensAt: new Date("2026-02-01").toISOString(),
+      registrationClosesAt: new Date("2026-01-01").toISOString(),
+    }));
+    expect(response.status).toBe(400);
+  });
+
+  it("requires authentication to create a Season", async () => {
+    const event = await seedEvent();
+    mockGetSession.mockResolvedValue(null);
+    const response = await createSeason(context({ id: event.id }, "POST", { name: "X", ...seasonWindow() }));
+    expect(response.status).toBe(401);
+  });
+
+  it("returns 404 for a missing Event", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const response = await createSeason(context({ id: "no-such-event" }, "POST", { name: "X", ...seasonWindow() }));
+    expect(response.status).toBe(404);
+  });
+
+  it("reports canManage true for the owner and false for anonymous", async () => {
+    const event = await seedEvent({ ownerId: "owner-1" });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const asOwner = await listSeasons(context({ id: event.id }, "GET"));
+    expect((await asOwner.json()).canManage).toBe(true);
+
+    mockGetSession.mockResolvedValue(null);
+    const asAnon = await listSeasons(context({ id: event.id }, "GET"));
+    expect((await asAnon.json()).canManage).toBe(false);
+  });
+});
+
+describe("Season membership admin override", () => {
+  async function closedSeason() {
+    const event = await seedEvent({ ownerId: "owner-1" });
+    const season = await prisma.season.create({
+      data: {
+        eventId: event.id,
+        name: "Closed Season",
+        status: "registration",
+        registrationOpensAt: new Date(Date.now() - 30 * 86400_000),
+        registrationClosesAt: new Date(Date.now() - 86400_000), // closed yesterday
+      },
+    });
+    return { event, season };
+  }
+
+  it("blocks a regular participant from joining after registration closes", async () => {
+    const { event, season } = await closedSeason();
+    const player = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Late", userId: "user-1" } });
+    mockGetSession.mockResolvedValue({ user: { id: "user-1" } });
+
+    const response = await joinSeason(context({ id: event.id, seasonId: season.id }, "POST", { eventPlayerId: player.id }));
+    expect(response.status).toBe(409);
+  });
+
+  it("lets an admin change membership after registration closes", async () => {
+    const { event, season } = await closedSeason();
+    const player = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Owner Player", userId: "owner-1" } });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    const joined = await joinSeason(context({ id: event.id, seasonId: season.id }, "POST", { eventPlayerId: player.id }));
+    expect([200, 201]).toContain(joined.status);
+    const withdrawn = await withdrawSeason(context({ id: event.id, seasonId: season.id }, "DELETE"));
+    expect(withdrawn.status).toBe(200);
+  });
+
+  it("requires authentication to join or withdraw", async () => {
+    const { event, season } = await closedSeason();
+    mockGetSession.mockResolvedValue(null);
+    const join = await joinSeason(context({ id: event.id, seasonId: season.id }, "POST", { eventPlayerId: "x" }));
+    const leave = await withdrawSeason(context({ id: event.id, seasonId: season.id }, "DELETE"));
+    expect(join.status).toBe(401);
+    expect(leave.status).toBe(401);
+  });
+
+  it("returns 404 joining a Season that does not belong to the Event", async () => {
+    mockGetSession.mockResolvedValue({ user: { id: "user-1" } });
+    const response = await joinSeason(context({ id: "missing-event", seasonId: "missing-season" }, "POST", { eventPlayerId: "x" }));
+    expect(response.status).toBe(404);
+  });
+
+  it("rejects an empty eventPlayerId when joining", async () => {
+    const event = await seedEvent({ ownerId: "owner-1" });
+    const season = await prisma.season.create({
+      data: { eventId: event.id, name: "Open", status: "registration", registrationOpensAt: new Date(Date.now() - 60_000), registrationClosesAt: new Date(Date.now() + 86400_000) },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const response = await joinSeason(context({ id: event.id, seasonId: season.id }, "POST", { eventPlayerId: "" }));
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 404 when withdrawing without a registration", async () => {
+    const event = await seedEvent({ ownerId: "owner-1" });
+    const season = await prisma.season.create({
+      data: { eventId: event.id, name: "Open", status: "registration", registrationOpensAt: new Date(Date.now() - 60_000), registrationClosesAt: new Date(Date.now() + 86400_000) },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "user-1" } });
+    const response = await withdrawSeason(context({ id: event.id, seasonId: season.id }, "DELETE"));
+    expect(response.status).toBe(404);
+  });
 });

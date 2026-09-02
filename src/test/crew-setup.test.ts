@@ -279,3 +279,95 @@ describe("Crew Season setup", () => {
     expect(recommendation.status).toBe(400);
     expect(save.status).toBe(400);
   });
+
+
+it("returns 404 for a Season that does not exist", async () => {
+  const event = await seedEvent();
+  const response = await getSeason(context({ id: event.id, seasonId: "no-such-season" }, "GET"));
+  expect(response.status).toBe(404);
+});
+
+it("returns 404 when the Season belongs to another Event", async () => {
+  const eventA = await seedEvent();
+  const { season } = await seedSeason(eventA.id);
+  const eventB = await prisma.event.create({
+    data: { title: "Other", location: "X", dateTime: new Date(Date.now() + 86400_000), ownerId: "crew-user-0", eloEnabled: true, balanced: true },
+  });
+  const response = await getSeason(context({ id: eventB.id, seasonId: season.id }, "GET"));
+  expect(response.status).toBe(404);
+});
+
+it("denies access to a password-protected Event without the cookie", async () => {
+  const event = await seedEvent(true);
+  const { season } = await seedSeason(event.id);
+  mockGetSession.mockResolvedValue(null);
+  const response = await getSeason(context({ id: event.id, seasonId: season.id }, "GET"));
+  expect(response.status).toBe(403);
+});
+
+it("exposes admin diagnostics (activeMembers + crew ids) to the owner", async () => {
+  const event = await seedEvent();
+  const { season, memberships } = await seedSeason(event.id);
+  await prisma.crew.create({
+    data: { seasonId: season.id, name: "North", sortOrder: 0, memberships: { connect: [{ id: memberships[0].id }, { id: memberships[1].id }, { id: memberships[2].id }] } },
+  });
+  mockGetSession.mockResolvedValue({ user: { id: "crew-user-0" } });
+
+  const response = await getSeason(context({ id: event.id, seasonId: season.id }, "GET"));
+  const body = await response.json();
+
+  expect(response.status).toBe(200);
+  expect(Array.isArray(body.season.activeMembers)).toBe(true);
+  expect(body.season.crews[0].id).toBeTruthy();
+  expect(body.season.crews[0].members[0].membershipId).toBeTruthy();
+});
+
+
+it("rejects a crew with too few members", async () => {
+  const event = await seedEvent();
+  const { season, memberships } = await seedSeason(event.id);
+  mockGetSession.mockResolvedValue({ user: { id: "crew-user-0" } });
+  const response = await saveCrews(context({ id: event.id, seasonId: season.id }, "POST", {
+    crews: [
+      { name: "Tiny", membershipIds: [memberships[0].id, memberships[1].id] },
+      { name: "Rest", membershipIds: [memberships[2].id, memberships[3].id, memberships[4].id] },
+    ],
+  }));
+  expect(response.status).toBe(400);
+});
+
+it("rejects duplicate crew names", async () => {
+  const event = await seedEvent();
+  const { season, memberships } = await seedSeason(event.id);
+  mockGetSession.mockResolvedValue({ user: { id: "crew-user-0" } });
+  const response = await saveCrews(context({ id: event.id, seasonId: season.id }, "POST", {
+    crews: [
+      { name: "Same", membershipIds: [memberships[0].id, memberships[1].id, memberships[2].id] },
+      { name: "same", membershipIds: [memberships[3].id, memberships[4].id, memberships[5].id] },
+    ],
+  }));
+  expect(response.status).toBe(400);
+});
+
+it("rejects assigning one participant to multiple crews", async () => {
+  const event = await seedEvent();
+  const { season, memberships } = await seedSeason(event.id);
+  mockGetSession.mockResolvedValue({ user: { id: "crew-user-0" } });
+  const response = await saveCrews(context({ id: event.id, seasonId: season.id }, "POST", {
+    crews: [
+      { name: "One", membershipIds: [memberships[0].id, memberships[1].id, memberships[2].id] },
+      { name: "Two", membershipIds: [memberships[2].id, memberships[3].id, memberships[4].id] },
+    ],
+  }));
+  expect(response.status).toBe(400);
+});
+
+it("rejects fewer than two crews", async () => {
+  const event = await seedEvent();
+  const { season, memberships } = await seedSeason(event.id);
+  mockGetSession.mockResolvedValue({ user: { id: "crew-user-0" } });
+  const response = await saveCrews(context({ id: event.id, seasonId: season.id }, "POST", {
+    crews: [{ name: "Only", membershipIds: [memberships[0].id, memberships[1].id, memberships[2].id] }],
+  }));
+  expect(response.status).toBe(400);
+});

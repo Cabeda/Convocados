@@ -165,4 +165,17 @@ describe("crew scoring (season-v1 mean-of-members)", () => {
     );
     expect(result.crews.map((crew) => crew.name)).toEqual(["Red"]);
   });
+
+  it("labels each player row with its Crew name (null when unassigned)", () => {
+    const members = [
+      member("m-a", "Alice", "red", "Red"),
+      { membershipId: "m-b", name: "Bob", crewId: null, crewName: null, joinedAt: new Date("2025-01-01"), withdrawnAt: null },
+    ];
+    const result = calculateLeaderboard(
+      [game("g1", "2026-01-01", 1, 0, ["Alice"], ["Bob"])],
+      members,
+    );
+    expect(result.players.find((p) => p.name === "Alice")?.crewName).toBe("Red");
+    expect(result.players.find((p) => p.name === "Bob")?.crewName).toBeNull();
+  });
 });
