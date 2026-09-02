@@ -36,7 +36,7 @@ An un-adopted one-off Event+Game sourced from a Playtomic booking (`source=playt
 _Avoid_: synthetic game, beacon, phantom game
 
 ## Player
-A participation record in a specific **Game** (via `GameParticipant`). The per-game row that tracks order/position. Linked to an **EventPlayer** (the persistent series identity). "Joined" means having a GameParticipant record in the current Game.
+A participation record in a specific **Game** (via `GameParticipant`). The per-game row that tracks order/position. Linked to an **EventPlayer** (the persistent series identity). A pending invitation is not yet a Player; "joined" means having an active GameParticipant record in the current Game.
 
 ## EventPlayer
 The persistent identity of a participant within an **Event** series. One per person per Event. Holds the name, optional `userId` link, cached ELO rating, and win/loss/attendance counters. Either anonymous (name-keyed, no userId) or authenticated (userId-linked).
@@ -332,8 +332,14 @@ The per-Event running balance of *forfeited* credit and declared spends, in Even
 _Avoid_: surplus, organizer wallet, kitty
 
 ## Invite
-A request to participate in a **Game**, sent to a person on behalf of the inviting **User** when a **Player** is being added by an Owner/Admin. Carried as a push notification (to a registered **User** whose email matches) or an email (to an unregistered address, asking them to register). Triggered automatically by the add-player action whenever the email resolves to a non-self **User** or is provided without resolving. Single-shot: not stored, not retried, not visible to the recipient before they accept. On the web/Android client, an Owner/Admin can also pick a contact from the device address book to populate the player's name and email in one step.
+A persisted request to participate in a specific **Game**, represented by a `PlayerInvite`. An Invite targets either an account-linked **EventPlayer** or an Anonymous EventPlayer through a shareable Guest Invite Link. While pending, its participation is visible as invited but is not part of the active Player list; accepting activates that Game participation and records Attendance=yes. An Invite is scoped to one Game, so accepting it does not accept other pending Invites for later Games in the same Event.
+
+When the intended authenticated User adds themselves, the action is also acceptance: the system matches the stable User identity, reuses the existing EventPlayer, and promotes the current Game's pending participation instead of creating a duplicate. A conflicting second identity blocks the action rather than being silently merged.
 _Avoid_: notify, ask to join, request access
+
+## Account Invite Promotion
+The self-service acceptance of a pending account-targeted **Invite** by its intended logged-in **User**. It moves that Game participation from invited to the active Player list, marks the Invite accepted, and records Attendance=yes. Matching uses the User identity, not the typed display name. It affects only the current Game; other pending Game Invites remain pending.
+_Avoid_: name-match join, silent merge, duplicate Player
 
 ## EventInvite
 An entry in the per-**Game** access-bypass list. Grants the linked **User** access to a password-protected **Game** without supplying the event password. Distinct from `Invite` — this is about *access* to a private game, not *participation* in any game.

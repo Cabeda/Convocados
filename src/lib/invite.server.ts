@@ -216,6 +216,48 @@ export async function createPlayerInvite(opts: {
 }
 
 /**
+ * Accept a pending account-targeted invite when the invitee joins through the
+ * direct roster endpoint instead of the invite URL. The caller has already
+ * created/activated the roster rows; this helper reconciles the invitation
+ * lifecycle and RSVP without emitting a second join notification.
+ */
+export async function acceptPendingAccountInviteForDirectJoin(opts: {
+  eventId: string;
+  gameId: string;
+  userId: string;
+}): Promise<boolean> {
+  const invite = await prisma.playerInvite.findFirst({
+    where: {
+      gameId: opts.gameId,
+      status: "pending",
+      eventPlayer: { eventId: opts.eventId, userId: opts.userId },
+    },
+    select: { id: true, eventPlayerId: true },
+  });
+  if (!invite) return false;
+
+  const respondedAt = new Date();
+  return prisma.$transaction(async (tx) => {
+    const accepted = await tx.playerInvite.updateMany({
+      where: { id: invite.id, status: "pending" },
+      data: { status: "accepted", respondedAt },
+    });
+    if (accepted.count === 0) return false;
+
+    await tx.gameParticipant.updateMany({
+      where: { gameId: opts.gameId, eventPlayerId: invite.eventPlayerId },
+      data: { status: "active", archivedAt: null },
+    });
+    await tx.rsvp.upsert({
+      where: { eventPlayerId_gameId: { eventPlayerId: invite.eventPlayerId, gameId: opts.gameId } },
+      create: { eventPlayerId: invite.eventPlayerId, gameId: opts.gameId, status: "yes", respondedAt },
+      update: { status: "yes", respondedAt },
+    });
+    return true;
+  });
+}
+
+/**
  * Re-send an existing pending PlayerInvite through all currently-enabled
  * notification channels (ADR 0025). Enforces a 24h cooldown since the last
  * delivery. Allowed for the event owner, an event admin, or the original

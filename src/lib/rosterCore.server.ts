@@ -112,6 +112,21 @@ export async function upsertEventPlayerForRoster(
   target: RosterTarget,
   client: Pick<typeof prisma, "eventPlayer"> = prisma,
 ): Promise<{ id: string; name: string; userId: string | null }> {
+  // Account-linked identities are event-scoped, not name-scoped. Reuse an
+  // existing identity even when the caller's display name has changed; this
+  // prevents a self-join from creating a second EventPlayer for the same user.
+  if (target.userId) {
+    const existingByUser = await client.eventPlayer.findFirst({
+      where: { eventId, userId: target.userId },
+    });
+    if (existingByUser) {
+      return client.eventPlayer.update({
+        where: { id: existingByUser.id },
+        data: { invitationOptOutAt: null },
+      });
+    }
+  }
+
   const ep = await client.eventPlayer.upsert({
     where: { eventId_name: { eventId, name: target.name } },
     create: { eventId, name: target.name, userId: target.userId },
