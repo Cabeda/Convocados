@@ -45,6 +45,15 @@ async function eventAccessAllowed(
   }).granted;
 }
 
+async function isEventAdmin(
+  event: { id: string; ownerId: string | null },
+  session: Session,
+): Promise<boolean> {
+  const userId = session?.user?.id ?? null;
+  if (!userId) return false;
+  return event.ownerId === userId || await checkEventAdmin(event.id, userId);
+}
+
 function registrationIsOpen(season: {
   status: string;
   registrationOpensAt: Date;
@@ -68,7 +77,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!(await eventAccessAllowed(season.event, session, request))) {
     return Response.json({ error: "Event access required." }, { status: 403 });
   }
-  if (!registrationIsOpen(season)) {
+  if (!registrationIsOpen(season) && !(await isEventAdmin(season.event, session))) {
     return Response.json({ error: "Season registration is closed." }, { status: 409 });
   }
 
@@ -120,7 +129,7 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   if (!(await eventAccessAllowed(season.event, session, request))) {
     return Response.json({ error: "Event access required." }, { status: 403 });
   }
-  if (!registrationIsOpen(season)) {
+  if (!registrationIsOpen(season) && !(await isEventAdmin(season.event, session))) {
     return Response.json({ error: "Season registration is closed." }, { status: 409 });
   }
 

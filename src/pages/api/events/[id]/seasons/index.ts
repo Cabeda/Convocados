@@ -15,6 +15,7 @@ type SeasonWithDates = {
   status: string;
   registrationOpensAt: Date;
   registrationClosesAt: Date;
+  startsAt: Date | null;
   activatedAt: Date | null;
   reviewStartedAt: Date | null;
   completedAt: Date | null;
@@ -36,6 +37,7 @@ function seasonResponse(
     status: season.status,
     registrationOpensAt: season.registrationOpensAt,
     registrationClosesAt: season.registrationClosesAt,
+    startsAt: season.startsAt,
     activatedAt: season.activatedAt,
     reviewStartedAt: season.reviewStartedAt,
     completedAt: season.completedAt,
@@ -87,6 +89,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     orderBy: { createdAt: "asc" },
   });
   const userId = session?.user?.id;
+  const canManage = userId
+    ? (event.ownerId === userId || await checkEventAdmin(event.id, userId))
+    : false;
   const result = await Promise.all(seasons.map(async (season) => {
     const [memberCount, currentMembership] = await Promise.all([
       prisma.seasonMembership.count({ where: { seasonId: season.id, status: "active" } }),
@@ -100,7 +105,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     return seasonResponse(season, memberCount, currentMembership);
   }));
 
-  return Response.json({ seasons: result });
+  return Response.json({ seasons: result, canManage });
 };
 
 export const POST: APIRoute = async ({ params, request }) => {
@@ -148,6 +153,23 @@ export const POST: APIRoute = async ({ params, request }) => {
     select: { id: true },
   });
   if (existing) return Response.json({ error: "This event already has an active Season." }, { status: 409 });
+
+  // A Season occupies its registration window; windows must not overlap another
+  // Season's. Cancelled Seasons are abandoned and free their window for reuse.
+  const others = await prisma.season.findMany({
+    where: { eventId, status: { not: "cancelled" } },
+    select: { registrationOpensAt: true, registrationClosesAt: true },
+  });
+  const newStart = opensAt.getTime();
+  const newEnd = closesAt.getTime();
+  const overlaps = others.some((season) => {
+    const otherStart = season.registrationOpensAt.getTime();
+    const otherEnd = season.registrationClosesAt.getTime();
+    return newStart <= otherEnd && otherStart <= newEnd;
+  });
+  if (overlaps) {
+    return Response.json({ error: "This Season's period overlaps an existing Season." }, { status: 409 });
+  }
 
   try {
     const season = await prisma.season.create({
