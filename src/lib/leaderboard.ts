@@ -30,6 +30,7 @@ export interface LeaderboardOptions {
 export interface PlayerStanding {
   rank: number;
   name: string;
+  crewName: string | null;
   points: number;
   played: number;
   wins: number;
@@ -172,10 +173,11 @@ function compareStandings(a: MutableStanding, b: MutableStanding): number {
     || a.name.localeCompare(b.name);
 }
 
-function finalizePlayer(standing: MutableStanding, rank: number): PlayerStanding {
+function finalizePlayer(standing: MutableStanding, rank: number, crewName: string | null): PlayerStanding {
   return {
     rank,
     name: standing.name,
+    crewName,
     points: standing.points,
     played: standing.played,
     wins: standing.wins,
@@ -306,8 +308,9 @@ export function calculateLeaderboard(
     }
   }
 
-  const players = [...playerStandings.values()].sort(compareStandings).map(finalizePlayer);
-  players.forEach((player, index) => { player.rank = index + 1; });
+  const players = [...playerStandings.entries()]
+    .sort((a, b) => compareStandings(a[1], b[1]))
+    .map(([key, standing], index) => finalizePlayer(standing, index + 1, memberByName.get(key)?.crewName ?? null));
   const crews = [...crewStandings.values()]
     .filter((standing) => standing.gameScores.length > 0)
     .map((standing) => finalizeCrew(standing, 0))

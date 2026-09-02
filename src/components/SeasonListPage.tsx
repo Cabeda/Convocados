@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert, Button, Card, CardContent, Chip, CircularProgress, Container, Stack, TextField, Typography,
+  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container, Stack, TextField, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -125,6 +126,11 @@ export default function SeasonListPage({ eventId }: { eventId: string }) {
       <ResponsiveLayout>
         <Container maxWidth="md" sx={{ py: { xs: 2, sm: 4 } }}>
           <Stack spacing={3}>
+            <Box sx={{ display: "flex" }}>
+              <Button variant="outlined" size="small" startIcon={<ArrowBackIcon />} href={`/events/${eventId}`}>
+                {t("backToGame")}
+              </Button>
+            </Box>
             <BoxHeader title={t("seasons")} description={t("seasonHistoryDescription")} />
             {!loading && !error && !locked && canManage && (
               <>

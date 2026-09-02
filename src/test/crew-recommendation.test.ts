@@ -67,3 +67,42 @@ describe("recommendCrews", () => {
 
     expect(Math.abs(result.crews[0].averageRating - result.crews[1].averageRating)).toBeLessThanOrEqual(333);
   });
+
+
+it("rejects an empty participant list", () => {
+  const result = recommendCrews([], 2);
+  expect(result.crews).toEqual([]);
+  expect(result.errors).toContain("At least one participant is required.");
+});
+
+it("rejects duplicate membership IDs", () => {
+  const result = recommendCrews([
+    { membershipId: "dup", name: "A", rating: 1000 },
+    { membershipId: "dup", name: "B", rating: 1000 },
+    { membershipId: "m3", name: "C", rating: 1000 },
+    { membershipId: "m4", name: "D", rating: 1000 },
+    { membershipId: "m5", name: "E", rating: 1000 },
+    { membershipId: "m6", name: "F", rating: 1000 },
+  ], 2);
+  expect(result.crews).toEqual([]);
+  expect(result.errors).toContain("Participant membership IDs must be unique.");
+});
+
+it("rejects too few participants for the requested crew count", () => {
+  const result = recommendCrews([
+    { membershipId: "m1", name: "A", rating: 1000 },
+    { membershipId: "m2", name: "B", rating: 1000 },
+    { membershipId: "m3", name: "C", rating: 1000 },
+    { membershipId: "m4", name: "D", rating: 1000 },
+    { membershipId: "m5", name: "E", rating: 1000 },
+  ], 2); // 2 crews need 6–10
+  expect(result.crews).toEqual([]);
+  expect(result.errors[0]).toMatch(/require between/);
+});
+
+it("rejects too many participants for the requested crew count", () => {
+  const players = Array.from({ length: 11 }, (_, i) => ({ membershipId: `m${i}`, name: `P${i}`, rating: 1000 }));
+  const result = recommendCrews(players, 2); // 2 crews cap at 10
+  expect(result.crews).toEqual([]);
+  expect(result.errors[0]).toMatch(/require between/);
+});

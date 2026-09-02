@@ -163,6 +163,7 @@ const fr: TranslationKeys = {
   addPlayerToTeam: "Ajouter un joueur",
   saveTeams: "Enregistrer les équipes",
   backToGame: "Retour au match",
+  backToSeasons: "Retour aux saisons",
   historyTitle: "{title} — Historique",
   leaderboard: "Classement",
   leaderboardDescription: "Classement façon football basé sur les matchs joués non amicaux.",

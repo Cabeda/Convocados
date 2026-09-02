@@ -39,6 +39,7 @@ describe("SeasonListPage", () => {
     renderWithTheme(<SeasonListPage eventId="event-1" />);
 
     expect(await screen.findByRole("heading", { name: "Seasons" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to game" })).toHaveAttribute("href", "/events/event-1");
     expect(screen.getByText("Current seasons")).toBeInTheDocument();
     expect(screen.getByText("Past seasons")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /September Season/ })).toHaveAttribute(

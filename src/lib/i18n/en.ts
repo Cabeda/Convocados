@@ -176,6 +176,7 @@ const en = {
   addPlayerToTeam: "Add player",
   saveTeams: "Save teams",
   backToGame: "Back to game",
+  backToSeasons: "Back to seasons",
   historyTitle: "{title} — History",
   leaderboard: "Standings",
   leaderboardDescription: "Football-style standings from played, non-friendly games.",

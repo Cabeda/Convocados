@@ -60,7 +60,19 @@ function PlayerStandingsTable({ rows, label }: { rows: PlayerStanding[]; label: 
           {rows.map((row) => (
             <TableRow key={row.name}>
               <TableCell sx={{ color: "text.secondary", fontWeight: 700 }}>{row.rank}</TableCell>
-              <TableCell sx={{ fontWeight: row.rank === 1 ? 700 : 500, whiteSpace: "nowrap" }}>{row.name}</TableCell>
+              <TableCell sx={{ fontWeight: row.rank === 1 ? 700 : 500 }}>
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap", gap: 0.5 }}>
+                  <Box component="span" sx={{ whiteSpace: "nowrap" }}>{row.name}</Box>
+                  {row.crewName && (
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={row.crewName}
+                      sx={{ height: 18, fontSize: "0.65rem", "& .MuiChip-label": { px: 0.75 } }}
+                    />
+                  )}
+                </Stack>
+              </TableCell>
               <TableCell align="right" sx={{ fontWeight: 700 }}>{row.points}</TableCell>
               <TableCell align="right">{row.played}</TableCell>
               <TableCell align="right">{row.wins}</TableCell>
@@ -102,21 +114,31 @@ function CrewStandingsTable({ rows, label }: { rows: CrewStanding[]; label: stri
                 {row.points.toFixed(2)}
               </TableCell>
               <TableCell align="right">{row.roundsCounted}/{row.roundsRepresented}</TableCell>
-              <TableCell>
-                <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
+              <TableCell sx={{ minWidth: 160 }}>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, maxWidth: 220 }}>
                   {row.gameScores.map((entry, index) => (
-                    <Chip
+                    <Box
                       key={entry.gameId}
-                      size="small"
-                      label={entry.score.toFixed(2)}
-                      color={entry.counted ? "primary" : "default"}
-                      variant={entry.counted ? "filled" : "outlined"}
                       title={entry.counted ? t("crewScoreCounted") : t("crewScoreDropped")}
-                      sx={{ opacity: entry.counted ? 1 : 0.55 }}
                       aria-label={`${t("crewGameScores")} ${index + 1}: ${entry.score.toFixed(2)}`}
-                    />
+                      sx={{
+                        width: 44,
+                        textAlign: "center",
+                        py: 0.25,
+                        borderRadius: 1,
+                        fontVariantNumeric: "tabular-nums",
+                        fontSize: "0.72rem",
+                        fontWeight: entry.counted ? 700 : 400,
+                        color: entry.counted ? "primary.contrastText" : "text.secondary",
+                        bgcolor: entry.counted ? "primary.main" : "action.hover",
+                        border: "1px solid",
+                        borderColor: entry.counted ? "primary.main" : "divider",
+                      }}
+                    >
+                      {entry.score.toFixed(2)}
+                    </Box>
                   ))}
-                </Stack>
+                </Box>
               </TableCell>
             </TableRow>
           ))}
@@ -194,10 +216,10 @@ export function LeaderboardTables({ data, loading, selectedScopeId, seasonOption
         <Alert severity="info">{t("leaderboardNoGames")}</Alert>
       ) : (
         <Grid container spacing={2}>
-          <Grid size={{ xs: 12, lg: 7 }}>
+          <Grid size={{ xs: 12, xl: 7 }}>
             <PlayerStandingsCard title={t("playerLeague")} rows={data.players} label={t("leaderboardPlayer")} emptyMessage={t("leaderboardNoGames")} />
           </Grid>
-          <Grid size={{ xs: 12, lg: 5 }}>
+          <Grid size={{ xs: 12, xl: 5 }}>
             <CrewStandingsCard title={t("crewLeague")} rows={data.crews} label={t("leaderboardCrew")} emptyMessage={t("leaderboardNoCrews")} />
           </Grid>
         </Grid>
