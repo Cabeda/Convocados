@@ -19,6 +19,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import EmojiPeopleIcon from "@mui/icons-material/EmojiPeople";
+import GroupsIcon from "@mui/icons-material/Groups";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import CancelIcon from "@mui/icons-material/Cancel";
@@ -93,7 +94,7 @@ export function EventHeader({
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [notifDialogOpen, setNotifDialogOpen] = useState(false);
 
-  // ── Ref for the main card ────────────────────────────────────────────────────
+  // ── Ref for the main card ──
   const cardRef = useRef<HTMLDivElement>(null);
 
   // ── Keyboard shortcut `e` ────────────────────────────────────────────────────
@@ -504,6 +505,10 @@ export function EventHeader({
                 <MenuItem component="a" href={`/events/${eventId}/history`} onClick={() => setAnchorEl(null)}>
                   <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
                   <ListItemText>{t("history")}</ListItemText>
+                </MenuItem>
+                <MenuItem component="a" href={`/events/${eventId}/seasons`} onClick={() => setAnchorEl(null)}>
+                  <ListItemIcon><GroupsIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText>{t("seasons")}</ListItemText>
                 </MenuItem>
                 <MenuItem component="a" href={`/events/${eventId}/payments`} onClick={() => setAnchorEl(null)}>
                   <ListItemIcon><PaymentsIcon fontSize="small" /></ListItemIcon>
