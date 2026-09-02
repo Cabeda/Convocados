@@ -16,6 +16,7 @@ import { PrismaClient } from "@prisma/client";
 import { computeGameUpdates } from "../src/lib/elo";
 import { getDefaultDurationMinutes } from "../src/lib/sports";
 import { seedCrewSeason } from "./seed-crew-season";
+import { faker } from "@faker-js/faker";
 
 const prisma = new PrismaClient();
 
@@ -36,30 +37,15 @@ const SPORTS = [
 ];
 
 // Each venue has a {name, lat, lng} triple so the public-games map view can plot
-// them. Coordinates are approximate (Lisbon-area) — not real-world surveyed, just
-// spread enough to make the map useful in dev. Update both halves together.
-const LOCATIONS = [
-  { name: "Riverside Astro, Pitch 1", lat: 38.7075, lng: -9.1369 },
-  { name: "Central Park Courts", lat: 38.7000, lng: -9.1900 },
-  { name: "Downtown Sports Hall", lat: 38.7220, lng: -9.1390 },
-  { name: "Beachside Arena", lat: 38.6970, lng: -9.4220 },
-  { name: "University Gym", lat: 38.7530, lng: -9.1590 },
-  { name: "Olympic Stadium, Field B", lat: 38.7050, lng: -9.2540 },
-  { name: "Sunset Recreation Center", lat: 38.6800, lng: -9.3380 },
-  { name: "Hilltop Tennis Club", lat: 38.8000, lng: -9.3880 },
-  { name: "Padel World, Court 3", lat: 38.7170, lng: -9.1410 },
-  { name: "Community Center Gym", lat: 38.7390, lng: -9.1300 },
-  { name: "Eastside Football Ground", lat: 38.7750, lng: -9.0940 },
-  { name: "Lakefront Sports Complex", lat: 38.7680, lng: -9.0940 },
-];
+// them. Coordinates and names are faker-generated for dev — not real-world
+// surveyed venues. Update both halves together.
+const LOCATIONS = Array.from({ length: 12 }, () => ({
+  name: `${faker.company.name()} ${faker.helpers.arrayElement(["Arena", "Sports Hall", "Astro", "Courts", "Complex", "Gym", "Ground"])}`,
+  lat: faker.location.latitude(),
+  lng: faker.location.longitude(),
+}));
 
-const FIRST_NAMES = [
-  "Alex", "Bruno", "Carlos", "Diana", "Elena", "Fábio", "Gonçalo", "Helena",
-  "Igor", "Joana", "Kevin", "Lara", "Miguel", "Nuno", "Olga", "Pedro",
-  "Quim", "Rita", "Sofia", "Tiago", "Ursula", "Vasco", "Wanda", "Xavier",
-  "Yara", "Zé", "André", "Beatriz", "Catarina", "Diogo", "Eva", "Filipe",
-  "Gustavo", "Inês", "Jorge", "Kátia", "Luís", "Marta", "Nelson", "Patrícia",
-];
+// Player names are faker-generated per seed run — no real personal data.
 
 const TITLE_TEMPLATES = [
   "{day} {sport} session",
@@ -122,8 +108,17 @@ function generateTitle(sport: string, location: string): string {
 }
 
 function uniqueNames(count: number): string[] {
-  const shuffled = [...FIRST_NAMES].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, Math.min(count, shuffled.length));
+  const names = new Set<string>();
+  let guard = 0;
+  while (names.size < count && guard < count * 20) {
+    names.add(faker.person.firstName());
+    guard += 1;
+  }
+  // Top up with disambiguated names if faker ran out of unique first names.
+  while (names.size < count) {
+    names.add(`${faker.person.firstName()} ${faker.string.alpha({ length: 1, casing: "upper" })}.`);
+  }
+  return [...names].slice(0, count);
 }
 
 async function main() {
@@ -138,10 +133,10 @@ async function main() {
   const COST_AMOUNTS = [30, 40, 50, 60, 75, 80, 100, 120];
   const PAYMENT_METHODS = ["revolut", "mbway", "cash", "transfer", null];
   const PAYMENT_DETAILS = [
-    "Revolut @jose / MB Way 912345678",
-    "IBAN PT50 0035 1234 5678 9012 345",
+    `${faker.finance.accountName()} — ${faker.finance.iban({ countryCode: "PT" })}`,
+    `App handle @${faker.internet.username().toLowerCase()}`,
     "Cash on arrival",
-    "Bizum +34 612 345 678",
+    `Bank transfer ${faker.finance.iban({ countryCode: "PT" })}`,
     null,
   ];
 
@@ -505,7 +500,7 @@ async function main() {
         eventId: justEndedEvent.id,
         totalAmount,
         currency: "EUR",
-        paymentDetails: "Revolut @jose / MB Way 912345678",
+        paymentDetails: `App handle @${faker.internet.username().toLowerCase()}`,
       },
     });
     for (const name of justEndedPlayers) {

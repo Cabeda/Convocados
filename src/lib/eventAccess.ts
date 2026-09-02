@@ -2,17 +2,34 @@
  * Event access control — password hashing, verification, and access checks.
  */
 
-import { createHash, randomBytes, timingSafeEqual } from "crypto";
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 
-// ── Password hashing (SHA-256 + salt — lightweight, no bcrypt dep needed) ────
+// ── Password hashing (scrypt — memory-hard KDF for password storage) ─────────
+// Format: "scrypt$<saltHex>$<hashHex>". Legacy "<saltHex>:<sha256Hex>" hashes
+// created before the scrypt migration still verify for backward compatibility.
+
+const SCRYPT_KEYLEN = 64;
 
 export function hashPassword(plain: string): string {
-  const salt = randomBytes(16).toString("hex");
-  const hash = createHash("sha256").update(salt + plain).digest("hex");
-  return `${salt}:${hash}`;
+  const salt = randomBytes(16);
+  const hash = scryptSync(plain, salt, SCRYPT_KEYLEN);
+  return `scrypt$${salt.toString("hex")}$${hash.toString("hex")}`;
 }
 
 export function verifyPassword(plain: string, stored: string): boolean {
+  if (stored.startsWith("scrypt$")) {
+    const [, saltHex, hashHex] = stored.split("$");
+    if (!saltHex || !hashHex) return false;
+    try {
+      const candidate = scryptSync(plain, Buffer.from(saltHex, "hex"), SCRYPT_KEYLEN);
+      const expected = Buffer.from(hashHex, "hex");
+      return expected.length === candidate.length && timingSafeEqual(expected, candidate);
+    } catch {
+      return false;
+    }
+  }
+  // Legacy salted SHA-256 ("<salt>:<hash>") — kept so existing stored passwords
+  // still verify. New passwords are always written with scrypt above.
   const [salt, hash] = stored.split(":");
   if (!salt || !hash) return false;
   const candidate = createHash("sha256").update(salt + plain).digest("hex");
@@ -27,9 +44,14 @@ export function verifyPassword(plain: string, stored: string): boolean {
 
 const ACCESS_COOKIE = "ev_access";
 
-/** Build a per-event access token from the hashed password. */
+// Server-side key for deriving opaque per-event access tokens. The token is an
+// HMAC over the event id keyed by this secret plus the stored password hash, so
+// it is a keyed MAC (not a password hash) and never exposes the credential.
+const ACCESS_TOKEN_SECRET = process.env.BETTER_AUTH_SECRET ?? "convocados-dev-access-token-secret";
+
+/** Build an opaque per-event access token bound to the stored password hash. */
 export function makeAccessToken(eventId: string, hashedPassword: string): string {
-  return createHash("sha256").update(`${eventId}:${hashedPassword}`).digest("hex");
+  return createHmac("sha256", ACCESS_TOKEN_SECRET).update(`${eventId}:${hashedPassword}`).digest("hex");
 }
 
 /** Parse the ev_access cookie map: { eventId: token, ... } */

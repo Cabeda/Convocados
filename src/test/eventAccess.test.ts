@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { createHash } from "crypto";
 import {
   hashPassword,
   verifyPassword,
@@ -38,6 +39,18 @@ describe("hashPassword / verifyPassword", () => {
 
   it("should reject malformed stored hash", () => {
     expect(verifyPassword("test", "nocolon")).toBe(false);
+  });
+
+  it("uses the memory-hard scrypt format for new hashes", () => {
+    expect(hashPassword("secret123").startsWith("scrypt$")).toBe(true);
+  });
+
+  it("still verifies legacy salted SHA-256 hashes (backward compatibility)", () => {
+    // Legacy format produced before the scrypt migration: "<salt>:<sha256(salt+plain)>".
+    const salt = "0123456789abcdef0123456789abcdef";
+    const legacy = `${salt}:${createHash("sha256").update(salt + "legacypass").digest("hex")}`;
+    expect(verifyPassword("legacypass", legacy)).toBe(true);
+    expect(verifyPassword("wrong", legacy)).toBe(false);
   });
 });
 
