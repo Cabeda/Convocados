@@ -13,7 +13,7 @@
     "p-retry": "^8.0.0"
   },
   "devDependencies": {
-    "@types/node": "^26.3.0",
+    "@types/node": "^26.4.1",
     "tsx": "^4.23.12",
     "typescript": "^5.5.0"
   }
