@@ -235,4 +235,60 @@ describe("processPaymentEscalation", () => {
     expect(result.organizerAlerts).toHaveLength(0);
     expect(mockSendPush).not.toHaveBeenCalled();
   });
+
+  it("sends stage 1 exactly once across repeated cron ticks", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const debtor = await seedUser({ name: "Debtor" });
+    const event = await seedPastEvent(owner.id, 1); // ended 1h ago
+
+    await prisma.player.create({
+      data: { eventId: event.id, name: "Debtor", order: 0, userId: debtor.id },
+    });
+    const cost = await prisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 10 },
+    });
+    await prisma.playerPayment.create({
+      data: { eventCostId: cost.id, playerName: "Debtor", amount: 5, status: "pending" },
+    });
+
+    // Simulate 3 consecutive cron ticks: the nudge must fire on tick 1 only.
+    await processPaymentEscalation();
+
+    // Dedup state survives the tick (cleanup must not wipe active trackers).
+    const trackers = await prisma.paymentNudgeStage.findMany({ where: { eventId: event.id } });
+    expect(trackers.map((t) => t.stage)).toEqual([1]);
+
+    await processPaymentEscalation();
+    await processPaymentEscalation();
+
+    expect(mockSendPush.mock.calls.length).toBe(1);
+  });
+
+  it("clears the tracker once the debt is settled", async () => {
+    const owner = await seedUser({ name: "Owner" });
+    const debtor = await seedUser({ name: "Debtor" });
+    const event = await seedPastEvent(owner.id, 1);
+
+    await prisma.player.create({
+      data: { eventId: event.id, name: "Debtor", order: 0, userId: debtor.id },
+    });
+    const cost = await prisma.eventCost.create({
+      data: { eventId: event.id, totalAmount: 10 },
+    });
+    const payment = await prisma.playerPayment.create({
+      data: { eventCostId: cost.id, playerName: "Debtor", amount: 5, status: "pending" },
+    });
+
+    await processPaymentEscalation();
+    expect(mockSendPush.mock.calls.length).toBe(1);
+
+    // Debtor pays: next tick sends nothing and drops the stale tracker.
+    await prisma.playerPayment.update({ where: { id: payment.id }, data: { status: "paid" } });
+    mockSendPush.mockClear();
+    await processPaymentEscalation();
+
+    expect(mockSendPush).not.toHaveBeenCalled();
+    const trackers = await prisma.paymentNudgeStage.findMany({ where: { eventId: event.id } });
+    expect(trackers).toHaveLength(0);
+  });
 });
