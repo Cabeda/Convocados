@@ -79,6 +79,30 @@ export const auth = betterAuth({
         },
       },
     },
+    // better-auth 1.7.3 no longer writes `Account.issuer` (upstream treats it
+    // as an optional, plugin-owned column; the prisma adapter drops it from
+    // create payloads). We re-stamp it right after insert for the well-known
+    // identity providers so rows keep the same issuer scoping the unique
+    // (issuer, accountId) key has had since the 1.7.1 upgrade.
+    account: {
+      create: {
+        after: async (account) => {
+          if ((account as { issuer?: string | null }).issuer) return;
+          const issuer =
+            account.providerId === "google"
+              ? "https://accounts.google.com"
+              : account.providerId === "credential"
+                ? "local:credential"
+                : null;
+          if (issuer) {
+            await prisma.account.update({
+              where: { id: account.id },
+              data: { issuer },
+            });
+          }
+        },
+      },
+    },
   },
   // Per-IP auth rate limiting (better-auth built-in). Enabled only in
   // production to avoid throttling the test suite. customRules tighten the
