@@ -1,0 +1,11 @@
+---
+import BaseLayout from "../../../../layouts/BaseLayout.astro";
+import SeasonListPage from "../../../../components/SeasonListPage";
+
+const { id } = Astro.params;
+const title = "Seasons — Convocados";
+---
+
+<BaseLayout title={title} description="Browse current and past Seasons.">
+  <SeasonListPage client:only="react" eventId={id!} />
+</BaseLayout>
