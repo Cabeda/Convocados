@@ -7,6 +7,7 @@ import {
 import GroupsIcon from "@mui/icons-material/Groups";
 import RecommendIcon from "@mui/icons-material/Recommend";
 import SaveIcon from "@mui/icons-material/Save";
+import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
@@ -65,6 +66,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [draggingMembershipId, setDraggingMembershipId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -242,6 +244,26 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     })));
   };
 
+  const addCrew = () => {
+    setupDraftDirtyRef.current = true;
+    setCrews((current) => {
+      const taken = new Set(current.map((crew) => crew.name.toLowerCase()));
+      let index = current.length + 1;
+      let name = `Crew ${index}`;
+      while (taken.has(name.toLowerCase())) {
+        index += 1;
+        name = `Crew ${index}`;
+      }
+      return [...current, { name, membershipIds: [] }];
+    });
+  };
+
+  const dropOnCrew = (crewIndex: number | null) => {
+    if (draggingMembershipId === null) return;
+    moveMember(draggingMembershipId, crewIndex);
+    setDraggingMembershipId(null);
+  };
+
   if (loading) {
     return <ThemeModeProvider><ResponsiveLayout><Container maxWidth="md" sx={{ py: 5, textAlign: "center" }}><CircularProgress /></Container></ResponsiveLayout></ThemeModeProvider>;
   }
@@ -366,7 +388,13 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                         ? Math.round(crewMembers.reduce((sum, member) => sum + member.rating, 0) / crewMembers.length)
                         : null;
                       return (
-                        <Card key={crew.id ?? `new-${crew.name}`} variant="outlined">
+                        <Card
+                          key={crew.id ?? `new-${crew.name}`}
+                          variant="outlined"
+                          data-testid={`crew-card-${index}`}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={() => dropOnCrew(index)}
+                        >
                           <CardContent>
                             <Stack spacing={1.5}>
                               <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
@@ -376,7 +404,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                               {crew.membershipIds.map((membershipId) => {
                                 const member = members.find((candidate) => candidate.membershipId === membershipId);
                                 if (!member) return null;
-                                return <MemberAssignment key={membershipId} member={member} crews={crews} currentCrewIndex={index} onMove={moveMember} />;
+                                return <MemberAssignment key={membershipId} member={member} crews={crews} currentCrewIndex={index} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} />;
                               })}
                             </Stack>
                           </CardContent>
@@ -384,15 +412,25 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                       );
                     })}
                   </Stack>
+                  <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={addCrew} disabled={busy !== null} sx={{ mt: 2 }}>
+                    {t("addCrew")}
+                  </Button>
                 </Box>
 
                 {unassigned.length > 0 && (
-                  <Card variant="outlined"><CardContent>
-                    <Typography variant="subtitle1" fontWeight={600}>{t("unassignedPlayers")}</Typography>
-                    <Stack spacing={1} sx={{ mt: 1 }}>
-                      {unassigned.map((member) => <MemberAssignment key={member.membershipId} member={member} crews={crews} currentCrewIndex={null} onMove={moveMember} />)}
-                    </Stack>
-                  </CardContent></Card>
+                  <Card
+                    variant="outlined"
+                    data-testid="unassigned-card"
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => dropOnCrew(null)}
+                  >
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={600}>{t("unassignedPlayers")}</Typography>
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        {unassigned.map((member) => <MemberAssignment key={member.membershipId} member={member} crews={crews} currentCrewIndex={null} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} />)}
+                      </Stack>
+                    </CardContent>
+                  </Card>
                 )}
 
                 <Button variant="contained" size="large" startIcon={<SaveIcon />} onClick={() => void save()} disabled={busy !== null || crews.length < 2}>
@@ -407,15 +445,25 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   );
 }
 
-function MemberAssignment({ member, crews, currentCrewIndex, onMove }: {
+function MemberAssignment({ member, crews, currentCrewIndex, onMove, onDragStart, onDragEnd }: {
   member: Member;
   crews: CrewDraft[];
   currentCrewIndex: number | null;
   onMove: (membershipId: string, crewIndex: number | null) => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
 }) {
   const t = useT();
   return (
-    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{ alignItems: "center" }}
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      data-testid={`member-row-${member.membershipId}`}
+    >
       <Typography sx={{ flex: 1 }}>{member.name}</Typography>
       <Chip size="small" variant="outlined" label={Math.round(member.rating)} />
       <FormControl size="small" sx={{ minWidth: 135 }}>

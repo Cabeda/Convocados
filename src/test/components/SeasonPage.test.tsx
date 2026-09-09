@@ -130,6 +130,81 @@ describe("SeasonPage", () => {
     expect(screen.getByText("Crew ELO 1200")).toBeInTheDocument();
   });
 
+  it("lets an admin add an empty Crew and assign players to it", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const twelve = Array.from({ length: 12 }, (_, index) => ({
+      membershipId: `m-${index}`,
+      eventPlayerId: `p-${index}`,
+      name: `P${index}`,
+      rating: 1000,
+      crewId: null,
+    }));
+    const customSeason = {
+      season: {
+        id: "season-1",
+        name: "September Season",
+        status: "registration",
+        startsAt: null,
+        registrationOpensAt: "2026-09-01T00:00:00.000Z",
+        registrationClosesAt: "2026-09-30T00:00:00.000Z",
+        viewerEventPlayerId: null,
+        viewerMembership: null,
+        registrationOpen: true,
+        crews: [
+          { id: "crew-1", name: "North", sortOrder: 0, members: twelve.slice(0, 3).map((m) => ({ name: m.name, membershipId: m.membershipId })) },
+          { id: "crew-2", name: "South", sortOrder: 1, members: twelve.slice(3, 6).map((m) => ({ name: m.name, membershipId: m.membershipId })) },
+        ],
+        activeMembers: twelve,
+      },
+    };
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(customSeason), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ saved: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(customSeason), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    await user.click(screen.getByRole("button", { name: "Add crew" }));
+    expect(await screen.findByDisplayValue("Crew 3")).toBeInTheDocument();
+
+    for (const name of ["Crew for P6", "Crew for P7", "Crew for P8"]) {
+      await user.click(screen.getByRole("combobox", { name }));
+      await user.click(screen.getByRole("option", { name: "Crew 3" }));
+    }
+    await user.click(screen.getByRole("button", { name: "Save Season setup" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    const saveRequest = fetchMock.mock.calls[2][1];
+    expect(JSON.parse(String(saveRequest?.body)).crews).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "Crew 3", membershipIds: expect.arrayContaining(["m-6", "m-7", "m-8"]) }),
+    ]));
+  });
+
+  it("moves a player between Crews by drag and drop", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
+        { id: "crew-1", name: "North", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
+        { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
+      ])), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    const playerRow = screen.getByTestId("member-row-membership-0");
+    fireEvent.dragStart(playerRow);
+    const crewTwoCard = screen.getByTestId("crew-card-1");
+    fireEvent.dragOver(crewTwoCard);
+    fireEvent.drop(crewTwoCard);
+
+    // Player 0 now sits in Crew "South" (select value reflects the move).
+    expect(screen.getByRole("combobox", { name: "Crew for Player 0" })).toHaveTextContent("South");
+  });
+
   it("keeps the admin crew-editing UI available on an active Season", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
