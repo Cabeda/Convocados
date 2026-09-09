@@ -152,6 +152,70 @@ describe("Crew Season setup", () => {
     expect(await prisma.seasonMembership.count({ where: { crewId: { not: null } } })).toBe(0);
   });
 
+  it("reuses the previous Season's Crews when recommending", async () => {
+    const event = await seedEvent();
+    const { season: previous, memberships: previousMemberships } = await seedSeason(event.id);
+    await prisma.crew.create({
+      data: {
+        seasonId: previous.id,
+        name: "North",
+        sortOrder: 0,
+        memberships: { connect: previousMemberships.slice(0, 3).map((membership) => ({ id: membership.id })) },
+      },
+    });
+    await prisma.crew.create({
+      data: {
+        seasonId: previous.id,
+        name: "South",
+        sortOrder: 1,
+        memberships: { connect: previousMemberships.slice(3).map((membership) => ({ id: membership.id })) },
+      },
+    });
+    await prisma.season.update({ where: { id: previous.id }, data: { status: "completed" } });
+
+    // New Season with the same players; give everyone recent attendance.
+    const season = await prisma.season.create({
+      data: {
+        eventId: event.id,
+        name: "September Season 2",
+        registrationOpensAt: new Date(Date.now() - 86400_000),
+        registrationClosesAt: new Date(Date.now() + 86400_000),
+      },
+    });
+    const players = await prisma.eventPlayer.findMany({ where: { eventId: event.id }, orderBy: { name: "asc" } });
+    const memberships: Array<{ id: string; eventPlayerId: string }> = [];
+    for (const player of players) {
+      memberships.push(await prisma.seasonMembership.create({
+        data: { seasonId: season.id, eventPlayerId: player.id, userId: player.userId as string },
+      }));
+    }
+    const game = await prisma.game.create({
+      data: { eventId: event.id, dateTime: new Date(Date.now() - 86400_000), status: "played" },
+    });
+    for (const player of players) {
+      await prisma.gameParticipant.create({ data: { gameId: game.id, eventPlayerId: player.id } });
+    }
+    // Symmetric ratings so the previous grouping is also the balanced one.
+    const balancedByName: Record<string, number> = {
+      "Player 0": 1100, "Player 1": 1000, "Player 2": 900,
+      "Player 3": 1100, "Player 4": 1000, "Player 5": 900,
+    };
+    for (const [name, rating] of Object.entries(balancedByName)) {
+      await prisma.playerRating.update({ where: { eventId_name: { eventId: event.id, name } }, data: { rating } });
+    }
+    mockGetSession.mockResolvedValue({ user: { id: "crew-user-0" } });
+
+    const response = await recommend(context({ id: event.id, seasonId: season.id }, "POST", { crewCount: 2 }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    const crewOf = (membershipId: string) => body.crews.find((crew: { membershipIds: string[] }) => crew.membershipIds.includes(membershipId))?.name;
+    // The old North crew (players 0-2) and old South crew (players 3-5) stay grouped.
+    expect(new Set(memberships.slice(0, 3).map((membership) => crewOf(membership.id))).size).toBe(1);
+    expect(new Set(memberships.slice(3).map((membership) => crewOf(membership.id))).size).toBe(1);
+    expect(crewOf(memberships[0].id)).not.toBe(crewOf(memberships[3].id));
+  });
+
   it("saves the starting date, names, and assignments atomically", async () => {
     const event = await seedEvent();
     const { season, memberships } = await seedSeason(event.id);
