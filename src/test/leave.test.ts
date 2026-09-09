@@ -201,6 +201,32 @@ describe("archiveAndLeave — admin decline guest (organizer path)", () => {
   });
 });
 
+describe("archiveAndLeave — organizer removes linked user (#911)", () => {
+  it("writes Rsvp.status='no' with respondedByUserId audit so the leaver lands in Declined", async () => {
+    const owner = await seedUser("Owner", "u-owner");
+    const linked = await seedUser("Linked", "u-linked");
+    const event = await seedEvent(owner.id);
+    const player = await prisma.player.create({
+      data: { eventId: event.id, name: "Linked", userId: linked.id, order: 0 },
+    });
+    const ep = await prisma.eventPlayer.create({
+      data: { eventId: event.id, name: "Linked", userId: linked.id },
+    });
+
+    await archiveAndLeave({
+      eventId: event.id,
+      actor: { kind: "organizer", userId: owner.id },
+      playerId: player.id,
+    });
+
+    const rsvp = await prisma.rsvp.findFirst({
+      where: { gameId: event.currentGameId!, eventPlayerId: ep.id },
+    });
+    expect(rsvp?.status).toBe("no");
+    expect(rsvp?.respondedByUserId).toBe(owner.id);
+  });
+});
+
 describe("archiveAndLeave — bench state after removal", () => {
   it("computes benchEmpty=true when no bench players and wasActive", async () => {
     const user = await seedUser("Alice", "u-alice");

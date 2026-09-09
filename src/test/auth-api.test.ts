@@ -850,6 +850,23 @@ describe("POST /api/events/[id]/undo-remove", () => {
     expect(players.map((p) => p.name)).toEqual(["Alice", "Bob", "Charlie"]);
   });
 
+  it("resets RSVP to yes when restoring a player into the current game", async () => {
+    mockAnonymous();
+    const id = await seedEvent();
+    const game = await testPrisma.game.create({
+      data: { eventId: id, dateTime: new Date(Date.now() + 86400_000) },
+    });
+    await testPrisma.event.update({ where: { id }, data: { currentGameId: game.id } });
+    const ep = await testPrisma.eventPlayer.create({ data: { eventId: id, name: "Bob" } });
+    await testPrisma.rsvp.create({
+      data: { eventPlayerId: ep.id, gameId: game.id, status: "no", respondedAt: new Date() },
+    });
+    const res = await undoRemove(ctx({ id }, { name: "Bob", order: 0, userId: null, removedAt: Date.now() }));
+    expect(res.status).toBe(200);
+    const rsvp = await testPrisma.rsvp.findFirst({ where: { eventPlayerId: ep.id, gameId: game.id } });
+    expect(rsvp?.status).toBe("yes");
+  });
+
   it("returns 410 when undo window has expired", async () => {
     mockAnonymous();
     const id = await seedEvent();

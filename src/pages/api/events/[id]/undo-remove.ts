@@ -66,7 +66,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     await addPlayerToTeams(eventId, name, event.currentGameId);
   }
 
-  // ADR 0016: restore GameParticipant for the current Game
+  // ADR 0016: restore GameParticipant for the current Game. The removal
+  // wrote Rsvp="no" (Declined roster) — restoring presence resets it to "yes".
   if (event.currentGameId) {
     const ep = await prisma.eventPlayer.findUnique({
       where: { eventId_name: { eventId, name } },
@@ -76,6 +77,11 @@ export const POST: APIRoute = async ({ params, request }) => {
         where: { gameId_eventPlayerId: { gameId: event.currentGameId, eventPlayerId: ep.id } },
         create: { gameId: event.currentGameId, eventPlayerId: ep.id, order, status: "active" },
         update: { archivedAt: null, order, status: "active" },
+      });
+      await prisma.rsvp.upsert({
+        where: { eventPlayerId_gameId: { eventPlayerId: ep.id, gameId: event.currentGameId } },
+        create: { eventPlayerId: ep.id, gameId: event.currentGameId, status: "yes", respondedAt: new Date() },
+        update: { status: "yes", respondedAt: new Date() },
       });
     }
   }
