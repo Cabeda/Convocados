@@ -31,6 +31,30 @@ A Game marked with `isFriendly: true` by the Owner/Admin. Friendly Games are exc
 Use cases: casual sessions with guests, holiday matches, unbalanced rosters, first-timer introductions.
 _Avoid_: exhibition, practice, scrimmage
 
+## Season
+A bounded, optional competition within an **Event**. Account-linked **EventPlayers** join explicitly during registration. Eligible non-friendly **Games** contribute results for participating players, while non-participants in those Games remain absent from Season standings.
+
+A Season moves through registration, active competition, result review, and completion, or is cancelled. It resets its own standings and awards but never resets the Event's long-lived ELO, which continues to support team balancing across Seasons. An Event has at most one Season that has not completed or been cancelled.
+_Avoid_: league (a possible competition format, not the time boundary), ELO season
+
+## Crew
+A named, Season-specific group of three to five confirmed **Season** participants competing as one entry in the Season standings. Players form Crews themselves; unassigned participants may enter registration as free agents.
+
+Crew membership is independent of **Game** participation and match-team assignment. It creates a shared competitive identity, not an obligation to attend or a guarantee that Crew members always play on the same side. Membership changes never rewrite a Crew's historical Game contributions.
+_Avoid_: Team (the side fielded in one Game), squad (implies a fixed lineup)
+
+## Season Round
+One of the first eight eligible **Games** after a Season becomes active. An eligible Game is played, non-friendly, and has two immutable match-team lineups. Cancelling a Game, marking it Friendly, or removing its usable lineups removes it from the active Season sequence; a later eligible Game takes its place.
+_Avoid_: fixture (Games are not scheduled specifically for the Season), matchday
+
+## Season Contribution
+The 3, 1, or 0 points earned by a confirmed **Crew** member for a win, draw, or loss in a **Season Round**. Only players assigned to an immutable match-team lineup contribute. Bench and payment-only participants do not.
+_Avoid_: ELO points, individual Season score
+
+## Crew Round Score
+The arithmetic mean of all Season Contributions earned by one **Crew** in a **Season Round**, or zero when no member contributes. A Crew's standing totals its best six Crew Round Scores from the eight-round Season.
+_Avoid_: team score (the Game's goals or sets), Crew ELO
+
 ## Open Pickup
 An un-adopted one-off Event+Game sourced from a Playtomic booking (`source=playtomic`), created automatically by the sweep when a court slot is detected as booked. Public (`isPublic=true`), no Owner (`ownerId=null`), no players yet. A notice that people play here at this court and time — a lead for organizing, not a real game. Rendered distinctly in the public listing (badge + no roster/join UI). Joining is blocked until someone Adopts.
 _Avoid_: synthetic game, beacon, phantom game

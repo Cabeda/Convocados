@@ -1,11 +1,11 @@
-import { useState, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { createT, detectLocale, setStoredLocale, type Locale, type TFunction } from "./i18n";
 
 export function useT(): TFunction {
   const [locale] = useState<Locale>(() =>
     typeof window === "undefined" ? "en" : detectLocale()
   );
-  return createT(locale);
+  return useMemo(() => createT(locale), [locale]);
 }
 
 export function useLocale(): { locale: Locale; setLocale: (l: Locale) => void; t: TFunction } {
@@ -18,5 +18,6 @@ export function useLocale(): { locale: Locale; setLocale: (l: Locale) => void; t
     setLocaleState(l);
   }, []);
 
-  return { locale, setLocale, t: createT(locale) };
+  const t = useMemo(() => createT(locale), [locale]);
+  return { locale, setLocale, t };
 }
