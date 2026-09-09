@@ -74,8 +74,10 @@ model Session {
 
 model Account {
   id                    String    @id
-  /// Trusted issuer scoping the external identity (better-auth 1.7)
-  issuer                String
+  /// Trusted issuer scoping the external identity.
+  /// Optional since better-auth 1.7.3 no longer writes issuer on account
+  /// creation; auth.server.ts re-stamps it via the account.create.before hook.
+  issuer                String?
   accountId             String
   providerId            String
   userId                String
