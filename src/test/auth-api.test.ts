@@ -30,6 +30,7 @@ import { POST as claimOwnership, DELETE as relinquishOwnership } from "~/pages/a
 import { POST as transferOwnership } from "~/pages/api/events/[id]/transfer";
 import { POST as addPlayer, DELETE as deletePlayer } from "~/pages/api/events/[id]/players";
 import { POST as claimPlayerEndpoint } from "~/pages/api/events/[id]/claim-player";
+import { createPlayerInvite } from "~/lib/invite.server";
 import { PUT as reorderPlayers } from "~/pages/api/events/[id]/reorder-players";
 import { POST as undoRemove } from "~/pages/api/events/[id]/undo-remove";
 import { GET as getMyGames } from "~/pages/api/me/games";
@@ -238,6 +239,51 @@ describe("POST /api/events/[id]/transfer (authenticated)", () => {
 // ─── POST /api/events/[id]/players (linkToAccount) ──────────────────────────
 
 describe("POST /api/events/[id]/players (linkToAccount)", () => {
+  it("promotes a pending account invitation when the invitee joins themselves", async () => {
+    const owner = await seedUser({ name: "Owner", email: "owner@test.com" });
+    const invitee = await seedUser({ name: "Luis Lopes", email: "luis@test.com" });
+    mockAuth(invitee.id, invitee.name);
+    const id = await seedEvent({ ownerId: owner.id });
+    const event = await testPrisma.event.findUniqueOrThrow({ where: { id } });
+    const game = await testPrisma.game.create({ data: { eventId: id, dateTime: event.dateTime } });
+    await testPrisma.event.update({ where: { id }, data: { currentGameId: game.id } });
+    await testPrisma.player.create({ data: { eventId: id, name: invitee.name, order: 0 } });
+    await createPlayerInvite({
+      eventId: id,
+      gameId: game.id,
+      inviteeUserId: invitee.id,
+      invitedByUserId: owner.id,
+      origin: "https://convocados.cabeda.dev",
+      delivery: "link-only",
+    });
+    const laterGame = await testPrisma.game.create({ data: { eventId: id, dateTime: new Date(event.dateTime.getTime() + 7 * 86400_000) } });
+    await createPlayerInvite({
+      eventId: id,
+      gameId: laterGame.id,
+      inviteeUserId: invitee.id,
+      invitedByUserId: owner.id,
+      origin: "https://convocados.cabeda.dev",
+      delivery: "link-only",
+    });
+
+    const res = await addPlayer(ctx({ id }, { name: "Luis", linkToAccount: true }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ resolvedName: "Luis Lopes", anonymous: false });
+    const invite = await testPrisma.playerInvite.findFirstOrThrow({ where: { gameId: game.id } });
+    expect(invite.status).toBe("accepted");
+    expect(invite.respondedAt).not.toBeNull();
+    expect((await testPrisma.playerInvite.findFirstOrThrow({ where: { gameId: laterGame.id } })).status).toBe("pending");
+    const eventPlayer = await testPrisma.eventPlayer.findFirstOrThrow({ where: { eventId: id, userId: invitee.id } });
+    const participant = await testPrisma.gameParticipant.findUniqueOrThrow({
+      where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: eventPlayer.id } },
+    });
+    expect(participant.status).toBe("active");
+    expect(await testPrisma.rsvp.findUnique({ where: { eventPlayerId_gameId: { eventPlayerId: eventPlayer.id, gameId: game.id } } })).toMatchObject({ status: "yes" });
+    expect(await testPrisma.player.count({ where: { eventId: id, userId: invitee.id } })).toBe(1);
+    expect(await testPrisma.eventPlayer.count({ where: { eventId: id, userId: invitee.id } })).toBe(1);
+  });
+
   it("links userId when linkToAccount is true and user is authenticated", async () => {
     const user = await seedUser();
     mockAuth(user.id, user.name);
