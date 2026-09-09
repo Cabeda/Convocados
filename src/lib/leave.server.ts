@@ -131,12 +131,12 @@ export async function archiveAndLeave(input: ArchiveAndLeaveInput): Promise<Arch
     }
   }
 
-  // Write Rsvp. Two cases:
+  // Write Rsvp. Every removal from the current game records status="no":
   //   - Self-leave (linked user): status="no" + respondedAt
-  //   - Admin declining a guest (organizer + no userId): status="no" + respondedByUserId audit.
-  //   - Organizer X on a linked user: do not touch Rsvp (the user can still respond later).
+  //   - Organizer removal (guest or linked user): status="no" + respondedByUserId audit.
+  // The leaver lands in the Declined roster; a re-add/undo resets it to "yes".
   // ADR 0016: RSVP is keyed on (eventPlayerId, gameId).
-  if (currentGameId && (actor.kind === "self" && player.userId || actor.kind === "organizer" && !player.userId && actor.userId)) {
+  if (currentGameId && ((actor.kind === "self" && player.userId) || (actor.kind === "organizer" && actor.userId))) {
     const ep = await prisma.eventPlayer.findUnique({
       where: { eventId_name: { eventId, name: player.name } },
     });
