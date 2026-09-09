@@ -156,8 +156,11 @@ export async function seedCrewSeason(
 
   // Pre-assign two crews (first six participants) so the Crew league renders on
   // first load; the remaining six stay as free agents to group live in the UI.
-  const crewOne = await prisma.crew.create({ data: { seasonId: season.id, name: faker.color.human(), sortOrder: 0 } });
-  const crewTwo = await prisma.crew.create({ data: { seasonId: season.id, name: faker.color.human(), sortOrder: 1 } });
+  const crewOneName = faker.color.human();
+  let crewTwoName = faker.color.human();
+  for (let i = 0; crewTwoName === crewOneName && i < 10; i++) crewTwoName = faker.color.human();
+  const crewOne = await prisma.crew.create({ data: { seasonId: season.id, name: crewOneName, sortOrder: 0 } });
+  const crewTwo = await prisma.crew.create({ data: { seasonId: season.id, name: crewTwoName, sortOrder: 1 } });
   const crewOneNames = names.slice(0, 3);
   const crewTwoNames = names.slice(3, 6);
   for (const name of crewOneNames) {
