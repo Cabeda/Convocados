@@ -58,6 +58,11 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
     const totalPayments = await prisma.playerPayment.count({ where: { eventCostId: ec.id } });
     const paidCount = await prisma.playerPayment.count({ where: { eventCostId: ec.id, status: "paid" } });
 
+    // Users with a still-unsettled payment on this event. Trackers for anyone
+    // else (paid since the last tick) are stale and removed below so a future
+    // debt starts cleanly at stage 0.
+    const activeUserIds = new Set<string>();
+
     for (const payment of ec.payments) {
       // Find linked user
       const player = await prisma.player.findFirst({
@@ -65,6 +70,7 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
         select: { userId: true },
       });
       if (!player?.userId) continue;
+      activeUserIds.add(player.userId);
 
       // Get or create nudge stage tracker
       const tracker = await prisma.paymentNudgeStage.upsert({
@@ -119,6 +125,16 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
       }
     }
 
+    // Drop trackers for users with no remaining unsettled payment on this
+    // event (they paid since the last tick). Scoped to linked userIds seen
+    // above — never compare userId against playerName (different domains).
+    // Empty active set means no linked user still owes: clear all trackers.
+    await prisma.paymentNudgeStage.deleteMany({
+      where: activeUserIds.size > 0
+        ? { eventId: ec.eventId, userId: { notIn: [...activeUserIds] } }
+        : { eventId: ec.eventId },
+    }).catch(() => {}); // ponytail: best-effort cleanup, not critical
+
     // Send organizer alert as a batch (one notification for all stage-3-expired debtors per event)
     if (ec.event.ownerId && result.organizerAlerts.length > 0) {
       const debtorNames = ec.payments
@@ -140,17 +156,21 @@ export async function processPaymentEscalation(): Promise<EscalationResult> {
     }
   }
 
-  // Clean up nudge trackers for payments that have been settled
-  await prisma.paymentNudgeStage.deleteMany({
-    where: {
-      eventId: { in: eventCosts.map((ec) => ec.eventId) },
-      userId: {
-        notIn: eventCosts.flatMap((ec) =>
-          ec.payments.map((p) => p.playerName) // This needs userIds, let's just leave trackers — they're idempotent
-        ),
-      },
-    },
-  }).catch(() => {}); // ponytail: best-effort cleanup, not critical
+  // Sweep trackers for events with no remaining unsettled payment at all.
+  // Such events never enter the loop above, so without this their trackers
+  // would linger after the debt is fully settled.
+  const trackedEventIds = await prisma.paymentNudgeStage
+    .findMany({ select: { eventId: true } })
+    .then((rows) => [...new Set(rows.map((r) => r.eventId))])
+    .catch(() => [] as string[]);
+  for (const eventId of trackedEventIds) {
+    const remaining = await prisma.eventCost.count({
+      where: { eventId, payments: { some: { status: { in: ["pending", "sent"] } } } },
+    }).catch(() => 1);
+    if (remaining === 0) {
+      await prisma.paymentNudgeStage.deleteMany({ where: { eventId } }).catch(() => {});
+    }
+  }
 
   return result;
 }
