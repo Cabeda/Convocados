@@ -52,6 +52,9 @@ model User {
   playerInvitesSent       PlayerInvite[]       @relation("PlayerInviteBy")
   createdSeasons           Season[]            @relation("SeasonCreator")
   seasonMemberships        SeasonMembership[]  @relation("SeasonMembershipUser")
+  reviewedCrewProposals    CrewProposal[]      @relation("CrewProposalReviewer")
+  crewProposalInvitesSent  CrewProposalInvite[] @relation("CrewProposalInviteSender")
+  claimedCrewProposalInvites CrewProposalInvite[] @relation("CrewProposalInviteClaimer")
 }
 
 model Session {
@@ -362,6 +365,7 @@ model Season {
   status                String    @default("registration") // "registration" | "active" | "review" | "completed" | "cancelled"
   registrationOpensAt   DateTime
   registrationClosesAt  DateTime
+  startsAt              DateTime?
   activatedAt           DateTime?
   reviewStartedAt       DateTime?
   completedAt           DateTime?
@@ -373,6 +377,9 @@ model Season {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
   memberships           SeasonMembership[]
+  crews                 Crew[]
+  crewProposals         CrewProposal[]
+  crewProposalInvites   CrewProposalInvite[]
 
   @@index([eventId, status])
   @@index([createdByUserId])
@@ -384,8 +391,12 @@ model SeasonMembership {
   season         Season       @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   eventPlayerId  String
   eventPlayer    EventPlayer  @relation(fields: [eventPlayerId], references: [id], onDelete: Cascade)
+  crewId         String?
+  crew           Crew?        @relation(fields: [crewId], references: [id], onDelete: SetNull)
   userId         String
   user           User         @relation("SeasonMembershipUser", fields: [userId], references: [id], onDelete: Cascade)
+  proposedCrewProposals CrewProposal[] @relation("CrewProposalProposer")
+  proposalMembers CrewProposalMember[]
   status         String       @default("active") // "active" | "withdrawn"
   joinedAt       DateTime     @default(now())
   withdrawnAt    DateTime?
@@ -396,6 +407,55 @@ model SeasonMembership {
   @@unique([seasonId, userId])
   @@index([eventPlayerId])
   @@index([userId])
+}
+
+model Crew {
+  id           String             @id @default(cuid())
+  seasonId     String
+  season       Season             @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  name         String
+  sortOrder    Int                @default(0)
+  memberships  SeasonMembership[]
+  approvedProposal CrewProposal? @relation("CrewProposalApprovedCrew")
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@unique([seasonId, name])
+  @@unique([seasonId, sortOrder])
+  @@index([seasonId])
+}
+
+model CrewProposal {
+  id                    String              @id @default(cuid())
+  seasonId              String
+  season                Season              @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  proposerMembershipId  String
+  proposerMembership    SeasonMembership    @relation("CrewProposalProposer", fields: [proposerMembershipId], references: [id], onDelete: Cascade)
+  name                  String
+  status                String              @default("pending") // "pending" | "approved" | "rejected"
+  reviewedByUserId      String?
+  reviewedByUser        User?               @relation("CrewProposalReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewedAt            DateTime?
+  rejectionReason       String?
+  approvedCrewId        String?             @unique
+  approvedCrew          Crew?               @relation("CrewProposalApprovedCrew", fields: [approvedCrewId], references: [id], onDelete: SetNull)
+  members               CrewProposalMember[]
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([seasonId, status])
+  @@index([proposerMembershipId])
+}
+
+model CrewProposalMember {
+  id                  String           @id @default(cuid())
+  proposalId          String
+  proposal            CrewProposal     @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  seasonMembershipId  String
+  seasonMembership    SeasonMembership @relation(fields: [seasonMembershipId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalId, seasonMembershipId])
+  @@index([seasonMembershipId])
 }
 
 model GameParticipant {
@@ -1232,4 +1292,24 @@ model UserAppOpen {
 
   @@unique([userId, day])
   @@index([userId, day])
+}
+
+
+model CrewProposalInvite {
+  id             String   @id @default(cuid())
+  seasonId       String
+  season         Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  invitedByUserId String
+  invitedBy      User     @relation("CrewProposalInviteSender", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  claimedByUserId String?
+  claimedBy      User?    @relation("CrewProposalInviteClaimer", fields: [claimedByUserId], references: [id], onDelete: SetNull)
+  email          String
+  token          String   @unique
+  status         String   @default("pending") // "pending" | "claimed"
+  claimedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([seasonId, status])
+  @@index([email])
 }
