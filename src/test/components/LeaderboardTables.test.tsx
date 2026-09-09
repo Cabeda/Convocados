@@ -55,11 +55,17 @@ describe("LeaderboardTables", () => {
   });
 
   it("does not offer cancelled Seasons as a leaderboard scope", () => {
-    renderWithTheme(<LeaderboardTables data={data} loading={false} selectedScopeId="active" seasonOptions={[{ id: "cancelled", name: "Cancelled League", status: "cancelled" }, { id: "active", name: "Active League", status: "active" }]} onScopeChange={vi.fn()} />);
+    const { unmount } = renderWithTheme(<LeaderboardTables data={data} loading={false} selectedScopeId="active" seasonOptions={[{ id: "cancelled", name: "Cancelled League", status: "cancelled" }, { id: "active", name: "Active League", status: "active" }]} onScopeChange={vi.fn()} />);
     const comboboxes = screen.getAllByRole("combobox");
     fireEvent.mouseDown(comboboxes[comboboxes.length - 1]);
 
     expect(screen.queryByRole("option", { name: "Cancelled League" })).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Active League" })).toBeInTheDocument();
+
+    // Close the MUI menu and unmount synchronously: React 19 schedules menu
+    // transition work outside act(), which otherwise flushes after jsdom
+    // teardown and fails the run with an unhandled "window is not defined".
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    unmount();
   });
 });
