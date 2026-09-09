@@ -51,9 +51,7 @@ const ACCESS_TOKEN_SECRET = process.env.BETTER_AUTH_SECRET ?? "convocados-dev-ac
 
 /** Build an opaque per-event access token bound to the stored password hash. */
 export function makeAccessToken(eventId: string, hashedPassword: string): string {
-  // codeql[js/insufficient-password-hash] false-positive: keyed HMAC (server secret),
-  // not password storage — the credential itself is scrypt-hashed in hashPassword above.
-  return createHmac("sha256", ACCESS_TOKEN_SECRET).update(`${eventId}:${hashedPassword}`).digest("hex");
+  return createHmac("sha256", ACCESS_TOKEN_SECRET).update(`${eventId}:${hashedPassword}`).digest("hex"); // codeql[js/insufficient-password-hash] false-positive: keyed HMAC (server secret), not password storage — the credential itself is scrypt-hashed in hashPassword above.
 }
 
 /** Parse the ev_access cookie map: { eventId: token, ... } */
