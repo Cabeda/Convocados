@@ -247,6 +247,59 @@ describe("SeasonPage", () => {
     expect(await screen.findByText("No players from recent games to add.")).toBeInTheDocument();
   });
 
+  it("enrolls a searched player directly into a Crew", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const candidates = { players: [
+      { eventPlayerId: "player-9", name: "Zed", hasAccount: true, gamesPlayed: 2, memberStatus: null },
+      { eventPlayerId: "player-10", name: "Guest", hasAccount: false, gamesPlayed: 1, memberStatus: null },
+    ] };
+    const withCrews = seasonResponse([
+      { id: "crew-1", name: "North", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
+      { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
+    ]);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(withCrews), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(candidates), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        membership: { id: "membership-9", eventPlayerId: "player-9", userId: "user-9", status: "active", crewId: "crew-1" },
+      }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(withCrews), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    await user.click(screen.getByRole("combobox", { name: "Add player to North" }));
+    await user.type(screen.getByRole("combobox", { name: "Add player to North" }), "Zed");
+    await user.click(await screen.findByRole("option", { name: "Zed" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+    expect(fetchMock.mock.calls[3][0]).toBe("/api/events/event-1/seasons/season-1/memberships");
+    expect(JSON.parse(String(fetchMock.mock.calls[3][1]?.body))).toEqual({ eventPlayerId: "player-9", crewId: "crew-1" });
+    expect(await screen.findByText("Added Zed to North.")).toBeInTheDocument();
+  });
+
+  it("disables candidates without an account in the player search", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const candidates = { players: [
+      { eventPlayerId: "player-10", name: "Guest", hasAccount: false, gamesPlayed: 1, memberStatus: null },
+    ] };
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(candidates), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    await user.click(screen.getByRole("combobox", { name: "Add player" }));
+    await user.type(screen.getByRole("combobox", { name: "Add player" }), "Guest");
+
+    expect(await screen.findByRole("option", { name: "Guest (no account)" })).toHaveAttribute("aria-disabled", "true");
+  });
+
   it("keeps the admin crew-editing UI available on an active Season", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
