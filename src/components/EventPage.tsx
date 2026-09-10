@@ -2,12 +2,15 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button,
-  Alert, Skeleton,
+  Alert, Skeleton, ToggleButton, ToggleButtonGroup,
 } from "@mui/material";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import StadiumIcon from "@mui/icons-material/Stadium";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
+import { TeamField } from "./TeamField";
 import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
@@ -116,6 +119,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [teamTwoName, setTeamTwoName] = useState("");
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [shuffleVersion, setShuffleVersion] = useState(0);
+  const [teamView, setTeamView] = useState<"list" | "field">("list");
 
   // ── Event data ──────────────────────────────────────────────────────────────
   const [event, setEvent] = useState<EventData | null>(null);
@@ -1196,26 +1200,57 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {localMatches && localMatches.length > 0 && (
               <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
                 <Stack spacing={3}>
-                  <Typography variant="h6" fontWeight={600}>{t("teams")}</Typography>
-                  <TeamPicker
-                    matches={localMatches.map((m) => ({
-                      ...m,
-                      team: m.team === event.teamOneName ? teamOneName
-                        : m.team === event.teamTwoName ? teamTwoName : m.team,
-                    }))}
-                    onResultChange={handleTeamChange}
-                    shuffleKey={shuffleVersion}
-                    ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
-                    onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
-                      if (teamIdx === 0) {
-                        setTeamOneName(newName);
-                        handleTeamNameSave(newName, teamTwoName);
-                      } else {
-                        setTeamTwoName(newName);
-                        handleTeamNameSave(teamOneName, newName);
-                      }
-                    } : undefined}
-                  />
+                  <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+                    <Typography variant="h6" fontWeight={600}>{t("teams")}</Typography>
+                    <ToggleButtonGroup
+                      size="small"
+                      exclusive
+                      value={teamView}
+                      onChange={(_e, next) => { if (next) setTeamView(next); }}
+                      aria-label={t("teamViewToggleLabel")}
+                    >
+                      <ToggleButton value="list" aria-label={t("teamViewList")}>
+                        <ViewListIcon fontSize="small" sx={{ mr: 0.5 }} />
+                        {t("teamViewList")}
+                      </ToggleButton>
+                      <ToggleButton value="field" aria-label={t("teamViewField")}>
+                        <StadiumIcon fontSize="small" sx={{ mr: 0.5 }} />
+                        {t("teamViewField")}
+                      </ToggleButton>
+                    </ToggleButtonGroup>
+                  </Stack>
+                  {teamView === "list" ? (
+                    <TeamPicker
+                      matches={localMatches.map((m) => ({
+                        ...m,
+                        team: m.team === event.teamOneName ? teamOneName
+                          : m.team === event.teamTwoName ? teamTwoName : m.team,
+                      }))}
+                      onResultChange={handleTeamChange}
+                      shuffleKey={shuffleVersion}
+                      ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
+                      onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
+                        if (teamIdx === 0) {
+                          setTeamOneName(newName);
+                          handleTeamNameSave(newName, teamTwoName);
+                        } else {
+                          setTeamTwoName(newName);
+                          handleTeamNameSave(teamOneName, newName);
+                        }
+                      } : undefined}
+                    />
+                  ) : (
+                    <TeamField
+                      matches={localMatches.map((m) => ({
+                        ...m,
+                        team: m.team === event.teamOneName ? teamOneName
+                          : m.team === event.teamTwoName ? teamTwoName : m.team,
+                      }))}
+                      onResultChange={handleTeamChange}
+                      shuffleKey={shuffleVersion}
+                      ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
+                    />
+                  )}
                 </Stack>
               </Paper>
             )}
