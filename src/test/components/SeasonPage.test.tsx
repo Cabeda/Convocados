@@ -196,6 +196,7 @@ describe("SeasonPage", () => {
     await screen.findByRole("heading", { name: "September Season" });
 
     const playerRow = screen.getByTestId("member-row-membership-0");
+    expect(screen.getByTestId("member-grip-membership-0")).toBeInTheDocument();
     fireEvent.dragStart(playerRow);
     const crewTwoCard = screen.getByTestId("crew-card-1");
     fireEvent.dragOver(crewTwoCard);
