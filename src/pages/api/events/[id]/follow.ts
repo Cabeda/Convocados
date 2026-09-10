@@ -133,14 +133,8 @@ export const DELETE: APIRoute = async ({ params, request }) => {
 
   const eventId = params.id ?? "";
 
-  // ponytail: can't unfollow while on the player list — leave the game first.
-  const isPlayer = await prisma.player.count({
-    where: { eventId, userId, archivedAt: null },
-  }) > 0;
-  if (isPlayer) {
-    return Response.json({ error: "Leave the player list to unfollow." }, { status: 409 });
-  }
-
+  // ADR 0003: a player who joins but later unfollows explicitly opts out of
+  // notifications while keeping their spot on the roster. Do not block them.
   await prisma.eventFollow.deleteMany({ where: { eventId, userId } });
   return Response.json({ ok: true, following: false });
 };

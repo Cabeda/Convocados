@@ -23,50 +23,51 @@ export const GET: APIRoute = async ({ params, request }) => {
   const url = new URL(request.url);
   const { limit, cursor } = parsePaginationParams(url);
 
-  const history = await prisma.gameHistory.findMany({
-    where: { eventId: params.id },
-    orderBy: { dateTime: "desc" },
-    take: limit + 1,
-    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-  });
+  // The merged timeline is GameHistory + played Game rows, ordered by dateTime.
+  // Take `limit + 1` from each side after the cursor and merge in memory: the
+  // top N of the union is always contained in the top N of each side, so the
+  // endpoint never has to load the whole event. The cursor may point at either
+  // table, so resolve it to its dateTime first.
+  let cursorDate: Date | null = null;
+  if (cursor) {
+    const [historyCursor, gameCursor] = await Promise.all([
+      prisma.gameHistory.findFirst({ where: { id: cursor, eventId: params.id }, select: { dateTime: true } }),
+      prisma.game.findFirst({ where: { id: cursor, eventId: params.id }, select: { dateTime: true } }),
+    ]);
+    cursorDate = historyCursor?.dateTime ?? gameCursor?.dateTime ?? null;
+  }
+  const dateFilter = cursorDate ? { dateTime: { lt: cursorDate } } : {};
 
-  // ADR 0016: also include Game rows with status "played" (new model)
-  const playedGames = await prisma.game.findMany({
-    where: { eventId: params.id, status: "played" },
-    include: {
-      participants: {
-        where: { archivedAt: null },
-        include: { eventPlayer: { select: { id: true, name: true } } },
-        orderBy: { order: "asc" },
+  const [history, playedGames] = await Promise.all([
+    prisma.gameHistory.findMany({
+      where: { eventId: params.id, ...dateFilter },
+      orderBy: { dateTime: "desc" },
+      take: limit + 1,
+    }),
+    // ADR 0016: also include Game rows with status "played" (new model)
+    prisma.game.findMany({
+      where: { eventId: params.id, status: "played", ...dateFilter },
+      include: {
+        participants: {
+          where: { archivedAt: null },
+          include: { eventPlayer: { select: { id: true, name: true } } },
+          orderBy: { order: "asc" },
+        },
+        payments: {
+          where: { archivedAt: null },
+          include: { eventPlayer: { select: { name: true } } },
+        },
+        payerEventPlayer: { select: { id: true, name: true } },
       },
-      payments: {
-        where: { archivedAt: null },
-        include: { eventPlayer: { select: { name: true } } },
-      },
-      payerEventPlayer: { select: { id: true, name: true } },
-    },
-    orderBy: { dateTime: "desc" },
-  });
+      orderBy: { dateTime: "desc" },
+      take: limit + 1,
+    }),
+  ]);
 
-  // Per-game payment config (mode + payer + participant rows) so the history
-  // page can re-open the "who paid this game?" dialog and switch the mode back
-  // (e.g. an accidental "each one" → tracked) on a past game.
   const eventCost = await prisma.eventCost.findUnique({
     where: { eventId: params.id },
     select: { totalAmount: true, currency: true },
   });
-  const totalFor = (g: (typeof playedGames)[number]) => g.costTotalAmount ?? eventCost?.totalAmount ?? 0;
-  const paymentConfigByDate = new Map<string, unknown>();
-  for (const g of playedGames) {
-    paymentConfigByDate.set(g.dateTime.toISOString(), {
-      gameId: g.id,
-      mode: (g.paymentMode as PaymentMode | null) ?? "tracked",
-      payerName: g.payerEventPlayer?.name ?? g.payerExternalName,
-      payerIsPlayer: !!g.payerEventPlayer,
-      hasCost: totalFor(g) > 0,
-      rows: buildSettlementRows(g, g.participants, totalFor(g), event.maxPlayers),
-    });
-  }
 
   // ADR 0016: live Games store team membership in the event-level teamResults
   // (not in the Game row). Snapshot them so the UI can render the players that
@@ -84,10 +85,12 @@ export const GET: APIRoute = async ({ params, request }) => {
       )
     : null;
 
-  // Fetch ALL history for ELO replay (needed for accurate deltas)
+  // ELO deltas need a replay from the first game, so all rows are still read —
+  // but only the columns the replay touches.
   const allHistory = await prisma.gameHistory.findMany({
     where: { eventId: params.id },
     orderBy: { dateTime: "asc" },
+    select: { id: true, status: true, scoreOne: true, scoreTwo: true, teamsSnapshot: true, dateTime: true },
   });
   const eloMap = computeHistoryDeltas(allHistory);
 
@@ -157,12 +160,34 @@ export const GET: APIRoute = async ({ params, request }) => {
   const legacyDateTimes = new Set(dedupedLegacy.map((h) => h.dateTime));
   const dedupedGames = gameMapped.filter((g) => !legacyDateTimes.has(g.dateTime));
   const merged = [...dedupedLegacy, ...dedupedGames]
-    .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime())
-    .map((entry) => ({ ...entry, paymentConfig: paymentConfigByDate.get(entry.dateTime) ?? null }));
+    .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
+
+  const page = merged.slice(0, limit + 1);
+
+  // Per-game payment config (mode + payer + participant rows) so the history
+  // page can re-open the "who paid this game?" dialog on a past game. Only the
+  // page's Game rows are loaded, which is enough: a GameHistory entry and its
+  // source Game share a dateTime, so the Game is in the page window whenever
+  // the GameHistory is.
+  const totalFor = (g: (typeof playedGames)[number]) => g.costTotalAmount ?? eventCost?.totalAmount ?? 0;
+  const paymentConfigByDate = new Map<string, unknown>();
+  for (const g of playedGames) {
+    paymentConfigByDate.set(g.dateTime.toISOString(), {
+      gameId: g.id,
+      mode: (g.paymentMode as PaymentMode | null) ?? "tracked",
+      payerName: g.payerEventPlayer?.name ?? g.payerExternalName,
+      payerIsPlayer: !!g.payerEventPlayer,
+      hasCost: totalFor(g) > 0,
+      rows: buildSettlementRows(g, g.participants, totalFor(g), event.maxPlayers),
+    });
+  }
+  const pageWithConfig = page.map((entry) => ({
+    ...entry,
+    paymentConfig: paymentConfigByDate.get(entry.dateTime) ?? null,
+  }));
 
   // Ship each page entry's MVP summary with the list response. The card used to
   // fetch /history/[id]/mvp per card — an N+1 that scaled with the page size.
-  const page = merged.slice(0, limit + 1);
   const gameHistoryIds = new Set(allHistory.map((h) => h.id));
   const session = await getSession(request);
   const mvpMap = await buildMvpSummaries(
@@ -171,10 +196,10 @@ export const GET: APIRoute = async ({ params, request }) => {
       durationMinutes: event.durationMinutes ?? null,
       mvpEnabled: event.mvpEnabled ?? null,
     },
-    page.filter((entry) => gameHistoryIds.has(entry.id)),
+    pageWithConfig.filter((entry) => gameHistoryIds.has(entry.id)),
     session,
   );
-  const withMvp = page.map((entry) => ({
+  const withMvp = pageWithConfig.map((entry) => ({
     ...entry,
     mvp: gameHistoryIds.has(entry.id) ? (mvpMap.get(entry.id) ?? null) : null,
   }));

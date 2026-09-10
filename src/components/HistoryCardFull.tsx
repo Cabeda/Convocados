@@ -33,6 +33,7 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import EventIcon from "@mui/icons-material/Event";
 import LoginIcon from "@mui/icons-material/Login";
 import HistoryIcon from "@mui/icons-material/History";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { useT } from "~/lib/useT";
 import { detectLocale, type TFunction } from "~/lib/i18n";
 import { matchesWithName } from "~/lib/stringMatch";
@@ -306,7 +307,7 @@ export function TennisScoreBand({
   );
 }
 
-function MobileScoreCard({
+function MobileScoreColumn({
   teamName,
   value,
   onChange,
@@ -326,30 +327,23 @@ function MobileScoreCard({
   const theme = useTheme();
   const numValue = Math.max(0, parseInt(value || "0", 10) || 0);
   return (
-    <Box
-      sx={{
-        p: 1.5,
-        borderRadius: 3,
-        border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
-        backgroundColor: alpha(theme.palette.action.hover, 0.04),
-      }}
-    >
-      <Typography variant="subtitle1" fontWeight={700} align="center" noWrap sx={{ mb: 1 }}>
+    <Stack alignItems="center" spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
+      <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ maxWidth: "100%" }}>
         {teamName}
       </Typography>
-      <Stack direction="row" alignItems="center" justifyContent="center" spacing={2}>
+      <Stack direction="row" alignItems="center" spacing={0.5}>
         <IconButton
           data-testid={minusTestId}
           aria-label={decreaseLabel}
           onClick={() => onChange(String(Math.max(0, numValue - 1)))}
           disabled={numValue <= 0}
-          sx={{ width: 56, height: 56, border: `1px solid ${theme.palette.divider}` }}
+          sx={{ width: 44, height: 44, border: `1px solid ${theme.palette.divider}` }}
         >
           <RemoveIcon />
         </IconButton>
         <Typography
           sx={{
-            fontSize: "3rem",
+            fontSize: "2.25rem",
             fontWeight: 800,
             fontVariantNumeric: "tabular-nums",
             lineHeight: 1,
@@ -364,12 +358,12 @@ function MobileScoreCard({
           aria-label={increaseLabel}
           color="primary"
           onClick={() => onChange(String(numValue + 1))}
-          sx={{ width: 56, height: 56, backgroundColor: alpha(theme.palette.primary.main, 0.12) }}
+          sx={{ width: 44, height: 44, backgroundColor: alpha(theme.palette.primary.main, 0.12) }}
         >
           <AddIcon />
         </IconButton>
       </Stack>
-    </Box>
+    </Stack>
   );
 }
 
@@ -389,6 +383,7 @@ export function HistoryCardFull({
   userName,
   eventPlayers: _eventPlayers,
   onPaymentsConfigSaved,
+  gameHref,
 }: {
   entry: HistoryCardFullEntry;
   eventId: string;
@@ -405,6 +400,7 @@ export function HistoryCardFull({
   userName: string | null;
   eventPlayers?: { id: string; name: string }[];
   onPaymentsConfigSaved?: () => void;
+  gameHref?: string;
 }) {
   const t = useT();
   const locale = detectLocale();
@@ -822,6 +818,19 @@ export function HistoryCardFull({
           </Stack>
 
           <Stack direction="row" spacing={0.25} alignItems="center">
+            {gameHref && (
+              <Tooltip title={t("openGame")}>
+                <IconButton
+                  size="small"
+                  component="a"
+                  href={gameHref}
+                  data-testid="open-game-link"
+                  aria-label={t("openGame")}
+                >
+                  <OpenInNewIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             {isPlayAdmin && (
               <>
                 <Tooltip title={entry.isFriendly ? t("markCompetitive") : t("markFriendly")}>
@@ -880,8 +889,13 @@ export function HistoryCardFull({
           </Typography>
         </Stack>
 
-        {/* Meta row: location + cost + share + source */}
-        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ mt: 0.5, rowGap: 0.5 }}>
+        {/* Meta row: location + cost + share + source. Stacked and left-aligned
+            on mobile so each piece of game info gets its own line. */}
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          flexWrap="wrap"
+          sx={{ mt: 0.5, alignItems: { xs: "flex-start", sm: "center" }, gap: { xs: 0.5, sm: 2 }, rowGap: 0.5 }}
+        >
           {entry.source === "historical" && (
             <Tooltip title={t("historicalGame")}>
               <Chip icon={<HistoryIcon color="primary" />} label={t("historicalGame")}
@@ -892,7 +906,7 @@ export function HistoryCardFull({
             <Tooltip title={t("getDirections")}>
               <a href={mapsUrl(event.location, event.latitude, event.longitude)}
                 target="_blank" rel="noopener noreferrer"
-                style={{ color: "inherit", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0, maxWidth: "60%" }}>
+                style={{ color: "inherit", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0, maxWidth: "100%" }}>
                 <LocationOnIcon fontSize="small" sx={{ color: "primary.main", flexShrink: 0 }} />
                 <Typography variant="body2" color="text.secondary" noWrap sx={{ textDecoration: "underline", textDecorationStyle: "dotted" }}>
                   {event.location}
@@ -959,8 +973,15 @@ export function HistoryCardFull({
               />
             )}
             {!isTennisScoring && (isMobile && canEditScore ? (
-              <Stack data-testid="mobile-score-editor" spacing={1.5}>
-                <MobileScoreCard
+              <Stack
+                data-testid="mobile-score-editor"
+                direction="row"
+                alignItems="center"
+                justifyContent="center"
+                spacing={1}
+                sx={{ width: "100%" }}
+              >
+                <MobileScoreColumn
                   teamName={entry.teamOneName}
                   value={scoreOne}
                   onChange={setScoreOne}
@@ -969,7 +990,8 @@ export function HistoryCardFull({
                   decreaseLabel={t("decreaseScore", { team: entry.teamOneName })}
                   increaseLabel={t("increaseScore", { team: entry.teamOneName })}
                 />
-                <MobileScoreCard
+                <Typography variant="h6" color="text.disabled" fontWeight={300}>–</Typography>
+                <MobileScoreColumn
                   teamName={entry.teamTwoName}
                   value={scoreTwo}
                   onChange={setScoreTwo}

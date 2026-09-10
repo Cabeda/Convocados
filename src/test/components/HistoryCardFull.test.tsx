@@ -551,7 +551,7 @@ describe("HistoryCardFull — mobile score editor", () => {
     window.matchMedia = originalMatchMedia;
   });
 
-  it("renders stacked per-team score cards with one plus/minus per team", () => {
+  it("renders side-by-side per-team score controls with one plus/minus per team", () => {
     renderCard();
     expect(screen.getByTestId("mobile-score-editor")).toBeInTheDocument();
     expect(screen.getAllByTestId(/score-plus/)).toHaveLength(2);
@@ -630,6 +630,36 @@ describe("HistoryCardFull — MVP data from list", () => {
       const urls = fetchMock.mock.calls.map((c) => String(c[0]));
       expect(urls.some((u) => u.includes("/mvp"))).toBe(true);
     });
+  });
+});
+
+describe("HistoryCardFull — single game link", () => {
+  it("shows an open-game link when gameHref is provided", () => {
+    mockUseSession.mockReturnValue({ data: { user: { id: "u-1", name: "João Fernandes" } }, isPending: false });
+    renderWithTheme(
+      <HistoryCardFull
+        entry={baseEntry}
+        eventId="evt-1"
+        event={event}
+        cost={cost}
+        mvp={mvp}
+        isOwner={false}
+        isAdmin={false}
+        isAuthenticated
+        userName="João Fernandes"
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        knownPlayers={[]}
+        playerRatings={[]}
+        gameHref="/events/evt-1/games/h-1"
+      />,
+    );
+    expect(screen.getByTestId("open-game-link")).toHaveAttribute("href", "/events/evt-1/games/h-1");
+  });
+
+  it("hides the open-game link by default", () => {
+    renderCard();
+    expect(screen.queryByTestId("open-game-link")).not.toBeInTheDocument();
   });
 });
 

@@ -16,6 +16,7 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import CrewProposalPanel from "./CrewProposalPanel";
+import { LeaderboardTables, type LeaderboardPayload } from "./LeaderboardTables";
 
 interface Member {
   membershipId: string;
@@ -50,6 +51,7 @@ interface SeasonPayload {
   viewerEventPlayerId?: string | null;
   viewerMembership?: { id: string; status: string; eventPlayerId: string } | null;
   registrationOpen?: boolean;
+  leaderboard?: LeaderboardPayload | null;
 }
 
 interface MemberCandidate {
@@ -72,6 +74,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const [seasonName, setSeasonName] = useState("");
   const [opensAt, setOpensAt] = useState("");
   const [closesAt, setClosesAt] = useState("");
+  const [leaderboard, setLeaderboard] = useState<LeaderboardPayload | null>(null);
   const [crewCount, setCrewCount] = useState(2);
   const [crews, setCrews] = useState<CrewDraft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,6 +101,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       setSeasonName(nextSeason.name);
       setOpensAt(toDateInput(nextSeason.registrationOpensAt));
       setClosesAt(toDateInput(nextSeason.registrationClosesAt));
+      setLeaderboard(nextSeason.leaderboard ?? null);
       if (nextSeason.activeMembers) {
         const nextCrews = nextSeason.crews.map((crew) => ({
           id: crew.id,
@@ -155,7 +159,6 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const savedCrews = season?.crews ?? [];
   const qualifyingCrewCount = savedCrews.filter((crew) => crew.members.length >= 3 && crew.members.length <= 5).length;
   const activationReady = qualifyingCrewCount >= 3 && members.length >= 9;
-  const leaderboardHref = `/events/${eventId}/history?seasonId=${seasonId}`;
 
   const recommend = async () => {
     setBusy("recommend");
@@ -472,8 +475,8 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                       </Typography>
                     </Box>
                     <Stack direction="row" spacing={1}>
-                      <Button variant="outlined" component="a" href={leaderboardHref}>
-                        {t("viewLeaderboard")}
+                      <Button variant="outlined" component="a" href={`/events/${eventId}/history`}>
+                        {t("viewHistory")}
                       </Button>
                       {isRegistration && (
                         <Button
@@ -505,6 +508,15 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
               </Button>
             )}
             {season.status === "registration" && <CrewProposalPanel eventId={eventId} seasonId={seasonId} onCrewApproved={() => setupDraftDirtyRef.current ? undefined : load()} />}
+
+            <LeaderboardTables
+              data={leaderboard}
+              loading={false}
+              selectedScopeId={seasonId}
+              seasonOptions={[]}
+              onScopeChange={() => {}}
+              eventId={eventId}
+            />
 
             {!isAdmin ? (
               <Stack spacing={2}>

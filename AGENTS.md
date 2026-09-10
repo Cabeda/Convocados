@@ -61,6 +61,23 @@ that ships on one platform ships on the others in the **same PR** or an explicit
 follow-up ticket (Wear included where the affordance exists). No "web-only" or "app-only"
 UI drift.
 
+### 5. Coverage Thresholds Are a Ratchet (Never Cheat the Gate)
+The coverage thresholds in `vitest.config.ts` (`thresholds.lines`, `.statements`,
+`.functions`, `.branches`) are a **floor, never a ceiling**. They may only move **up**.
+
+**NEVER lower a coverage threshold to make a failing gate pass.** Nor may you achieve the
+same effect by proxy: deleting or `.skip`-ing failing tests, reaching for coverage
+`exclude` entries or `/* c8 ignore */`-style suppressions, or weakening assertions so a
+test passes without exercising the branch. That is cheating on the tests, and it is
+forbidden.
+
+- If coverage drops, write tests that cover the gap, then **raise** the thresholds to the
+  new measured values.
+- If a path is genuinely unreachable, document it in `docs/coverage.md`; do not silently
+  exclude it.
+- Lowering any threshold requires explicit written justification **and** the user's
+  approval, stated in the PR description. Absent that, a lowered threshold is a bug.
+
 ## Development Workflow
 
 ### First-time setup
@@ -401,6 +418,7 @@ Before submitting a PR:
 - [ ] Lint passes (`npm run lint -- --max-warnings 259`)
 - [ ] All tests pass (`npm run test`)
 - [ ] Type checking passes (`npm run typecheck`)
+- [ ] Coverage thresholds only raised, never lowered (see Core Principle 5)
 - [ ] i18n strings added to all 6 locales
 - [ ] Platform parity considered (web ↔ Android apps)
 - [ ] Database migrations included (if schema changed)
