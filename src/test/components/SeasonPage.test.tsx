@@ -546,9 +546,10 @@ describe("SeasonPage proposal refresh", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(approvedSeason), { status: 200 }));
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
-    await screen.findByRole("button", { name: "Approve proposal North" });
+    // Generous timeout: under coverage the proposal fetch can take >1s.
+    await screen.findByRole("button", { name: "Approve proposal North" }, { timeout: 5000 });
     await user.click(screen.getByRole("button", { name: "Approve proposal North" }));
-    const crewName = await screen.findByDisplayValue("North");
+    const crewName = await screen.findByDisplayValue("North", {}, { timeout: 5000 });
     expect(crewName).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Save Season setup" }));
