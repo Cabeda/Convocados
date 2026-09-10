@@ -103,8 +103,10 @@ test.describe("Crew Season setup — full happy path", () => {
     // Seasons require a competitive (ELO + balanced) event.
     sql(`UPDATE Event SET eloEnabled = 1, balanced = 1 WHERE id = '${eventId}'`);
 
-    // ── 3. Nine account-linked players with ratings ───────────────────────
-    const names = Array.from({ length: 9 }, (_, i) => `E2EPlayer${i}`);
+    // ── 3. Ten account-linked players with ratings ──────────────────────
+    // The tenth has no recent games, so bulk-enroll skips them and the UI
+    // autocomplete can enroll them into a specific Crew instead.
+    const names = Array.from({ length: 10 }, (_, i) => `E2EPlayer${i}`);
     for (const [index, name] of names.entries()) {
       const userId = `e2e-crew-user-${stamp}-${index}`;
       sql(
@@ -141,17 +143,20 @@ test.describe("Crew Season setup — full happy path", () => {
     await expect(page.getByLabel("Season starting date")).toHaveValue(opens);
 
     // ── 5. Enroll the nine players via "Add recent players" ─────────────
-    // A recent game with all players attending, so the bulk endpoint finds them.
+    // A recent game with nine attending. (Adding a player auto-joins them to
+    // the current game roster, so clear those rows first for determinism.)
+    sql(`DELETE FROM GameParticipant WHERE eventPlayerId IN (SELECT id FROM EventPlayer WHERE eventId = '${eventId}')`);
     const playersJson = sqlGet(
-      `SELECT json_group_array(json_object('id', id, 'userId', userId)) FROM EventPlayer WHERE eventId = '${eventId}'`,
+      `SELECT json_group_array(json_object('id', id, 'userId', userId)) FROM (SELECT id, userId FROM EventPlayer WHERE eventId = '${eventId}' ORDER BY rowid)`,
     );
     const players = JSON.parse(playersJson) as Array<{ id: string; userId: string }>;
-    expect(players).toHaveLength(9);
+    expect(players).toHaveLength(10);
     sql(
       `INSERT INTO Game (id, eventId, dateTime, status, createdAt, updatedAt) ` +
-        `VALUES ('e2e-game-${stamp}', '${eventId}', datetime('now'), 'played', datetime('now'), datetime('now'))`,
+        `VALUES ('e2e-game-${stamp}', '${eventId}', ${Date.now()}, 'played', datetime('now'), datetime('now'))`,
     );
-    for (const [index, player] of players.entries()) {
+    // Only the first nine attended: E2EPlayer9 stays out for the autocomplete step.
+    for (const [index, player] of players.slice(0, 9).entries()) {
       sql(
         `INSERT INTO GameParticipant (id, gameId, eventPlayerId, status, createdAt) ` +
           `VALUES ('e2e-gp-${stamp}-${index}', 'e2e-game-${stamp}', '${player.id}', 'active', datetime('now'))`,
@@ -208,6 +213,13 @@ test.describe("Crew Season setup — full happy path", () => {
     // Sizes stay 3/3/3: the swap keeps every Crew valid for saving.
     expect(await page.getByTestId("crew-card-0").getByTestId(/member-row-/).count()).toBe(3);
     expect(await page.getByTestId("crew-card-1").getByTestId(/member-row-/).count()).toBe(3);
+
+    // ── 8b. Enroll the tenth player straight into Crew 1 via search ───────
+    await page.getByRole("combobox", { name: "Add player to Crew 1" }).click();
+    await page.getByRole("combobox", { name: "Add player to Crew 1" }).fill("E2EPlayer9");
+    await page.getByRole("option", { name: "E2EPlayer9" }).click();
+    await expect(page.getByText("Added E2EPlayer9 to Crew 1.")).toBeVisible({ timeout: 10_000 });
+    expect(await page.getByTestId("crew-card-0").getByTestId(/member-row-/).count()).toBe(4);
 
     // ── 9. Save the setup ─────────────────────────────────────────────────
     await submitExpecting(

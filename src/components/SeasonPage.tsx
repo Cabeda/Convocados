@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect -- Async server data initializes local form state. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
+  Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
   FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from "@mui/material";
 import GroupsIcon from "@mui/icons-material/Groups";
@@ -52,6 +52,14 @@ interface SeasonPayload {
   registrationOpen?: boolean;
 }
 
+interface MemberCandidate {
+  eventPlayerId: string;
+  name: string;
+  hasAccount: boolean;
+  gamesPlayed: number;
+  memberStatus: string | null;
+}
+
 function toDateInput(value: string | null) {
   return value ? value.slice(0, 10) : "";
 }
@@ -65,9 +73,11 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const [crewCount, setCrewCount] = useState(2);
   const [crews, setCrews] = useState<CrewDraft[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | null>(null);
+  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | "enroll" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [candidates, setCandidates] = useState<MemberCandidate[]>([]);
+  const candidatesLoadedRef = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [draggingMembershipId, setDraggingMembershipId] = useState<string | null>(null);
 
@@ -278,6 +288,48 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     }
   };
 
+  const loadCandidates = async () => {
+    if (candidatesLoadedRef.current) return;
+    candidatesLoadedRef.current = true;
+    try {
+      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/memberships/candidates`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return;
+      setCandidates(Array.isArray(data.players) ? data.players : []);
+    } catch {
+      // Non-fatal: the autocomplete simply stays empty.
+    }
+  };
+
+  const enrollMember = async (eventPlayerId: string, crewIndex: number | null) => {
+    setBusy("enroll");
+    setError(null);
+    setNotice(null);
+    try {
+      const draftCrew = crewIndex === null ? null : crews[crewIndex] ?? null;
+      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/memberships`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventPlayerId, crewId: draftCrew?.id ?? null }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { setError(data.error ?? t("seasonMembershipError")); return; }
+      const membershipId = (data.membership as { id?: unknown } | undefined)?.id;
+      const candidate = candidates.find((entry) => entry.eventPlayerId === eventPlayerId);
+      const displayName = candidate?.name ?? "";
+      setCandidates((current) => current.filter((entry) => entry.eventPlayerId !== eventPlayerId));
+      if (typeof membershipId === "string" && crewIndex !== null) moveMember(membershipId, crewIndex);
+      setNotice(draftCrew
+        ? t("playerAddedToCrew", { name: displayName, crew: draftCrew.name })
+        : t("playerAddedUnassigned", { name: displayName }));
+      await refreshMembers();
+    } catch {
+      setError(t("seasonMembershipError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const rename = (index: number, name: string) => {
     setupDraftDirtyRef.current = true;
     setCrews((current) => current.map((crew, crewIndex) => crewIndex === index ? { ...crew, name } : crew));
@@ -462,6 +514,13 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                                 if (!member) return null;
                                 return <MemberAssignment key={membershipId} member={member} crews={crews} currentCrewIndex={index} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} />;
                               })}
+                              <CrewMemberAutocomplete
+                                label={t("addPlayerToCrew", { crew: crew.name })}
+                                candidates={candidates.filter((candidate) => candidate.memberStatus !== "active")}
+                                disabled={busy !== null}
+                                onOpen={() => void loadCandidates()}
+                                onSelect={(eventPlayerId) => void enrollMember(eventPlayerId, index)}
+                              />
                             </Stack>
                           </CardContent>
                         </Card>
@@ -485,6 +544,13 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                       <Stack spacing={1} sx={{ mt: 1 }}>
                         {unassigned.map((member) => <MemberAssignment key={member.membershipId} member={member} crews={crews} currentCrewIndex={null} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} />)}
                       </Stack>
+                      <CrewMemberAutocomplete
+                        label={t("addPlayer")}
+                        candidates={candidates.filter((candidate) => candidate.memberStatus !== "active")}
+                        disabled={busy !== null}
+                        onOpen={() => void loadCandidates()}
+                        onSelect={(eventPlayerId) => void enrollMember(eventPlayerId, null)}
+                      />
                     </CardContent>
                   </Card>
                 )}
@@ -534,5 +600,37 @@ function MemberAssignment({ member, crews, currentCrewIndex, onMove, onDragStart
         </Select>
       </FormControl>
     </Stack>
+  );
+}
+
+function CrewMemberAutocomplete({ label, candidates, disabled, onOpen, onSelect }: {
+  label: string;
+  candidates: MemberCandidate[];
+  disabled: boolean;
+  onOpen: () => void;
+  onSelect: (eventPlayerId: string) => void;
+}) {
+  const t = useT();
+  const [value, setValue] = useState<MemberCandidate | null>(null);
+  return (
+    <Autocomplete
+      size="small"
+      options={candidates}
+      getOptionLabel={(option) => (option.hasAccount ? option.name : `${option.name} ${t("noAccountSuffix")}`)}
+      getOptionDisabled={(option) => !option.hasAccount}
+      isOptionEqualToValue={(option, selected) => option.eventPlayerId === selected.eventPlayerId}
+      value={value}
+      disabled={disabled}
+      onOpen={onOpen}
+      onChange={(_, selected) => {
+        if (selected && selected.hasAccount) {
+          setValue(null);
+          onSelect(selected.eventPlayerId);
+        }
+      }}
+      renderInput={(params) => <TextField {...params} label={label} size="small" />}
+      noOptionsText={t("noMatchingPlayers")}
+      sx={{ mt: 1 }}
+    />
   );
 }
