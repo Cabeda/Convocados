@@ -19,6 +19,12 @@
 *.db-wal
 *.db-shm
 
+# per-worktree preview port cache (see scripts/dev.sh)
+.dev-port
+
+# local git worktrees used for parallel previews
+.worktrees/
+
 # env
 .env
 .env.local
