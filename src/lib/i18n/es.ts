@@ -117,6 +117,8 @@ const es: TranslationKeys = {
   teamViewToggleLabel: "Vista de equipos",
   teamViewList: "Lista",
   teamViewField: "Campo",
+  formation: "Formación",
+  unplacedPlayers: "Sin posición",
   vs: "vs",
   rerandomizeTitle: "¿Sortear equipos de nuevo?",
   rerandomizeDesc: "Los equipos ya fueron definidos. Sortear de nuevo reemplazará la asignación actual.",

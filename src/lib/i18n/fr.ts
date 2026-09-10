@@ -117,6 +117,8 @@ const fr: TranslationKeys = {
   teamViewToggleLabel: "Vue des équipes",
   teamViewList: "Liste",
   teamViewField: "Terrain",
+  formation: "Formation",
+  unplacedPlayers: "Non placé",
   vs: "vs",
   rerandomizeTitle: "Retirer les équipes au sort ?",
   rerandomizeDesc: "Les équipes ont déjà été définies. Un nouveau tirage remplacera la répartition actuelle.",

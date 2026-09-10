@@ -117,6 +117,8 @@ const it: TranslationKeys = {
   teamViewToggleLabel: "Vista squadre",
   teamViewList: "Elenco",
   teamViewField: "Campo",
+  formation: "Formazione",
+  unplacedPlayers: "Non schierato",
   vs: "vs",
   rerandomizeTitle: "Sorteggiare di nuovo le squadre?",
   rerandomizeDesc: "Le squadre sono già state definite. Un nuovo sorteggio sostituirà l'assegnazione attuale.",

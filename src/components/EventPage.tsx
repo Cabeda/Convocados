@@ -453,7 +453,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
     if (event.teamResults.length > 0) {
       setLocalMatches(event.teamResults.map((tr) => ({
         team: tr.name,
-        players: tr.members.map((m) => ({ name: m.name, order: m.order })),
+        formation: tr.formation ?? null,
+        players: tr.members.map((m) => ({ name: m.name, order: m.order, slot: m.slot ?? null })),
       })));
     } else {
       setLocalMatches(null);
@@ -1252,6 +1253,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       onResultChange={handleTeamChange}
                       shuffleKey={shuffleVersion}
                       ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
+                      sport={event.sport}
                     />
                   )}
                 </Stack>

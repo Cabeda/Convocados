@@ -54,6 +54,8 @@ teams:
     balanced-randomize: { web: true, android: true, wearos: false }
     manual-drag-assign: { web: true, android: true, wearos: false }
     view-teams: { web: true, android: true, wearos: true }
+    field-view: { web: true, android: false, wearos: false }
+    player-positions: { web: true, android: false, wearos: false }
 
 score-tracking:
   web: true
