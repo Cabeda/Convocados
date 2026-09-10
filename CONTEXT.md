@@ -26,7 +26,7 @@ A Game has a lifecycle: `upcoming → in_progress → played | cancelled`. Trans
 _Avoid_: event (when referring to a single occurrence), instance, occurrence (code uses `Game` exclusively)
 
 ## Friendly Game
-A Game marked with `isFriendly: true` by the Owner/Admin. Friendly Games are excluded from ELO calculations. All other mechanics (attendance, payments, MVP voting, stats counting) remain unchanged. Settable at any time — before, during, or after the Game. Toggling retroactively triggers ELO reprocessing for the Event.
+A Game marked with `isFriendly: true` by the Owner/Admin. Friendly Games are excluded from Skill Rating calculations. All other mechanics (attendance, payments, MVP voting, stats counting) remain unchanged. Settable at any time — before, during, or after the Game. Toggling retroactively triggers Skill Rating reprocessing for the Event.
 
 Use cases: casual sessions with guests, holiday matches, unbalanced rosters, first-timer introductions.
 _Avoid_: exhibition, practice, scrimmage
@@ -34,8 +34,8 @@ _Avoid_: exhibition, practice, scrimmage
 ## Season
 A bounded, optional competition within an **Event**. Account-linked **EventPlayers** join explicitly during registration. Eligible non-friendly **Games** contribute results for participating players, while non-participants in those Games remain absent from Season standings.
 
-A Season moves through registration, active competition, result review, and completion, or is cancelled. It resets its own standings and awards but never resets the Event's long-lived ELO, which continues to support team balancing across Seasons. An Event has at most one Season that has not completed or been cancelled.
-_Avoid_: league (a possible competition format, not the time boundary), ELO season
+A Season moves through registration, active competition, result review, and completion, or is cancelled. It soft-resets each participant's **Season Rank** and resets its own standings and awards, but never resets the Event's long-lived **Skill Rating**, which continues to support team balancing across Seasons. An Event has at most one Season that has not completed or been cancelled.
+_Avoid_: league (a possible competition format, not the time boundary), Skill Rating season
 
 ## Crew
 A named, Season-specific group of three to five confirmed **Season** participants competing as one entry in the Season standings. Players form Crews themselves; unassigned participants may enter registration as free agents.
@@ -49,11 +49,27 @@ _Avoid_: fixture (Games are not scheduled specifically for the Season), matchday
 
 ## Season Contribution
 The 3, 1, or 0 points earned by a confirmed **Crew** member for a win, draw, or loss in a **Season Round**. Only players assigned to an immutable match-team lineup contribute. Bench and payment-only participants do not.
-_Avoid_: ELO points, individual Season score
+_Avoid_: Skill Rating points, individual Season score
 
 ## Crew Round Score
 The arithmetic mean of all Season Contributions earned by one **Crew** in a **Season Round**, or zero when no member contributes. A Crew's standing totals its best six Crew Round Scores from the eight-round Season.
-_Avoid_: team score (the Game's goals or sets), Crew ELO
+_Avoid_: team score (the Game's goals or sets), Crew Rank
+
+## Skill Rating
+The hidden, per-Event Elo value (`EventPlayer.rating`, today backed by the legacy `PlayerRating` store) that estimates a player's long-run skill. Seeded at 1000, symmetric (K=48 under six games, 32 after), unbounded, and never reset. Drives team balancing; never feeds **Season Rank**'s expected-score math or any matchmaking.
+_Avoid_: ELO (the formula's name, not the value), MMR, Season Rank
+
+## Season Rank
+The visible, 0-based progression number a player earns within a **Season**, displayed floored at 0 and grouped into **Tiers**. Seeded from **Skill Rating**, moves by `K × (outcome − expected)` against opponents' Skill Rating, and soft-resets each Season toward the player's Skill Rating baseline.
+_Avoid_: ELO, MMR, rating, points
+
+## Tier
+A named band of **Season Rank**: Bronze, Silver, Gold, Platinum, Diamond, Master. Bands are absolute, fixed at launch, and the top band is open-ended.
+_Avoid_: rank, division, league, medal
+
+## Provisional
+A player's first three **Season Rounds**, during which no **Tier** is shown because the **Season Rank** is still calibrating.
+_Avoid_: placement, calibration, unranked
 
 ## Open Pickup
 An un-adopted one-off Event+Game sourced from a Playtomic booking (`source=playtomic`), created automatically by the sweep when a court slot is detected as booked. Public (`isPublic=true`), no Owner (`ownerId=null`), no players yet. A notice that people play here at this court and time — a lead for organizing, not a real game. Rendered distinctly in the public listing (badge + no roster/join UI). Joining is blocked until someone Adopts.
@@ -63,7 +79,7 @@ _Avoid_: synthetic game, beacon, phantom game
 A participation record in a specific **Game** (via `GameParticipant`). The per-game row that tracks order/position. Linked to an **EventPlayer** (the persistent series identity). A pending invitation is not yet a Player; "joined" means having an active GameParticipant record in the current Game.
 
 ## EventPlayer
-The persistent identity of a participant within an **Event** series. One per person per Event. Holds the name, optional `userId` link, cached ELO rating, and win/loss/attendance counters. Either anonymous (name-keyed, no userId) or authenticated (userId-linked).
+The persistent identity of a participant within an **Event** series. One per person per Event. Holds the name, optional `userId` link, cached Skill Rating, and win/loss/attendance counters. Either anonymous (name-keyed, no userId) or authenticated (userId-linked).
 
 Anonymous EventPlayers can be **claimed** by an authenticated User, inheriting all history. Claim is blocked if any Game overlap exists between the two identities.
 
@@ -107,7 +123,7 @@ _Avoid_: merging (that is the owner-driven duplicate-name tool), upgrading
 The User who created the Game or to whom ownership was transferred. Has full management control. A Game has exactly zero or one Owner.
 
 ## Admin
-A User granted management privileges for a Game by the Owner (via `EventAdmin`). Can edit teams, archive players, approve ELO, etc. Has no ownership rights.
+A User granted management privileges for a Game by the Owner (via `EventAdmin`). Can edit teams, archive players, approve Skill Rating, etc. Has no ownership rights.
 
 ## Adopt
 The action of taking over an Open Pickup: an authenticated User claims the event, becoming its Owner. The event then behaves as an ordinary Event+Game and stays public unless the new Owner opts into privacy (sets a password via settings). Followers and joiners are notified on adoption. Distinct from Claim (anonymous EventPlayer identity claim).
