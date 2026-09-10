@@ -5,6 +5,7 @@ import {
   FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from "@mui/material";
 import GroupsIcon from "@mui/icons-material/Groups";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import RecommendIcon from "@mui/icons-material/Recommend";
 import SaveIcon from "@mui/icons-material/Save";
 import AddIcon from "@mui/icons-material/Add";
@@ -64,9 +65,10 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const [crewCount, setCrewCount] = useState(2);
   const [crews, setCrews] = useState<CrewDraft[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | null>(null);
+  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [draggingMembershipId, setDraggingMembershipId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -229,6 +231,53 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
     }
   };
 
+  // Refresh the participant list without touching unsaved Crew drafts.
+  const refreshMembers = async () => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return;
+      const nextSeason = data.season as SeasonPayload;
+      setSeason((current) => current ? { ...current, activeMembers: nextSeason.activeMembers } : nextSeason);
+    } catch {
+      // Non-fatal: the next load covers it.
+    }
+  };
+
+  const bulkAddMembers = async () => {
+    setBusy("bulk");
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/memberships/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { setError(data.error ?? t("seasonMembershipError")); return; }
+      const added = Array.isArray(data.added) ? data.added : [];
+      const skipped = Array.isArray(data.skipped) ? data.skipped : [];
+      if (added.length === 0 && skipped.length === 0) {
+        setNotice(t("recentPlayersNone"));
+      } else {
+        const parts = added.length > 0 ? [t("recentPlayersAdded", { added: added.length })] : [];
+        if (skipped.length > 0) {
+          parts.push(t("recentPlayersSkipped", {
+            skipped: skipped.length,
+            names: skipped.map((entry: { name: string }) => entry.name).join(", "),
+          }));
+        }
+        setNotice(parts.join(" "));
+      }
+      await refreshMembers();
+    } catch {
+      setError(t("seasonMembershipError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const rename = (index: number, name: string) => {
     setupDraftDirtyRef.current = true;
     setCrews((current) => current.map((crew, crewIndex) => crewIndex === index ? { ...crew, name } : crew));
@@ -328,6 +377,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
 
             {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
             {saved && <Alert severity="success">{t("seasonSaved")}</Alert>}
+            {notice && <Alert severity="info" onClose={() => setNotice(null)}>{notice}</Alert>}
             {season.viewerEventPlayerId && isRegistrationOpen && (
               <Button
                 variant={isSeasonMember ? "outlined" : "contained"}
@@ -379,8 +429,13 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                 </CardContent></Card>
 
                 <Box>
-                  <Typography variant="h6" gutterBottom><GroupsIcon sx={{ verticalAlign: "middle", mr: 0.5 }} />{t("crewMembers")}</Typography>
-                  <Stack spacing={2}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between" }}>
+                    <Typography variant="h6" gutterBottom sx={{ mb: 0 }}><GroupsIcon sx={{ verticalAlign: "middle", mr: 0.5 }} />{t("crewMembers")}</Typography>
+                    <Button variant="outlined" size="small" startIcon={<PersonAddIcon />} onClick={() => void bulkAddMembers()} disabled={busy !== null}>
+                      {busy === "bulk" ? t("addingRecentPlayers") : t("addRecentPlayers")}
+                    </Button>
+                  </Stack>
+                  <Stack spacing={2} sx={{ mt: 2 }}>
                     {crews.map((crew, index) => {
                       const crewMembers = crew.membershipIds
                         .map((membershipId) => members.find((candidate) => candidate.membershipId === membershipId))
