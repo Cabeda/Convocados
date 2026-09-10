@@ -155,8 +155,10 @@ export function TeamField({
           const accentColor = colors.main;
           const formation = formationFor(team);
           const slotCount = formation.slots.length;
-          const placed = team.players.filter((p) => typeof p.slot === "number" && p.slot < slotCount);
-          const unplaced = team.players.filter((p) => !(typeof p.slot === "number" && p.slot < slotCount));
+          const isPlaced = (p: Imatch["players"][number]) =>
+            typeof p.slot === "number" && p.slot < slotCount;
+          const placed = team.players.filter(isPlaced);
+          const unplaced = team.players.filter((p) => !isPlaced(p));
           const teamAvgElo = ratingsMap && n > 0
             ? Math.round(team.players.reduce((sum, p) => sum + (ratingsMap[p.name] ?? 1000), 0) / n)
             : null;
@@ -336,7 +338,6 @@ export function TeamField({
                 </FormControl>
               )}
 
-              {/* Pitch area with formation slots */}
               <Box
                 sx={{
                   position: "relative",

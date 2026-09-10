@@ -301,22 +301,30 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 	const teamOne = teams[0];
 	const teamTwo = teams[1];
 
-	const memberCreates: { name: string; order: number; slot: number; teamResultId: string }[] = [];
+	// Assign players to teams. Slots are clamped to the sport's default formation
+	// so an oversized roster never persists out-of-range positions.
+	const patchSlotCount = getDefaultFormation(event.sport).slots.length;
+	const memberCreates: { name: string; order: number; slot: number | null; teamResultId: string }[] = [];
 	const playerLookup = new Map(allPlayersForPatch.map((p) => [p.id, p.name]));
 
 	for (let i = 0; i < teamOnePlayerIds.length; i++) {
 		const name = playerLookup.get(teamOnePlayerIds[i]);
 		if (name) {
-			memberCreates.push({ name, order: i, slot: i, teamResultId: teamOne.id });
+			memberCreates.push({ name, order: i, slot: i < patchSlotCount ? i : null, teamResultId: teamOne.id });
 		}
 	}
 
 	for (let i = 0; i < teamTwoPlayerIds.length; i++) {
 		const name = playerLookup.get(teamTwoPlayerIds[i]);
 		if (name) {
-			memberCreates.push({ name, order: i, slot: i, teamResultId: teamTwo.id });
+			memberCreates.push({ name, order: i, slot: i < patchSlotCount ? i : null, teamResultId: teamTwo.id });
 		}
 	}
+
+	await prisma.teamResult.updateMany({
+		where: { id: { in: teams.map((t) => t.id) } },
+		data: { formation: getDefaultFormation(event.sport).id },
+	});
 
 	if (memberCreates.length > 0) {
 		await prisma.teamMember.createMany({ data: memberCreates });

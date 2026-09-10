@@ -1,6 +1,16 @@
 import type { Imatch, Player } from "./random";
 import { getDefaultFormation, getFormation } from "./formations";
 
+function reindex(players: Player[]): Player[] {
+  return players.map((p, i) => ({ ...p, order: i }));
+}
+
+function slotsNotIn(taken: Set<number>, slotCount: number): number[] {
+  const free: number[] = [];
+  for (let i = 0; i < slotCount; i++) if (!taken.has(i)) free.push(i);
+  return free;
+}
+
 /**
  * Move a player from one team to another, returning a new `Imatch[]` with
  * `order` values reindexed. Returns the original array unchanged when the move
@@ -24,16 +34,11 @@ export function movePlayer(
 
   return matches.map((m) => {
     if (m.team === fromTeam) {
-      const players = m.players
-        .filter((p) => p.name !== playerName)
-        .map((p, i) => ({ ...p, order: i }));
-      return { ...m, players };
+      return { ...m, players: reindex(m.players.filter((p) => p.name !== playerName)) };
     }
     if (m.team === toTeam) {
-      const players = [...m.players, { name: playerName, order: m.players.length, slot: null }].map(
-        (p, i) => ({ ...p, order: i }),
-      );
-      return { ...m, players };
+      const players = [...m.players, { name: playerName, order: m.players.length, slot: null }];
+      return { ...m, players: reindex(players) };
     }
     return m;
   });
@@ -81,12 +86,12 @@ export function placePlayer(
     if (m.team === fromTeam) {
       let players = m.players.filter((p) => p.name !== playerName);
       if (occupant) players = [...players, { name: occupant.name, order: 0, slot: vacatedSlot }];
-      return { ...m, players: players.map((p, i) => ({ ...p, order: i })) };
+      return { ...m, players: reindex(players) };
     }
     if (m.team === toTeam) {
       let players = occupant ? m.players.filter((p) => p.name !== occupant.name) : m.players;
       players = [...players, { name: playerName, order: 0, slot: toSlot }];
-      return { ...m, players: players.map((p, i) => ({ ...p, order: i })) };
+      return { ...m, players: reindex(players) };
     }
     return m;
   });
@@ -134,8 +139,7 @@ export function normalizeSlots(players: Player[], slotCount: number): Player[] {
     }
   }
 
-  const free: number[] = [];
-  for (let i = 0; i < slotCount; i++) if (!taken.has(i)) free.push(i);
+  const free = slotsNotIn(taken, slotCount);
 
   const unplaced = result
     .filter((p) => p.slot === null)
@@ -154,8 +158,7 @@ export function firstFreeSlot(players: Player[], slotCount: number): number | nu
   const used = new Set(
     players.map((p) => p.slot).filter((s): s is number => typeof s === "number"),
   );
-  for (let i = 0; i < slotCount; i++) if (!used.has(i)) return i;
-  return null;
+  return slotsNotIn(used, slotCount)[0] ?? null;
 }
 
 /**
