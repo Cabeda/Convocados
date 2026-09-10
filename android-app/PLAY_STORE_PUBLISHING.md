@@ -31,6 +31,11 @@ automated release always updates `wear:internal` and drafts `wear:production`;
 the Wear closed/open promotion is best-effort and never fails the release when
 those tracks are absent.
 
+Track IDs are the Play Developer API names, which can differ from the Console
+display name. This repo's Wear closed track is custom-named
+**`wear:Convocados Wear`** (open testing is `wear:beta`). `List Play Tracks`
+(Settings → Actions → *List Play Tracks*) prints the current IDs.
+
 ## Setup (one-time)
 
 ### 1. Create a Google Cloud Service Account
