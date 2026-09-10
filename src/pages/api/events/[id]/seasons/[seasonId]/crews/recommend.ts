@@ -46,11 +46,48 @@ export const POST: APIRoute = async ({ params, request }) => {
     ratingByUserId.get(membership.eventPlayer.userId ?? membership.userId)
       ?? ratingByName.get(membership.eventPlayer.name)
       ?? membership.eventPlayer.rating;
+
+  // ── History for smarter recommendations (GH-917) ──────────────────────────
+  // gamesPlayed: attended (active) game slots in the last 12 months.
+  // previousCrewId: the Crew the player belonged to in the most recent
+  // non-cancelled previous Season of this event, when the membership was
+  // still active there.
+  const attendanceWindow = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const [participants, previousSeason] = await Promise.all([
+    prisma.gameParticipant.findMany({
+      where: {
+        eventPlayer: { eventId: season.eventId },
+        status: "active",
+        game: { eventId: season.eventId, dateTime: { gte: attendanceWindow }, status: { not: "cancelled" } },
+      },
+      select: { eventPlayerId: true },
+    }),
+    prisma.season.findFirst({
+      where: { eventId: season.eventId, id: { not: season.id }, status: { in: ["active", "review", "completed"] } },
+      orderBy: { startsAt: "desc" },
+      select: { id: true },
+    }),
+  ]);
+  const gamesPlayedByEventPlayer = new Map<string, number>();
+  for (const participant of participants) {
+    gamesPlayedByEventPlayer.set(participant.eventPlayerId, (gamesPlayedByEventPlayer.get(participant.eventPlayerId) ?? 0) + 1);
+  }
+  let previousCrewByEventPlayer = new Map<string, string>();
+  if (previousSeason) {
+    const previousMemberships = await prisma.seasonMembership.findMany({
+      where: { seasonId: previousSeason.id, status: "active", crewId: { not: null } },
+      select: { eventPlayerId: true, crewId: true },
+    });
+    previousCrewByEventPlayer = new Map(previousMemberships.map((membership) => [membership.eventPlayerId, membership.crewId as string]));
+  }
+
   const recommendation = recommendCrews(
     memberships.map((membership) => ({
       membershipId: membership.id,
       name: membership.eventPlayer.name,
       rating: ratingFor(membership),
+      gamesPlayed: gamesPlayedByEventPlayer.get(membership.eventPlayer.id) ?? 0,
+      previousCrewId: previousCrewByEventPlayer.get(membership.eventPlayer.id) ?? null,
     })),
     crewCount,
   );
