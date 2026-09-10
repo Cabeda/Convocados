@@ -410,4 +410,20 @@
     <string name="tier_down_title">New season, fresh start</string>
     <string name="tier_down_body">Your Rank soft-reset. You\'re back in %1$s — climb again.</string>
     <string name="continue_action">Continue</string>
+    <string name="seasons">Seasons</string>
+    <string name="no_seasons">No Seasons yet.</string>
+    <string name="past_seasons">Past seasons</string>
+    <string name="season_status_registration">Registration</string>
+    <string name="season_status_active">Active</string>
+    <string name="season_status_review">Under review</string>
+    <string name="season_status_completed">Completed</string>
+    <string name="season_status_cancelled">Cancelled</string>
+    <string name="season_join">Join Season</string>
+    <string name="season_leave">Leave Season</string>
+    <string name="season_manage">Manage</string>
+    <string name="season_activate">Start Season</string>
+    <string name="season_complete">Complete Season</string>
+    <string name="season_cancel">Cancel Season</string>
+    <string name="season_reopen">Reopen Season</string>
+    <string name="crew_league">Crew league</string>
 </resources>

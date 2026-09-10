@@ -40,6 +40,8 @@ import dev.convocados.ui.screen.event.EventDetailScreen
 import dev.convocados.ui.screen.publicgames.PublicGamesScreen
 import dev.convocados.ui.screen.settings.EventSettingsScreen
 import dev.convocados.ui.screen.rankings.RankingsScreen
+import dev.convocados.ui.screen.seasons.SeasonDetailScreen
+import dev.convocados.ui.screen.seasons.SeasonsListScreen
 import dev.convocados.ui.screen.payments.PaymentsScreen
 import dev.convocados.ui.screen.attendance.AttendanceScreen
 import dev.convocados.ui.screen.log.EventLogScreen
@@ -188,6 +190,8 @@ fun AppNavigation(
                                 onBack = onClose,
                                 onSettings = { navController.navigate(Route.EventSettings.create(eventId)) },
                                 onRankings = { navController.navigate(Route.EventRankings.create(eventId)) },
+                        onSeasons = { navController.navigate(Route.EventSeasons.create(eventId)) },
+                                onSeasons = { navController.navigate(Route.EventSeasons.create(eventId)) },
                                 onPayments = { navController.navigate(Route.EventPayments.create(eventId)) },
                                 onLog = { navController.navigate(Route.EventLog.create(eventId)) },
                                 onAttendance = { navController.navigate(Route.EventAttendance.create(eventId)) },
@@ -257,6 +261,7 @@ fun AppNavigation(
                         onBack = { navController.popBackStack() },
                         onSettings = { navController.navigate(Route.EventSettings.create(eventId)) },
                         onRankings = { navController.navigate(Route.EventRankings.create(eventId)) },
+                        onSeasons = { navController.navigate(Route.EventSeasons.create(eventId)) },
                         onPayments = { navController.navigate(Route.EventPayments.create(eventId)) },
                         onLog = { navController.navigate(Route.EventLog.create(eventId)) },
                         onAttendance = { navController.navigate(Route.EventAttendance.create(eventId)) },
@@ -283,6 +288,7 @@ fun AppNavigation(
                         eventId = eventId,
                         onBack = { navController.popBackStack() },
                         onRankings = { navController.navigate(Route.EventRankings.create(eventId)) },
+                        onSeasons = { navController.navigate(Route.EventSeasons.create(eventId)) },
                         onPayments = { navController.navigate(Route.EventPayments.create(eventId)) },
                         onLog = { navController.navigate(Route.EventLog.create(eventId)) },
                         onAttendance = { navController.navigate(Route.EventAttendance.create(eventId)) },
@@ -294,6 +300,28 @@ fun AppNavigation(
                 ) { entry ->
                     val eventId = entry.arguments?.getString("eventId") ?: return@composable
                     RankingsScreen(eventId = eventId, onBack = { navController.popBackStack() }, onUserClick = { navController.navigate(Route.UserProfile.create(it)) })
+                }
+                composable(
+                    Route.EventSeasons().route,
+                    arguments = listOf(navArgument("eventId") { type = NavType.StringType }),
+                ) { entry ->
+                    val eventId = entry.arguments?.getString("eventId") ?: return@composable
+                    SeasonsListScreen(
+                        eventId = eventId,
+                        onBack = { navController.popBackStack() },
+                        onSeasonClick = { navController.navigate(Route.SeasonDetail.create(eventId, it)) },
+                    )
+                }
+                composable(
+                    Route.SeasonDetail().route,
+                    arguments = listOf(
+                        navArgument("eventId") { type = NavType.StringType },
+                        navArgument("seasonId") { type = NavType.StringType },
+                    ),
+                ) { entry ->
+                    val eventId = entry.arguments?.getString("eventId") ?: return@composable
+                    val seasonId = entry.arguments?.getString("seasonId") ?: return@composable
+                    SeasonDetailScreen(eventId = eventId, seasonId = seasonId, onBack = { navController.popBackStack() })
                 }
                 composable(
                     Route.EventPayments().route,
