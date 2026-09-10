@@ -32,7 +32,8 @@ async function buildSnapshotForGame(eventId: string, game: { id: string; dateTim
     ? JSON.stringify(
         event.teamResults.map((tr) => ({
           team: tr.name,
-          players: tr.members.map((m) => ({ name: m.name, order: m.order })),
+          formation: tr.formation,
+          players: tr.members.map((m) => ({ name: m.name, order: m.order, slot: m.slot })),
         })),
       )
     : null;

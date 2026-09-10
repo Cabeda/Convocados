@@ -6,6 +6,7 @@ import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
+import { applyFormationLayout } from "../../../../lib/teams";
 
 const log = createLogger("randomize");
 
@@ -72,12 +73,13 @@ export const POST: APIRoute = async ({ params, url, request }) => {
 
   await prisma.$transaction([
     prisma.teamResult.deleteMany({ where: { eventId } }),
-    ...matches.map((match) =>
+    ...applyFormationLayout(matches, event.sport).map((match) =>
       prisma.teamResult.create({
         data: {
           name: match.team,
+          formation: match.formation ?? null,
           eventId,
-          members: { create: match.players.map((p) => ({ name: p.name, order: p.order })) },
+          members: { create: match.players.map((p) => ({ name: p.name, order: p.order, slot: p.slot ?? null })) },
         },
       })
     ),

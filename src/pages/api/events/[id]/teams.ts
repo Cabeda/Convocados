@@ -4,6 +4,8 @@ import { authenticateRequest } from "../../../../lib/authenticate.server";
 import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
+import { applyFormationLayout } from "../../../../lib/teams";
+import { getDefaultFormation } from "../../../../lib/formations";
 
 /** Resolve the active player list for an event.
  * ADR 0016: when currentGameId exists, use GameParticipant (game-scoped).
@@ -150,7 +152,11 @@ export const PUT: APIRoute = async ({ params, request }) => {
 		return Response.json({ error: "You must be the event owner, an admin, or a player in this game to update teams." }, { status: 403 });
 	}
 
-	interface MatchInput { team: string; players: { name: string; order: number }[] }
+	interface MatchInput {
+		team: string;
+		formation?: string | null;
+		players: { name: string; order: number; slot?: number | null }[];
+	}
 	let body: { matches: MatchInput[] };
 	try {
 		body = await request.json();
@@ -177,13 +183,15 @@ export const PUT: APIRoute = async ({ params, request }) => {
 	// Delete existing teams and recreate
 	await prisma.teamResult.deleteMany({ where: { eventId: event.id } });
 
-	for (const match of body.matches) {
+	const laidOut = applyFormationLayout(body.matches, event.sport);
+	for (const match of laidOut) {
 		await prisma.teamResult.create({
 			data: {
 				name: match.team,
+				formation: match.formation ?? null,
 				eventId: event.id,
 				members: {
-					create: match.players.map((p) => ({ name: p.name, order: p.order })),
+					create: match.players.map((p) => ({ name: p.name, order: p.order, slot: p.slot ?? null })),
 				},
 			},
 		});
@@ -272,8 +280,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 		await prisma.teamResult.deleteMany({ where: { eventId: event.id } });
 		await prisma.teamResult.createMany({
 			data: [
-				{ name: event.teamOneName || "Team 1", eventId: event.id },
-				{ name: event.teamTwoName || "Team 2", eventId: event.id },
+				{ name: event.teamOneName || "Team 1", eventId: event.id, formation: getDefaultFormation(event.sport).id },
+				{ name: event.teamTwoName || "Team 2", eventId: event.id, formation: getDefaultFormation(event.sport).id },
 			],
 		});
 	}
@@ -293,22 +301,30 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 	const teamOne = teams[0];
 	const teamTwo = teams[1];
 
-	const memberCreates: { name: string; order: number; teamResultId: string }[] = [];
+	// Assign players to teams. Slots are clamped to the sport's default formation
+	// so an oversized roster never persists out-of-range positions.
+	const patchSlotCount = getDefaultFormation(event.sport).slots.length;
+	const memberCreates: { name: string; order: number; slot: number | null; teamResultId: string }[] = [];
 	const playerLookup = new Map(allPlayersForPatch.map((p) => [p.id, p.name]));
 
 	for (let i = 0; i < teamOnePlayerIds.length; i++) {
 		const name = playerLookup.get(teamOnePlayerIds[i]);
 		if (name) {
-			memberCreates.push({ name, order: i, teamResultId: teamOne.id });
+			memberCreates.push({ name, order: i, slot: i < patchSlotCount ? i : null, teamResultId: teamOne.id });
 		}
 	}
 
 	for (let i = 0; i < teamTwoPlayerIds.length; i++) {
 		const name = playerLookup.get(teamTwoPlayerIds[i]);
 		if (name) {
-			memberCreates.push({ name, order: i, teamResultId: teamTwo.id });
+			memberCreates.push({ name, order: i, slot: i < patchSlotCount ? i : null, teamResultId: teamTwo.id });
 		}
 	}
+
+	await prisma.teamResult.updateMany({
+		where: { id: { in: teams.map((t) => t.id) } },
+		data: { formation: getDefaultFormation(event.sport).id },
+	});
 
 	if (memberCreates.length > 0) {
 		await prisma.teamMember.createMany({ data: memberCreates });
