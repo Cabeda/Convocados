@@ -490,6 +490,149 @@ describe("HistoryCardFull — typography floor", () => {
 });
 
 
+describe("HistoryCardFull — team swap", () => {
+  it("moves a player to the other team via the swap button and saves", async () => {
+    const fetchMock = mockFetchSequence({
+      "PATCH /api/events/evt-1/history/h-1": { ...baseEntry },
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const user = userEvent.setup();
+    renderCard();
+
+    const joaoRow = screen.getByText("João Fernandes").closest("[data-player-row]") as HTMLElement;
+    const swap = within(joaoRow).getByTestId("swap-player");
+    await user.click(swap);
+
+    const saveBtn = await screen.findByRole("button", { name: /save teams/i });
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls as Array<[string, RequestInit]>;
+      const patchCall = calls.find(([u, i]) => u.includes("/history/h-1") && (i?.method ?? "GET") === "PATCH");
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse(patchCall![1].body as string);
+      const snapshot = body.teamsSnapshot as Array<{ team: string; players: { name: string }[] }>;
+      const ninjas = snapshot.find((tm) => tm.team === "Ninjas")!;
+      const gunas = snapshot.find((tm) => tm.team === "Gunas")!;
+      expect(ninjas.players.map((p) => p.name)).not.toContain("João Fernandes");
+      expect(gunas.players.map((p) => p.name)).toContain("João Fernandes");
+    });
+  });
+
+  it("hides the swap button for spectators", () => {
+    renderCard({}, null);
+    expect(screen.queryByTestId("swap-player")).not.toBeInTheDocument();
+  });
+
+  it("labels the swap button with the destination team", () => {
+    renderCard();
+    const joaoRow = screen.getByText("João Fernandes").closest("[data-player-row]") as HTMLElement;
+    expect(within(joaoRow).getByTestId("swap-player")).toHaveAccessibleName(/Gunas/);
+  });
+});
+
+describe("HistoryCardFull — mobile score editor", () => {
+  const originalMatchMedia = window.matchMedia;
+
+  beforeEach(() => {
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes("max-width"),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it("renders stacked per-team score cards with one plus/minus per team", () => {
+    renderCard();
+    expect(screen.getByTestId("mobile-score-editor")).toBeInTheDocument();
+    expect(screen.getAllByTestId(/score-plus/)).toHaveLength(2);
+    expect(screen.getAllByTestId(/score-minus/)).toHaveLength(2);
+  });
+
+  it("increments the correct team score from the mobile card", async () => {
+    const fetchMock = mockFetchSequence({
+      "PATCH /api/events/evt-1/history/h-1": { ...baseEntry, scoreOne: 12 },
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.click(screen.getByTestId("score-plus"));
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls as Array<[string, RequestInit]>;
+      const patchCall = calls.find(([u, i]) => u.includes("/history/h-1") && (i?.method ?? "GET") === "PATCH");
+      expect(patchCall).toBeDefined();
+      expect(JSON.parse(patchCall![1].body as string)).toEqual({ scoreOne: 12, scoreTwo: 5 });
+    }, { timeout: 2000 });
+  });
+});
+
+describe("HistoryCardFull — MVP data from list", () => {
+  it("does not fetch /mvp when the entry already carries a summary", () => {
+    const fetchMock = mockFetchSequence({});
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    mockUseSession.mockReturnValue({ data: { user: { id: "u-1", name: "João Fernandes" } }, isPending: false });
+    renderWithTheme(
+      <HistoryCardFull
+        entry={{
+          ...baseEntry,
+          mvp: { mvp: null, isVotingOpen: false, hasVoted: null, totalVotes: 0, eligibleVoters: 0, participants: [] },
+        }}
+        eventId="evt-1"
+        event={event}
+        cost={cost}
+        isOwner={false}
+        isAdmin={false}
+        isAuthenticated
+        userName="João Fernandes"
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        knownPlayers={[]}
+        playerRatings={[]}
+      />,
+    );
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.includes("/mvp"))).toBe(false);
+  });
+
+  it("falls back to fetching /mvp when the entry has no summary", async () => {
+    const fetchMock = mockFetchSequence({
+      "/mvp": { mvp: null, isVotingOpen: false, hasVoted: null, totalVotes: 0, eligibleVoters: 0, participants: [] },
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    mockUseSession.mockReturnValue({ data: { user: { id: "u-1", name: "João Fernandes" } }, isPending: false });
+    renderWithTheme(
+      <HistoryCardFull
+        entry={baseEntry}
+        eventId="evt-1"
+        event={event}
+        cost={cost}
+        isOwner={false}
+        isAdmin={false}
+        isAuthenticated
+        userName="João Fernandes"
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        knownPlayers={[]}
+        playerRatings={[]}
+      />,
+    );
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+      expect(urls.some((u) => u.includes("/mvp"))).toBe(true);
+    });
+  });
+});
+
 describe("HistoryCardFull — tennis/padel score", () => {
   it("falls back to scalar scores for legacy tennis rows", () => {
     renderCard({ scoringType: "tennis", scoreSets: null, scoreOne: 2, scoreTwo: 1 }, null);
