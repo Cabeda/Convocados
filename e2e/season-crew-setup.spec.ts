@@ -140,19 +140,30 @@ test.describe("Crew Season setup — full happy path", () => {
     // GH-915: the starting date is pre-filled from the registration period.
     await expect(page.getByLabel("Season starting date")).toHaveValue(opens);
 
-    // ── 5. Season memberships for the nine players ────────────────────────
+    // ── 5. Enroll the nine players via "Add recent players" ─────────────
+    // A recent game with all players attending, so the bulk endpoint finds them.
     const playersJson = sqlGet(
       `SELECT json_group_array(json_object('id', id, 'userId', userId)) FROM EventPlayer WHERE eventId = '${eventId}'`,
     );
     const players = JSON.parse(playersJson) as Array<{ id: string; userId: string }>;
     expect(players).toHaveLength(9);
+    sql(
+      `INSERT INTO Game (id, eventId, dateTime, status, createdAt, updatedAt) ` +
+        `VALUES ('e2e-game-${stamp}', '${eventId}', datetime('now'), 'played', datetime('now'), datetime('now'))`,
+    );
     for (const [index, player] of players.entries()) {
       sql(
-        `INSERT INTO SeasonMembership (id, seasonId, eventPlayerId, userId, status, joinedAt, updatedAt) ` +
-          `VALUES ('e2e-mem-${stamp}-${index}', '${seasonId}', '${player.id}', '${player.userId}', 'active', datetime('now'), datetime('now'))`,
+        `INSERT INTO GameParticipant (id, gameId, eventPlayerId, status, createdAt) ` +
+          `VALUES ('e2e-gp-${stamp}-${index}', 'e2e-game-${stamp}', '${player.id}', 'active', datetime('now'))`,
       );
     }
-    await page.reload();
+    await submitExpecting(
+      page,
+      () => page.getByRole("button", { name: "Add recent players" }).click(),
+      page.getByText("Added 9 players to the season."),
+    );
+    // Participants are listed without a reload.
+    expect(await page.getByTestId(/member-row-/).count()).toBe(9);
 
     // ── 6. Recommend balanced Crews ───────────────────────────────────────
     await page.getByRole("combobox", { name: "Number of Crews" }).click();
