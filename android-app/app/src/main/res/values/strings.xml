@@ -400,4 +400,14 @@
     <string name="save_photo">Save photo</string>
     <string name="zoom">Zoom</string>
     <string name="photo_load_error">Couldn\'t load that image.</string>
+    <string name="season_rank">Season Rank</string>
+    <string name="season_rank_subtitle">Friendly games don\'t affect Rank · %1$d qualifying games</string>
+    <string name="season_rank_provisional">Provisional</string>
+    <string name="season_rank_to_next">%1$d to %2$s</string>
+    <string name="season_rank_top_tier">Top tier</string>
+    <string name="tier_up_title">You reached %1$s!</string>
+    <string name="tier_up_body">Earned on the pitch this season — not a prize, just your form.</string>
+    <string name="tier_down_title">New season, fresh start</string>
+    <string name="tier_down_body">Your Rank soft-reset. You\'re back in %1$s — climb again.</string>
+    <string name="continue_action">Continue</string>
 </resources>
