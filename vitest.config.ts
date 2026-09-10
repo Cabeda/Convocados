@@ -127,10 +127,12 @@ export default defineConfig({
         "src/pages/api/users/[id]/calendar.ics.ts",
         "src/test/**",
       ],
-      // ponytail: thresholds set at current measured values (2026-08-27 — MCP stateless feature).
+      // Thresholds ratchet up to the measured values after the Crew Seasons
+      // coverage pass (2026-09-10 — see docs/coverage.md). Measured:
+      // lines 94.96, functions 91.22, branches 83.60, statements 92.14.
       // Excluding __generated__/prisma (auto-generated Prisma 7 types).
       // Upgrade path: mutation testing (Stryker) validates assertion quality where coverage can't.
-      thresholds: { lines: 93, functions: 89, branches: 81, statements: 90 },
+      thresholds: { lines: 94, functions: 91, branches: 83, statements: 92 },
     },
   },
 });
