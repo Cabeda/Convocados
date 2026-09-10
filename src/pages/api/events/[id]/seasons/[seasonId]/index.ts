@@ -87,17 +87,24 @@ export const GET: APIRoute = async ({ params, request }) => {
   };
 
   if (authz.isAdmin) {
-    result.crews = crews.map((crew) => ({
-      id: crew.id,
-      name: crew.name,
-      sortOrder: crew.sortOrder,
-      members: crew.memberships.map((membership) => ({
+    result.crews = crews.map((crew) => {
+      const crewMembers = crew.memberships.map((membership) => ({
         membershipId: membership.id,
         eventPlayerId: membership.eventPlayer.id,
         name: membership.eventPlayer.name,
         rating: ratingFor(membership),
-      })),
-    }));
+      }));
+      const averageRating = crewMembers.length > 0
+        ? Math.round(crewMembers.reduce((sum, member) => sum + member.rating, 0) / crewMembers.length)
+        : null;
+      return {
+        id: crew.id,
+        name: crew.name,
+        sortOrder: crew.sortOrder,
+        averageRating,
+        members: crewMembers,
+      };
+    });
     result.activeMembers = memberships.map((membership) => ({
       membershipId: membership.id,
       eventPlayerId: membership.eventPlayer.id,

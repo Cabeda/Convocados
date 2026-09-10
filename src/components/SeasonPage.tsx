@@ -78,7 +78,9 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       }
       const nextSeason = data.season as SeasonPayload;
       setSeason(nextSeason);
-      setStartDate(toDateInput(nextSeason.startsAt));
+      // GH-915: the create dialog already collected the period dates, so do
+      // not re-prompt for a starting date — default it from registration.
+      setStartDate(toDateInput(nextSeason.startsAt ?? nextSeason.registrationOpensAt));
       if (nextSeason.activeMembers) {
         const nextCrews = nextSeason.crews.map((crew) => ({
           id: crew.id,
@@ -356,20 +358,31 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                 <Box>
                   <Typography variant="h6" gutterBottom><GroupsIcon sx={{ verticalAlign: "middle", mr: 0.5 }} />{t("crewMembers")}</Typography>
                   <Stack spacing={2}>
-                    {crews.map((crew, index) => (
-                      <Card key={crew.id ?? `new-${crew.name}`} variant="outlined">
-                        <CardContent>
-                          <Stack spacing={1.5}>
-                            <TextField label={t("crewName")} value={crew.name} onChange={(event) => rename(index, event.target.value)} size="small" />
-                            {crew.membershipIds.map((membershipId) => {
-                              const member = members.find((candidate) => candidate.membershipId === membershipId);
-                              if (!member) return null;
-                              return <MemberAssignment key={membershipId} member={member} crews={crews} currentCrewIndex={index} onMove={moveMember} />;
-                            })}
-                          </Stack>
-                        </CardContent>
-                      </Card>
-                    ))}
+                    {crews.map((crew, index) => {
+                      const crewMembers = crew.membershipIds
+                        .map((membershipId) => members.find((candidate) => candidate.membershipId === membershipId))
+                        .filter((member): member is Member => !!member);
+                      const crewElo = crewMembers.length > 0
+                        ? Math.round(crewMembers.reduce((sum, member) => sum + member.rating, 0) / crewMembers.length)
+                        : null;
+                      return (
+                        <Card key={crew.id ?? `new-${crew.name}`} variant="outlined">
+                          <CardContent>
+                            <Stack spacing={1.5}>
+                              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                                <TextField label={t("crewName")} value={crew.name} onChange={(event) => rename(index, event.target.value)} size="small" sx={{ flex: 1 }} />
+                                {crewElo !== null && <Chip size="small" color="secondary" variant="outlined" label={`${t("crewElo")} ${crewElo}`} />}
+                              </Stack>
+                              {crew.membershipIds.map((membershipId) => {
+                                const member = members.find((candidate) => candidate.membershipId === membershipId);
+                                if (!member) return null;
+                                return <MemberAssignment key={membershipId} member={member} crews={crews} currentCrewIndex={index} onMove={moveMember} />;
+                              })}
+                            </Stack>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </Stack>
                 </Box>
 

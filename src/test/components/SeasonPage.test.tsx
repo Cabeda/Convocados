@@ -23,6 +23,8 @@ function seasonResponse(
       name: "September Season",
       status,
       startsAt: null,
+      registrationOpensAt: "2026-09-01T00:00:00.000Z",
+      registrationClosesAt: "2026-09-30T00:00:00.000Z",
       viewerEventPlayerId: null as string | null,
       viewerMembership: null as { id: string; status: string; eventPlayerId: string } | null,
       registrationOpen: status === "registration",
@@ -86,13 +88,46 @@ describe("SeasonPage", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
     const saveRequest = fetchMock.mock.calls[3][1];
     expect(JSON.parse(String(saveRequest?.body))).toMatchObject({
-      startsAt: null,
+      // Pre-filled from the registration period (GH-915) unless changed.
+      startsAt: "2026-09-01",
       crews: [
         { name: "North", membershipIds: expect.not.arrayContaining(["membership-0"]) },
         { name: "Crew 2", membershipIds: expect.arrayContaining(["membership-0"]) },
       ],
     });
     expect(await screen.findByText("Season setup saved.")).toBeInTheDocument();
+  });
+
+  it("pre-fills the starting date from the registration period when none is set", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    expect(screen.getByLabelText("Season starting date")).toHaveValue("2026-09-01");
+  });
+
+  it("shows the average ELO of each recommended Crew", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ crews: [
+        { name: "Crew 1", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
+        { name: "Crew 2", membershipIds: members.slice(3).map((member) => member.membershipId) },
+      ] }), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+    await user.click(screen.getByRole("button", { name: "Recommend Crews" }));
+
+    // members ratings: 1000 + index*50 → Crew 1 mean 1050, Crew 2 mean 1200.
+    expect(await screen.findByText("Crew ELO 1050")).toBeInTheDocument();
+    expect(screen.getByText("Crew ELO 1200")).toBeInTheDocument();
   });
 
   it("keeps the admin crew-editing UI available on an active Season", async () => {
