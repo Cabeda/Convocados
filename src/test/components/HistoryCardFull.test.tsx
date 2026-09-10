@@ -551,7 +551,7 @@ describe("HistoryCardFull — mobile score editor", () => {
     window.matchMedia = originalMatchMedia;
   });
 
-  it("renders stacked per-team score cards with one plus/minus per team", () => {
+  it("renders side-by-side per-team score controls with one plus/minus per team", () => {
     renderCard();
     expect(screen.getByTestId("mobile-score-editor")).toBeInTheDocument();
     expect(screen.getAllByTestId(/score-plus/)).toHaveLength(2);
