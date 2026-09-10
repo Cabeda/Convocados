@@ -41,18 +41,22 @@ export function SeasonRankTable({ eventId, seasonId, showTransition = true }: { 
     let alive = true;
     setData(null);
     setError(null);
-    fetch(`/api/events/${eventId}/seasons/${seasonId}/rank`)
-      .then(async (res) => {
+    (async () => {
+      try {
+        const res = await fetch(`/api/events/${eventId}/seasons/${seasonId}/rank`);
         if (!alive) return;
-        if (!res.ok) { setError("Season Rank is unavailable."); return; }
-        setData(await res.json() as RankPayload);
-      })
-      .catch(() => alive && setError("Season Rank is unavailable."));
+        if (!res || !res.ok) { setError("Season Rank is unavailable."); return; }
+        const json = await res.json() as RankPayload;
+        if (alive) setData(json);
+      } catch {
+        if (alive) setError("Season Rank is unavailable.");
+      }
+    })();
     return () => { alive = false; };
   }, [eventId, seasonId]);
 
   const rows = useMemo(() => {
-    if (!data) return [];
+    if (!data || !Array.isArray(data.players) || !Array.isArray(data.edges)) return [];
     const edges = data.edges;
     return [...data.players]
       .map((p) => {
