@@ -15,7 +15,6 @@ type SeasonWithDates = {
   status: string;
   registrationOpensAt: Date;
   registrationClosesAt: Date;
-  startsAt: Date | null;
   activatedAt: Date | null;
   reviewStartedAt: Date | null;
   completedAt: Date | null;
@@ -37,7 +36,6 @@ function seasonResponse(
     status: season.status,
     registrationOpensAt: season.registrationOpensAt,
     registrationClosesAt: season.registrationClosesAt,
-    startsAt: season.startsAt,
     activatedAt: season.activatedAt,
     reviewStartedAt: season.reviewStartedAt,
     completedAt: season.completedAt,
