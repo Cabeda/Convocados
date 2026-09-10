@@ -164,7 +164,7 @@ user-profile:
     view-stats: { web: true, android: true, wearos: false }
     view-other-profiles: { web: true, android: true, wearos: false }
     edit-name: { web: true, android: false, wearos: false }
-    edit-photo: { web: true, android: false, wearos: false }
+    edit-photo: { web: true, android: true, wearos: false }
 
 webhooks:
   web: true
