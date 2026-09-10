@@ -6,11 +6,13 @@ import {
   Paper, Alert, CircularProgress, IconButton, Tooltip, Divider,
   FormControl, Select, MenuItem, Card, CardContent, CardHeader,
   TextField, List, ListItem, ListItemText, ListItemSecondaryAction,
-  Autocomplete,
+  Autocomplete, Accordion, AccordionSummary, AccordionDetails,
+  ToggleButton, ToggleButtonGroup,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PublicIcon from "@mui/icons-material/Public";
 import StarIcon from "@mui/icons-material/Star";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
@@ -80,6 +82,9 @@ interface EventSettings {
   hideEloInTeams: boolean;
   showCompetitiveData: boolean;
   allowManualRating: boolean;
+  rankEnabled: boolean;
+  rankDecayEnabled: boolean;
+  inactiveRankBehavior: string;
   splitCostsEnabled: boolean;
   mvpEnabled: boolean;
   mvpEloEnabled: boolean;
@@ -250,16 +255,6 @@ export default function EventSettingsPage({ eventId }: Props) {
     updateSetting("visibility", { isPublic: v });
   };
 
-  const handleToggleBalanced = (v: boolean) => {
-    setEvent((e) => e ? { ...e, balanced: v } : e);
-    updateSetting("balanced", { balanced: v });
-  };
-
-  const handleToggleElo = (v: boolean) => {
-    setEvent((e) => e ? { ...e, eloEnabled: v, ...(v ? {} : { balanced: false, hideEloInTeams: false }) } : e);
-    updateSetting("elo", { eloEnabled: v });
-  };
-
   const handleToggleShowCompetitiveData = (v: boolean) => {
     setEvent((e) => e ? { ...e, showCompetitiveData: v } : e);
     updateSetting("show-competitive-data", { showCompetitiveData: v });
@@ -273,6 +268,21 @@ export default function EventSettingsPage({ eventId }: Props) {
   const handleToggleHideEloInTeams = (v: boolean) => {
     setEvent((e) => e ? { ...e, hideEloInTeams: v } : e);
     updateSetting("hide-elo-in-teams", { hideEloInTeams: v });
+  };
+
+  const handleToggleCompetition = (v: boolean) => {
+    setEvent((e) => e ? { ...e, eloEnabled: v, rankEnabled: v, balanced: v, ...(v ? {} : { hideEloInTeams: false, mvpEloEnabled: false }) } : e);
+    updateSetting("competition", { enabled: v });
+  };
+
+  const handleToggleRankDecay = (v: boolean) => {
+    setEvent((e) => e ? { ...e, rankDecayEnabled: v } : e);
+    updateSetting("competition", { rankDecayEnabled: v });
+  };
+
+  const handleSetInactiveBehavior = (v: string) => {
+    setEvent((e) => e ? { ...e, inactiveRankBehavior: v } : e);
+    updateSetting("competition", { inactiveRankBehavior: v });
   };
 
   const handleToggleSplitCosts = (v: boolean) => {
@@ -612,40 +622,57 @@ export default function EventSettingsPage({ eventId }: Props) {
         </Stack>
       </SectionCard>
 
-      {/* ── Teams & Ratings ── */}
-      <SectionCard title={t("eventSettingsTeams")} icon={<StarIcon color="action" />}>
+      {/* ── Competition (ADR 0031) ── */}
+      <SectionCard title={t("competitionSettings")} icon={<StarIcon color="action" />}>
         <Stack spacing={1}>
+          <Tooltip title={t("competitiveRankingsTooltip")}>
+            <FormControlLabel
+              control={<Switch size="small" checked={(event.eloEnabled ?? true) && (event.rankEnabled ?? true)} onChange={(e) => handleToggleCompetition(e.target.checked)} disabled={!canEdit} />}
+              label={<Typography variant="body2" fontWeight={600}>{t("competitiveRankings")}</Typography>}
+            />
+          </Tooltip>
+          <Typography variant="caption" color="text.secondary">{t("competitiveRankingsDesc")}</Typography>
+          <Divider sx={{ my: 0.5 }} />
           <Tooltip title={t("showCompetitiveDataTooltip")}>
             <FormControlLabel
               control={<Switch size="small" checked={event.showCompetitiveData ?? true} onChange={(e) => handleToggleShowCompetitiveData(e.target.checked)} disabled={!canEdit} />}
               label={<Typography variant="body2">{t("showCompetitiveData")}</Typography>}
             />
           </Tooltip>
-          <Divider sx={{ my: 0.5 }} />
-          <Tooltip title={t("eloEnabledTooltip")}>
-            <FormControlLabel
-              control={<Switch size="small" checked={event.eloEnabled ?? true} onChange={(e) => handleToggleElo(e.target.checked)} disabled={!canEdit} />}
-              label={<Typography variant="body2">{t("eloEnabled")}</Typography>}
-            />
-          </Tooltip>
-          <Tooltip title={t("balancedTeamsTooltip")}>
-            <FormControlLabel
-              control={<Switch size="small" checked={event.balanced} onChange={(e) => handleToggleBalanced(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
-              label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("balancedTeams")}</Typography>}
-            />
-          </Tooltip>
-          <Tooltip title={t("hideEloInTeamsTooltip")}>
-            <FormControlLabel
-              control={<Switch size="small" checked={event.hideEloInTeams ?? false} onChange={(e) => handleToggleHideEloInTeams(e.target.checked)} disabled={!canEdit || !event.balanced} />}
-              label={<Typography variant="body2" color={!event.balanced ? "text.disabled" : undefined}>{t("hideEloInTeams")}</Typography>}
-            />
-          </Tooltip>
-          <Tooltip title={t("allowManualRatingTooltip")}>
-            <FormControlLabel
-              control={<Switch size="small" checked={event.allowManualRating ?? false} onChange={(e) => handleToggleManualRating(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
-              label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("allowManualRating")}</Typography>}
-            />
-          </Tooltip>
+          <Accordion disableGutters elevation={0} sx={{ bgcolor: "transparent", "&:before": { display: "none" } }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0, minHeight: 36 }}>
+              <Typography variant="body2" color="text.secondary">{t("advancedSettings")}</Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 0 }}>
+              <Stack spacing={1}>
+                <Tooltip title={t("hideEloInTeamsTooltip")}>
+                  <FormControlLabel
+                    control={<Switch size="small" checked={event.hideEloInTeams ?? false} onChange={(e) => handleToggleHideEloInTeams(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
+                    label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("hideEloInTeams")}</Typography>}
+                  />
+                </Tooltip>
+                <Tooltip title={t("allowManualRatingTooltip")}>
+                  <FormControlLabel
+                    control={<Switch size="small" checked={event.allowManualRating ?? false} onChange={(e) => handleToggleManualRating(e.target.checked)} disabled={!canEdit || !(event.eloEnabled ?? true)} />}
+                    label={<Typography variant="body2" color={!(event.eloEnabled ?? true) ? "text.disabled" : undefined}>{t("allowManualRating")}</Typography>}
+                  />
+                </Tooltip>
+                <Tooltip title={t("rankDecayTooltip")}>
+                  <FormControlLabel
+                    control={<Switch size="small" checked={event.rankDecayEnabled ?? false} onChange={(e) => handleToggleRankDecay(e.target.checked)} disabled={!canEdit || !(event.rankEnabled ?? true)} />}
+                    label={<Typography variant="body2" color={!(event.rankEnabled ?? true) ? "text.disabled" : undefined}>{t("rankDecay")}</Typography>}
+                  />
+                </Tooltip>
+                <Box>
+                  <Typography variant="body2" sx={{ mb: 0.5 }} color={!(event.rankEnabled ?? true) ? "text.disabled" : undefined}>{t("inactiveRankBehavior")}</Typography>
+                  <ToggleButtonGroup exclusive size="small" value={event.inactiveRankBehavior ?? "freeze"} onChange={(_, v) => v && handleSetInactiveBehavior(v)} disabled={!canEdit || !(event.rankEnabled ?? true)}>
+                    <ToggleButton value="freeze">{t("inactiveRankFreeze")}</ToggleButton>
+                    <ToggleButton value="reset">{t("inactiveRankReset")}</ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
         </Stack>
       </SectionCard>
 
