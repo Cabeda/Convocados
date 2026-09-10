@@ -529,6 +529,15 @@ jobs:
           sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" app/build.gradle.kts
           sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" wear/build.gradle.kts
 
+      # Play "What's new" comes from the GitHub release body. Promotion reads the
+      # from-track notes (internal.txt), so writing here covers every later stage.
+      - name: Populate Play release notes from the GitHub release
+        working-directory: android-app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ needs.release.outputs.version }}
+        run: python3 ../.github/scripts/play-release-notes.py app wear
+
       - name: Publish phone app to internal track
         working-directory: android-app
         run: ./gradlew :app:publishReleaseBundle --no-daemon
@@ -536,6 +545,21 @@ jobs:
       - name: Publish wear app to internal track
         working-directory: android-app
         run: ./gradlew :wear:publishReleaseBundle --no-daemon
+
+      # Auto-promote the same version code through the testing tracks and stage a
+      # production draft. The humans-in-the-loop rollout happens in Play Console.
+      - name: Promote testing tracks and draft production
+        working-directory: android-app
+        env:
+          VERSION: v${{ needs.release.outputs.version }}
+        run: |
+          set -e
+          ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track alpha --release-status completed --release-name "$VERSION" --no-daemon
+          ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track beta --release-status completed --release-name "$VERSION" --no-daemon
+          ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:alpha --release-status completed --release-name "$VERSION" --no-daemon
+          ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:beta --release-status completed --release-name "$VERSION" --no-daemon
+          ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track production --release-status draft --release-name "$VERSION" --no-daemon
+          ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:production --release-status draft --release-name "$VERSION" --no-daemon
 
       - name: Cleanup credentials
         if: always()

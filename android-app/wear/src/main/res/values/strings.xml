@@ -104,4 +104,7 @@
     <string name="mvp_voting_closed">Voting closed</string>
     <string name="mvp_no_votes">No votes recorded</string>
     <string name="mvp_retry">Retry</string>
+    <string name="ongoing_channel_name">Ongoing game</string>
+    <string name="ongoing_score_title">Live score</string>
+    <string name="ongoing_quick_title">Quick game</string>
 </resources>
