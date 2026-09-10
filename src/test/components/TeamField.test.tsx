@@ -15,11 +15,13 @@ function TeamFieldHarness({
   shuffleKey = 0,
   ratingsMap,
   sport = "football-5v5",
+  canEdit = true,
   onResultChange,
 }: {
   shuffleKey?: number;
   ratingsMap?: Record<string, number>;
   sport?: string;
+  canEdit?: boolean;
   onResultChange?: (m: Imatch[]) => void;
 }) {
   const [matches, setMatches] = useState(initialMatches);
@@ -33,6 +35,7 @@ function TeamFieldHarness({
       ratingsMap={ratingsMap}
       shuffleKey={shuffleKey}
       sport={sport}
+      canEdit={canEdit}
     />
   );
 }
@@ -204,5 +207,31 @@ describe("TeamField", () => {
 
     expect(screen.getByTestId("field-half-elo-Blue")).toHaveTextContent("Elo 1100");
     expect(screen.getByTestId("field-half-elo-Red")).toHaveTextContent("Elo 800");
+  });
+
+  it("is read-only when the viewer cannot edit teams", () => {
+    const onResultChange = vi.fn();
+    renderWithTheme(<TeamFieldHarness canEdit={false} onResultChange={onResultChange} />);
+
+    expect(screen.getByTestId("team-field")).toHaveAttribute("data-can-edit", "false");
+    expect(within(screen.getByTestId("field-formation-Blue")).getByRole("combobox")).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+
+    mockHalfRects();
+    fireEvent.pointerDown(screen.getByTestId("field-player-Alice"), {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerUp(screen.getByTestId("team-field"), {
+      pointerId: 1,
+      clientX: 150,
+      clientY: 50,
+    });
+
+    expect(onResultChange).not.toHaveBeenCalled();
   });
 });

@@ -905,6 +905,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const isAdmin = !!event?.isAdmin;
   const canEditSettings = isOwnerless || isOwner || isAdmin;
   const canManageInvites = isOwner || isAdmin;
+  // Mirrors the PUT /api/events/:id/teams authorization: signed-in owner, admin,
+  // or an active participant. Everyone else gets a read-only field.
+  const isParticipant = !!session?.user
+    && !!event?.players.some((p) => p.userId === session.user!.id);
+  const canEditTeams = isAuthenticated && (isOwner || isAdmin || isParticipant);
 
   // #463 high-intent: fetch the signed-in user's RSVP for this event so the
   // PushPromptBanner can render as a modal when the user has a pending RSVP
@@ -1237,6 +1242,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       onResultChange={handleTeamChange}
                       shuffleKey={shuffleVersion}
                       ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
+                      canEdit={canEditTeams}
                       onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
                         if (teamIdx === 0) {
                           setTeamOneName(newName);
@@ -1254,6 +1260,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                       shuffleKey={shuffleVersion}
                       ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
                       sport={event.sport}
+                      canEdit={canEditTeams}
                     />
                   )}
                 </Stack>

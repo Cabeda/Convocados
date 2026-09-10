@@ -18,6 +18,8 @@ interface Props {
   ratingsMap?: Record<string, number>;
   /** Increment when a server-side randomization starts to animate the reshuffle. */
   shuffleKey?: number;
+  /** When false, players cannot be dragged between teams. */
+  canEdit?: boolean;
 }
 
 export function TeamPicker({
@@ -26,6 +28,7 @@ export function TeamPicker({
   onTeamNameSave,
   ratingsMap,
   shuffleKey = 0,
+  canEdit = true,
 }: Props) {
   const theme = useTheme();
   const t = useT();
@@ -57,6 +60,7 @@ export function TeamPicker({
       <Box
         data-testid="team-picker"
         data-shuffling={isShuffling ? "true" : "false"}
+        data-can-edit={canEdit ? "true" : "false"}
         data-shuffle-key={shuffleKey}
         sx={{
           display: "grid",
@@ -247,17 +251,17 @@ export function TeamPicker({
                           }} />
                         <Box
                           data-testid={`team-player-handle-${player.name}`}
-                          onPointerDown={(e) => handlePointerDown(e, player.name, team.team)}
+                          onPointerDown={canEdit ? (e) => handlePointerDown(e, player.name, team.team) : undefined}
                           sx={{
-                            cursor: drag ? "grabbing" : "grab",
+                            cursor: canEdit ? (drag ? "grabbing" : "grab") : "default",
                             touchAction: "none",
                             display: "flex",
                             alignItems: "center",
                             p: 0.5,
                             borderRadius: 1,
-                            "&:hover": {
+                            "&:hover": canEdit ? {
                               bgcolor: alpha(theme.palette.text.primary, 0.08),
-                            },
+                            } : undefined,
                           }}
                         >
                           <DragIndicatorIcon
