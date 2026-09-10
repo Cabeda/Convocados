@@ -561,3 +561,62 @@ describe("SeasonPage proposal refresh", () => {
     ]));
   });
 });
+
+describe("SeasonPage destructive actions", () => {
+  it("deletes a Crew only after the confirmation dialog", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
+        { id: "crew-1", name: "North", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
+        { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
+      ])), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
+        { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
+      ])), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    await user.click(screen.getByRole("button", { name: "Delete North" }));
+
+    // Confirmation required: nothing deleted yet.
+    expect(await screen.findByText("Delete Crew?")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getByRole("button", { name: "Delete Crew" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/events/event-1/seasons/season-1/crews/crew-1");
+    expect(fetchMock.mock.calls[2][1]?.method).toBe("DELETE");
+    expect(await screen.findByText("Deleted North.")).toBeInTheDocument();
+  });
+
+  it("cancels the season only after the confirmation dialog", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "cancelled" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "cancelled")), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    await user.click(screen.getByRole("button", { name: "Cancel season" }));
+
+    expect(await screen.findByText("Cancel this season?")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await user.type(screen.getByLabelText("Reason (optional)"), "Pilot paused");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel season" }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some((call) => call[1]?.method === "PATCH")).toBe(true));
+    const patchCall = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH")!;
+    expect(patchCall[0]).toBe("/api/events/event-1/seasons/season-1");
+    expect(JSON.parse(String(patchCall[1]?.body))).toEqual({ action: "cancel", reason: "Pilot paused" });
+  });
+});

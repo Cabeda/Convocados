@@ -84,7 +84,7 @@ jobs:
           case "$STAGE" in
             closed)
               if wants phone; then promote app internal alpha completed; fi
-              if wants wear; then promote wear wear:internal wear:alpha completed; fi
+              if wants wear; then promote wear wear:internal "wear:Convocados Wear" completed; fi
               ;;
             open)
               if wants phone; then promote app internal beta completed; fi

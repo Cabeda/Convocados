@@ -684,3 +684,80 @@ describe("PATCH season details update", () => {
     expect(response.status).toBe(409);
   });
 });
+
+describe("PATCH season cancel", () => {
+  async function seedActiveSeason() {
+    const event = await seedEvent();
+    const season = await prisma.season.create({
+      data: {
+        eventId: event.id,
+        name: "Doomed Season",
+        status: "active",
+        registrationOpensAt: new Date("2026-01-01"),
+        registrationClosesAt: new Date("2026-06-30"),
+      },
+    });
+    return { event, season };
+  }
+
+  it("lets an admin cancel a non-terminal season with a reason", async () => {
+    const { event, season } = await seedActiveSeason();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", {
+      action: "cancel",
+      reason: "Pilot paused",
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.season).toMatchObject({ id: season.id, status: "cancelled", cancellationReason: "Pilot paused" });
+    const updated = await prisma.season.findUnique({ where: { id: season.id } });
+    expect(updated?.status).toBe("cancelled");
+    expect(updated?.cancelledAt).not.toBeNull();
+    expect(updated?.cancellationReason).toBe("Pilot paused");
+  });
+
+  it("cancels without a reason", async () => {
+    const { event, season } = await seedActiveSeason();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", { action: "cancel" }));
+
+    expect(response.status).toBe(200);
+    expect((await prisma.season.findUnique({ where: { id: season.id } }))?.status).toBe("cancelled");
+  });
+
+  it("frees the registration window for a new season", async () => {
+    const { event, season } = await seedActiveSeason();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", { action: "cancel" }));
+    const created = await createSeason(context({ id: event.id }, "POST", {
+      name: "Replacement",
+      registrationOpensAt: "2026-02-01T00:00:00.000Z",
+      registrationClosesAt: "2026-03-01T00:00:00.000Z",
+    }));
+
+    expect(created.status).toBe(201);
+  });
+
+  it("rejects cancelling an already terminal season", async () => {
+    const { event, season } = await seedActiveSeason();
+    await prisma.season.update({ where: { id: season.id }, data: { status: "completed" } });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", { action: "cancel" }));
+
+    expect(response.status).toBe(409);
+  });
+
+  it("requires admin rights to cancel", async () => {
+    const { event, season } = await seedActiveSeason();
+    mockGetSession.mockResolvedValue({ user: { id: "user-1" } });
+
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", { action: "cancel" }));
+
+    expect(response.status).toBe(403);
+  });
+});

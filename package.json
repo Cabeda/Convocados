@@ -1,10 +1,10 @@
 {
   "name": "convocados",
-  "version": "3.178.0",
+  "version": "3.180.2",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file=.env node_modules/astro/bin/astro.mjs dev",
+    "dev": "sh ./scripts/dev.sh",
     "build": "astro build",
     "preview": "astro preview",
     "start": "sh ./scripts/start.sh",

@@ -187,9 +187,40 @@ async function updateSeasonDetails(
     },
   });
 }
+/**
+ * Cancel a Season (admin-only, non-terminal only). Cancelled Seasons keep
+ * their history, free the registration window for a new Season, and are
+ * excluded from standings. The optional reason is recorded for the audit.
+ */
+async function cancelSeason(
+  season: NonNullable<Awaited<ReturnType<typeof getSeasonForEvent>>>,
+  reason: unknown,
+) {
+  if (TERMINAL_STATUSES.includes(season.status)) {
+    return Response.json({ error: "Completed Seasons are read-only." }, { status: 409 });
+  }
+  const cancellationReason = typeof reason === "string" ? reason.trim() : "";
+  if (cancellationReason.length > 500) {
+    return Response.json({ error: "Cancellation reason must be 500 characters or fewer." }, { status: 400 });
+  }
+  const updated = await prisma.season.update({
+    where: { id: season.id },
+    data: { status: "cancelled", cancelledAt: new Date(), cancellationReason: cancellationReason || null },
+  });
+  // ADR 0031: a cancelled Season leaves no Rank ladder footprint.
+  await clearSeasonRankSnapshot(season.id);
+  return Response.json({
+    season: {
+      id: updated.id,
+      status: updated.status,
+      cancelledAt: updated.cancelledAt,
+      cancellationReason: updated.cancellationReason,
+    },
+  });
+}
+
 const MIN_CREWS = 3;
-const MIN_PARTICIPANTS = 9;
-const MIN_CREW_SIZE = 3;
+const MIN_PARTICIPANTS = 9;const MIN_CREW_SIZE = 3;
 const MAX_CREW_SIZE = 5;
 
 /**
@@ -219,7 +250,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   try {
     const parsed: unknown = await request.json();
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return Response.json({ error: "Invalid JSON." }, { status: 400 });
-    body = parsed as { action?: unknown; name?: unknown; registrationOpensAt?: unknown; registrationClosesAt?: unknown };
+    body = parsed as { action?: unknown; name?: unknown; registrationOpensAt?: unknown; registrationClosesAt?: unknown; reason?: unknown };
   } catch {
     return Response.json({ error: "Invalid JSON." }, { status: 400 });
   }
@@ -231,7 +262,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     return completeSeason(season);
   }
   if (body.action === "cancel") {
-    return cancelSeason(season, body);
+    return cancelSeason(season, body.reason);
   }
   if (body.action === "reopen") {
     return reopenSeason(season);
@@ -310,23 +341,6 @@ async function completeSeason(season: NonNullable<Awaited<ReturnType<typeof getS
   });
   await snapshotSeasonRank(season.eventId, season.id);
   return Response.json({ season: { id: updated.id, status: updated.status, completedAt: updated.completedAt } });
-}
-
-/** Any non-terminal -> cancelled. Reverts Rank (no ladder footprint). */
-async function cancelSeason(
-  season: NonNullable<Awaited<ReturnType<typeof getSeasonForEvent>>>,
-  body: { reason?: unknown },
-) {
-  if (TERMINAL_STATUSES.includes(season.status)) {
-    return Response.json({ error: "Season is already completed or cancelled." }, { status: 409 });
-  }
-  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 500) : null;
-  const updated = await prisma.season.update({
-    where: { id: season.id },
-    data: { status: "cancelled", cancelledAt: new Date(), cancellationReason: reason },
-  });
-  await clearSeasonRankSnapshot(season.id);
-  return Response.json({ season: { id: updated.id, status: updated.status, cancelledAt: updated.cancelledAt } });
 }
 
 /** completed -> active. Drops the snapshot so Rank derives live again. */

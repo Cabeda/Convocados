@@ -93,4 +93,24 @@ class ProfileViewModelTest {
         coVerify { api.updateProfile("New Name") }
         coVerify(atLeast = 2) { userRepository.refreshUserProfile() }
     }
+
+    @Test
+    fun `updateProfilePhoto delegates to the repository`() = runTest {
+        val viewModel = ProfileViewModel(userRepository, api, authManager, tokenStore, settingsStore, pushTokenManager)
+
+        viewModel.updateProfilePhoto("data:image/jpeg;base64,AAAA")
+        advanceUntilIdle()
+
+        coVerify { userRepository.uploadProfilePhoto("data:image/jpeg;base64,AAAA") }
+    }
+
+    @Test
+    fun `removeProfilePhoto delegates to the repository`() = runTest {
+        val viewModel = ProfileViewModel(userRepository, api, authManager, tokenStore, settingsStore, pushTokenManager)
+
+        viewModel.removeProfilePhoto()
+        advanceUntilIdle()
+
+        coVerify { userRepository.removeProfilePhoto() }
+    }
 }

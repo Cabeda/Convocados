@@ -8,12 +8,17 @@ on:
     branches:
       - main
   workflow_dispatch:
+  # Merge queue: required checks run against the queued merge result, so a
+  # combination that only breaks after merging is caught before it lands.
+  merge_group:
+    types: [checks_requested]
 
 # Cancel in-progress runs for the same ref when a new push lands.
 # Saves CI minutes when a developer pushes repeatedly to the same branch.
+# Never cancel a merge-queue run: GitHub re-queues on cancellation.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
 
 permissions:
   contents: read
@@ -466,7 +471,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke]
+    needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke, android, android-wear]
     steps:
       - name: Check results
         run: |

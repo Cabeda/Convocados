@@ -847,6 +847,35 @@ export const openApiSpec = {
         responses: { "200": { description: "Profile updated" }, "401": { description: "Unauthorized" } },
       },
     },
+    "/api/me/photo": {
+      post: {
+        summary: "Set the authenticated user's profile photo (base64 data URL)",
+        tags: ["Users"],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["image"],
+                properties: {
+                  image: { type: "string", description: "data:image/(jpeg|png|webp);base64,... up to 500 KB" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          ...errorResponses,
+          "200": { description: "Photo updated" },
+          "400": { description: "Invalid or oversized image" },
+        },
+      },
+      delete: {
+        summary: "Clear the authenticated user's profile photo",
+        tags: ["Users"],
+        responses: { "200": { description: "Photo removed" }, ...errorResponses },
+      },
+    },
     "/api/me/notification-preferences": {
       get: {
         summary: "Get notification preferences",

@@ -19,6 +19,12 @@
 *.db-wal
 *.db-shm
 
+# per-worktree preview port cache (see scripts/dev.sh)
+.dev-port
+
+# local git worktrees used for parallel previews
+.worktrees/
+
 # env
 .env
 .env.local
@@ -60,6 +66,9 @@ android-app/.idea/
 android-app/app/build/
 android-app/build/
 android-app/*/build/
+
+# Local git worktrees must never be committed (gitlinks break CI checkouts).
+.worktrees/
 android-app/local.properties
 android-app/wear/local.properties
 android-app/app/google-services.json

@@ -548,7 +548,7 @@ jobs:
 
       # Auto-promote the same version code through the testing tracks and stage a
       # production draft. The humans-in-the-loop rollout happens in Play Console.
-      - name: Promote testing tracks and draft production
+      - name: Promote phone to closed + open testing
         working-directory: android-app
         env:
           VERSION: v${{ needs.release.outputs.version }}
@@ -556,8 +556,26 @@ jobs:
           set -e
           ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track alpha --release-status completed --release-name "$VERSION" --no-daemon
           ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track beta --release-status completed --release-name "$VERSION" --no-daemon
-          ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:alpha --release-status completed --release-name "$VERSION" --no-daemon
+
+      # Wear closed/open testing tracks only exist if the Wear OS release type has
+      # been opted into them in Play Console. The Wear closed track is custom-named
+      # `wear:Convocados Wear`; open testing is `wear:beta`. Attempt the promotion,
+      # but never fail the release when a form-factor track is absent.
+      - name: Promote wear to closed + open testing (if enabled)
+        continue-on-error: true
+        working-directory: android-app
+        env:
+          VERSION: v${{ needs.release.outputs.version }}
+        run: |
+          ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track "wear:Convocados Wear" --release-status completed --release-name "$VERSION" --no-daemon
           ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:beta --release-status completed --release-name "$VERSION" --no-daemon
+
+      - name: Draft production release for phone and wear
+        working-directory: android-app
+        env:
+          VERSION: v${{ needs.release.outputs.version }}
+        run: |
+          set -e
           ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track production --release-status draft --release-name "$VERSION" --no-daemon
           ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:production --release-status draft --release-name "$VERSION" --no-daemon
 

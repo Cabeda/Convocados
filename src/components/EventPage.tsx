@@ -2,12 +2,15 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Container, Paper, Typography, Box, Stack, Button,
-  Alert, Skeleton,
+  Alert, Skeleton, ToggleButton, ToggleButtonGroup,
 } from "@mui/material";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import StadiumIcon from "@mui/icons-material/Stadium";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { TeamPicker } from "./TeamPicker";
+import { TeamField } from "./TeamField";
 import type { Imatch } from "~/lib/random";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
@@ -116,6 +119,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const [teamTwoName, setTeamTwoName] = useState("");
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [shuffleVersion, setShuffleVersion] = useState(0);
+  const [teamView, setTeamView] = useState<"list" | "field">("list");
 
   // ── Event data ──────────────────────────────────────────────────────────────
   const [event, setEvent] = useState<EventData | null>(null);
@@ -426,6 +430,17 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const notFound = error?.status === 404;
 
+  // Server team results use raw team identifiers; swap in the (possibly
+  // renamed) display names once for both the list and field views.
+  const displayMatches = useMemo(() => {
+    if (!localMatches || !event) return localMatches;
+    return localMatches.map((m) => ({
+      ...m,
+      team: m.team === event.teamOneName ? teamOneName
+        : m.team === event.teamTwoName ? teamTwoName : m.team,
+    }));
+  }, [localMatches, event, teamOneName, teamTwoName]);
+
   useEffect(() => {
     if (event) document.title = `${event.title} — Convocados`;
     return () => { document.title = "Convocados"; };
@@ -438,7 +453,8 @@ export default function EventPage({ eventId }: { eventId: string }) {
     if (event.teamResults.length > 0) {
       setLocalMatches(event.teamResults.map((tr) => ({
         team: tr.name,
-        players: tr.members.map((m) => ({ name: m.name, order: m.order })),
+        formation: tr.formation ?? null,
+        players: tr.members.map((m) => ({ name: m.name, order: m.order, slot: m.slot ?? null })),
       })));
     } else {
       setLocalMatches(null);
@@ -889,6 +905,11 @@ export default function EventPage({ eventId }: { eventId: string }) {
   const isAdmin = !!event?.isAdmin;
   const canEditSettings = isOwnerless || isOwner || isAdmin;
   const canManageInvites = isOwner || isAdmin;
+  // Mirrors the PUT /api/events/:id/teams authorization: signed-in owner, admin,
+  // or an active participant. Everyone else gets a read-only field.
+  const isParticipant = !!session?.user
+    && !!event?.players.some((p) => p.userId === session.user!.id);
+  const canEditTeams = isAuthenticated && (isOwner || isAdmin || isParticipant);
 
   // #463 high-intent: fetch the signed-in user's RSVP for this event so the
   // PushPromptBanner can render as a modal when the user has a pending RSVP
@@ -1196,26 +1217,52 @@ export default function EventPage({ eventId }: { eventId: string }) {
             {localMatches && localMatches.length > 0 && (
               <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
                 <Stack spacing={3}>
-                  <Typography variant="h6" fontWeight={600}>{t("teams")}</Typography>
-                  <TeamPicker
-                    matches={localMatches.map((m) => ({
-                      ...m,
-                      team: m.team === event.teamOneName ? teamOneName
-                        : m.team === event.teamTwoName ? teamTwoName : m.team,
-                    }))}
-                    onResultChange={handleTeamChange}
-                    shuffleKey={shuffleVersion}
-                    ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
-                    onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
-                      if (teamIdx === 0) {
-                        setTeamOneName(newName);
-                        handleTeamNameSave(newName, teamTwoName);
-                      } else {
-                        setTeamTwoName(newName);
-                        handleTeamNameSave(teamOneName, newName);
-                      }
-                    } : undefined}
-                  />
+                  <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+                    <Typography variant="h6" fontWeight={600}>{t("teams")}</Typography>
+                    <ToggleButtonGroup
+                      size="small"
+                      exclusive
+                      value={teamView}
+                      onChange={(_e, next) => { if (next) setTeamView(next); }}
+                      aria-label={t("teamViewToggleLabel")}
+                    >
+                      <ToggleButton value="list" aria-label={t("teamViewList")}>
+                        <ViewListIcon fontSize="small" sx={{ mr: 0.5 }} />
+                        {t("teamViewList")}
+                      </ToggleButton>
+                      <ToggleButton value="field" aria-label={t("teamViewField")}>
+                        <StadiumIcon fontSize="small" sx={{ mr: 0.5 }} />
+                        {t("teamViewField")}
+                      </ToggleButton>
+                    </ToggleButtonGroup>
+                  </Stack>
+                  {teamView === "list" ? (
+                    <TeamPicker
+                      matches={displayMatches ?? []}
+                      onResultChange={handleTeamChange}
+                      shuffleKey={shuffleVersion}
+                      ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
+                      canEdit={canEditTeams}
+                      onTeamNameSave={canEditSettings ? (teamIdx, newName) => {
+                        if (teamIdx === 0) {
+                          setTeamOneName(newName);
+                          handleTeamNameSave(newName, teamTwoName);
+                        } else {
+                          setTeamTwoName(newName);
+                          handleTeamNameSave(teamOneName, newName);
+                        }
+                      } : undefined}
+                    />
+                  ) : (
+                    <TeamField
+                      matches={displayMatches ?? []}
+                      onResultChange={handleTeamChange}
+                      shuffleKey={shuffleVersion}
+                      ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
+                      sport={event.sport}
+                      canEdit={canEditTeams}
+                    />
+                  )}
                 </Stack>
               </Paper>
             )}
