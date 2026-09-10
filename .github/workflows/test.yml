@@ -8,12 +8,17 @@ on:
     branches:
       - main
   workflow_dispatch:
+  # Merge queue: required checks run against the queued merge result, so a
+  # combination that only breaks after merging is caught before it lands.
+  merge_group:
+    types: [checks_requested]
 
 # Cancel in-progress runs for the same ref when a new push lands.
 # Saves CI minutes when a developer pushes repeatedly to the same branch.
+# Never cancel a merge-queue run: GitHub re-queues on cancellation.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
 
 permissions:
   contents: read
@@ -230,8 +235,11 @@ jobs:
           key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
       - if: steps.nm-cache.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile --prefer-offline
-      - if: steps.nm-cache.outputs.cache-hit != 'true'
-        run: pnpm prisma generate
+      # Always regenerate: a node_modules cache hit must never skip client
+      # generation. The cache key ignores source changes, and a cached
+      # generated/ dir can be stale or partial — skipping this broke every run
+      # that hit the cache with "Cannot find module './__generated__/prisma/client'".
+      - run: pnpm prisma generate
         env:
           DATABASE_URL: file:./prisma/dev.db
       - name: Run full suite with coverage (thresholds from vitest.config.ts)
@@ -463,7 +471,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke]
+    needs: [typecheck, lint, audit, test, coverage-gate, build, e2e, seed-smoke, android, android-wear]
     steps:
       - name: Check results
         run: |
