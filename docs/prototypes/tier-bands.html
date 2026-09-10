@@ -74,6 +74,11 @@ No personal data: players are P1…P42.</p>
         <option selected>6</option>
         <option>7</option>
       </select></label>
+    <label>Band method
+      <select id="method">
+        <option value="uniform">uniform σ</option>
+        <option value="percentile" selected>percentile (equal-count)</option>
+      </select></label>
   </div>
 </div>
 
@@ -112,9 +117,17 @@ function compute(){
   const sigmaPool=(sigmaPop==="est"?est:allPop);
   const sigma=sd(sigmaPool.map(seed));
   const w=mult*sigma;
-  const edges=[]; for(let i=0;i<tiers;i++) edges.push(i*w);
-  const bandOf=R=>Math.min(tiers-1,Math.floor(R/w));
-  return {thr,anchorSrc,sigmaPop,mult,tiers,est,anchor,seed,sigma,w,edges,bandOf};
+  const method=document.getElementById("method").value;
+  let edges;
+  if(method==="percentile"){
+    const vals=est.map(seed).sort((a,b)=>a-b);
+    const q=p=>vals[Math.min(vals.length-1,Math.max(0,Math.round(p*(vals.length-1))))];
+    edges=[0]; for(let i=1;i<tiers;i++) edges.push(q(i/tiers));
+  } else {
+    edges=[]; for(let i=0;i<tiers;i++) edges.push(i*w);
+  }
+  const bandOf=R=>Math.max(0,Math.min(tiers-1,edges.findLastIndex(e=>R>=e)));
+  return {thr,anchorSrc,sigmaPop,mult,tiers,est,anchor,seed,sigma,w,edges,bandOf,method};
 }
 
 function render(){
@@ -124,7 +137,7 @@ function render(){
   document.getElementById("summary").innerHTML=[
     ["anchor",c.anchor.toFixed(0)],
     ["σ",c.sigma.toFixed(1)],
-    ["band width",c.w.toFixed(1)],
+    ...(c.method==="uniform"?[["band width",c.w.toFixed(1)]]:[["method","percentile"]]),
     ["established",c.est.length+"/"+DATA.length],
     ["edges",c.edges.map(e=>e.toFixed(0)).join(" / ")+" +"],
   ].map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
@@ -168,10 +181,10 @@ document.querySelectorAll("select,input").forEach(el=>el.addEventListener("input
 document.getElementById("presets").addEventListener("click",e=>{
   const p=e.target.dataset.p; if(!p)return;
   const set=(id,v)=>{document.getElementById(id).value=v;};
-  if(p==="rec"){set("thr",6);set("anchor","p5est");set("sigmapop","est");set("mult","0.5");set("tiers",6);}
-  if(p==="all"){set("thr",0);set("anchor","p5all");set("sigmapop","all");set("mult","0.5");set("tiers",6);}
-  if(p==="tight"){set("thr",6);set("anchor","p5est");set("sigmapop","est");set("mult","0.4");set("tiers",6);}
-  if(p==="wide"){set("thr",6);set("anchor","p5est");set("sigmapop","est");set("mult","0.6");set("tiers",6);}
+  if(p==="rec"){set("thr",3);set("anchor","minest");set("sigmapop","est");set("mult","0.5");set("tiers",6);set("method","percentile");}
+  if(p==="all"){set("thr",0);set("anchor","p5all");set("sigmapop","all");set("mult","0.5");set("tiers",6);set("method","uniform");}
+  if(p==="tight"){set("thr",3);set("anchor","minest");set("sigmapop","est");set("mult","0.4");set("tiers",6);set("method","uniform");}
+  if(p==="wide"){set("thr",3);set("anchor","minest");set("sigmapop","est");set("mult","0.6");set("tiers",6);set("method","uniform");}
   document.getElementById("thrv").textContent=document.getElementById("thr").value; render();
 });
 render();
