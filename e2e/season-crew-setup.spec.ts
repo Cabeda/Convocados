@@ -1,4 +1,4 @@
-import { test, expect, type Page, type APIRequestContext } from "@playwright/test";
+import { test, expect, type Page, type APIRequestContext, type Locator } from "@playwright/test";
 import { execSync } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -31,6 +31,24 @@ function withIp(request: APIRequestContext) {
     post: (url: string, opts?: any) => request.post(url, { ...opts, headers: { ...headers, ...opts?.headers } }),
     get: (url: string, opts?: any) => request.get(url, { ...opts, headers: { ...headers, ...opts?.headers } }),
   };
+}
+
+// Browser-driven mutations share one rate-limit bucket in CI (no client IP
+// header on real browser traffic, 30 writes/min across the whole suite). If a
+// submit hits the exhausted bucket, wait out the 60s window and retry once.
+async function submitExpecting(page: Page, click: () => Promise<void>, success: Locator) {
+  await click();
+  try {
+    await expect(success).toBeVisible({ timeout: 10_000 });
+    return;
+  } catch {
+    // Fall through: check for the rate-limit alert below.
+  }
+  const limited = await page.getByText("Too many requests. Please try again later.").count();
+  if (limited === 0) throw new Error("submit did not succeed and no rate-limit alert was shown");
+  await page.waitForTimeout(65_000);
+  await click();
+  await expect(success).toBeVisible({ timeout: 15_000 });
 }
 
 // Playwright's locator.dragTo() does not reliably trigger HTML5 drag-and-drop,
@@ -108,10 +126,13 @@ test.describe("Crew Season setup — full happy path", () => {
     await page.getByLabel("Season name").fill("E2E Season");
     await page.getByLabel("Registration opens").fill(opens);
     await page.getByLabel("Registration closes").fill(closes);
-    await page.getByRole("button", { name: "Create season", exact: true }).click();
+    await submitExpecting(
+      page,
+      () => page.getByRole("button", { name: "Create season", exact: true }).click(),
+      page.getByRole("link", { name: /E2E Season/ }),
+    );
     // Creation stays on the list — open the new Season from its card.
-    await expect(page.getByRole("link", { name: /E2E Season/ })).toBeVisible({ timeout: 10_000 });
-    await page.getByRole("link", { name: /E2E Season/ }).click();
+    await page.getByRole("link", { name: /E2E Season/ }).first().click();
     await page.waitForURL(/\/seasons\//, { timeout: 10_000 });
     const seasonId = page.url().split("/seasons/")[1];
     expect(seasonId).toBeTruthy();
@@ -136,8 +157,11 @@ test.describe("Crew Season setup — full happy path", () => {
     // ── 6. Recommend balanced Crews ───────────────────────────────────────
     await page.getByRole("combobox", { name: "Number of Crews" }).click();
     await page.getByRole("option", { name: "3", exact: true }).click();
-    await page.getByRole("button", { name: "Recommend Crews" }).click();
-    await expect(page.getByText("Crew ELO", { exact: false }).first()).toBeVisible({ timeout: 10_000 });
+    await submitExpecting(
+      page,
+      () => page.getByRole("button", { name: "Recommend Crews" }).click(),
+      page.getByText("Crew ELO", { exact: false }).first(),
+    );
     // GH-919: every draft Crew shows its average ELO.
     expect(await page.getByText(/Crew ELO \d+/).count()).toBe(3);
 
@@ -147,8 +171,11 @@ test.describe("Crew Season setup — full happy path", () => {
     await page.reload();
     await page.getByRole("combobox", { name: "Number of Crews" }).click();
     await page.getByRole("option", { name: "3", exact: true }).click();
-    await page.getByRole("button", { name: "Recommend Crews" }).click();
-    await expect(page.getByText("Crew ELO", { exact: false }).first()).toBeVisible({ timeout: 10_000 });
+    await submitExpecting(
+      page,
+      () => page.getByRole("button", { name: "Recommend Crews" }).click(),
+      page.getByText("Crew ELO", { exact: false }).first(),
+    );
 
     // ── 8. Swap two players via drag and drop (GH-918) ────────────────────
     const seasonRes = await api.get(`/api/events/${eventId}/seasons/${seasonId}`);
@@ -172,13 +199,19 @@ test.describe("Crew Season setup — full happy path", () => {
     expect(await page.getByTestId("crew-card-1").getByTestId(/member-row-/).count()).toBe(3);
 
     // ── 9. Save the setup ─────────────────────────────────────────────────
-    await page.getByRole("button", { name: "Save Season setup" }).click();
-    await expect(page.getByText("Season setup saved.")).toBeVisible({ timeout: 10_000 });
+    await submitExpecting(
+      page,
+      () => page.getByRole("button", { name: "Save Season setup" }).click(),
+      page.getByText("Season setup saved."),
+    );
 
     // ── 10. Start the Season (3 qualifying Crews + 9 participants) ────────
     const startButton = page.getByRole("button", { name: "Start season" });
     await expect(startButton).toBeEnabled();
-    await startButton.click();
-    await expect(page.getByRole("heading", { name: "Season is active" })).toBeVisible({ timeout: 10_000 });
+    await submitExpecting(
+      page,
+      () => startButton.click(),
+      page.getByRole("heading", { name: "Season is active" }),
+    );
   });
 });
