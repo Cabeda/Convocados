@@ -113,7 +113,7 @@ export async function ensureRankCalibration(eventId: string): Promise<{ anchor: 
     where: { id: eventId },
     select: { rankAnchor: true, rankTierEdges: true },
   });
-  if (event?.rankAnchor != null && event.rankTierEdges) {
+  if (typeof event?.rankAnchor === "number" && event.rankTierEdges) {
     try {
       return { anchor: event.rankAnchor, edges: JSON.parse(event.rankTierEdges) as number[] };
     } catch {
