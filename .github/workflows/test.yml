@@ -230,8 +230,11 @@ jobs:
           key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
       - if: steps.nm-cache.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile --prefer-offline
-      - if: steps.nm-cache.outputs.cache-hit != 'true'
-        run: pnpm prisma generate
+      # Always generate: the node_modules cache key includes the Prisma schema,
+      # but a restored cache has been observed to miss src/lib/__generated__,
+      # which silently breaks every test that imports db.server. Generating is
+      # idempotent and cheap, so never rely on the cache for it.
+      - run: pnpm prisma generate
         env:
           DATABASE_URL: file:./prisma/dev.db
       - name: Run full suite with coverage (thresholds from vitest.config.ts)
