@@ -12,6 +12,7 @@ import { syncPaymentsForEvent } from "../../../../lib/payments.server";
 import { syncGamePayments } from "../../../../lib/settlement.server";
 import { getOutstandingBalance, getGateBalance } from "../../../../lib/balance.server";
 import { logEvent } from "../../../../lib/eventLog.server";
+import { applyFormationLayout } from "../../../../lib/teams";
 import { createLogger } from "../../../../lib/logger.server";
 import { normalizeForMatch } from "../../../../lib/stringMatch";
 import { isGameEnded } from "../../../../lib/gameStatus";
@@ -288,7 +289,7 @@ async function autoRandomizeIfFull(eventId: string, maxPlayers: number, currentG
   // Game is full and no teams — auto-generate
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { balanced: true, teamOneName: true, teamTwoName: true },
+    select: { balanced: true, teamOneName: true, teamTwoName: true, sport: true },
   });
   if (!event) return;
 
@@ -308,12 +309,13 @@ async function autoRandomizeIfFull(eventId: string, maxPlayers: number, currentG
   }
 
   await prisma.$transaction([
-    ...matches.map((match) =>
+    ...applyFormationLayout(matches, event.sport).map((match) =>
       prisma.teamResult.create({
         data: {
           name: match.team,
+          formation: match.formation ?? null,
           eventId,
-          members: { create: match.players.map((p) => ({ name: p.name, order: p.order })) },
+          members: { create: match.players.map((p) => ({ name: p.name, order: p.order, slot: p.slot ?? null })) },
         },
       })
     ),

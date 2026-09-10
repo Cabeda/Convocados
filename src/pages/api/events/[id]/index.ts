@@ -94,7 +94,8 @@ export const GET: APIRoute = async ({ params, request }) => {
         const teamsSnapshot = event.teamResults.length > 0
           ? JSON.stringify(event.teamResults.map((tr) => ({
               team: tr.name,
-              players: tr.members.map((m) => ({ name: m.name, order: m.order })),
+              formation: tr.formation,
+              players: tr.members.map((m) => ({ name: m.name, order: m.order, slot: m.slot })),
             })))
           : null;
 

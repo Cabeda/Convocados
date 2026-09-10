@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ request }) => {
     where: { id: eventId },
     include: {
       teamResults: {
-        select: { id: true, name: true, members: { select: { name: true, order: true } } },
+        select: { id: true, name: true, formation: true, members: { select: { name: true, order: true, slot: true } } },
       },
       history: {
         where: { status: "played" },
@@ -86,7 +86,8 @@ export const POST: APIRoute = async ({ request }) => {
     ? JSON.stringify(
         event.teamResults.map((tr) => ({
           team: tr.name,
-          players: tr.members.map((m) => ({ name: m.name, order: m.order })),
+          formation: tr.formation,
+          players: tr.members.map((m) => ({ name: m.name, order: m.order, slot: m.slot })),
         }))
       )
     : null;

@@ -12,11 +12,15 @@ export interface Player {
 export interface TeamMember {
   name: string;
   order: number;
+  /** Formation slot index, or null when unplaced. */
+  slot?: number | null;
 }
 
 export interface TeamResult {
   id: string;
   name: string;
+  /** Sport-specific formation id (e.g. "4-3-3"), or null when unset. */
+  formation?: string | null;
   members: TeamMember[];
 }
 
