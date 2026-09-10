@@ -430,6 +430,17 @@ export default function EventPage({ eventId }: { eventId: string }) {
 
   const notFound = error?.status === 404;
 
+  // Server team results use raw team identifiers; swap in the (possibly
+  // renamed) display names once for both the list and field views.
+  const displayMatches = useMemo(() => {
+    if (!localMatches || !event) return localMatches;
+    return localMatches.map((m) => ({
+      ...m,
+      team: m.team === event.teamOneName ? teamOneName
+        : m.team === event.teamTwoName ? teamTwoName : m.team,
+    }));
+  }, [localMatches, event, teamOneName, teamTwoName]);
+
   useEffect(() => {
     if (event) document.title = `${event.title} — Convocados`;
     return () => { document.title = "Convocados"; };
@@ -1221,11 +1232,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                   </Stack>
                   {teamView === "list" ? (
                     <TeamPicker
-                      matches={localMatches.map((m) => ({
-                        ...m,
-                        team: m.team === event.teamOneName ? teamOneName
-                          : m.team === event.teamTwoName ? teamTwoName : m.team,
-                      }))}
+                      matches={displayMatches ?? []}
                       onResultChange={handleTeamChange}
                       shuffleKey={shuffleVersion}
                       ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
@@ -1241,11 +1248,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                     />
                   ) : (
                     <TeamField
-                      matches={localMatches.map((m) => ({
-                        ...m,
-                        team: m.team === event.teamOneName ? teamOneName
-                          : m.team === event.teamTwoName ? teamTwoName : m.team,
-                      }))}
+                      matches={displayMatches ?? []}
                       onResultChange={handleTeamChange}
                       shuffleKey={shuffleVersion}
                       ratingsMap={balanced && !event.hideEloInTeams ? ratingsMap : undefined}
