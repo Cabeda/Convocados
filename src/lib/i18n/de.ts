@@ -168,6 +168,7 @@ const de: TranslationKeys = {
   backToGame: "Zurück zum Spiel",
   backToSeasons: "Zurück zu den Saisons",
   historyTitle: "{title} — Verlauf",
+  openGame: "Spiel öffnen",
   leaderboard: "Tabelle",
   leaderboardDescription: "Fußballähnliche Tabelle aus gespielten, nicht freundschaftlichen Spielen.",
   playerLeague: "Spieler-Liga",

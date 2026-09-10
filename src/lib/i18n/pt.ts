@@ -182,6 +182,7 @@ const pt: TranslationKeys = {
   backToGame: "Voltar ao jogo",
   backToSeasons: "Voltar às épocas",
   historyTitle: "{title} — Histórico",
+  openGame: "Abrir jogo",
   leaderboard: "Classificação",
   leaderboardDescription: "Classificação ao estilo do futebol, com jogos disputados não amigáveis.",
   playerLeague: "Liga de jogadores",

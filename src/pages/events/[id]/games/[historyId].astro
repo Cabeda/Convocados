@@ -1,0 +1,21 @@
+---
+import GameDetailPage from "../../../../components/GameDetailPage";
+
+const { id, historyId } = Astro.params;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Game</title>
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1b6b4a" />
+  </head>
+  <body>
+    <GameDetailPage client:only="react" eventId={id!} historyId={historyId!} />
+  </body>
+</html>
