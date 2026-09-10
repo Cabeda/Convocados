@@ -358,4 +358,14 @@
     <string name="save_photo">Foto speichern</string>
     <string name="zoom">Zoom</string>
     <string name="photo_load_error">Bild konnte nicht geladen werden.</string>
+    <string name="season_rank">Saison-Rang</string>
+    <string name="season_rank_subtitle">Freundschaftsspiele zählen nicht für den Rang · %1$d gewertete Spiele</string>
+    <string name="season_rank_provisional">Vorläufig</string>
+    <string name="season_rank_to_next">%1$d bis %2$s</string>
+    <string name="season_rank_top_tier">Höchste Stufe</string>
+    <string name="tier_up_title">Du hast %1$s erreicht!</string>
+    <string name="tier_up_body">Auf dem Platz verdient in dieser Saison — kein Preis, nur deine Form.</string>
+    <string name="tier_down_title">Neue Saison, neuer Start</string>
+    <string name="tier_down_body">Dein Rang wurde zurückgesetzt. Du bist wieder in %1$s — steig erneut auf.</string>
+    <string name="continue_action">Weiter</string>
 </resources>

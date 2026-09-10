@@ -29,6 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Context
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import dev.convocados.R
 import androidx.lifecycle.ViewModel
@@ -40,6 +45,8 @@ import dev.convocados.data.api.ApiException
 import dev.convocados.data.api.EventDetail
 import dev.convocados.data.api.Player
 import dev.convocados.data.api.PlayerRating
+import dev.convocados.data.api.SeasonRankPayload
+import dev.convocados.data.api.SeasonRankPlayer
 import dev.convocados.data.api.UserProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -85,6 +92,10 @@ class RankingsViewModel @Inject constructor(
     val canManage: StateFlow<Boolean> = _canManage
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message
+    private val _seasonRank = MutableStateFlow<SeasonRankPayload?>(null)
+    val seasonRank: StateFlow<SeasonRankPayload?> = _seasonRank
+    private val _seasonRankName = MutableStateFlow<String?>(null)
+    val seasonRankName: StateFlow<String?> = _seasonRankName
     private var nextCursor: String? = null
 
     init {
@@ -114,6 +125,17 @@ class RankingsViewModel @Inject constructor(
             }
             _loading.value = false
             _refreshing.value = false
+
+            // Season Rank (ADR 0031): fetch the active Season's ladder for the
+            // viewer. Non-fatal — a failure leaves the lifetime ratings intact.
+            runCatching { api.fetchSeasons(id) }.onSuccess { seasons ->
+                val active = seasons.seasons.firstOrNull { it.status == "active" || it.status == "review" || it.status == "completed" }
+                if (active != null) {
+                    _seasonRankName.value = active.name
+                    runCatching { api.fetchSeasonRank(id, active.id) }
+                        .onSuccess { _seasonRank.value = it }
+                }
+            }
         }
     }
 
@@ -235,6 +257,28 @@ fun RankingsScreen(
     val canEdit by viewModel.canEdit.collectAsStateWithLifecycle()
     val canManage by viewModel.canManage.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val seasonRank by viewModel.seasonRank.collectAsStateWithLifecycle()
+    val seasonRankName by viewModel.seasonRankName.collectAsStateWithLifecycle()
+
+    // Season Rank tier transition (ADR 0031): celebrate up (with haptic), calm
+    // fresh-start down. Fires once per transition, tracked per Season in prefs.
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    var transition by remember { mutableStateOf<TierTransition?>(null) }
+    LaunchedEffect(seasonRank) {
+        val rank = seasonRank ?: return@LaunchedEffect
+        val you = rank.youName?.let { name -> rank.players.firstOrNull { it.name == name } } ?: return@LaunchedEffect
+        if (you.provisional) return@LaunchedEffect
+        val prefs = context.getSharedPreferences("season_rank", Context.MODE_PRIVATE)
+        val key = "tier_${rank.seasonId}_${you.name}"
+        val prev = prefs.getInt(key, -1)
+        prefs.edit().putInt(key, you.tier).apply()
+        if (prev >= 0 && prev != you.tier) {
+            val kind = if (you.tier > prev) TierTransitionKind.UP else TierTransitionKind.DOWN
+            if (kind == TierTransitionKind.UP) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            transition = TierTransition(kind, prev, you.tier)
+        }
+    }
 
     LaunchedEffect(eventId) { viewModel.load(eventId) }
 
@@ -290,6 +334,10 @@ fun RankingsScreen(
                             Text(stringResource(R.string.rankings), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                }
+
+                if (!hidden && !loading && seasonRank?.players?.isNotEmpty() == true) {
+                    item { SeasonRankCard(requireNotNull(seasonRank), seasonRankName) }
                 }
 
                 if (hidden) {
@@ -399,6 +447,17 @@ fun RankingsScreen(
             dismissButton = { TextButton(onClick = { purgeTarget = null }) { Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.outline) } },
         )
     }
+
+    // Season Rank tier transition dialog (ADR 0031)
+    transition?.let { tr ->
+        val tierName = TierNames.getOrElse(tr.to) { "" }
+        AlertDialog(
+            onDismissRequest = { transition = null },
+            title = { Text(if (tr.kind == TierTransitionKind.UP) stringResource(R.string.tier_up_title, tierName) else stringResource(R.string.tier_down_title)) },
+            text = { Text(if (tr.kind == TierTransitionKind.UP) stringResource(R.string.tier_up_body) else stringResource(R.string.tier_down_body, tierName), color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            confirmButton = { TextButton(onClick = { transition = null }) { Text(stringResource(R.string.continue_action), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) } },
+        )
+    }
 }
 
 private val PodiumColors = listOf(Color(0xFFC9A227), Color(0xFF9EA7B3), Color(0xFFB08D57))
@@ -410,5 +469,69 @@ private val PodiumColors = listOf(Color(0xFFC9A227), Color(0xFF9EA7B3), Color(0x
         }
     } else {
         Text("$rank", color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Bold, modifier = Modifier.width(24.dp))
+    }
+}
+
+enum class TierTransitionKind { UP, DOWN }
+
+data class TierTransition(val kind: TierTransitionKind, val from: Int, val to: Int)
+
+private val TierNames = listOf("Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master")
+private val TierColors = listOf(
+    Color(0xFF8C6A4A), Color(0xFF8892A0), Color(0xFFC9A227),
+    Color(0xFF3FA8A0), Color(0xFF5B8DEF), Color(0xFF9B6BFF),
+)
+
+/** Season Rank ladder (ADR 0031), Variant A: tier + numeric rank + progress. */
+@Composable private fun SeasonRankCard(rank: SeasonRankPayload, seasonName: String?) {
+    val sorted = rank.players.sortedWith(compareBy({ it.provisional }, { -it.display }))
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text(stringResource(R.string.season_rank), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (!seasonName.isNullOrBlank()) {
+                Text(seasonName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(stringResource(R.string.season_rank_subtitle, rank.gamesCount), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            sorted.forEach { player -> SeasonRankRow(player, rank.edges, highlight = player.name == rank.youName) }
+        }
+    }
+}
+
+@Composable private fun SeasonRankRow(player: SeasonRankPlayer, edges: List<Double>, highlight: Boolean) {
+    val tierColor = if (player.provisional) MaterialTheme.colorScheme.outline else TierColors.getOrElse(player.tier) { MaterialTheme.colorScheme.primary }
+    Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (player.provisional) "—" else TierNames.getOrElse(player.tier) { "" },
+                color = tierColor,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.width(82.dp),
+            )
+            Text(
+                player.name + if (highlight) stringResource(R.string.you_suffix) else "",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (highlight) FontWeight.Bold else FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            if (player.provisional) {
+                Text(stringResource(R.string.season_rank_provisional), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            } else {
+                Text("${player.display.toInt()}", color = tierColor, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold)
+            }
+        }
+        if (!player.provisional) {
+            val lo = edges.getOrNull(player.tier) ?: 0.0
+            val hi = edges.getOrNull(player.tier + 1)
+            val progress = if (hi == null) 1f else (((player.display - lo) / (hi - lo)).coerceIn(0.0, 1.0)).toFloat()
+            LinearProgressIndicator(
+                progress = { progress },
+                color = tierColor,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp).height(5.dp),
+            )
+        }
     }
 }
