@@ -63,6 +63,45 @@ describe("GET /api/events/:id/history/leaderboard", () => {
     expect(body.crews[0]).toMatchObject({ name: "Red", points: 4, roundsRepresented: 2 });
   });
 
+  it("counts period games for a retroactive Season whose members joined after the games", async () => {
+    const event = await prisma.event.create({ data: { title: "Retro League", location: "Pitch", dateTime: new Date("2026-02-01") } });
+    const alice = await prisma.user.create({ data: { id: "retro-alice", name: "Alice", email: "retro-alice@test.com" } });
+    const bob = await prisma.user.create({ data: { id: "retro-bob", name: "Bob", email: "retro-bob@test.com" } });
+    const alicePlayer = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: alice.id } });
+    const bobPlayer = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Bob", userId: bob.id } });
+    const season = await prisma.season.create({
+      data: {
+        eventId: event.id,
+        name: "Q2 Retro",
+        status: "registration",
+        registrationOpensAt: new Date("2026-01-01"),
+        registrationClosesAt: new Date("2026-08-31"),
+        startsAt: new Date("2026-01-01"),
+      },
+    });
+    const red = await prisma.crew.create({ data: { seasonId: season.id, name: "Red", sortOrder: 0 } });
+    const blue = await prisma.crew.create({ data: { seasonId: season.id, name: "Blue", sortOrder: 1 } });
+    // Enrolled in September, after every game — the retroactive case.
+    await prisma.seasonMembership.create({ data: { seasonId: season.id, eventPlayerId: alicePlayer.id, userId: alice.id, crewId: red.id, joinedAt: new Date("2026-09-10") } });
+    await prisma.seasonMembership.create({ data: { seasonId: season.id, eventPlayerId: bobPlayer.id, userId: bob.id, crewId: blue.id, joinedAt: new Date("2026-09-10") } });
+    const snapshot = JSON.stringify([
+      { team: "Ninjas", players: [{ name: "Alice", order: 0 }] },
+      { team: "Gunas", players: [{ name: "Bob", order: 0 }] },
+    ]);
+    await prisma.gameHistory.create({
+      data: { eventId: event.id, dateTime: new Date("2026-03-01"), status: "played", scoreOne: 3, scoreTwo: 1, teamOneName: "Ninjas", teamTwoName: "Gunas", teamsSnapshot: snapshot },
+    });
+
+    const response = await getLeaderboard(context(event.id, `?seasonId=${season.id}`));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.gamesCount).toBe(1);
+    expect(body.players.find((player: { name: string }) => player.name === "Alice")).toMatchObject({ played: 1, points: 3 });
+    expect(body.players.find((player: { name: string }) => player.name === "Bob")).toMatchObject({ played: 1, points: 0 });
+    expect(body.crews).toHaveLength(2);
+  });
+
   it("returns event-wide player standings and no invented Crews without a Season", async () => {
     const event = await prisma.event.create({ data: { title: "Pickup", location: "Pitch", dateTime: new Date("2026-02-01") } });
     await prisma.gameHistory.create({

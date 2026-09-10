@@ -92,7 +92,12 @@ export const GET: APIRoute = async ({ params, request }) => {
     : [];
   const startsAt = selectedSeason?.startsAt ?? selectedSeason?.registrationClosesAt ?? null;
   const endsAt = selectedSeason?.completedAt ?? selectedSeason?.cancelledAt ?? null;
-  const standings = calculateLeaderboard(allGames, selectedSeason ? seasonMembers : undefined, { startsAt, endsAt });
+  // Members enrolled after the season period closed (e.g. a retroactive season
+  // set up after the games) count for the whole period — see isMemberEffective.
+  const seasonEndsAt = selectedSeason
+    ? (selectedSeason.completedAt ?? selectedSeason.cancelledAt ?? selectedSeason.registrationClosesAt)
+    : null;
+  const standings = calculateLeaderboard(allGames, selectedSeason ? seasonMembers : undefined, { startsAt, endsAt, seasonEndsAt });
 
   return Response.json({
     scope: {
