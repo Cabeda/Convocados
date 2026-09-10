@@ -11,6 +11,14 @@ const eventIdParam = {
   description: "Event ID",
 };
 
+const seasonIdParam = {
+  name: "seasonId",
+  in: "path" as const,
+  required: true,
+  schema: { type: "string" },
+  description: "Season ID",
+};
+
 const errorResponses = {
   "400": { description: "Bad request" },
   "401": { description: "Unauthorized" },
@@ -196,6 +204,22 @@ export const openApiSpec = {
         tags: ["Events"],
         parameters: [eventIdParam],
         responses: { "200": { description: "ELO setting updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons": {
+      get: {
+        summary: "List Seasons for an event",
+        tags: ["Seasons"],
+        parameters: [eventIdParam],
+        responses: { "200": { description: "Seasons list" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/rank": {
+      get: {
+        summary: "Get the Season Rank ladder for an event Season",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Season Rank ladder" }, ...errorResponses },
       },
     },
     "/api/events/{id}/hide-elo-in-teams": {
