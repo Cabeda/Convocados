@@ -25,6 +25,12 @@ same build, so version codes never drift and the changelog travels with it. See
 "Private beta" in conversation means the **Internal testing** track — not Closed
 testing.
 
+Wear OS closed/open testing are **optional**: `wear:alpha` and `wear:beta` only
+exist if you opt the Wear app into those testing tracks in Play Console. The
+automated release always updates `wear:internal` and drafts `wear:production`;
+the Wear closed/open promotion is best-effort and never fails the release when
+those tracks are absent.
+
 ## Setup (one-time)
 
 ### 1. Create a Google Cloud Service Account
