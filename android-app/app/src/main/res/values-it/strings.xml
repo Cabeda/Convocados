@@ -351,6 +351,11 @@
     <string name="open_pickup">Pickup aperto</string>
     <string name="claim_pickup">Adotta questo pickup</string>
     <string name="team_total_elo">ELO totale: %1$d</string>
+    <string name="team_view_toggle_label">Vista squadre</string>
+    <string name="team_view_list">Elenco</string>
+    <string name="team_view_field">Campo</string>
+    <string name="formation">Formazione</string>
+    <string name="unplaced_players">Non schierato</string>
     <!-- Profile photo -->
     <string name="profile_photo">Foto profilo</string>
     <string name="change_photo">Cambia foto</string>
