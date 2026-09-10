@@ -517,10 +517,11 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
               seasonOptions={[]}
               onScopeChange={() => {}}
               eventId={eventId}
+              showPlayers={false}
             />
 
             {(season.status === "active" || season.status === "review" || season.status === "completed") && (
-              <SeasonRankTable eventId={eventId} seasonId={seasonId} />
+              <SeasonRankTable eventId={eventId} seasonId={seasonId} standings={leaderboard?.players} />
             )}
 
             {!isAdmin ? (

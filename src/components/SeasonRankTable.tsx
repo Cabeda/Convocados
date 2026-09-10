@@ -31,7 +31,7 @@ interface RankPayload {
  * Tier chip + numeric Rank + progress-to-next-tier bar. Admin-only state tabs
  * live on the Ratings page; this table derives state per player.
  */
-export function SeasonRankTable({ eventId, seasonId, showTransition = true }: { eventId: string; seasonId: string; showTransition?: boolean }) {
+export function SeasonRankTable({ eventId, seasonId, showTransition = true, standings }: { eventId: string; seasonId: string; showTransition?: boolean; standings?: Array<{ name: string; points: number; wins: number; draws: number; losses: number }> }) {
   const theme = useTheme();
   const t = useT();
   const [data, setData] = useState<RankPayload | null>(null);
@@ -58,16 +58,18 @@ export function SeasonRankTable({ eventId, seasonId, showTransition = true }: { 
   const rows = useMemo(() => {
     if (!data || !Array.isArray(data.players) || !Array.isArray(data.edges)) return [];
     const edges = data.edges;
+    const standingByName = new Map((standings ?? []).map((s) => [s.name, s]));
     return [...data.players]
       .map((p) => {
         const tier = p.tier;
         const lo = edges[tier] ?? 0;
         const hi = edges[tier + 1];
         const pct = hi === null ? 100 : Math.round(((p.display - lo) / (hi - lo)) * 100);
-        return { ...p, pct, to: hi === null ? 0 : Math.max(0, hi - p.display), next: hi === null ? null : TIER_NAMES[tier + 1] };
+        const s = standingByName.get(p.name);
+        return { ...p, pct, to: hi === null ? 0 : Math.max(0, hi - p.display), next: hi === null ? null : TIER_NAMES[tier + 1], points: s?.points ?? 0, wins: s?.wins ?? 0, draws: s?.draws ?? 0, losses: s?.losses ?? 0 };
       })
       .sort((a, b) => Number(a.provisional) - Number(b.provisional) || b.display - a.display);
-  }, [data]);
+  }, [data, standings]);
 
   if (error) return <Alert severity="info">{error}</Alert>;
   if (!data) return <Skeleton variant="rounded" height={180} />;
@@ -91,6 +93,8 @@ export function SeasonRankTable({ eventId, seasonId, showTransition = true }: { 
                 <TableCell sx={{ fontWeight: 700 }}>{t("leaderboardPlayer")}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t("seasonRankTier")}</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 700 }}>{t("seasonRankRank")}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }} title={t("leaderboardPoints")}>{t("leaderboardPoints")}</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, whiteSpace: "nowrap", display: { xs: "none", sm: "table-cell" } }} title={t("leaderboardWins")}>{t("leaderboardWins")}-{t("leaderboardDraws")}-{t("leaderboardLosses")}</TableCell>
                 <TableCell sx={{ fontWeight: 700, minWidth: 150, display: { xs: "none", sm: "table-cell" } }}>{t("seasonRankProgress")}</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 700 }}>G</TableCell>
               </TableRow>
@@ -121,6 +125,8 @@ export function SeasonRankTable({ eventId, seasonId, showTransition = true }: { 
                         sx={{ fontWeight: 700, minWidth: 48, color: TIER_COLORS[r.tier], borderColor: alpha(TIER_COLORS[r.tier], 0.4), bgcolor: alpha(TIER_COLORS[r.tier], 0.08) }} />
                     )}
                   </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>{r.points}</TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: "nowrap", display: { xs: "none", sm: "table-cell" } }}>{r.wins}-{r.draws}-{r.losses}</TableCell>
                   <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
                     {r.provisional ? (
                       <Typography variant="caption" color="text.secondary">{t("seasonRankUnlocks", { n: r.games })}</Typography>

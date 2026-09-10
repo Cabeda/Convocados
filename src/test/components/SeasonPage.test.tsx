@@ -178,7 +178,7 @@ describe("SeasonPage", () => {
       scope: { type: "season", seasonId: "season-1", name: "September Season", startsAt: null, endsAt: null },
       gamesCount: 1,
       players: [{ rank: 1, name: "Alice", crewName: null, points: 3, played: 1, wins: 1, draws: 0, losses: 0, goalsFor: 2, goalsAgainst: 1, goalDifference: 1 }],
-      crews: [],
+      crews: [{ rank: 1, crewId: "crew-1", name: "Brothers", points: 3, tieBreakTotal: 3, roundsCounted: 1, roundsRepresented: 1, gameScores: [] }],
     };
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify(withLeaderboard), { status: 200 }))
@@ -186,7 +186,9 @@ describe("SeasonPage", () => {
 
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     expect(await screen.findByText("Standings")).toBeInTheDocument();
-    expect(screen.getByText("Alice")).toBeInTheDocument();
+    // Season Rank replaces the individual Player league; the Crew league stays.
+    expect(screen.getByText("Brothers")).toBeInTheDocument();
+    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
   });
 
   it("shows the average ELO of each recommended Crew", async () => {
