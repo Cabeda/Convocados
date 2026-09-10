@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { authorizeSeasonRequest, getSeasonForEvent } from "~/lib/seasonSetup.server";
 import { getSeasonRankPayload } from "~/lib/seasonRank.server";
@@ -16,5 +17,12 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const payload = await getSeasonRankPayload(eventId, seasonId);
   if (!payload) return Response.json({ error: "Season not found." }, { status: 404 });
-  return Response.json(payload);
+
+  // The viewer's own EventPlayer name, so the client can highlight "you" and
+  // detect tier transitions for the celebration/demotion modal.
+  const youName = session?.user
+    ? (await prisma.eventPlayer.findFirst({ where: { eventId, userId: session.user.id }, select: { name: true } }))?.name ?? null
+    : null;
+
+  return Response.json({ ...payload, youName });
 };
