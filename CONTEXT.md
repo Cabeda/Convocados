@@ -455,3 +455,22 @@ _Avoid_: responsive screen (too vague), tablet-only layout
 ## Reduced Motion
 The system accessibility instruction to simplify or remove expressive animations. It takes precedence over the app's default expressive motion policy on phone and Wear. Reduced Motion changes transitions and feedback timing, not domain state or interaction availability.
 _Avoid_: disabled animation (too broad), slow mode
+
+## Release Track
+A distribution stage for an app in Google Play. Convocados uses `internal` (Internal testing), `alpha` (Closed testing), `beta` (Open testing), and `production`. The Wear app uses the same stages under the `wear:` form-factor prefix (`wear:internal`, `wear:alpha`, `wear:beta`, `wear:production`). A Release Track holds one release of a given version at a time.
+
+The phrase "private beta" refers to the `internal` track in conversation, not to Closed testing.
+_Avoid_: channel (that is a notification concept), environment (that is web infrastructure)
+
+## Promotion
+Moving an already-uploaded build — one version code — from one **Release Track** to another without rebuilding it. The promoted build carries its release notes. Promotion is how a single artifact reaches every stage, so stages never diverge into different builds.
+_Avoid_: deploy (reserved for the web app and server), rebuild, re-upload
+
+## Policy Remediation
+Replacing a build that Google Play rejected for a policy violation with a compliant build on every **Release Track** that holds the violating one, at full rollout for production. Distinct from **Promotion** in intent: a promotion advances a build through stages; a remediation retires a non-compliant one everywhere.
+_Avoid_: hotfix (a code fix, not the release operation), rollback (Play cannot downgrade a version code)
+
+## Ongoing Activity
+A Wear OS concept: a long-running task surfaced with an ongoing notification paired with an `OngoingActivity`, so the watch face shows a tappable indicator and the recent-apps chip references it. In Convocados a live score session — a **Game** being scored, or a **Quick Game** — is an Ongoing Activity. If the app ever gains a tile, the tile must reference the Ongoing Activity.
+_Avoid_: foreground service (a different mechanism), Live Update (a distinct Wear surface)
+

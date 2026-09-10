@@ -20,6 +20,9 @@ import dev.convocados.wear.data.api.displayTennisPoint
 import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.RememberKeepScreenOn
+import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
+import dev.convocados.wear.ui.ongoing.ongoingScoreText
+import dev.convocados.wear.ui.ongoing.shouldShowQuickGameOngoing
 import dev.convocados.wear.ui.screen.score.GameClock
 import dev.convocados.wear.ui.screen.score.GameEdgeProgress
 import dev.convocados.wear.ui.screen.score.TeamScoreButton
@@ -38,6 +41,17 @@ fun QuickScoreScreen(
     RememberKeepScreenOn(true)
 
     val kickoffMs = state.kickoffEpochMs
+    // Play policy: a running quick game must surface an Ongoing Activity.
+    RememberOngoingActivity(
+        enabled = shouldShowQuickGameOngoing(kickoffMs, state.durationMinutes, System.currentTimeMillis()),
+        title = stringResource(R.string.ongoing_quick_title),
+        text = ongoingScoreText(
+            stringResource(R.string.team_default_1),
+            state.scoreOne,
+            stringResource(R.string.team_default_2),
+            state.scoreTwo,
+        ),
+    )
     if (kickoffMs == null) return // no active quick game; caller handles end
 
     var now by remember { mutableStateOf(Instant.now()) }
@@ -64,10 +78,11 @@ fun QuickScoreScreen(
         if (next <= totalDurationMs) (next.toFloat() / totalDurationMs) else null
     } else null
 
-    ScreenScaffold {
+    ScreenScaffold { contentPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(contentPadding)
                 .pointerInput(Unit) {
                     // Swipe up ends the quick game; swipe down saves it to an event.
                     val threshold = 64.dp.toPx()

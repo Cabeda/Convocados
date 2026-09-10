@@ -444,6 +444,12 @@ jobs:
         working-directory: android-app
         run: ./gradlew :wear:assembleDebug --no-daemon
 
+      # Runs the Wear unit suite and fails if a round/square screenshot drifted,
+      # which is the regression gate for Play's "Watch shapes" requirement.
+      - name: Verify Wear screenshots (round + square)
+        working-directory: android-app
+        run: ./gradlew :wear:verifyRoborazziDebug --no-daemon
+
 
 
   # ── Gate job: single required status check for branch protection ─────────

@@ -1,0 +1,148 @@
+name: Promote Play Release
+
+# Manual promotion for the exception paths: remediation (a policy-compliant
+# build must replace the violating one on every track at 100%) and back-filling a
+# stage the automated release flow skipped. The happy path is automatic in
+# release.yml; use this only when you need to move a specific tag by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Promotion stage'
+        required: true
+        type: choice
+        options:
+          - closed
+          - open
+          - production-request
+          - remediate-production
+      tag:
+        description: 'Release tag to promote (e.g. v3.176.0)'
+        required: true
+        type: string
+      apps:
+        description: 'Which apps (ignored by remediate-production, which is Wear-only)'
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - phone
+          - wear
+
+permissions:
+  contents: read
+
+jobs:
+  promote-testing:
+    name: Promote testing track
+    if: inputs.stage != 'remediate-production'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Create Play service account credentials
+        working-directory: android-app
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: printenv PLAY_SERVICE_ACCOUNT_JSON > play-service-account.json
+
+      - name: Populate Play release notes from the GitHub release
+        working-directory: android-app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: python3 ../.github/scripts/play-release-notes.py app wear
+
+      - name: Promote
+        working-directory: android-app
+        env:
+          STAGE: ${{ inputs.stage }}
+          APPS: ${{ inputs.apps }}
+          VERSION: ${{ inputs.tag }}
+        run: |
+          set -e
+          promote() {
+            ./gradlew ":${1}:promoteReleaseArtifact" \
+              --from-track "$2" --promote-track "$3" \
+              --release-status "$4" --release-name "$VERSION" --no-daemon
+          }
+          wants() { [ "$APPS" = "both" ] || [ "$APPS" = "$1" ]; }
+
+          case "$STAGE" in
+            closed)
+              if wants phone; then promote app internal alpha completed; fi
+              if wants wear; then promote wear wear:internal wear:alpha completed; fi
+              ;;
+            open)
+              if wants phone; then promote app internal beta completed; fi
+              if wants wear; then promote wear wear:internal wear:beta completed; fi
+              ;;
+            production-request)
+              if wants phone; then promote app internal production draft; fi
+              if wants wear; then promote wear wear:internal wear:production draft; fi
+              ;;
+          esac
+
+      - name: Cleanup credentials
+        if: always()
+        working-directory: android-app
+        run: rm -f play-service-account.json
+
+  remediate-production:
+    name: Remediate production (Wear, 100%)
+    if: inputs.stage == 'remediate-production'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Create Play service account credentials
+        working-directory: android-app
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: printenv PLAY_SERVICE_ACCOUNT_JSON > play-service-account.json
+
+      - name: Populate Play release notes from the GitHub release
+        working-directory: android-app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: python3 ../.github/scripts/play-release-notes.py wear
+
+      - name: Roll out compliant Wear build to production
+        working-directory: android-app
+        env:
+          VERSION: ${{ inputs.tag }}
+        run: |
+          ./gradlew :wear:promoteReleaseArtifact \
+            --from-track wear:internal --promote-track wear:production \
+            --release-status completed --release-name "$VERSION" --no-daemon
+
+      - name: Cleanup credentials
+        if: always()
+        working-directory: android-app
+        run: rm -f play-service-account.json

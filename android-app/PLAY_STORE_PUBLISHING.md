@@ -1,31 +1,57 @@
 # Play Store Automatic Publishing
 
-On each release (merge to main that bumps the version), the CI automatically publishes AABs to the Play Store **internal testing** track.
+On each release (merge to main that bumps the version and touches `android-app/`),
+CI takes the app through a fixed path:
+
+1. Build **one** App Bundle and publish it to **Internal testing**.
+2. Promote that same version code to **Closed testing** (`alpha`) and **Open
+   testing** (`beta`) for both the phone and Wear apps.
+3. Create a **production draft** for review. Production is never rolled out from
+   CI — a person reviews the draft and starts a staged rollout in Play Console.
+
+This is the "build once, promote the artifact" model: every stage gets the exact
+same build, so version codes never drift and the changelog travels with it. See
+[ADR 0031](../docs/adr/0031-play-track-promotion-model.md).
+
+## Tracks
+
+| Stage | Phone track | Wear track | Rollout |
+|-------|-------------|------------|---------|
+| Internal testing | `internal` | `wear:internal` | automatic |
+| Closed testing | `alpha` | `wear:alpha` | automatic |
+| Open testing | `beta` | `wear:beta` | automatic |
+| Production | `production` | `wear:production` | draft only (manual rollout) |
+
+"Private beta" in conversation means the **Internal testing** track — not Closed
+testing.
 
 ## Setup (one-time)
 
 ### 1. Create a Google Cloud Service Account
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/) → IAM & Admin → Service Accounts
-2. Create a service account (e.g., `play-publisher@your-project.iam.gserviceaccount.com`)
-3. Create a JSON key and download it
+1. Google Cloud Console → IAM & Admin → Service Accounts → create one, add a JSON key.
+2. Enable the [AndroidPublisher API](https://console.cloud.google.com/apis/library/androidpublisher.googleapis.com).
 
-### 2. Grant Play Console Access
+### 2. Grant Play Console access
 
-1. Go to [Play Console](https://play.google.com/console) → Users & permissions → Invite new users
-2. Add the service account email
-3. Grant permissions:
-   - **Release to testing tracks** (for internal/alpha/beta)
-   - **Manage production releases** (if you want to promote later)
-4. Apply to the specific app(s): `com.cabeda.Convocados` and `com.cabeda.Convocados` (Wear)
+Play Console → Users & permissions → invite the service account email and grant:
 
-### 3. Add GitHub Secrets
+- **Release to testing tracks** — required for internal/closed/open.
+- **Manage production releases** — required to create the production draft.
 
-Add these secrets to the repository (Settings → Secrets and variables → Actions):
+Apply to `com.cabeda.Convocados` (phone) and `com.cabeda.Convocados` (Wear).
+
+### 3. Turn **Managed publishing OFF**
+
+With managed publishing on, Play holds changes on the testing tracks too and the
+automation looks like it silently did nothing. Verify this in Play Console before
+relying on the pipeline.
+
+### 4. Add GitHub secrets
 
 | Secret | Description |
 |--------|-------------|
-| `PLAY_SERVICE_ACCOUNT_JSON` | Full contents of the service account JSON key file |
+| `PLAY_SERVICE_ACCOUNT_JSON` | Full contents of the service account JSON key |
 | `GOOGLE_SERVICES_JSON` | Contents of `app/google-services.json` (Firebase config) |
 | `ANDROID_KEYSTORE` | Base64-encoded release keystore (`base64 release-keystore.jks`) |
 | `KEYSTORE_PASSWORD` | Keystore password |
@@ -33,32 +59,64 @@ Add these secrets to the repository (Settings → Secrets and variables → Acti
 | `KEY_PASSWORD` | Key password |
 | `GOOGLE_SERVER_CLIENT_ID` | Google OAuth web client ID (for Wear OS sign-in) |
 
-### 4. Local testing (optional)
+### 5. Create the `production` Environment
 
-To test publishing locally:
+Settings → Environments → new environment `production`, add required reviewers.
+The manual remediation workflow uses it; the automated happy path does not.
+
+## Release notes ("What's new")
+
+Promotion copies the notes of the track it promotes **from** — always `internal`.
+CI writes the GitHub Release body into:
+
+```
+android-app/app/src/main/play/release-notes/en-US/internal.txt
+android-app/wear/src/main/play/release-notes/en-US/internal.txt
+```
+
+Markdown is flattened to plain text and truncated to Play's 500-character limit.
+These files are static defaults in the repo; CI overwrites them only in its
+ephemeral checkout and never commits the change.
+
+## Promoting releases
+
+### Automatic (happy path)
+
+Runs as part of `release.yml` after the internal publish. Nothing to do.
+
+### Manual (`Promote Play Release` workflow)
+
+Workflow → *Promote Play Release* → **Run workflow**:
+
+| Stage | Effect |
+|-------|--------|
+| `closed` | Promote `internal → alpha` (phone and/or Wear) |
+| `open` | Promote `internal → beta` (phone and/or Wear) |
+| `production-request` | Create a production **draft** for review |
+| `remediate-production` | **Wear only.** Roll a compliant build out to `wear:production` at 100% |
+
+`remediate-production` sits behind the `production` environment, so it requires
+reviewer approval.
+
+### Local dry run
 
 ```bash
-# Place your service account JSON at:
-android-app/play-service-account.json
-
-# Dry run (validates without uploading):
+# Place the service account JSON at android-app/play-service-account.json
 cd android-app
 ./gradlew :app:publishReleaseBundle --validate-only
 ./gradlew :wear:publishReleaseBundle --validate-only
 ```
 
-## How it works
+## Recovering from a policy rejection
 
-- Plugin: [gradle-play-publisher](https://github.com/Triple-T/gradle-play-publisher) (v3.12.1)
-- Phone app → `internal` track
-- Wear OS app → `wear:internal` track
-- Release notes: `{module}/src/main/play/release-notes/en-US/internal.txt`
-- Version code: auto-generated from timestamp (already configured)
+Play's remediation steps, mapped to this pipeline:
 
-## Promoting releases
-
-After testing internally, promote to production via Play Console UI or:
-
-```bash
-./gradlew :app:promoteArtifact --from-track internal --promote-track production
-```
+1. Fix the policy issue and release a new version (it lands on `internal`
+   automatically).
+2. Replace the violating build on every track it reached. The automated release
+   already promotes to `alpha`/`beta`; run *Promote Play Release* with
+   `remediate-production` to roll out `wear:production` at 100%.
+3. In Play Console, discard or update any draft release that still references the
+   non-compliant bundle so it does not remain under "Not included".
+4. If the region/track opt-in itself is the problem, disable the Wear OS release
+   type under Advanced settings → Release types.
