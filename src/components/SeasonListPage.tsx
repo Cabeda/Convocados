@@ -12,7 +12,8 @@ interface SeasonSummary {
   id: string;
   name: string;
   status: string;
-  startsAt: string | null;
+  registrationOpensAt: string;
+  registrationClosesAt: string;
   memberCount: number;
 }
 
@@ -112,7 +113,9 @@ export default function SeasonListPage({ eventId }: { eventId: string }) {
           <Stack spacing={0.5} sx={{ alignItems: "flex-end" }}>
             <Chip size="small" label={statusLabel(season.status)} />
             <Typography variant="body2" color="text.secondary">
-              {[season.startsAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(season.startsAt)) : null,
+              {[season.registrationOpensAt
+                ? `${new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(season.registrationOpensAt))} – ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(season.registrationClosesAt))}`
+                : null,
                 t("seasonMemberCount", { n: season.memberCount })].filter(Boolean).join(" · ")}
             </Typography>
           </Stack>

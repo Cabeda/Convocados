@@ -33,9 +33,8 @@ describe("GET /api/events/:id/history/leaderboard", () => {
         eventId: event.id,
         name: "Winter League",
         status: "completed",
-        registrationOpensAt: new Date("2025-12-01"),
-        registrationClosesAt: new Date("2025-12-31"),
-        startsAt: new Date("2026-01-01"),
+        registrationOpensAt: new Date("2026-01-01"),
+        registrationClosesAt: new Date("2026-01-31"),
         completedAt: new Date("2026-01-31"),
       },
     });
@@ -76,7 +75,6 @@ describe("GET /api/events/:id/history/leaderboard", () => {
         status: "registration",
         registrationOpensAt: new Date("2026-01-01"),
         registrationClosesAt: new Date("2026-08-31"),
-        startsAt: new Date("2026-01-01"),
       },
     });
     const red = await prisma.crew.create({ data: { seasonId: season.id, name: "Red", sortOrder: 0 } });
@@ -153,9 +151,8 @@ describe("GET /api/events/:id/history/leaderboard", () => {
         eventId: event.id,
         name: "Winter League",
         status: "completed",
-        registrationOpensAt: new Date("2025-12-01"),
-        registrationClosesAt: new Date("2025-12-31"),
-        startsAt: new Date("2026-01-01"),
+        registrationOpensAt: new Date("2026-01-01"),
+        registrationClosesAt: new Date("2026-02-01"),
         completedAt: new Date("2026-02-01"),
       },
     });
@@ -195,10 +192,10 @@ describe("GET /api/events/:id/history/leaderboard", () => {
     const seasonData = {
       eventId: event.id,
       status: "active",
-      registrationOpensAt: new Date("2025-12-01"),
-      registrationClosesAt: new Date("2025-12-31"),
+      registrationOpensAt: new Date("2026-01-01"),
+      registrationClosesAt: new Date("2026-03-31"),
     };
-    const season = await prisma.season.create({ data: { ...seasonData, name: "January League", startsAt: new Date("2026-01-01") } });
+    const season = await prisma.season.create({ data: { ...seasonData, name: "January League" } });
     await prisma.gameHistory.createMany({
       data: [
         { eventId: event.id, dateTime: new Date("2026-01-05"), status: "played", scoreOne: 1, scoreTwo: 0, teamOneName: "A", teamTwoName: "B", teamsSnapshot: JSON.stringify([{ team: "A", players: [{ name: "Alice" }] }, { team: "B", players: [{ name: "Bob" }] }]) },
@@ -236,9 +233,8 @@ describe("GET /api/events/:id/history/leaderboard", () => {
         eventId: event.id,
         name: "Empty League",
         status: "active",
-        registrationOpensAt: new Date("2025-12-01"),
-        registrationClosesAt: new Date("2025-12-31"),
-        startsAt: new Date("2026-01-01"),
+        registrationOpensAt: new Date("2026-01-01"),
+        registrationClosesAt: new Date("2026-01-31"),
       },
     });
     await prisma.gameHistory.create({

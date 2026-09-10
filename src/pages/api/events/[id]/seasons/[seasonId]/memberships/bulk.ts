@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
-import { getSeasonForEvent, requireSeasonAdmin } from "~/lib/seasonSetup.server";
+import { getSeasonForEvent, requireSeasonAdmin, seasonAttendanceWindow } from "~/lib/seasonSetup.server";
 
 /**
  * Bulk-enroll recent players into a Season (admin-only).
@@ -26,6 +26,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   // Admins may bulk-enroll at any point in the lifecycle, including after
   // registration closed — same override as the single join path.
 
+  const attendanceWindow = seasonAttendanceWindow(season);
   const participants = await prisma.gameParticipant.findMany({
     where: {
       eventPlayer: { eventId: season.eventId },
@@ -33,7 +34,7 @@ export const POST: APIRoute = async ({ params, request }) => {
       game: {
         eventId: season.eventId,
         status: { not: "cancelled" },
-        dateTime: { gte: season.registrationOpensAt, lte: season.registrationClosesAt },
+        dateTime: { gte: attendanceWindow.gte, lte: attendanceWindow.lte },
       },
     },
     select: { eventPlayerId: true },

@@ -139,8 +139,19 @@ test.describe("Crew Season setup — full happy path", () => {
     const seasonId = page.url().split("/seasons/")[1];
     expect(seasonId).toBeTruthy();
 
-    // GH-915: the starting date is pre-filled from the registration period.
-    await expect(page.getByLabel("Season starting date")).toHaveValue(opens);
+    // The season details editor is pre-filled with the name and period.
+    await expect(page.getByLabel("Season name")).toHaveValue("E2E Season");
+    await expect(page.getByLabel("Registration opens")).toHaveValue(opens);
+    await expect(page.getByLabel("Registration closes")).toHaveValue(closes);
+
+    // The season is editable: rename it and widen the period.
+    await page.getByLabel("Season name").fill("E2E Season Edited");
+    await submitExpecting(
+      page,
+      () => page.getByRole("button", { name: "Save details" }).click(),
+      page.getByText("Season details saved."),
+    );
+    await expect(page.getByRole("heading", { name: "E2E Season Edited" })).toBeVisible();
 
     // ── 5. Enroll the nine players via "Add recent players" ─────────────
     // A recent game with nine attending. (Adding a player auto-joins them to
@@ -220,6 +231,11 @@ test.describe("Crew Season setup — full happy path", () => {
     await page.getByRole("option", { name: "E2EPlayer9" }).click();
     await expect(page.getByText("Added E2EPlayer9 to Crew 1.")).toBeVisible({ timeout: 10_000 });
     expect(await page.getByTestId("crew-card-0").getByTestId(/member-row-/).count()).toBe(4);
+
+    // ── 8c. Remove a member from the season ──────────────────────────────
+    await page.getByRole("button", { name: "Remove E2EPlayer9 from the season" }).click();
+    await expect(page.getByText("Removed E2EPlayer9 from the season.")).toBeVisible({ timeout: 10_000 });
+    expect(await page.getByTestId("crew-card-0").getByTestId(/member-row-/).count()).toBe(3);
 
     // ── 9. Save the setup ─────────────────────────────────────────────────
     await submitExpecting(

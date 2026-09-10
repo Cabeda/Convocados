@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
+import { screen, waitFor, cleanup, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
@@ -22,7 +22,6 @@ function seasonResponse(
       id: "season-1",
       name: "September Season",
       status,
-      startsAt: null,
       registrationOpensAt: "2026-09-01T00:00:00.000Z",
       registrationClosesAt: "2026-09-30T00:00:00.000Z",
       viewerEventPlayerId: null as string | null,
@@ -88,8 +87,6 @@ describe("SeasonPage", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
     const saveRequest = fetchMock.mock.calls[3][1];
     expect(JSON.parse(String(saveRequest?.body))).toMatchObject({
-      // Pre-filled from the registration period (GH-915) unless changed.
-      startsAt: "2026-09-01",
       crews: [
         { name: "North", membershipIds: expect.not.arrayContaining(["membership-0"]) },
         { name: "Crew 2", membershipIds: expect.arrayContaining(["membership-0"]) },
@@ -98,7 +95,7 @@ describe("SeasonPage", () => {
     expect(await screen.findByText("Season setup saved.")).toBeInTheDocument();
   });
 
-  it("pre-fills the starting date from the registration period when none is set", async () => {
+  it("pre-fills the season details with the current name and period", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
@@ -107,7 +104,71 @@ describe("SeasonPage", () => {
     renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
     await screen.findByRole("heading", { name: "September Season" });
 
-    expect(screen.getByLabelText("Season starting date")).toHaveValue("2026-09-01");
+    expect(screen.getByLabelText("Season name")).toHaveValue("September Season");
+    expect(screen.getByLabelText("Registration opens")).toHaveValue("2026-09-01");
+    expect(screen.getByLabelText("Registration closes")).toHaveValue("2026-09-30");
+  });
+
+  it("saves edited season details", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        season: { id: "season-1", name: "Autumn Season", registrationOpensAt: "2026-10-01T00:00:00.000Z", registrationClosesAt: "2026-10-31T00:00:00.000Z" },
+      }), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    await user.clear(screen.getByLabelText("Season name"));
+    await user.type(screen.getByLabelText("Season name"), "Autumn Season");
+    await user.clear(screen.getByLabelText("Registration opens"));
+    await user.type(screen.getByLabelText("Registration opens"), "2026-10-01");
+    await user.clear(screen.getByLabelText("Registration closes"));
+    await user.type(screen.getByLabelText("Registration closes"), "2026-10-31");
+    await user.click(screen.getByRole("button", { name: "Save details" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const patchCall = fetchMock.mock.calls[2];
+    expect(patchCall[0]).toBe("/api/events/event-1/seasons/season-1");
+    expect(patchCall[1]?.method).toBe("PATCH");
+    expect(JSON.parse(String(patchCall[1]?.body))).toMatchObject({
+      action: "update",
+      name: "Autumn Season",
+      registrationOpensAt: "2026-10-01",
+      registrationClosesAt: "2026-10-31",
+    });
+    expect(await screen.findByText("Season details saved.")).toBeInTheDocument();
+  });
+
+  it("removes a member from the season", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
+        { id: "crew-1", name: "North", membershipIds: members.slice(0, 3).map((member) => member.membershipId) },
+        { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
+      ])), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ membership: { id: "membership-0", status: "withdrawn" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([
+        { id: "crew-1", name: "North", membershipIds: members.slice(1, 3).map((member) => member.membershipId) },
+        { id: "crew-2", name: "South", membershipIds: members.slice(3).map((member) => member.membershipId) },
+      ])), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    await user.click(screen.getByRole("button", { name: "Remove Player 0 from the season" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/events/event-1/seasons/season-1/memberships/membership-0");
+    expect(fetchMock.mock.calls[2][1]?.method).toBe("DELETE");
+    expect(await screen.findByText("Removed Player 0 from the season.")).toBeInTheDocument();
+    // The member left every draft Crew (and falls back to unassigned).
+    expect(within(screen.getByTestId("crew-card-0")).queryByTestId("member-row-membership-0")).not.toBeInTheDocument();
   });
 
   it("renders the season standings embedded in the season response", async () => {
@@ -163,7 +224,6 @@ describe("SeasonPage", () => {
         id: "season-1",
         name: "September Season",
         status: "registration",
-        startsAt: null,
         registrationOpensAt: "2026-09-01T00:00:00.000Z",
         registrationClosesAt: "2026-09-30T00:00:00.000Z",
         viewerEventPlayerId: null,
@@ -422,7 +482,7 @@ describe("SeasonPage", () => {
     }));
     const ready = {
       season: {
-        id: "season-1", name: "September Season", status: "registration", startsAt: null,
+        id: "season-1", name: "September Season", status: "registration",
         viewerEventPlayerId: null, viewerMembership: null, registrationOpen: true,
         crews: [0, 1, 2].map((c) => ({
           id: `crew-${c}`, name: `Crew ${c + 1}`, sortOrder: c,

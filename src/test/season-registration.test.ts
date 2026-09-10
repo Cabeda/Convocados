@@ -310,7 +310,6 @@ async function seedQualifyingSeason(crewCount: number, perCrew: number, extraFre
       status: "registration",
       registrationOpensAt: new Date(Date.now() - 60_000),
       registrationClosesAt: new Date(Date.now() + 14 * 86400_000),
-      startsAt: new Date(Date.now() - 86400_000),
     },
   });
   let n = 0;
@@ -573,5 +572,115 @@ describe("Season membership admin override", () => {
     mockGetSession.mockResolvedValue({ user: { id: "user-1" } });
     const response = await withdrawSeason(context({ id: event.id, seasonId: season.id }, "DELETE"));
     expect(response.status).toBe(404);
+  });
+});
+
+describe("PATCH season details update", () => {
+  async function seedOpenSeason() {
+    const event = await seedEvent();
+    const season = await prisma.season.create({
+      data: {
+        eventId: event.id,
+        name: "Old Name",
+        registrationOpensAt: new Date("2026-01-01"),
+        registrationClosesAt: new Date("2026-06-30"),
+      },
+    });
+    return { event, season };
+  }
+
+  it("lets an admin rename the season and change its period", async () => {
+    const { event, season } = await seedOpenSeason();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", {
+      action: "update",
+      name: "New Name",
+      registrationOpensAt: "2026-02-01T00:00:00.000Z",
+      registrationClosesAt: "2026-07-31T00:00:00.000Z",
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.season).toMatchObject({ id: season.id, name: "New Name" });
+    const updated = await prisma.season.findUnique({ where: { id: season.id } });
+    expect(updated?.registrationOpensAt.toISOString()).toBe("2026-02-01T00:00:00.000Z");
+    expect(updated?.registrationClosesAt.toISOString()).toBe("2026-07-31T00:00:00.000Z");
+  });
+
+  it("supports partial updates", async () => {
+    const { event, season } = await seedOpenSeason();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", {
+      action: "update",
+      name: "Renamed Only",
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.season.name).toBe("Renamed Only");
+    const updated = await prisma.season.findUnique({ where: { id: season.id } });
+    expect(updated?.registrationOpensAt.toISOString()).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("requires admin rights", async () => {
+    const { event, season } = await seedOpenSeason();
+    mockGetSession.mockResolvedValue({ user: { id: "user-1" } });
+
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", {
+      action: "update",
+      name: "Hacked",
+    }));
+
+    expect(response.status).toBe(403);
+  });
+
+  it("rejects an invalid window", async () => {
+    const { event, season } = await seedOpenSeason();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", {
+      action: "update",
+      registrationOpensAt: "2026-07-31T00:00:00.000Z",
+      registrationClosesAt: "2026-02-01T00:00:00.000Z",
+    }));
+
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects overlap with another season's period", async () => {
+    const { event, season } = await seedOpenSeason();
+    await prisma.season.create({
+      data: {
+        eventId: event.id,
+        name: "Old Completed",
+        status: "completed",
+        registrationOpensAt: new Date("2026-05-01"),
+        registrationClosesAt: new Date("2026-12-31"),
+      },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", {
+      action: "update",
+      registrationOpensAt: "2026-01-01T00:00:00.000Z",
+      registrationClosesAt: new Date("2026-06-30").toISOString(),
+    }));
+
+    expect(response.status).toBe(409);
+  });
+
+  it("rejects edits on terminal seasons", async () => {
+    const { event, season } = await seedOpenSeason();
+    await prisma.season.update({ where: { id: season.id }, data: { status: "completed" } });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    const response = await patchSeason(context({ id: event.id, seasonId: season.id }, "PATCH", {
+      action: "update",
+      name: "Late Rename",
+    }));
+
+    expect(response.status).toBe(409);
   });
 });

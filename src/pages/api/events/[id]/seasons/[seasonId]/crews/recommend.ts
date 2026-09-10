@@ -3,7 +3,7 @@ import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { recommendCrews } from "~/lib/crewRecommendation";
-import { getSeasonForEvent, requireSeasonAdmin } from "~/lib/seasonSetup.server";
+import { getSeasonForEvent, requireSeasonAdmin, seasonAttendanceWindow } from "~/lib/seasonSetup.server";
 
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
@@ -48,23 +48,23 @@ export const POST: APIRoute = async ({ params, request }) => {
       ?? membership.eventPlayer.rating;
 
   // ── History for smarter recommendations (GH-917) ──────────────────────────
-  // gamesPlayed: attended (active) game slots in the last 12 months.
+  // gamesPlayed: attended (active) game slots in the season period so far.
   // previousCrewId: the Crew the player belonged to in the most recent
   // non-cancelled previous Season of this event, when the membership was
   // still active there.
-  const attendanceWindow = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const attendanceWindow = seasonAttendanceWindow(season);
   const [participants, previousSeason] = await Promise.all([
     prisma.gameParticipant.findMany({
       where: {
         eventPlayer: { eventId: season.eventId },
         status: "active",
-        game: { eventId: season.eventId, dateTime: { gte: attendanceWindow }, status: { not: "cancelled" } },
+        game: { eventId: season.eventId, dateTime: { gte: attendanceWindow.gte, lte: attendanceWindow.lte }, status: { not: "cancelled" } },
       },
       select: { eventPlayerId: true },
     }),
     prisma.season.findFirst({
       where: { eventId: season.eventId, id: { not: season.id }, status: { in: ["active", "review", "completed"] } },
-      orderBy: { startsAt: "desc" },
+      orderBy: { registrationOpensAt: "desc" },
       select: { id: true },
     }),
   ]);

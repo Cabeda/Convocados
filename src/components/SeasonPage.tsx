@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
-  FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography,
+  FormControl, IconButton, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from "@mui/material";
 import GroupsIcon from "@mui/icons-material/Groups";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
@@ -10,6 +10,7 @@ import RecommendIcon from "@mui/icons-material/Recommend";
 import SaveIcon from "@mui/icons-material/Save";
 import AddIcon from "@mui/icons-material/Add";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
@@ -41,7 +42,6 @@ interface PublicCrew {
 interface SeasonPayload {
   id: string;
   name: string;
-  startsAt: string | null;
   registrationOpensAt: string;
   registrationClosesAt: string;
   status: string;
@@ -71,12 +71,14 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const inviteClaimAttemptedRef = useRef(false);
   const setupDraftDirtyRef = useRef(false);
   const [season, setSeason] = useState<SeasonPayload | null>(null);
+  const [seasonName, setSeasonName] = useState("");
+  const [opensAt, setOpensAt] = useState("");
+  const [closesAt, setClosesAt] = useState("");
   const [leaderboard, setLeaderboard] = useState<LeaderboardPayload | null>(null);
-  const [startDate, setStartDate] = useState("");
   const [crewCount, setCrewCount] = useState(2);
   const [crews, setCrews] = useState<CrewDraft[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | "enroll" | null>(null);
+  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | "enroll" | "details" | "remove" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [candidates, setCandidates] = useState<MemberCandidate[]>([]);
@@ -96,10 +98,10 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       }
       const nextSeason = data.season as SeasonPayload;
       setSeason(nextSeason);
+      setSeasonName(nextSeason.name);
+      setOpensAt(toDateInput(nextSeason.registrationOpensAt));
+      setClosesAt(toDateInput(nextSeason.registrationClosesAt));
       setLeaderboard(nextSeason.leaderboard ?? null);
-      // GH-915: the create dialog already collected the period dates, so do
-      // not re-prompt for a starting date — default it from registration.
-      setStartDate(toDateInput(nextSeason.startsAt ?? nextSeason.registrationOpensAt));
       if (nextSeason.activeMembers) {
         const nextCrews = nextSeason.crews.map((crew) => ({
           id: crew.id,
@@ -189,7 +191,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/crews`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startsAt: startDate || null, crews }),
+        body: JSON.stringify({ crews }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) { setError(data.error ?? t("seasonSetupError")); return; }
@@ -198,6 +200,67 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       setupDraftDirtyRef.current = false;
     } catch {
       setError(t("seasonSetupError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveDetails = async () => {
+    setBusy("details");
+    setError(null);
+    setSaved(false);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          name: seasonName,
+          registrationOpensAt: opensAt,
+          registrationClosesAt: closesAt,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { setError(data.error ?? t("seasonDetailsError")); return; }
+      const updated = data.season as { name: string; registrationOpensAt: string; registrationClosesAt: string };
+      setSeason((current) => current ? {
+        ...current,
+        name: updated.name,
+        registrationOpensAt: updated.registrationOpensAt,
+        registrationClosesAt: updated.registrationClosesAt,
+      } : current);
+      setSeasonName(updated.name);
+      setOpensAt(toDateInput(updated.registrationOpensAt));
+      setClosesAt(toDateInput(updated.registrationClosesAt));
+      setNotice(t("seasonDetailsSaved"));
+    } catch {
+      setError(t("seasonDetailsError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const removeMember = async (member: Member) => {
+    setBusy("remove");
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/memberships/${member.membershipId}`, {
+        method: "DELETE",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { setError(data.error ?? t("seasonMembershipError")); return; }
+      // Drop the member from every draft crew, then refresh participants.
+      setCrews((current) => current.map((crew) => ({
+        ...crew,
+        membershipIds: crew.membershipIds.filter((id) => id !== member.membershipId),
+      })));
+      setCandidates((current) => current.filter((entry) => entry.eventPlayerId !== member.eventPlayerId));
+      setNotice(t("memberRemoved", { name: member.name }));
+      await refreshMembers();
+    } catch {
+      setError(t("seasonMembershipError"));
     } finally {
       setBusy(null);
     }
@@ -468,15 +531,32 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
             ) : (
               <Stack spacing={3}>
                 <Card variant="outlined"><CardContent>
+                  <Stack spacing={2}>
+                    <Typography variant="subtitle1" fontWeight={700}>{t("seasonDetails")}</Typography>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { xs: "stretch", sm: "flex-end" } }}>
+                      <TextField
+                        label={t("seasonNameLabel")} value={seasonName}
+                        onChange={(event) => setSeasonName(event.target.value)}
+                        fullWidth size="small"
+                      />
+                      <TextField
+                        type="date" label={t("registrationOpensAt")} value={opensAt}
+                        onChange={(event) => setOpensAt(event.target.value)}
+                        slotProps={{ inputLabel: { shrink: true } }} fullWidth size="small"
+                      />
+                      <TextField
+                        type="date" label={t("registrationClosesAt")} value={closesAt}
+                        onChange={(event) => setClosesAt(event.target.value)}
+                        slotProps={{ inputLabel: { shrink: true } }} fullWidth size="small"
+                      />
+                      <Button variant="outlined" onClick={() => void saveDetails()} disabled={busy !== null} sx={{ whiteSpace: "nowrap" }}>
+                        {busy === "details" ? t("savingDetails") : t("saveDetails")}
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </CardContent></Card>
+                <Card variant="outlined"><CardContent>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { xs: "stretch", sm: "flex-end" } }}>
-                    <TextField
-                      type="date" label={t("seasonStartDate")} value={startDate}
-                      onChange={(event) => {
-                        setupDraftDirtyRef.current = true;
-                        setStartDate(event.target.value);
-                      }}
-                      slotProps={{ inputLabel: { shrink: true } }} fullWidth
-                    />
                     <FormControl sx={{ minWidth: { sm: 180 } }}>
                       <InputLabel id="season-crew-count-label">{t("crewCount")}</InputLabel>
                       <Select labelId="season-crew-count-label" label={t("crewCount")} value={crewCount} onChange={(event) => {
@@ -524,7 +604,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                               {crew.membershipIds.map((membershipId) => {
                                 const member = members.find((candidate) => candidate.membershipId === membershipId);
                                 if (!member) return null;
-                                return <MemberAssignment key={membershipId} member={member} crews={crews} currentCrewIndex={index} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} />;
+                                return <MemberAssignment key={membershipId} member={member} crews={crews} currentCrewIndex={index} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} onRemove={() => void removeMember(member)} disabled={busy !== null} />;
                               })}
                               <CrewMemberAutocomplete
                                 label={t("addPlayerToCrew", { crew: crew.name })}
@@ -554,7 +634,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                     <CardContent>
                       <Typography variant="subtitle1" fontWeight={600}>{t("unassignedPlayers")}</Typography>
                       <Stack spacing={1} sx={{ mt: 1 }}>
-                        {unassigned.map((member) => <MemberAssignment key={member.membershipId} member={member} crews={crews} currentCrewIndex={null} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} />)}
+                        {unassigned.map((member) => <MemberAssignment key={member.membershipId} member={member} crews={crews} currentCrewIndex={null} onMove={moveMember} onDragStart={() => setDraggingMembershipId(member.membershipId)} onDragEnd={() => setDraggingMembershipId(null)} onRemove={() => void removeMember(member)} disabled={busy !== null} />)}
                       </Stack>
                       <CrewMemberAutocomplete
                         label={t("addPlayer")}
@@ -579,13 +659,15 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   );
 }
 
-function MemberAssignment({ member, crews, currentCrewIndex, onMove, onDragStart, onDragEnd }: {
+function MemberAssignment({ member, crews, currentCrewIndex, onMove, onDragStart, onDragEnd, onRemove, disabled }: {
   member: Member;
   crews: CrewDraft[];
   currentCrewIndex: number | null;
   onMove: (membershipId: string, crewIndex: number | null) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
+  onRemove?: () => void;
+  disabled?: boolean;
 }) {
   const t = useT();
   return (
@@ -611,6 +693,16 @@ function MemberAssignment({ member, crews, currentCrewIndex, onMove, onDragStart
           {crews.map((crew, index) => <MenuItem key={crew.id ?? crew.name} value={index}>{crew.name}</MenuItem>)}
         </Select>
       </FormControl>
+      {onRemove && (
+        <IconButton
+          size="small"
+          aria-label={t("removeMemberFromSeason", { name: member.name })}
+          onClick={onRemove}
+          disabled={disabled}
+        >
+          <DeleteOutlineIcon fontSize="small" />
+        </IconButton>
+      )}
     </Stack>
   );
 }

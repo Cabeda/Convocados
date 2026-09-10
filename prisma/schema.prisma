@@ -367,7 +367,6 @@ model Season {
   status                String    @default("registration") // "registration" | "active" | "review" | "completed" | "cancelled"
   registrationOpensAt   DateTime
   registrationClosesAt  DateTime
-  startsAt              DateTime?
   activatedAt           DateTime?
   reviewStartedAt       DateTime?
   completedAt           DateTime?

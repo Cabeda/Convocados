@@ -133,9 +133,10 @@ export async function seedCrewSeason(
       eventId: event.id,
       name: `${faker.word.adjective()} ${faker.date.month()} Season`,
       status: "registration",
-      registrationOpensAt: new Date(now - DAY),
+      // The season period is the registration window, so it must span the
+      // seeded games for the demo leaderboard to show them.
+      registrationOpensAt: seasonStart,
       registrationClosesAt: new Date(now + 14 * DAY),
-      startsAt: seasonStart,
       createdByUserId: demoUser.id,
     },
   });
