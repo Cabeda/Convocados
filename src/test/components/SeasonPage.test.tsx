@@ -110,6 +110,24 @@ describe("SeasonPage", () => {
     expect(screen.getByLabelText("Season starting date")).toHaveValue("2026-09-01");
   });
 
+  it("renders the season standings embedded in the season response", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const withLeaderboard = seasonResponse();
+    (withLeaderboard.season as Record<string, unknown>).leaderboard = {
+      scope: { type: "season", seasonId: "season-1", name: "September Season", startsAt: null, endsAt: null },
+      gamesCount: 1,
+      players: [{ rank: 1, name: "Alice", crewName: null, points: 3, played: 1, wins: 1, draws: 0, losses: 0, goalsFor: 2, goalsAgainst: 1, goalDifference: 1 }],
+      crews: [],
+    };
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(withLeaderboard), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    expect(await screen.findByText("Standings")).toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+  });
+
   it("shows the average ELO of each recommended Crew", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.mocked(fetch);
@@ -392,8 +410,8 @@ describe("SeasonPage", () => {
     await screen.findByRole("heading", { name: "September Season" });
 
     expect(screen.getByRole("button", { name: "Start season" })).toBeDisabled();
-    expect(screen.getByRole("link", { name: "View leaderboard" }))
-      .toHaveAttribute("href", "/events/event-1/history?seasonId=season-1");
+    expect(screen.getByRole("link", { name: "View history" }))
+      .toHaveAttribute("href", "/events/event-1/history");
   });
 
   it("enables Start season once there are 3 Crews and 9 participants", async () => {

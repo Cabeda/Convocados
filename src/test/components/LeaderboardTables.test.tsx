@@ -48,6 +48,12 @@ describe("LeaderboardTables", () => {
     expect(screen.getAllByText("Red").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("links crew game-score chips to the single game page when eventId is provided", () => {
+    renderWithTheme(<LeaderboardTables data={data} loading={false} selectedScopeId="season-1" seasonOptions={[]} onScopeChange={vi.fn()} eventId="evt-1" />);
+    const chip = screen.getByLabelText(/Game scores 1: 3\.00/);
+    expect(chip).toHaveAttribute("href", "/events/evt-1/games/g1");
+  });
+
   it("explains when no Crew standings exist", () => {
     renderWithTheme(<LeaderboardTables data={{ ...data, crews: [] }} loading={false} selectedScopeId="all" seasonOptions={[]} onScopeChange={vi.fn()} />);
     expect(screen.getByText("No Crew standings are available for this scope.")).toBeInTheDocument();
@@ -94,13 +100,13 @@ describe("LeaderboardTables — mobile crew standings", () => {
     window.matchMedia = originalMatchMedia;
   });
 
-  it("renders the standings as cards instead of wide tables", () => {
+  it("renders the crew standings as cards while the player league stays a table", () => {
     renderWithTheme(<LeaderboardTables data={data} loading={false} selectedScopeId="season-1" seasonOptions={[]} onScopeChange={vi.fn()} />);
 
     expect(screen.getByTestId("crew-standings-mobile")).toBeInTheDocument();
-    expect(screen.getByTestId("player-standings-mobile")).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "Crew" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("table", { name: "Player" })).not.toBeInTheDocument();
+    // The player league keeps the scrollable table.
+    expect(screen.getByRole("table", { name: "Player" })).toBeInTheDocument();
     expect(screen.getAllByText("Red").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("10.00")).toBeInTheDocument();
     expect(screen.getByText(/4\/4/)).toBeInTheDocument();

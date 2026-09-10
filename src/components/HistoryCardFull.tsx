@@ -33,6 +33,7 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import EventIcon from "@mui/icons-material/Event";
 import LoginIcon from "@mui/icons-material/Login";
 import HistoryIcon from "@mui/icons-material/History";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { useT } from "~/lib/useT";
 import { detectLocale, type TFunction } from "~/lib/i18n";
 import { matchesWithName } from "~/lib/stringMatch";
@@ -382,6 +383,7 @@ export function HistoryCardFull({
   userName,
   eventPlayers: _eventPlayers,
   onPaymentsConfigSaved,
+  gameHref,
 }: {
   entry: HistoryCardFullEntry;
   eventId: string;
@@ -398,6 +400,7 @@ export function HistoryCardFull({
   userName: string | null;
   eventPlayers?: { id: string; name: string }[];
   onPaymentsConfigSaved?: () => void;
+  gameHref?: string;
 }) {
   const t = useT();
   const locale = detectLocale();
@@ -815,6 +818,19 @@ export function HistoryCardFull({
           </Stack>
 
           <Stack direction="row" spacing={0.25} alignItems="center">
+            {gameHref && (
+              <Tooltip title={t("openGame")}>
+                <IconButton
+                  size="small"
+                  component="a"
+                  href={gameHref}
+                  data-testid="open-game-link"
+                  aria-label={t("openGame")}
+                >
+                  <OpenInNewIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             {isPlayAdmin && (
               <>
                 <Tooltip title={entry.isFriendly ? t("markCompetitive") : t("markFriendly")}>
