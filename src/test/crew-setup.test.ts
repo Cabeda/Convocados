@@ -114,6 +114,27 @@ describe("Crew Season setup", () => {
     expect(response.status).toBe(403);
   });
 
+  it("returns each Crew's average ELO to admins", async () => {
+    const event = await seedEvent();
+    const { season, memberships } = await seedSeason(event.id);
+    await prisma.crew.create({
+      data: {
+        seasonId: season.id,
+        name: "North",
+        sortOrder: 0,
+        memberships: { connect: memberships.slice(0, 3).map((membership) => ({ id: membership.id })) },
+      },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "crew-user-0" } });
+
+    const response = await getSeason(context({ id: event.id, seasonId: season.id }, "GET"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    // PlayerRating: 1000, 1050, 1100 → mean 1050.
+    expect(body.season.crews[0]).toMatchObject({ name: "North", averageRating: 1050 });
+  });
+
   it("previews balanced recommendations without creating Crews or assignments", async () => {
     const event = await seedEvent();
     const { season, memberships } = await seedSeason(event.id);
