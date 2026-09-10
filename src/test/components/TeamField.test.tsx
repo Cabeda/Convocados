@@ -113,6 +113,26 @@ describe("TeamField", () => {
     expect(onResultChange).not.toHaveBeenCalled();
   });
 
+  it("does not move a player dropped outside every half", () => {
+    const onResultChange = vi.fn();
+    renderWithTheme(<TeamFieldHarness onResultChange={onResultChange} />);
+    mockHalfRects();
+
+    fireEvent.pointerDown(screen.getByTestId("field-player-Alice"), {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerUp(screen.getByTestId("team-field"), {
+      pointerId: 1,
+      clientX: 9999,
+      clientY: 9999,
+    });
+
+    expect(onResultChange).not.toHaveBeenCalled();
+  });
+
   it("exposes a transient shuffle state when the shuffle key changes", () => {
     vi.useFakeTimers();
     const { rerender } = renderWithTheme(<TeamFieldHarness shuffleKey={0} />);
