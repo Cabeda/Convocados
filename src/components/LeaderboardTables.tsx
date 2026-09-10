@@ -1,5 +1,5 @@
 import {
-  Alert, Box, Chip, FormControl, Grid, InputLabel, MenuItem, Paper, Select,
+  Alert, Box, Chip, FormControl, InputLabel, MenuItem, Paper, Select,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography,
   useMediaQuery, useTheme,
 } from "@mui/material";
@@ -33,6 +33,10 @@ interface LeaderboardTablesProps {
   seasonOptions: LeaderboardSeasonOption[];
   onScopeChange: (scopeId: string) => void;
   eventId?: string;
+  /** Hide the individual Player league (e.g. when Season Rank replaces it). */
+  showPlayers?: boolean;
+  /** Hide the Crew league. */
+  showCrews?: boolean;
 }
 
 function StatHeader({ label, title }: { label: string; title: string }) {
@@ -243,7 +247,7 @@ function CrewStandingsCard({ title, rows, label, emptyMessage, eventId }: {
   );
 }
 
-export function LeaderboardTables({ data, loading, selectedScopeId, seasonOptions, onScopeChange, eventId }: LeaderboardTablesProps) {
+export function LeaderboardTables({ data, loading, selectedScopeId, seasonOptions, onScopeChange, eventId, showPlayers = true, showCrews = true }: LeaderboardTablesProps) {
   const t = useT();
   if (loading && !data) return <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}><Typography color="text.secondary">{t("loading")}</Typography></Paper>;
   if (!data) return null;
@@ -278,14 +282,14 @@ export function LeaderboardTables({ data, loading, selectedScopeId, seasonOption
       {data.gamesCount === 0 ? (
         <Alert severity="info">{t("leaderboardNoGames")}</Alert>
       ) : (
-        <Grid container spacing={2}>
-          <Grid size={{ xs: 12, xl: 7 }}>
+        <Stack spacing={2}>
+          {showPlayers && (
             <PlayerStandingsCard title={t("playerLeague")} rows={data.players} label={t("leaderboardPlayer")} emptyMessage={t("leaderboardNoGames")} />
-          </Grid>
-          <Grid size={{ xs: 12, xl: 5 }}>
+          )}
+          {showCrews && (
             <CrewStandingsCard title={t("crewLeague")} rows={data.crews} label={t("leaderboardCrew")} emptyMessage={t("leaderboardNoCrews")} eventId={eventId} />
-          </Grid>
-        </Grid>
+          )}
+        </Stack>
       )}
     </Stack>
   );
