@@ -33,6 +33,9 @@ export default defineConfig({
     "/docs/[...path]": { maxAge: 3600, swr: 300 },
   },
   vite: {
+    // PROTOTYPE-ONLY local tweak (not committed): node_modules is symlinked
+    // outside this worktree, so Vite's fs sandbox 403s the React island import.
+    server: { fs: { strict: false } },
     resolve: {
       alias: [
         // tsconfig `paths` with an exact key ("@prisma/client" → src/lib/prisma-client)
