@@ -21,6 +21,8 @@ interface Props {
   shuffleKey?: number;
   /** Event sport id — drives which formations are offered. */
   sport?: string | null;
+  /** When false, the field is read-only (no drag, no formation change). */
+  canEdit?: boolean;
 }
 
 const TOKEN_TEXT = "#16241b";
@@ -37,6 +39,7 @@ export function TeamField({
   ratingsMap,
   shuffleKey = 0,
   sport = null,
+  canEdit = true,
 }: Props) {
   const theme = useTheme();
   const t = useT();
@@ -104,6 +107,7 @@ export function TeamField({
         data-testid="team-field"
         data-shuffling={isShuffling ? "true" : "false"}
         data-dragging={drag ? "true" : "false"}
+        data-can-edit={canEdit ? "true" : "false"}
         data-shuffle-key={shuffleKey}
         sx={{
           position: "relative",
@@ -186,7 +190,7 @@ export function TeamField({
                 ref={slotIdx !== null
                   ? (el: HTMLElement | null) => { slotRefs.current[`${team.team}:${slotIdx}`] = el; }
                   : undefined}
-                onPointerDown={(e) => handlePointerDown(e, player.name, team.team)}
+                onPointerDown={canEdit ? (e) => handlePointerDown(e, player.name, team.team) : undefined}
                 sx={{
                   ...(slotIdx !== null
                     ? { position: "absolute", ...tokenPosition(slotIdx), transform: "translate(-50%, -50%)", maxWidth: "46%" }
@@ -201,7 +205,7 @@ export function TeamField({
                   bgcolor: "#f7fbf8",
                   color: TOKEN_TEXT,
                   boxShadow: isDark ? "0 2px 8px rgba(0,0,0,0.5)" : 2,
-                  cursor: drag ? "grabbing" : "grab",
+                  cursor: canEdit ? (drag ? "grabbing" : "grab") : "default",
                   touchAction: "none",
                   userSelect: "none",
                   zIndex: isBeingDragged ? 0 : 2,
@@ -311,6 +315,7 @@ export function TeamField({
                   <Select
                     data-testid={`field-formation-${team.team}`}
                     value={formation.id}
+                    disabled={!canEdit}
                     onChange={(e) => {
                       const next = getFormation(sport, e.target.value);
                       if (!next) return;
