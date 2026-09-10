@@ -426,4 +426,5 @@
     <string name="season_cancel">Cancel Season</string>
     <string name="season_reopen">Reopen Season</string>
     <string name="crew_league">Crew league</string>
+    <string name="crews">Crews</string>
 </resources>

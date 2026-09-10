@@ -148,7 +148,7 @@ fun SeasonDetailScreen(
 
                 // Crews (members)
                 if (s.crews.isNotEmpty()) {
-                    item { Text(stringResource(R.string.crew_league), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+                    item { Text(stringResource(R.string.crews), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
                     items(s.crews) { crew ->
                         Card(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(14.dp)) {
