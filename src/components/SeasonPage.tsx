@@ -8,6 +8,7 @@ import GroupsIcon from "@mui/icons-material/Groups";
 import RecommendIcon from "@mui/icons-material/Recommend";
 import SaveIcon from "@mui/icons-material/Save";
 import AddIcon from "@mui/icons-material/Add";
+import DragHandleIcon from "@mui/icons-material/DragHandle";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
@@ -363,8 +364,8 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                       slotProps={{ inputLabel: { shrink: true } }} fullWidth
                     />
                     <FormControl sx={{ minWidth: { sm: 180 } }}>
-                      <InputLabel>{t("crewCount")}</InputLabel>
-                      <Select label={t("crewCount")} value={crewCount} onChange={(event) => {
+                      <InputLabel id="season-crew-count-label">{t("crewCount")}</InputLabel>
+                      <Select labelId="season-crew-count-label" label={t("crewCount")} value={crewCount} onChange={(event) => {
                         setupDraftDirtyRef.current = true;
                         setCrewCount(Number(event.target.value));
                       }}>
@@ -464,6 +465,7 @@ function MemberAssignment({ member, crews, currentCrewIndex, onMove, onDragStart
       onDragEnd={onDragEnd}
       data-testid={`member-row-${member.membershipId}`}
     >
+      <DragHandleIcon fontSize="small" sx={{ cursor: "grab", color: "text.disabled", flexShrink: 0 }} data-testid={`member-grip-${member.membershipId}`} />
       <Typography sx={{ flex: 1 }}>{member.name}</Typography>
       <Chip size="small" variant="outlined" label={Math.round(member.rating)} />
       <FormControl size="small" sx={{ minWidth: 135 }}>
