@@ -214,6 +214,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.wear)
+    implementation(libs.androidx.wear.ongoing)
     implementation("androidx.wear:wear-input:1.2.0")
 
     // Hilt DI

@@ -1,8 +1,12 @@
 package dev.convocados.wear.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -40,6 +44,9 @@ class WearActivity : ComponentActivity() {
 
     private var isAmbient by mutableStateOf(false)
 
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     private val ambientCallback = object : AmbientLifecycleObserver.AmbientLifecycleCallback {
         override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {
             isAmbient = true
@@ -56,6 +63,7 @@ class WearActivity : ComponentActivity() {
 
         ambientObserver = AmbientLifecycleObserver(this, ambientCallback)
         lifecycle.addObserver(ambientObserver)
+        requestNotificationPermissionIfNeeded()
         lifecycleScope.launch {
             restoreCredentialCoordinator.restoreOrCreate(this@WearActivity)
         }
@@ -67,5 +75,15 @@ class WearActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Ongoing Activity (live score) shows through a notification, which needs the
+     * runtime permission on API 33+. Asked once on launch, like other Wear apps.
+     */
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 }
