@@ -206,6 +206,47 @@ describe("SeasonPage", () => {
     expect(screen.getByRole("combobox", { name: "Crew for Player 0" })).toHaveTextContent("South");
   });
 
+  it("adds recent players to the season and shows the result", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const refreshed = seasonResponse();
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        added: [
+          { membershipId: "membership-0", eventPlayerId: "player-0", name: "Player 0" },
+          { membershipId: "membership-1", eventPlayerId: "player-1", name: "Player 1" },
+        ],
+        skipped: [{ eventPlayerId: "player-9", name: "Guest", reason: "noAccount" }],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(refreshed), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Add recent players" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/events/event-1/seasons/season-1/memberships/bulk");
+    expect(await screen.findByText("Added 2 players to the season. 1 skipped (no account yet: Guest).")).toBeInTheDocument();
+  });
+
+  it("reports when no recent players can be added", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(proposalPanelResponse()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ added: [], skipped: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse()), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Add recent players" }));
+
+    expect(await screen.findByText("No players from recent games to add.")).toBeInTheDocument();
+  });
+
   it("keeps the admin crew-editing UI available on an active Season", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
