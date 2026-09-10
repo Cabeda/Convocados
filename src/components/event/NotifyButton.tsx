@@ -10,14 +10,14 @@ interface Props {
 }
 
 /**
- * ponytail: Follow button — simple binary toggle for non-players.
- * Players are auto-followed (button hidden for them).
+ * ponytail: Follow button — binary toggle for anyone who can access the event,
+ * players included. Unfollowing is an explicit opt-out: it keeps the player's
+ * spot on the roster but stops notifications (ADR 0003).
  * Follow = game appears in My Games + get event-change notifications.
  */
 export function NotifyButton({ eventId, isAuthenticated }: Props) {
   const t = useT();
   const [following, setFollowing] = useState(false);
-  const [isPlayer, setIsPlayer] = useState(false);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -27,7 +27,6 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
       .then((r) => r.json())
       .then((d) => {
         setFollowing(!!d.following);
-        setIsPlayer(!!d.isPlayer);
       })
       .catch(() => {});
   }, [eventId, isAuthenticated]);
@@ -74,8 +73,9 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
     }
   };
 
-  // Hidden for unauthenticated users and players (players are auto-followed)
-  if (!isAuthenticated || isPlayer) return null;
+  // Hidden only for unauthenticated users. Everyone with access can follow,
+  // including players (who can unfollow to opt out while keeping their spot).
+  if (!isAuthenticated) return null;
 
   return (
     <>
