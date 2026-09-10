@@ -5,6 +5,7 @@ import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.serv
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { buildSettlementRows, type PaymentMode } from "../../../../../lib/settlement.server";
+import { buildMvpSummaries } from "../../../../../lib/mvp.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
 
 // GET /api/events/[id]/history — paginated history entries
@@ -159,7 +160,26 @@ export const GET: APIRoute = async ({ params, request }) => {
     .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime())
     .map((entry) => ({ ...entry, paymentConfig: paymentConfigByDate.get(entry.dateTime) ?? null }));
 
-  return Response.json(buildPaginatedResponse(merged.slice(0, limit + 1), limit));
+  // Ship each page entry's MVP summary with the list response. The card used to
+  // fetch /history/[id]/mvp per card — an N+1 that scaled with the page size.
+  const page = merged.slice(0, limit + 1);
+  const gameHistoryIds = new Set(allHistory.map((h) => h.id));
+  const session = await getSession(request);
+  const mvpMap = await buildMvpSummaries(
+    {
+      id: event.id,
+      durationMinutes: event.durationMinutes ?? null,
+      mvpEnabled: event.mvpEnabled ?? null,
+    },
+    page.filter((entry) => gameHistoryIds.has(entry.id)),
+    session,
+  );
+  const withMvp = page.map((entry) => ({
+    ...entry,
+    mvp: gameHistoryIds.has(entry.id) ? (mvpMap.get(entry.id) ?? null) : null,
+  }));
+
+  return Response.json(buildPaginatedResponse(withMvp, limit));
 };
 
 /** Replay ELO from scratch in memory to get per-game deltas without touching the DB */

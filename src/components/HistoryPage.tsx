@@ -413,8 +413,10 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
       const seasonsJson = await seasonsRes.json();
       setSeasonOptions((seasonsJson.seasons ?? []).map((season: { id: string; name: string; status: string }) => ({ id: season.id, name: season.name, status: season.status })));
     }
+    // Load the leaderboard with the page so its table doesn't pop in after the
+    // history cards and shove them down (large layout shift on mobile).
+    await loadLeaderboard();
     setLoading(false);
-    void loadLeaderboard();
 
     // Fetch known players (historical) and ratings in parallel (non-blocking)
     // Combine current event players with historical players for suggestions
@@ -471,7 +473,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   if (loading) return (
     <ThemeModeProvider>
       <ResponsiveLayout>
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
+        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
           <CircularProgress />
         </Box>
       </ResponsiveLayout>
