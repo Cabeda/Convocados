@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type APIRequestContext } from "@playwright/test";
 import { execSync } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -18,6 +18,19 @@ const pad = (n: number) => String(n).padStart(2, "0");
 function dateInput(daysFromNow: number): string {
   const date = new Date(Date.now() + daysFromNow * 86400_000);
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// Unique client IP per spec run, so the shared CI rate-limit buckets used by
+// the rest of the suite do not throttle this spec's API setup calls.
+let ipCounter = 200;
+function withIp(request: APIRequestContext) {
+  ipCounter++;
+  const ip = `10.99.${Math.floor(ipCounter / 256)}.${ipCounter % 256}`;
+  const headers = { "X-Forwarded-For": ip };
+  return {
+    post: (url: string, opts?: any) => request.post(url, { ...opts, headers: { ...headers, ...opts?.headers } }),
+    get: (url: string, opts?: any) => request.get(url, { ...opts, headers: { ...headers, ...opts?.headers } }),
+  };
 }
 
 // Playwright's locator.dragTo() does not reliably trigger HTML5 drag-and-drop,
@@ -43,7 +56,7 @@ test.describe("Crew Season setup — full happy path", () => {
     const stamp = Date.now();
     const email = `e2e-crew-owner-${stamp}@test.com`;
     const password = "TestPassword123!";
-    const api = page.request;
+    const api = withIp(page.request);
 
     // ── 1. Owner account via the real signup API ──────────────────────────
     const signUpRes = await api.post("/api/auth/sign-up/email", {
