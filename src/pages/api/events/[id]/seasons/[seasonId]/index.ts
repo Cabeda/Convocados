@@ -186,9 +186,38 @@ async function updateSeasonDetails(
     },
   });
 }
+/**
+ * Cancel a Season (admin-only, non-terminal only). Cancelled Seasons keep
+ * their history, free the registration window for a new Season, and are
+ * excluded from standings. The optional reason is recorded for the audit.
+ */
+async function cancelSeason(
+  season: NonNullable<Awaited<ReturnType<typeof getSeasonForEvent>>>,
+  reason: unknown,
+) {
+  if (TERMINAL_STATUSES.includes(season.status)) {
+    return Response.json({ error: "Completed Seasons are read-only." }, { status: 409 });
+  }
+  const cancellationReason = typeof reason === "string" ? reason.trim() : "";
+  if (cancellationReason.length > 500) {
+    return Response.json({ error: "Cancellation reason must be 500 characters or fewer." }, { status: 400 });
+  }
+  const updated = await prisma.season.update({
+    where: { id: season.id },
+    data: { status: "cancelled", cancelledAt: new Date(), cancellationReason: cancellationReason || null },
+  });
+  return Response.json({
+    season: {
+      id: updated.id,
+      status: updated.status,
+      cancelledAt: updated.cancelledAt,
+      cancellationReason: updated.cancellationReason,
+    },
+  });
+}
+
 const MIN_CREWS = 3;
-const MIN_PARTICIPANTS = 9;
-const MIN_CREW_SIZE = 3;
+const MIN_PARTICIPANTS = 9;const MIN_CREW_SIZE = 3;
 const MAX_CREW_SIZE = 5;
 
 /**
@@ -214,17 +243,20 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   if (!authz.allowed) return Response.json({ error: "Event access required." }, { status: 403 });
   if (!authz.isAdmin) return Response.json({ error: "Only the event owner or an admin can manage a Season." }, { status: 403 });
 
-  let body: { action?: unknown; name?: unknown; registrationOpensAt?: unknown; registrationClosesAt?: unknown };
+  let body: { action?: unknown; name?: unknown; registrationOpensAt?: unknown; registrationClosesAt?: unknown; reason?: unknown };
   try {
     const parsed: unknown = await request.json();
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return Response.json({ error: "Invalid JSON." }, { status: 400 });
-    body = parsed as { action?: unknown; name?: unknown; registrationOpensAt?: unknown; registrationClosesAt?: unknown };
+    body = parsed as { action?: unknown; name?: unknown; registrationOpensAt?: unknown; registrationClosesAt?: unknown; reason?: unknown };
   } catch {
     return Response.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
   if (body.action === "update") {
     return updateSeasonDetails(season, body);
+  }
+  if (body.action === "cancel") {
+    return cancelSeason(season, body.reason);
   }
   if (body.action !== "activate") {
     return Response.json({ error: "Unsupported action." }, { status: 400 });
