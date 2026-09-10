@@ -39,6 +39,15 @@ interface UseTeamDragOptions {
   onResultChange: (matches: Imatch[]) => void;
   /** Increment when a server-side randomization starts to animate the reshuffle. */
   shuffleKey?: number;
+  /**
+   * Custom drop resolution. When provided, the hook delegates the move to it
+   * and skips its default zone + movePlayer logic. Return null for a no-op.
+   */
+  resolveMove?: (
+    drag: TeamDragState,
+    x: number,
+    y: number,
+  ) => { updated: Imatch[]; destinationTeam: string } | null;
 }
 
 /**
@@ -46,7 +55,7 @@ interface UseTeamDragOptions {
  * drop-zone refs, the floating drag ghost, arrival/shuffle motion flags, and
  * commits player moves via {@link movePlayer}.
  */
-export function useTeamDrag({ matches, onResultChange, shuffleKey = 0 }: UseTeamDragOptions) {
+export function useTeamDrag({ matches, onResultChange, shuffleKey = 0, resolveMove }: UseTeamDragOptions) {
   const [drag, setDrag] = useState<TeamDragState | null>(null);
   const [activeDropZone, setActiveDropZone] = useState<string | null>(null);
   const [playerMotion, setPlayerMotion] = useState<{ name: string; destinationTeam: string } | null>(null);
@@ -106,6 +115,18 @@ export function useTeamDrag({ matches, onResultChange, shuffleKey = 0 }: UseTeam
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     if (!drag) return;
+
+    if (resolveMove) {
+      const resolved = resolveMove(drag, e.clientX, e.clientY);
+      if (resolved) {
+        setPlayerMotion({ name: drag.name, destinationTeam: resolved.destinationTeam });
+        onResultChange(resolved.updated);
+      }
+      setDrag(null);
+      setActiveDropZone(null);
+      return;
+    }
+
     const destinationTeam = zoneAtPoint(e.clientX, e.clientY);
     const updated = destinationTeam
       ? movePlayer(matches, drag.name, drag.team, destinationTeam)
@@ -116,7 +137,7 @@ export function useTeamDrag({ matches, onResultChange, shuffleKey = 0 }: UseTeam
     }
     setDrag(null);
     setActiveDropZone(null);
-  }, [drag, matches, zoneAtPoint, onResultChange]);
+  }, [drag, matches, zoneAtPoint, onResultChange, resolveMove]);
 
   useEffect(() => {
     if (!drag) return;
@@ -134,6 +155,7 @@ export function useTeamDrag({ matches, onResultChange, shuffleKey = 0 }: UseTeam
     isShuffling,
     zonesRef,
     cancelDrag,
+    zoneAtPoint,
     handlePointerDown,
     handlePointerMove,
     handlePointerUp,

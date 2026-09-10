@@ -117,6 +117,8 @@ const de: TranslationKeys = {
   teamViewToggleLabel: "Team-Ansicht",
   teamViewList: "Liste",
   teamViewField: "Feld",
+  formation: "Formation",
+  unplacedPlayers: "Nicht platziert",
   vs: "vs",
   rerandomizeTitle: "Teams neu auslosen?",
   rerandomizeDesc: "Die Teams wurden bereits festgelegt. Eine neue Auslosung ersetzt die aktuelle Zuordnung.",

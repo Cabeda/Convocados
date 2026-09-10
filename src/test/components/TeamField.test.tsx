@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { useState } from "react";
 import "@testing-library/jest-dom/vitest";
@@ -14,10 +14,12 @@ const initialMatches: Imatch[] = [
 function TeamFieldHarness({
   shuffleKey = 0,
   ratingsMap,
+  sport = "football-5v5",
   onResultChange,
 }: {
   shuffleKey?: number;
   ratingsMap?: Record<string, number>;
+  sport?: string;
   onResultChange?: (m: Imatch[]) => void;
 }) {
   const [matches, setMatches] = useState(initialMatches);
@@ -30,6 +32,7 @@ function TeamFieldHarness({
       }}
       ratingsMap={ratingsMap}
       shuffleKey={shuffleKey}
+      sport={sport}
     />
   );
 }
@@ -89,8 +92,35 @@ describe("TeamField", () => {
     const updated = onResultChange.mock.calls[0][0] as Imatch[];
     const red = updated.find((m) => m.team === "Red")!;
     const blue = updated.find((m) => m.team === "Blue")!;
-    expect(red.players.map((p) => p.name)).toEqual(["Bob", "Alice"]);
+    expect(red.players.map((p) => p.name)).toContain("Alice");
     expect(blue.players.map((p) => p.name)).toEqual(["Carol"]);
+  });
+
+  it("places a player into a specific slot when dropped on it", () => {
+    const onResultChange = vi.fn();
+    renderWithTheme(<TeamFieldHarness onResultChange={onResultChange} />);
+
+    const targetSlot = screen.getByTestId("field-slot-Red-1");
+    vi.spyOn(targetSlot, "getBoundingClientRect").mockReturnValue({
+      left: 150, right: 160, top: 40, bottom: 50, width: 10, height: 10, x: 150, y: 40,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerDown(screen.getByTestId("field-player-Alice"), {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerUp(screen.getByTestId("team-field"), {
+      pointerId: 1,
+      clientX: 155,
+      clientY: 45,
+    });
+
+    const updated = onResultChange.mock.calls[0][0] as Imatch[];
+    const red = updated.find((m) => m.team === "Red")!;
+    expect(red.players.find((p) => p.name === "Alice")!.slot).toBe(1);
   });
 
   it("does not move a player dropped back on their own half", () => {
@@ -131,6 +161,29 @@ describe("TeamField", () => {
     });
 
     expect(onResultChange).not.toHaveBeenCalled();
+  });
+
+  it("renders a formation selector with the sport's options", () => {
+    renderWithTheme(<TeamFieldHarness sport="football-5v5" />);
+
+    const select = screen.getByTestId("field-formation-Blue");
+    expect(select).toHaveTextContent("2-2");
+
+    fireEvent.mouseDown(within(select).getByRole("combobox"));
+    expect(screen.getByRole("option", { name: "1-2-1" })).toBeInTheDocument();
+  });
+
+  it("applies a new formation when one is chosen", () => {
+    const onResultChange = vi.fn();
+    renderWithTheme(<TeamFieldHarness onResultChange={onResultChange} />);
+
+    const select = screen.getByTestId("field-formation-Blue");
+    fireEvent.mouseDown(within(select).getByRole("combobox"));
+    fireEvent.click(screen.getByRole("option", { name: "1-2-1" }));
+
+    expect(onResultChange).toHaveBeenCalledTimes(1);
+    const updated = onResultChange.mock.calls[0][0] as Imatch[];
+    expect(updated.find((m) => m.team === "Blue")!.formation).toBe("1-2-1");
   });
 
   it("exposes a transient shuffle state when the shuffle key changes", () => {

@@ -125,6 +125,8 @@ const en = {
   teamViewToggleLabel: "Team view",
   teamViewList: "List",
   teamViewField: "Field",
+  formation: "Formation",
+  unplacedPlayers: "Not placed",
   vs: "vs",
   rerandomizeTitle: "Re-randomize teams?",
   rerandomizeDesc: "Teams have already been set. Randomizing again will replace the current assignment.",
