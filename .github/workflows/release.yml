@@ -558,15 +558,16 @@ jobs:
           ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track beta --release-status completed --release-name "$VERSION" --no-daemon
 
       # Wear closed/open testing tracks only exist if the Wear OS release type has
-      # been opted into them in Play Console. Attempt the promotion, but never fail
-      # the release when the form-factor track is absent (Play returns 404 for it).
+      # been opted into them in Play Console. The Wear closed track is custom-named
+      # `wear:Convocados Wear`; open testing is `wear:beta`. Attempt the promotion,
+      # but never fail the release when a form-factor track is absent.
       - name: Promote wear to closed + open testing (if enabled)
         continue-on-error: true
         working-directory: android-app
         env:
           VERSION: v${{ needs.release.outputs.version }}
         run: |
-          ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:alpha --release-status completed --release-name "$VERSION" --no-daemon
+          ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track "wear:Convocados Wear" --release-status completed --release-name "$VERSION" --no-daemon
           ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:beta --release-status completed --release-name "$VERSION" --no-daemon
 
       - name: Draft production release for phone and wear
