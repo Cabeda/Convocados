@@ -358,4 +358,14 @@
     <string name="save_photo">Enregistrer la photo</string>
     <string name="zoom">Zoom</string>
     <string name="photo_load_error">Impossible de charger l\'image.</string>
+    <string name="season_rank">Classement de la Saison</string>
+    <string name="season_rank_subtitle">Les matchs amicaux n\'affectent pas le Classement · %1$d matchs comptés</string>
+    <string name="season_rank_provisional">Provisoire</string>
+    <string name="season_rank_to_next">%1$d vers %2$s</string>
+    <string name="season_rank_top_tier">Niveau maximal</string>
+    <string name="tier_up_title">Tu as atteint %1$s !</string>
+    <string name="tier_up_body">Gagné sur le terrain cette saison — pas un prix, juste ta forme.</string>
+    <string name="tier_down_title">Nouvelle saison, nouveau départ</string>
+    <string name="tier_down_body">Ton Classement a été réinitialisé. Tu reviens en %1$s — remonte.</string>
+    <string name="continue_action">Continuer</string>
 </resources>

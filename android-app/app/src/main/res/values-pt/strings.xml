@@ -358,4 +358,14 @@
     <string name="save_photo">Guardar foto</string>
     <string name="zoom">Zoom</string>
     <string name="photo_load_error">Não foi possível carregar a imagem.</string>
+    <string name="season_rank">Classificação da Época</string>
+    <string name="season_rank_subtitle">Jogos amigáveis não afetam a Classificação · %1$d jogos válidos</string>
+    <string name="season_rank_provisional">Provisório</string>
+    <string name="season_rank_to_next">%1$d para %2$s</string>
+    <string name="season_rank_top_tier">Nível máximo</string>
+    <string name="tier_up_title">Chegaste a %1$s!</string>
+    <string name="tier_up_body">Conquistado em campo esta época — não é um prémio, é a tua forma.</string>
+    <string name="tier_down_title">Nova época, recomeço</string>
+    <string name="tier_down_body">A tua Classificação foi reiniciada. Estás de volta em %1$s — sobe outra vez.</string>
+    <string name="continue_action">Continuar</string>
 </resources>

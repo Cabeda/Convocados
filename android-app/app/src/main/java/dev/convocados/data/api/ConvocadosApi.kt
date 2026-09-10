@@ -35,6 +35,13 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun fetchPostGameStatus(id: String): PostGameStatus =
         client.get("/api/events/$id/post-game-status")
 
+    // ── Seasons / Season Rank (ADR 0031) ─────────────────────────────────
+    suspend fun fetchSeasons(id: String): SeasonsResponse =
+        client.get("/api/events/$id/seasons")
+
+    suspend fun fetchSeasonRank(eventId: String, seasonId: String): SeasonRankPayload =
+        client.get("/api/events/$eventId/seasons/$seasonId/rank")
+
     // ── Players ───────────────────────────────────────────────────────────
     suspend fun addPlayer(
         eventId: String,

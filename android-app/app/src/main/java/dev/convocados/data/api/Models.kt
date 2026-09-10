@@ -754,3 +754,40 @@ data class InviteCreateResponse(
     val inviteUrl: String = "",
     val channels: InviteChannels = InviteChannels(),
 )
+
+// ── Season Rank (ADR 0031) ────────────────────────────────────────────────
+
+@Serializable
+data class SeasonSummary(
+    val id: String = "",
+    val name: String = "",
+    val status: String = "",
+)
+
+@Serializable
+data class SeasonsResponse(
+    val seasons: List<SeasonSummary> = emptyList(),
+    val canManage: Boolean = false,
+)
+
+@Serializable
+data class SeasonRankPlayer(
+    val name: String = "",
+    val hidden: Double = 0.0,
+    val display: Double = 0.0,
+    val tier: Int = 0,
+    val tierName: String? = null,
+    val games: Int = 0,
+    val provisional: Boolean = false,
+)
+
+@Serializable
+data class SeasonRankPayload(
+    val seasonId: String = "",
+    val players: List<SeasonRankPlayer> = emptyList(),
+    val edges: List<Double> = emptyList(),
+    val anchor: Double = 0.0,
+    val gamesCount: Int = 0,
+    val enabled: Boolean = true,
+    val youName: String? = null,
+)
