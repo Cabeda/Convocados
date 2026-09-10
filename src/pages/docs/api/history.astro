@@ -11,18 +11,25 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
   <p>List all history entries for an event, ordered by date descending.</p>
 
   <h3>Response</h3>
-  <pre><code>{`[
-  {
-    "id": "clx9abc...",
-    "eventId": "clx1abc...",
-    "dateTime": "2026-03-13T19:00:00.000Z",
-    "status": "played",
-    "scoreOne": 3,
-    "scoreTwo": 2,
-    "teamsSnapshot": "{\\"teamOne\\":[...],\\"teamTwo\\":[...]}",
-    "createdAt": "2026-03-13T21:00:00.000Z"
-  }
-]`}</code></pre>
+  <pre><code>{`{
+  "data": [
+    {
+      "id": "clx9abc...",
+      "eventId": "clx1abc...",
+      "dateTime": "2026-03-13T19:00:00.000Z",
+      "status": "played",
+      "scoreOne": 3,
+      "scoreTwo": 2,
+      "teamsSnapshot": "{\\"teamOne\\":[...],\\"teamTwo\\":[...]}",
+      "createdAt": "2026-03-13T21:00:00.000Z"
+    }
+  ],
+  "nextCursor": "clx9abc...",
+  "hasMore": true
+}`}</code></pre>
+
+  <h3>Pagination</h3>
+  <p>Cursor-based. Pass <code>?limit=</code> (default 20, max 100) and the previous page's <code>nextCursor</code> as <code>?cursor=</code>. The cursor is opaque and may reference either a <code>GameHistory</code> or a live <code>Game</code> row.</p>
 
   <h3>Fields</h3>
   <table>
