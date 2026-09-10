@@ -8,6 +8,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import type { Imatch } from "~/lib/random";
+import { movePlayer } from "~/lib/teams";
 import { useT } from "~/lib/useT";
 
 interface Props {
@@ -87,19 +88,9 @@ export function TeamPicker({
 
   const commitMove = useCallback((destinationTeam: string | null, sourceName: string, sourceTeam: string) => {
     if (!destinationTeam || destinationTeam === sourceTeam) return;
+    const updated = movePlayer(matches, sourceName, sourceTeam, destinationTeam);
+    if (updated === matches) return;
     setPlayerMotion({ name: sourceName, destinationTeam });
-    const updated = matches.map((match) => {
-      if (match.team === sourceTeam) {
-        return { ...match, players: match.players.filter((p) => p.name !== sourceName) };
-      }
-      if (match.team === destinationTeam) {
-        const newPlayers = [...match.players, { name: sourceName, order: match.players.length }].map(
-          (p, i) => ({ ...p, order: i })
-        );
-        return { ...match, players: newPlayers };
-      }
-      return match;
-    });
     onResultChange(updated);
   }, [matches, onResultChange]);
 
