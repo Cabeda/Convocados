@@ -973,6 +973,7 @@ fun EventDetailScreen(
     onBack: () -> Unit,
     onSettings: () -> Unit,
     onRankings: () -> Unit,
+    onSeasons: () -> Unit = {},
     onPayments: () -> Unit,
     onLog: () -> Unit,
     onAttendance: () -> Unit,
@@ -1156,7 +1157,7 @@ fun EventDetailScreen(
                                     if (ds.isFollowing) {
                                         IconButton(onClick = { viewModel.showNotifications() }) { Icon(Icons.Default.Notifications, stringResource(R.string.notification_settings)) }
                                     }
-                                    HeroMoreMenu(ev, ds, viewModel, eventId, onBack, onSettings, onRankings, onPayments, onLog, onAttendance, onNotificationPrefs, onAllHistory, onCourtAlternatives)
+                                    HeroMoreMenu(ev, ds, viewModel, eventId, onBack, onSettings, onRankings, onPayments, onLog, onAttendance, onNotificationPrefs, onAllHistory, onCourtAlternatives, onSeasons)
                                 }
                                 Text(sportEmoji(ev.sport), fontSize = 36.sp, modifier = Modifier.padding(top = 4.dp))
                                 Text(ev.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, modifier = Modifier.semantics { heading() })
@@ -1602,7 +1603,7 @@ private fun PlayerGroup(players: List<Player>, user: UserProfile?, isOwner: Bool
 }
 
 @Composable
-private fun HeroMoreMenu(ev: EventDetail, state: EventScreenState, viewModel: EventDetailViewModel, eventId: String, onBack: () -> Unit, onSettings: () -> Unit, onRankings: () -> Unit, onPayments: () -> Unit, onLog: () -> Unit, onAttendance: () -> Unit, onNotificationPrefs: () -> Unit, onAllHistory: () -> Unit, onCourtAlternatives: () -> Unit) {
+private fun HeroMoreMenu(ev: EventDetail, state: EventScreenState, viewModel: EventDetailViewModel, eventId: String, onBack: () -> Unit, onSettings: () -> Unit, onRankings: () -> Unit, onPayments: () -> Unit, onLog: () -> Unit, onAttendance: () -> Unit, onNotificationPrefs: () -> Unit, onAllHistory: () -> Unit, onCourtAlternatives: () -> Unit, onSeasons: () -> Unit = {}) {
     var open by remember { mutableStateOf(false) }
     val context = LocalContext.current
     Box {
@@ -1616,6 +1617,7 @@ private fun HeroMoreMenu(ev: EventDetail, state: EventScreenState, viewModel: Ev
                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, context.getString(R.string.share)))
             })
             DropdownMenuItem(text = { Text(stringResource(R.string.rankings)) }, onClick = { open = false; onRankings() })
+            DropdownMenuItem(text = { Text(stringResource(R.string.seasons)) }, onClick = { open = false; onSeasons() })
             DropdownMenuItem(text = { Text("Payments page") }, onClick = { open = false; onPayments() })
             DropdownMenuItem(text = { Text(stringResource(R.string.history)) }, onClick = { open = false; onAllHistory() })
             DropdownMenuItem(text = { Text("Attendance") }, onClick = { open = false; onAttendance() })
