@@ -17,6 +17,7 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import CrewProposalPanel from "./CrewProposalPanel";
 import { LeaderboardTables, type LeaderboardPayload } from "./LeaderboardTables";
+import { SeasonRankTable } from "./SeasonRankTable";
 
 interface Member {
   membershipId: string;
@@ -517,6 +518,10 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
               onScopeChange={() => {}}
               eventId={eventId}
             />
+
+            {(season.status === "active" || season.status === "review" || season.status === "completed") && (
+              <SeasonRankTable eventId={eventId} seasonId={seasonId} />
+            )}
 
             {!isAdmin ? (
               <Stack spacing={2}>
