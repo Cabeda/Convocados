@@ -347,6 +347,25 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Re-read follow/player state so the hero follow toggle and notifications
+     * bell stay in sync after membership changes (join/leave). Best-effort — a
+     * network blip keeps the optimistic local state.
+     */
+    private suspend fun refreshFollowState(eventId: String) {
+        runCatching { api.getFollowState(eventId) }.getOrNull()?.let { f ->
+            _state.value = _state.value.copy(
+                isFollowing = f.following,
+                isPlayer = f.isPlayer,
+                isAdmin = f.isAdmin,
+                mutePlayerActivity = f.mutePlayerActivity,
+                muteReminders = f.muteReminders,
+                mutePostGame = f.mutePostGame,
+                muteEventDetails = f.muteEventDetails,
+            )
+        }
+    }
+
     fun toggleFollow(eventId: String) {
         if (_state.value.isFollowing) {
             // Unfollow — API will block if user is a player (409)
@@ -422,6 +441,9 @@ class EventDetailViewModel @Inject constructor(
             repository.addPlayer(eventId, name, link, email, idempotencyKey)
                 .onSuccess { resolvedName ->
                     _state.value = _state.value.copy(addedPlayerName = resolvedName ?: name)
+                    // Joining auto-follows and makes the caller a player — re-sync
+                    // so the hero hides the toggle and shows the bell immediately.
+                    refreshFollowState(eventId)
                     // Auto-open payment dialog after join if preference is set
                     if (autoPayOnJoin.value && _state.value.balance?.callerBalance?.let { it.amount > 0 } == true) {
                         _state.value = _state.value.copy(showPaymentNudge = true)
@@ -603,6 +625,9 @@ class EventDetailViewModel @Inject constructor(
             repository.removePlayer(eventId, playerId)
                 .onSuccess { undo ->
                     _state.value = _state.value.copy(undoData = undo)
+                    // Leaving archives the player row and auto-unfollows — re-sync
+                    // so the follow toggle reappears without a manual refresh.
+                    refreshFollowState(eventId)
                     delay(60_000)
                     _state.value = _state.value.copy(undoData = null)
                 }
@@ -906,6 +931,18 @@ internal fun shouldShowAutoPaymentPrompt(
     balance: BalanceResponse?,
 ): Boolean = autoOpenPay && balance?.callerBalance != null
 
+/**
+ * Whether the hero shows the follow toggle.
+ *
+ * An auto-followed player (on the roster AND following) is hidden — players are
+ * auto-followed on join. But a player who is NOT following (added by an organizer
+ * via auto-link, or unfollowed from the dashboard) must still get the toggle so
+ * they can opt into notifications. Hiding it left them with no control at all and
+ * silently dropped the game from "My Games".
+ */
+internal fun shouldShowFollowToggle(isPlayer: Boolean, isFollowing: Boolean): Boolean =
+    !(isPlayer && isFollowing)
+
 @Composable
 internal fun phaseColors(phase: EventPhase): Pair<Color, Color> {
     val base = MaterialTheme.colorScheme.surface
@@ -1121,7 +1158,7 @@ fun EventDetailScreen(
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
                                     Spacer(Modifier.weight(1f))
-                                    if (!ds.isPlayer) {
+                                    if (shouldShowFollowToggle(ds.isPlayer, ds.isFollowing)) {
                                         IconButton(onClick = { viewModel.toggleFollow(eventId) }) {
                                             Icon(
                                                 if (ds.isFollowing) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,

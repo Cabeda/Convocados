@@ -74,8 +74,10 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
     }
   };
 
-  // Hidden for unauthenticated users and players (players are auto-followed)
-  if (!isAuthenticated || isPlayer) return null;
+  // Hidden for unauthenticated users and for auto-followed players. A player who
+  // is NOT following (e.g. added to the roster by an organizer, or unfollowed via
+  // the dashboard) must still see the toggle to opt into notifications.
+  if (!isAuthenticated || (isPlayer && following)) return null;
 
   return (
     <>
