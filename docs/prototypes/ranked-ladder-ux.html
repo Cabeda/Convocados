@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — Ranked ladder UX</title>
+<style>
+  :root{--bg:#0f1115;--card:#1a1d24;--line:#2a2f3a;--fg:#e7e9ee;--muted:#98a0b0;--accent:#4c8dff;--good:#3ddc97;--warn:#ffb454;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding-bottom:80px}
+  .appbar{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#12151b;z-index:5}
+  .appbar b{font-size:15px}
+  .tabs{display:flex;gap:14px;color:var(--muted);font-size:13px}
+  .tabs .active{color:var(--fg);border-bottom:2px solid var(--accent);padding-bottom:2px}
+  .wrap{max-width:820px;margin:0 auto;padding:20px}
+  .scenarios{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .scenarios button{background:#222834;color:var(--fg);border:1px solid var(--line);border-radius:20px;padding:6px 14px;cursor:pointer;font-size:12px}
+  .scenarios button.on{border-color:var(--accent);background:#243049}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .muted{color:var(--muted)}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-weight:700;border-radius:20px;padding:3px 12px;font-size:12px}
+  .dot{width:9px;height:9px;border-radius:50%}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr.you{background:#1e2636}
+  .bar{height:7px;border-radius:4px;background:#2a3140;overflow:hidden;min-width:80px}
+  .bar > i{display:block;height:100%;border-radius:4px}
+  .ladderband{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;border:1px solid transparent;margin-bottom:6px}
+  .ladderband.you{border-color:var(--accent);background:#1e2636}
+  .ladderband .tname{width:92px;font-weight:700;font-size:12px}
+  .ladderband .range{width:96px;color:var(--muted);font-size:11px}
+  .ladderband .who{flex:1;color:var(--muted);font-size:12px}
+  .ladderband .who b{color:var(--fg)}
+  .selfcard{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+  .selfrank{font-size:44px;font-weight:800;line-height:1}
+  .pill{display:inline-block;background:#222834;border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--muted)}
+  .banner{background:#2a2418;border:1px solid #6b5620;color:#ffd88a;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px}
+  .switchbar{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:#000;border:1px solid #444;border-radius:999px;padding:6px 10px;box-shadow:0 8px 30px rgba(0,0,0,.6);z-index:20}
+  .switchbar button{background:#222;color:#fff;border:1px solid #444;border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:14px}
+  .switchbar span{font-size:12px;color:#cfd4de;min-width:190px;text-align:center}
+  h2{font-size:16px;margin:0 0 4px}
+</style>
+</head>
+<body>
+<div class="appbar">
+  <b>Ninjas da Areosa</b>
+  <div class="tabs"><span>History</span><span>Attendance</span><span class="active">Ratings</span><span>Season</span></div>
+</div>
+
+<div class="wrap">
+  <div class="scenarios" id="scenarios">
+    <button data-s="established">Established player</button>
+    <button data-s="provisional">Provisional (&lt;3 games)</button>
+    <button data-s="newseason">New Season / reset</button>
+  </div>
+  <div id="view"></div>
+</div>
+
+<div class="switchbar" id="switchbar">
+  <button id="prev" title="Previous (←)">‹</button>
+  <span id="label"></span>
+  <button id="next" title="Next (→)">›</button>
+</div>
+
+<script>
+// ── data ──────────────────────────────────────────────────────────────────────
+const EDGES=[0,75,102,107,118,213], NAMES=["Bronze","Silver","Gold","Platinum","Diamond","Master"];
+const COLORS=["#8c6a4a","#a9b2c0","#e0b341","#5ad1c8","#7fb3ff","#b07bff"];
+const ANCHOR=879;
+const tierOf=s=>{let b=0;for(let i=0;i<EDGES.length;i++)if(s>=EDGES[i])b=i;return b;};
+const nextEdge=s=>{for(const e of EDGES)if(e>s)return e;return null;};
+const P=[
+ {n:"Rita",r:1114,g:11,w:9,d:0,l:2},
+ {n:"Marco",r:1092,g:12,w:9,d:0,l:3},
+ {n:"You",r:1073,g:8,w:6,d:0,l:2,you:true},
+ {n:"Inês",r:997,g:10,w:5,d:0,l:5},
+ {n:"Tomás",r:995,g:13,w:6,d:0,l:7},
+ {n:"Sofia",r:986,g:7,w:3,d:0,l:4},
+ {n:"Bruno",r:984,g:8,w:3,d:0,l:5},
+ {n:"Ana",r:981,g:5,w:2,d:0,l:3},
+ {n:"João",r:979,g:3,w:1,d:0,l:2},
+ {n:"Rui",r:957,g:4,w:1,d:0,l:3},
+ {n:"Nuno",r:935,g:13,w:4,d:0,l:9},
+].map(p=>({...p,seed:Math.max(0,p.r-ANCHOR),tier:tierOf(Math.max(0,p.r-ANCHOR))}));
+
+let scenario="established", variant="A";
+const VNAMES={A:"Table + next-tier bar",B:"Ladder",C:"Self-first card"};
+
+function you(){return P.find(p=>p.you);}
+function youSeed(){return scenario==="newseason"?Math.round(you().seed*0.5):you().seed;} // soft reset visual
+function youTier(){return tierOf(youSeed());}
+function progress(seed){
+  const t=tierOf(seed), lo=EDGES[t], hi=nextEdge(seed);
+  if(hi==null)return{pct:100,to:0,next:null};
+  return{pct:Math.round((seed-lo)/(hi-lo)*100),to:hi-seed,next:NAMES[t+1]};
+}
+function badge(t,extra=""){
+  return `<span class="badge" style="background:${COLORS[t]}22;color:${COLORS[t]};border:1px solid ${COLORS[t]}55"><span class="dot" style="background:${COLORS[t]}"></span>${NAMES[t]}${extra}</span>`;
+}
+
+// ── variants ──────────────────────────────────────────────────────────────────
+function banner(){
+  if(scenario==="newseason")return `<div class="banner">Season 3 has started. Your Rank soft-reset from <b>Diamond ${you().seed}</b> to <b>${youTier()&&NAMES[youTier()]} ${youSeed()}</b> — re-earn your spot. <span class="pill">no attendance pressure</span></div>`;
+  if(scenario==="provisional")return `<div class="banner">Provisional — play <b>1 more game</b> (2/3) to get your first Tier. Your Rank is calibrating.</div>`;
+  return "";
+}
+
+function variantA(){
+  const rows=P.map((p,i)=>{
+    const seed=p.you?youSeed():p.seed;
+    const isProv=p.you&&scenario==="provisional";
+    const t=tierOf(seed), pr=progress(seed);
+    const bar=isProv?`<span class="muted">—</span>`:`<div class="bar" title="${pr.pct}% to ${pr.next||"top"}"><i style="width:${pr.pct}%;background:${COLORS[t]}"></i></div>`;
+    const rankCell=isProv?`<span class="muted">—</span>`:badge(t);
+    return `<tr class="${p.you?"you":""}"><td class="num">${i+1}</td><td>${p.n}</td><td>${rankCell}</td>
+      <td class="num">${seed}</td><td style="width:160px">${bar}</td>
+      <td class="num">${isProv?2:p.g}</td><td class="num">${p.w}-${p.d}-${p.l}</td></tr>`;
+  }).join("");
+  return `${banner()}<div class="card"><h2>Ratings</h2><div class="muted" style="margin-bottom:10px">Season Rank · top 11 by Rank</div>
+    <table><thead><tr><th class="num">#</th><th>Player</th><th>Tier</th><th class="num">Rank</th><th>Progress to next</th><th class="num">G</th><th class="num">W-D-L</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function variantB(){
+  const groups=NAMES.map((_,t)=>P.filter(p=>{
+    const seed=p.you?youSeed():p.seed; return (p.you&&scenario==="provisional")?false:tierOf(seed)===t;
+  }));
+  const bands=NAMES.map((n,t)=>{
+    const list=groups[t];
+    const isYouBand=list.some(p=>p.you);
+    const hi=(t===NAMES.length-1?"+":EDGES[t+1]);
+    return `<div class="ladderband ${isYouBand?"you":""}">
+      <div class="tname" style="color:${COLORS[t]}">${n}</div>
+      <div class="range">${EDGES[t]}–${hi}</div>
+      <div class="who">${list.length?list.map(p=>p.you?`<b>${p.n}</b>`:p.n).join(", "):'<span class="muted">—</span>'}</div>
+      <div class="muted">${list.length}</div></div>`;
+  }).join("");
+  const prov=(scenario==="provisional")?`<div class="ladderband" style="border-color:#5a3a3a"><div class="tname" style="color:#ffb0a0">Provisional</div><div class="range">calibrating</div><div class="who"><b>You</b> · 2/3 games</div></div>`:"";
+  return `${banner()}<div class="card"><h2>Where you sit</h2><div class="muted" style="margin-bottom:10px">All players across the 6 tiers</div>${bands}${prov}</div>`;
+}
+
+function variantC(){
+  const seed=youSeed(), t=tierOf(seed), pr=progress(seed), isProv=scenario==="provisional";
+  const self=isProv
+    ? `<div class="selfcard"><div><div class="muted">Your Rank</div><div class="selfrank muted">Provisional</div>
+        <div style="margin-top:6px">Play <b>1 more game</b> (2/3) to unlock your Tier.</div></div></div>`
+    : `<div class="selfcard"><div><div class="muted">Your Tier</div><div style="margin:4px 0">${badge(t)}</div></div>
+        <div><div class="muted">Rank</div><div class="selfrank" style="color:${COLORS[t]}">${seed}</div></div>
+        <div style="flex:1;min-width:200px"><div class="muted" style="margin-bottom:6px">${pr.to} to <b style="color:${COLORS[t+1]}">${pr.next||"top"}</b></div>
+          <div class="bar" style="height:12px"><i style="width:${pr.pct}%;background:linear-gradient(90deg,${COLORS[t]},${COLORS[t+1]||COLORS[t]})"></i></div>
+          <div class="muted" style="margin-top:6px;font-size:11px">${pr.pct}% through ${NAMES[t]}</div></div></div>`;
+  const others=P.filter(p=>!p.you).sort((a,b)=>b.r-a.r).slice(0,6).map(p=>{
+    const s=p.seed,t2=tierOf(s);
+    return `<tr><td>${p.n}</td><td>${badge(t2)}</td><td class="num">${s}</td></tr>`;
+  }).join("");
+  return `${banner()}<div class="card">${self}</div>
+    <div class="card"><h2>Others</h2><table><thead><tr><th>Player</th><th>Tier</th><th class="num">Rank</th></tr></thead><tbody>${others}</tbody></table></div>`;
+}
+
+function render(){
+  document.getElementById("view").innerHTML = variant==="A"?variantA():variant==="B"?variantB():variantC();
+  document.querySelectorAll("#scenarios button").forEach(b=>b.classList.toggle("on",b.dataset.s===scenario));
+  document.getElementById("label").textContent=`${variant} (${VNAMES[variant]}) · ${scenario}`;
+  const u=new URL(location.href); u.searchParams.set("variant",variant); u.searchParams.set("scenario",scenario);
+  history.replaceState(null,"",u);
+}
+
+// ── wiring ────────────────────────────────────────────────────────────────────
+const KEYS=Object.keys(VNAMES);
+function cycle(d){variant=KEYS[(KEYS.indexOf(variant)+d+KEYS.length)%KEYS.length];render();}
+document.getElementById("prev").onclick=()=>cycle(-1);
+document.getElementById("next").onclick=()=>cycle(1);
+document.getElementById("scenarios").onclick=e=>{if(e.target.dataset.s){scenario=e.target.dataset.s;render();}};
+addEventListener("keydown",e=>{
+  const tag=(document.activeElement||{}).tagName;
+  if(tag==="INPUT"||tag==="TEXTAREA")return;
+  if(e.key==="ArrowLeft")cycle(-1); if(e.key==="ArrowRight")cycle(1);
+});
+const q=new URLSearchParams(location.search);
+variant=q.get("variant")||"A"; scenario=q.get("scenario")||"established";
+if(!VNAMES[variant])variant="A";
+render();
+</script>
+</body>
+</html>
