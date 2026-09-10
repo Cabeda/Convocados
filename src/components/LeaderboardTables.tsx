@@ -1,6 +1,7 @@
 import {
   Alert, Box, Chip, FormControl, Grid, InputLabel, MenuItem, Paper, Select,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography,
+  useMediaQuery, useTheme,
 } from "@mui/material";
 import { EmojiEvents } from "@mui/icons-material";
 import { useT } from "~/lib/useT";
@@ -37,8 +38,73 @@ function StatHeader({ label, title }: { label: string; title: string }) {
   return <TableCell align="right" title={title} sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>{label}</TableCell>;
 }
 
+function PlayerStandingsList({ rows, label }: { rows: PlayerStanding[]; label: string }) {
+  const t = useT();
+  return (
+    <Stack spacing={1} sx={{ p: 1.5 }} data-testid="player-standings-mobile" aria-label={label}>
+      {rows.map((row) => {
+        const stats: Array<[string, number | string]> = [
+          [t("leaderboardPlayed"), row.played],
+          [t("leaderboardWins"), row.wins],
+          [t("leaderboardDraws"), row.draws],
+          [t("leaderboardLosses"), row.losses],
+          [t("leaderboardGoalsFor"), row.goalsFor],
+          [t("leaderboardGoalsAgainst"), row.goalsAgainst],
+          [t("leaderboardGoalDifference"), `${row.goalDifference > 0 ? "+" : ""}${row.goalDifference}`],
+        ];
+        return (
+          <Box
+            key={row.name}
+            sx={{
+              p: 1.25,
+              borderRadius: 2,
+              border: "1px solid",
+              borderColor: "divider",
+              bgcolor: "action.hover",
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ minWidth: 18 }}>
+                {row.rank}
+              </Typography>
+              <Stack direction="row" alignItems="center" spacing={0.75} sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="subtitle1" fontWeight={row.rank === 1 ? 700 : 600} noWrap>
+                  {row.name}
+                </Typography>
+                {row.crewName && (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={row.crewName}
+                    sx={{ height: 18, fontSize: "0.65rem", "& .MuiChip-label": { px: 0.75 } }}
+                  />
+                )}
+              </Stack>
+              <Stack alignItems="flex-end">
+                <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1 }}>{row.points}</Typography>
+                <Typography variant="caption" color="text.secondary">{t("leaderboardPoints")}</Typography>
+              </Stack>
+            </Stack>
+            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0.5, mt: 1 }}>
+              {stats.map(([statLabel, value]) => (
+                <Box key={statLabel} sx={{ textAlign: "center" }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>{statLabel}</Typography>
+                  <Typography variant="body2" fontWeight={600} sx={{ fontVariantNumeric: "tabular-nums" }}>{value}</Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        );
+      })}
+    </Stack>
+  );
+}
+
 function PlayerStandingsTable({ rows, label }: { rows: PlayerStanding[]; label: string }) {
   const t = useT();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"), { noSsr: true });
+  if (isMobile) return <PlayerStandingsList rows={rows} label={label} />;
   return (
     <TableContainer sx={{ overflowX: "auto" }}>
       <Table size="small" aria-label={label}>
@@ -91,8 +157,84 @@ function PlayerStandingsTable({ rows, label }: { rows: PlayerStanding[]; label: 
   );
 }
 
+function CrewScoreChips({ row }: { row: CrewStanding }) {
+  const t = useT();
+  return (
+    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+      {row.gameScores.map((entry, index) => (
+        <Box
+          key={entry.gameId}
+          title={entry.counted ? t("crewScoreCounted") : t("crewScoreDropped")}
+          aria-label={`${t("crewGameScores")} ${index + 1}: ${entry.score.toFixed(2)}`}
+          sx={{
+            width: 44,
+            textAlign: "center",
+            py: 0.25,
+            borderRadius: 1,
+            fontVariantNumeric: "tabular-nums",
+            fontSize: "0.72rem",
+            fontWeight: entry.counted ? 700 : 400,
+            color: entry.counted ? "primary.contrastText" : "text.secondary",
+            bgcolor: entry.counted ? "primary.main" : "action.hover",
+            border: "1px solid",
+            borderColor: entry.counted ? "primary.main" : "divider",
+          }}
+        >
+          {entry.score.toFixed(2)}
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+function CrewStandingsList({ rows, label }: { rows: CrewStanding[]; label: string }) {
+  const t = useT();
+  return (
+    <Stack spacing={1} sx={{ p: 1.5 }} data-testid="crew-standings-mobile" aria-label={label}>
+      {rows.map((row) => (
+        <Box
+          key={row.crewId}
+          sx={{
+            p: 1.25,
+            borderRadius: 2,
+            border: "1px solid",
+            borderColor: "divider",
+            bgcolor: "action.hover",
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ minWidth: 18 }}>
+              {row.rank}
+            </Typography>
+            <Typography variant="subtitle1" fontWeight={row.rank === 1 ? 700 : 600} noWrap sx={{ flex: 1, minWidth: 0 }}>
+              {row.name}
+            </Typography>
+            <Typography
+              variant="h6"
+              fontWeight={700}
+              title={t("crewBestSixTitle")}
+              sx={{ fontVariantNumeric: "tabular-nums" }}
+            >
+              {row.points.toFixed(2)}
+            </Typography>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" title={t("crewRoundsTitle")}>
+            {row.roundsCounted}/{row.roundsRepresented} {t("leaderboardRounds")}
+          </Typography>
+          <Box sx={{ mt: 1 }}>
+            <CrewScoreChips row={row} />
+          </Box>
+        </Box>
+      ))}
+    </Stack>
+  );
+}
+
 function CrewStandingsTable({ rows, label }: { rows: CrewStanding[]; label: string }) {
   const t = useT();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"), { noSsr: true });
+  if (isMobile) return <CrewStandingsList rows={rows} label={label} />;
   return (
     <TableContainer sx={{ overflowX: "auto" }}>
       <Table size="small" aria-label={label}>
@@ -115,29 +257,8 @@ function CrewStandingsTable({ rows, label }: { rows: CrewStanding[]; label: stri
               </TableCell>
               <TableCell align="right">{row.roundsCounted}/{row.roundsRepresented}</TableCell>
               <TableCell sx={{ minWidth: 160 }}>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, maxWidth: 220 }}>
-                  {row.gameScores.map((entry, index) => (
-                    <Box
-                      key={entry.gameId}
-                      title={entry.counted ? t("crewScoreCounted") : t("crewScoreDropped")}
-                      aria-label={`${t("crewGameScores")} ${index + 1}: ${entry.score.toFixed(2)}`}
-                      sx={{
-                        width: 44,
-                        textAlign: "center",
-                        py: 0.25,
-                        borderRadius: 1,
-                        fontVariantNumeric: "tabular-nums",
-                        fontSize: "0.72rem",
-                        fontWeight: entry.counted ? 700 : 400,
-                        color: entry.counted ? "primary.contrastText" : "text.secondary",
-                        bgcolor: entry.counted ? "primary.main" : "action.hover",
-                        border: "1px solid",
-                        borderColor: entry.counted ? "primary.main" : "divider",
-                      }}
-                    >
-                      {entry.score.toFixed(2)}
-                    </Box>
-                  ))}
+                <Box sx={{ maxWidth: 220 }}>
+                  <CrewScoreChips row={row} />
                 </Box>
               </TableCell>
             </TableRow>

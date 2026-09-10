@@ -1,8 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
-import { screen, fireEvent } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { cleanup, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import { LeaderboardTables, type LeaderboardPayload } from "~/components/LeaderboardTables";
+
+afterEach(() => {
+  cleanup();
+});
 
 const data: LeaderboardPayload = {
   scope: { type: "season", seasonId: "season-1", name: "Spring League", startsAt: null, endsAt: null },
@@ -67,5 +71,40 @@ describe("LeaderboardTables", () => {
     // teardown and fails the run with an unhandled "window is not defined".
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     unmount();
+  });
+});
+
+describe("LeaderboardTables — mobile crew standings", () => {
+  const originalMatchMedia = window.matchMedia;
+
+  beforeEach(() => {
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes("max-width"),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it("renders the standings as cards instead of wide tables", () => {
+    renderWithTheme(<LeaderboardTables data={data} loading={false} selectedScopeId="season-1" seasonOptions={[]} onScopeChange={vi.fn()} />);
+
+    expect(screen.getByTestId("crew-standings-mobile")).toBeInTheDocument();
+    expect(screen.getByTestId("player-standings-mobile")).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Crew" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Player" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Red").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("10.00")).toBeInTheDocument();
+    expect(screen.getByText(/4\/4/)).toBeInTheDocument();
+    // Game score chips still render.
+    expect(screen.getByLabelText(/Game scores 1: 3\.00/)).toBeInTheDocument();
   });
 });
