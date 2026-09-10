@@ -2,6 +2,12 @@
  * PROTOTYPE — Ranked ladder UX, Variant A (throwaway).
  * Renders inside the real app shell (ThemeModeProvider + ResponsiveLayout + MUI)
  * with stub Rank/Tier data, since the Rank layer is not implemented yet.
+ *
+ * Members see their state DERIVED, never chosen:
+ *   - provisional is per-player (games < 3)
+ *   - the new-season banner is transient (shown right after a reset)
+ * The state tabs are an ADMIN-ONLY preview, off by default.
+ *
  * Winner of ticket dex 20jkpipd. Do not promote as-is.
  */
 import { useState } from "react";
@@ -9,6 +15,7 @@ import {
   Container, Paper, Typography, Box, Stack, Chip, Button, Avatar,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   LinearProgress, Alert, alpha, useTheme, ToggleButton, ToggleButtonGroup,
+  FormControlLabel, Switch,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { ThemeModeProvider } from "./ThemeModeProvider";
@@ -32,6 +39,8 @@ const DATA: Row[] = [
   { name: "João", rating: 979, games: 3, wins: 1, draws: 0, losses: 2 },
   { name: "Rui", rating: 957, games: 4, wins: 1, draws: 0, losses: 3 },
   { name: "Nuno", rating: 935, games: 13, wins: 4, draws: 0, losses: 9 },
+  { name: "Pedro", rating: 1000, games: 1, wins: 0, draws: 0, losses: 1 },
+  { name: "Lia", rating: 1000, games: 2, wins: 1, draws: 0, losses: 1 },
 ];
 
 const tierOf = (s: number) => { let b = 0; for (let i = 0; i < EDGES.length; i++) if (s >= EDGES[i]) b = i; return b; };
@@ -41,23 +50,27 @@ type Scenario = "established" | "provisional" | "newseason";
 
 export default function PrototypeRankedLadder() {
   const theme = useTheme();
+  const [adminPreview, setAdminPreview] = useState(false);
   const [scenario, setScenario] = useState<Scenario>("established");
 
   const seedOf = (r: Row) => Math.max(0, r.rating - ANCHOR);
   const youRow = DATA.find((r) => r.you)!;
-  const youSeed = scenario === "newseason" ? Math.round(seedOf(youRow) * 0.5) : seedOf(youRow);
-  const youIsProvisional = scenario === "provisional";
-  const youTier = tierOf(youSeed);
+  const newSeason = adminPreview && scenario === "newseason";
+  const youSeed = newSeason ? Math.round(seedOf(youRow) * 0.5) : seedOf(youRow);
+  const forceYouProvisional = adminPreview && scenario === "provisional";
 
-  const rows = DATA.map((r) => {
-    const provisional = Boolean(r.you && youIsProvisional);
-    const seed = r.you ? youSeed : seedOf(r);
-    const t = tierOf(seed);
-    const hi = nextEdge(seed);
-    const lo = EDGES[t];
-    const pct = hi === null ? 100 : Math.round(((seed - lo) / (hi - lo)) * 100);
-    return { r, provisional, seed, t, pct, to: hi === null ? 0 : hi - seed, next: hi === null ? null : NAMES[t + 1] };
-  });
+  // Established first (by seed desc), provisional (games < 3) last, as "—".
+  const rows = [...DATA]
+    .map((r) => ({ r, provisional: forceYouProvisional && r.you ? true : r.games < 3 }))
+    .sort((a, b) => Number(a.provisional) - Number(b.provisional) || seedOf(b.r) - seedOf(a.r))
+    .map(({ r, provisional }) => {
+      const seed = r.you ? youSeed : seedOf(r);
+      const t = tierOf(seed);
+      const hi = nextEdge(seed);
+      const lo = EDGES[t];
+      const pct = hi === null ? 100 : Math.round(((seed - lo) / (hi - lo)) * 100);
+      return { r, provisional, seed, t, pct, to: hi === null ? 0 : hi - seed, next: hi === null ? null : NAMES[t + 1] };
+    });
 
   const tierChip = (t: number, provisional: boolean) => {
     if (provisional) {
@@ -81,34 +94,46 @@ export default function PrototypeRankedLadder() {
             <Button startIcon={<ArrowBackIcon />} href="#" sx={{ alignSelf: "flex-start" }}>
               Back
             </Button>
-            <Box>
-              <Typography variant="h5" fontWeight={700}>Ratings</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Season Rank · friendly games don’t affect Rank
-              </Typography>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
+              <Box>
+                <Typography variant="h5" fontWeight={700}>Ratings</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Season Rank · friendly games don’t affect Rank
+                </Typography>
+              </Box>
+              <FormControlLabel
+                control={<Switch size="small" checked={adminPreview} onChange={(_, v) => setAdminPreview(v)} />}
+                label={<Typography variant="caption">Admin preview</Typography>}
+              />
             </Box>
 
-            <ToggleButtonGroup
-              exclusive
-              size="small"
-              value={scenario}
-              onChange={(_, v) => v && setScenario(v)}
-              sx={{ flexWrap: "wrap" }}
-            >
-              <ToggleButton value="established">Established</ToggleButton>
-              <ToggleButton value="provisional">Provisional (&lt;3 games)</ToggleButton>
-              <ToggleButton value="newseason">New Season / reset</ToggleButton>
-            </ToggleButtonGroup>
+            {adminPreview ? (
+              <Box>
+                <ToggleButtonGroup
+                  exclusive
+                  size="small"
+                  value={scenario}
+                  onChange={(_, v) => v && setScenario(v)}
+                  sx={{ flexWrap: "wrap" }}
+                >
+                  <ToggleButton value="established">Established</ToggleButton>
+                  <ToggleButton value="provisional">Provisional (&lt;3 games)</ToggleButton>
+                  <ToggleButton value="newseason">New Season / reset</ToggleButton>
+                </ToggleButtonGroup>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                  Admin-only preview. Members never see these tabs — their state is derived.
+                </Typography>
+              </Box>
+            ) : (
+              <Typography variant="caption" color="text.secondary">
+                Provisional players show automatically. A reset banner appears on its own right after a new Season starts.
+              </Typography>
+            )}
 
-            {scenario === "newseason" && (
+            {newSeason && (
               <Alert severity="info">
                 Season 3 has started. Your Rank soft-reset from <b>Diamond {seedOf(youRow)}</b> to{" "}
-                <b>{NAMES[youTier]} {youSeed}</b> — re-earn your spot. No attendance pressure.
-              </Alert>
-            )}
-            {scenario === "provisional" && (
-              <Alert severity="warning">
-                Provisional — play <b>1 more game</b> (2/3) to unlock your first Tier. Your Rank is still calibrating.
+                <b>{NAMES[tierOf(youSeed)]} {youSeed}</b> — re-earn your spot. No attendance pressure.
               </Alert>
             )}
 
@@ -121,7 +146,7 @@ export default function PrototypeRankedLadder() {
                       <TableCell sx={{ fontWeight: 700 }}>Player</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Tier</TableCell>
                       <TableCell align="center" sx={{ fontWeight: 700 }}>Rank</TableCell>
-                      <TableCell sx={{ fontWeight: 700, width: 180 }}>Progress to next</TableCell>
+                      <TableCell sx={{ fontWeight: 700, width: 170 }}>Progress to next</TableCell>
                       <TableCell align="center" sx={{ fontWeight: 700 }}>G</TableCell>
                       <TableCell align="center" sx={{ fontWeight: 700, color: "success.main" }}>W</TableCell>
                       <TableCell align="center" sx={{ fontWeight: 700, color: "text.secondary" }}>D</TableCell>
@@ -135,12 +160,12 @@ export default function PrototypeRankedLadder() {
                         sx={{ bgcolor: r.you ? alpha(theme.palette.primary.main, 0.08) : undefined, "&:last-child td": { borderBottom: 0 } }}
                       >
                         <TableCell>
-                          {i < 3 ? (
+                          {!provisional && i < 3 ? (
                             <Avatar sx={{ width: 26, height: 26, fontSize: "0.75rem", fontWeight: 700, bgcolor: alpha(theme.palette.primary.main, 0.18) }}>
                               {i + 1}
                             </Avatar>
                           ) : (
-                            <Typography variant="body2" color="text.secondary">{i + 1}</Typography>
+                            <Typography variant="body2" color="text.secondary">{provisional ? "—" : i + 1}</Typography>
                           )}
                         </TableCell>
                         <TableCell>
@@ -161,7 +186,9 @@ export default function PrototypeRankedLadder() {
                         </TableCell>
                         <TableCell>
                           {provisional ? (
-                            <Typography variant="caption" color="text.secondary">unlocks at 3 games</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              unlocks at 3 games ({r.games}/3)
+                            </Typography>
                           ) : (
                             <Box>
                               <LinearProgress
