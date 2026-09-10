@@ -252,5 +252,19 @@ test.describe("Crew Season setup — full happy path", () => {
       () => startButton.click(),
       page.getByRole("heading", { name: "Season is active" }),
     );
+
+    // ── 11. Delete a Crew through the confirmation dialog ────────────────
+    await page.getByRole("button", { name: "Delete Crew 3" }).click();
+    await expect(page.getByText("Delete Crew?")).toBeVisible();
+    await page.getByRole("button", { name: "Delete Crew", exact: true }).click();
+    await expect(page.getByText("Deleted Crew 3.")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Delete Crew 3" })).toHaveCount(0);
+
+    // ── 12. Cancel the Season through the confirmation dialog ────────────
+    await page.getByRole("button", { name: "Cancel season" }).click();
+    await expect(page.getByText("Cancel this season?")).toBeVisible();
+    await page.getByLabel("Reason (optional)").fill("E2E wrap up");
+    await page.getByRole("button", { name: "Cancel season", exact: true }).click();
+    await expect(page.getByText("This Season is read-only.")).toBeVisible({ timeout: 10_000 });
   });
 });

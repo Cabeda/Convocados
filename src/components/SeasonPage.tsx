@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
+  Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   FormControl, IconButton, InputLabel, MenuItem, Select, Stack, TextField, Typography,
 } from "@mui/material";
 import GroupsIcon from "@mui/icons-material/Groups";
@@ -11,6 +12,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import AddIcon from "@mui/icons-material/Add";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
+import CancelIcon from "@mui/icons-material/Cancel";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
@@ -79,13 +81,16 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const [crewCount, setCrewCount] = useState(2);
   const [crews, setCrews] = useState<CrewDraft[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | "enroll" | "details" | "remove" | null>(null);
+  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | "enroll" | "details" | "remove" | "crewDelete" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [candidates, setCandidates] = useState<MemberCandidate[]>([]);
   const candidatesLoadedRef = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [draggingMembershipId, setDraggingMembershipId] = useState<string | null>(null);
+  const [pendingCrewDelete, setPendingCrewDelete] = useState<{ index: number; id?: string; name: string } | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -262,6 +267,51 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       await refreshMembers();
     } catch {
       setError(t("seasonMembershipError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const confirmCrewDelete = async () => {
+    if (!pendingCrewDelete) return;
+    const { index, id, name } = pendingCrewDelete;
+    setBusy("crewDelete");
+    setError(null);
+    setNotice(null);
+    try {
+      if (id) {
+        const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}/crews/${id}`, { method: "DELETE" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) { setError(data.error ?? t("crewDeleteError")); return; }
+      }
+      setCrews((current) => current.filter((_, crewIndex) => crewIndex !== index));
+      setPendingCrewDelete(null);
+      setNotice(t("crewDeleted", { name }));
+      if (id) await refreshMembers();
+    } catch {
+      setError(t("crewDeleteError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const confirmCancelSeason = async () => {
+    setBusy("cancel");
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel", reason: cancelReason }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { setError(data.error ?? t("seasonCancelError")); return; }
+      setCancelOpen(false);
+      setCancelReason("");
+      await load();
+    } catch {
+      setError(t("seasonCancelError"));
     } finally {
       setBusy(null);
     }
@@ -606,6 +656,15 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                               <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                                 <TextField label={t("crewName")} value={crew.name} onChange={(event) => rename(index, event.target.value)} size="small" sx={{ flex: 1 }} />
                                 {crewElo !== null && <Chip size="small" color="secondary" variant="outlined" label={`${t("crewElo")} ${crewElo}`} />}
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  aria-label={t("deleteCrewAria", { name: crew.name })}
+                                  onClick={() => setPendingCrewDelete({ index, id: crew.id, name: crew.name })}
+                                  disabled={busy !== null}
+                                >
+                                  <DeleteOutlineIcon fontSize="small" />
+                                </IconButton>
                               </Stack>
                               {crew.membershipIds.map((membershipId) => {
                                 const member = members.find((candidate) => candidate.membershipId === membershipId);
@@ -656,10 +715,60 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                 <Button variant="contained" size="large" startIcon={<SaveIcon />} onClick={() => void save()} disabled={busy !== null || crews.length < 2}>
                   {busy === "save" ? t("savingCrews") : t("saveCrews")}
                 </Button>
+
+                <Box>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    startIcon={<CancelIcon />}
+                    onClick={() => { setCancelReason(""); setCancelOpen(true); }}
+                    disabled={busy !== null}
+                  >
+                    {t("cancelSeason")}
+                  </Button>
+                </Box>
               </Stack>
             )}
           </Stack>
         </Container>
+
+        <Dialog open={pendingCrewDelete !== null} onClose={() => busy === null && setPendingCrewDelete(null)}>
+          <DialogTitle>{t("deleteCrewTitle")}</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              {t("deleteCrewConfirm", { name: pendingCrewDelete?.name ?? "" })}
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setPendingCrewDelete(null)} disabled={busy !== null}>{t("cancel")}</Button>
+            <Button color="error" variant="contained" onClick={() => void confirmCrewDelete()} disabled={busy !== null}>
+              {busy === "crewDelete" ? t("deletingCrew") : t("deleteCrew")}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={cancelOpen} onClose={() => busy === null && setCancelOpen(false)} fullWidth maxWidth="xs">
+          <DialogTitle>{t("cancelSeasonTitle")}</DialogTitle>
+          <DialogContent>
+            <DialogContentText>{t("cancelSeasonConfirm")}</DialogContentText>
+            <TextField
+              autoFocus
+              margin="dense"
+              label={t("cancelSeasonReason")}
+              fullWidth
+              size="small"
+              value={cancelReason}
+              onChange={(event) => setCancelReason(event.target.value)}
+              slotProps={{ htmlInput: { maxLength: 500 } }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setCancelOpen(false)} disabled={busy !== null}>{t("keepSeason")}</Button>
+            <Button color="error" variant="contained" onClick={() => void confirmCancelSeason()} disabled={busy !== null}>
+              {busy === "cancel" ? t("cancellingSeason") : t("cancelSeason")}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </ResponsiveLayout>
     </ThemeModeProvider>
   );

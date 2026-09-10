@@ -11,13 +11,14 @@ const initialMatches: Imatch[] = [
   { team: "Red", players: [{ name: "Bob", order: 0 }] },
 ];
 
-function TeamPickerHarness({ shuffleKey = 0 }: { shuffleKey?: number }) {
+function TeamPickerHarness({ shuffleKey = 0, canEdit = true, onResultChange }: { shuffleKey?: number; canEdit?: boolean; onResultChange?: (m: Imatch[]) => void }) {
   const [matches, setMatches] = useState(initialMatches);
   return (
     <TeamPicker
       matches={matches}
-      onResultChange={setMatches}
+      onResultChange={(m) => { setMatches(m); onResultChange?.(m); }}
       shuffleKey={shuffleKey}
+      canEdit={canEdit}
     />
   );
 }
@@ -70,5 +71,36 @@ describe("TeamPicker motion", () => {
 
     act(() => vi.advanceTimersByTime(700));
     expect(screen.getByTestId("team-picker")).toHaveAttribute("data-shuffling", "false");
+  });
+
+  it("does not move players when read-only", () => {
+    const onResultChange = vi.fn();
+    renderWithTheme(<TeamPickerHarness canEdit={false} onResultChange={onResultChange} />);
+
+    expect(screen.getByTestId("team-picker")).toHaveAttribute("data-can-edit", "false");
+
+    const panels = screen.getAllByTestId("team-panel");
+    vi.spyOn(panels[0], "getBoundingClientRect").mockReturnValue({
+      left: 0, right: 100, top: 0, bottom: 100, width: 100, height: 100, x: 0, y: 0,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(panels[1], "getBoundingClientRect").mockReturnValue({
+      left: 101, right: 200, top: 0, bottom: 100, width: 99, height: 100, x: 101, y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerDown(screen.getByTestId("team-player-handle-Alice"), {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerUp(screen.getByTestId("team-picker"), {
+      pointerId: 1,
+      clientX: 150,
+      clientY: 50,
+    });
+
+    expect(onResultChange).not.toHaveBeenCalled();
   });
 });

@@ -1,11 +1,15 @@
 export interface Imatch {
   team: string;
   players: Player[];
+  /** Sport-specific formation id (e.g. "4-3-3"), or null when unset. */
+  formation?: string | null;
 }
 
 export interface Player {
   order: number;
   name: string;
+  /** Formation slot index within the team, or null when unplaced. */
+  slot?: number | null;
 }
 
 export function Randomize(players: string[], teams: string[]): Imatch[] {

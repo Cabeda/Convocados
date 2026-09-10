@@ -521,17 +521,19 @@ model GamePayment {
 }
 
 model TeamResult {
-  id      String       @id @default(cuid())
-  name    String
-  eventId String
-  event   Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  members TeamMember[]
+  id        String       @id @default(cuid())
+  name      String
+  formation String?
+  eventId   String
+  event     Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  members   TeamMember[]
 }
 
 model TeamMember {
   id           String     @id @default(cuid())
   name         String
   order        Int
+  slot         Int?
   teamResultId String
   team         TeamResult @relation(fields: [teamResultId], references: [id], onDelete: Cascade)
 }

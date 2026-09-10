@@ -258,6 +258,12 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun updateProfile(name: String): UserProfile =
         client.put("/api/me/profile", UpdateProfileRequest(name))
 
+    suspend fun updateProfilePhoto(image: String): ProfilePhotoResponse =
+        client.post("/api/me/photo", UpdateProfilePhotoRequest(image))
+
+    suspend fun removeProfilePhoto(): ProfilePhotoResponse =
+        client.delete("/api/me/photo")
+
     // ── Reorder players ───────────────────────────────────────────────────
     suspend fun reorderPlayers(eventId: String, playerIds: List<String>): OkResponse =
         client.put("/api/events/$eventId/reorder-players", ReorderPlayersRequest(playerIds))
@@ -407,6 +413,8 @@ data class CreateEventRequest(
 @Serializable data class UpdateTeamsRequest(val teamOnePlayerIds: List<String>, val teamTwoPlayerIds: List<String>)
 @Serializable data class TransferRequest(val targetUserId: String)
 @Serializable data class UpdateProfileRequest(val name: String)
+@Serializable data class UpdateProfilePhotoRequest(val image: String)
+@Serializable data class ProfilePhotoResponse(val ok: Boolean = false, val image: String? = null)
 @Serializable data class ReorderPlayersRequest(val playerIds: List<String>)
 @Serializable data class CostOverrideRequest(val playerName: String, val amount: Double)
 @Serializable data class LocationWithCoordsRequest(val location: String, val latitude: Double, val longitude: Double)
