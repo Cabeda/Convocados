@@ -435,14 +435,24 @@ jobs:
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Configure local.properties
+        working-directory: android-app
+        run: echo "GOOGLE_SERVER_CLIENT_ID=placeholder.apps.googleusercontent.com" > local.properties
+
       - name: Build Wear OS debug APK
         working-directory: android-app
         run: ./gradlew :wear:assembleDebug --no-daemon
+
+      # Runs the Wear unit suite and fails if a round/square screenshot drifted,
+      # which is the regression gate for Play's "Watch shapes" requirement.
+      - name: Verify Wear screenshots (round + square)
+        working-directory: android-app
+        run: ./gradlew :wear:verifyRoborazziDebug --no-daemon
 
 
 
