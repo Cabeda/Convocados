@@ -334,6 +334,34 @@ class EventDetailViewModelTest {
     }
 
     @Test
+    fun `leaving the player list re-syncs follow state so the toggle returns`() = runTest {
+        coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
+        coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
+        coEvery { repository.getHistory(eventId) } returns flowOf(emptyList())
+        // Loaded as an active player who auto-follows.
+        coEvery { api.getFollowState(eventId) } returnsMany listOf(
+            FollowStateResponse(following = true, isPlayer = true),
+            FollowStateResponse(following = false, isPlayer = false),
+        )
+        coEvery { repository.removePlayer(eventId, any()) } returns Result.success(null as UndoData?)
+
+        val viewModel = EventDetailViewModel(repository, api, tokenStore, client, settingsStore)
+        viewModel.state.test {
+            viewModel.load(eventId)
+            advanceUntilIdle()
+            assertTrue(expectMostRecentItem().isPlayer)
+
+            viewModel.removePlayer(eventId, "p1")
+            advanceUntilIdle()
+
+            val after = expectMostRecentItem()
+            assertFalse(after.isPlayer)
+            assertFalse(after.isFollowing)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `resend invite calls api and surfaces success notice`() = runTest {
         coEvery { repository.getEventDetail(eventId) } returns flowOf(mockEvent)
         coEvery { repository.getPlayers(eventId) } returns flowOf(emptyList())
