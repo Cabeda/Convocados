@@ -21,7 +21,6 @@ import { hasCompletedMatch, matchScoreFromSets, type SetScore } from "~/lib/scor
 import { ScoreRoller } from "./event/ScoreRoller";
 import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
 import { HistoryCardFull, TennisScoreBand, type HistoryCardFullEntry } from "./HistoryCardFull";
-import { LeaderboardTables, type LeaderboardPayload, type LeaderboardSeasonOption } from "./LeaderboardTables";
 
 type HistoryEntry = HistoryCardFullEntry;
 
@@ -361,32 +360,13 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
   const [eventLat, setEventLat] = useState<number | null>(null);
   const [eventLng, setEventLng] = useState<number | null>(null);
   const [cost, setCost] = useState<{ totalAmount: number; currency: string; payments: Array<{ playerName: string; amount: number; status: "paid" | "pending" }> } | null>(null);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardPayload | null>(null);
-  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
-  const [seasonOptions, setSeasonOptions] = useState<LeaderboardSeasonOption[]>([]);
-  const [selectedScopeId, setSelectedScopeId] = useState("all");
   const isOwner = !!(session?.user && ownerId && session.user.id === ownerId);
 
-  const loadLeaderboard = useCallback(async (scopeId?: string) => {
-    setLeaderboardLoading(true);
-    try {
-      const query = scopeId ? `?seasonId=${encodeURIComponent(scopeId)}` : "";
-      const response = await fetch(`/api/events/${eventId}/history/leaderboard${query}`);
-      if (!response.ok) return;
-      const data = await response.json() as LeaderboardPayload;
-      setLeaderboard(data);
-      setSelectedScopeId(data.scope.seasonId ?? "all");
-    } finally {
-      setLeaderboardLoading(false);
-    }
-  }, [eventId]);
-
   const load = useCallback(async () => {
-    const [evRes, histRes, costRes, seasonsRes] = await Promise.all([
+    const [evRes, histRes, costRes] = await Promise.all([
       fetch(`/api/events/${eventId}`),
       fetch(`/api/events/${eventId}/history`),
       fetch(`/api/events/${eventId}/cost`).catch(() => null),
-      fetch(`/api/events/${eventId}/seasons`).catch(() => null),
     ]);
     if (evRes.status === 404) { setNotFound(true); setLoading(false); return; }
     const ev = await evRes.json();
@@ -409,13 +389,6 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
       const costJson = await costRes.json();
       setCost(costJson);
     }
-    if (seasonsRes && seasonsRes.ok) {
-      const seasonsJson = await seasonsRes.json();
-      setSeasonOptions((seasonsJson.seasons ?? []).map((season: { id: string; name: string; status: string }) => ({ id: season.id, name: season.name, status: season.status })));
-    }
-    // Load the leaderboard with the page so its table doesn't pop in after the
-    // history cards and shove them down (large layout shift on mobile).
-    await loadLeaderboard();
     setLoading(false);
 
     // Fetch known players (historical) and ratings in parallel (non-blocking)
@@ -440,7 +413,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
         (ratings.data ?? []).map((r: { name: string; rating: number; gamesPlayed: number }) => ({ name: r.name, rating: r.rating, gamesPlayed: r.gamesPlayed }))
       );
     });
-  }, [eventId, loadLeaderboard]);
+  }, [eventId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -457,17 +430,14 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
 
   const handleUpdate = (updated: HistoryEntry) => {
     setHistory((prev) => prev.map((h) => h.id === updated.id ? updated : h));
-    void loadLeaderboard(selectedScopeId);
   };
 
   const handleDelete = (id: string) => {
     setHistory((prev) => prev.filter((h) => h.id !== id));
-    void loadLeaderboard(selectedScopeId);
   };
 
   const handleAddHistoricalSuccess = (newEntry: HistoryEntry) => {
     setHistory((prev) => [newEntry, ...prev]);
-    void loadLeaderboard(selectedScopeId);
   };
 
   if (loading) return (
@@ -519,16 +489,6 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
               )}
             </Box>
 
-            <LeaderboardTables
-              data={leaderboard}
-              loading={leaderboardLoading}
-              selectedScopeId={selectedScopeId}
-              seasonOptions={seasonOptions}
-              onScopeChange={(scopeId) => {
-                void loadLeaderboard(scopeId);
-              }}
-            />
-
             {history.length === 0 ? (
               <Paper elevation={0} sx={{
                 borderRadius: 4, p: 4, textAlign: "center",
@@ -566,6 +526,7 @@ export default function HistoryPage({ eventId }: { eventId: string }) {
                     userName={session?.user?.name ?? null}
                     eventPlayers={eventPlayers}
                     onPaymentsConfigSaved={load}
+                    gameHref={`/events/${eventId}/games/${entry.id}`}
                   />
                 ))}
                 {hasMore && (

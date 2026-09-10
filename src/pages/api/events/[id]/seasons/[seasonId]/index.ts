@@ -3,6 +3,7 @@ import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { authorizeSeasonRequest, getSeasonForEvent, requireSeasonAdmin } from "~/lib/seasonSetup.server";
+import { computeLeaderboardPayload } from "~/lib/leaderboard.server";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
@@ -113,6 +114,10 @@ export const GET: APIRoute = async ({ params, request }) => {
       crewId: membership.crewId,
     }));
   }
+
+  // Standings for this Season, embedded so the Season page renders them in the
+  // same request (no separate leaderboard fetch / layout shift).
+  result.leaderboard = await computeLeaderboardPayload(eventId, seasonId, request);
 
   return Response.json({ season: result });
 };

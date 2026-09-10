@@ -181,6 +181,7 @@ const en = {
   backToGame: "Back to game",
   backToSeasons: "Back to seasons",
   historyTitle: "{title} — History",
+  openGame: "Open game",
   leaderboard: "Standings",
   leaderboardDescription: "Football-style standings from played, non-friendly games.",
   playerLeague: "Player league",

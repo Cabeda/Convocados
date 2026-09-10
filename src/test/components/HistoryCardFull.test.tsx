@@ -633,6 +633,36 @@ describe("HistoryCardFull — MVP data from list", () => {
   });
 });
 
+describe("HistoryCardFull — single game link", () => {
+  it("shows an open-game link when gameHref is provided", () => {
+    mockUseSession.mockReturnValue({ data: { user: { id: "u-1", name: "João Fernandes" } }, isPending: false });
+    renderWithTheme(
+      <HistoryCardFull
+        entry={baseEntry}
+        eventId="evt-1"
+        event={event}
+        cost={cost}
+        mvp={mvp}
+        isOwner={false}
+        isAdmin={false}
+        isAuthenticated
+        userName="João Fernandes"
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        knownPlayers={[]}
+        playerRatings={[]}
+        gameHref="/events/evt-1/games/h-1"
+      />,
+    );
+    expect(screen.getByTestId("open-game-link")).toHaveAttribute("href", "/events/evt-1/games/h-1");
+  });
+
+  it("hides the open-game link by default", () => {
+    renderCard();
+    expect(screen.queryByTestId("open-game-link")).not.toBeInTheDocument();
+  });
+});
+
 describe("HistoryCardFull — tennis/padel score", () => {
   it("falls back to scalar scores for legacy tennis rows", () => {
     renderCard({ scoringType: "tennis", scoreSets: null, scoreOne: 2, scoreTwo: 1 }, null);

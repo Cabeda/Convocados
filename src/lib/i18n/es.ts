@@ -168,6 +168,7 @@ const es: TranslationKeys = {
   backToGame: "Volver al juego",
   backToSeasons: "Volver a las temporadas",
   historyTitle: "{title} — Historial",
+  openGame: "Abrir partido",
   leaderboard: "Clasificación",
   leaderboardDescription: "Clasificación al estilo del fútbol con partidos disputados no amistosos.",
   playerLeague: "Liga de jugadores",

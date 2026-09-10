@@ -32,79 +32,15 @@ interface LeaderboardTablesProps {
   selectedScopeId: string;
   seasonOptions: LeaderboardSeasonOption[];
   onScopeChange: (scopeId: string) => void;
+  eventId?: string;
 }
 
 function StatHeader({ label, title }: { label: string; title: string }) {
   return <TableCell align="right" title={title} sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>{label}</TableCell>;
 }
 
-function PlayerStandingsList({ rows, label }: { rows: PlayerStanding[]; label: string }) {
-  const t = useT();
-  return (
-    <Stack spacing={1} sx={{ p: 1.5 }} data-testid="player-standings-mobile" aria-label={label}>
-      {rows.map((row) => {
-        const stats: Array<[string, number | string]> = [
-          [t("leaderboardPlayed"), row.played],
-          [t("leaderboardWins"), row.wins],
-          [t("leaderboardDraws"), row.draws],
-          [t("leaderboardLosses"), row.losses],
-          [t("leaderboardGoalsFor"), row.goalsFor],
-          [t("leaderboardGoalsAgainst"), row.goalsAgainst],
-          [t("leaderboardGoalDifference"), `${row.goalDifference > 0 ? "+" : ""}${row.goalDifference}`],
-        ];
-        return (
-          <Box
-            key={row.name}
-            sx={{
-              p: 1.25,
-              borderRadius: 2,
-              border: "1px solid",
-              borderColor: "divider",
-              bgcolor: "action.hover",
-            }}
-          >
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ minWidth: 18 }}>
-                {row.rank}
-              </Typography>
-              <Stack direction="row" alignItems="center" spacing={0.75} sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="subtitle1" fontWeight={row.rank === 1 ? 700 : 600} noWrap>
-                  {row.name}
-                </Typography>
-                {row.crewName && (
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    label={row.crewName}
-                    sx={{ height: 18, fontSize: "0.65rem", "& .MuiChip-label": { px: 0.75 } }}
-                  />
-                )}
-              </Stack>
-              <Stack alignItems="flex-end">
-                <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1 }}>{row.points}</Typography>
-                <Typography variant="caption" color="text.secondary">{t("leaderboardPoints")}</Typography>
-              </Stack>
-            </Stack>
-            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0.5, mt: 1 }}>
-              {stats.map(([statLabel, value]) => (
-                <Box key={statLabel} sx={{ textAlign: "center" }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>{statLabel}</Typography>
-                  <Typography variant="body2" fontWeight={600} sx={{ fontVariantNumeric: "tabular-nums" }}>{value}</Typography>
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        );
-      })}
-    </Stack>
-  );
-}
-
 function PlayerStandingsTable({ rows, label }: { rows: PlayerStanding[]; label: string }) {
   const t = useT();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"), { noSsr: true });
-  if (isMobile) return <PlayerStandingsList rows={rows} label={label} />;
   return (
     <TableContainer sx={{ overflowX: "auto" }}>
       <Table size="small" aria-label={label}>
@@ -157,37 +93,42 @@ function PlayerStandingsTable({ rows, label }: { rows: PlayerStanding[]; label: 
   );
 }
 
-function CrewScoreChips({ row }: { row: CrewStanding }) {
+function CrewScoreChips({ row, eventId }: { row: CrewStanding; eventId?: string }) {
   const t = useT();
   return (
     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-      {row.gameScores.map((entry, index) => (
-        <Box
-          key={entry.gameId}
-          title={entry.counted ? t("crewScoreCounted") : t("crewScoreDropped")}
-          aria-label={`${t("crewGameScores")} ${index + 1}: ${entry.score.toFixed(2)}`}
-          sx={{
-            width: 44,
-            textAlign: "center",
-            py: 0.25,
-            borderRadius: 1,
-            fontVariantNumeric: "tabular-nums",
-            fontSize: "0.72rem",
-            fontWeight: entry.counted ? 700 : 400,
-            color: entry.counted ? "primary.contrastText" : "text.secondary",
-            bgcolor: entry.counted ? "primary.main" : "action.hover",
-            border: "1px solid",
-            borderColor: entry.counted ? "primary.main" : "divider",
-          }}
-        >
-          {entry.score.toFixed(2)}
-        </Box>
-      ))}
+      {row.gameScores.map((entry, index) => {
+        const href = eventId ? `/events/${eventId}/games/${entry.gameId}` : undefined;
+        return (
+          <Box
+            key={entry.gameId}
+            {...(href ? { component: "a" as const, href } : {})}
+            title={entry.counted ? t("crewScoreCounted") : t("crewScoreDropped")}
+            aria-label={`${t("crewGameScores")} ${index + 1}: ${entry.score.toFixed(2)}`}
+            sx={{
+              width: 44,
+              textAlign: "center",
+              py: 0.25,
+              borderRadius: 1,
+              fontVariantNumeric: "tabular-nums",
+              fontSize: "0.72rem",
+              fontWeight: entry.counted ? 700 : 400,
+              color: entry.counted ? "primary.contrastText" : "text.secondary",
+              bgcolor: entry.counted ? "primary.main" : "action.hover",
+              border: "1px solid",
+              borderColor: entry.counted ? "primary.main" : "divider",
+              ...(href ? { textDecoration: "none", "&:hover": { opacity: 0.85 } } : {}),
+            }}
+          >
+            {entry.score.toFixed(2)}
+          </Box>
+        );
+      })}
     </Box>
   );
 }
 
-function CrewStandingsList({ rows, label }: { rows: CrewStanding[]; label: string }) {
+function CrewStandingsList({ rows, label, eventId }: { rows: CrewStanding[]; label: string; eventId?: string }) {
   const t = useT();
   return (
     <Stack spacing={1} sx={{ p: 1.5 }} data-testid="crew-standings-mobile" aria-label={label}>
@@ -222,7 +163,7 @@ function CrewStandingsList({ rows, label }: { rows: CrewStanding[]; label: strin
             {row.roundsCounted}/{row.roundsRepresented} {t("leaderboardRounds")}
           </Typography>
           <Box sx={{ mt: 1 }}>
-            <CrewScoreChips row={row} />
+            <CrewScoreChips row={row} eventId={eventId} />
           </Box>
         </Box>
       ))}
@@ -230,11 +171,11 @@ function CrewStandingsList({ rows, label }: { rows: CrewStanding[]; label: strin
   );
 }
 
-function CrewStandingsTable({ rows, label }: { rows: CrewStanding[]; label: string }) {
+function CrewStandingsTable({ rows, label, eventId }: { rows: CrewStanding[]; label: string; eventId?: string }) {
   const t = useT();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"), { noSsr: true });
-  if (isMobile) return <CrewStandingsList rows={rows} label={label} />;
+  if (isMobile) return <CrewStandingsList rows={rows} label={label} eventId={eventId} />;
   return (
     <TableContainer sx={{ overflowX: "auto" }}>
       <Table size="small" aria-label={label}>
@@ -258,7 +199,7 @@ function CrewStandingsTable({ rows, label }: { rows: CrewStanding[]; label: stri
               <TableCell align="right">{row.roundsCounted}/{row.roundsRepresented}</TableCell>
               <TableCell sx={{ minWidth: 160 }}>
                 <Box sx={{ maxWidth: 220 }}>
-                  <CrewScoreChips row={row} />
+                  <CrewScoreChips row={row} eventId={eventId} />
                 </Box>
               </TableCell>
             </TableRow>
@@ -285,23 +226,24 @@ function PlayerStandingsCard({ title, rows, label, emptyMessage }: {
   );
 }
 
-function CrewStandingsCard({ title, rows, label, emptyMessage }: {
+function CrewStandingsCard({ title, rows, label, emptyMessage, eventId }: {
   title: string;
   rows: CrewStanding[];
   label: string;
   emptyMessage?: string;
+  eventId?: string;
 }) {
   return (
     <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
       <Box sx={{ px: 2, py: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
         <Typography variant="h6" fontWeight={700}>{title}</Typography>
       </Box>
-      {rows.length > 0 ? <CrewStandingsTable rows={rows} label={label} /> : <Alert severity="info" sx={{ m: 2 }}>{emptyMessage}</Alert>}
+      {rows.length > 0 ? <CrewStandingsTable rows={rows} label={label} eventId={eventId} /> : <Alert severity="info" sx={{ m: 2 }}>{emptyMessage}</Alert>}
     </Paper>
   );
 }
 
-export function LeaderboardTables({ data, loading, selectedScopeId, seasonOptions, onScopeChange }: LeaderboardTablesProps) {
+export function LeaderboardTables({ data, loading, selectedScopeId, seasonOptions, onScopeChange, eventId }: LeaderboardTablesProps) {
   const t = useT();
   if (loading && !data) return <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}><Typography color="text.secondary">{t("loading")}</Typography></Paper>;
   if (!data) return null;
@@ -341,7 +283,7 @@ export function LeaderboardTables({ data, loading, selectedScopeId, seasonOption
             <PlayerStandingsCard title={t("playerLeague")} rows={data.players} label={t("leaderboardPlayer")} emptyMessage={t("leaderboardNoGames")} />
           </Grid>
           <Grid size={{ xs: 12, xl: 5 }}>
-            <CrewStandingsCard title={t("crewLeague")} rows={data.crews} label={t("leaderboardCrew")} emptyMessage={t("leaderboardNoCrews")} />
+            <CrewStandingsCard title={t("crewLeague")} rows={data.crews} label={t("leaderboardCrew")} emptyMessage={t("leaderboardNoCrews")} eventId={eventId} />
           </Grid>
         </Grid>
       )}
