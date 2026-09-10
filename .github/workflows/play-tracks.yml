@@ -1,0 +1,41 @@
+name: List Play Tracks
+
+# Diagnostic: lists the real Play Developer API track IDs for the app, including
+# per-form-factor tracks (Wear OS). Console display names can differ from the API
+# track ID, which is why a promotion can 404 with "Track not found".
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  list:
+    name: List tracks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        id: auth
+        with:
+          credentials_json: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          token_format: access_token
+
+      - name: List tracks for com.cabeda.Convocados
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          BASE="https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.cabeda.Convocados"
+          EDIT=$(curl -sf -X POST -H "Authorization: Bearer $TOKEN" "$BASE/edits" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+          echo "Track IDs:"
+          curl -sf -H "Authorization: Bearer $TOKEN" "$BASE/edits/$EDIT/tracks" > /tmp/tracks.json
+          python3 - <<'PY'
+          import json, os
+          with open("/tmp/tracks.json") as f:
+              data = json.load(f)
+          for t in data.get("tracks", []):
+              versions = [r.get("versionCodes") for r in t.get("releases", [])]
+              print(f'  {t["track"]}  (formFactor={t.get("formFactor", "DEFAULT")})  releases={versions}')
+          PY
+          curl -sf -X DELETE -H "Authorization: Bearer $TOKEN" "$BASE/edits/$EDIT" >/dev/null
