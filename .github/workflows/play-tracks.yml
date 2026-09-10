@@ -15,27 +15,38 @@ jobs:
     name: List tracks
     runs-on: ubuntu-latest
     steps:
-      - uses: google-github-actions/auth@v2
-        id: auth
-        with:
-          credentials_json: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          token_format: access_token
-
       - name: List tracks for com.cabeda.Convocados
         env:
-          TOKEN: ${{ steps.auth.outputs.access_token }}
+          SA_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
           set -euo pipefail
-          BASE="https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.cabeda.Convocados"
-          EDIT=$(curl -sf -X POST -H "Authorization: Bearer $TOKEN" "$BASE/edits" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
-          echo "Track IDs:"
-          curl -sf -H "Authorization: Bearer $TOKEN" "$BASE/edits/$EDIT/tracks" > /tmp/tracks.json
+          python3 -m pip install --quiet google-auth
           python3 - <<'PY'
-          import json, os
-          with open("/tmp/tracks.json") as f:
-              data = json.load(f)
-          for t in data.get("tracks", []):
+          import json, os, urllib.request
+          from google.auth.transport.requests import Request
+          from google.oauth2 import service_account
+
+          creds = service_account.Credentials.from_service_account_info(
+              json.loads(os.environ["SA_JSON"]),
+              scopes=["https://www.googleapis.com/auth/androidpublisher"],
+          )
+          creds.refresh(Request())
+
+          base = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.cabeda.Convocados"
+
+          def call(method, url, body=None):
+              data = json.dumps(body).encode() if body is not None else None
+              req = urllib.request.Request(url, method=method, data=data)
+              req.add_header("Authorization", "Bearer " + creds.token)
+              with urllib.request.urlopen(req) as r:
+                  raw = r.read()
+                  return json.loads(raw) if raw else None
+
+          edit = call("POST", base + "/edits")["id"]
+          tracks = call("GET", f"{base}/edits/{edit}/tracks")
+          print("Track IDs:")
+          for t in tracks.get("tracks", []):
               versions = [r.get("versionCodes") for r in t.get("releases", [])]
               print(f'  {t["track"]}  (formFactor={t.get("formFactor", "DEFAULT")})  releases={versions}')
+          call("DELETE", f"{base}/edits/{edit}")
           PY
-          curl -sf -X DELETE -H "Authorization: Bearer $TOKEN" "$BASE/edits/$EDIT" >/dev/null
