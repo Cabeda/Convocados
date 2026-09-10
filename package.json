@@ -51,6 +51,7 @@
     "prisma": "^7.10.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-easy-crop": "^6.2.3",
     "react-leaflet": "^5.0.0",
     "recharts": "^3.10.1",
     "resend": "^6.26.0",

@@ -16,9 +16,11 @@ import DownloadIcon from "@mui/icons-material/Download";
 import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import AddAPhotoIcon from "@mui/icons-material/AddAPhoto";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { NotificationSettingsSection } from "./NotificationSettingsSection";
+import ProfilePhotoDialog from "./ProfilePhotoDialog";
 import { useT } from "~/lib/useT";
 import { detectLocale } from "~/lib/i18n";
 import { GameCard, type GameSummary } from "./GameCard";
@@ -760,6 +762,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
   const locale = detectLocale();
   const [tab, setTab] = React.useState(0);
   const [editing, setEditing] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
 
   const [data, setData] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -829,12 +832,46 @@ export default function UserProfilePage({ userId }: { userId: string }) {
             {/* Profile header */}
             <Paper elevation={2} sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}>
               <Stack direction="row" spacing={2} alignItems="center">
-                <Avatar
-                  src={user.image ?? undefined}
-                  sx={{ width: 56, height: 56, fontSize: "1.5rem", bgcolor: "primary.main" }}
+                <Box
+                  onClick={isOwnProfile ? () => setPhotoOpen(true) : undefined}
+                  sx={{
+                    position: "relative",
+                    cursor: isOwnProfile ? "pointer" : "default",
+                    borderRadius: "50%",
+                    "&:hover .photo-badge": { opacity: isOwnProfile ? 1 : 0 },
+                  }}
                 >
-                  {user.name[0]?.toUpperCase()}
-                </Avatar>
+                  <Avatar
+                    src={user.image ?? undefined}
+                    sx={{ width: 56, height: 56, fontSize: "1.5rem", bgcolor: "primary.main" }}
+                  >
+                    {user.name[0]?.toUpperCase()}
+                  </Avatar>
+                  {isOwnProfile && (
+                    <Box
+                      className="photo-badge"
+                      sx={{
+                        position: "absolute",
+                        right: -2,
+                        bottom: -2,
+                        width: 22,
+                        height: 22,
+                        borderRadius: "50%",
+                        bgcolor: "primary.main",
+                        color: "primary.contrastText",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: 0.9,
+                        transition: "opacity 0.15s",
+                        border: "2px solid",
+                        borderColor: "background.paper",
+                      }}
+                    >
+                      <AddAPhotoIcon sx={{ fontSize: 12 }} />
+                    </Box>
+                  )}
+                </Box>
                 <Box sx={{ flex: 1 }}>
                   <Stack direction="row" alignItems="center" spacing={1}>
                     <Typography variant="h5" fontWeight={700}>{user.name}</Typography>
@@ -903,6 +940,14 @@ export default function UserProfilePage({ userId }: { userId: string }) {
               </Box>
             </Paper>
           </Stack>
+          {isOwnProfile && photoOpen && (
+            <ProfilePhotoDialog
+              open
+              currentImage={user.image}
+              onClose={() => setPhotoOpen(false)}
+              onSaved={() => fetchProfile()}
+            />
+          )}
         </Container>
       </ResponsiveLayout>
     </ThemeModeProvider>
