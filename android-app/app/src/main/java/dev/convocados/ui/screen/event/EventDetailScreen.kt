@@ -368,7 +368,7 @@ class EventDetailViewModel @Inject constructor(
 
     fun toggleFollow(eventId: String) {
         if (_state.value.isFollowing) {
-            // Unfollow — API will block if user is a player (409)
+            // Unfollow — opt out of notifications; keeps any player spot (ADR 0003).
             viewModelScope.launch {
                 _state.value = _state.value.copy(isFollowing = false)
                 runCatching { api.unfollowEvent(eventId) }
@@ -931,18 +931,6 @@ internal fun shouldShowAutoPaymentPrompt(
     balance: BalanceResponse?,
 ): Boolean = autoOpenPay && balance?.callerBalance != null
 
-/**
- * Whether the hero shows the follow toggle.
- *
- * An auto-followed player (on the roster AND following) is hidden — players are
- * auto-followed on join. But a player who is NOT following (added by an organizer
- * via auto-link, or unfollowed from the dashboard) must still get the toggle so
- * they can opt into notifications. Hiding it left them with no control at all and
- * silently dropped the game from "My Games".
- */
-internal fun shouldShowFollowToggle(isPlayer: Boolean, isFollowing: Boolean): Boolean =
-    !(isPlayer && isFollowing)
-
 @Composable
 internal fun phaseColors(phase: EventPhase): Pair<Color, Color> {
     val base = MaterialTheme.colorScheme.surface
@@ -1091,9 +1079,7 @@ fun EventDetailScreen(
                     Text(stringResource(R.string.notify_admin_section_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(24.dp))
-                if (!state.isPlayer) {
-                    TextButton(onClick = { viewModel.unfollow(eventId) }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error), modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.unfollow)) }
-                }
+                TextButton(onClick = { viewModel.unfollow(eventId) }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error), modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.unfollow)) }
                 Spacer(Modifier.height(16.dp))
             }
         }
@@ -1158,14 +1144,14 @@ fun EventDetailScreen(
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
                                     Spacer(Modifier.weight(1f))
-                                    if (shouldShowFollowToggle(ds.isPlayer, ds.isFollowing)) {
-                                        IconButton(onClick = { viewModel.toggleFollow(eventId) }) {
-                                            Icon(
-                                                if (ds.isFollowing) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                                contentDescription = if (ds.isFollowing) stringResource(R.string.following) else stringResource(R.string.follow),
-                                                tint = if (ds.isFollowing) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
+                                    // Everyone who can open the event can follow it —
+                                    // including players (unfollow = opt out, keep spot).
+                                    IconButton(onClick = { viewModel.toggleFollow(eventId) }) {
+                                        Icon(
+                                            if (ds.isFollowing) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                            contentDescription = if (ds.isFollowing) stringResource(R.string.following) else stringResource(R.string.follow),
+                                            tint = if (ds.isFollowing) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
                                     }
                                     if (ds.isFollowing) {
                                         IconButton(onClick = { viewModel.showNotifications() }) { Icon(Icons.Default.Notifications, stringResource(R.string.notification_settings)) }

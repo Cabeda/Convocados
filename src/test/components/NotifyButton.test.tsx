@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck -- component test type suppression for @testing-library/react screen exports
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { screen, cleanup, waitFor } from "@testing-library/react";
+import { screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
@@ -36,12 +36,22 @@ describe("NotifyButton follow toggle", () => {
     expect(await screen.findByText(/follow game/i)).toBeInTheDocument();
   });
 
-  it("keeps the toggle hidden for an auto-followed player", async () => {
-    vi.stubGlobal("fetch", stubFetch({ get: { following: true, isPlayer: true } }));
+  it("shows the toggle for an auto-followed player so they can opt out", async () => {
+    vi.stubGlobal(
+      "fetch",
+      stubFetch({
+        get: { following: true, isPlayer: true },
+        delete: () => new Response(JSON.stringify({ ok: true, following: false }), { status: 200 }),
+      }),
+    );
 
+    const user = userEvent.setup();
     renderWithTheme(<NotifyButton eventId="e1" isAuthenticated />);
 
-    await waitFor(() => expect(screen.queryByText(/follow/i)).not.toBeInTheDocument());
+    const followingBtn = await screen.findByText(/following/i);
+    await user.click(followingBtn);
+
+    expect(await screen.findByText(/follow game/i)).toBeInTheDocument();
   });
 
   it("non-player follower can unfollow and the Follow button reappears", async () => {
