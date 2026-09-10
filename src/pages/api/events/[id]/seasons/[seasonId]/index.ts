@@ -75,7 +75,6 @@ export const GET: APIRoute = async ({ params, request }) => {
     registrationOpensAt: season.registrationOpensAt,
     registrationClosesAt: season.registrationClosesAt,
     registrationOpen: season.status === "registration" && season.registrationOpensAt <= new Date() && new Date() < season.registrationClosesAt,
-    startsAt: season.startsAt,
     activatedAt: season.activatedAt,
     crews: publicCrews,
     viewerEventPlayerId: viewerEventPlayer?.id ?? null,
@@ -117,6 +116,71 @@ export const GET: APIRoute = async ({ params, request }) => {
   return Response.json({ season: result });
 };
 
+const TERMINAL_STATUSES = ["completed", "cancelled"];
+
+/**
+ * Update a Season's name and/or registration period (admin-only, non-terminal
+ * Seasons only). Standings follow the period automatically since the
+ * leaderboard is computed live from the registration window.
+ */
+async function updateSeasonDetails(
+  season: NonNullable<Awaited<ReturnType<typeof getSeasonForEvent>>>,
+  body: { name?: unknown; registrationOpensAt?: unknown; registrationClosesAt?: unknown },
+) {
+  if (TERMINAL_STATUSES.includes(season.status)) {
+    return Response.json({ error: "Completed Seasons are read-only." }, { status: 409 });
+  }
+
+  const data: { name?: string; registrationOpensAt?: Date; registrationClosesAt?: Date } = {};
+  if (body.name !== undefined) {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name || name.length > 100) {
+      return Response.json({ error: "Season name must be between 1 and 100 characters." }, { status: 400 });
+    }
+    data.name = name;
+  }
+  const opensAt = body.registrationOpensAt === undefined
+    ? season.registrationOpensAt
+    : typeof body.registrationOpensAt === "string" ? new Date(body.registrationOpensAt) : null;
+  const closesAt = body.registrationClosesAt === undefined
+    ? season.registrationClosesAt
+    : typeof body.registrationClosesAt === "string" ? new Date(body.registrationClosesAt) : null;
+  if (body.registrationOpensAt !== undefined || body.registrationClosesAt !== undefined) {
+    if (!opensAt || Number.isNaN(opensAt.getTime()) || !closesAt || Number.isNaN(closesAt.getTime())) {
+      return Response.json({ error: "Registration dates must be valid dates." }, { status: 400 });
+    }
+    if (closesAt <= opensAt) {
+      return Response.json({ error: "Registration must close after it opens." }, { status: 400 });
+    }
+    const others = await prisma.season.findMany({
+      where: { eventId: season.eventId, id: { not: season.id }, status: { not: "cancelled" } },
+      select: { registrationOpensAt: true, registrationClosesAt: true },
+    });
+    const overlaps = others.some((other) =>
+      opensAt.getTime() <= other.registrationClosesAt.getTime()
+      && other.registrationOpensAt.getTime() <= closesAt.getTime(),
+    );
+    if (overlaps) {
+      return Response.json({ error: "This Season's period overlaps an existing Season." }, { status: 409 });
+    }
+    data.registrationOpensAt = opensAt;
+    data.registrationClosesAt = closesAt;
+  }
+  if (Object.keys(data).length === 0) {
+    return Response.json({ error: "Nothing to update." }, { status: 400 });
+  }
+
+  const updated = await prisma.season.update({ where: { id: season.id }, data });
+  return Response.json({
+    season: {
+      id: updated.id,
+      name: updated.name,
+      status: updated.status,
+      registrationOpensAt: updated.registrationOpensAt,
+      registrationClosesAt: updated.registrationClosesAt,
+    },
+  });
+}
 const MIN_CREWS = 3;
 const MIN_PARTICIPANTS = 9;
 const MIN_CREW_SIZE = 3;
@@ -145,15 +209,18 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   if (!authz.allowed) return Response.json({ error: "Event access required." }, { status: 403 });
   if (!authz.isAdmin) return Response.json({ error: "Only the event owner or an admin can manage a Season." }, { status: 403 });
 
-  let body: { action?: unknown };
+  let body: { action?: unknown; name?: unknown; registrationOpensAt?: unknown; registrationClosesAt?: unknown };
   try {
     const parsed: unknown = await request.json();
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return Response.json({ error: "Invalid JSON." }, { status: 400 });
-    body = parsed as { action?: unknown };
+    body = parsed as { action?: unknown; name?: unknown; registrationOpensAt?: unknown; registrationClosesAt?: unknown };
   } catch {
     return Response.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
+  if (body.action === "update") {
+    return updateSeasonDetails(season, body);
+  }
   if (body.action !== "activate") {
     return Response.json({ error: "Unsupported action." }, { status: 400 });
   }

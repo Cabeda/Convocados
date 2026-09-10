@@ -52,7 +52,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const [history, seasons] = await Promise.all([
     prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "asc" } }),
-    prisma.season.findMany({ where: { eventId, status: { not: "cancelled" } }, include: { memberships: { include: { eventPlayer: true, crew: true } } }, orderBy: { startsAt: "desc" } }),
+    prisma.season.findMany({ where: { eventId, status: { not: "cancelled" } }, include: { memberships: { include: { eventPlayer: true, crew: true } } }, orderBy: { registrationOpensAt: "desc" } }),
   ]);
 
   // GameHistory is the only immutable source of the teams that actually played.
@@ -72,7 +72,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     : requestedSeasonId === "all"
       ? null
       : seasons.find((season) => {
-          const startsAt = (season.startsAt ?? season.registrationClosesAt).getTime();
+          const startsAt = season.registrationOpensAt.getTime();
           return latestGameTime !== null && startsAt <= latestGameTime;
         }) ?? null;
 
@@ -90,13 +90,16 @@ export const GET: APIRoute = async ({ params, request }) => {
         withdrawnAt: membership.withdrawnAt,
       }))
     : [];
-  const startsAt = selectedSeason?.startsAt ?? selectedSeason?.registrationClosesAt ?? null;
-  const endsAt = selectedSeason?.completedAt ?? selectedSeason?.cancelledAt ?? null;
+  // The season period is the registration window: editing it recomputes the
+  // standings live, adding and removing period games automatically. Completion
+  // still caps the window for seasons ended early.
+  const startsAt = selectedSeason?.registrationOpensAt ?? null;
+  const completedEndsAt = selectedSeason?.completedAt ?? selectedSeason?.cancelledAt ?? null;
+  const closesAt = selectedSeason?.registrationClosesAt ?? null;
+  const endsAt = completedEndsAt && closesAt && completedEndsAt < closesAt ? completedEndsAt : closesAt;
   // Members enrolled after the season period closed (e.g. a retroactive season
   // set up after the games) count for the whole period — see isMemberEffective.
-  const seasonEndsAt = selectedSeason
-    ? (selectedSeason.completedAt ?? selectedSeason.cancelledAt ?? selectedSeason.registrationClosesAt)
-    : null;
+  const seasonEndsAt = selectedSeason?.registrationClosesAt ?? null;
   const standings = calculateLeaderboard(allGames, selectedSeason ? seasonMembers : undefined, { startsAt, endsAt, seasonEndsAt });
 
   return Response.json({

@@ -216,13 +216,12 @@ describe("Crew Season setup", () => {
     expect(crewOf(memberships[0].id)).not.toBe(crewOf(memberships[3].id));
   });
 
-  it("saves the starting date, names, and assignments atomically", async () => {
+  it("saves Crew names and assignments atomically", async () => {
     const event = await seedEvent();
     const { season, memberships } = await seedSeason(event.id);
     mockGetSession.mockResolvedValue({ user: { id: "crew-user-0" } });
 
     const response = await saveCrews(context({ id: event.id, seasonId: season.id }, "POST", {
-      startsAt: "2026-09-01T18:00:00.000Z",
       crews: [
         { name: "North", membershipIds: memberships.slice(0, 3).map((membership) => membership.id) },
         { name: "South", membershipIds: memberships.slice(3).map((membership) => membership.id) },
@@ -230,7 +229,6 @@ describe("Crew Season setup", () => {
     }));
 
     expect(response.status).toBe(200);
-    expect((await prisma.season.findUnique({ where: { id: season.id } }))?.startsAt?.toISOString()).toBe("2026-09-01T18:00:00.000Z");
     expect(await prisma.crew.count({ where: { seasonId: season.id } })).toBe(2);
     expect(await prisma.gameParticipant.count()).toBe(0);
   });
@@ -244,7 +242,6 @@ describe("Crew Season setup", () => {
     mockGetSession.mockResolvedValue({ user: { id: "crew-user-0" } });
 
     const response = await saveCrews(context({ id: event.id, seasonId: season.id }, "POST", {
-      startsAt: "not-a-date",
       crews: [
         { name: "North", membershipIds: [memberships[0].id, memberships[0].id, foreignMembership.id] },
         { name: "South", membershipIds: memberships.slice(1, 4).map((membership) => membership.id) },
@@ -253,7 +250,6 @@ describe("Crew Season setup", () => {
 
     expect(response.status).toBe(400);
     expect(await prisma.crew.count()).toBe(0);
-    expect((await prisma.season.findUnique({ where: { id: season.id } }))?.startsAt).toBeNull();
   });
 
   it("does not clear legacy cross-event membership assignments during a valid save", async () => {

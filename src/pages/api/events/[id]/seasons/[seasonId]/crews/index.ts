@@ -10,14 +10,6 @@ interface CrewInput {
   membershipIds?: unknown;
 }
 
-function parseStartDate(value: unknown): Date | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  if (typeof value !== "string") return undefined;
-  const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? undefined : date;
-}
-
 export const POST: APIRoute = async ({ params, request }) => {
   const limited = await rateLimitResponse(request, "write");
   if (limited) return limited;
@@ -32,19 +24,15 @@ export const POST: APIRoute = async ({ params, request }) => {
   // Admins may adjust Crews at any point in the Season lifecycle, including
   // after activation, so they can always correct mistakes.
 
-  let body: { startsAt?: unknown; crews?: unknown };
+  let body: { crews?: unknown };
   try {
     const parsed: unknown = await request.json();
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return Response.json({ error: "Invalid JSON." }, { status: 400 });
-    body = parsed as { startsAt?: unknown; crews?: unknown };
+    body = parsed as { crews?: unknown };
   } catch {
     return Response.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
-  const startsAt = parseStartDate(body.startsAt);
-  if (body.startsAt !== undefined && startsAt === undefined) {
-    return Response.json({ error: "startsAt must be a valid date or null." }, { status: 400 });
-  }
   if (!Array.isArray(body.crews) || body.crews.length < 2) {
     return Response.json({ error: "At least two Crews are required." }, { status: 400 });
   }
@@ -136,9 +124,6 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   try {
     await prisma.$transaction(async (tx) => {
-      if (startsAt !== undefined) {
-        await tx.season.update({ where: { id: season.id }, data: { startsAt } });
-      }
       if (!registrationOpen && pendingProposals.length > 0) {
         await tx.crewProposal.updateMany({
           where: { seasonId: season.id, status: "pending" },

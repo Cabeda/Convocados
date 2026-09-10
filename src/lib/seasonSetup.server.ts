@@ -19,6 +19,21 @@ export function isSeasonRegistrationOpen(season: {
   return season.status === "registration" && season.registrationOpensAt <= now && now < season.registrationClosesAt;
 }
 
+/**
+ * Attendance window for season recommendations and candidate stats: the
+ * season period up to now. Future games have not been played yet, so they
+ * never count toward attendance.
+ */
+export function seasonAttendanceWindow(season: {
+  registrationOpensAt: Date;
+  registrationClosesAt: Date;
+}, now = new Date()): { gte: Date; lte: Date } {
+  return {
+    gte: season.registrationOpensAt,
+    lte: season.registrationClosesAt < now ? season.registrationClosesAt : now,
+  };
+}
+
 export async function getSeasonForEvent(seasonId: string, eventId: string) {
   const season = await prisma.season.findUnique({
     where: { id: seasonId },

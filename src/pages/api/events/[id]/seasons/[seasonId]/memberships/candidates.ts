@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
-import { getSeasonForEvent, requireSeasonAdmin } from "~/lib/seasonSetup.server";
+import { getSeasonForEvent, requireSeasonAdmin, seasonAttendanceWindow } from "~/lib/seasonSetup.server";
 
 /**
  * List enrollment candidates for a Season (admin-only): every EventPlayer of
@@ -18,6 +18,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   if (!authz.allowed) return Response.json({ error: "Event access required." }, { status: 403 });
   if (!authz.isAdmin) return Response.json({ error: "Only the event owner or an admin can manage a Season." }, { status: 403 });
 
+  const attendanceWindow = seasonAttendanceWindow(season);
   const [eventPlayers, memberships, participants, users] = await Promise.all([
     prisma.eventPlayer.findMany({
       where: { eventId: season.eventId },
@@ -35,7 +36,7 @@ export const GET: APIRoute = async ({ params, request }) => {
         game: {
           eventId: season.eventId,
           status: { not: "cancelled" },
-          dateTime: { gte: season.registrationOpensAt, lte: season.registrationClosesAt },
+          dateTime: { gte: attendanceWindow.gte, lte: attendanceWindow.lte },
         },
       },
       select: { eventPlayerId: true },
