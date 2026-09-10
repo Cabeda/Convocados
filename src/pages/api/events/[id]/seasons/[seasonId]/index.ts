@@ -4,6 +4,7 @@ import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 import { authorizeSeasonRequest, getSeasonForEvent, requireSeasonAdmin } from "~/lib/seasonSetup.server";
 import { computeLeaderboardPayload } from "~/lib/leaderboard.server";
+import { clearSeasonRankSnapshot, ensureRankCalibration, snapshotSeasonRank } from "~/lib/seasonRank.server";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
@@ -214,7 +215,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   if (!authz.allowed) return Response.json({ error: "Event access required." }, { status: 403 });
   if (!authz.isAdmin) return Response.json({ error: "Only the event owner or an admin can manage a Season." }, { status: 403 });
 
-  let body: { action?: unknown; name?: unknown; registrationOpensAt?: unknown; registrationClosesAt?: unknown };
+  let body: { action?: unknown; name?: unknown; registrationOpensAt?: unknown; registrationClosesAt?: unknown; reason?: unknown };
   try {
     const parsed: unknown = await request.json();
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return Response.json({ error: "Invalid JSON." }, { status: 400 });
@@ -225,6 +226,15 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
   if (body.action === "update") {
     return updateSeasonDetails(season, body);
+  }
+  if (body.action === "complete") {
+    return completeSeason(season);
+  }
+  if (body.action === "cancel") {
+    return cancelSeason(season, body);
+  }
+  if (body.action === "reopen") {
+    return reopenSeason(season);
   }
   if (body.action !== "activate") {
     return Response.json({ error: "Unsupported action." }, { status: 400 });
@@ -281,5 +291,53 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     });
   });
 
+  // ADR 0031: freeze the Rank calibration (anchor + tier edges) once, at the
+  // Event's first activation. Idempotent. The per-player soft reset derives on
+  // read, so nothing else is written here.
+  await ensureRankCalibration(eventId);
+
   return Response.json({ season: { id: updated.id, status: updated.status, activatedAt: updated.activatedAt } });
 };
+
+/** Active/review -> completed. Freezes the Season Rank + Crew history snapshot. */
+async function completeSeason(season: NonNullable<Awaited<ReturnType<typeof getSeasonForEvent>>>) {
+  if (season.status !== "active" && season.status !== "review") {
+    return Response.json({ error: "Only an active or under-review Season can be completed." }, { status: 409 });
+  }
+  const updated = await prisma.season.update({
+    where: { id: season.id },
+    data: { status: "completed", completedAt: new Date() },
+  });
+  await snapshotSeasonRank(season.eventId, season.id);
+  return Response.json({ season: { id: updated.id, status: updated.status, completedAt: updated.completedAt } });
+}
+
+/** Any non-terminal -> cancelled. Reverts Rank (no ladder footprint). */
+async function cancelSeason(
+  season: NonNullable<Awaited<ReturnType<typeof getSeasonForEvent>>>,
+  body: { reason?: unknown },
+) {
+  if (TERMINAL_STATUSES.includes(season.status)) {
+    return Response.json({ error: "Season is already completed or cancelled." }, { status: 409 });
+  }
+  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 500) : null;
+  const updated = await prisma.season.update({
+    where: { id: season.id },
+    data: { status: "cancelled", cancelledAt: new Date(), cancellationReason: reason },
+  });
+  await clearSeasonRankSnapshot(season.id);
+  return Response.json({ season: { id: updated.id, status: updated.status, cancelledAt: updated.cancelledAt } });
+}
+
+/** completed -> active. Drops the snapshot so Rank derives live again. */
+async function reopenSeason(season: NonNullable<Awaited<ReturnType<typeof getSeasonForEvent>>>) {
+  if (season.status !== "completed") {
+    return Response.json({ error: "Only a completed Season can be reopened." }, { status: 409 });
+  }
+  const updated = await prisma.season.update({
+    where: { id: season.id },
+    data: { status: "active", completedAt: null },
+  });
+  await clearSeasonRankSnapshot(season.id);
+  return Response.json({ season: { id: updated.id, status: updated.status } });
+}

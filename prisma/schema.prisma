@@ -178,6 +178,13 @@ model Event {
   hideEloInTeams    Boolean @default(false)
   allowManualRating Boolean @default(false)
 
+  // Season Rank (ADR 0031)
+  rankEnabled          Boolean @default(true)
+  rankDecayEnabled     Boolean @default(false)
+  inactiveRankBehavior String  @default("freeze") // "freeze" | "reset"
+  rankAnchor           Float?  // derived once at first activation, frozen
+  rankTierEdges        String? // JSON number[] derived once at launch, frozen
+
   // Cost tracking
   splitCostsEnabled Boolean @default(true)
 
@@ -203,6 +210,7 @@ model Event {
   // Court Watch (JSON: {radius: number, indoor: boolean|null, surface: string|null}; null = disabled)
   courtWatchConfig String?
   courtWatchAlerts CourtWatchAlert[]
+  rankSnapshots SeasonRankSnapshot[]
 
   // Open Pickups (ADR-0021): events sourced from Playtomic bookings
   source String @default("manual") // "manual" | "playtomic"
@@ -381,9 +389,24 @@ model Season {
   crews                 Crew[]
   crewProposals         CrewProposal[]
   crewProposalInvites   CrewProposalInvite[]
+  rankSnapshot          SeasonRankSnapshot?
 
   @@index([eventId, status])
   @@index([createdByUserId])
+}
+
+// ADR 0031: frozen Season Rank + Crew standings at Season completion.
+// The active Season's Rank derives on read; only completion snapshots persist.
+model SeasonRankSnapshot {
+  id        String   @id @default(cuid())
+  seasonId  String   @unique
+  season    Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  payload   String   // JSON: { players: [{name, hidden, display, tier, games}], crews: [...], winner: string|null }
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
 }
 
 model SeasonMembership {
