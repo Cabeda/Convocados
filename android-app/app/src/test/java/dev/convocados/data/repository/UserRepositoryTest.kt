@@ -2,6 +2,7 @@ package dev.convocados.data.repository
 
 import app.cash.turbine.test
 import dev.convocados.data.api.ConvocadosApi
+import dev.convocados.data.api.ProfilePhotoResponse
 import dev.convocados.data.api.UserProfile
 import dev.convocados.data.local.dao.UserDao
 import dev.convocados.data.local.entity.UserProfileEntity
@@ -70,5 +71,48 @@ class UserRepositoryTest {
         repository.clearUser()
 
         coVerify { dao.clear() }
+    }
+
+    @Test
+    fun `uploadProfilePhoto posts the data url and refreshes the profile`() = runTest {
+        val dataUrl = "data:image/jpeg;base64,AAAA"
+        coEvery { api.updateProfilePhoto(dataUrl) } returns ProfilePhotoResponse(ok = true, image = dataUrl)
+        coEvery { api.fetchUserInfo() } returns UserProfile("1", "User", "user@test.com", dataUrl)
+        coEvery { dao.insert(any()) } returns Unit
+
+        repository.uploadProfilePhoto(dataUrl)
+
+        coVerify { api.updateProfilePhoto(dataUrl) }
+        coVerify { api.fetchUserInfo() }
+    }
+
+    @Test
+    fun `uploadProfilePhoto shows a snackbar on failure`() = runTest {
+        coEvery { api.updateProfilePhoto(any()) } throws Exception("API error")
+
+        repository.uploadProfilePhoto("data:image/jpeg;base64,AAAA")
+
+        coVerify { uiEventManager.showSnackbar("Failed to update photo: API error") }
+    }
+
+    @Test
+    fun `removeProfilePhoto clears the photo and refreshes the profile`() = runTest {
+        coEvery { api.removeProfilePhoto() } returns ProfilePhotoResponse(ok = true, image = null)
+        coEvery { api.fetchUserInfo() } returns UserProfile("1", "User", "user@test.com", null)
+        coEvery { dao.insert(any()) } returns Unit
+
+        repository.removeProfilePhoto()
+
+        coVerify { api.removeProfilePhoto() }
+        coVerify { api.fetchUserInfo() }
+    }
+
+    @Test
+    fun `removeProfilePhoto shows a snackbar on failure`() = runTest {
+        coEvery { api.removeProfilePhoto() } throws Exception("API error")
+
+        repository.removeProfilePhoto()
+
+        coVerify { uiEventManager.showSnackbar("Failed to remove photo: API error") }
     }
 }
