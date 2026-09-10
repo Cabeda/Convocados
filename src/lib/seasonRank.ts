@@ -8,6 +8,9 @@ import { expectedScore } from "./elo";
 
 export const TIER_NAMES = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master"] as const;
 
+/** Presentation colours per tier (index-aligned with TIER_NAMES). */
+export const TIER_COLORS = ["#8c6a4a", "#8892a0", "#c9a227", "#3fa8a0", "#5b8def", "#9b6bff"];
+
 /**
  * Provisional window for unseeded players: clamp(round(0.25N), 3, 10) games.
  * `N` is the season's expected game count.
