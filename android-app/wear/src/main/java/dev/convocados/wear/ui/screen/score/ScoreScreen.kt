@@ -26,6 +26,9 @@ import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.LocalAmbientMode
 import dev.convocados.wear.ui.RememberKeepScreenOn
+import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
+import dev.convocados.wear.ui.ongoing.ongoingScoreText
+import dev.convocados.wear.ui.ongoing.shouldShowLiveGameOngoing
 import dev.convocados.wear.ui.theme.Warning
 import dev.convocados.wear.util.GameScorePhase
 import dev.convocados.wear.util.formatRelativeTime
@@ -58,8 +61,20 @@ fun ScoreScreen(
     // sleeping mid-game.
     RememberKeepScreenOn(state.keepScreenOn)
 
-    ScreenScaffold {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    // Play policy: a live scoring session must surface an Ongoing Activity.
+    RememberOngoingActivity(
+        enabled = shouldShowLiveGameOngoing(isScoring = state.history != null, phase = scorePhase),
+        title = state.game?.title ?: stringResource(R.string.ongoing_score_title),
+        text = ongoingScoreText(state.teamOneName, state.scoreOne, state.teamTwoName, state.scoreTwo),
+    )
+
+    ScreenScaffold { contentPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding),
+            contentAlignment = Alignment.Center,
+        ) {
             when {
                 state.isLoading -> {
                     CircularProgressIndicator()
@@ -181,8 +196,13 @@ fun ScoreFixtureContent(
     onToggleTiebreak: () -> Unit = {},
     onUndo: () -> Unit = {},
 ) {
-    ScreenScaffold {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    ScreenScaffold { contentPadding ->
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(contentPadding),
+            contentAlignment = Alignment.Center,
+        ) {
             if (isAmbient) {
                 AmbientScoreDisplay(state)
             } else if (state.isTennisScoring) {
@@ -326,62 +346,83 @@ internal fun TennisScoreEditor(
 ) {
     val currentSet = state.scoreSets.lastOrNull()
     val currentGame = currentSet?.tennisGameScore() ?: dev.convocados.wear.data.api.TennisGameScore()
-    Column(Modifier.fillMaxSize().padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = state.scoreSets.joinToString(" · ") { set ->
-                if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
-            }.ifEmpty { "New set" } + "  ·  ${displayTennisPoint(currentGame)}",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        state.legacyScalarScore?.let { (one, two) ->
+    val now = nowOverride ?: Instant.now()
+    val kickoffMs = state.kickoffEpochMs
+    val gameOver = kickoffMs != null && state.game != null &&
+        now.toEpochMilli() >= kickoffMs + sportDurationMinutes(state.game.sport) * 60_000L
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize().padding(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Text(
-                text = "Legacy result $one-$two · tap a team to start point scoring",
-                style = MaterialTheme.typography.labelSmall,
+                text = state.scoreSets.joinToString(" · ") { set ->
+                    if (set.tiebreakTeamOne != null && set.tiebreakTeamTwo != null) "${set.teamOne}-${set.teamTwo} (${set.tiebreakTeamOne}-${set.tiebreakTeamTwo})" else "${set.teamOne}-${set.teamTwo}"
+                }.ifEmpty { "New set" } + "  ·  ${displayTennisPoint(currentGame)}",
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
             )
-        }
-        Text("${if (state.isTiebreakScoring) "Tiebreak" else "Set"} ${state.scoreSets.size.coerceAtLeast(1)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TeamScoreButton(
-                teamName = state.teamOneName,
-                score = if (state.isTiebreakScoring) currentSet?.tiebreakTeamOne ?: 0 else currentSet?.teamOne ?: 0,
-                scoreLabel = if (state.isTiebreakScoring) {
-                    (currentSet?.tiebreakTeamOne ?: 0).toString()
+            state.legacyScalarScore?.let { (one, two) ->
+                Text(
+                    text = "Legacy result $one-$two · tap a team to start point scoring",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Text("${if (state.isTiebreakScoring) "Tiebreak" else "Set"} ${state.scoreSets.size.coerceAtLeast(1)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            if (state.isOfflineQueued) {
+                Text(
+                    text = stringResource(R.string.will_sync_online),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Warning,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TeamScoreButton(
+                    teamName = state.teamOneName,
+                    score = if (state.isTiebreakScoring) currentSet?.tiebreakTeamOne ?: 0 else currentSet?.teamOne ?: 0,
+                    scoreLabel = if (state.isTiebreakScoring) {
+                        (currentSet?.tiebreakTeamOne ?: 0).toString()
+                    } else {
+                        displayTennisPointForTeam(currentGame, TennisTeam.ONE)
+                    },
+                    container = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    onIncrement = onIncrementOne,
+                    onDecrement = onDecrementOne,
+                    enabled = true,
+                    modifier = Modifier.weight(1f),
+                )
+                TeamScoreButton(
+                    teamName = state.teamTwoName,
+                    score = if (state.isTiebreakScoring) currentSet?.tiebreakTeamTwo ?: 0 else currentSet?.teamTwo ?: 0,
+                    scoreLabel = if (state.isTiebreakScoring) {
+                        (currentSet?.tiebreakTeamTwo ?: 0).toString()
+                    } else {
+                        displayTennisPointForTeam(currentGame, TennisTeam.TWO)
+                    },
+                    container = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    onIncrement = onIncrementTwo,
+                    onDecrement = onDecrementTwo,
+                    enabled = true,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (gameOver) {
+                    CompactButton(onClick = onFinish) { Text(stringResource(R.string.finish_game)) }
                 } else {
-                    displayTennisPointForTeam(currentGame, TennisTeam.ONE)
-                },
-                container = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                onIncrement = onIncrementOne,
-                onDecrement = onDecrementOne,
-                enabled = true,
-                modifier = Modifier.weight(1f),
-            )
-            TeamScoreButton(
-                teamName = state.teamTwoName,
-                score = if (state.isTiebreakScoring) currentSet?.tiebreakTeamTwo ?: 0 else currentSet?.teamTwo ?: 0,
-                scoreLabel = if (state.isTiebreakScoring) {
-                    (currentSet?.tiebreakTeamTwo ?: 0).toString()
-                } else {
-                    displayTennisPointForTeam(currentGame, TennisTeam.TWO)
-                },
-                container = MaterialTheme.colorScheme.tertiaryContainer,
-                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                onIncrement = onIncrementTwo,
-                onDecrement = onDecrementTwo,
-                enabled = true,
-                modifier = Modifier.weight(1f),
-            )
+                    CompactButton(onClick = onNextSet, enabled = state.scoreSets.size < 5) { Text("Next set") }
+                }
+                CompactButton(onClick = onToggleTiebreak) { Text(if (state.isTiebreakScoring) "Games" else "Tiebreak") }
+                CompactButton(onClick = onUndo) { Text("Undo") }
+                CompactButton(onClick = onTeams) { Text(stringResource(R.string.teams_title)) }
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            CompactButton(onClick = onNextSet, enabled = state.scoreSets.size < 5) { Text("Next set") }
-            CompactButton(onClick = onToggleTiebreak) { Text(if (state.isTiebreakScoring) "Games" else "Tiebreak") }
-            CompactButton(onClick = onUndo) { Text("Undo") }
-            CompactButton(onClick = onTeams) { Text(stringResource(R.string.teams_title)) }
-        }
-        ScoreTimeOverlay(state = state, onFinish = onFinish, nowOverride = nowOverride)
+        ScoreTimeOverlay(state = state, onFinish = onFinish, nowOverride = nowOverride, showTopStatus = false, showOfflineStatus = false)
     }
 }
 
@@ -461,6 +502,8 @@ internal fun ScoreTimeOverlay(
     state: ScoreUiState,
     onFinish: () -> Unit,
     nowOverride: Instant? = null,
+    showTopStatus: Boolean = true,
+    showOfflineStatus: Boolean = true,
 ) {
     var now by remember(nowOverride) { mutableStateOf(nowOverride ?: Instant.now()) }
     if (nowOverride == null) {
@@ -501,25 +544,27 @@ internal fun ScoreTimeOverlay(
         val gameOver = kickoffMs != null && state.game != null &&
             now.toEpochMilli() >= kickoffMs + sportDurationMinutes(state.game.sport) * 60_000L
 
-        if (gameOver) {
-            CompactButton(
-                onClick = onFinish,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 14.dp),
-            ) {
-                Text(stringResource(R.string.finish_game))
+        if (showTopStatus) {
+            if (gameOver) {
+                CompactButton(
+                    onClick = onFinish,
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 14.dp),
+                ) {
+                    Text(stringResource(R.string.finish_game))
+                }
+            } else {
+                Text(
+                    text = stringResource(R.string.teams_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 14.dp),
+                )
             }
-        } else {
-            Text(
-                text = stringResource(R.string.teams_hint),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 14.dp),
-            )
         }
 
-        if (state.isOfflineQueued) {
+        if (showOfflineStatus && state.isOfflineQueued) {
             Text(
                 text = stringResource(R.string.will_sync_online),
                 style = MaterialTheme.typography.labelSmall,
