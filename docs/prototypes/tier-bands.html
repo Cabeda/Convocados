@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — Season Rank tier bands</title>
+<style>
+  :root { --bg:#0f1115; --card:#1a1d24; --line:#2a2f3a; --fg:#e7e9ee; --muted:#98a0b0; --accent:#4c8dff; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px; background:var(--bg); color:var(--fg);
+         font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .warn { color:#ffb454; margin:0 0 18px; font-size:13px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .controls { display:flex; flex-wrap:wrap; gap:16px; }
+  label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); }
+  select, input[type=range] { background:#0f1115; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px; }
+  .presets button { background:#222834; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 10px; cursor:pointer; margin-right:6px; }
+  .presets button:hover { border-color:var(--accent); }
+  .summary { display:flex; flex-wrap:wrap; gap:20px; }
+  .stat b { display:block; font-size:18px; }
+  .stat span { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  .band { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .band:last-child { border-bottom:none; }
+  .band .name { width:90px; font-weight:600; }
+  .band .range { width:110px; color:var(--muted); font-size:12px; }
+  .chips { display:flex; flex-wrap:wrap; gap:4px; flex:1; }
+  .chip { background:#2a3346; border:1px solid #3a4560; border-radius:5px; padding:1px 6px; font-size:11px; }
+  .chip.prov { background:#3a2a2a; border-color:#5a3a3a; color:#ffb0a0; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:500; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .note { color:var(--muted); font-size:12px; }
+  .bar { height:8px; background:linear-gradient(90deg,#4c8dff,#8a5cff); border-radius:4px; }
+</style>
+</head>
+<body>
+<h1>PROTOTYPE — Season Rank tier bands</h1>
+<p class="warn">Throwaway. Calibrating 6 absolute bands for the <b>Ninjas da Areosa</b> pilot.
+Real production snapshot 2026-09-10 · 42 EventPlayers · Season “Q2 2026” active · 8 played non-friendly games.
+No personal data: players are P1…P42.</p>
+
+<div class="card">
+  <div class="presets" id="presets">
+    <button data-p="rec">Recommended: p5·established, 0.5σ, 6</button>
+    <button data-p="all">All players (incl. no-signal)</button>
+    <button data-p="tight">Tight 0.4σ</button>
+    <button data-p="wide">Wide 0.6σ</button>
+  </div>
+  <div class="controls" style="margin-top:14px">
+    <label>Established = games ≥ <input id="thr" type="range" min="0" max="13" value="6" step="1"><span id="thrv">6</span></label>
+    <label>Anchor source
+      <select id="anchor">
+        <option value="p5est" selected>p5 of established</option>
+        <option value="minest">min of established</option>
+        <option value="p5all">p5 of all 42</option>
+        <option value="minall">min of all 42</option>
+      </select></label>
+    <label>σ population
+      <select id="sigmapop">
+        <option value="est" selected>established</option>
+        <option value="all">all 42</option>
+      </select></label>
+    <label>Band width
+      <select id="mult">
+        <option value="0.4">0.4σ</option>
+        <option value="0.5" selected>0.5σ</option>
+        <option value="0.6">0.6σ</option>
+      </select></label>
+    <label>Tiers
+      <select id="tiers">
+        <option>5</option>
+        <option selected>6</option>
+        <option>7</option>
+      </select></label>
+  </div>
+</div>
+
+<div class="card"><div class="summary" id="summary"></div></div>
+<div class="card"><div id="ladder"></div></div>
+<div class="card"><table id="players"></table></div>
+<p class="note">Thin-signal players (games &lt; threshold) are shown as <span class="chip prov">provisional</span>
+and start at display Rank 0 — they are excluded from anchor/σ calibration.</p>
+
+<script>
+const DATA = [{"rating":998,"games":4},{"rating":1000,"games":0},{"rating":976,"games":1},{"rating":1000,"games":0},{"rating":1000,"games":0},{"rating":1000,"games":0},{"rating":800,"games":0},{"rating":935,"games":13},{"rating":1092,"games":12},{"rating":977,"games":1},{"rating":995,"games":13},{"rating":997,"games":10},{"rating":1046,"games":2},{"rating":1114,"games":11},{"rating":986,"games":7},{"rating":957,"games":4},{"rating":954,"games":10},{"rating":1000,"games":0},{"rating":1000,"games":0},{"rating":979,"games":3},{"rating":1000,"games":0},{"rating":879,"games":9},{"rating":976,"games":1},{"rating":1046,"games":2},{"rating":1000,"games":0},{"rating":1000,"games":0},{"rating":981,"games":5},{"rating":1000,"games":0},{"rating":977,"games":1},{"rating":1000,"games":0},{"rating":1000,"games":0},{"rating":1026,"games":1},{"rating":1092,"games":11},{"rating":984,"games":8},{"rating":989,"games":1},{"rating":1000,"games":0},{"rating":1000,"games":0},{"rating":1000,"games":0},{"rating":977,"games":1},{"rating":1000,"games":0},{"rating":1000,"games":0},{"rating":1073,"games":8}];
+
+const NAMES = {
+  5: ["Bronze","Silver","Gold","Platinum","Diamond"],
+  6: ["Bronze","Silver","Gold","Platinum","Diamond","Master"],
+  7: ["Bronze","Silver","Gold","Platinum","Diamond","Master","Legend"],
+};
+const COLORS = ["#8c6a4a","#a9b2c0","#e0b341","#5ad1c8","#7fb3ff","#b07bff","#ff7b9c"];
+
+const pct = (arr,p)=>{const s=[...arr].sort((a,b)=>a-b);if(!s.length)return 0;const i=Math.min(s.length-1,Math.max(0,Math.round(p/100*(s.length-1))));return s[i];};
+const sd = arr=>{if(arr.length<2)return 0;const m=arr.reduce((a,b)=>a+b,0)/arr.length;return Math.sqrt(arr.reduce((a,b)=>a+(b-m)**2,0)/arr.length);};
+
+function compute(){
+  const thr=+document.getElementById("thr").value;
+  const anchorSrc=document.getElementById("anchor").value;
+  const sigmaPop=document.getElementById("sigmapop").value;
+  const mult=+document.getElementById("mult").value;
+  const tiers=+document.getElementById("tiers").value;
+
+  const est=DATA.filter(p=>p.games>=thr);
+  const allPop=DATA;
+  const anchorPool=anchorSrc.endsWith("est")?est:allPop;
+  const ratings=anchorPool.map(p=>p.rating);
+  const anchor=anchorSrc.startsWith("p5")?pct(ratings,5):Math.min(...ratings);
+  const seed=p=>Math.max(0,p.rating-anchor);
+  const sigmaPool=(sigmaPop==="est"?est:allPop);
+  const sigma=sd(sigmaPool.map(seed));
+  const w=mult*sigma;
+  const edges=[]; for(let i=0;i<tiers;i++) edges.push(i*w);
+  const bandOf=R=>Math.min(tiers-1,Math.floor(R/w));
+  return {thr,anchorSrc,sigmaPop,mult,tiers,est,anchor,seed,sigma,w,edges,bandOf};
+}
+
+function render(){
+  const c=compute();
+  const names=NAMES[c.tiers];
+
+  document.getElementById("summary").innerHTML=[
+    ["anchor",c.anchor.toFixed(0)],
+    ["σ",c.sigma.toFixed(1)],
+    ["band width",c.w.toFixed(1)],
+    ["established",c.est.length+"/"+DATA.length],
+    ["edges",c.edges.map(e=>e.toFixed(0)).join(" / ")+" +"],
+  ].map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
+
+  // ladder
+  const bands=Array.from({length:c.tiers},()=>[]);
+  const prov=[];
+  for(const p of DATA){
+    const R=c.seed(p);
+    if(p.games<c.thr){prov.push(p);continue;}
+    bands[c.bandOf(R)].push({p,R});
+  }
+  document.getElementById("ladder").innerHTML=bands.map((list,i)=>{
+    const lo=c.edges[i].toFixed(0), hi=(i===c.tiers-1?"+":c.edges[i+1].toFixed(0));
+    const chips=list.sort((a,b)=>b.R-a.R).map(x=>`<span class="chip" title="rating ${x.p.rating}, ${x.p.games}g">R${x.R.toFixed(0)} · ${x.p.rating}</span>`).join("");
+    return `<div class="band">
+      <div class="name" style="color:${COLORS[i]}">${names[i]}</div>
+      <div class="range">${lo} – ${hi}</div>
+      <div class="chips">${chips||'<span class="note">empty</span>'}</div>
+      <div class="note">${list.length}</div>
+    </div>`;
+  }).join("")+
+  `<div class="band"><div class="name" style="color:#ffb0a0">Provisional</div><div class="range">starts at 0</div>
+   <div class="chips">${prov.map(()=>'<span class="chip prov">0</span>').join("")||'<span class="note">none</span>'}</div>
+   <div class="note">${prov.length}</div></div>`;
+
+  // table
+  const rows=[...DATA].sort((a,b)=>b.rating-a.rating).map((p,i)=>{
+    const R=c.seed(p); const isP=p.games<c.thr;
+    const band=isP?"Provisional":names[c.bandOf(R)];
+    return `<tr><td>P${i+1}</td><td class="num">${p.rating}</td><td class="num">${p.games}</td>
+      <td class="num">${isP?"0":R.toFixed(0)}</td><td>${band}</td></tr>`;
+  }).join("");
+  document.getElementById("players").innerHTML=
+    `<thead><tr><th>Player</th><th class="num">Skill Rating</th><th class="num">Games</th><th class="num">Seed Rank</th><th>Tier</th></tr></thead><tbody>${rows}</tbody>`;
+}
+
+document.querySelectorAll("select,input").forEach(el=>el.addEventListener("input",()=>{
+  if(el.id==="thr")document.getElementById("thrv").textContent=el.value; render();
+}));
+document.getElementById("presets").addEventListener("click",e=>{
+  const p=e.target.dataset.p; if(!p)return;
+  const set=(id,v)=>{document.getElementById(id).value=v;};
+  if(p==="rec"){set("thr",6);set("anchor","p5est");set("sigmapop","est");set("mult","0.5");set("tiers",6);}
+  if(p==="all"){set("thr",0);set("anchor","p5all");set("sigmapop","all");set("mult","0.5");set("tiers",6);}
+  if(p==="tight"){set("thr",6);set("anchor","p5est");set("sigmapop","est");set("mult","0.4");set("tiers",6);}
+  if(p==="wide"){set("thr",6);set("anchor","p5est");set("sigmapop","est");set("mult","0.6");set("tiers",6);}
+  document.getElementById("thrv").textContent=document.getElementById("thr").value; render();
+});
+render();
+</script>
+</body>
+</html>
