@@ -35,6 +35,7 @@ import DocsLayout from '../../../layouts/DocsLayout.astro';
       <tr><td><code>scoreOne</code></td><td>number | null</td><td>Team one score</td></tr>
       <tr><td><code>scoreTwo</code></td><td>number | null</td><td>Team two score</td></tr>
       <tr><td><code>teamsSnapshot</code></td><td>string</td><td>JSON snapshot of team assignments at game time</td></tr>
+      <tr><td><code>mvp</code></td><td>object | null</td><td>Batched MVP summary for the game (<code>mvp</code>, <code>participants</code>, <code>isVotingOpen</code>, <code>hasVoted</code>, <code>totalVotes</code>, <code>eligibleVoters</code>). <code>null</code> for live <code>Game</code> rows. Included so the history page does not fetch MVP per card.</td></tr>
     </tbody>
   </table>
 

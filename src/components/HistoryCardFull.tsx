@@ -11,7 +11,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import {
   Box, Stack, Chip, Button, Paper,
   Alert, TextField, Autocomplete, InputAdornment,
-  alpha, useTheme, IconButton, Tooltip, Dialog, DialogTitle,
+  alpha, useTheme, useMediaQuery, IconButton, Tooltip, Dialog, DialogTitle,
   DialogContent, DialogActions, Menu, MenuItem, ListItemIcon, ListItemText, Typography,
   Popover,
 } from "@mui/material";
@@ -29,6 +29,7 @@ import SentimentSatisfiedAltIcon from "@mui/icons-material/SentimentSatisfiedAlt
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import RemoveIcon from "@mui/icons-material/Remove";
 import AddIcon from "@mui/icons-material/Add";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import EventIcon from "@mui/icons-material/Event";
 import LoginIcon from "@mui/icons-material/Login";
 import HistoryIcon from "@mui/icons-material/History";
@@ -65,6 +66,7 @@ export interface HistoryCardFullEntry {
   eloUpdates?: { name: string; delta: number }[] | null;
   participants?: string[];
   paymentConfig?: PaymentConfigGame | null;
+  mvp?: MvpSummary | null;
 }
 
 interface EventLite {
@@ -304,6 +306,73 @@ export function TennisScoreBand({
   );
 }
 
+function MobileScoreCard({
+  teamName,
+  value,
+  onChange,
+  minusTestId,
+  plusTestId,
+  decreaseLabel,
+  increaseLabel,
+}: {
+  teamName: string;
+  value: string;
+  onChange: (value: string) => void;
+  minusTestId: string;
+  plusTestId: string;
+  decreaseLabel: string;
+  increaseLabel: string;
+}) {
+  const theme = useTheme();
+  const numValue = Math.max(0, parseInt(value || "0", 10) || 0);
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        borderRadius: 3,
+        border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+        backgroundColor: alpha(theme.palette.action.hover, 0.04),
+      }}
+    >
+      <Typography variant="subtitle1" fontWeight={700} align="center" noWrap sx={{ mb: 1 }}>
+        {teamName}
+      </Typography>
+      <Stack direction="row" alignItems="center" justifyContent="center" spacing={2}>
+        <IconButton
+          data-testid={minusTestId}
+          aria-label={decreaseLabel}
+          onClick={() => onChange(String(Math.max(0, numValue - 1)))}
+          disabled={numValue <= 0}
+          sx={{ width: 56, height: 56, border: `1px solid ${theme.palette.divider}` }}
+        >
+          <RemoveIcon />
+        </IconButton>
+        <Typography
+          sx={{
+            fontSize: "3rem",
+            fontWeight: 800,
+            fontVariantNumeric: "tabular-nums",
+            lineHeight: 1,
+            minWidth: "2ch",
+            textAlign: "center",
+          }}
+        >
+          {numValue}
+        </Typography>
+        <IconButton
+          data-testid={plusTestId}
+          aria-label={increaseLabel}
+          color="primary"
+          onClick={() => onChange(String(numValue + 1))}
+          sx={{ width: 56, height: 56, backgroundColor: alpha(theme.palette.primary.main, 0.12) }}
+        >
+          <AddIcon />
+        </IconButton>
+      </Stack>
+    </Box>
+  );
+}
+
 export function HistoryCardFull({
   entry,
   eventId,
@@ -340,6 +409,7 @@ export function HistoryCardFull({
   const t = useT();
   const locale = detectLocale();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"), { noSsr: true });
   const isPlayAdmin = isOwner || isAdmin;
 
   const [scoreOne, setScoreOne] = useState(entry.scoreOne !== null ? String(entry.scoreOne) : "");
@@ -370,12 +440,14 @@ export function HistoryCardFull({
   const [paymentConfigOpen, setPaymentConfigOpen] = useState(false);
 
   // Mvp vote state
+  const providedMvp = mvp !== undefined ? mvp : entry.mvp;
   const [votingFor, setVotingFor] = useState<string | null>(null);
-  const [mvpState, setMvpState] = useState<MvpSummary | null>(mvp ?? null);
+  const [mvpState, setMvpState] = useState<MvpSummary | null>(providedMvp ?? null);
 
-  // If mvp wasn't passed in, fetch it
+  // The list response ships entry.mvp so cards don't each hit the network.
+  // Only fall back to the per-game endpoint when no summary was provided.
   useEffect(() => {
-    if (mvp) { setMvpState(mvp); return; }
+    if (providedMvp !== undefined) { setMvpState(providedMvp ?? null); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -384,7 +456,7 @@ export function HistoryCardFull({
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
-  }, [eventId, entry.id, mvp]);
+  }, [eventId, entry.id, providedMvp]);
 
   // Permissions. A settled-game participant is someone whose name is on this
   // game's teams OR payment roll — playing is not required for settling score
@@ -560,6 +632,26 @@ export function HistoryCardFull({
       return { ...t, players: [...t.players, { name, order: t.players.length }] };
     }));
     if (!playerName) setNewPlayerInputs((prev) => ({ ...prev, [teamIdx]: "" }));
+    setTeamsDirty(true);
+  };
+
+  const swapPlayerTeam = (fromTeamIdx: number, playerName: string) => {
+    setEditableTeams((prev) => {
+      if (prev.length !== 2) return prev;
+      const toTeamIdx = fromTeamIdx === 0 ? 1 : 0;
+      const player = prev[fromTeamIdx]?.players.find((p) => p.name === playerName);
+      if (!player) return prev;
+      return prev.map((team, i) => {
+        if (i === fromTeamIdx) {
+          const filtered = team.players.filter((p) => p.name !== playerName);
+          return { ...team, players: filtered.map((p, j) => ({ ...p, order: j })) };
+        }
+        if (i === toTeamIdx) {
+          return { ...team, players: [...team.players, { name: player.name, order: team.players.length }] };
+        }
+        return team;
+      });
+    });
     setTeamsDirty(true);
   };
 
@@ -866,7 +958,28 @@ export function HistoryCardFull({
                 tiebreakLabel={t("tiebreakLabel")}
               />
             )}
-            {!isTennisScoring && (
+            {!isTennisScoring && (isMobile && canEditScore ? (
+              <Stack data-testid="mobile-score-editor" spacing={1.5}>
+                <MobileScoreCard
+                  teamName={entry.teamOneName}
+                  value={scoreOne}
+                  onChange={setScoreOne}
+                  minusTestId="score-minus"
+                  plusTestId="score-plus"
+                  decreaseLabel={t("decreaseScore", { team: entry.teamOneName })}
+                  increaseLabel={t("increaseScore", { team: entry.teamOneName })}
+                />
+                <MobileScoreCard
+                  teamName={entry.teamTwoName}
+                  value={scoreTwo}
+                  onChange={setScoreTwo}
+                  minusTestId="score-minus-two"
+                  plusTestId="score-plus-two"
+                  decreaseLabel={t("decreaseScore", { team: entry.teamTwoName })}
+                  increaseLabel={t("increaseScore", { team: entry.teamTwoName })}
+                />
+              </Stack>
+            ) : (
             <Box sx={{
               display: "grid",
               gridTemplateColumns: "1fr auto 1fr",
@@ -954,7 +1067,7 @@ export function HistoryCardFull({
                 )}
               </Stack>
             </Box>
-            )}
+            ))}
           </Box>
         ) : null}
 
@@ -1130,7 +1243,7 @@ export function HistoryCardFull({
                           onDragStart={canEditTeams ? () => handleDragStart(row.name, teamIdx) : undefined}
                           sx={{
                             display: "grid",
-                            gridTemplateColumns: "1fr auto auto auto auto",
+                            gridTemplateColumns: "1fr auto auto auto auto auto",
                             alignItems: "center",
                             gap: 1,
                             py: 0.25, px: 1, borderRadius: 1.5,
@@ -1145,6 +1258,23 @@ export function HistoryCardFull({
                               </IconButton>
                             )}
                           </Typography>
+
+                          {/* Swap to other team — touch-friendly alternative to drag & drop */}
+                          {canEditTeams && editableTeams.length === 2 ? (
+                            <Tooltip title={t("movePlayerToTeam", { team: editableTeams[teamIdx === 0 ? 1 : 0]?.team ?? "" })}>
+                              <IconButton
+                                size="small"
+                                data-testid="swap-player"
+                                aria-label={t("movePlayerToTeam", { team: editableTeams[teamIdx === 0 ? 1 : 0]?.team ?? "" })}
+                                onClick={() => swapPlayerTeam(teamIdx, row.name)}
+                                sx={{ p: 0.5 }}
+                              >
+                                <SwapHorizIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          ) : (
+                            <Box />
+                          )}
 
                           {/* ELO chip — hidden on friendly games, no rating change */}
                           {entry.isFriendly ? (
