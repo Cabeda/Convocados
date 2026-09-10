@@ -80,7 +80,8 @@ export const GET: APIRoute = async ({ params, request }) => {
     ? JSON.stringify(
         teamResults.map((tr) => ({
           team: tr.name,
-          players: tr.members.map((m) => ({ name: m.name, order: m.order })),
+          formation: tr.formation,
+          players: tr.members.map((m) => ({ name: m.name, order: m.order, slot: m.slot })),
         })),
       )
     : null;

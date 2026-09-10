@@ -266,31 +266,47 @@ npm run db:studio    # Open Prisma Studio
 
 ## Dev Server Management (for AI agents)
 
-When running integration tests or Bruno API tests, the agent can manage the dev server:
+### Parallel previews / worktrees
+
+`npm run dev` runs `scripts/dev.sh`, which makes every checkout self-contained so
+several previews can run at once (the main clone plus any number of
+`.worktrees/*`) without port collisions or a shared database:
+
+- **Port** — auto-allocated and cached in `<worktree>/.dev-port`, seeded from a
+  hash of the worktree path and scanned upward until free. Override with `PORT`.
+- **Database** — defaults to `<worktree>/dev.db` (created and migrated on first
+  run), so each preview has its own data. Override with `DATABASE_URL`.
+- **Auth** — `BETTER_AUTH_URL` defaults to `http://localhost:<port>`, so cookies
+  and OAuth callbacks work on the allocated port. Override explicitly if needed.
+- **Node** — `better-sqlite3` needs the Node 24 ABI; the script prefers a
+  Node 24 binary when it can find one. Override with `DEV_NODE=/path/to/node`.
+
+The script prints the URL and DB it picked. Different worktrees are different
+Astro project roots, so they run concurrently; Astro still refuses two dev
+servers in the *same* directory.
 
 ```bash
-# Start dev server in background
-pkill -f "astro dev" 2>/dev/null || true
+# Start a preview for this worktree (prints http://localhost:<port>)
 nohup npm run dev > /tmp/convocados-dev.log 2>&1 &
 echo $! > /tmp/convocados-dev.pid
 
-# Wait for server to be ready
+# Wait for server to be ready (read the port the script chose)
+PORT=$(cat .dev-port)
 for i in $(seq 1 15); do
-  curl -s http://localhost:4321/api/health | grep -q '"ok"' && break
+  curl -s "http://localhost:$PORT/api/health" | grep -q '"ok"' && break
   sleep 1
 done
 
 # Check server logs
 cat /tmp/convocados-dev.log
 
-# Restart server
-kill $(cat /tmp/convocados-dev.pid) 2>/dev/null; sleep 1
-nohup npm run dev > /tmp/convocados-dev.log 2>&1 &
-echo $! > /tmp/convocados-dev.pid
-
 # Stop server
 kill $(cat /tmp/convocados-dev.pid) 2>/dev/null
 ```
+
+To run two previews side by side, run the above in two different worktrees — each
+writes its own `.dev-port` and `dev.db`. Pass an explicit `PORT` when you want a
+stable URL (e.g. for screenshots or Bruno).
 
 ## Bruno API Testing
 

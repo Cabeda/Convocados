@@ -67,3 +67,20 @@ interfaces, so no test asserts them:
   already normalized. Keeping the guards makes the functions safe for direct
   callers; they are documented here instead of forcing tests through impossible
   states.
+
+## Teams field / formations pass (2026-09-10)
+
+The team field view added two counted `src/lib/**` modules — `formations.ts`
+(sport formation presets) and the slot helpers in `teams.ts` (`placePlayer`,
+`setFormation`, `normalizeSlots`, `firstFreeSlot`, `applyFormationLayout`) —
+covered by `src/test/formations.test.ts` and `src/test/teams.test.ts`.
+
+| Metric     | Previous | After  | Gate |
+|------------|----------|--------|------|
+| Lines      | 94.96    | 94.99  | 94   |
+| Statements | 92.14    | 92.21  | 92   |
+| Functions  | 91.22    | 91.49  | 91   |
+| Branches   | 83.60    | 83.65  | 83   |
+
+No threshold was lowered; all gates held.
+

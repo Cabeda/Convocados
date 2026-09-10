@@ -351,4 +351,11 @@
     <string name="open_pickup">Offenes Pickup</string>
     <string name="claim_pickup">Dieses Pickup übernehmen</string>
     <string name="team_total_elo">Gesamt-ELO: %1$d</string>
+    <!-- Profile photo -->
+    <string name="profile_photo">Profilbild</string>
+    <string name="change_photo">Foto ändern</string>
+    <string name="remove_photo">Foto entfernen</string>
+    <string name="save_photo">Foto speichern</string>
+    <string name="zoom">Zoom</string>
+    <string name="photo_load_error">Bild konnte nicht geladen werden.</string>
 </resources>

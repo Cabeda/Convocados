@@ -54,6 +54,8 @@ teams:
     balanced-randomize: { web: true, android: true, wearos: false }
     manual-drag-assign: { web: true, android: true, wearos: false }
     view-teams: { web: true, android: true, wearos: true }
+    field-view: { web: true, android: false, wearos: false }
+    player-positions: { web: true, android: false, wearos: false }
 
 score-tracking:
   web: true
@@ -164,7 +166,7 @@ user-profile:
     view-stats: { web: true, android: true, wearos: false }
     view-other-profiles: { web: true, android: true, wearos: false }
     edit-name: { web: true, android: false, wearos: false }
-    edit-photo: { web: true, android: false, wearos: false }
+    edit-photo: { web: true, android: true, wearos: false }
 
 webhooks:
   web: true
