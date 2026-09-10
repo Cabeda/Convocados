@@ -2,22 +2,34 @@ package dev.convocados.ui.screen.profile
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import coil3.compose.SubcomposeAsyncImage
 import dev.convocados.BuildConfig
 import dev.convocados.R
 import dev.convocados.ui.components.SectionCard
@@ -32,11 +44,14 @@ import dev.convocados.data.datastore.SettingsStore
 import dev.convocados.data.push.PushTokenManager
 import dev.convocados.data.repository.UserRepository
 import dev.convocados.ui.theme.ThemeMode
+import dev.convocados.util.ProfilePhoto
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class LocaleOption(val code: String, val label: String)
@@ -70,6 +85,14 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun updateProfilePhoto(imageDataUrl: String) {
+        viewModelScope.launch { repository.uploadProfilePhoto(imageDataUrl) }
+    }
+
+    fun removeProfilePhoto() {
+        viewModelScope.launch { repository.removeProfilePhoto() }
+    }
+
     fun logout() { 
         viewModelScope.launch {
             pushTokenManager.unregisterCurrentToken()
@@ -98,6 +121,12 @@ fun ProfileScreen(
     var showLanguages by remember { mutableStateOf(false) }
     var showEditName by remember { mutableStateOf(false) }
     var editName by remember { mutableStateOf("") }
+    var pickedPhoto by remember { mutableStateOf<Uri?>(null) }
+    val scope = rememberCoroutineScope()
+
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) pickedPhoto = uri
+    }
 
     Column(
         Modifier
@@ -110,6 +139,12 @@ fun ProfileScreen(
         user?.let { u ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    ProfileAvatar(
+                        name = u.name,
+                        image = u.image,
+                        onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    )
+                    Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(u.name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge)
                         IconButton(onClick = { editName = u.name; showEditName = true }) {
@@ -117,6 +152,11 @@ fun ProfileScreen(
                         }
                     }
                     Text(u.email, color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodyMedium)
+                    if (u.image != null) {
+                        TextButton(onClick = { viewModel.removeProfilePhoto() }) {
+                            Text(stringResource(R.string.remove_photo), color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -254,6 +294,76 @@ fun ProfileScreen(
             },
         )
     }
+
+    // Profile photo crop
+    pickedPhoto?.let { uri ->
+        Dialog(
+            onDismissRequest = { pickedPhoto = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            ProfilePhotoCropScreen(
+                imageUri = uri,
+                onCancel = { pickedPhoto = null },
+                onConfirm = { cropped ->
+                    pickedPhoto = null
+                    scope.launch {
+                        val dataUrl = withContext(Dispatchers.Default) { ProfilePhoto.encode(cropped) }
+                        viewModel.updateProfilePhoto(dataUrl)
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileAvatar(name: String, image: String?, size: Dp = 96.dp, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (image != null) {
+            SubcomposeAsyncImage(
+                model = image,
+                contentDescription = name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                loading = { AvatarInitial(name) },
+                error = { AvatarInitial(name) },
+            )
+        } else {
+            AvatarInitial(name)
+        }
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.CameraAlt,
+                contentDescription = stringResource(R.string.change_photo),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AvatarInitial(name: String) {
+    Text(
+        name.trim().firstOrNull()?.uppercase() ?: "?",
+        color = MaterialTheme.colorScheme.onPrimary,
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold,
+    )
 }
 
 @Composable

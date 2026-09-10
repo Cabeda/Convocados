@@ -28,6 +28,26 @@ class UserRepository @Inject constructor(
         }
     }
 
+    /** Upload a cropped photo (JPEG data URL) and refresh the cached profile. */
+    suspend fun uploadProfilePhoto(imageDataUrl: String) {
+        try {
+            api.updateProfilePhoto(imageDataUrl)
+            refreshUserProfile()
+        } catch (e: Exception) {
+            uiEventManager.showSnackbar("Failed to update photo: ${e.message}")
+        }
+    }
+
+    /** Clear the profile photo and refresh the cached profile. */
+    suspend fun removeProfilePhoto() {
+        try {
+            api.removeProfilePhoto()
+            refreshUserProfile()
+        } catch (e: Exception) {
+            uiEventManager.showSnackbar("Failed to remove photo: ${e.message}")
+        }
+    }
+
     suspend fun clearUser() {
         userDao.clear()
     }
