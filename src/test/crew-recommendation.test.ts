@@ -106,3 +106,76 @@ it("rejects too many participants for the requested crew count", () => {
   expect(result.crews).toEqual([]);
   expect(result.errors[0]).toMatch(/require between/);
 });
+
+describe("recommendCrews with season history", () => {
+  it("keeps previous-season Crews together when sizes allow", () => {
+    const result = recommendCrews([
+      { membershipId: "m1", name: "A", rating: 1000, gamesPlayed: 5, previousCrewId: "crew-a" },
+      { membershipId: "m2", name: "B", rating: 990, gamesPlayed: 4, previousCrewId: "crew-a" },
+      { membershipId: "m3", name: "C", rating: 980, gamesPlayed: 6, previousCrewId: "crew-a" },
+      { membershipId: "m4", name: "D", rating: 970, gamesPlayed: 5, previousCrewId: "crew-b" },
+      { membershipId: "m5", name: "E", rating: 960, gamesPlayed: 4, previousCrewId: "crew-b" },
+      { membershipId: "m6", name: "F", rating: 950, gamesPlayed: 6, previousCrewId: "crew-b" },
+    ], 2);
+
+    expect(result.errors).toEqual([]);
+    const crewIndexFor = (membershipId: string) => result.crews.findIndex((crew) => crew.membershipIds.includes(membershipId));
+    expect(new Set(["m1", "m2", "m3"].map(crewIndexFor)).size).toBe(1);
+    expect(new Set(["m4", "m5", "m6"].map(crewIndexFor)).size).toBe(1);
+    expect(crewIndexFor("m1")).not.toBe(crewIndexFor("m4"));
+  });
+
+  it("keeps only actively-attending members grouped; inactive ones are free agents", () => {
+    const result = recommendCrews([
+      { membershipId: "m1", name: "A", rating: 1000, gamesPlayed: 5, previousCrewId: "crew-a" },
+      { membershipId: "m2", name: "B", rating: 990, gamesPlayed: 4, previousCrewId: "crew-a" },
+      { membershipId: "m3", name: "C", rating: 980, gamesPlayed: 0, previousCrewId: "crew-a" },
+      { membershipId: "m4", name: "D", rating: 970, gamesPlayed: 5 },
+      { membershipId: "m5", name: "E", rating: 960, gamesPlayed: 4 },
+      { membershipId: "m6", name: "F", rating: 950, gamesPlayed: 4 },
+    ], 2);
+
+    expect(result.errors).toEqual([]);
+    const crewOf = (membershipId: string) => result.crews.find((crew) => crew.membershipIds.includes(membershipId))!;
+    const crewA = crewOf("m1");
+    // The two active members of the old Crew stay together…
+    expect(crewA.membershipIds).toContain("m2");
+    // …and the inactive member (C) does not anchor the Crew around him.
+    expect(crewOf("m3").membershipIds).not.toEqual(expect.arrayContaining(["m1", "m2"]));
+    expect(result.crews.flatMap((crew) => crew.membershipIds).sort()).toEqual(["m1", "m2", "m3", "m4", "m5", "m6"]);
+  });
+
+  it("splits an oversized previous-season Crew into several balanced Crews", () => {
+    const players = Array.from({ length: 12 }, (_, index) => ({
+      membershipId: `m${index}`,
+      name: `P${index}`,
+      rating: 1200 - index * 10,
+      gamesPlayed: 5,
+      previousCrewId: "huge",
+    }));
+    const result = recommendCrews(players, 3);
+
+    expect(result.errors).toEqual([]);
+    expect(result.crews.map((crew) => crew.membershipIds.length).sort()).toEqual([4, 4, 4]);
+    const distinctCrews = new Set(result.crews.flatMap((crew) => crew.membershipIds.map(() => 0)).map((_, index) => {
+      return result.crews.findIndex((crew) => crew.membershipIds.includes(`m${index}`));
+    }));
+    expect(distinctCrews.size).toBeGreaterThan(1);
+  });
+
+  it("keeps the previous grouping when ratings are already balanced (small changes only)", () => {
+    const result = recommendCrews([
+      { membershipId: "m1", name: "A", rating: 1010, gamesPlayed: 5, previousCrewId: "crew-a" },
+      { membershipId: "m2", name: "B", rating: 1000, gamesPlayed: 4, previousCrewId: "crew-a" },
+      { membershipId: "m3", name: "C", rating: 990, gamesPlayed: 6, previousCrewId: "crew-a" },
+      { membershipId: "m4", name: "D", rating: 1000, gamesPlayed: 5, previousCrewId: "crew-b" },
+      { membershipId: "m5", name: "E", rating: 990, gamesPlayed: 4, previousCrewId: "crew-b" },
+      { membershipId: "m6", name: "F", rating: 980, gamesPlayed: 6, previousCrewId: "crew-b" },
+    ], 2);
+
+    expect(result.errors).toEqual([]);
+    const crewIndexFor = (membershipId: string) => result.crews.findIndex((crew) => crew.membershipIds.includes(membershipId));
+    expect(new Set(["m1", "m2", "m3"].map(crewIndexFor)).size).toBe(1);
+    expect(new Set(["m4", "m5", "m6"].map(crewIndexFor)).size).toBe(1);
+  });
+});
