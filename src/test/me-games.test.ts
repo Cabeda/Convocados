@@ -269,6 +269,28 @@ describe("GET /api/me/games", () => {
     expect(body.archivedAdmin[0].title).toBe("Archived Admin");
   });
 
+  it("returns custom team names, defaulting when unset", async () => {
+    const user = await seedUser();
+    mockAuthenticateRequest.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ user: { id: user.id, name: user.name } } as any);
+    const named = await seedEvent(user.id, { title: "Named" });
+    await prisma.event.update({
+      where: { id: named.id },
+      data: { teamOneName: "Whites", teamTwoName: "Blues" },
+    });
+    await seedEvent(user.id, { title: "Unnamed" });
+
+    const res = await GET(ctx());
+    const body = await res.json();
+    const namedRow = body.owned.find((g: { title: string }) => g.title === "Named");
+    const unnamed = body.owned.find((g: { title: string }) => g.title === "Unnamed");
+    expect(namedRow.teamOneName).toBe("Whites");
+    expect(namedRow.teamTwoName).toBe("Blues");
+    // Unset events fall back to the schema defaults, never blank.
+    expect((unnamed.teamOneName ?? "").length).toBeGreaterThan(0);
+    expect((unnamed.teamTwoName ?? "").length).toBeGreaterThan(0);
+  });
+
   it("still returns admin events when the EventFollow query fails", async () => {
     const user = await seedUser();
     mockAuthenticateRequest.mockResolvedValue(null);
