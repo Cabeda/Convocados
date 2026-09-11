@@ -436,4 +436,6 @@
     <string name="season_recommend_crews">Recommend crews</string>
     <string name="season_save_crews">Save crews</string>
     <string name="season_edit_details">Edit name &amp; dates</string>
+    <string name="season_members">Members</string>
+    <string name="season_add_player">Add player</string>
 </resources>
