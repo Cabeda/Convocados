@@ -393,6 +393,11 @@
     <string name="open_pickup">Open pickup</string>
     <string name="claim_pickup">Claim this pickup</string>
     <string name="team_total_elo">Total Elo: %1$d</string>
+    <string name="team_view_toggle_label">Team view</string>
+    <string name="team_view_list">List</string>
+    <string name="team_view_field">Field</string>
+    <string name="formation">Formation</string>
+    <string name="unplaced_players">Not placed</string>
     <!-- Profile photo -->
     <string name="profile_photo">Profile photo</string>
     <string name="change_photo">Change photo</string>
