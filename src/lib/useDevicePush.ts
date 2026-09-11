@@ -49,5 +49,5 @@ export function useDevicePush() {
     }
   }, [refresh]);
 
-  return { state, busy, enable, disable, refresh };
+  return { state, busy, enable, disable };
 }

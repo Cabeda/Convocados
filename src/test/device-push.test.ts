@@ -190,6 +190,27 @@ describe("disableDevicePush", () => {
     expect(String(del?.body)).toContain("https://push.example/ep1");
   });
 
+  it("unsubscribes the browser before deleting the server record", async () => {
+    const order: string[] = [];
+    const unsubscribe = vi.fn(async () => {
+      order.push("unsubscribe");
+      return true;
+    });
+    stubBrowser({
+      userAgent: DESKTOP_UA,
+      permission: "granted",
+      getSubscription: vi.fn(async () => ({ endpoint: "https://push.example/ep1", unsubscribe })),
+    });
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") order.push("delete");
+      return new Response("{}", { status: 200 });
+    }));
+
+    await disableDevicePush();
+
+    expect(order).toEqual(["unsubscribe", "delete"]);
+  });
+
   it("is a no-op (success) when this device has no subscription", async () => {
     stubBrowser({
       userAgent: DESKTOP_UA,
@@ -258,5 +279,48 @@ describe("enableDevicePush — unsupported and error paths", () => {
     const result = await enableDevicePush();
 
     expect(result).toMatchObject({ ok: false, reason: "error", state: "off" });
+  });
+
+  it("rolls back the browser subscription when the server rejects it", async () => {
+    const unsubscribe = vi.fn(async () => true);
+    stubBrowser({
+      userAgent: DESKTOP_UA,
+      permission: "granted",
+      subscribe: vi.fn(async () => ({
+        endpoint: "https://push.example/ep1",
+        toJSON: () => ({ endpoint: "https://push.example/ep1", keys: { p256dh: "p", auth: "a" } }),
+        unsubscribe,
+      })),
+    });
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url === "/api/push/vapid-public-key") {
+        return new Response(JSON.stringify({ publicKey: "AQAB" }), { status: 200 });
+      }
+      if (url === "/api/push/subscribe") {
+        return new Response("server error", { status: 500 });
+      }
+      return new Response("{}", { status: 200 });
+    }));
+
+    const result = await enableDevicePush();
+
+    expect(result).toMatchObject({ ok: false, reason: "error" });
+    expect(unsubscribe).toHaveBeenCalled();
+  });
+
+  it("does not write prompt state as a side effect of enabling a device", async () => {
+    stubBrowser({ userAgent: DESKTOP_UA, permission: "granted" });
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url === "/api/push/vapid-public-key") {
+        return new Response(JSON.stringify({ publicKey: "AQAB" }), { status: 200 });
+      }
+      return new Response("{}", { status: 200 });
+    }));
+
+    await enableDevicePush();
+
+    expect(calls).not.toContain("/api/users/me/push-prompt-state");
   });
 });

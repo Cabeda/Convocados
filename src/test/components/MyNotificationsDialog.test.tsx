@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck -- component test type suppression for @testing-library/react screen exports
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -50,14 +48,14 @@ function stubBrowser(opts: {
   if (opts.standalone !== undefined) {
     vi.spyOn(window, "matchMedia").mockReturnValue({
       matches: opts.standalone,
-      media: query,
+      media: "(display-mode: standalone)",
       onchange: null,
       addListener: () => {},
       removeListener: () => {},
       addEventListener: () => {},
       removeEventListener: () => {},
       dispatchEvent: () => false,
-    });
+    } as MediaQueryList);
   }
   vi.stubGlobal("Notification", {
     permission: opts.permission ?? "default",
@@ -66,7 +64,7 @@ function stubBrowser(opts: {
   return { subscription: makeSub(), unsubscribe };
 }
 
-function stubFetch(overrides: { follow?: Record<string, unknown> } = {}) {
+function stubFetch(overrides: { follow?: Record<string, unknown>; pushSubscribeStatus?: number } = {}) {
   const calls: Array<{ url: string; method?: string; body?: unknown }> = [];
   const fn = vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, method: init?.method, body: init?.body });
@@ -75,6 +73,9 @@ function stubFetch(overrides: { follow?: Record<string, unknown> } = {}) {
     }
     if (url === "/api/push/vapid-public-key") {
       return new Response(JSON.stringify({ publicKey: "AQAB" }), { status: 200 });
+    }
+    if (url === "/api/push/subscribe" && (init?.method ?? "GET") === "POST" && overrides.pushSubscribeStatus) {
+      return new Response("boom", { status: overrides.pushSubscribeStatus });
     }
     return new Response("{}", { status: 200 });
   });
@@ -163,5 +164,30 @@ describe("MyNotificationsDialog — this device section", () => {
     renderWithTheme(<MyNotificationsDialog eventId="e1" open onClose={() => {}} />);
 
     expect(await screen.findByText(/add convocados to your home screen/i)).toBeInTheDocument();
+  });
+
+  it("surfaces a message when enabling the device fails", async () => {
+    stubBrowser({ hasSubscription: false, permission: "granted" });
+    vi.stubGlobal("fetch", stubFetch({ pushSubscribeStatus: 500 }).fn);
+
+    const user = userEvent.setup();
+    renderWithTheme(<MyNotificationsDialog eventId="e1" open onClose={() => {}} />);
+
+    await user.click(await screen.findByRole("button", { name: /enable on this device/i }));
+
+    expect(await screen.findByText(/couldn't enable notifications/i)).toBeInTheDocument();
+  });
+
+  it("surfaces a message when disabling the device fails", async () => {
+    const { unsubscribe } = stubBrowser({ hasSubscription: true, permission: "granted" });
+    unsubscribe.mockRejectedValueOnce(new Error("unsubscribe failed"));
+    vi.stubGlobal("fetch", stubFetch().fn);
+
+    const user = userEvent.setup();
+    renderWithTheme(<MyNotificationsDialog eventId="e1" open onClose={() => {}} />);
+
+    await user.click(await screen.findByRole("button", { name: /turn off on this device/i }));
+
+    expect(await screen.findByText(/couldn't turn off notifications/i)).toBeInTheDocument();
   });
 });
