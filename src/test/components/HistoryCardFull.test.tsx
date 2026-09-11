@@ -105,7 +105,7 @@ function mockFetchSequence(handlers: Record<string, unknown>) {
   });
 }
 
-function renderCard(overrides: Partial<HistoryCardFullEntry> = {}, session: { user?: { id: string; name: string } } | null = { user: { id: "u-1", name: "João Fernandes" } }) {
+function renderCard(overrides: Partial<HistoryCardFullEntry> = {}, session: { user?: { id: string; name: string } } | null = { user: { id: "u-1", name: "João Fernandes" } }, extraProps: Record<string, unknown> = {}) {
   mockUseSession.mockReturnValue({ data: session, isPending: false });
   const entry = { ...baseEntry, ...overrides };
   return renderWithTheme(
@@ -123,6 +123,7 @@ function renderCard(overrides: Partial<HistoryCardFullEntry> = {}, session: { us
       onDelete={vi.fn()}
       knownPlayers={[]}
       playerRatings={[]}
+      {...extraProps}
     />,
   );
 }
@@ -681,5 +682,74 @@ describe("HistoryCardFull — tennis/padel score", () => {
     }, null);
 
     expect(screen.getByText("6-4 · 7-6 (7-5)")).toBeInTheDocument();
+  });
+});
+
+describe("HistoryCardFull — game settlement payments", () => {
+  const settlementConfig = {
+    gameId: "g-1",
+    mode: "tracked" as const,
+    payerName: "Gonçalo",
+    payerIsPlayer: true,
+    hasCost: true,
+    rows: [
+      { eventPlayerId: "ep-joao", name: "João Fernandes", amount: 8, status: "paid", isPayer: false },
+      { eventPlayerId: "ep-rodrigo", name: "Rodrigo Stange", amount: 8, status: "pending", isPayer: false },
+      { eventPlayerId: "ep-goncalo", name: "Gonçalo", amount: 8, status: "paid", isPayer: true },
+      { eventPlayerId: "ep-tf", name: "TF", amount: 8, status: "paid", isPayer: false },
+    ],
+  };
+
+  function mockSettlementFetch() {
+    const calls: Array<{ url: string; method: string; body: any }> = [];
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({
+        url,
+        method: init?.method ?? "GET",
+        body: init?.body ? JSON.parse(init.body as string) : null,
+      });
+      return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as unknown as typeof fetch;
+    return calls;
+  }
+
+  it("settles a pending share through the settlement API", async () => {
+    const calls = mockSettlementFetch();
+    const onSaved = vi.fn();
+    renderCard({ paymentConfig: settlementConfig }, undefined, { onPaymentsConfigSaved: onSaved });
+
+    const row = screen.getByText("Rodrigo Stange").closest("[data-player-row]") as HTMLElement;
+    await userEvent.click(within(row).getByText("€8"));
+
+    await waitFor(() => {
+      expect(calls.some((c) => c.url.includes("/payments/settlement") && c.method === "PUT")).toBe(true);
+    });
+    const put = calls.find((c) => c.url.includes("/payments/settlement") && c.method === "PUT")!;
+    expect(put.body).toEqual({ gameId: "g-1", eventPlayerId: "ep-rodrigo" });
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it("reverts a paid non-payer share through the settlement API", async () => {
+    const calls = mockSettlementFetch();
+    renderCard({ paymentConfig: settlementConfig });
+
+    const row = screen.getByText("João Fernandes").closest("[data-player-row]") as HTMLElement;
+    await userEvent.click(within(row).getByText("€8"));
+
+    await waitFor(() => {
+      expect(calls.some((c) => c.url.includes("/payments/settlement") && c.method === "DELETE")).toBe(true);
+    });
+    const del = calls.find((c) => c.url.includes("/payments/settlement") && c.method === "DELETE")!;
+    expect(del.body).toEqual({ gameId: "g-1", eventPlayerId: "ep-joao" });
+  });
+
+  it("does not call the API when clicking the auto-settled payer chip", async () => {
+    const calls = mockSettlementFetch();
+    renderCard({ paymentConfig: settlementConfig });
+
+    const row = screen.getByText("Gonçalo").closest("[data-player-row]") as HTMLElement;
+    await userEvent.click(within(row).getByText("€8"));
+
+    expect(calls.some((c) => c.url.includes("/payments/settlement"))).toBe(false);
   });
 });

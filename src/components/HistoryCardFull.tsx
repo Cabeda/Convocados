@@ -681,12 +681,43 @@ export function HistoryCardFull({
   };
 
   // ── Payments edit (auto-save on click, no manual save) ─────────────────────
-  const paymentSaveInFlight = useRef<Set<number>>(new Set());
-  const cyclePaymentStatus = async (idx: number) => {
-    // Prevent double-fire on the same chip while a PATCH is in flight
-    if (paymentSaveInFlight.current.has(idx)) return;
+  const paymentSaveInFlight = useRef<Set<string>>(new Set());
+  const cyclePaymentStatus = async (playerName: string) => {
+    // Game-backed entries settle through the durable per-game model; legacy
+    // (historical) entries keep the snapshot cycle. The payer's row auto-settles
+    // and is never editable.
+    const config = entry.paymentConfig;
+    if (config && config.mode === "tracked" && config.gameId) {
+      const row = config.rows.find((r) => r.name.toLowerCase() === playerName.toLowerCase());
+      if (!row || row.isPayer) return;
+      if (paymentSaveInFlight.current.has(playerName)) return;
+      paymentSaveInFlight.current.add(playerName);
+      try {
+        const res = await fetch(`/api/events/${eventId}/payments/settlement`, {
+          method: row.status === "paid" ? "DELETE" : "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ gameId: config.gameId, eventPlayerId: row.eventPlayerId }),
+        });
+        if (!res.ok) {
+          setError(t("somethingWentWrong"));
+          return;
+        }
+        await onPaymentsConfigSaved?.();
+      } catch {
+        setError(t("somethingWentWrong"));
+      } finally {
+        paymentSaveInFlight.current.delete(playerName);
+      }
+      return;
+    }
 
     const order: Array<"paid" | "pending"> = ["pending", "paid"];
+    const list = canEditPayments ? editablePayments : payments;
+    const idx = list.findIndex((p) => p.playerName.toLowerCase() === playerName.toLowerCase());
+    if (idx < 0) return;
+    // Prevent double-fire on the same chip while a PATCH is in flight
+    if (paymentSaveInFlight.current.has(playerName)) return;
+
     let nextSnapshot: PaymentSnapshotEntry[] = [];
     setEditablePayments((prev) => {
       nextSnapshot = prev.map((p, i) => {
@@ -697,9 +728,9 @@ export function HistoryCardFull({
       return nextSnapshot;
     });
 
-    paymentSaveInFlight.current.add(idx);
+    paymentSaveInFlight.current.add(playerName);
     await patch({ paymentsSnapshot: nextSnapshot });
-    paymentSaveInFlight.current.delete(idx);
+    paymentSaveInFlight.current.delete(playerName);
   };
 
   // ── MVP vote ───────────────────────────────────────────────────────────────
@@ -744,7 +775,7 @@ export function HistoryCardFull({
     name: string;
     teamIdx: number;
     elo: number | null;
-    paid: "paid" | "pending" | null;
+    paid: string | null;
     amount: number | null;
     participant: { id: string; name: string; voteCount: number } | null;
     isMvp: boolean;
@@ -754,9 +785,18 @@ export function HistoryCardFull({
     const participantsByName = new Map(
       (mvpState?.participants ?? []).map((p) => [p.name.toLowerCase(), p]),
     );
-    const paymentsByName = new Map(
-      (canEditPayments ? editablePayments : payments).map((p) => [p.playerName.toLowerCase(), p]),
-    );
+    // Game-backed entries render the durable settlement rows; legacy/historical
+    // entries fall back to the snapshot list.
+    const paymentsByName = new Map<string, { status: string; amount: number }>();
+    if (entry.paymentConfig?.mode === "tracked") {
+      for (const r of entry.paymentConfig.rows) {
+        paymentsByName.set(r.name.toLowerCase(), { status: r.status, amount: r.amount });
+      }
+    } else {
+      for (const p of (canEditPayments ? editablePayments : payments)) {
+        paymentsByName.set(p.playerName.toLowerCase(), { status: p.status, amount: p.amount });
+      }
+    }
     const eloByName = new Map<string, number>();
     // Saved ELO is the source of truth for past games. Only fall back to live
     // preview when the user is mid-edit and saved data isn't present.
@@ -785,6 +825,7 @@ export function HistoryCardFull({
     editableTeams, teams,
     editablePayments, payments,
     liveEloUpdates, entry.eloUpdates,
+    entry.paymentConfig,
     mvpState,
   ]);
 
@@ -1259,6 +1300,13 @@ export function HistoryCardFull({
                       const liveElo = liveEloUpdates.find((e) => e.name === row.name);
                       const elo = row.elo ?? liveElo?.delta ?? null;
                       const eloColor = elo === null ? "default" : elo > 0 ? "success" : elo < 0 ? "error" : "default";
+                      // Game-backed rows settle via the new model; the payer's
+                      // auto-settled row is never toggleable.
+                      const configRow = entry.paymentConfig?.mode === "tracked"
+                        ? entry.paymentConfig.rows.find((r) => r.name.toLowerCase() === row.name.toLowerCase())
+                        : undefined;
+                      const chipInteractive = canEditPayments
+                        && (!entry.paymentConfig || (!!configRow && !configRow.isPayer));
                       return (
                         <Box key={row.name} data-player-row={row.name}
                           draggable={canEditTeams}
@@ -1322,13 +1370,10 @@ export function HistoryCardFull({
                               label={`${formatAmount(row.amount)}`}
                               color={row.paid === "paid" ? "success" : "warning"}
                               variant={row.paid === "paid" ? "filled" : "outlined"}
-                              onClick={canEditPayments ? () => {
-                                const idx = (canEditPayments ? editablePayments : payments).findIndex((p) => p.playerName === row.name);
-                                if (idx >= 0) cyclePaymentStatus(idx);
-                              } : undefined}
+                              onClick={chipInteractive ? () => cyclePaymentStatus(row.name) : undefined}
                               icon={row.paid === "paid" ? <CheckCircleIcon sx={{ fontSize: 12 }} /> : undefined}
                               sx={{ height: 22, fontSize: "0.8rem", fontWeight: 600,
-                                ...(canEditPayments ? { cursor: "pointer" } : {}) }} />
+                                ...(chipInteractive ? { cursor: "pointer" } : {}) }} />
                           ) : (
                             <Box /> /* keep grid alignment */
                           )}

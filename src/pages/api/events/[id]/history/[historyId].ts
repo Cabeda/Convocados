@@ -8,6 +8,7 @@ import { computeHistoryDeltas } from "./index";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
 import { isSettledGameParticipant } from "../../../../../lib/participants.server";
+import { getGameSettlement, type CurrentGameSettlement } from "../../../../../lib/settlement.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
 
 const log = createLogger("history-patch");
@@ -66,6 +67,17 @@ async function buildSnapshotForGame(eventId: string, game: { id: string; dateTim
   };
 }
 
+/**
+ * The legacy-shaped payments list for a tracked game, derived from its durable
+ * GamePayment rows. Returns null for untracked games (no per-player tracking).
+ */
+function settlementPaymentsSnapshot(settlement: CurrentGameSettlement | null): string | null {
+  if (!settlement || settlement.mode !== "tracked" || settlement.rows.length === 0) return null;
+  return JSON.stringify(
+    settlement.rows.map((r) => ({ playerName: r.name, amount: r.amount, status: r.status })),
+  );
+}
+
 // GET /api/events/[id]/history/[historyId] — single history entry
 export const GET: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
@@ -81,6 +93,17 @@ export const GET: APIRoute = async ({ params, request }) => {
   const gh = await prisma.gameHistory.findUnique({ where: { id: params.historyId } });
   if (gh) {
     const eloUpdates = hideCompetitive ? null : (computeHistoryDeltas(await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "asc" } })).get(gh.id) ?? null);
+    // Resolve the source Game (same occurrence) so payments read from the
+    // durable GamePayment rows instead of the stale legacy snapshot.
+    const sourceGame = await prisma.game.findFirst({
+      where: { eventId, status: "played", dateTime: gh.dateTime },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+    const paymentConfig = sourceGame ? await getGameSettlement(eventId, sourceGame.id) : null;
+    const paymentsSnapshot = paymentConfig
+      ? settlementPaymentsSnapshot(paymentConfig)
+      : gh.paymentsSnapshot;
     return Response.json({
       id: gh.id,
       eventId: gh.eventId,
@@ -93,7 +116,8 @@ export const GET: APIRoute = async ({ params, request }) => {
       teamOneName: gh.teamOneName,
       teamTwoName: gh.teamTwoName,
       teamsSnapshot: gh.teamsSnapshot,
-      paymentsSnapshot: gh.paymentsSnapshot,
+      paymentsSnapshot,
+      paymentConfig,
       createdAt: gh.createdAt.toISOString(),
       source: gh.source,
       eloUpdates,
@@ -103,22 +127,13 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   const game = await prisma.game.findUnique({
     where: { id: params.historyId },
-    include: {
-      payments: { where: { archivedAt: null }, include: { eventPlayer: { select: { name: true } } } },
-      payerEventPlayer: { select: { name: true } },
-    },
   });
   if (game && game.status === "played") {
     const snap = await buildSnapshotForGame(eventId, game);
     // Payments come from the game's settlement rows (who actually paid), not
     // the stale eventCost snapshot.
-    const paymentsSnapshot = JSON.stringify(
-      game.payments.map((p) => ({
-        playerName: p.eventPlayer?.name ?? "?",
-        amount: p.amount,
-        status: p.status,
-      })),
-    );
+    const paymentConfig = await getGameSettlement(eventId, game.id);
+    const paymentsSnapshot = settlementPaymentsSnapshot(paymentConfig);
     return Response.json({
       id: game.id,
       eventId,
@@ -130,8 +145,9 @@ export const GET: APIRoute = async ({ params, request }) => {
       scoringType: getScoringType(event.sport),
       teamOneName: game.teamOneName ?? event.teamOneName ?? "Team 1",
       teamTwoName: game.teamTwoName ?? event.teamTwoName ?? "Team 2",
-      teamsSnapshot: JSON.stringify(snap.teamsSnapshot),
+      teamsSnapshot: snap.teamsSnapshot,
       paymentsSnapshot,
+      paymentConfig,
       createdAt: game.createdAt.toISOString(),
       source: "live",
       eloUpdates: null,

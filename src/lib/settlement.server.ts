@@ -68,6 +68,28 @@ export async function isEventParticipant(eventId: string, userId: string): Promi
 }
 
 /**
+ * Whether a user took part in a specific game — an active participant or the
+ * game's player-payer. Used to authorize settling a share from the history /
+ * game-detail page, matching what the card lets a participant edit.
+ */
+export async function isGameParticipant(eventId: string, gameId: string, userId: string): Promise<boolean> {
+  if (!userId) return false;
+  const ep = await prisma.eventPlayer.findFirst({ where: { eventId, userId }, select: { id: true } });
+  if (!ep) return false;
+  const [participant, payer] = await Promise.all([
+    prisma.gameParticipant.findFirst({
+      where: { ...activeParticipantsWhere(gameId), eventPlayerId: ep.id },
+      select: { id: true },
+    }),
+    prisma.game.findFirst({
+      where: { id: gameId, payerEventPlayerId: ep.id },
+      select: { id: true },
+    }),
+  ]);
+  return !!participant || !!payer;
+}
+
+/**
  * Per-participant share in euros (2dp), 0 when no cost or no participants.
  * The denominator is maxPlayers (the required playing slots) — the per-player
  * price is a fixed attribute of the event and does not change with how many
