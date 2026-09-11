@@ -42,6 +42,52 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun fetchSeasonRank(eventId: String, seasonId: String): SeasonRankPayload =
         client.get("/api/events/$eventId/seasons/$seasonId/rank")
 
+    // ── Seasons & Crews ──────────────────────────────────────────────────
+    suspend fun fetchSeasonDetail(eventId: String, seasonId: String): SeasonDetailResponse =
+        client.get("/api/events/$eventId/seasons/$seasonId")
+
+    suspend fun joinSeason(eventId: String, seasonId: String, eventPlayerId: String): OkResponse =
+        client.post("/api/events/$eventId/seasons/$seasonId/membership", JoinSeasonRequest(eventPlayerId))
+
+    suspend fun leaveSeason(eventId: String, seasonId: String): OkResponse =
+        client.delete("/api/events/$eventId/seasons/$seasonId/membership", null)
+
+    suspend fun saveCrews(eventId: String, seasonId: String, crews: List<CrewDraftInput>): OkResponse =
+        client.post("/api/events/$eventId/seasons/$seasonId/crews", SaveCrewsRequest(crews))
+
+    suspend fun recommendCrews(eventId: String, seasonId: String, crewCount: Int): OkResponse =
+        client.post("/api/events/$eventId/seasons/$seasonId/crews/recommend", RecommendCrewsRequest(crewCount))
+
+    suspend fun deleteCrew(eventId: String, seasonId: String, crewId: String): OkResponse =
+        client.delete("/api/events/$eventId/seasons/$seasonId/crews/$crewId", null)
+
+    suspend fun activateSeason(eventId: String, seasonId: String): OkResponse =
+        client.patch("/api/events/$eventId/seasons/$seasonId", SeasonActionRequest("activate"))
+
+    suspend fun completeSeason(eventId: String, seasonId: String): OkResponse =
+        client.patch("/api/events/$eventId/seasons/$seasonId", SeasonActionRequest("complete"))
+
+    suspend fun cancelSeason(eventId: String, seasonId: String, reason: String? = null): OkResponse =
+        client.patch("/api/events/$eventId/seasons/$seasonId", CancelSeasonRequest("cancel", reason))
+
+    suspend fun reopenSeason(eventId: String, seasonId: String): OkResponse =
+        client.patch("/api/events/$eventId/seasons/$seasonId", SeasonActionRequest("reopen"))
+
+    suspend fun updateSeasonDetails(eventId: String, seasonId: String, name: String, opensAt: String, closesAt: String): OkResponse =
+        client.patch("/api/events/$eventId/seasons/$seasonId", UpdateSeasonRequest(name = name, registrationOpensAt = opensAt, registrationClosesAt = closesAt))
+
+    suspend fun fetchSeasonCandidates(eventId: String, seasonId: String): SeasonCandidatesResponse =
+        client.get("/api/events/$eventId/seasons/$seasonId/memberships/candidates")
+
+    suspend fun bulkAddSeasonMembers(eventId: String, seasonId: String): OkResponse =
+        client.post("/api/events/$eventId/seasons/$seasonId/memberships/bulk")
+
+    suspend fun addSeasonMember(eventId: String, seasonId: String, eventPlayerId: String): OkResponse =
+        client.post("/api/events/$eventId/seasons/$seasonId/memberships", AddSeasonMemberRequest(eventPlayerId))
+
+    suspend fun removeSeasonMember(eventId: String, seasonId: String, membershipId: String): OkResponse =
+        client.delete("/api/events/$eventId/seasons/$seasonId/memberships/$membershipId", null)
+
     // ── Players ───────────────────────────────────────────────────────────
     suspend fun addPlayer(
         eventId: String,

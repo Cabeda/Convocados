@@ -18,6 +18,12 @@ sealed class Route(val route: String) {
     data class EventRankings(val id: String = "{eventId}") : Route("event/{eventId}/rankings") {
         companion object { fun create(id: String) = "event/$id/rankings" }
     }
+    data class EventSeasons(val id: String = "{eventId}") : Route("event/{eventId}/seasons") {
+        companion object { fun create(id: String) = "event/$id/seasons" }
+    }
+    data class SeasonDetail(val eventId: String = "{eventId}", val seasonId: String = "{seasonId}") : Route("event/{eventId}/seasons/{seasonId}") {
+        companion object { fun create(eventId: String, seasonId: String) = "event/$eventId/seasons/$seasonId" }
+    }
     data class EventPayments(val id: String = "{eventId}") : Route("event/{eventId}/payments") {
         companion object { fun create(id: String) = "event/$id/payments" }
     }
