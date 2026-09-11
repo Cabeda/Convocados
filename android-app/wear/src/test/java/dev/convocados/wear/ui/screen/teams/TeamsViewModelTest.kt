@@ -3,6 +3,7 @@ package dev.convocados.wear.ui.screen.teams
 import app.cash.turbine.test
 import dev.convocados.wear.data.api.TeamInfo
 import dev.convocados.wear.data.api.TeamsResponse
+import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
 import dev.convocados.wear.data.local.CheckInStore
 import dev.convocados.wear.data.repository.WearGameRepository
@@ -72,6 +73,48 @@ class TeamsViewModelTest {
             assertEquals("Charlie", state.unassigned[0].name)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `uses custom team names from the live teams response`() = runTest {
+        coEvery { repository.refreshTeams("event1") } returns Result.success(
+            TeamsResponse(TeamInfo("Whites", emptyList()), TeamInfo("Blues", emptyList()), emptyList(), emptyList(), 5)
+        )
+        every { repository.observePlayers("event1") } returns flowOf(samplePlayers)
+        coEvery { gameRepository.getGame("event1") } returns null
+
+        viewModel = TeamsViewModel(repository, gameRepository, checkInStore, workManager)
+        viewModel.load("event1")
+        advanceUntilIdle()
+
+        assertEquals("Whites", viewModel.uiState.value.teamOneName)
+        assertEquals("Blues", viewModel.uiState.value.teamTwoName)
+    }
+
+    @Test
+    fun `seeds team names from the cached event when offline`() = runTest {
+        coEvery { repository.refreshTeams("event1") } returns Result.failure(RuntimeException("offline"))
+        every { repository.observePlayers("event1") } returns flowOf(samplePlayers)
+        coEvery { gameRepository.getGame("event1") } returns WearGameEntity(
+            id = "event1",
+            title = "Tuesday",
+            location = "Pitch",
+            dateTime = "2026-09-11T18:00:00Z",
+            sport = "football-5v5",
+            maxPlayers = 10,
+            playerCount = 3,
+            teamOneName = "Whites",
+            teamTwoName = "Blues",
+            isRecurring = false,
+            type = "owned",
+        )
+
+        viewModel = TeamsViewModel(repository, gameRepository, checkInStore, workManager)
+        viewModel.load("event1")
+        advanceUntilIdle()
+
+        assertEquals("Whites", viewModel.uiState.value.teamOneName)
+        assertEquals("Blues", viewModel.uiState.value.teamTwoName)
     }
 
     @Test

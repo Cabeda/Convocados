@@ -5,6 +5,7 @@ import dev.convocados.wear.data.api.TeamInfo
 import dev.convocados.wear.data.api.TeamPlayer
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
+import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearPlayerDao
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
 import io.mockk.*
@@ -18,13 +19,14 @@ class WearTeamRepositoryTest {
 
     private val client = mockk<WearApiClient>()
     private val playerDao = mockk<WearPlayerDao>(relaxed = true)
+    private val gameDao = mockk<WearGameDao>(relaxed = true)
     private val pendingRosterChangeDao = mockk<PendingRosterChangeDao>(relaxed = true)
 
     private lateinit var repository: WearTeamRepository
 
     @Before
     fun setup() {
-        repository = WearTeamRepository(client, playerDao, pendingRosterChangeDao)
+        repository = WearTeamRepository(client, playerDao, gameDao, pendingRosterChangeDao)
     }
 
     @Test
@@ -42,6 +44,22 @@ class WearTeamRepositoryTest {
 
         assertTrue(result.isSuccess)
         coVerify { playerDao.refreshPlayers("e1", any()) }
+    }
+
+    @Test
+    fun `refreshTeams caches the custom team names`() = runTest {
+        val response = TeamsResponse(
+            teamOne = TeamInfo(name = "Whites", players = emptyList()),
+            teamTwo = TeamInfo(name = "Blues", players = emptyList()),
+            unassigned = emptyList(),
+            bench = emptyList(),
+            maxPlayers = 10,
+        )
+        coEvery { client.getTeams("e1") } returns response
+
+        repository.refreshTeams("e1")
+
+        coVerify { gameDao.updateTeamNames("e1", "Whites", "Blues") }
     }
 
     @Test
