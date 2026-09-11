@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
-import { getSettlementSummary, settleShare, unsettleShare, isEventParticipant } from "../../../../../lib/settlement.server";
+import { getSettlementSummary, settleShare, unsettleShare, isEventParticipant, isGameParticipant } from "../../../../../lib/settlement.server";
 
 /**
  * GET  /api/events/[id]/payments/settlement — people-first settlement summary.
@@ -48,17 +48,20 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (event.ownerId && !isOwner && !isAdmin) {
-    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
-  }
-
   const session = await getSession(request);
   const body = await request.json();
   const gameId = String(body.gameId ?? "");
   const eventPlayerId = String(body.eventPlayerId ?? "");
   if (!gameId || !eventPlayerId) {
     return Response.json({ error: "gameId and eventPlayerId are required." }, { status: 400 });
+  }
+
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+  // Owner/admin manage any game; a participant may settle within their own game.
+  if (event.ownerId && !isOwner && !isAdmin) {
+    if (!session?.user || !(await isGameParticipant(eventId, gameId, session.user.id))) {
+      return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+    }
   }
 
   const markedBy = session?.user?.id ?? event.ownerId ?? "unknown";
@@ -80,16 +83,20 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (event.ownerId && !isOwner && !isAdmin) {
-    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
-  }
-
   const body = await request.json();
   const gameId = String(body.gameId ?? "");
   const eventPlayerId = String(body.eventPlayerId ?? "");
   if (!gameId || !eventPlayerId) {
     return Response.json({ error: "gameId and eventPlayerId are required." }, { status: 400 });
+  }
+
+  const session = await getSession(request);
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+  // Owner/admin manage any game; a participant may revert within their own game.
+  if (event.ownerId && !isOwner && !isAdmin) {
+    if (!session?.user || !(await isGameParticipant(eventId, gameId, session.user.id))) {
+      return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+    }
   }
 
   try {

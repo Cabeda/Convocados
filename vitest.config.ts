@@ -128,11 +128,11 @@ export default defineConfig({
         "src/test/**",
       ],
       // Thresholds ratchet up to the measured values after each coverage pass
-      // (see docs/coverage.md). Latest teams field/formations pass (2026-09-10):
-      // lines 94.99, functions 91.49, branches 83.65, statements 92.21.
+      // (see docs/coverage.md). Latest history-settlement pass (2026-09-11):
+      // lines 95.27, functions 91.92, branches 83.81, statements 92.45.
       // Excluding __generated__/prisma (auto-generated Prisma 7 types).
       // Upgrade path: mutation testing (Stryker) validates assertion quality where coverage can't.
-      thresholds: { lines: 94, functions: 91, branches: 83, statements: 92 },
+      thresholds: { lines: 95, functions: 91, branches: 83, statements: 92 },
     },
   },
 });
