@@ -6,6 +6,7 @@ import dev.convocados.wear.data.api.TeamsResponse
 import dev.convocados.wear.data.api.UpdateTeamsRequest
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.local.dao.PendingRosterChangeDao
+import dev.convocados.wear.data.local.dao.WearGameDao
 import dev.convocados.wear.data.local.dao.WearPlayerDao
 import dev.convocados.wear.data.local.entity.PendingRosterChangeEntity
 import dev.convocados.wear.data.local.entity.WearPlayerEntity
@@ -20,6 +21,7 @@ import javax.inject.Singleton
 class WearTeamRepository @Inject constructor(
     private val client: WearApiClient,
     private val playerDao: WearPlayerDao,
+    private val gameDao: WearGameDao,
     private val pendingRosterChangeDao: PendingRosterChangeDao,
 ) {
     fun observePlayers(eventId: String): Flow<List<WearPlayerEntity>> =
@@ -33,6 +35,13 @@ class WearTeamRepository @Inject constructor(
         response.unassigned.forEach { players.add(it.toEntity(eventId, "unassigned")) }
         response.bench.forEach { players.add(it.toEntity(eventId, "bench")) }
         playerDao.refreshPlayers(eventId, players)
+        // Persist the organizer's custom team names so the labels survive
+        // offline and are reused across the Teams and Score screens.
+        gameDao.updateTeamNames(
+            eventId,
+            response.teamOne.name.ifBlank { "Team 1" },
+            response.teamTwo.name.ifBlank { "Team 2" },
+        )
         Result.success(response)
     } catch (e: Exception) {
         Log.w("WearTeamRepo", "Failed to refresh teams for $eventId", e)

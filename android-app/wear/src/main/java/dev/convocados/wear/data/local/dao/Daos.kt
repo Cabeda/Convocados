@@ -30,6 +30,9 @@ interface WearGameDao {
 
     @Query("SELECT * FROM wear_games WHERE id = :id")
     suspend fun getGame(id: String): WearGameEntity?
+
+    @Query("UPDATE wear_games SET teamOneName = :teamOneName, teamTwoName = :teamTwoName WHERE id = :id")
+    suspend fun updateTeamNames(id: String, teamOneName: String, teamTwoName: String)
 }
 
 @Dao
