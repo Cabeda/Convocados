@@ -78,7 +78,14 @@ class TeamsViewModel @Inject constructor(
                 // Show snapshot teams from the active game (read-only)
                 showSnapshotTeams(snapshot, activeHistory.teamOneName, activeHistory.teamTwoName)
             } else {
-                // No active game — show live roster (editable for upcoming game)
+                // No active game — show live roster (editable for upcoming game).
+                // Seed the labels from the cached event so custom team names show
+                // before (or without) a network round-trip.
+                gameRepository.getGame(eventId)?.let { game ->
+                    _uiState.update {
+                        it.copy(teamOneName = game.teamOneName, teamTwoName = game.teamTwoName)
+                    }
+                }
                 showLiveRoster(eventId)
             }
         }
@@ -130,8 +137,18 @@ class TeamsViewModel @Inject constructor(
                     }
                 }
             }
-            // Non-blocking refresh from API
-            launch { repository.refreshTeams(eventId) }
+            // Non-blocking refresh from API — also applies the event's custom
+            // team names (defaults to the current labels when unavailable).
+            launch {
+                repository.refreshTeams(eventId).onSuccess { response ->
+                    _uiState.update {
+                        it.copy(
+                            teamOneName = response.teamOne.name.ifBlank { it.teamOneName },
+                            teamTwoName = response.teamTwo.name.ifBlank { it.teamTwoName },
+                        )
+                    }
+                }
+            }
         }
     }
 
