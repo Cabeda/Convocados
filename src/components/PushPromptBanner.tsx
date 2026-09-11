@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { Alert, Button, Collapse, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Link, Snackbar } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import BlockIcon from "@mui/icons-material/Block";
+import AddToHomeScreenIcon from "@mui/icons-material/AddToHomeScreen";
 import { useT } from "~/lib/useT";
-import { resolveIosHelpLink } from "~/lib/pushPrompt";
+import { resolveIosHelpLink, isIos, isStandalone, installBannerDismissed } from "~/lib/pushPrompt";
 
 const DISMISS_KEY = "push_prompt_dismissed_at";
 const COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days (tightened from 30d after #463)
@@ -33,6 +34,7 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
   const t = useT();
   const [visible, setVisible] = useState(false);
   const [denied, setDenied] = useState(false);
+  const [needsInstall, setNeedsInstall] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
     open: false,
     message: "",
@@ -41,6 +43,22 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    const ua = navigator.userAgent;
+    const iosTab = isIos(ua) && !isStandalone({
+      displayModeStandalone: window.matchMedia?.("(display-mode: standalone)").matches ?? false,
+      navigatorStandalone: (navigator as unknown as { standalone?: boolean }).standalone,
+    });
+
+    if (iosTab) {
+      // iOS Web Push only works from a Home Screen web app. The global install
+      // banner already pitches that, so only speak up once it's been dismissed
+      // (otherwise the two banners duplicate the same message).
+      const granted = typeof Notification !== "undefined" && Notification.permission === "granted";
+      if (!granted && installBannerDismissed(localStorage)) setNeedsInstall(true);
+      return;
+    }
+
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
     if (Notification.permission === "denied") {
@@ -123,6 +141,14 @@ export function PushPromptBanner({ followCount, forceOnEventDetail = false, high
     }).catch(() => {});
     setVisible(false);
   };
+
+  if (needsInstall) {
+    return (
+      <Alert severity="info" icon={<AddToHomeScreenIcon />} sx={{ mb: 2 }}>
+        {t("notifyDeviceNeedsInstall")}
+      </Alert>
+    );
+  }
 
   if (denied) {
     const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";

@@ -3,9 +3,8 @@ import {
   isIos,
   isStandalone,
   resolveIosHelpLink,
-  pickActiveBanner,
-  type PermissionState,
-  type BannerContext,
+  installBannerDismissed,
+  INSTALL_BANNER_DISMISS_KEY,
 } from "~/lib/pushPrompt";
 
 // ── Platform detection ──────────────────────────────────────────────────────
@@ -89,71 +88,29 @@ describe("resolveIosHelpLink", () => {
   });
 });
 
-// ── pickActiveBanner — single-source-of-truth resolver ──────────────────────
+// ── install banner dismissal ────────────────────────────────────────────────
 
-function ctx(over: Partial<BannerContext> = {}): BannerContext {
-  return {
-    isStandalone: false,
-    isIos: false,
-    permission: "default" as PermissionState,
-    installDismissed: false,
-    pushPromptVisible: true,
-    ...over,
-  };
+function storageWith(value: string | null) {
+  return { getItem: (key: string) => (key === INSTALL_BANNER_DISMISS_KEY ? value : null) };
 }
 
-describe("pickActiveBanner", () => {
-  describe("both suppressed when standalone", () => {
-    it("returns 'none' when app is installed (PWA)", () => {
-      expect(pickActiveBanner(ctx({ isStandalone: true }))).toBe("none");
-    });
+describe("installBannerDismissed", () => {
+  const now = 1_000_000_000_000_000;
+
+  it("is false when nothing was stored", () => {
+    expect(installBannerDismissed(storageWith(null), now)).toBe(false);
   });
 
-  describe("permission already granted", () => {
-    it("hides push banner, keeps install banner as install path", () => {
-      // On desktop: install banner still useful for "open as app" UX
-      // On iOS: install banner useless (already granted means user is on this device, possibly installed)
-      expect(pickActiveBanner(ctx({ permission: "granted", isIos: false }))).toBe("install");
-      expect(pickActiveBanner(ctx({ permission: "granted", isIos: true }))).toBe("none");
-    });
+  it("is true when dismissed within the cooldown window", () => {
+    expect(installBannerDismissed(storageWith(String(now - 24 * 60 * 60 * 1000)), now)).toBe(true);
   });
 
-  describe("permission denied", () => {
-    it("hides push banner (denied = terminal), keeps install banner", () => {
-      expect(pickActiveBanner(ctx({ permission: "denied" }))).toBe("install");
-    });
-    it("hides both on iOS — install doesn't help a denied permission", () => {
-      // Actually on iOS PWA install can change permission context, so still show install
-      // But if standalone + denied, no banners
-      expect(pickActiveBanner(ctx({ permission: "denied", isIos: true, isStandalone: true }))).toBe("none");
-    });
+  it("is false once the cooldown has elapsed", () => {
+    expect(installBannerDismissed(storageWith(String(now - 8 * 24 * 60 * 60 * 1000)), now)).toBe(false);
   });
 
-  describe("permission default", () => {
-    it("prefers push banner on desktop", () => {
-      expect(pickActiveBanner(ctx({ permission: "default", isIos: false }))).toBe("push");
-    });
-    it("prefers install banner on iOS (push needs PWA install first)", () => {
-      expect(pickActiveBanner(ctx({ permission: "default", isIos: true }))).toBe("install");
-    });
-    it("falls back to install when push prompt was hidden by internal logic", () => {
-      expect(pickActiveBanner(ctx({ permission: "default", pushPromptVisible: false }))).toBe("install");
-    });
-  });
-
-  describe("dismissals", () => {
-    it("install dismissed → can still show push", () => {
-      expect(pickActiveBanner(ctx({ permission: "default", installDismissed: true }))).toBe("push");
-    });
-    it("push dismissed (via internal flag) → can still show install", () => {
-      expect(pickActiveBanner(ctx({ permission: "default", pushPromptVisible: false, installDismissed: false }))).toBe("install");
-    });
-    it("both dismissed → none", () => {
-      expect(pickActiveBanner(ctx({
-        permission: "default",
-        installDismissed: true,
-        pushPromptVisible: false,
-      }))).toBe("none");
-    });
+  it("is false for a malformed timestamp", () => {
+    expect(installBannerDismissed(storageWith("not-a-number"), now)).toBe(false);
   });
 });
+
