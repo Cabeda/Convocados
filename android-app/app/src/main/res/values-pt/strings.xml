@@ -390,4 +390,8 @@
     <string name="season_reopen">Reabrir Época</string>
     <string name="crew_league">Liga de Equipas</string>
     <string name="crews">Equipas</string>
+    <string name="season_enroll_recent">Inscrever jogadores recentes</string>
+    <string name="season_recommend_crews">Recomendar equipas</string>
+    <string name="season_save_crews">Guardar equipas</string>
+    <string name="season_edit_details">Editar nome e datas</string>
 </resources>

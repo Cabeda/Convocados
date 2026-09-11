@@ -924,6 +924,11 @@ data class SaveCrewsRequest(
 )
 
 @Serializable
+data class RecommendCrewsResponse(
+    val crews: List<CrewDraftInput> = emptyList(),
+)
+
+@Serializable
 data class JoinSeasonRequest(val eventPlayerId: String)
 
 @Serializable

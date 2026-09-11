@@ -55,7 +55,7 @@ class ConvocadosApi @Inject constructor(private val client: ApiClient) {
     suspend fun saveCrews(eventId: String, seasonId: String, crews: List<CrewDraftInput>): OkResponse =
         client.post("/api/events/$eventId/seasons/$seasonId/crews", SaveCrewsRequest(crews))
 
-    suspend fun recommendCrews(eventId: String, seasonId: String, crewCount: Int): OkResponse =
+    suspend fun recommendCrews(eventId: String, seasonId: String, crewCount: Int): RecommendCrewsResponse =
         client.post("/api/events/$eventId/seasons/$seasonId/crews/recommend", RecommendCrewsRequest(crewCount))
 
     suspend fun deleteCrew(eventId: String, seasonId: String, crewId: String): OkResponse =
