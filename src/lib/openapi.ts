@@ -222,6 +222,90 @@ export const openApiSpec = {
         responses: { "200": { description: "Season Rank ladder" }, ...errorResponses },
       },
     },
+    "/api/events/{id}/seasons/{seasonId}": {
+      get: {
+        summary: "Get a Season's detail (members, crews, standings)",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Season detail" }, ...errorResponses },
+      },
+      patch: {
+        summary: "Update, activate, complete, cancel, or reopen a Season",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Season updated" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/membership": {
+      post: {
+        summary: "Join a Season",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Joined" }, ...errorResponses },
+      },
+      delete: {
+        summary: "Leave a Season",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Left" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/memberships": {
+      post: {
+        summary: "Add a Season member (admin)",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Member added" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/memberships/bulk": {
+      post: {
+        summary: "Bulk-enroll recent players as Season members (admin)",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Members added" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/memberships/candidates": {
+      get: {
+        summary: "List candidate players for a Season (admin)",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Candidates" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/memberships/{membershipId}": {
+      delete: {
+        summary: "Remove a Season member (admin)",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam, { name: "membershipId", in: "path" as const, required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Member removed" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/crews": {
+      post: {
+        summary: "Save Season Crews (admin)",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Crews saved" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/crews/recommend": {
+      post: {
+        summary: "Recommend balanced Season Crews (admin)",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam],
+        responses: { "200": { description: "Crews recommended" }, ...errorResponses },
+      },
+    },
+    "/api/events/{id}/seasons/{seasonId}/crews/{crewId}": {
+      delete: {
+        summary: "Delete a Season Crew (admin)",
+        tags: ["Seasons"],
+        parameters: [eventIdParam, seasonIdParam, { name: "crewId", in: "path" as const, required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Crew deleted" }, ...errorResponses },
+      },
+    },
     "/api/events/{id}/hide-elo-in-teams": {
       put: {
         summary: "Toggle hiding ELO in team view",

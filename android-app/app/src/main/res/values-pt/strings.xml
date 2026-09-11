@@ -373,4 +373,21 @@
     <string name="tier_down_title">Nova época, recomeço</string>
     <string name="tier_down_body">A tua Classificação foi reiniciada. Estás de volta em %1$s — sobe outra vez.</string>
     <string name="continue_action">Continuar</string>
+    <string name="seasons">Épocas</string>
+    <string name="no_seasons">Ainda não há épocas.</string>
+    <string name="past_seasons">Épocas anteriores</string>
+    <string name="season_status_registration">Inscrições</string>
+    <string name="season_status_active">Ativa</string>
+    <string name="season_status_review">Em revisão</string>
+    <string name="season_status_completed">Concluída</string>
+    <string name="season_status_cancelled">Cancelada</string>
+    <string name="season_join">Entrar na Época</string>
+    <string name="season_leave">Sair da Época</string>
+    <string name="season_manage">Gerir</string>
+    <string name="season_activate">Começar Época</string>
+    <string name="season_complete">Concluir Época</string>
+    <string name="season_cancel">Cancelar Época</string>
+    <string name="season_reopen">Reabrir Época</string>
+    <string name="crew_league">Liga de Equipas</string>
+    <string name="crews">Equipas</string>
 </resources>
