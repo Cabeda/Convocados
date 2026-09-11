@@ -126,6 +126,7 @@ data class EventScreenState(
     val teamMoveAnimation: TeamMoveAnimation? = null,
     val teamShuffleAnimation: Boolean = false,
     val teamRatings: Map<String, Int>? = null,
+    val teamViewMode: TeamViewMode = TeamViewMode.List,
     val isFollowing: Boolean = false,
     val isPlayer: Boolean = false,
     val isAdmin: Boolean = false,
@@ -181,6 +182,9 @@ data class TeamMoveUndo(
     val previousTeamOneIds: List<String>,
     val previousTeamTwoIds: List<String>,
 )
+
+/** How the teams section renders: the classic list or the drag-and-drop pitch. */
+enum class TeamViewMode { List, Field }
 
 /** Where an add-player suggestion comes from — drives the transparent label. */
 enum class SuggestionSource { EVENT, CO_PLAY }
@@ -659,6 +663,10 @@ class EventDetailViewModel @Inject constructor(
                     _state.value = _state.value.copy(teamShuffleAnimation = false)
                 }
         }
+    }
+
+    fun setTeamViewMode(mode: TeamViewMode) {
+        _state.value = _state.value.copy(teamViewMode = mode)
     }
 
     fun movePlayerToTeam(eventId: String, playerId: String, playerName: String, toTeamOne: Boolean) {
@@ -1259,11 +1267,25 @@ fun EventDetailScreen(
                             if (teams != null && teams.size == 2) {
                                 Card(Modifier.fillMaxWidth()) {
                                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        Text("Teams", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            HeroTeamColumn(teams[0], ev, false, viewModel, eventId, state.teamMoveAnimation, state.teamShuffleAnimation, state.teamRatings, Modifier.weight(1f), MaterialTheme.colorScheme.primary)
-                                            VsBadge()
-                                            HeroTeamColumn(teams[1], ev, true, viewModel, eventId, state.teamMoveAnimation, state.teamShuffleAnimation, state.teamRatings, Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+                                            Text(stringResource(R.string.teams), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).semantics { heading() })
+                                            TeamViewToggle(selected = state.teamViewMode, onSelect = { viewModel.setTeamViewMode(it) })
+                                        }
+                                        if (state.teamViewMode == TeamViewMode.Field) {
+                                            TeamFieldView(
+                                                teams = teams,
+                                                sport = ev.sport,
+                                                ratings = state.teamRatings,
+                                                playerIds = ev.players.associate { it.name to it.id },
+                                                canEdit = true,
+                                                onMove = { pid, name, toTeamOne -> viewModel.movePlayerToTeam(eventId, pid, name, toTeamOne) },
+                                            )
+                                        } else {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                HeroTeamColumn(teams[0], ev, false, viewModel, eventId, state.teamMoveAnimation, state.teamShuffleAnimation, state.teamRatings, Modifier.weight(1f), MaterialTheme.colorScheme.primary)
+                                                VsBadge()
+                                                HeroTeamColumn(teams[1], ev, true, viewModel, eventId, state.teamMoveAnimation, state.teamShuffleAnimation, state.teamRatings, Modifier.weight(1f), MaterialTheme.colorScheme.secondary)
+                                            }
                                         }
                                     }
                                 }
@@ -2166,3 +2188,19 @@ private fun OfflineStaleBanner() {
 }
 @Composable fun HistoryCard(h: GameHistory, editingScoreId: String?, scoreOne: String, scoreTwo: String, onClick:()->Unit={}, onEditScore:()->Unit, onScoreOneChange:(String)->Unit, onScoreTwoChange:(String)->Unit, onSaveScore:()->Unit){ Card(modifier=Modifier.fillMaxWidth().padding(bottom=6.dp).clickable(onClick=onClick)){ Column(Modifier.padding(12.dp)){ Text(formatRelativeDate(h.dateTime), color=MaterialTheme.colorScheme.outline, style=MaterialTheme.typography.bodySmall); if(h.scoreOne!=null&&h.scoreTwo!=null) Text("${h.teamOneName} ${h.scoreOne} - ${h.scoreTwo} ${h.teamTwoName}", style=MaterialTheme.typography.titleSmall, modifier=Modifier.clickable(onClick=onEditScore)) else { if(editingScoreId==h.id){ Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp), modifier=Modifier.padding(top=4.dp)){ OutlinedTextField(value=scoreOne, onValueChange=onScoreOneChange, modifier=Modifier.width(50.dp), singleLine=true); Text("-", color=MaterialTheme.colorScheme.outline, fontWeight=FontWeight.Bold); OutlinedTextField(value=scoreTwo, onValueChange=onScoreTwoChange, modifier=Modifier.width(50.dp), singleLine=true); Button(onClick=onSaveScore){ Text(stringResource(R.string.save)) } } } else TextButton(onClick=onEditScore){ Text(stringResource(R.string.add_score), color=MaterialTheme.colorScheme.primary, fontWeight=FontWeight.SemiBold)} } ; h.eloUpdates?.takeIf{it.isNotEmpty()}?.let{ ups-> Row(Modifier.padding(top=6.dp), horizontalArrangement=Arrangement.spacedBy(6.dp)){ ups.forEach{eu-> Text("${eu.name} ${if(eu.delta>0) "+" else ""}${eu.delta}", color=if(eu.delta>0) MaterialTheme.colorScheme.primary else if(eu.delta<0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline, style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.SemiBold)}} } } } }
 
+
+@Composable
+private fun TeamViewToggle(selected: TeamViewMode, onSelect: (TeamViewMode) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        FilterChip(
+            selected = selected == TeamViewMode.List,
+            onClick = { onSelect(TeamViewMode.List) },
+            label = { Text(stringResource(R.string.team_view_list)) },
+        )
+        FilterChip(
+            selected = selected == TeamViewMode.Field,
+            onClick = { onSelect(TeamViewMode.Field) },
+            label = { Text(stringResource(R.string.team_view_field)) },
+        )
+    }
+}
