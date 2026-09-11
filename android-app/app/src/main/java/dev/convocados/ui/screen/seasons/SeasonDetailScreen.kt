@@ -20,6 +20,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.convocados.R
 import dev.convocados.data.api.ApiException
 import dev.convocados.data.api.ConvocadosApi
+import dev.convocados.data.api.CrewDraftInput
 import dev.convocados.data.api.SeasonDetail
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +41,8 @@ class SeasonDetailViewModel @Inject constructor(
     val busy: StateFlow<Boolean> = _busy
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message
+    private val _crewDrafts = MutableStateFlow<List<CrewDraftInput>>(emptyList())
+    val crewDrafts: StateFlow<List<CrewDraftInput>> = _crewDrafts
 
     fun load(eventId: String, seasonId: String) {
         viewModelScope.launch {
@@ -71,6 +74,31 @@ class SeasonDetailViewModel @Inject constructor(
     fun cancel(eventId: String, seasonId: String, reason: String?) = action(eventId, seasonId) { api.cancelSeason(eventId, seasonId, reason) }
     fun reopen(eventId: String, seasonId: String) = action(eventId, seasonId) { api.reopenSeason(eventId, seasonId) }
 
+    fun bulkEnroll(eventId: String, seasonId: String) = action(eventId, seasonId) { api.bulkAddSeasonMembers(eventId, seasonId) }
+
+    fun updateDetails(eventId: String, seasonId: String, name: String, opensAt: String, closesAt: String) =
+        action(eventId, seasonId) { api.updateSeasonDetails(eventId, seasonId, name, opensAt, closesAt) }
+
+    fun recommendCrews(eventId: String, seasonId: String, crewCount: Int) {
+        viewModelScope.launch {
+            _busy.value = true
+            runCatching { api.recommendCrews(eventId, seasonId, crewCount) }
+                .onSuccess { _crewDrafts.value = it.crews }
+                .onFailure { _message.value = it.message }
+            _busy.value = false
+        }
+    }
+
+    fun saveCrews(eventId: String, seasonId: String) {
+        viewModelScope.launch {
+            _busy.value = true
+            runCatching { api.saveCrews(eventId, seasonId, _crewDrafts.value) }
+                .onSuccess { _crewDrafts.value = emptyList(); load(eventId, seasonId) }
+                .onFailure { _message.value = it.message }
+            _busy.value = false
+        }
+    }
+
     fun clearMessage() { _message.value = null }
 }
 
@@ -84,6 +112,12 @@ fun SeasonDetailScreen(
 ) {
     val season by viewModel.season.collectAsStateWithLifecycle()
     val canManage by viewModel.canManage.collectAsStateWithLifecycle()
+    val crewDrafts by viewModel.crewDrafts.collectAsStateWithLifecycle()
+    var crewCount by remember { mutableIntStateOf(2) }
+    var showEdit by remember { mutableStateOf(false) }
+    var editName by remember { mutableStateOf("") }
+    var editOpens by remember { mutableStateOf("") }
+    var editCloses by remember { mutableStateOf("") }
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
@@ -92,6 +126,26 @@ fun SeasonDetailScreen(
     LaunchedEffect(eventId, seasonId) { viewModel.load(eventId, seasonId) }
     LaunchedEffect(message) {
         message?.let { snackbarHostState.showSnackbar(it); viewModel.clearMessage() }
+    }
+
+    if (showEdit) {
+        AlertDialog(
+            onDismissRequest = { showEdit = false },
+            title = { Text(stringResource(R.string.season_edit_details)) },
+            text = {
+                Column {
+                    OutlinedTextField(value = editName, onValueChange = { editName = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = editOpens, onValueChange = { editOpens = it }, label = { Text("Opens (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = editCloses, onValueChange = { editCloses = it }, label = { Text("Closes (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.updateDetails(eventId, seasonId, editName, editOpens, editCloses); showEdit = false }) { Text(stringResource(R.string.save)) }
+            },
+            dismissButton = { TextButton(onClick = { showEdit = false }) { Text(stringResource(R.string.cancel)) } },
+        )
     }
 
     Scaffold(
@@ -155,6 +209,45 @@ fun SeasonDetailScreen(
                                 Text(crew.name, fontWeight = FontWeight.Bold)
                                 Text(crew.members.joinToString(", ") { it.name }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             }
+                        }
+                    }
+                }
+
+                // Admin setup (registration only)
+                if (canManage && s.status == "registration") {
+                    item { Text(stringResource(R.string.season_manage), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { viewModel.bulkEnroll(eventId, seasonId) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.season_enroll_recent))
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(stringResource(R.string.crews) + ": $crewCount", modifier = Modifier.weight(1f))
+                                OutlinedButton(onClick = { if (crewCount > 2) crewCount-- }, enabled = !busy) { Text("\u2212") }
+                                Spacer(Modifier.width(8.dp))
+                                OutlinedButton(onClick = { crewCount++ }, enabled = !busy) { Text("+") }
+                            }
+                            Button(onClick = { viewModel.recommendCrews(eventId, seasonId, crewCount) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.season_recommend_crews))
+                            }
+                            crewDrafts.forEach { draft ->
+                                Text("${draft.name} \u00B7 ${draft.membershipIds.size}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            }
+                            if (crewDrafts.isNotEmpty()) {
+                                Button(onClick = { viewModel.saveCrews(eventId, seasonId) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.season_save_crews))
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    editName = s.name
+                                    editOpens = s.registrationOpensAt.take(10)
+                                    editCloses = s.registrationClosesAt.take(10)
+                                    showEdit = true
+                                },
+                                enabled = !busy,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text(stringResource(R.string.season_edit_details)) }
                         }
                     }
                 }
