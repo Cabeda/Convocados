@@ -20,6 +20,8 @@ import { useT } from "~/lib/useT";
 import CrewProposalPanel from "./CrewProposalPanel";
 import { LeaderboardTables, type LeaderboardPayload } from "./LeaderboardTables";
 import { SeasonRankTable } from "./SeasonRankTable";
+import { SeasonDifficultyPrototype } from "./SeasonDifficultyPrototype";
+import { PrototypeVariantSwitcher, usePrototypeVariant } from "./PrototypeVariantSwitcher";
 
 interface Member {
   membershipId: string;
@@ -91,6 +93,8 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const [pendingCrewDelete, setPendingCrewDelete] = useState<{ index: number; id?: string; name: string } | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  // PROTOTYPE: event-difficulty UI variants (?variant=A|B|C). Remove with the prototype.
+  const [prototypeVariant, setPrototypeVariant] = usePrototypeVariant();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -572,6 +576,14 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
 
             {(season.status === "active" || season.status === "review" || season.status === "completed") && (
               <SeasonRankTable eventId={eventId} seasonId={seasonId} standings={leaderboard?.players} />
+            )}
+
+            {/* PROTOTYPE: event-difficulty variants. Remove with the prototype. */}
+            {!import.meta.env.PROD && (season.status === "active" || season.status === "review" || season.status === "completed") && (
+              <>
+                <SeasonDifficultyPrototype variant={prototypeVariant} />
+                <PrototypeVariantSwitcher current={prototypeVariant} onChange={setPrototypeVariant} labels={{ A: "Compact strip", B: "Ranked list", C: "Difficulty axis" }} />
+              </>
             )}
 
             {!isAdmin ? (
