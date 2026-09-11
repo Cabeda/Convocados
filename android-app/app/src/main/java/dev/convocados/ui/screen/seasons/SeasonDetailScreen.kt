@@ -1,10 +1,12 @@
 package dev.convocados.ui.screen.seasons
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +24,7 @@ import dev.convocados.data.api.ApiException
 import dev.convocados.data.api.ConvocadosApi
 import dev.convocados.data.api.CrewDraftInput
 import dev.convocados.data.api.SeasonDetail
+import dev.convocados.data.api.SeasonMemberCandidate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -43,6 +46,8 @@ class SeasonDetailViewModel @Inject constructor(
     val message: StateFlow<String?> = _message
     private val _crewDrafts = MutableStateFlow<List<CrewDraftInput>>(emptyList())
     val crewDrafts: StateFlow<List<CrewDraftInput>> = _crewDrafts
+    private val _candidates = MutableStateFlow<List<SeasonMemberCandidate>>(emptyList())
+    val candidates: StateFlow<List<SeasonMemberCandidate>> = _candidates
 
     fun load(eventId: String, seasonId: String) {
         viewModelScope.launch {
@@ -99,6 +104,20 @@ class SeasonDetailViewModel @Inject constructor(
         }
     }
 
+    fun loadCandidates(eventId: String, seasonId: String) {
+        viewModelScope.launch {
+            runCatching { api.fetchSeasonCandidates(eventId, seasonId) }
+                .onSuccess { _candidates.value = it.candidates }
+                .onFailure { _message.value = it.message }
+        }
+    }
+
+    fun addMember(eventId: String, seasonId: String, eventPlayerId: String) =
+        action(eventId, seasonId) { api.addSeasonMember(eventId, seasonId, eventPlayerId) }
+
+    fun removeMember(eventId: String, seasonId: String, membershipId: String) =
+        action(eventId, seasonId) { api.removeSeasonMember(eventId, seasonId, membershipId) }
+
     fun clearMessage() { _message.value = null }
 }
 
@@ -113,6 +132,8 @@ fun SeasonDetailScreen(
     val season by viewModel.season.collectAsStateWithLifecycle()
     val canManage by viewModel.canManage.collectAsStateWithLifecycle()
     val crewDrafts by viewModel.crewDrafts.collectAsStateWithLifecycle()
+    val candidates by viewModel.candidates.collectAsStateWithLifecycle()
+    var showAdd by remember { mutableStateOf(false) }
     var crewCount by remember { mutableIntStateOf(2) }
     var showEdit by remember { mutableStateOf(false) }
     var editName by remember { mutableStateOf("") }
@@ -126,6 +147,27 @@ fun SeasonDetailScreen(
     LaunchedEffect(eventId, seasonId) { viewModel.load(eventId, seasonId) }
     LaunchedEffect(message) {
         message?.let { snackbarHostState.showSnackbar(it); viewModel.clearMessage() }
+    }
+
+    if (showAdd) {
+        AlertDialog(
+            onDismissRequest = { showAdd = false },
+            title = { Text(stringResource(R.string.season_add_player)) },
+            text = {
+                LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                    items(candidates, key = { it.eventPlayerId }) { candidate ->
+                        Text(
+                            candidate.name,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.addMember(eventId, seasonId, candidate.eventPlayerId); showAdd = false }
+                                .padding(vertical = 10.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showAdd = false }) { Text(stringResource(R.string.cancel)) } },
+        )
     }
 
     if (showEdit) {
@@ -213,6 +255,21 @@ fun SeasonDetailScreen(
                     }
                 }
 
+                // Members
+                if (s.activeMembers.isNotEmpty()) {
+                    item { Text(stringResource(R.string.season_members), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+                    items(s.activeMembers, key = { it.membershipId }) { member ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(member.name, modifier = Modifier.weight(1f))
+                            if (canManage && s.status != "completed" && s.status != "cancelled") {
+                                IconButton(onClick = { viewModel.removeMember(eventId, seasonId, member.membershipId) }, enabled = !busy) {
+                                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Admin setup (registration only)
                 if (canManage && s.status == "registration") {
                     item { Text(stringResource(R.string.season_manage), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
@@ -220,6 +277,9 @@ fun SeasonDetailScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = { viewModel.bulkEnroll(eventId, seasonId) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                                 Text(stringResource(R.string.season_enroll_recent))
+                            }
+                            OutlinedButton(onClick = { viewModel.loadCandidates(eventId, seasonId); showAdd = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.season_add_player))
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(stringResource(R.string.crews) + ": $crewCount", modifier = Modifier.weight(1f))
