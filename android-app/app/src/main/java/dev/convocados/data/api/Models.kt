@@ -791,3 +791,157 @@ data class SeasonRankPayload(
     val enabled: Boolean = true,
     val youName: String? = null,
 )
+
+// ── Seasons & Crews ───────────────────────────────────────────────────────
+
+@Serializable
+data class SeasonMember(
+    val membershipId: String = "",
+    val eventPlayerId: String = "",
+    val name: String = "",
+    val rating: Double = 0.0,
+    val crewId: String? = null,
+)
+
+@Serializable
+data class SeasonCrewMember(
+    val name: String = "",
+    val membershipId: String? = null,
+)
+
+@Serializable
+data class SeasonCrew(
+    val id: String? = null,
+    val name: String = "",
+    val sortOrder: Int = 0,
+    val members: List<SeasonCrewMember> = emptyList(),
+)
+
+@Serializable
+data class ViewerMembership(
+    val id: String = "",
+    val status: String = "",
+    val eventPlayerId: String = "",
+)
+
+@Serializable
+data class LeaderboardScope(
+    val type: String = "event",
+    val seasonId: String? = null,
+    val name: String? = null,
+    val startsAt: String? = null,
+    val endsAt: String? = null,
+)
+
+@Serializable
+data class LeaderboardPlayer(
+    val rank: Int = 0,
+    val name: String = "",
+    val crewName: String? = null,
+    val points: Double = 0.0,
+    val played: Int = 0,
+    val wins: Int = 0,
+    val draws: Int = 0,
+    val losses: Int = 0,
+    val goalsFor: Int = 0,
+    val goalsAgainst: Int = 0,
+    val goalDifference: Int = 0,
+)
+
+@Serializable
+data class LeaderboardCrewScore(
+    val gameId: String = "",
+    val score: Double = 0.0,
+    val counted: Boolean = false,
+)
+
+@Serializable
+data class LeaderboardCrew(
+    val rank: Int = 0,
+    val crewId: String = "",
+    val name: String = "",
+    val points: Double = 0.0,
+    val tieBreakTotal: Double = 0.0,
+    val roundsCounted: Int = 0,
+    val roundsRepresented: Int = 0,
+    val gameScores: List<LeaderboardCrewScore> = emptyList(),
+)
+
+@Serializable
+data class LeaderboardPayload(
+    val scope: LeaderboardScope? = null,
+    val players: List<LeaderboardPlayer> = emptyList(),
+    val crews: List<LeaderboardCrew> = emptyList(),
+    val gamesCount: Int = 0,
+    val hidden: Boolean = false,
+)
+
+@Serializable
+data class SeasonDetail(
+    val id: String = "",
+    val name: String = "",
+    val status: String = "registration",
+    val registrationOpensAt: String = "",
+    val registrationClosesAt: String = "",
+    val activatedAt: String? = null,
+    val crews: List<SeasonCrew> = emptyList(),
+    val activeMembers: List<SeasonMember> = emptyList(),
+    val viewerEventPlayerId: String? = null,
+    val viewerMembership: ViewerMembership? = null,
+    val registrationOpen: Boolean = false,
+    val leaderboard: LeaderboardPayload? = null,
+)
+
+@Serializable
+data class SeasonDetailResponse(
+    val season: SeasonDetail = SeasonDetail(),
+)
+
+@Serializable
+data class SeasonMemberCandidate(
+    val eventPlayerId: String = "",
+    val name: String = "",
+    val hasAccount: Boolean = false,
+    val gamesPlayed: Int = 0,
+    val memberStatus: String? = null,
+)
+
+@Serializable
+data class SeasonCandidatesResponse(
+    val candidates: List<SeasonMemberCandidate> = emptyList(),
+)
+
+@Serializable
+data class CrewDraftInput(
+    val id: String? = null,
+    val name: String,
+    val membershipIds: List<String>,
+)
+
+@Serializable
+data class SaveCrewsRequest(
+    val crews: List<CrewDraftInput>,
+)
+
+@Serializable
+data class JoinSeasonRequest(val eventPlayerId: String)
+
+@Serializable
+data class AddSeasonMemberRequest(val eventPlayerId: String)
+
+@Serializable
+data class RecommendCrewsRequest(val crewCount: Int)
+
+@Serializable
+data class SeasonActionRequest(val action: String)
+
+@Serializable
+data class CancelSeasonRequest(val action: String, val reason: String? = null)
+
+@Serializable
+data class UpdateSeasonRequest(
+    val action: String = "update",
+    val name: String,
+    val registrationOpensAt: String,
+    val registrationClosesAt: String,
+)
