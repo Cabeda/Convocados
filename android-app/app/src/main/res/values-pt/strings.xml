@@ -394,4 +394,6 @@
     <string name="season_recommend_crews">Recomendar equipas</string>
     <string name="season_save_crews">Guardar equipas</string>
     <string name="season_edit_details">Editar nome e datas</string>
+    <string name="season_members">Membros</string>
+    <string name="season_add_player">Adicionar jogador</string>
 </resources>
