@@ -31,6 +31,8 @@ export const GET: APIRoute = async ({ request }) => {
     archivedAt: true,
     isRecurring: true,
     currentGameId: true,
+    teamOneName: true,
+    teamTwoName: true,
     _count: { select: { players: true } },
     history: {
       select: { scoreOne: true, scoreTwo: true },
@@ -49,6 +51,10 @@ export const GET: APIRoute = async ({ request }) => {
 
   const mapGame = async (e: GameRow) => ({
     ...e,
+    // Surface the organizer's custom team names (same defaults as
+    // GET /api/events/[id]/teams) so clients can label teams offline.
+    teamOneName: e.teamOneName || "Team 1",
+    teamTwoName: e.teamTwoName || "Team 2",
     dateTime: e.dateTime.toISOString(),
     archivedAt: e.archivedAt?.toISOString() ?? null,
     playerCount: await resolvePlayerCount(e),
