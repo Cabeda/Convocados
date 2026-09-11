@@ -107,4 +107,16 @@
     <string name="ongoing_channel_name">Ongoing game</string>
     <string name="ongoing_score_title">Live score</string>
     <string name="ongoing_quick_title">Quick game</string>
+
+    <!-- Quick game home-screen tile -->
+    <string name="tile_label">Quick game</string>
+    <string name="tile_quick_game_title">Quick game</string>
+    <string name="tile_quick_game_idle">Tap to start scoring</string>
+    <string name="tile_quick_game_cta">Start</string>
+    <string name="tile_quick_game_live">Live</string>
+    <string name="tile_quick_game_upcoming">Starts soon</string>
+    <string name="tile_quick_game_paused">Finished</string>
+    <string name="tile_sport_standard">Match</string>
+    <string name="tile_sport_tennis">Tennis</string>
+    <string name="tile_sport_padel">Padel</string>
 </resources>
