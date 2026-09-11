@@ -1,10 +1,15 @@
 import { useState, useEffect } from "react";
 import {
   Dialog, DialogTitle, DialogContent, Box, Stack, Switch,
-  Typography, alpha, useTheme, FormControlLabel, IconButton, Chip,
+  Typography, alpha, useTheme, FormControlLabel, IconButton, Chip, Button,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
+import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
+import BlockIcon from "@mui/icons-material/Block";
+import AddToHomeScreenIcon from "@mui/icons-material/AddToHomeScreen";
 import { useT } from "~/lib/useT";
+import { useDevicePush } from "~/lib/useDevicePush";
 
 interface FollowOverrides {
   following: boolean;
@@ -25,6 +30,67 @@ interface Props {
   eventId: string;
   open: boolean;
   onClose: () => void;
+}
+
+/**
+ * Device-level push state for the current browser/PWA.
+ *
+ * Distinct from the account's global push toggle: a device can be blocked,
+ * missing the PWA install (iOS), or simply never subscribed while the account
+ * preference is on. Surfaces the real state and an enable/disable action.
+ */
+function DeviceSection() {
+  const t = useT();
+  const theme = useTheme();
+  const { state, busy, enable, disable } = useDevicePush();
+
+  if (state === null) return null;
+
+  const label =
+    state === "on" ? t("notifyDeviceOn")
+      : state === "off" ? t("notifyDeviceOff")
+        : state === "blocked" ? t("notifyDeviceBlocked")
+          : state === "needs-install" ? t("notifyDeviceNeedsInstall")
+            : t("notifyDeviceUnsupported");
+
+  const accent =
+    state === "on" ? theme.palette.success.main
+      : state === "blocked" ? theme.palette.warning.main
+        : state === "needs-install" ? theme.palette.info.main
+          : theme.palette.text.secondary;
+
+  return (
+    <Box
+      sx={{
+        mb: 2, p: 1.5, borderRadius: 2,
+        bgcolor: alpha(accent, state === "on" || state === "needs-install" ? 0.06 : 0.04),
+        border: `1px solid ${alpha(accent, 0.25)}`,
+      }}
+    >
+      <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 0.6 }}>
+        {t("notifyThisDeviceTitle")}
+      </Typography>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.25 }}>
+        {state === "on" ? <NotificationsActiveIcon fontSize="small" color="success" />
+          : state === "blocked" ? <BlockIcon fontSize="small" color="warning" />
+            : state === "needs-install" ? <AddToHomeScreenIcon fontSize="small" color="info" />
+              : <NotificationsOffIcon fontSize="small" color="disabled" />}
+        <Typography variant="body2" fontWeight={600} sx={{ flex: 1 }}>
+          {label}
+        </Typography>
+        {state === "on" && (
+          <Button size="small" color="inherit" disabled={busy} onClick={disable} sx={{ flexShrink: 0 }}>
+            {t("notifyDisableDevice")}
+          </Button>
+        )}
+        {state === "off" && (
+          <Button size="small" variant="contained" disabled={busy} onClick={enable} sx={{ flexShrink: 0 }}>
+            {t("notifyEnableDevice")}
+          </Button>
+        )}
+      </Box>
+    </Box>
+  );
 }
 
 /**
@@ -118,6 +184,7 @@ export function MyNotificationsDialog({ eventId, open, onClose }: Props) {
           </IconButton>
         </DialogTitle>
         <DialogContent>
+          <DeviceSection />
           <Typography variant="body2" color="text.secondary">
             {t("notifyJoinToGetNotifications")}
           </Typography>
@@ -139,6 +206,7 @@ export function MyNotificationsDialog({ eventId, open, onClose }: Props) {
         </IconButton>
       </DialogTitle>
       <DialogContent>
+        <DeviceSection />
         {pushOff && (
           <Box sx={{
             mb: 2, p: 1.5, borderRadius: 2,
@@ -153,7 +221,10 @@ export function MyNotificationsDialog({ eventId, open, onClose }: Props) {
             </Typography>
           </Box>
         )}
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 0.6 }}>
+          {t("notifyAccountTitle")}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, mt: 0.25 }}>
           {isPlayer ? t("myNotificationsDescPlayer") : t("myNotificationsDescFollower")}
         </Typography>
         <Stack spacing={1}>
