@@ -26,9 +26,10 @@ import {
   getSettlementSummary,
   getWrapUpGameSettlement,
   shareFor,
+  isGameParticipant,
 } from "~/lib/settlement.server";
 import { PATCH as setConfig } from "~/pages/api/events/[id]/payments/config";
-import { GET as getSummary, PUT as settle } from "~/pages/api/events/[id]/payments/settlement";
+import { GET as getSummary, PUT as settle, DELETE as unsettle } from "~/pages/api/events/[id]/payments/settlement";
 import { PUT as bulkSettle } from "~/pages/api/events/[id]/payments/settlement/bulk";
 import { POST as selfReport } from "~/pages/api/events/[id]/payments/settlement/self-report";
 import { GET as getCurrentGame } from "~/pages/api/events/[id]/payments/game";
@@ -688,5 +689,62 @@ describe("getWrapUpGameSettlement", () => {
 
     const wrap = await getWrapUpGameSettlement(event.id);
     expect(wrap).toBeNull();
+  });
+});
+
+describe("isGameParticipant + participant settlement authorization", () => {
+  it("is true for a player on the game and false for a stranger", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await linkUser("Ana", "user-ana");
+    expect(await isGameParticipant(event.id, game.id, "user-ana")).toBe(true);
+    expect(await isGameParticipant(event.id, game.id, "stranger")).toBe(false);
+    expect(await isGameParticipant(event.id, game.id, "")).toBe(false);
+  });
+
+  it("stays true for the player-payer even after their participant row is archived", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+    await setPaymentConfig(event.id, game.id, { mode: "tracked", payerEventPlayerId: ana.id });
+    await linkUser("Ana", "user-ana");
+    await prisma.gameParticipant.updateMany({
+      where: { gameId: game.id, eventPlayerId: ana.id },
+      data: { archivedAt: new Date() },
+    });
+    expect(await isGameParticipant(event.id, game.id, "user-ana")).toBe(true);
+  });
+
+  it("lets a game participant settle and revert a share", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    await linkUser("Ana", "user-ana");
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    mockGetSession.mockResolvedValue({ user: { id: "user-ana", name: "Ana" } });
+
+    const bruno = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Bruno" } });
+    const put = await settle(ctx({ id: event.id }, { gameId: game.id, eventPlayerId: bruno.id }, "PUT"));
+    expect(put.status).toBe(200);
+    let row = await prisma.gamePayment.findUniqueOrThrow({
+      where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: bruno.id } },
+    });
+    expect(row.status).toBe("paid");
+
+    const del = await unsettle(ctx({ id: event.id }, { gameId: game.id, eventPlayerId: bruno.id }, "DELETE"));
+    expect(del.status).toBe(200);
+    row = await prisma.gamePayment.findUniqueOrThrow({
+      where: { gameId_eventPlayerId: { gameId: game.id, eventPlayerId: bruno.id } },
+    });
+    expect(row.status).toBe("pending");
+  });
+
+  it("rejects a logged-in non-participant", async () => {
+    const { event, game } = await seedEvent({ cost: 60 });
+    await syncGamePayments(game.id, event.id);
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
+    mockGetSession.mockResolvedValue({ user: { id: "stranger", name: "Stranger" } });
+    const ana = await prisma.eventPlayer.findFirstOrThrow({ where: { name: "Ana" } });
+
+    const res = await settle(ctx({ id: event.id }, { gameId: game.id, eventPlayerId: ana.id }, "PUT"));
+    expect(res.status).toBe(403);
   });
 });
