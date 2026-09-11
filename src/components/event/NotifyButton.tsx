@@ -48,10 +48,16 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
           setToast(t("followedToast"));
 
           // Subscribe this device to push. Requests the permission first and
-          // reports the iOS install prerequisite instead of failing silently.
+          // reports every failure mode instead of dropping them silently.
           const pushResult = await enableDevicePush();
           if (pushResult.reason === "needs-install") {
             setToast(t("notifyDeviceNeedsInstall"));
+          } else if (pushResult.reason === "blocked") {
+            setToast(t("notifyDeviceBlocked"));
+          } else if (pushResult.reason === "unsupported") {
+            setToast(t("notifyDeviceUnsupported"));
+          } else if (pushResult.reason === "error") {
+            setToast(t("notifyPushEnableFailed"));
           }
         }
       }

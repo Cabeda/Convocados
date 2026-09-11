@@ -138,16 +138,17 @@ export async function enableDevicePush(): Promise<DevicePushResult> {
       userVisibleOnly: true,
       applicationServerKey: base64UrlToUint8Array(publicKey),
     });
-    await fetch("/api/push/subscribe", {
+    const res = await fetch("/api/push/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...sub.toJSON(), locale: navigator.language }),
     });
-    await fetch("/api/users/me/push-prompt-state", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ state: "granted" }),
-    }).catch(() => {});
+    if (!res.ok) {
+      // The server never recorded it — roll back so the device doesn't show
+      // "on" while no push can actually be delivered.
+      await sub.unsubscribe().catch(() => {});
+      throw new Error("Failed to register push subscription");
+    }
     return { ok: true, state: "on" };
   } catch {
     return { ok: false, state: "off", reason: "error" };
@@ -161,12 +162,14 @@ export async function disableDevicePush(): Promise<boolean> {
     const reg = await navigator.serviceWorker.getRegistration();
     const sub = await reg?.pushManager.getSubscription();
     if (!sub) return true;
+    // Browser first: once unsubscribed this device can no longer receive, so a
+    // later server failure cannot leave the UI stuck on "on".
+    await sub.unsubscribe();
     await fetch("/api/push/subscribe", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint: sub.endpoint }),
     });
-    await sub.unsubscribe();
     return true;
   } catch {
     return false;
