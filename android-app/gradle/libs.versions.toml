@@ -21,6 +21,8 @@ firebaseBom = "34.18.0"
 accompanist = "0.37.3"
 room = "2.8.4"
 wearCompose = "1.6.2"
+wearTiles = "1.6.2"
+protolayout = "1.4.2"
 playServicesWearable = "20.0.1"
 playServicesAuth = "22.0.0"
 playServicesAuthLegacy = "22.0.0"
@@ -101,6 +103,9 @@ androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version
 androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltWork" }
 androidx-wear = { group = "androidx.wear", name = "wear", version = "1.4.0" }
 androidx-wear-ongoing = { group = "androidx.wear", name = "wear-ongoing", version = "1.1.0" }
+androidx-wear-tiles = { group = "androidx.wear.tiles", name = "tiles", version.ref = "wearTiles" }
+androidx-wear-protolayout = { group = "androidx.wear.protolayout", name = "protolayout", version.ref = "protolayout" }
+androidx-concurrent-futures = { group = "androidx.concurrent", name = "concurrent-futures", version = "1.2.0" }
 
 # Testing
 junit = { group = "junit", name = "junit", version = "4.13.2" }

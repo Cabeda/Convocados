@@ -217,6 +217,11 @@ dependencies {
     implementation(libs.androidx.wear.ongoing)
     implementation("androidx.wear:wear-input:1.2.0")
 
+    // Tiles (home-screen tile)
+    implementation(libs.androidx.wear.tiles)
+    implementation(libs.androidx.wear.protolayout)
+    implementation(libs.androidx.concurrent.futures)
+
     // Hilt DI
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
