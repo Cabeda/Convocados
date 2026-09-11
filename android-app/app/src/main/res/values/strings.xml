@@ -432,4 +432,8 @@
     <string name="season_reopen">Reopen Season</string>
     <string name="crew_league">Crew league</string>
     <string name="crews">Crews</string>
+    <string name="season_enroll_recent">Enroll recent players</string>
+    <string name="season_recommend_crews">Recommend crews</string>
+    <string name="season_save_crews">Save crews</string>
+    <string name="season_edit_details">Edit name &amp; dates</string>
 </resources>
