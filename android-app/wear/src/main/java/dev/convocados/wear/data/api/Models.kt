@@ -14,6 +14,8 @@ data class EventSummary(
     val playerCount: Int,
     val isRecurring: Boolean = false,
     val archivedAt: String? = null,
+    val teamOneName: String = "",
+    val teamTwoName: String = "",
 )
 
 @Serializable
