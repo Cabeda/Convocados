@@ -95,6 +95,12 @@
     <string name="done_label">Done</string>
     <string name="arrived_label">arrived</string>
     <string name="live_badge">LIVE</string>
+    <string name="ongoing_live_title">Scoring %1$s</string>
+    <string name="ongoing_live_text">%1$d – %2$d · tap to return</string>
+    <string name="ongoing_quick_title">Quick game live</string>
+    <string name="ongoing_quick_text">%1$d – %2$d · tap to return</string>
+    <string name="ongoing_channel_name">Live games</string>
+    <string name="ongoing_channel_desc">Shows the live score while a game is being scored</string>
     <string name="ended_label">Ended</string>
     <string name="mvp_title">MVP</string>
     <string name="mvp_vote_prompt">Vote for MVP</string>

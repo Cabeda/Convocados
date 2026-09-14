@@ -6,15 +6,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.CompactButton
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import dev.convocados.wear.R
+import dev.convocados.wear.data.ongoing.GameOngoingActivityManager
+import dev.convocados.wear.data.ongoing.OngoingGameStatus
 import dev.convocados.wear.ui.RememberKeepScreenOn
 import dev.convocados.wear.ui.screen.score.GameClock
 import dev.convocados.wear.ui.screen.score.GameEdgeProgress
@@ -32,8 +36,24 @@ fun QuickScoreScreen(
     val state by viewModel.uiState.collectAsState()
 
     RememberKeepScreenOn(true)
+    val context = LocalContext.current
 
     val kickoffMs = state.kickoffEpochMs
+    val quickActive = OngoingGameStatus.shouldShowQuickOngoing(
+        kickoffMs,
+        System.currentTimeMillis(),
+        state.durationMinutes,
+    )
+    LaunchedEffect(quickActive, state.scoreOne, state.scoreTwo) {
+        if (quickActive) {
+            GameOngoingActivityManager.startQuick(context, state.scoreOne, state.scoreTwo)
+        } else {
+            GameOngoingActivityManager.stopQuick(context)
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { GameOngoingActivityManager.stopQuick(context) }
+    }
     if (kickoffMs == null) return // no active quick game; caller handles end
 
     var now by remember { mutableStateOf(Instant.now()) }
@@ -60,10 +80,11 @@ fun QuickScoreScreen(
         if (next <= totalDurationMs) (next.toFloat() / totalDurationMs) else null
     } else null
 
-    ScreenScaffold {
+    ScreenScaffold { contentPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(contentPadding)
                 .pointerInput(Unit) {
                     // Swipe up ends the quick game; swipe down saves it to an event.
                     val threshold = 64.dp.toPx()
@@ -91,7 +112,7 @@ fun QuickScoreScreen(
                 )
             } else {
                 Row(
-                    modifier = Modifier.fillMaxSize().padding(2.dp),
+                    modifier = Modifier.fillMaxSize().padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     TeamScoreButton(
@@ -139,6 +160,8 @@ fun QuickScoreScreen(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = 14.dp),
@@ -179,6 +202,8 @@ private fun QuickSetScoreEditor(
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = if (isTiebreak) {
@@ -188,6 +213,8 @@ private fun QuickSetScoreEditor(
             },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         Row(
             modifier = Modifier.weight(1f).fillMaxWidth(),

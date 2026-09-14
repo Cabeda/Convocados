@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -20,6 +21,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.*
 import dev.convocados.wear.R
+import dev.convocados.wear.data.ongoing.GameOngoingActivityManager
+import dev.convocados.wear.data.ongoing.OngoingGameStatus
 import dev.convocados.wear.ui.LocalAmbientMode
 import dev.convocados.wear.ui.RememberKeepScreenOn
 import dev.convocados.wear.ui.theme.Warning
@@ -43,6 +46,7 @@ fun ScoreScreen(
     val state by viewModel.uiState.collectAsState()
     val isAmbient = LocalAmbientMode.current
     val view = LocalView.current
+    val context = LocalContext.current
     val scorePhase = gameScorePhase(state.game?.dateTime, state.game?.sport ?: "futsal")
 
     // Hold the screen awake whenever the per-event setting is on — including
@@ -50,8 +54,35 @@ fun ScoreScreen(
     // sleeping mid-game.
     RememberKeepScreenOn(state.keepScreenOn)
 
-    ScreenScaffold {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    // Play quality gate: surface the live game as an Ongoing Activity
+    // (watch-face indicator + Recents chip + tap-to-return notification)
+    // while scoring is active; clear it when the game ends or leaves.
+    val ongoingActive = OngoingGameStatus.shouldShowLiveOngoing(
+        isLoading = state.isLoading,
+        hasHistory = state.history != null,
+        gameEnded = scorePhase == GameScorePhase.ENDED,
+    )
+    LaunchedEffect(ongoingActive, state.game?.title, state.scoreOne, state.scoreTwo) {
+        if (ongoingActive && !isAmbient) {
+            GameOngoingActivityManager.startLive(
+                context,
+                state.game?.title,
+                state.scoreOne,
+                state.scoreTwo,
+            )
+        } else {
+            GameOngoingActivityManager.stopLive(context)
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { GameOngoingActivityManager.stopLive(context) }
+    }
+
+    ScreenScaffold { contentPadding ->
+        Box(
+            modifier = Modifier.fillMaxSize().padding(contentPadding),
+            contentAlignment = Alignment.Center,
+        ) {
             when {
                 state.isLoading -> {
                     CircularProgressIndicator()
@@ -103,6 +134,7 @@ fun ScoreScreen(
                                 color = MaterialTheme.colorScheme.error,
                                 textAlign = TextAlign.Center,
                                 maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
@@ -173,8 +205,11 @@ fun ScoreFixtureContent(
     onToggleTiebreak: () -> Unit = {},
     onUndo: () -> Unit = {},
 ) {
-    ScreenScaffold {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    ScreenScaffold { contentPadding ->
+        Box(
+            Modifier.fillMaxSize().padding(contentPadding),
+            contentAlignment = Alignment.Center,
+        ) {
             if (isAmbient) {
                 AmbientScoreDisplay(state)
             } else if (state.isTennisScoring) {
@@ -233,6 +268,8 @@ private fun OffWindowGameContent(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
@@ -241,6 +278,7 @@ private fun OffWindowGameContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
         Spacer(modifier = Modifier.height(8.dp))
         CompactButton(onClick = onTeams) {
@@ -269,6 +307,8 @@ private fun EndedGameContent(state: ScoreUiState) {
             text = stringResource(R.string.game_ended),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         if (hasScore) {
             Spacer(modifier = Modifier.height(4.dp))
@@ -277,6 +317,8 @@ private fun EndedGameContent(state: ScoreUiState) {
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         } else if (hasStructuredScore) {
             Spacer(modifier = Modifier.height(4.dp))
@@ -287,6 +329,8 @@ private fun EndedGameContent(state: ScoreUiState) {
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
             )
         } else {
             Spacer(modifier = Modifier.height(2.dp))
@@ -294,6 +338,9 @@ private fun EndedGameContent(state: ScoreUiState) {
                 text = stringResource(R.string.game_ended_no_score),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -321,8 +368,17 @@ internal fun TennisScoreEditor(
             }.ifEmpty { "${state.scoreOne}-${state.scoreTwo}" },
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
-        Text("${if (state.isTiebreakScoring) "Tiebreak" else "Set"} ${state.scoreSets.size.coerceAtLeast(1)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Text(
+            "${if (state.isTiebreakScoring) "Tiebreak" else "Set"} ${state.scoreSets.size.coerceAtLeast(1)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TeamScoreButton(
                 teamName = state.teamOneName,
@@ -345,9 +401,14 @@ internal fun TennisScoreEditor(
                 modifier = Modifier.weight(1f),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // Two rows of two: four CompactButtons in one row overflow narrow
+        // round screens (192dp), cutting off labels at default font size.
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             CompactButton(onClick = onNextSet, enabled = state.scoreSets.size < 5) { Text("Next set") }
             CompactButton(onClick = onToggleTiebreak) { Text(if (state.isTiebreakScoring) "Games" else "Tiebreak") }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             CompactButton(onClick = onUndo) { Text("Undo") }
             CompactButton(onClick = onTeams) { Text(stringResource(R.string.teams_title)) }
         }
@@ -395,7 +456,9 @@ internal fun ScoreEditor(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(2.dp),
+                // 8dp inset keeps the tiles inside the round bezel / edge
+                // progress ring instead of touching the screen edge.
+                .padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             TeamScoreButton(
@@ -483,6 +546,8 @@ internal fun ScoreTimeOverlay(
                 text = stringResource(R.string.teams_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = 14.dp),
@@ -495,6 +560,8 @@ internal fun ScoreTimeOverlay(
                 style = MaterialTheme.typography.labelSmall,
                 color = Warning,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 26.dp),
@@ -535,12 +602,17 @@ private fun AmbientScoreDisplay(state: ScoreUiState) {
                 text = "${state.scoreOne} - ${state.scoreTwo}",
                 style = MaterialTheme.typography.displayMedium,
                 color = androidx.compose.ui.graphics.Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             // Team names
             Text(
                 text = "${state.teamOneName} vs ${state.teamTwoName}",
                 style = MaterialTheme.typography.labelSmall,
                 color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             // Game clock (or "Ended" once the game window has elapsed).
             val kickoffMs = state.kickoffEpochMs

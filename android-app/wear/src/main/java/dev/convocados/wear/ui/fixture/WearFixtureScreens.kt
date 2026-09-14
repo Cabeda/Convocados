@@ -6,6 +6,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
@@ -36,9 +37,17 @@ fun WearGamesFixtureContent(
 
     ScreenScaffold(scrollState = columnState) { contentPadding ->
         if (games.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxSize().padding(contentPadding),
+                contentAlignment = Alignment.Center,
+            ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(20.dp)) {
-                    Text(stringResource(if (offline) R.string.offline_cached else R.string.no_games), textAlign = TextAlign.Center)
+                    Text(
+                        stringResource(if (offline) R.string.offline_cached else R.string.no_games),
+                        textAlign = TextAlign.Center,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Spacer(Modifier.height(8.dp))
                     CompactButton(onClick = onQuickGame) { Text(stringResource(R.string.quick_game)) }
                 }
@@ -129,12 +138,15 @@ fun WearHistoryFixtureContent(
                         Text(
                             text = "${history.teamOneName} · ${history.teamTwoName}",
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     },
                     secondaryLabel = {
                         Text(
                             text = "${formatRelativeTime(history.dateTime, now)} · ${history.scoreOne ?: 0} – ${history.scoreTwo ?: 0}",
                             style = MaterialTheme.typography.labelSmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     },
                 )

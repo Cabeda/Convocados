@@ -76,6 +76,8 @@ internal fun TeamScoreButton(
 
     // Flex-font registry drives the score's "roll" on each point: weight + width
     // swell briefly so the tile feels responsive, using M3 Expressive AnimatedText.
+    // Capped at 40sp so 3-digit scores still fit narrow round tiles (192dp)
+    // at default font size instead of pushing the team name out.
     val fontRegistry = rememberAnimatedTextFontRegistry(
         startFontVariationSettings = FontVariation.Settings(
             FontVariation.width(60f),
@@ -85,8 +87,8 @@ internal fun TeamScoreButton(
             FontVariation.width(100f),
             FontVariation.weight(800),
         ),
-        startFontSize = 42.sp,
-        endFontSize = 48.sp,
+        startFontSize = 36.sp,
+        endFontSize = 40.sp,
     )
     val scoreAnim = remember { Animatable(0f) }
     LaunchedEffect(score) {
@@ -273,6 +275,8 @@ internal fun GameClock(text: String, modifier: Modifier = Modifier) {
         text = text,
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = modifier
             .clip(RoundedCornerShape(50))
             .background(MaterialTheme.colorScheme.surfaceContainer)

@@ -147,12 +147,20 @@ fun GamesScreen(
     ScreenScaffold(scrollState = columnState) { contentPadding ->
         when {
             state.isLoading && state.games.isEmpty() -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.fillMaxSize().padding(contentPadding),
+                    contentAlignment = Alignment.Center,
+                ) {
                     CircularProgressIndicator()
                 }
             }
             state.games.isEmpty() && state.pastGames.isEmpty() -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // Empty state respects the scaffold insets so the buttons sit
+                // inside the round bezel instead of clipping at the edge.
+                Box(
+                    Modifier.fillMaxSize().padding(contentPadding),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -165,6 +173,8 @@ fun GamesScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         CompactButton(onClick = { viewModel.refresh() }) {

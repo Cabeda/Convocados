@@ -123,6 +123,8 @@ fun AuthScreen(
                             Text(
                                 text = if (uiState.password.isBlank()) "Password" else "••••••••",
                                 style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
@@ -271,6 +273,8 @@ private fun BackendSelector(viewModel: AuthViewModel) {
                 style = MaterialTheme.typography.labelSmall,
                 color = TextMuted,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
