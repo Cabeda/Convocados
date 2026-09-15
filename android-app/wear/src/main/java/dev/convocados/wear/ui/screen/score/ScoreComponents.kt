@@ -37,7 +37,6 @@ import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material3.AnimatedText
 import androidx.wear.compose.material3.LocalContentColor
 import androidx.wear.compose.material3.MaterialTheme
@@ -87,6 +86,10 @@ internal fun TeamScoreButton(
 
     // Flex-font registry drives the score's "roll" on each point: weight + width
     // swell briefly so the tile feels responsive, using M3 Expressive AnimatedText.
+    // Sizes come from MaterialTheme typography (round-optimized flex fonts),
+    // not hard-coded sp, so the score tracks the Expressive type system.
+    val scoreStartSize = MaterialTheme.typography.displaySmall.fontSize
+    val scoreEndSize = MaterialTheme.typography.displayMedium.fontSize
     val fontRegistry = rememberAnimatedTextFontRegistry(
         startFontVariationSettings = FontVariation.Settings(
             FontVariation.width(60f),
@@ -96,8 +99,8 @@ internal fun TeamScoreButton(
             FontVariation.width(100f),
             FontVariation.weight(800),
         ),
-        startFontSize = 42.sp,
-        endFontSize = 48.sp,
+        startFontSize = scoreStartSize,
+        endFontSize = scoreEndSize,
     )
     val scoreAnim = remember { Animatable(0f) }
     LaunchedEffect(score, scoreLabel, motion) {
@@ -111,11 +114,14 @@ internal fun TeamScoreButton(
         modifier = modifier
             .scale(scale)
             .fillMaxHeight()
-            .clip(RoundedCornerShape(28.dp))
+            // M3 Expressive shape from the theme (round-optimized), not a
+            // hard-coded corner radius.
+            .clip(MaterialTheme.shapes.large)
             .background(container)
             .combinedClickable(
                 interactionSource = interactionSource,
-                indication = null,
+                // Default ripple (Expressive touch response) alongside the
+                // press-scale above.
                 enabled = enabled,
                 onClickLabel = "Add a point to $teamName",
                 onLongClickLabel = "Remove a point from $teamName",
