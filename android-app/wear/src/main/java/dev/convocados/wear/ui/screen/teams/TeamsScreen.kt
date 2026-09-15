@@ -111,6 +111,8 @@ fun TeamsScreen(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.fillMaxWidth(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
 
@@ -146,6 +148,8 @@ fun TeamsScreen(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.fillMaxWidth(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
 
@@ -181,6 +185,8 @@ fun TeamsScreen(
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.fillMaxWidth(),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         items(state.unassigned, key = { "u-${it.id}" }) { player ->
@@ -209,6 +215,8 @@ fun TeamsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.fillMaxWidth(),
                                 textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
@@ -258,6 +266,8 @@ fun TeamsScreen(
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     item {
@@ -267,14 +277,25 @@ fun TeamsScreen(
                                 onKickoff()
                             },
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Kick off now") }
+                        ) {
+                            Text(
+                                "Kick off now",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                     item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            CompactButton(onClick = { settingsViewModel.nudgeKickoff(-1) }) { Text("−1m") }
-                            CompactButton(onClick = { settingsViewModel.nudgeKickoff(1) }) { Text("+1m") }
-                            if (settingsState.isKickoffOverridden) {
-                                CompactButton(onClick = { settingsViewModel.resetKickoff() }) { Text("Reset") }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                CompactButton(onClick = { settingsViewModel.nudgeKickoff(-1) }) { Text("−1m") }
+                                CompactButton(onClick = { settingsViewModel.nudgeKickoff(1) }) { Text("+1m") }
+                                if (settingsState.isKickoffOverridden) {
+                                    CompactButton(onClick = { settingsViewModel.resetKickoff() }) { Text("Reset") }
+                                }
                             }
                         }
                     }
@@ -434,9 +455,28 @@ private fun PlayerChip(
 private fun UnassignedPlayerChip(player: WearPlayerEntity, onMoveToOne: () -> Unit, onMoveToTwo: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text = player.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
-            CompactButton(onClick = onMoveToOne) { Text(text = stringResource(R.string.move_to_team, "1"), style = MaterialTheme.typography.labelSmall) }
-            CompactButton(onClick = onMoveToTwo) { Text(text = stringResource(R.string.move_to_team, "2"), style = MaterialTheme.typography.labelSmall) }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                CompactButton(onClick = onMoveToOne) {
+                    Text(
+                        text = stringResource(R.string.move_to_team, "1"),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                CompactButton(onClick = onMoveToTwo) {
+                    Text(
+                        text = stringResource(R.string.move_to_team, "2"),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }
