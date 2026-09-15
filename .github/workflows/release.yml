@@ -483,7 +483,10 @@ jobs:
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: 17
+          # Java 21: syncPlayListings runs verifyRoborazziDebug, and Robolectric
+          # on targetSdk 36 requires a Java 21 runtime (fails on 17 with a
+          # DefaultSdkProvider UnsupportedOperationException).
+          java-version: 21
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -578,6 +581,22 @@ jobs:
           set -e
           ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track production --release-status draft --release-name "$VERSION" --no-daemon
           ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:production --release-status draft --release-name "$VERSION" --no-daemon
+
+      # Refresh Play Store screenshots from the committed Roborazzi sources and
+      # upload them. Runs last so a listing failure never blocks the bundles,
+      # promotions, or production draft above — listings retry on next release.
+      - name: Sync Play listing graphics
+        working-directory: android-app
+        run: ./gradlew syncPlayListings --no-daemon
+
+      # Explicit per-variant tasks: the :app:publishListing lifecycle fans out to
+      # the baseline-profile build types too, triple-uploading the same images.
+      - name: Publish Play listings (phone + wear screenshots)
+        working-directory: android-app
+        run: |
+          set -e
+          ./gradlew :app:publishReleaseListing --no-daemon
+          ./gradlew :wear:publishReleaseListing --no-daemon
 
       - name: Cleanup credentials
         if: always()

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { recommendCrews } from "~/lib/crewRecommendation";
 import { calculateLeaderboard, filterLeaderboardGames, type LeaderboardGame, type SeasonMember } from "~/lib/leaderboard";
-import { authorizeSeasonRequest, requireSeasonAdmin } from "~/lib/seasonSetup.server";
+import { authorizeSeasonRequest, requireSeasonAdmin, seasonWindowsOverlapByDay, isSeasonCurrent } from "~/lib/seasonSetup.server";
 
 function game(overrides: Partial<LeaderboardGame> = {}): LeaderboardGame {
   return {
@@ -108,5 +108,40 @@ describe("seasonSetup authorization edge cases", () => {
     const required = await requireSeasonAdmin(null, null, request);
     expect(authz).toMatchObject({ allowed: false, isAdmin: false, isOwner: false });
     expect(required).toMatchObject({ allowed: false, isAdmin: false });
+  });
+});
+
+describe("season window coexistence by day", () => {
+  const window = (opens: string, closes: string) => ({
+    registrationOpensAt: new Date(opens),
+    registrationClosesAt: new Date(closes),
+  });
+
+  it("treats a shared boundary day as adjacency, not overlap", () => {
+    expect(seasonWindowsOverlapByDay(
+      window("2026-01-01T00:00:00.000Z", "2026-01-31T00:00:00.000Z"),
+      window("2026-01-31T00:00:00.000Z", "2026-02-28T00:00:00.000Z"),
+    )).toBe(false);
+  });
+
+  it("ignores time-of-day on the boundary day", () => {
+    expect(seasonWindowsOverlapByDay(
+      window("2026-01-01T23:00:00.000Z", "2026-01-31T01:00:00.000Z"),
+      window("2026-01-31T15:00:00.000Z", "2026-02-28T00:00:00.000Z"),
+    )).toBe(false);
+  });
+
+  it("detects a shared month as overlap", () => {
+    expect(seasonWindowsOverlapByDay(
+      window("2026-01-01T00:00:00.000Z", "2026-01-31T00:00:00.000Z"),
+      window("2026-01-15T00:00:00.000Z", "2026-02-15T00:00:00.000Z"),
+    )).toBe(true);
+  });
+
+  it("marks the window containing today as current, except when cancelled", () => {
+    const now = new Date("2026-03-10T12:00:00.000Z");
+    expect(isSeasonCurrent({ status: "registration", ...window("2026-03-01T00:00:00.000Z", "2026-04-01T00:00:00.000Z") }, now)).toBe(true);
+    expect(isSeasonCurrent({ status: "registration", ...window("2026-01-01T00:00:00.000Z", "2026-02-01T00:00:00.000Z") }, now)).toBe(false);
+    expect(isSeasonCurrent({ status: "cancelled", ...window("2026-03-01T00:00:00.000Z", "2026-04-01T00:00:00.000Z") }, now)).toBe(false);
   });
 });
