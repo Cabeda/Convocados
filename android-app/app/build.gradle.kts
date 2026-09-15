@@ -195,6 +195,40 @@ tasks.register("generateStoreListing") {
     }
 }
 
+// Copies the validated store-listing PNGs into the Gradle Play Publisher
+// listing layout so `./gradlew :app:publishListing` uploads them. Depends on
+// generateStoreListing, so Roborazzi verification + dimension checks run first.
+// Mapping: phone/ -> phone-screenshots, foldable/ -> tablet-screenshots (7"),
+// tablet/ -> large-tablet-screenshots (10"). Play caps each slot at 8 images.
+val playListingGraphics = mapOf(
+    "phone-screenshots" to (storeListingSource.resolve("phone") to storeListingNames),
+    "tablet-screenshots" to (storeListingSource.resolve("foldable") to storeListingNames),
+    "large-tablet-screenshots" to (storeListingSource.resolve("tablet") to storeListingNames),
+)
+
+tasks.register("syncPlayListingGraphics") {
+    notCompatibleWithConfigurationCache("The task copies generated PNGs with plain file I/O")
+    dependsOn("generateStoreListing")
+
+    doLast {
+        val graphicsRoot = project.file("src/main/play/listings/en-US/graphics")
+        playListingGraphics.forEach { (slot, pair) ->
+            val (sourceDir, names) = pair
+            val targetDir = graphicsRoot.resolve(slot)
+            targetDir.deleteRecursively()
+            targetDir.mkdirs()
+            names.forEach { name ->
+                val source = sourceDir.resolve(name)
+                if (!source.isFile) {
+                    throw GradleException("Missing store-listing PNG for Play slot $slot: $source")
+                }
+                source.copyTo(targetDir.resolve(name), overwrite = true)
+            }
+        }
+        println("Synced Play listing graphics into ${graphicsRoot.absolutePath}")
+    }
+}
+
 
 dependencies {
     implementation(project(":design-system"))
