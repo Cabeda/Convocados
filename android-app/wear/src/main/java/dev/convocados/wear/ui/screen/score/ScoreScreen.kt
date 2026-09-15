@@ -361,7 +361,9 @@ internal fun TennisScoreEditor(
         now.toEpochMilli() >= kickoffMs + sportDurationMinutes(state.game.sport) * 60_000L
     Box(Modifier.fillMaxSize()) {
         Column(
-            Modifier.fillMaxSize().padding(4.dp),
+            // Bottom reserve keeps the two action rows clear of the
+            // GameClock pill overlay (BottomCenter) on short round screens.
+            Modifier.fillMaxSize().padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
