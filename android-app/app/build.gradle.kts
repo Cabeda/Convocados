@@ -1,5 +1,9 @@
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.io.File
 import java.util.Properties
 import javax.imageio.ImageIO
+import kotlin.math.ceil
 
 plugins {
     id("com.android.application")
@@ -192,6 +196,64 @@ tasks.register("generateStoreListing") {
         println(
             "Generated ${expectedFiles.size} store-listing screenshots in ${storeListingOutput.absolutePath}"
         )
+    }
+}
+
+// Copies the validated store-listing PNGs into the Gradle Play Publisher
+// listing layout so `./gradlew :app:publishListing` uploads them. Depends on
+// generateStoreListing, so Roborazzi verification + dimension checks run first.
+// Mapping: phone/ -> phone-screenshots, foldable/ -> tablet-screenshots (7"),
+// tablet/ -> large-tablet-screenshots (10"). Play caps each slot at 8 images.
+// Play's images endpoint rejects screenshots whose shortest side is under
+// 1080px (max side 7680px, max aspect ratio 2.3). Roborazzi sources render at
+// natural device dp, so the sync step upscales by the smallest integer factor
+// that clears the minimum. Integer factors keep edges crisp; bicubic keeps
+// glyphs smooth. Throws when the result still falls outside Play's limits.
+fun upscaleForPlay(source: File, target: File): Pair<Int, Int> {
+    val image = ImageIO.read(source)
+        ?: throw GradleException("Unable to read store-listing PNG: $source")
+    val factor = maxOf(1, ceil(1080.0 / minOf(image.width, image.height)).toInt())
+    val scaled = BufferedImage(image.width * factor, image.height * factor, BufferedImage.TYPE_INT_ARGB)
+    val graphics = scaled.createGraphics()
+    graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+    graphics.drawImage(image, 0, 0, scaled.width, scaled.height, null)
+    graphics.dispose()
+    ImageIO.write(scaled, "png", target)
+    val shortest = minOf(scaled.width, scaled.height)
+    val longest = maxOf(scaled.width, scaled.height)
+    if (shortest < 1080 || longest > 7680 || longest.toDouble() / shortest > 2.3) {
+        throw GradleException("$target is ${scaled.width}x${scaled.height}; outside Play limits (min side 1080, max side 7680, max aspect 2.3)")
+    }
+    return scaled.width to scaled.height
+}
+
+val playListingGraphics = mapOf(
+    "phone-screenshots" to (storeListingSource.resolve("phone") to storeListingNames),
+    "tablet-screenshots" to (storeListingSource.resolve("foldable") to storeListingNames),
+    "large-tablet-screenshots" to (storeListingSource.resolve("tablet") to storeListingNames),
+)
+
+tasks.register("syncPlayListingGraphics") {
+    notCompatibleWithConfigurationCache("The task copies generated PNGs with plain file I/O")
+    dependsOn("generateStoreListing")
+
+    doLast {
+        val graphicsRoot = project.file("src/main/play/listings/en-US/graphics")
+        playListingGraphics.forEach { (slot, pair) ->
+            val (sourceDir, names) = pair
+            val targetDir = graphicsRoot.resolve(slot)
+            targetDir.deleteRecursively()
+            targetDir.mkdirs()
+            names.forEach { name ->
+                val source = sourceDir.resolve(name)
+                if (!source.isFile) {
+                    throw GradleException("Missing store-listing PNG for Play slot $slot: $source")
+                }
+                val (width, height) = upscaleForPlay(source, targetDir.resolve(name))
+                println("$slot/$name -> ${width}x$height")
+            }
+        }
+        println("Synced Play listing graphics into ${graphicsRoot.absolutePath}")
     }
 }
 
