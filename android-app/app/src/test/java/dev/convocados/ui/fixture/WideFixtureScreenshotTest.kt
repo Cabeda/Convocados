@@ -26,8 +26,8 @@ class WideFixtureScreenshotTest {
     @Test fun stats_dark() = snapshot("tablet/stats_dark", ThemeMode.Dark) { StatsContent(FixtureData.stats, false, null, {}, {}) }
     @Test fun event_light() = snapshot("tablet/event_light", ThemeMode.Light) { EventFixtureContent(FixtureData.event, {}, {}) }
     @Test fun event_dark() = snapshot("tablet/event_dark", ThemeMode.Dark) { EventFixtureContent(FixtureData.event, {}, {}) }
-    @Test fun adaptive_light() = snapshot("tablet/adaptive_light", ThemeMode.Light) { AdaptiveGamesFixtureContent(FixtureData.games, FixtureData.event, {}, {}, {}, {}) }
-    @Test fun adaptive_dark() = snapshot("tablet/adaptive_dark", ThemeMode.Dark) { AdaptiveGamesFixtureContent(FixtureData.games, FixtureData.event, {}, {}, {}, {}) }
+    @Test fun adaptive_light() = goldenSnapshot("tablet/adaptive_light", ThemeMode.Light) { AdaptiveGamesFixtureContent(FixtureData.games, FixtureData.event, {}, {}, {}, {}) }
+    @Test fun adaptive_dark() = goldenSnapshot("tablet/adaptive_dark", ThemeMode.Dark) { AdaptiveGamesFixtureContent(FixtureData.games, FixtureData.event, {}, {}, {}, {}) }
     @Test fun profile_light() = snapshot("tablet/profile_light", ThemeMode.Light) { ProfileFixtureContent(FixtureData.user, {}, {}) }
     @Test fun profile_dark() = snapshot("tablet/profile_dark", ThemeMode.Dark) { ProfileFixtureContent(FixtureData.user, {}, {}) }
     @Test fun state_empty_light() = stateSnapshot("tablet", FixtureState.Empty)
@@ -47,6 +47,14 @@ class WideFixtureScreenshotTest {
         composeRule.setContent { ConvocadosTheme(themeMode = mode, content = content) }
         composeRule.onRoot().captureRoboImage("src/test/screenshots/store-listing/$name.png")
     }
+
+    // Adaptive layout probes are regression goldens, not store assets: Play's
+    // phone/tablet slots cap at 8 images and generateStoreListing enforces an
+    // exact file set, so these must not land in store-listing/.
+    private fun goldenSnapshot(name: String, mode: ThemeMode, content: @Composable () -> Unit) {
+        composeRule.setContent { ConvocadosTheme(themeMode = mode, content = content) }
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/goldens/$name.png")
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -61,8 +69,8 @@ class FoldableFixtureScreenshotTest {
     @Test fun stats_dark() = snapshot("foldable/stats_dark", ThemeMode.Dark) { StatsContent(FixtureData.stats, false, null, {}, {}) }
     @Test fun event_light() = snapshot("foldable/event_light", ThemeMode.Light) { EventFixtureContent(FixtureData.event, {}, {}) }
     @Test fun event_dark() = snapshot("foldable/event_dark", ThemeMode.Dark) { EventFixtureContent(FixtureData.event, {}, {}) }
-    @Test fun adaptive_light() = snapshot("foldable/adaptive_light", ThemeMode.Light) { AdaptiveGamesFixtureContent(FixtureData.games, FixtureData.event, {}, {}, {}, {}) }
-    @Test fun adaptive_dark() = snapshot("foldable/adaptive_dark", ThemeMode.Dark) { AdaptiveGamesFixtureContent(FixtureData.games, FixtureData.event, {}, {}, {}, {}) }
+    @Test fun adaptive_light() = goldenSnapshot("foldable/adaptive_light", ThemeMode.Light) { AdaptiveGamesFixtureContent(FixtureData.games, FixtureData.event, {}, {}, {}, {}) }
+    @Test fun adaptive_dark() = goldenSnapshot("foldable/adaptive_dark", ThemeMode.Dark) { AdaptiveGamesFixtureContent(FixtureData.games, FixtureData.event, {}, {}, {}, {}) }
     @Test fun profile_light() = snapshot("foldable/profile_light", ThemeMode.Light) { ProfileFixtureContent(FixtureData.user, {}, {}) }
     @Test fun profile_dark() = snapshot("foldable/profile_dark", ThemeMode.Dark) { ProfileFixtureContent(FixtureData.user, {}, {}) }
     @Test fun state_empty_light() = stateSnapshot("foldable", FixtureState.Empty)
@@ -81,5 +89,11 @@ class FoldableFixtureScreenshotTest {
     private fun snapshot(name: String, mode: ThemeMode, content: @Composable () -> Unit) {
         composeRule.setContent { ConvocadosTheme(themeMode = mode, content = content) }
         composeRule.onRoot().captureRoboImage("src/test/screenshots/store-listing/$name.png")
+    }
+
+    // See WideFixtureScreenshotTest.goldenSnapshot: adaptive probes are goldens.
+    private fun goldenSnapshot(name: String, mode: ThemeMode, content: @Composable () -> Unit) {
+        composeRule.setContent { ConvocadosTheme(themeMode = mode, content = content) }
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/goldens/$name.png")
     }
 }

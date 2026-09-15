@@ -193,6 +193,28 @@ tasks.register("generateWearStoreListing") {
     }
 }
 
+// Copies the validated Wear store-listing PNGs into the Gradle Play Publisher
+// listing layout so `./gradlew :wear:publishListing` uploads them. Depends on
+// generateWearStoreListing, so Roborazzi verification + dimension checks run first.
+tasks.register("syncWearPlayListingGraphics") {
+    notCompatibleWithConfigurationCache("The task copies generated PNGs with plain file I/O")
+    dependsOn("generateWearStoreListing")
+
+    doLast {
+        val targetDir = project.file("src/main/play/listings/en-US/graphics/wear-screenshots")
+        targetDir.deleteRecursively()
+        targetDir.mkdirs()
+        wearStoreListingNames.forEach { name ->
+            val source = wearStoreListingSource.resolve(name)
+            if (!source.isFile) {
+                throw GradleException("Missing Wear store-listing PNG: $source")
+            }
+            source.copyTo(targetDir.resolve(name), overwrite = true)
+        }
+        println("Synced ${wearStoreListingNames.size} Wear Play listing graphics into ${targetDir.absolutePath}")
+    }
+}
+
 
 dependencies {
     implementation(project(":design-system"))

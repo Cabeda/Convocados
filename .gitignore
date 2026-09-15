@@ -83,6 +83,11 @@ android-app/keystore.properties
 android-app/app/release-keystore.jks
 android-app/release-output/
 android-app/artifacts/
+# Generated Play listing graphics (syncPlayListings output). The committed
+# Roborazzi sources under */src/test/screenshots/store-listing/ are the source
+# of truth; CI regenerates these on every release before publishListing.
+android-app/app/src/main/play/listings/
+android-app/wear/src/main/play/listings/
 *.jks
 *.aab
 play-service-account.json
