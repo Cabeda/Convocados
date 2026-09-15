@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
-import { authorizeSeasonRequest, getSeasonForEvent, requireSeasonAdmin } from "~/lib/seasonSetup.server";
+import { authorizeSeasonRequest, getSeasonForEvent, requireSeasonAdmin, seasonWindowsOverlapByDay, isSeasonCurrent } from "~/lib/seasonSetup.server";
 import { computeLeaderboardPayload } from "~/lib/leaderboard.server";
 import { clearSeasonRankSnapshot, ensureRankCalibration, snapshotSeasonRank } from "~/lib/seasonRank.server";
 
@@ -77,6 +77,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     registrationOpensAt: season.registrationOpensAt,
     registrationClosesAt: season.registrationClosesAt,
     registrationOpen: season.status === "registration" && season.registrationOpensAt <= new Date() && new Date() < season.registrationClosesAt,
+    isCurrent: isSeasonCurrent(season),
     activatedAt: season.activatedAt,
     crews: publicCrews,
     viewerEventPlayerId: viewerEventPlayer?.id ?? null,
@@ -160,14 +161,20 @@ async function updateSeasonDetails(
     }
     const others = await prisma.season.findMany({
       where: { eventId: season.eventId, id: { not: season.id }, status: { not: "cancelled" } },
-      select: { registrationOpensAt: true, registrationClosesAt: true },
+      select: { name: true, status: true, registrationOpensAt: true, registrationClosesAt: true },
     });
-    const overlaps = others.some((other) =>
-      opensAt.getTime() <= other.registrationClosesAt.getTime()
-      && other.registrationOpensAt.getTime() <= closesAt.getTime(),
+    // Date-only, exclusive edges: sharing a boundary day is adjacency.
+    const clash = others.find((other) =>
+      seasonWindowsOverlapByDay(
+        { registrationOpensAt: opensAt, registrationClosesAt: closesAt },
+        other,
+      ),
     );
-    if (overlaps) {
-      return Response.json({ error: "This Season's period overlaps an existing Season." }, { status: 409 });
+    if (clash) {
+      if (TERMINAL_STATUSES.includes(clash.status)) {
+        return Response.json({ error: "This Season's period overlaps an existing Season." }, { status: 409 });
+      }
+      return Response.json({ error: `This Season's period overlaps an open Season ("${clash.name}", ${clash.status}).` }, { status: 409 });
     }
     data.registrationOpensAt = opensAt;
     data.registrationClosesAt = closesAt;
@@ -272,6 +279,16 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   }
   if (season.status !== "registration") {
     return Response.json({ error: "Only a Season in registration can be started." }, { status: 409 });
+  }
+
+  // Single live competition: registration Seasons may coexist (past/future
+  // prep), but only one Season may be active or under review at a time.
+  const rival = await prisma.season.findFirst({
+    where: { eventId: season.eventId, id: { not: season.id }, status: { in: ["active", "review"] } },
+    select: { name: true, status: true },
+  });
+  if (rival) {
+    return Response.json({ error: `This event already has an open Season ("${rival.name}", ${rival.status}). Complete or cancel it before starting a new one.` }, { status: 409 });
   }
 
   const crews = await prisma.crew.findMany({
