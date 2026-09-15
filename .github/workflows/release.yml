@@ -483,7 +483,10 @@ jobs:
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: 17
+          # Java 21: syncPlayListings runs verifyRoborazziDebug, and Robolectric
+          # on targetSdk 36 requires a Java 21 runtime (fails on 17 with a
+          # DefaultSdkProvider UnsupportedOperationException).
+          java-version: 21
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
