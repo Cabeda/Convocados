@@ -1,5 +1,9 @@
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.io.File
 import java.util.Properties
 import javax.imageio.ImageIO
+import kotlin.math.ceil
 
 plugins {
     alias(libs.plugins.android.application)
@@ -196,6 +200,26 @@ tasks.register("generateWearStoreListing") {
 // Copies the validated Wear store-listing PNGs into the Gradle Play Publisher
 // listing layout so `./gradlew :wear:publishListing` uploads them. Depends on
 // generateWearStoreListing, so Roborazzi verification + dimension checks run first.
+// See :app upscaleForPlay: Play rejects screenshots whose shortest side is
+// under 1080px, so the 390px watch renders are upscaled for upload.
+fun upscaleWearForPlay(source: File, target: File): Pair<Int, Int> {
+    val image = ImageIO.read(source)
+        ?: throw GradleException("Unable to read Wear store-listing PNG: $source")
+    val factor = maxOf(1, ceil(1080.0 / minOf(image.width, image.height)).toInt())
+    val scaled = BufferedImage(image.width * factor, image.height * factor, BufferedImage.TYPE_INT_ARGB)
+    val graphics = scaled.createGraphics()
+    graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+    graphics.drawImage(image, 0, 0, scaled.width, scaled.height, null)
+    graphics.dispose()
+    ImageIO.write(scaled, "png", target)
+    val shortest = minOf(scaled.width, scaled.height)
+    val longest = maxOf(scaled.width, scaled.height)
+    if (shortest < 1080 || longest > 7680 || longest.toDouble() / shortest > 2.3) {
+        throw GradleException("$target is ${scaled.width}x${scaled.height}; outside Play limits (min side 1080, max side 7680, max aspect 2.3)")
+    }
+    return scaled.width to scaled.height
+}
+
 tasks.register("syncWearPlayListingGraphics") {
     notCompatibleWithConfigurationCache("The task copies generated PNGs with plain file I/O")
     dependsOn("generateWearStoreListing")
@@ -209,7 +233,8 @@ tasks.register("syncWearPlayListingGraphics") {
             if (!source.isFile) {
                 throw GradleException("Missing Wear store-listing PNG: $source")
             }
-            source.copyTo(targetDir.resolve(name), overwrite = true)
+            val (width, height) = upscaleWearForPlay(source, targetDir.resolve(name))
+            println("wear-screenshots/$name -> ${width}x$height")
         }
         println("Synced ${wearStoreListingNames.size} Wear Play listing graphics into ${targetDir.absolutePath}")
     }

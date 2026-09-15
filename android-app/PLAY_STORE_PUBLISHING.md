@@ -117,7 +117,12 @@ Mapping:
 | Wear `store-listing/` | `wear-screenshots` |
 
 The generated `src/main/play/listings/` output is gitignored — like release
-notes, it exists only in the CI checkout and is never committed. Text listings
+notes, it exists only in the CI checkout and is never committed. Roborazzi
+renders at natural device dp (e.g. 411x891 phone), but the Play images API
+rejects anything with a side under 1080px (max side 7680, max aspect 2.3), so
+the sync step upscales each PNG by the smallest integer factor clearing the
+minimum (phone 3x to 1233x2673, foldable/tablet 2x, watch 3x to 1170x1170)
+and fails the release if the result still falls outside Play's limits. Text listings
 (title, descriptions) are still managed by hand in Play Console; the automation
 only touches graphics. The listing upload runs **last**, after bundles,
 promotions, and the production draft, so a screenshot failure never blocks a
