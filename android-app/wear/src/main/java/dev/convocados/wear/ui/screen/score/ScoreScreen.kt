@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -435,20 +436,46 @@ internal fun TennisScoreEditor(
                     modifier = Modifier.weight(1f),
                 )
             }
-            // Two rows of two: four CompactButtons in one row overflow narrow
-            // round screens (192dp), cutting labels off at default font size.
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Expressive ButtonGroups (connected buttons with animated width)
+            // instead of loose CompactButtons: two rows of two fit narrow round
+            // screens at default font size.
+            val setSource = remember { MutableInteractionSource() }
+            val tiebreakSource = remember { MutableInteractionSource() }
+            val undoSource = remember { MutableInteractionSource() }
+            val teamsSource = remember { MutableInteractionSource() }
+            ButtonGroup(Modifier.fillMaxWidth()) {
                 if (gameOver) {
-                    CompactButton(onClick = onFinish) { Text(stringResource(R.string.finish_game)) }
+                    Button(
+                        onClick = onFinish,
+                        modifier = Modifier.animateWidth(setSource),
+                        interactionSource = setSource,
+                    ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.finish_game)) } }
                 } else {
-                    CompactButton(onClick = onNextSet, enabled = state.scoreSets.size < 5) { Text("Next set") }
+                    Button(
+                        onClick = onNextSet,
+                        enabled = state.scoreSets.size < 5,
+                        modifier = Modifier.animateWidth(setSource),
+                        interactionSource = setSource,
+                    ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("Next set") } }
                 }
-                CompactButton(onClick = onToggleTiebreak) { Text(if (state.isTiebreakScoring) "Games" else "Tiebreak") }
+                Button(
+                    onClick = onToggleTiebreak,
+                    modifier = Modifier.animateWidth(tiebreakSource),
+                    interactionSource = tiebreakSource,
+                ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(if (state.isTiebreakScoring) "Games" else "Tiebreak") } }
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                CompactButton(onClick = onUndo) { Text("Undo") }
-                CompactButton(onClick = onTeams) { Text(stringResource(R.string.teams_title)) }
+            ButtonGroup(Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onUndo,
+                    modifier = Modifier.animateWidth(undoSource),
+                    interactionSource = undoSource,
+                ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("Undo") } }
+                Button(
+                    onClick = onTeams,
+                    modifier = Modifier.animateWidth(teamsSource),
+                    interactionSource = teamsSource,
+                ) { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.teams_title)) } }
             }
         }
         ScoreTimeOverlay(state = state, onFinish = onFinish, nowOverride = nowOverride, showTopStatus = false, showOfflineStatus = false)
@@ -495,7 +522,9 @@ internal fun ScoreEditor(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(2.dp),
+                // Bezel-safe inset so tiles sit inside the round display
+                // instead of touching the screen edge.
+                .padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             TeamScoreButton(
@@ -577,18 +606,26 @@ internal fun ScoreTimeOverlay(
             if (gameOver) {
                 CompactButton(
                     onClick = onFinish,
-                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 14.dp),
+                    // Clears the 12-o'clock progress marker on round screens.
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 20.dp),
                 ) {
                     Text(stringResource(R.string.finish_game))
                 }
             } else {
+                // Pill background (same treatment as GameClock) so the hint stays
+                // legible where the edge-progress marker crosses 12 o'clock.
                 Text(
                     text = stringResource(R.string.teams_hint),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 14.dp),
+                        .padding(top = 20.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .padding(horizontal = 10.dp, vertical = 2.dp),
                 )
             }
         }
@@ -599,6 +636,8 @@ internal fun ScoreTimeOverlay(
                 style = MaterialTheme.typography.labelSmall,
                 color = Warning,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 26.dp),
