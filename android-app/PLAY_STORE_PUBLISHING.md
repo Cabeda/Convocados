@@ -49,6 +49,9 @@ Play Console → Users & permissions → invite the service account email and gr
 
 - **Release to testing tracks** — required for internal/closed/open.
 - **Manage production releases** — required to create the production draft.
+- **Manage store presence** — required for the automated screenshot upload
+  (`publishReleaseListing` commits a store-listing edit; without this the
+  upload fails with `403 PERMISSION_DENIED` on commit).
 
 Apply to `com.cabeda.Convocados` (phone) and `com.cabeda.Convocados` (Wear).
 
