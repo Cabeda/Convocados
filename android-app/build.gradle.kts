@@ -17,6 +17,13 @@ tasks.register("generateStoreListings") {
     dependsOn(":app:generateStoreListing", ":wear:generateWearStoreListing")
 }
 
+// Validates + copies phone and Wear screenshots into the Play listing layout.
+// CI runs this on every release before publishListing; never commit the output
+// (see .gitignore) — the committed Roborazzi sources are the source of truth.
+tasks.register("syncPlayListings") {
+    dependsOn(":app:syncPlayListingGraphics", ":wear:syncWearPlayListingGraphics")
+}
+
 // Hilt 2.60.1 natively supports Kotlin 2.3.21 metadata.
 // Force kotlin-metadata-jvm to match Kotlin version as a safety net.
 allprojects {
