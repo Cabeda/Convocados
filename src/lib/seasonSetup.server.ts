@@ -20,6 +20,43 @@ export function isSeasonRegistrationOpen(season: {
 }
 
 /**
+ * UTC calendar day (`YYYY-MM-DD`) of a timestamp. Season coexistence compares
+ * windows by day, not by time-of-day: back-to-back seasons sharing a boundary
+ * day are adjacent, not overlapping.
+ */
+export function seasonDayKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+type SeasonWindow = {
+  registrationOpensAt: Date;
+  registrationClosesAt: Date;
+};
+
+/**
+ * Date-only, exclusive-edge window overlap. Cancelled seasons are excluded by
+ * the caller. `a.closes == b.opens` (same day) is adjacency, not overlap.
+ */
+export function seasonWindowsOverlapByDay(a: SeasonWindow, b: SeasonWindow): boolean {
+  const aOpen = seasonDayKey(a.registrationOpensAt);
+  const aClose = seasonDayKey(a.registrationClosesAt);
+  const bOpen = seasonDayKey(b.registrationOpensAt);
+  const bClose = seasonDayKey(b.registrationClosesAt);
+  return aOpen < bClose && bOpen < aClose;
+}
+
+/**
+ * Derived display flag: this season's registration period is "now" (date-only,
+ * half-open). `status` remains the lifecycle source of truth; `isCurrent` is
+ * for display only. Cancelled seasons are never current.
+ */
+export function isSeasonCurrent(season: { status: string } & SeasonWindow, now = new Date()): boolean {
+  if (season.status === "cancelled") return false;
+  const today = seasonDayKey(now);
+  return seasonDayKey(season.registrationOpensAt) <= today && today < seasonDayKey(season.registrationClosesAt);
+}
+
+/**
  * Attendance window for season recommendations and candidate stats: the
  * season period up to now. Future games have not been played yet, so they
  * never count toward attendance.
