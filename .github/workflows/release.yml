@@ -589,12 +589,14 @@ jobs:
         working-directory: android-app
         run: ./gradlew syncPlayListings --no-daemon
 
+      # Explicit per-variant tasks: the :app:publishListing lifecycle fans out to
+      # the baseline-profile build types too, triple-uploading the same images.
       - name: Publish Play listings (phone + wear screenshots)
         working-directory: android-app
         run: |
           set -e
-          ./gradlew :app:publishListing --no-daemon
-          ./gradlew :wear:publishListing --no-daemon
+          ./gradlew :app:publishReleaseListing --no-daemon
+          ./gradlew :wear:publishReleaseListing --no-daemon
 
       - name: Cleanup credentials
         if: always()
