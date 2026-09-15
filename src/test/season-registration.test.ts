@@ -212,6 +212,158 @@ describe("Season registration shell", () => {
     expect(response.status).toBe(201);
   });
 
+  it("allows back-to-back seasons sharing a boundary day", async () => {
+    const event = await seedEvent();
+    await prisma.season.create({
+      data: {
+        eventId: event.id,
+        name: "January Season",
+        status: "completed",
+        registrationOpensAt: new Date("2026-01-01T00:00:00.000Z"),
+        registrationClosesAt: new Date("2026-01-31T00:00:00.000Z"),
+        completedAt: new Date("2026-02-05"),
+      },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    // Opens on the same calendar day the previous season closed: adjacency, not overlap.
+    const response = await createSeason(context({ id: event.id }, "POST", {
+      name: "February Season",
+      registrationOpensAt: new Date("2026-01-31T00:00:00.000Z").toISOString(),
+      registrationClosesAt: new Date("2026-02-28T00:00:00.000Z").toISOString(),
+    }));
+
+    expect(response.status).toBe(201);
+  });
+
+  it("ignores time-of-day when checking period overlap", async () => {
+    const event = await seedEvent();
+    await prisma.season.create({
+      data: {
+        eventId: event.id,
+        name: "January Season",
+        status: "completed",
+        registrationOpensAt: new Date("2026-01-01T23:00:00.000Z"),
+        registrationClosesAt: new Date("2026-01-31T01:00:00.000Z"),
+        completedAt: new Date("2026-02-05"),
+      },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    // Same calendar boundary day, different times: still adjacency, not overlap.
+    const response = await createSeason(context({ id: event.id }, "POST", {
+      name: "February Season",
+      registrationOpensAt: new Date("2026-01-31T15:00:00.000Z").toISOString(),
+      registrationClosesAt: new Date("2026-02-28T00:00:00.000Z").toISOString(),
+    }));
+
+    expect(response.status).toBe(201);
+  });
+
+  it("allows preparing a future season while registration is open", async () => {
+    const event = await seedEvent();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const first = await createSeason(context({ id: event.id }, "POST", {
+      name: "Current Season",
+      ...seasonWindow(),
+    }));
+    expect(first.status).toBe(201);
+
+    const futureOpens = new Date(Date.now() + 30 * 86400_000);
+    const futureCloses = new Date(Date.now() + 60 * 86400_000);
+    const response = await createSeason(context({ id: event.id }, "POST", {
+      name: "Next Season",
+      registrationOpensAt: futureOpens.toISOString(),
+      registrationClosesAt: futureCloses.toISOString(),
+    }));
+
+    expect(response.status).toBe(201);
+    expect((await response.json()).season.status).toBe("registration");
+  });
+
+  it("allows recording a past season while registration is open", async () => {
+    const event = await seedEvent();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const first = await createSeason(context({ id: event.id }, "POST", {
+      name: "Current Season",
+      ...seasonWindow(),
+    }));
+    expect(first.status).toBe(201);
+
+    const response = await createSeason(context({ id: event.id }, "POST", {
+      name: "Historic Season",
+      registrationOpensAt: new Date("2025-01-01T00:00:00.000Z").toISOString(),
+      registrationClosesAt: new Date("2025-02-01T00:00:00.000Z").toISOString(),
+    }));
+
+    expect(response.status).toBe(201);
+  });
+
+  it("still rejects a second window covering today", async () => {
+    const event = await seedEvent();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    const first = await createSeason(context({ id: event.id }, "POST", {
+      name: "First Season",
+      ...seasonWindow(),
+    }));
+    expect(first.status).toBe(201);
+
+    const second = await createSeason(context({ id: event.id }, "POST", {
+      name: "Second Season",
+      ...seasonWindow(),
+    }));
+
+    expect(second.status).toBe(409);
+  });
+
+  it("names the open season in the conflict error", async () => {
+    const event = await seedEvent();
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+    await createSeason(context({ id: event.id }, "POST", {
+      name: "Current Season",
+      ...seasonWindow(),
+    }));
+
+    const response = await createSeason(context({ id: event.id }, "POST", {
+      name: "Clashing Season",
+      ...seasonWindow(),
+    }));
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toMatch(/open season/i);
+  });
+
+  it("rejects activating a season while another season is active", async () => {
+    const event = await seedEvent();
+    await prisma.season.create({
+      data: {
+        eventId: event.id,
+        name: "Running Season",
+        status: "active",
+        registrationOpensAt: new Date("2026-01-01T00:00:00.000Z"),
+        registrationClosesAt: new Date("2026-02-01T00:00:00.000Z"),
+        activatedAt: new Date("2026-02-02T00:00:00.000Z"),
+      },
+    });
+    const next = await prisma.season.create({
+      data: {
+        eventId: event.id,
+        name: "Next Season",
+        status: "registration",
+        registrationOpensAt: new Date(Date.now() - 60_000),
+        registrationClosesAt: new Date(Date.now() + 86400_000),
+      },
+    });
+    mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
+
+    const response = await patchSeason(context({ id: event.id, seasonId: next.id }, "PATCH", {
+      action: "activate",
+    }));
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toMatch(/open season|already active/i);
+  });
+
   it("allows public metadata but only exposes the caller membership state", async () => {
     const event = await seedEvent();
     mockGetSession.mockResolvedValue({ user: { id: "owner-1" } });
