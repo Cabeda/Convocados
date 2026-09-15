@@ -17,6 +17,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.wear.compose.material3.*
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.input.RemoteInputIntentHelper
 import dev.convocados.wear.BuildConfig
 import dev.convocados.wear.R
@@ -31,6 +33,7 @@ fun AuthScreen(
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     val columnState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
 
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated) onAuthenticated()
@@ -48,12 +51,21 @@ fun AuthScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             item {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
+                // ListHeader morphs with the scroll and reserves top bezel
+                // inset so the title is never clipped on round screens.
+                ListHeader(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .transformedHeight(this, transformationSpec)
+                        .minimumVerticalContentPadding(ListHeaderDefaults.minimumTopListContentPadding),
+                    transformation = SurfaceTransformation(transformationSpec),
+                ) {
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
 
             if (uiState.showEmailLogin) {
@@ -209,7 +221,14 @@ fun AuthScreen(
 
             item {
                 Spacer(modifier = Modifier.height(8.dp))
-                CompactButton(onClick = onQuickGame) {
+                CompactButton(
+                    onClick = onQuickGame,
+                    // Bottom bezel inset so release builds (no backend
+                    // selector below) don't clip this last item on round.
+                    modifier = Modifier.minimumVerticalContentPadding(
+                        ButtonDefaults.minimumVerticalListContentPadding
+                    ),
+                ) {
                     Text(
                         text = stringResource(R.string.quick_game),
                         style = MaterialTheme.typography.labelSmall,
