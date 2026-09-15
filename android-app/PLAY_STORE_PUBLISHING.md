@@ -89,6 +89,45 @@ Markdown is flattened to plain text and truncated to Play's 500-character limit.
 These files are static defaults in the repo; CI overwrites them only in its
 ephemeral checkout and never commits the change.
 
+## Store listing screenshots
+
+Every release refreshes the Play Store screenshots from the committed Roborazzi
+sources — no manual uploads. Source of truth:
+
+```
+app/src/test/screenshots/store-listing/{phone,foldable,tablet}/  (8 PNGs each)
+wear/src/test/screenshots/store-listing/                          (4 PNGs)
+```
+
+`release.yml` runs `./gradlew syncPlayListings` (which first runs the
+`generate*StoreListing` tasks: Roborazzi verification + dimension checks), then
+`:app:publishListing` and `:wear:publishListing`. Mapping:
+
+| Source | Play slot |
+|--------|-----------|
+| `phone/` | `phone-screenshots` |
+| `foldable/` | `tablet-screenshots` (7") |
+| `tablet/` | `large-tablet-screenshots` (10") |
+| Wear `store-listing/` | `wear-screenshots` |
+
+The generated `src/main/play/listings/` output is gitignored — like release
+notes, it exists only in the CI checkout and is never committed. Text listings
+(title, descriptions) are still managed by hand in Play Console; the automation
+only touches graphics. The listing upload runs **last**, after bundles,
+promotions, and the production draft, so a screenshot failure never blocks a
+release — it retries on the next one.
+
+Local preview:
+
+```bash
+cd android-app
+./gradlew syncPlayListings  # validates + stages graphics under src/main/play/listings/
+```
+
+Note: adaptive layout probes (`adaptive_light/dark`) are regression goldens
+under `src/test/screenshots/goldens/`, not store assets — Play caps each slot
+at 8 images.
+
 ## Promoting releases
 
 ### Automatic (happy path)
