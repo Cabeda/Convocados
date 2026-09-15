@@ -300,6 +300,8 @@ private fun EndedGameContent(state: ScoreUiState) {
             text = stringResource(R.string.game_ended),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         if (hasScore) {
             Spacer(modifier = Modifier.height(4.dp))
@@ -308,6 +310,8 @@ private fun EndedGameContent(state: ScoreUiState) {
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         } else if (hasStructuredScore) {
             Spacer(modifier = Modifier.height(4.dp))
@@ -318,6 +322,8 @@ private fun EndedGameContent(state: ScoreUiState) {
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
             )
         } else {
             Spacer(modifier = Modifier.height(2.dp))
@@ -325,6 +331,9 @@ private fun EndedGameContent(state: ScoreUiState) {
                 text = stringResource(R.string.game_ended_no_score),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -361,6 +370,9 @@ internal fun TennisScoreEditor(
                 }.ifEmpty { "New set" } + "  ·  ${displayTennisPoint(currentGame)}",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             state.legacyScalarScore?.let { (one, two) ->
                 Text(
@@ -368,15 +380,25 @@ internal fun TennisScoreEditor(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            Text("${if (state.isTiebreakScoring) "Tiebreak" else "Set"} ${state.scoreSets.size.coerceAtLeast(1)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Text(
+                "${if (state.isTiebreakScoring) "Tiebreak" else "Set"} ${state.scoreSets.size.coerceAtLeast(1)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             if (state.isOfflineQueued) {
                 Text(
                     text = stringResource(R.string.will_sync_online),
                     style = MaterialTheme.typography.labelSmall,
                     color = Warning,
                     textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -411,13 +433,18 @@ internal fun TennisScoreEditor(
                     modifier = Modifier.weight(1f),
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Two rows of two: four CompactButtons in one row overflow narrow
+            // round screens (192dp), cutting labels off at default font size.
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (gameOver) {
                     CompactButton(onClick = onFinish) { Text(stringResource(R.string.finish_game)) }
                 } else {
                     CompactButton(onClick = onNextSet, enabled = state.scoreSets.size < 5) { Text("Next set") }
                 }
                 CompactButton(onClick = onToggleTiebreak) { Text(if (state.isTiebreakScoring) "Games" else "Tiebreak") }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 CompactButton(onClick = onUndo) { Text("Undo") }
                 CompactButton(onClick = onTeams) { Text(stringResource(R.string.teams_title)) }
             }

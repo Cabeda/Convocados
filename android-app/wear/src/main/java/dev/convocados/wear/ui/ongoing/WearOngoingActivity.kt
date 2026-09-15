@@ -37,8 +37,11 @@ internal fun shouldShowQuickGameOngoing(kickoffMs: Long?, durationMinutes: Int, 
  * Play's "Wear App Quality Guidelines: Missing ongoing activity" policy requires
  * an ongoing score session to surface itself on the watch face and recent-apps
  * chip. Pairing an ongoing notification with an [OngoingActivity] is what makes
- * the device render those indicators; the app has no tile, so the "reference the
- * activity from the tile" clause does not apply.
+ * the device render those indicators. The tile-side reference required by the
+ * same policy lives in [dev.convocados.wear.tile.QuickGameTileService]: the
+ * whole tile is tappable and fires a LaunchAction into WearActivity — the same
+ * entry point as the touch intent below — so a user on the tile carousel can
+ * always return to the live session.
  */
 object WearOngoingActivity {
     const val NOTIFICATION_ID = 7447
