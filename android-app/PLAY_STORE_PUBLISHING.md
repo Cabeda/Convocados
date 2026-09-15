@@ -101,7 +101,10 @@ wear/src/test/screenshots/store-listing/                          (4 PNGs)
 
 `release.yml` runs `./gradlew syncPlayListings` (which first runs the
 `generate*StoreListing` tasks: Roborazzi verification + dimension checks), then
-`:app:publishListing` and `:wear:publishListing`. Mapping:
+`:app:publishListing` and `:wear:publishListing`. The publish job runs on
+Java 21 — Robolectric on targetSdk 36 refuses to run on 17
+(`DefaultSdkProvider` failure), which broke the first listing sync in v3.190.0.
+Mapping:
 
 | Source | Play slot |
 |--------|-----------|
