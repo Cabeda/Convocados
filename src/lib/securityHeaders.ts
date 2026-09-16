@@ -59,30 +59,3 @@ export function applySecurityHeaders(response: Response): Response {
     });
   }
 }
-
-/**
- * Map build-output HTML file paths to the URL pathnames the node adapter
- * matches against. Accepts paths relative to the client output directory.
- *
- *   index.html          -> /
- *   docs/index.html     -> /docs
- *   docs/about.html     -> /docs/about
- *   auth/signin.html    -> /auth/signin   (build.format: 'file')
- */
-export function htmlFilesToPathnames(relativePaths: string[]): string[] {
-  const pathnames = new Set<string>();
-  for (const raw of relativePaths) {
-    const normalized = raw.replace(/\\/g, "/").replace(/^\.?\//, "");
-    if (!normalized.endsWith(".html")) continue;
-    // Ignore error/asset pages that are not user-facing documents.
-    if (normalized === "404.html" || normalized.startsWith("500")) continue;
-    let pathname = normalized.slice(0, -".html".length);
-    if (pathname === "index") {
-      pathname = "";
-    } else if (pathname.endsWith("/index")) {
-      pathname = pathname.slice(0, -"/index".length);
-    }
-    pathnames.add(`/${pathname}`.replace(/\/{2,}/g, "/"));
-  }
-  return [...pathnames].sort();
-}

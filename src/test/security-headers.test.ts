@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  SECURITY_HEADERS,
-  applySecurityHeaders,
-  htmlFilesToPathnames,
-} from "~/lib/securityHeaders";
+import { SECURITY_HEADERS, applySecurityHeaders } from "~/lib/securityHeaders";
 
 describe("SECURITY_HEADERS", () => {
   it("covers the headers that were missing on prerendered pages", () => {
@@ -44,58 +40,5 @@ describe("applySecurityHeaders", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("https://convocados.cabeda.dev/dashboard");
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
-  });
-});
-
-describe("htmlFilesToPathnames", () => {
-  it("maps the root index to /", () => {
-    expect(htmlFilesToPathnames(["index.html"])).toEqual(["/"]);
-  });
-
-  it("maps a nested index to its directory", () => {
-    expect(htmlFilesToPathnames(["docs/index.html"])).toEqual(["/docs"]);
-  });
-
-  it("maps a file-format page to a clean path", () => {
-    expect(htmlFilesToPathnames(["auth/signin.html"])).toEqual(["/auth/signin"]);
-  });
-
-  it("ignores non-HTML assets", () => {
-    expect(htmlFilesToPathnames(["index.html", "_astro/app.js", "favicon.ico"])).toEqual(["/"]);
-  });
-
-  it("ignores the 404 page", () => {
-    expect(htmlFilesToPathnames(["404.html"])).toEqual([]);
-  });
-
-  it("normalises backslashes and leading ./", () => {
-    expect(htmlFilesToPathnames([".\\docs\\about.html"])).toEqual(["/docs/about"]);
-  });
-
-  it("dedupes and sorts", () => {
-    expect(htmlFilesToPathnames(["b.html", "a.html", "a.html"])).toEqual(["/a", "/b"]);
-  });
-
-  it("covers every prerendered page shape in this app", () => {
-    const paths = htmlFilesToPathnames([
-      "index.html",
-      "auth/signin.html",
-      "auth/signup.html",
-      "auth/verify-email.html",
-      "dashboard.html",
-      "settings/notifications.html",
-      "docs/index.html",
-      "docs/features/history.html",
-    ]);
-    expect(paths).toEqual([
-      "/",
-      "/auth/signin",
-      "/auth/signup",
-      "/auth/verify-email",
-      "/dashboard",
-      "/docs",
-      "/docs/features/history",
-      "/settings/notifications",
-    ]);
   });
 });
