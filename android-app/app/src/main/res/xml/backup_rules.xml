@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Auth tokens live in EncryptedSharedPreferences, whose master key is in
+         the Android Keystore and never leaves the device. Restoring the ciphertext
+         is useless and needlessly copies credential material, so exclude it.
+         Everything else (settings, caches) keeps the default backup behaviour. -->
+    <exclude domain="sharedpref" path="convocados_tokens.xml" />
+</full-backup-content>
