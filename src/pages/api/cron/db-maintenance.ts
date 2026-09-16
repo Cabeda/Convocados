@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { runDbOptimize } from "~/lib/db.server";
+import { requireCronSecret } from "~/lib/cronAuth.server";
 
 /**
  * Daily DB maintenance — runs `PRAGMA optimize` to keep SQLite query plans
@@ -9,9 +10,8 @@ import { runDbOptimize } from "~/lib/db.server";
  */
 export const POST: APIRoute = async ({ request }) => {
   const cronSecret = import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET;
-  if (cronSecret && request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const denied = requireCronSecret(request, cronSecret);
+  if (denied) return denied;
 
   await runDbOptimize();
   return Response.json({ ok: true });
