@@ -33,15 +33,22 @@ const MATCH = { resourceId: "court2", resourceName: "Court 2", slotDate: "2026-0
 beforeEach(async () => {
   await prisma.courtWatchHit.deleteMany();
   await prisma.courtWatch.deleteMany();
-  await prisma.inAppNotification.deleteMany();
+   await prisma.inAppNotification.deleteMany();
   await prisma.user.deleteMany();
   vi.clearAllMocks();
+  // The cron guard is fail-closed, so every request must carry the secret.
+  process.env.CRON_SECRET = "test-cron-secret";
   mockWatchQueries.mockReturnValue([KEY]);
   mockFetchGrouped.mockResolvedValue(new Map([["club1|padel|2026-06-15", [{ resource_id: "court2", resource_name: "Court 2", slots: [] }]]]));
 });
 
 function cronReq() {
-  return { request: new Request("http://localhost/api/cron/court-watches", { method: "POST" }) } as any;
+  return {
+    request: new Request("http://localhost/api/cron/court-watches", {
+      method: "POST",
+      headers: { authorization: "Bearer test-cron-secret" },
+    }),
+  } as any;
 }
 
 describe("POST /api/cron/court-watches", () => {
