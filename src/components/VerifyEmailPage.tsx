@@ -7,6 +7,7 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { authClient } from "~/lib/auth.client";
+import { sanitizeCallbackUrl } from "~/lib/safeRedirect";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -14,7 +15,7 @@ export default function VerifyEmailPage() {
   const t = useT();
   const params = new URLSearchParams(window.location.search);
   const email = params.get("email") ?? "";
-  const callbackURL = params.get("callbackURL") || "/";
+  const callbackURL = sanitizeCallbackUrl(params.get("callbackURL"));
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
