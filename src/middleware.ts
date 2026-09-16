@@ -1,4 +1,5 @@
 import { defineMiddleware } from "astro:middleware";
+import { applySecurityHeaders as addSecurityHeaders } from "~/lib/securityHeaders";
 
 /**
  * Security middleware: CSRF protection + security headers (CSP, etc.)
@@ -12,6 +13,10 @@ import { defineMiddleware } from "astro:middleware";
  * - /api/oauth-callback (testing utility)
  * - Requests with Bearer tokens (API keys / OAuth — not session-based)
  * - Requests without cookies (no session to exploit)
+ *
+ * Prerendered routes never reach this middleware (they are served as static
+ * files), so the same header map is also serialized to `dist/_headers.json` at
+ * build time by `src/integrations/staticSecurityHeaders.ts`.
  */
 
 const BYPASS_PREFIXES = [
@@ -20,35 +25,6 @@ const BYPASS_PREFIXES = [
 ];
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-
-/** Security headers applied to all responses */
-const SECURITY_HEADERS: Record<string, string> = {
-  "X-Content-Type-Options": "nosniff",
-  // X-Frame-Options: SAMEORIGIN (not DENY) so Astro's ClientRouter can load
-  // the next page in a hidden same-origin iframe to render its client:only
-  // islands during the view transition. External framing is still blocked by
-  // the CSP frame-ancestors directive below.
-  "X-Frame-Options": "SAMEORIGIN",
-  "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=(self)",
-  "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
-  "Cross-Origin-Opener-Policy": "same-origin",
-  "Cross-Origin-Resource-Policy": "same-origin",
-  "Content-Security-Policy": [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://maps.googleapis.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: https://*.tile.openstreetmap.org https://maps.googleapis.com https://maps.gstatic.com https://*.googleusercontent.com",
-    "connect-src 'self' https://maps.googleapis.com",
-    // frame-ancestors 'self' (not 'none') so Astro's ClientRouter can embed
-    // the next page in a same-origin hidden iframe while preparing the view
-    // transition. External framing is still blocked.
-    "frame-ancestors 'self'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join("; "),
-};
 
 /**
  * If the request arrived on a non-canonical host, return a redirect Response
@@ -96,31 +72,6 @@ function canonicalHostRedirect(request: Request, url: URL): Response | null {
   const location = `${proto === "http" ? "https" : proto}://${canonicalHost}${url.pathname}${url.search}`;
   const status = request.method === "GET" || request.method === "HEAD" ? 301 : 308;
   return new Response(null, { status, headers: { Location: location } });
-}
-
-function addSecurityHeaders(response: Response): Response {
-  try {
-    for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
-      if (!response.headers.has(key)) {
-        response.headers.set(key, value);
-      }
-    }
-    return response;
-  } catch {
-    // Responses created via Response.redirect() have immutable headers,
-    // so set() throws. Rebuild with a mutable copy (preserves status + Location).
-    const headers = new Headers(response.headers);
-    for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
-      if (!headers.has(key)) {
-        headers.set(key, value);
-      }
-    }
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
-  }
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
