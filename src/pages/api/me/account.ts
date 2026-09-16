@@ -3,9 +3,12 @@ import { prisma } from "../../../lib/db.server";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { verifyPassword } from "better-auth/crypto";
 import { logger } from "../../../lib/logger.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 /** DELETE /api/me/account — delete the authenticated user's account and clean up app data */
 export const DELETE: APIRoute = async ({ request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const session = await getSession(request);
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
