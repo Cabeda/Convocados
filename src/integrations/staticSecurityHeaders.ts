@@ -2,66 +2,39 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AstroIntegration } from "astro";
-import { SECURITY_HEADERS, htmlFilesToPathnames } from "../lib/securityHeaders";
-
-/** Recursively list files under `root`, returned as POSIX-style relative paths. */
-function listFiles(root: string): string[] {
-  const out: string[] = [];
-  const walk = (dir: string) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-      } else {
-        out.push(path.relative(root, full).split(path.sep).join("/"));
-      }
-    }
-  };
-  walk(root);
-  return out;
-}
+import { SECURITY_HEADERS } from "../lib/securityHeaders";
 
 /**
- * Apply the shared security headers to prerendered pages.
+ * Emit the shared security-header map for the runtime server.
  *
- * Prerendered routes are written to disk and served as static files, so
- * `src/middleware.ts` never runs for them — the pages that most need a CSP and
- * clickjacking protection (sign-in, dashboard) were previously served with no
- * security headers at all.
+ * Astro's node adapter serves prerendered pages as static files, which bypass
+ * `src/middleware.ts`, so those responses carried no CSP / HSTS / XFO / XCTO /
+ * Referrer-Policy / Permissions-Policy. The adapter's own `staticHeaders`
+ * option cannot fix that in a container: it resolves `_headers.json` against
+ * the **build-time** output directory baked into the manifest (CI builds under
+ * /home/runner/..., the image runs /app), so the file is never found.
+ * `scripts/server.mjs` injects the headers at the HTTP layer instead,
+ * independent of build paths.
  *
- * `@astrojs/node` supports this: with `staticHeaders: true` it reads
- * `dist/_headers.json` and applies matching entries to prerendered responses.
- * Its own writer emits a Content-Security-Policy only (and an empty array when
- * Astro's `security.csp` is off), so this integration emits the full header set
- * for every prerendered document.
+ * `src/lib/securityHeaders.ts` stays the single source of truth for both the
+ * middleware (dynamic routes) and this build-time artifact (static routes).
  */
 export function staticSecurityHeaders(): AstroIntegration {
   let outDir: URL;
-  let clientDir: URL;
 
   return {
     name: "convocados:static-security-headers",
     hooks: {
       "astro:config:done": ({ config }) => {
         outDir = config.outDir;
-        clientDir = config.build.client;
       },
       "astro:build:done": async ({ logger }) => {
         const root = fileURLToPath(outDir);
-        const client = fileURLToPath(clientDir);
-        if (!fs.existsSync(client)) {
-          logger.warn(`no client build output at ${client}; skipping static security headers`);
-          return;
-        }
-
-        const pathnames = htmlFilesToPathnames(listFiles(client));
-        const headers = Object.entries(SECURITY_HEADERS).map(([key, value]) => ({ key, value }));
-        const entries = pathnames.map((pathname) => ({ pathname, headers }));
-
-        const target = path.join(root, "_headers.json");
-        fs.writeFileSync(target, JSON.stringify(entries));
+        fs.mkdirSync(root, { recursive: true });
+        const target = path.join(root, "security-headers.json");
+        fs.writeFileSync(target, JSON.stringify(SECURITY_HEADERS, null, 2));
         logger.info(
-          `wrote security headers for ${entries.length} prerendered route(s) to ${target}`,
+          `wrote ${Object.keys(SECURITY_HEADERS).length} security headers to ${target}`,
         );
       },
     },

@@ -38,6 +38,7 @@ COPY package.json ./
 COPY public ./public
 COPY litestream.yml ./litestream.yml
 COPY scripts/start.sh ./scripts/start.sh
+COPY scripts/server.mjs ./scripts/server.mjs
 COPY scripts/release-migrate.sh ./scripts/release-migrate.sh
 
 EXPOSE 3000
