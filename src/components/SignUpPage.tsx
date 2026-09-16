@@ -7,6 +7,7 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { signIn, signUp } from "~/lib/auth.client";
+import { sanitizeCallbackUrl } from "~/lib/safeRedirect";
 
 export default function SignUpPage() {
   const t = useT();
@@ -17,8 +18,9 @@ export default function SignUpPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Defense-in-depth: only same-origin destinations survive (see safeRedirect).
   const callbackURL = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("callbackURL") || "/"
+    ? sanitizeCallbackUrl(new URLSearchParams(window.location.search).get("callbackURL"))
     : "/";
 
   const handleSubmit = async (e: React.FormEvent) => {
