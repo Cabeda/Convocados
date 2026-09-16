@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { checkOwnership } from "../../../../../../lib/auth.helpers.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 const VALID_EVENTS = ["player_joined", "player_left", "game_full", "game_reset"];
 
@@ -23,6 +24,8 @@ async function loadAuthorizedWebhook(eventId: string, webhookId: string, request
 
 /** PATCH — update which events a webhook receives */
 export const PATCH: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const eventId = params.id ?? "";
   const webhookId = params.webhookId ?? "";
 
@@ -49,6 +52,8 @@ export const PATCH: APIRoute = async ({ params, request }) => {
 
 /** DELETE — unsubscribe a webhook */
 export const DELETE: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const eventId = params.id ?? "";
   const webhookId = params.webhookId ?? "";
 

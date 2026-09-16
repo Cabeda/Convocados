@@ -2,11 +2,14 @@ import type { APIRoute } from "astro";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../../../lib/db.server";
 import { checkOwnership } from "../../../../../lib/auth.helpers.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 const MAX_WEBHOOKS_PER_EVENT = 10;
 
 /** POST — subscribe a webhook */
 export const POST: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });

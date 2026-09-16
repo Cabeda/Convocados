@@ -1,9 +1,12 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 /** POST — transfer ownership to another authenticated player */
 export const POST: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },

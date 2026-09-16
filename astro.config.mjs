@@ -3,13 +3,17 @@ import { fileURLToPath } from "node:url";
 import react from "@astrojs/react";
 import node from "@astrojs/node";
 import pkg from "./package.json" with { type: "json" };
+import { staticSecurityHeaders } from "./src/integrations/staticSecurityHeaders";
 
 const isProd = process.env.NODE_ENV === "production";
 
 export default defineConfig({
   output: "server",
+  // Prerendered pages bypass middleware; scripts/server.mjs injects the
+  // security headers at the HTTP layer (the adapter's staticHeaders option
+  // resolves against the build-time path, which does not exist in the image).
   adapter: node({ mode: "standalone" }),
-  integrations: [react()],
+  integrations: [react(), staticSecurityHeaders()],
   // Astro's built-in checkOrigin is disabled because it runs before middleware
   // and cannot be bypassed per-route. CSRF protection is handled by custom
   // middleware (src/middleware.ts) which validates Origin headers on session-

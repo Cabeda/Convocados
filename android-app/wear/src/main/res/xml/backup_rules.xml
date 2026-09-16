@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- See the :app equivalent: the Keystore-bound token store must not be
+         backed up. Everything else keeps the default behaviour. -->
+    <exclude domain="sharedpref" path="convocados_wear_tokens.xml" />
+</full-backup-content>

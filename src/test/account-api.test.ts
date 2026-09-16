@@ -11,9 +11,10 @@ vi.mock("~/lib/auth.helpers.server", () => ({
 }));
 
 // Mock logger to avoid noise
-vi.mock("~/lib/logger.server", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}));
+vi.mock("~/lib/logger.server", () => {
+  const noop = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+  return { logger: noop, createLogger: () => noop };
+});
 
 // Ensure route handlers use the same prisma client
 vi.mock("~/lib/db.server", async () => {

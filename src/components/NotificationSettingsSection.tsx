@@ -6,6 +6,7 @@ import {
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import { useT } from "~/lib/useT";
 import { DEFAULTS } from "~/lib/notificationPrefsDefaults";
+import { DevicePushSection } from "~/components/DevicePushSection";
 
 type Prefs = typeof DEFAULTS;
 
@@ -72,6 +73,8 @@ export function NotificationSettingsSection() {
             <Typography variant="h6" fontWeight={600}>{t("notificationSettings")}</Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary">{t("notificationSettingsDesc")}</Typography>
+
+          <DevicePushSection />
 
           {/* Global toggles */}
           <Stack spacing={0.5}>
