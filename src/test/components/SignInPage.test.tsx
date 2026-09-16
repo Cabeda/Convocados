@@ -122,3 +122,34 @@ describe("SignInPage — Google sign-in forwards callbackURL", () => {
     });
   });
 });
+
+// Regression: the old guard (startsWith("/") && !startsWith("//")) allowed
+// backslash-normalized protocol-relative URLs, so a crafted sign-in link could
+// bounce an authenticated user to another origin. Every rejected payload must
+// reach the sign-in callers as the safe /dashboard default.
+describe("SignInPage — callbackURL open-redirect hardening", () => {
+  it.each([
+    ["protocol-relative", "//evil.com"],
+    ["backslash", "/\\evil.com"],
+    ["mixed backslash", "/\\/evil.com"],
+    ["absolute", "https://evil.com/steal"],
+    ["javascript", "javascript:alert(1)"],
+  ])("sanitizes a %s callbackURL before it reaches sign-in", async (_label, payload) => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    renderAtUrl(`/auth/signin?callbackURL=${encodeURIComponent(payload)}`);
+
+    await user.click(screen.getByRole("button", { name: /signInWithGoogle/ }));
+
+    expect(mockSignInSocial).toHaveBeenCalledWith({
+      provider: "google",
+      callbackURL: "/dashboard",
+    });
+  });
+
+  it("does not leak the rejected payload into the sign-up link", () => {
+    renderAtUrl(`/auth/signin?callbackURL=${encodeURIComponent("/\\evil.com")}`);
+    const href = screen.getByRole("link", { name: /signUp/ }).getAttribute("href") ?? "";
+    expect(href).not.toContain("evil.com");
+  });
+});

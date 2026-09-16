@@ -85,9 +85,11 @@ function switchCtx(eventId: string, body: unknown) {
   } as any;
 }
 
-function cronCtx(secret?: string) {
-  const headers: Record<string, string> = { "content-type": "application/json" };
-  if (secret) headers.authorization = `Bearer ${secret}`;
+function cronCtx(secret: string = "test-cron-secret") {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    authorization: `Bearer ${secret}`,
+  };
   return { request: new Request("http://localhost/api/cron/court-watch", { method: "POST", headers }), params: {} } as any;
 }
 
@@ -309,6 +311,11 @@ describe("POST /api/events/[id]/switch-court", () => {
 // ── POST /api/cron/court-watch ──────────────────────────────────────────────────
 
 describe("POST /api/cron/court-watch", () => {
+  // The cron guard is fail-closed, so every request must carry the secret.
+  beforeEach(() => {
+    process.env.CRON_SECRET = "test-cron-secret";
+  });
+
   it("processes watched events and creates alerts", async () => {
     const user = await seedUser();
     await seedEvent(user.id, { courtWatchConfig: JSON.stringify({ radius: 10000, indoor: null, surface: null }) });
