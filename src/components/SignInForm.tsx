@@ -6,6 +6,7 @@ import GoogleIcon from "@mui/icons-material/Google";
 import EmailIcon from "@mui/icons-material/Email";
 import { useT } from "~/lib/useT";
 import { signIn } from "~/lib/auth.client";
+import { sanitizeCallbackUrl } from "~/lib/safeRedirect";
 
 function TabPanel({ children, value, index }: { children: React.ReactNode; value: number; index: number }) {
   return value === index ? <Box>{children}</Box> : null;
@@ -43,8 +44,12 @@ export interface SignInFormProps {
  * Safari (cookie lost). Those users fall back to email/password. Upgrade
  * path: Sign in with Apple JS (in-jar, needs Apple Developer credentials).
  */
-export function SignInForm({ callbackURL, onSuccess, showSignUpLink = true }: SignInFormProps) {
+export function SignInForm({ callbackURL: rawCallbackURL, onSuccess, showSignUpLink = true }: SignInFormProps) {
   const t = useT();
+  // The sink: every navigation, magic-link and social call below uses this
+  // value, so sanitizing here covers full-page, modal and link consumers at
+  // once (callers may pass an unsanitized value).
+  const callbackURL = sanitizeCallbackUrl(rawCallbackURL);
   const [tab, setTab] = useState(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
