@@ -3,6 +3,7 @@ import { Button, Snackbar } from "@mui/material";
 import BookmarkIcon from "@mui/icons-material/Bookmark";
 import BookmarkBorderIcon from "@mui/icons-material/BookmarkBorder";
 import { useT } from "~/lib/useT";
+import { enableDevicePush } from "~/lib/devicePush";
 
 interface Props {
   eventId: string;
@@ -46,25 +47,17 @@ export function NotifyButton({ eventId, isAuthenticated }: Props) {
           setFollowing(true);
           setToast(t("followedToast"));
 
-          // Register push subscription silently on first follow
-          if ("serviceWorker" in navigator && "PushManager" in window && Notification.permission !== "denied") {
-            try {
-              const reg = await navigator.serviceWorker.register("/sw.js");
-              await navigator.serviceWorker.ready;
-              const keyRes = await fetch("/api/push/vapid-public-key");
-              const { publicKey } = await keyRes.json();
-              const padding = "=".repeat((4 - (publicKey.length % 4)) % 4);
-              const base64 = (publicKey + padding).replace(/-/g, "+").replace(/_/g, "/");
-              const raw = window.atob(base64);
-              const key = new Uint8Array(raw.length);
-              for (let i = 0; i < raw.length; i++) key[i] = raw.charCodeAt(i);
-              const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-              await fetch("/api/push/subscribe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...sub.toJSON(), locale: navigator.language }),
-              });
-            } catch { /* push permission denied or unavailable — silent */ }
+          // Subscribe this device to push. Requests the permission first and
+          // reports every failure mode instead of dropping them silently.
+          const pushResult = await enableDevicePush();
+          if (pushResult.reason === "needs-install") {
+            setToast(t("notifyDeviceNeedsInstall"));
+          } else if (pushResult.reason === "blocked") {
+            setToast(t("notifyDeviceBlocked"));
+          } else if (pushResult.reason === "unsupported") {
+            setToast(t("notifyDeviceUnsupported"));
+          } else if (pushResult.reason === "error") {
+            setToast(t("notifyPushEnableFailed"));
           }
         }
       }

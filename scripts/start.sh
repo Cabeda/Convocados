@@ -100,8 +100,8 @@ fi
 # ── Start app ─────────────────────────────────────────────────────────────────
 if [ -n "$LITESTREAM_REPLICA_BUCKET" ]; then
   echo "[startup] Starting app with Litestream replication..."
-  exec litestream replicate -exec "node dist/server/entry.mjs" -config /app/litestream.yml
+  exec litestream replicate -exec "node scripts/server.mjs" -config /app/litestream.yml
 else
   echo "[startup] Starting app (no Litestream — LITESTREAM_REPLICA_BUCKET not set)..."
-  exec node dist/server/entry.mjs
+  exec node scripts/server.mjs
 fi

@@ -10,6 +10,7 @@ WORKDIR /app
 COPY dist ./dist
 COPY public ./public
 COPY scripts/start.sh ./scripts/start.sh
+COPY scripts/server.mjs ./scripts/server.mjs
 COPY scripts/release-migrate.sh ./scripts/release-migrate.sh
 COPY litestream.yml ./litestream.yml
 COPY prisma ./prisma

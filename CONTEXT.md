@@ -34,7 +34,7 @@ _Avoid_: exhibition, practice, scrimmage
 ## Season
 A bounded, optional competition within an **Event**. Account-linked **EventPlayers** join explicitly during registration. Eligible non-friendly **Games** contribute results for participating players, while non-participants in those Games remain absent from Season standings.
 
-A Season moves through registration, active competition, result review, and completion, or is cancelled. It soft-resets each participant's **Season Rank** and resets its own standings and awards, but never resets the Event's long-lived **Skill Rating**, which continues to support team balancing across Seasons. An Event has at most one Season that has not completed or been cancelled.
+A Season moves through registration, active competition, result review, and completion, or is cancelled. It soft-resets each participant's **Season Rank** and resets its own standings and awards, but never resets the Event's long-lived **Skill Rating**, which continues to support team balancing across Seasons. An Event has at most one live Season (`active` or `review`) plus any number of `registration` Seasons with non-overlapping windows (past recording, future prep); at most one window contains a given day. `status` is the lifecycle source of truth; `isCurrent` (today in window, never when cancelled) is derived for display only.
 _Avoid_: league (a possible competition format, not the time boundary), Skill Rating season
 
 ## Crew

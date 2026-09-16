@@ -28,6 +28,7 @@ import { useLocale } from "~/lib/useT";
 import type { Locale } from "~/lib/i18n";
 import { useSession, signOut } from "~/lib/auth.client";
 import { shareForHomeScreen } from "~/lib/pwaInstall";
+import { INSTALL_BANNER_DISMISS_KEY, installBannerDismissed } from "~/lib/pushPrompt";
 import { SignInModal } from "./SignInModal";
 import SupportLinks from "./SupportLinks";
 
@@ -39,9 +40,6 @@ const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
   { code: "de", label: "Deutsch" },
   { code: "it", label: "Italiano" },
 ];
-
-const INSTALL_DISMISS_KEY = "pwa-install-dismissed";
-const INSTALL_DISMISS_DAYS = 7;
 
 function isStandalone(): boolean {
   return typeof window !== "undefined" && (
@@ -56,19 +54,12 @@ function isIos(): boolean {
 }
 
 function isDismissed(): boolean {
-  try {
-    const raw = localStorage.getItem(INSTALL_DISMISS_KEY);
-    if (!raw) return false;
-    const dismissed = parseInt(raw, 10);
-    return Date.now() - dismissed < INSTALL_DISMISS_DAYS * 24 * 60 * 60 * 1000;
-  } catch {
-    return false;
-  }
+  return installBannerDismissed(localStorage);
 }
 
 function setDismissed(): void {
   try {
-    localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now()));
+    localStorage.setItem(INSTALL_BANNER_DISMISS_KEY, String(Date.now()));
   } catch { /* ignore */ }
 }
 

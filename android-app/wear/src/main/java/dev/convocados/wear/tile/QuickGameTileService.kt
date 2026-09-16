@@ -32,6 +32,12 @@ private const val FRESHNESS_MS = 30_000L
  * Home-screen tile: the live quick-game score when one is running, otherwise a
  * one-tap quick-game CTA. Tapping anywhere opens [WearActivity] (a LaunchAction
  * to the launcher activity — no renderable-action artifact needed).
+ *
+ * This tap target doubles as the tile-side reference to the Ongoing Activity
+ * required by Play's Wear App Quality policy: while a quick game is live, the
+ * ongoing notification ([dev.convocados.wear.ui.ongoing.WearOngoingActivity])
+ * points at the same entry point, so the tile carousel always offers a way
+ * back into the running session.
  */
 @AndroidEntryPoint
 class QuickGameTileService : TileService() {

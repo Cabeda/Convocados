@@ -5,6 +5,7 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { useT } from "~/lib/useT";
+import { DevicePushSection } from "~/components/DevicePushSection";
 
 interface FollowOverrides {
   following: boolean;
@@ -118,6 +119,7 @@ export function MyNotificationsDialog({ eventId, open, onClose }: Props) {
           </IconButton>
         </DialogTitle>
         <DialogContent>
+          <DevicePushSection />
           <Typography variant="body2" color="text.secondary">
             {t("notifyJoinToGetNotifications")}
           </Typography>
@@ -139,6 +141,7 @@ export function MyNotificationsDialog({ eventId, open, onClose }: Props) {
         </IconButton>
       </DialogTitle>
       <DialogContent>
+        <DevicePushSection />
         {pushOff && (
           <Box sx={{
             mb: 2, p: 1.5, borderRadius: 2,
@@ -153,7 +156,10 @@ export function MyNotificationsDialog({ eventId, open, onClose }: Props) {
             </Typography>
           </Box>
         )}
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 0.6 }}>
+          {t("notifyAccountTitle")}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, mt: 0.25 }}>
           {isPlayer ? t("myNotificationsDescPlayer") : t("myNotificationsDescFollower")}
         </Typography>
         <Stack spacing={1}>

@@ -1,16 +1,22 @@
 package dev.convocados.wear.ui.screen.quick
 
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.material3.CompactButton
+import androidx.wear.compose.material3.Button
+import androidx.wear.compose.material3.ButtonGroup
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
@@ -110,7 +116,8 @@ fun QuickScoreScreen(
                 )
             } else {
                 Row(
-                    modifier = Modifier.fillMaxSize().padding(2.dp),
+                    // Bezel-safe inset so tiles sit inside the round display.
+                    modifier = Modifier.fillMaxSize().padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     TeamScoreButton(
@@ -152,15 +159,22 @@ fun QuickScoreScreen(
                 )
             }
 
-            // Swipe hint (no numeric countdown — ADR 0027).
+            // Swipe hint (no numeric countdown — ADR 0027). Clears the
+            // 12-o'clock progress marker on round screens; pill background
+            // keeps it legible where the marker crosses.
             Text(
                 text = stringResource(R.string.quick_swipe_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 14.dp),
+                    .padding(top = 20.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(horizontal = 10.dp, vertical = 2.dp),
             )
         }
     }
@@ -199,6 +213,8 @@ private fun QuickSetScoreEditor(
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = if (isTiebreak) {
@@ -208,6 +224,8 @@ private fun QuickSetScoreEditor(
             },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         Row(
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -244,15 +262,27 @@ private fun QuickSetScoreEditor(
                 modifier = Modifier.weight(1f),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            CompactButton(
+        // Expressive connected actions instead of loose CompactButtons.
+        val nextSetSource = remember { MutableInteractionSource() }
+        val tiebreakSource = remember { MutableInteractionSource() }
+        ButtonGroup(Modifier.fillMaxWidth()) {
+            Button(
                 onClick = onNextSet,
                 enabled = state.scoreSets.size < 5,
+                modifier = Modifier.animateWidth(nextSetSource),
+                interactionSource = nextSetSource,
             ) {
-                Text(stringResource(R.string.quick_next_set))
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.quick_next_set))
+                }
             }
-            CompactButton(onClick = onToggleTiebreak) {
-                Text(stringResource(if (isTiebreak) R.string.quick_games else R.string.quick_tiebreak))
+            Button(onClick = onToggleTiebreak,
+                modifier = Modifier.animateWidth(tiebreakSource),
+                interactionSource = tiebreakSource,
+            ) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(stringResource(if (isTiebreak) R.string.quick_games else R.string.quick_tiebreak))
+                }
             }
         }
     }

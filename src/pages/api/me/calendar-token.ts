@@ -5,9 +5,12 @@ import {
   revokeUserTokens,
   getOrCreateEventFeedToken,
 } from "../../../lib/calendarToken.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 /** POST — generate (or retrieve) a calendar feed token for the authenticated user */
 export const POST: APIRoute = async ({ request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const session = await getSession(request);
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -37,6 +40,8 @@ export const POST: APIRoute = async ({ request }) => {
 
 /** DELETE — revoke all calendar tokens and regenerate */
 export const DELETE: APIRoute = async ({ request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const session = await getSession(request);
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });

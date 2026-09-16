@@ -49,6 +49,9 @@ Play Console → Users & permissions → invite the service account email and gr
 
 - **Release to testing tracks** — required for internal/closed/open.
 - **Manage production releases** — required to create the production draft.
+- **Manage store presence** — required for the automated screenshot upload
+  (`publishReleaseListing` commits a store-listing edit; without this the
+  upload fails with `403 PERMISSION_DENIED` on commit).
 
 Apply to `com.cabeda.Convocados` (phone) and `com.cabeda.Convocados` (Wear).
 
@@ -88,6 +91,53 @@ android-app/wear/src/main/play/release-notes/en-US/internal.txt
 Markdown is flattened to plain text and truncated to Play's 500-character limit.
 These files are static defaults in the repo; CI overwrites them only in its
 ephemeral checkout and never commits the change.
+
+## Store listing screenshots
+
+Every release refreshes the Play Store screenshots from the committed Roborazzi
+sources — no manual uploads. Source of truth:
+
+```
+app/src/test/screenshots/store-listing/{phone,foldable,tablet}/  (8 PNGs each)
+wear/src/test/screenshots/store-listing/                          (4 PNGs)
+```
+
+`release.yml` runs `./gradlew syncPlayListings` (which first runs the
+`generate*StoreListing` tasks: Roborazzi verification + dimension checks), then
+`:app:publishListing` and `:wear:publishListing`. The publish job runs on
+Java 21 — Robolectric on targetSdk 36 refuses to run on 17
+(`DefaultSdkProvider` failure), which broke the first listing sync in v3.190.0.
+Mapping:
+
+| Source | Play slot |
+|--------|-----------|
+| `phone/` | `phone-screenshots` |
+| `foldable/` | `tablet-screenshots` (7") |
+| `tablet/` | `large-tablet-screenshots` (10") |
+| Wear `store-listing/` | `wear-screenshots` |
+
+The generated `src/main/play/listings/` output is gitignored — like release
+notes, it exists only in the CI checkout and is never committed. Roborazzi
+renders at natural device dp (e.g. 411x891 phone), but the Play images API
+rejects anything with a side under 1080px (max side 7680, max aspect 2.3), so
+the sync step upscales each PNG by the smallest integer factor clearing the
+minimum (phone 3x to 1233x2673, foldable/tablet 2x, watch 3x to 1170x1170)
+and fails the release if the result still falls outside Play's limits. Text listings
+(title, descriptions) are still managed by hand in Play Console; the automation
+only touches graphics. The listing upload runs **last**, after bundles,
+promotions, and the production draft, so a screenshot failure never blocks a
+release — it retries on the next one.
+
+Local preview:
+
+```bash
+cd android-app
+./gradlew syncPlayListings  # validates + stages graphics under src/main/play/listings/
+```
+
+Note: adaptive layout probes (`adaptive_light/dark`) are regression goldens
+under `src/test/screenshots/goldens/`, not store assets — Play caps each slot
+at 8 images.
 
 ## Promoting releases
 

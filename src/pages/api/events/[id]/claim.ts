@@ -1,9 +1,12 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { getSession } from "../../../../lib/auth.helpers.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 /** POST — claim ownership of an ownerless event (atomic) */
 export const POST: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const eventId = params.id ?? "";
   const session = await getSession(request);
   if (!session?.user) {
@@ -29,6 +32,8 @@ export const POST: APIRoute = async ({ params, request }) => {
 
 /** DELETE — relinquish ownership (owner only), event becomes ownerless */
 export const DELETE: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const eventId = params.id ?? "";
   const session = await getSession(request);
   if (!session?.user) {
