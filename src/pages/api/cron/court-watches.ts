@@ -4,9 +4,9 @@ import { watchQueries, matchWatchInCourts, type CourtWatchMatch } from "~/lib/st
 import { fetchAvailabilityGrouped, availabilityKeyStr, purgeStaleAvailabilityCache } from "~/lib/availabilityCache.server";
 import { sendPushToUser } from "~/lib/push.server";
 import { createLogger } from "~/lib/logger.server";
+import { requireCronSecret } from "~/lib/cronAuth.server";
 
 const log = createLogger("court-watches");
-const CRON_SECRET = import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET;
 const APP_URL = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev";
 const LOOKAHEAD_DAYS = 14;
 // Max watches processed per invocation (oldest-checked first). Run the cron more
@@ -23,9 +23,11 @@ const CONCURRENCY = 5;
  *  5. Bulk-dedup + bulk-write hits/notifications; update lastCheckedAt.
  */
 export const POST: APIRoute = async ({ request }) => {
-  if (CRON_SECRET && request.headers.get("authorization") !== `Bearer ${CRON_SECRET}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  // Read per request: a module-level capture freezes the env at import
+  // time, so a rotated or later-set secret would never take effect.
+  const cronSecret = import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET;
+  const denied = requireCronSecret(request, cronSecret);
+  if (denied) return denied;
 
   // Housekeeping: drop stale availability cache rows so the table stays small.
   const purged = await purgeStaleAvailabilityCache();
