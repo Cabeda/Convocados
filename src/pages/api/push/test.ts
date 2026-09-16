@@ -12,8 +12,11 @@ import { prisma } from "~/lib/db.server";
 import { getSession } from "~/lib/auth.helpers.server";
 import { createT, type Locale } from "~/lib/i18n";
 import { sendTestPushToUserWebSubs } from "~/lib/push.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 export const POST: APIRoute = async ({ request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const session = await getSession(request);
   if (!session?.user?.id) {
     return Response.json({ error: "Unauthorized." }, { status: 401 });

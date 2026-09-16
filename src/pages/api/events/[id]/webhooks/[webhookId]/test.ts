@@ -1,9 +1,12 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { signPayload } from "../../../../../../lib/webhook.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 /** POST — send a test payload to a webhook */
-export const POST: APIRoute = async ({ params }) => {
+export const POST: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const eventId = params.id ?? "";
   const webhookId = params.webhookId ?? "";
 

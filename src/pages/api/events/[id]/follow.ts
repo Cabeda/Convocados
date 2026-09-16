@@ -4,6 +4,7 @@ import { getSession } from "../../../../lib/auth.helpers.server";
 import { authenticateRequest } from "../../../../lib/authenticate.server";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 import { getNotificationPrefs } from "../../../../lib/notificationPrefs.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 const OVERRIDE_FIELDS = ["mutePlayerActivity", "muteReminders", "mutePostGame", "muteEventDetails"] as const;
 
@@ -51,6 +52,8 @@ export const GET: APIRoute = async ({ params, request }) => {
 };
 
 export const POST: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const authCtx = await authenticateRequest(request);
   const userId = authCtx?.userId ?? (await getSession(request))?.user?.id;
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -73,6 +76,8 @@ export const POST: APIRoute = async ({ params, request }) => {
 };
 
 export const PUT: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const authCtx = await authenticateRequest(request);
   const userId = authCtx?.userId ?? (await getSession(request))?.user?.id;
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -127,6 +132,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const authCtx = await authenticateRequest(request);
   const userId = authCtx?.userId ?? (await getSession(request))?.user?.id;
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
