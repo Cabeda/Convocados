@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../lib/db.server";
 import { getSession } from "../../../lib/auth.helpers.server";
 import { generateApiKey, API_SCOPES } from "../../../lib/apiKey.server";
+import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 const MAX_KEYS_PER_USER = 10;
 
@@ -37,6 +38,8 @@ export const GET: APIRoute = async ({ request }) => {
 
 /** POST — create a new API key */
 export const POST: APIRoute = async ({ request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const session = await getSession(request);
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -83,6 +86,8 @@ export const POST: APIRoute = async ({ request }) => {
 
 /** DELETE — revoke an API key by id (passed in body) */
 export const DELETE: APIRoute = async ({ request }) => {
+  const limited = await rateLimitResponse(request, "write");
+  if (limited) return limited;
   const session = await getSession(request);
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
