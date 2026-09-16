@@ -22,19 +22,21 @@ import {
 import { createLogger } from "~/lib/logger.server";
 import { prisma } from "~/lib/db.server";
 import pLimit from "p-limit";
+import { requireCronSecret } from "~/lib/cronAuth.server";
 
 const log = createLogger("cron");
 
-const CRON_SECRET = import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET;
 const APP_URL = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev";
 
 /** Max concurrent outbound email sends to avoid overwhelming the SMTP provider */
 const EMAIL_CONCURRENCY = 10;
 
 export const POST: APIRoute = async ({ request }) => {
-  if (CRON_SECRET && request.headers.get("authorization") !== `Bearer ${CRON_SECRET}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  // Read per request: a module-level capture freezes the env at import
+  // time, so a rotated or later-set secret would never take effect.
+  const cronSecret = import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET;
+  const denied = requireCronSecret(request, cronSecret);
+  if (denied) return denied;
 
   const limit = pLimit(EMAIL_CONCURRENCY);
   const sent: string[] = [];

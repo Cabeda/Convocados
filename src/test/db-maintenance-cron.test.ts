@@ -48,9 +48,12 @@ describe("POST /api/cron/db-maintenance", () => {
     expect(mockRunDbOptimize).toHaveBeenCalledTimes(1);
   });
 
-  it("runs optimize without a secret when CRON_SECRET is unset", async () => {
+  // Fail-closed: an unset secret must not disable the guard. The previous
+  // behaviour (run without a secret) left the endpoint public whenever
+  // CRON_SECRET was missing from the environment.
+  it("rejects 401 when CRON_SECRET is unset", async () => {
     const res = await POST(cronReq());
-    expect(res.status).toBe(200);
-    expect(mockRunDbOptimize).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(401);
+    expect(mockRunDbOptimize).not.toHaveBeenCalled();
   });
 });

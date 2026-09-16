@@ -3,16 +3,18 @@ import { prisma } from "~/lib/db.server";
 import { searchCourtAlternatives, parseCourtWatchConfig } from "~/lib/courtAlternatives.server";
 import { sendPushToUser } from "~/lib/push.server";
 import { createLogger } from "~/lib/logger.server";
+import { requireCronSecret } from "~/lib/cronAuth.server";
 
 const log = createLogger("court-watch");
-const CRON_SECRET = import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET;
 const MAX_WATCHED_GAMES = 20;
 const APP_URL = import.meta.env.BETTER_AUTH_URL ?? process.env.BETTER_AUTH_URL ?? "https://convocados.cabeda.dev";
 
 export const POST: APIRoute = async ({ request }) => {
-  if (CRON_SECRET && request.headers.get("authorization") !== `Bearer ${CRON_SECRET}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  // Read per request: a module-level capture freezes the env at import
+  // time, so a rotated or later-set secret would never take effect.
+  const cronSecret = import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET;
+  const denied = requireCronSecret(request, cronSecret);
+  if (denied) return denied;
 
   // Find all events with court watching enabled
   const events = await prisma.event.findMany({

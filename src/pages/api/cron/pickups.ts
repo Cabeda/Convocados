@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { runPickupSweep, archiveExpiredPickups, resolveAnchors } from "../../../lib/pickupSweep.server";
 import { createLogger } from "../../../lib/logger.server";
+import { requireCronSecret } from "~/lib/cronAuth.server";
 
 const log = createLogger("pickups");
 
@@ -11,9 +12,8 @@ const log = createLogger("pickups");
  */
 export const POST: APIRoute = async ({ request }) => {
   const cronSecret = import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET;
-  if (cronSecret && request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const denied = requireCronSecret(request, cronSecret);
+  if (denied) return denied;
 
   const anchors = resolveAnchors();
 

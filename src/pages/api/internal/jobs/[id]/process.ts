@@ -1,11 +1,11 @@
 import type { APIRoute } from "astro";
 import { processJob } from "~/lib/scheduler.server";
+import { requireCronSecret } from "~/lib/cronAuth.server";
 
 export const POST: APIRoute = async ({ params, request }) => {
   const schedulerSecret = import.meta.env.SCHEDULER_SECRET ?? process.env.SCHEDULER_SECRET;
-  if (schedulerSecret && request.headers.get("authorization") !== `Bearer ${schedulerSecret}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const denied = requireCronSecret(request, schedulerSecret);
+  if (denied) return denied;
 
   const jobId = params.id;
   if (!jobId) {
