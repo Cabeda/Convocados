@@ -5,17 +5,19 @@ import { ResponsiveLayout } from "./ResponsiveLayout";
 import { SignInForm } from "./SignInForm";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
+import { sanitizeCallbackUrl } from "~/lib/safeRedirect";
 
 export default function SignInPage() {
   const t = useT();
   const { data: session, isPending } = useSession();
 
   const rawCallback = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("callbackURL") || "/"
-    : "/";
+    ? new URLSearchParams(window.location.search).get("callbackURL")
+    : null;
 
-  // Sanitize callbackURL: only allow relative paths to prevent open redirects
-  const callbackURL = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/";
+  // Only same-origin destinations survive: resolving against our own origin
+  // rejects protocol-relative, backslash-normalized and foreign-absolute URLs.
+  const callbackURL = sanitizeCallbackUrl(rawCallback);
 
   const hasCallbackURL = typeof window !== "undefined" && !!new URLSearchParams(window.location.search).get("callbackURL");
 
