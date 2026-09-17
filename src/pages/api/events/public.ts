@@ -18,6 +18,7 @@ export const GET: APIRoute = async ({ request }) => {
 
   const mapped = events.map((e) => ({
     id: e.id,
+    url: `/events/${e.id}`,
     title: e.title,
     location: e.location,
     latitude: e.latitude,

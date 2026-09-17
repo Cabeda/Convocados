@@ -3,6 +3,10 @@ Allow: /
 Allow: /public
 Allow: /events/
 Allow: /docs/
+Allow: /llms.txt
+Allow: /api/events/public
+Allow: /api/events/
+Allow: /api/openapi.json
 
 Disallow: /api/
 Disallow: /auth/signup

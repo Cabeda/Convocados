@@ -204,6 +204,47 @@ describe("GET /api/events/[id]", () => {
     expect(res.status).toBe(404);
   });
 
+  it("serves an unlisted event by link without leaking PII to anonymous readers", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Unlisted", location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        isPublic: false,
+      },
+    });
+    await prisma.player.createMany({
+      data: [{ name: "Alice", eventId: event.id }],
+    });
+
+    const res = await getEvent(ctx({ id: event.id }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    // isPublic governs discovery, not access: an unlisted event is still
+    // readable by id. But the anonymous payload must never carry account
+    // emails, the password hash, or per-player payment data.
+    expect(body.id).toBe(event.id);
+    expect(body.players.map((p: { name: string }) => p.name)).toContain("Alice");
+    expect(body.accessPassword).toBeUndefined();
+    expect(body.declined).toEqual([]);
+    expect(body.invited).toEqual([]);
+    expect(body.postGameStatus).toBeNull();
+
+    const keys = new Set<string>();
+    const walk = (value: unknown): void => {
+      if (Array.isArray(value)) value.forEach(walk);
+      else if (value && typeof value === "object") {
+        for (const [k, v] of Object.entries(value)) {
+          keys.add(k);
+          walk(v);
+        }
+      }
+    };
+    walk(body);
+    expect(keys.has("email")).toBe(false);
+    expect(keys.has("accessPassword")).toBe(false);
+  });
+
   it("includes postGameStatus in the payload so the UI can gate the banner on load", async () => {
     const id = await seedEvent();
 

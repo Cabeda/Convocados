@@ -19,6 +19,18 @@ _Avoid_: attended, was on the list
 A recurring series or one-off template. Holds configuration (title, location, sport, maxPlayers, recurrence rule, payment settings, priority settings). The container for one or more Games. URL: `/events/:id`.
 _Avoid_: game (when referring to the series)
 
+## Discoverable Event
+An Event with `isPublic = true`. Discoverable Events appear in the public listing (`/public`), `/api/events/public`, the sitemap, and the `/llms.txt` agent index. Discoverability is about *finding* an Event, never about being allowed to read it.
+_Avoid_: public (as a synonym for readable), listed
+
+## Unlisted Event
+An Event with `isPublic = false`. Absent from every listing and index, but still anonymously readable by anyone holding its link — unless password-locked. Link-sharing is the product's core distribution mechanism, so unlisted is not the same as unreadable.
+_Avoid_: private (implies inaccessible), hidden
+
+## Accessible Event
+An Event a caller is permitted to read, by id. Every Event is accessible by link; only password-locked Events (`accessPassword` set) deny anonymous reads, answering `{ "locked": true }` and requiring a session, invite, or password. See ADR 0034.
+_Avoid_: visible, readable (ambiguous — see Discoverable Event)
+
 ## Game
 A single occurrence of an Event — one date, one player list, one score. The unit of participation: Players join a Game, RSVPs answer a Game, payments settle a Game. A non-recurring Event has exactly one Game. A recurring Event spawns a new Game on each recurrence cycle.
 

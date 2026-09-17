@@ -1,7 +1,16 @@
 /**
  * OpenAPI 3.1 specification for the Convocados API.
  * Kept as a plain object so it can be served as JSON and validated in tests.
+ *
+ * Operations reachable without authentication MUST declare `security: []`.
+ * `/llms.txt` and `src/test/llms.test.ts` derive the anonymous read surface
+ * from that marker, so leaving it off silently hides an endpoint from agents.
  */
+
+import pkg from "../../package.json";
+
+/** Marks an operation as reachable without credentials. */
+const anonymous: [] = [];
 
 const eventIdParam = {
   name: "id",
@@ -30,7 +39,7 @@ export const openApiSpec = {
   openapi: "3.1.0",
   info: {
     title: "Convocados API",
-    version: "3.5.0",
+    version: pkg.version,
     description: "API for organizing pickup sports games — manage events, players, teams, and more.",
     license: { name: "MIT" },
   },
@@ -43,7 +52,16 @@ export const openApiSpec = {
       get: {
         summary: "Health check",
         tags: ["System"],
+        security: anonymous,
         responses: { "200": { description: "Service is healthy" } },
+      },
+    },
+    "/api/openapi.json": {
+      get: {
+        summary: "OpenAPI 3.1 specification (this document)",
+        tags: ["System"],
+        security: anonymous,
+        responses: { "200": { description: "OpenAPI document" } },
       },
     },
 
@@ -89,6 +107,7 @@ export const openApiSpec = {
       get: {
         summary: "List public events",
         tags: ["Events"],
+        security: anonymous,
         parameters: [
           { name: "sport", in: "query", schema: { type: "string" }, description: "Filter by sport" },
           { name: "hasSpots", in: "query", schema: { type: "boolean" }, description: "Only events with available spots" },
@@ -98,8 +117,9 @@ export const openApiSpec = {
     },
     "/api/events/{id}": {
       get: {
-        summary: "Get event details",
+        summary: "Get event details (anonymous link access; locked when password-protected)",
         tags: ["Events"],
+        security: anonymous,
         parameters: [eventIdParam],
         responses: {
           "200": { description: "Event details with players and teams" },
@@ -561,8 +581,9 @@ export const openApiSpec = {
     },
     "/api/users/{id}/stats": {
       get: {
-        summary: "Get a user's game statistics",
+        summary: "Get a user's game statistics (respects profile visibility)",
         tags: ["Users"],
+        security: anonymous,
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "User ID" }],
         responses: { "200": { description: "Player statistics" }, "404": { description: "User not found" } },
       },
@@ -609,6 +630,7 @@ export const openApiSpec = {
       get: {
         summary: "Get event status (player count, spots left)",
         tags: ["Events"],
+        security: anonymous,
         parameters: [eventIdParam],
         responses: { "200": { description: "Event status" } },
       },
@@ -776,6 +798,7 @@ export const openApiSpec = {
       get: {
         summary: "Download .ics calendar file for an event",
         tags: ["Calendar"],
+        security: anonymous,
         parameters: [eventIdParam],
         responses: { "200": { description: "iCalendar file", content: { "text/calendar": {} } } },
       },
@@ -784,6 +807,7 @@ export const openApiSpec = {
       get: {
         summary: "iCal feed for an event (token-authenticated)",
         tags: ["Calendar"],
+        security: anonymous,
         parameters: [eventIdParam, { name: "token", in: "query", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "iCalendar feed" }, "401": { description: "Missing token" }, "403": { description: "Invalid token" } },
       },
@@ -792,6 +816,7 @@ export const openApiSpec = {
       get: {
         summary: "iCal feed for a user's games (token-authenticated)",
         tags: ["Calendar"],
+        security: anonymous,
         parameters: [
           { name: "id", in: "path", required: true, schema: { type: "string" }, description: "User ID" },
           { name: "token", in: "query", required: true, schema: { type: "string" } },
@@ -819,6 +844,7 @@ export const openApiSpec = {
       get: {
         summary: "Get VAPID public key for push subscriptions",
         tags: ["Push"],
+        security: anonymous,
         responses: { "200": { description: "VAPID public key" } },
       },
     },
@@ -907,8 +933,9 @@ export const openApiSpec = {
     // ── Users ───────────────────────────────────────────────────────────
     "/api/users/{id}": {
       get: {
-        summary: "Get user profile",
+        summary: "Get user profile (email only on your own profile)",
         tags: ["Users"],
+        security: anonymous,
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "User ID" }],
         responses: { "200": { description: "User profile with game history" }, "404": { description: "User not found" } },
       },
@@ -1027,6 +1054,7 @@ export const openApiSpec = {
       get: {
         summary: "OpenID Connect discovery document",
         tags: ["OAuth"],
+        security: anonymous,
         responses: { "200": { description: "OIDC metadata" } },
       },
     },
@@ -1242,6 +1270,7 @@ export const openApiSpec = {
       get: {
         summary: "Look up an invite by token (invite-by-link)",
         tags: ["Invites"],
+        security: anonymous,
         parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "Invite details" } },
       },
@@ -1278,6 +1307,7 @@ export const openApiSpec = {
       get: {
         summary: "OAuth protected resource metadata (RFC 9728) for MCP",
         tags: ["OAuth"],
+        security: anonymous,
         responses: { "200": { description: "Protected resource metadata" } },
       },
     },
@@ -1285,6 +1315,7 @@ export const openApiSpec = {
       get: {
         summary: "OAuth authorization server metadata (RFC 8414 + RFC 9207 iss)",
         tags: ["OAuth"],
+        security: anonymous,
         responses: { "200": { description: "Authorization server metadata" } },
       },
     },
