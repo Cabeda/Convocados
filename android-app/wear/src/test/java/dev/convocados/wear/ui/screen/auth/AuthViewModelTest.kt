@@ -4,6 +4,7 @@ import dev.convocados.wear.data.api.OAuthTokenResponse
 import dev.convocados.wear.data.api.WearApiClient
 import dev.convocados.wear.data.auth.OAuthTokens
 import dev.convocados.wear.data.auth.WearGoogleSignIn
+import dev.convocados.wear.data.auth.WearGoogleSignInResult
 import dev.convocados.wear.data.auth.WearRestoreCredentialCoordinator
 import dev.convocados.wear.data.auth.WearTokenStore
 import io.mockk.*
@@ -151,5 +152,74 @@ class AuthViewModelTest {
     fun `signOut clears tokens`() {
         viewModel.signOut()
         verify { tokenStore.clearTokens() }
+    }
+
+    // ── Sign in with Google via Credential Manager ──────────────────────────
+
+    private val activity = mockk<android.app.Activity>(relaxed = true)
+
+    @Test
+    fun `signInWithGoogle success clears the error and stops the spinner`() = runTest {
+        coEvery { googleSignIn.signIn(activity) } returns WearGoogleSignInResult.Success
+
+        viewModel.signInWithGoogle(activity)
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isSigningIn)
+    }
+
+    // Dismissing the Credential Manager sheet must not read as a failure.
+    @Test
+    fun `signInWithGoogle cancellation stays silent`() = runTest {
+        coEvery { googleSignIn.signIn(activity) } returns WearGoogleSignInResult.Cancelled
+
+        viewModel.signInWithGoogle(activity)
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `signInWithGoogle without a Google account points at email sign-in`() = runTest {
+        coEvery { googleSignIn.signIn(activity) } returns WearGoogleSignInResult.NoCredential
+
+        viewModel.signInWithGoogle(activity)
+        advanceUntilIdle()
+
+        assertEquals(
+            "No Google account on this watch. Use email sign-in.",
+            viewModel.uiState.value.error,
+        )
+    }
+
+    @Test
+    fun `signInWithGoogle failure surfaces an error`() = runTest {
+        coEvery { googleSignIn.signIn(activity) } returns WearGoogleSignInResult.Error("boom")
+
+        viewModel.signInWithGoogle(activity)
+        advanceUntilIdle()
+
+        assertEquals("Sign-in failed. Try again.", viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `trySilentSignIn does nothing when already authenticated`() = runTest {
+        isAuthenticatedFlow.value = true
+
+        viewModel.trySilentSignIn(activity)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { googleSignIn.trySilentSignIn(any()) }
+    }
+
+    @Test
+    fun `trySilentSignIn stops the spinner when it cannot resolve silently`() = runTest {
+        coEvery { googleSignIn.trySilentSignIn(activity) } returns false
+
+        viewModel.trySilentSignIn(activity)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isSigningIn)
     }
 }

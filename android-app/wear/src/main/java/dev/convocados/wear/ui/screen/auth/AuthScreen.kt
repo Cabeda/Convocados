@@ -7,9 +7,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import android.app.RemoteInput
 import android.content.Intent
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,9 +38,16 @@ fun AuthScreen(
     val uiState by viewModel.uiState.collectAsState()
     val columnState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
+    val activity = LocalContext.current.findActivity()
 
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated) onAuthenticated()
+    }
+
+    // Credential Manager resolves a stored Google account through an Activity.
+    // Best-effort: on failure the normal sign-in button is shown instead.
+    LaunchedEffect(activity) {
+        if (activity != null) viewModel.trySilentSignIn(activity)
     }
 
     // Dev-only: prefill credentials from .env.wear
@@ -181,17 +192,13 @@ fun AuthScreen(
                 item { Spacer(modifier = Modifier.height(8.dp)) }
 
                 item {
-                    val googleLauncher = rememberLauncherForActivityResult(
-                        ActivityResultContracts.StartActivityForResult()
-                    ) { result ->
-                        viewModel.handleGoogleSignInResult(result.data)
-                    }
                     if (uiState.isSigningIn) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                     } else {
                         Button(
-                            onClick = { googleLauncher.launch(viewModel.getSignInIntent()) },
+                            onClick = { activity?.let { viewModel.signInWithGoogle(it) } },
                             modifier = Modifier.fillMaxWidth(),
+                            enabled = activity != null,
                             label = { Text(stringResource(R.string.sign_in_google)) }
                         )
                     }
@@ -293,4 +300,11 @@ private fun BackendSelector(viewModel: AuthViewModel) {
             )
         }
     }
+}
+
+/** Compose's LocalContext can be a wrapper; Credential Manager needs the Activity. */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

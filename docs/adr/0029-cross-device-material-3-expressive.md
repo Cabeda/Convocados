@@ -54,7 +54,18 @@ The PR must include:
 
 Performance profiling remains a validation concern, but a full benchmark lab is not a prerequisite for this PR.
 
-### 8. Keep the Wear Google Sign-In compatibility exception explicit
+### 8. Retire the Wear Google Sign-In compatibility exception
+
+> **Superseded (2026-09):** the exception below no longer applies. Credential
+> Manager *is* Google's documented Wear OS sign-in path — what actually blocks
+> it is the platform level: its Google and password providers are unavailable
+> below **API 35**, where the platform throws `NoCredentialException: This API
+> is not supported on Wear OS below API Level 35`. Rather than carry a legacy
+> fallback, `:wear` now targets `minSdk 35` and authenticates solely through
+> Credential Manager (`GetGoogleIdOption`), so Auth 22 is adopted everywhere and
+> the `GoogleSignIn`/`GoogleSignInClient` dependency is gone. Devices on
+> Wear OS 3/4/5 (API 30–34) keep the last compatible build and no longer receive
+> Wear updates. See the Wear OS authentication guide and #1024.
 
 The shared catalog tracks Play Services Auth 22.0.0 for the requested library update. Wear remains on the pinned 21.3.0 legacy artifact because the standalone watch flow still uses `GoogleSignIn`/`GoogleSignInClient`, which Auth 22 removed, and the documented Credential Manager path is not supported for this Wear flow. The exception is isolated to `:wear`; phone authentication uses Credential Manager.
 
