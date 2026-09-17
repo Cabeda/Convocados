@@ -83,6 +83,14 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    // Robolectric 4.17's FileDescriptorInterceptor reaches JDK-internal
+    // jdk.internal.access.SharedSecrets, which java.base does not export by
+    // default. Without it every Robolectric test dies in sandbox setup with
+    // "Failed to interact with raw FileDescriptor internals".
+    tasks.withType<Test>().configureEach {
+        jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
