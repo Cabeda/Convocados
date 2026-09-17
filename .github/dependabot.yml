@@ -40,6 +40,13 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     ignore:
+      # ADR 0029: the standalone watch flow uses the legacy GoogleSignIn /
+      # GoogleSignInClient API, which Auth 22.0.0 removed, and the Credential
+      # Manager replacement is not supported for that Wear flow. :wear stays on
+      # the pinned 21.3.0 artifact; phone auth uses Credential Manager already.
+      # Remove this once a Credential Manager path exists for Wear OS.
+      - dependency-name: "com.google.android.gms:play-services-auth"
+        versions: [">=22.0.0"]
       # Hilt/Dagger can't read Kotlin 2.4.x metadata yet (shaded kotlin-metadata-jvm).
       # Remove this once Dagger ships 2.4.0 support.
       - dependency-name: "org.jetbrains.kotlin:*"
