@@ -93,6 +93,11 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    // See :wear — Robolectric 4.17 needs jdk.internal.access exported.
+    tasks.withType<Test>().configureEach {
+        jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
+    }
 }
 
 play {
