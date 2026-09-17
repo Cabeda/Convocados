@@ -31,6 +31,12 @@ interface Props {
    * specific layout overrides without duplicating global styles.
    */
   mainClass?: string;
+  /**
+   * Render a small server-rendered footer linking the machine-readable docs
+   * (`/llms.txt`, OpenAPI). Enable on entry pages so agents that traverse HTML
+   * can discover them without running JS.
+   */
+  agentLinks?: boolean;
 }
 
 const {
@@ -43,6 +49,7 @@ const {
   themeColor = "#1b6b4a",
   mainTransitionName,
   mainClass,
+  agentLinks = false,
 } = Astro.props;
 ---
 
@@ -94,5 +101,14 @@ const {
     >
       <slot />
     </main>
+    {agentLinks && (
+      <footer
+        style="max-width: 960px; margin: 0 auto; padding: 16px; font-family: system-ui, sans-serif; font-size: 0.8rem; opacity: 0.7;"
+      >
+        <a href="/llms.txt" style="color: #7fc7a4; margin-right: 12px;">llms.txt</a>
+        <a href="/api/openapi.json" style="color: #7fc7a4; margin-right: 12px;">OpenAPI</a>
+        <a href="/docs" style="color: #7fc7a4;">Docs</a>
+      </footer>
+    )}
   </body>
 </html>

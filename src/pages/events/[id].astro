@@ -2,7 +2,9 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import EventPageComponent from "../../components/EventPage";
 import { prisma } from "../../lib/db.server";
+import { activeParticipantsWhere } from "../../lib/activeParticipants.server";
 import { generateEventHead, generateEventMetaTags } from "../../lib/seo";
+import { buildEventSummary, type EventSummary } from "../../lib/eventSummary";
 
 const { id } = Astro.params;
 
@@ -15,6 +17,7 @@ let description = "Organize pickup sports games — manage events, randomize tea
 let jsonLd = "";
 let alternateJson: string | undefined;
 let metaTags: { property: string; content: string }[] = [];
+let summary: EventSummary | null = null;
 
 try {
   const event = await prisma.event.findUnique({
@@ -28,10 +31,26 @@ try {
   });
 
   if (event) {
-    // ADR 0016: use GameParticipant count when currentGameId is set
-    const playerCount = event.currentGameId
-      ? await prisma.gameParticipant.count({ where: { gameId: event.currentGameId, archivedAt: null } })
-      : event._count.players;
+    // ADR 0016: the authoritative roster is GameParticipant-scoped once a
+    // current Game exists; legacy Player rows are the fallback.
+    const [playerNames, teamRows] = await Promise.all([
+      event.currentGameId
+        ? prisma.gameParticipant.findMany({
+            where: activeParticipantsWhere(event.currentGameId),
+            select: { eventPlayer: { select: { name: true } } },
+            orderBy: { order: "asc" },
+          }).then((rows) => rows.map((r) => r.eventPlayer.name))
+        : prisma.player.findMany({
+            where: { eventId: event.id, archivedAt: null },
+            select: { name: true },
+            orderBy: { order: "asc" },
+          }).then((rows) => rows.map((r) => r.name)),
+      prisma.teamResult.findMany({
+        where: { eventId: event.id },
+        select: { name: true, members: { select: { name: true }, orderBy: { order: "asc" } } },
+      }),
+    ]);
+    const playerCount = playerNames.length;
     const spotsLeft = Math.max(0, event.maxPlayers - playerCount);
     title = `${event.title} — Convocados`;
     description = `${event.location || "Game"} · ${playerCount}/${event.maxPlayers} players · ${spotsLeft} spot(s) left`;
@@ -52,6 +71,22 @@ try {
     });
     jsonLd = head.jsonLd ?? "";
     alternateJson = head.alternateJson;
+
+    const activeNames = new Set(playerNames);
+    summary = buildEventSummary({
+      id: event.id,
+      title: event.title,
+      location: event.location,
+      dateTime: event.dateTime,
+      sport: event.sport,
+      maxPlayers: event.maxPlayers,
+      playerCount,
+      playerNames,
+      teams: teamRows
+        .map((t) => ({ name: t.name, members: t.members.map((m) => m.name).filter((n) => activeNames.has(n)) }))
+        .filter((t) => t.members.length > 0),
+      locked: !!event.accessPassword,
+    });
 
     metaTags = generateEventMetaTags({
       title: event.title,
@@ -75,5 +110,23 @@ try {
   metaTags={metaTags}
   mainTransitionName={`page-event-${id}`}
 >
+  {summary && (
+    <section
+      data-ssr-event-summary
+      aria-label="Event summary"
+      style="max-width: 720px; margin: 0 auto; padding: 24px 16px; font-family: system-ui, sans-serif; line-height: 1.6; color: #e6e6e6;"
+    >
+      <h1 style="font-size: 1.5rem; margin: 0 0 8px;">{summary.heading}</h1>
+      <p style="margin: 0 0 4px;">{summary.meta}</p>
+      <p style="margin: 0 0 4px;">{summary.attendance}</p>
+      {summary.players && <p style="margin: 0 0 4px;">Players: {summary.players}</p>}
+      {summary.teams.map((team) => (
+        <p style="margin: 0 0 4px;">{team.name}: {team.members.join(", ")}</p>
+      ))}
+      <p style="margin: 8px 0 0; opacity: 0.7;">
+        Machine-readable: <a href={summary.apiPath} style="color: #7fc7a4;">{summary.apiPath}</a> (JSON)
+      </p>
+    </section>
+  )}
   <EventPageComponent client:only="react" eventId={id!} />
 </BaseLayout>

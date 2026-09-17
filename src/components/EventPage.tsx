@@ -113,6 +113,13 @@ export default function EventPage({ eventId }: { eventId: string }) {
     clientIdRef.current = id;
   }, []);
 
+  // The server renders a read-only event summary into the body so clients that
+  // do not run JS (agents, crawlers) can read the event. Once this island
+  // hydrates it takes over the page, so drop the summary to avoid duplication.
+  useEffect(() => {
+    document.querySelector("[data-ssr-event-summary]")?.remove();
+  }, []);
+
   // ── Team state ──────────────────────────────────────────────────────────────
   const [localMatches, setLocalMatches] = useState<Imatch[] | null>(null);
   const [teamOneName, setTeamOneName] = useState("");
