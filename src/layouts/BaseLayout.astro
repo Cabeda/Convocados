@@ -12,6 +12,12 @@ interface Props {
   metaTags?: MetaTag[];
   /** Optional JSON-LD payload to inject as <script type="application/ld+json">. */
   jsonLd?: string;
+  /**
+   * Optional JSON representation of this page, emitted as
+   * `<link rel="alternate" type="application/json">`. Used on JS-only shells
+   * so agents that do not execute scripts can find the data (ADR 0034).
+   */
+  alternateJson?: string;
   /** Override the default theme-color (default: #1b6b4a). */
   themeColor?: string;
   /**
@@ -33,6 +39,7 @@ const {
   canonical,
   metaTags = [],
   jsonLd,
+  alternateJson,
   themeColor = "#1b6b4a",
   mainTransitionName,
   mainClass,
@@ -52,6 +59,7 @@ const {
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content={themeColor} />
     {metaTags.map((tag) => <meta property={tag.property} content={tag.content} />)}
+    {alternateJson && <link rel="alternate" type="application/json" href={alternateJson} />}
     {jsonLd && <script type="application/ld+json" set:html={jsonLd} />}
 
     {/*

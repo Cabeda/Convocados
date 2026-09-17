@@ -53,6 +53,10 @@ export function buildLlmsTxt(baseUrl = ""): string {
     "account, key, or OAuth flow: send a plain `GET` and read JSON. Start from",
     "`/api/events/public` to discover games, then fetch one by id.",
     "",
+    "The human-facing `/events/{id}` pages are client-rendered: their HTML carries",
+    "no event data. Read an event with `GET /api/events/{id}`",
+    "(the page also exposes it as `<link rel=\"alternate\" type=\"application/json\">`).",
+    "",
     "## Anonymous read API",
     "",
   ];
