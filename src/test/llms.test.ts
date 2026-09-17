@@ -93,6 +93,12 @@ describe("buildLlmsTxt", () => {
     expect(txt).toContain("locked");
   });
 
+  it("tells agents the event pages are client-rendered and to use the JSON API", () => {
+    expect(txt).toContain("client-rendered");
+    expect(txt).toContain("GET /api/events/{id}");
+    expect(txt).toContain('rel="alternate"');
+  });
+
   it("uses relative links when no base URL is given", () => {
     const relative = buildLlmsTxt();
     expect(relative).toContain("`GET /api/events/public`");

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateEventJsonLd, generateEventMetaTags } from "../lib/seo";
+import { generateEventJsonLd, generateEventHead, generateEventMetaTags } from "../lib/seo";
 
 describe("generateEventJsonLd", () => {
   const event = {
@@ -44,6 +44,37 @@ describe("generateEventJsonLd", () => {
   it("caps remainingAttendeeCapacity at 0", () => {
     const parsed = JSON.parse(generateEventJsonLd({ ...event, playerCount: 15 }));
     expect(parsed.remainingAttendeeCapacity).toBe(0);
+  });
+});
+
+const baseEvent = {
+  id: "evt-1",
+  title: "Tuesday 5-a-side",
+  location: "Riverside Astro, Pitch 2",
+  dateTime: new Date("2026-03-24T19:00:00Z"),
+  sport: "football-5v5",
+  maxPlayers: 10,
+  playerCount: 6,
+  url: "https://convocados.fly.dev/events/evt-1",
+};
+
+describe("generateEventHead", () => {
+  it("emits JSON-LD for a link-accessible event without a password", () => {
+    const head = generateEventHead(baseEvent);
+    expect(head.jsonLd).not.toBeNull();
+    expect(JSON.parse(head.jsonLd!).name).toBe("Tuesday 5-a-side");
+  });
+
+  it("withholds JSON-LD when the event is password-locked", () => {
+    const head = generateEventHead({ ...baseEvent, accessPassword: "$2b$10$hash" });
+    expect(head.jsonLd).toBeNull();
+  });
+
+  it("always advertises the JSON representation of the same resource", () => {
+    expect(generateEventHead(baseEvent).alternateJson).toBe("/api/events/evt-1");
+    expect(generateEventHead({ ...baseEvent, accessPassword: "x" }).alternateJson).toBe(
+      "/api/events/evt-1",
+    );
   });
 });
 
