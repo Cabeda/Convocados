@@ -63,6 +63,25 @@ describe("DELETE /api/events/[id]/webhooks/[webhookId]", () => {
     expect(res.status).toBe(403);
   });
 
+  it("rejects anonymous deletion of a webhook on an owned event", async () => {
+    const owner = await seedUser("owner-anon");
+    const event = await seedEvent(owner.id, "evt-anon");
+    const webhook = await prisma.webhookSubscription.create({
+      data: { eventId: event.id, url: "https://example.com/webhook" },
+    });
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
+
+    const anonymous = ctx(event.id, webhook.id);
+    expect(anonymous.request.headers.get("authorization")).toBeNull();
+
+    const res = await DELETE(anonymous);
+    expect(res.status).toBe(403);
+
+    const remaining = await prisma.webhookSubscription.findUnique({ where: { id: webhook.id } });
+    expect(remaining).not.toBeNull();
+  });
+
   it("returns 404 for non-existent webhook", async () => {
     const owner = await seedUser("owner-2");
     const event = await seedEvent(owner.id);
@@ -104,7 +123,7 @@ describe("DELETE /api/events/[id]/webhooks/[webhookId]", () => {
     expect(res.status).toBe(200);
   });
 
-  it("allows ownerless event webhook deletion", async () => {
+  it("denies webhook deletion for an ownerless event (no one can be authorized)", async () => {
     const event = await prisma.event.create({
       data: { id: "evt-no-owner", title: "No Owner", location: "Pitch", dateTime: new Date(), maxPlayers: 10 },
     });
@@ -115,6 +134,6 @@ describe("DELETE /api/events/[id]/webhooks/[webhookId]", () => {
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
 
     const res = await DELETE(ctx(event.id, webhook.id));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
   });
 });

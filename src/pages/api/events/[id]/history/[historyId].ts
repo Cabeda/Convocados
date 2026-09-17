@@ -249,7 +249,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
       })
     : false;
 
-  if (event.ownerId && !isOwner && !isAdmin && !isParticipant) {
+  if (!isOwner && !isAdmin && !isParticipant) {
     return Response.json({ error: "Only the event owner or a participant can edit this." }, { status: 403 });
   }
 

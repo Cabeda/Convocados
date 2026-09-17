@@ -6,24 +6,34 @@ import { DELETE as deleteWebhook } from "~/pages/api/events/[id]/webhooks/[webho
 import { signPayload, fireWebhooks } from "~/lib/webhook.server";
 
 // Helpers
-function ctx(params: Record<string, string>, body?: unknown) {
+const OWNER_ID = "webhook-owner-1";
+const OAUTH_CLIENT_ID = "webhook-test-client";
+const ACCESS_TOKEN = "tok-webhook-owner";
+
+function authHeaders(withAuth: boolean): Record<string, string> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (withAuth) headers.authorization = `Bearer ${ACCESS_TOKEN}`;
+  return headers;
+}
+
+function ctx(params: Record<string, string>, body?: unknown, opts: { auth?: boolean } = {}) {
   const request = new Request("http://localhost/api/test", {
     method: body !== undefined ? "POST" : "GET",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders(opts.auth !== false),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return { request, params } as any;
 }
 
-function deleteCtx(params: Record<string, string>) {
+function deleteCtx(params: Record<string, string>, opts: { auth?: boolean } = {}) {
   const request = new Request("http://localhost/api/test", {
     method: "DELETE",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders(opts.auth !== false),
   });
   return { request, params } as any;
 }
 
-async function seedEvent() {
+async function seedEvent(ownerId: string | null = OWNER_ID) {
   const event = await prisma.event.create({
     data: {
       title: "Test Event",
@@ -31,9 +41,28 @@ async function seedEvent() {
       dateTime: new Date(Date.now() + 86400_000),
       teamOneName: "Ninjas",
       teamTwoName: "Gunas",
+      ownerId,
     },
   });
   return event.id;
+}
+
+async function seedAuth() {
+  await prisma.user.create({
+    data: { id: OWNER_ID, name: "Webhook Owner", email: "webhook-owner@test.com", emailVerified: true },
+  });
+  await prisma.oauthClient.create({
+    data: { id: crypto.randomUUID(), clientId: OAUTH_CLIENT_ID, redirectUris: "", type: "web" },
+  });
+  await prisma.oauthAccessToken.create({
+    data: {
+      id: crypto.randomUUID(),
+      token: ACCESS_TOKEN,
+      clientId: OAUTH_CLIENT_ID,
+      userId: OWNER_ID,
+      expiresAt: new Date(Date.now() + 3600_000),
+    },
+  });
 }
 
 beforeEach(async () => {
@@ -43,6 +72,10 @@ beforeEach(async () => {
   await prisma.teamResult.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
+  await prisma.oauthAccessToken.deleteMany();
+  await prisma.oauthClient.deleteMany();
+  await prisma.user.deleteMany();
+  await seedAuth();
 });
 
 // ─── POST /api/events/[id]/webhooks ─────────────────────────────────────────
@@ -59,6 +92,14 @@ describe("POST /api/events/[id]/webhooks", () => {
     expect(body.id).toBeTruthy();
     expect(body.url).toBe("https://example.com/hook");
     expect(body.events).toEqual(["player_joined"]);
+  });
+
+  it("rejects anonymous webhook creation on an owned event", async () => {
+    const id = await seedEvent();
+    const res = await createWebhook(ctx({ id }, {
+      url: "https://example.com/hook",
+    }, { auth: false }));
+    expect(res.status).toBe(403);
   });
 
   it("returns 404 for unknown event", async () => {

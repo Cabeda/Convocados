@@ -34,6 +34,13 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "gameId, eventPlayerId, and noShow (boolean) required." }, { status: 400 });
   }
 
+  // Bind the supplied game to THIS event — otherwise owner/admin of event A
+  // could mark no-shows on a game belonging to event B.
+  const game = await prisma.game.findUnique({ where: { id: gameId }, select: { eventId: true } });
+  if (!game || game.eventId !== eventId) {
+    return Response.json({ error: "gameId does not belong to this event." }, { status: 400 });
+  }
+
   const participant = await prisma.gameParticipant.findUnique({
     where: { gameId_eventPlayerId: { gameId, eventPlayerId } },
     include: { eventPlayer: { select: { userId: true, name: true } } },

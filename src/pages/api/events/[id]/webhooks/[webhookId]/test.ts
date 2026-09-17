@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { signPayload } from "../../../../../../lib/webhook.server";
+import { checkOwnership } from "../../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 /** POST — send a test payload to a webhook */
@@ -9,6 +10,15 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (limited) return limited;
   const eventId = params.id ?? "";
   const webhookId = params.webhookId ?? "";
+
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
+  if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  // Test fires a server-side request to the stored URL, so it must be owner/admin only.
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+  if (!isOwner && !isAdmin) {
+    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+  }
 
   const webhook = await prisma.webhookSubscription.findFirst({
     where: { id: webhookId, eventId },

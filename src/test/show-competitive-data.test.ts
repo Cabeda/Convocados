@@ -9,17 +9,42 @@ import { PUT as updateShowCompetitiveData } from "~/pages/api/events/[id]/show-c
 import { GET as getRatings } from "~/pages/api/events/[id]/ratings/index";
 import { GET as getHistory } from "~/pages/api/events/[id]/history/index";
 
-function ctx(params: Record<string, string>, body?: unknown, method = "GET") {
+function ctx(params: Record<string, string>, body?: unknown, method = "GET", token?: string) {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (token) headers.authorization = `Bearer ${token}`;
   const request = new Request("http://localhost/api/test", {
     method: body !== undefined ? (method === "GET" ? "POST" : method) : method,
-    headers: { "content-type": "application/json" },
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return { request, params, url: new URL(request.url) } as any;
 }
 
-function putCtx(params: Record<string, string>, body: unknown) {
-  return ctx(params, body, "PUT");
+function putCtx(params: Record<string, string>, body: unknown, token?: string) {
+  return ctx(params, body, "PUT", token);
+}
+
+/**
+ * Seed a real authenticated user backed by an OAuth access token.
+ * getSession() resolves the raw bearer token via prisma.oauthAccessToken.
+ */
+async function seedAuthenticatedUser() {
+  const id = await seedUser();
+  const clientId = `client-${id}`;
+  await prisma.oauthClient.create({
+    data: { id: `oc-${id}`, clientId, redirectUris: "http://localhost/callback" },
+  });
+  const token = `tok-${id}`;
+  await prisma.oauthAccessToken.create({
+    data: {
+      id: `oat-${id}`,
+      token,
+      clientId,
+      userId: id,
+      expiresAt: new Date(Date.now() + 3600_000),
+    },
+  });
+  return { id, token };
 }
 
 async function seedEvent(overrides: Record<string, unknown> = {}) {
@@ -52,6 +77,8 @@ beforeEach(async () => {
   await prisma.player.deleteMany();
   await prisma.session.deleteMany();
   await prisma.account.deleteMany();
+  await prisma.oauthAccessToken.deleteMany();
+  await prisma.oauthClient.deleteMany();
   await prisma.event.deleteMany();
   await prisma.user.deleteMany();
 });
@@ -59,9 +86,10 @@ beforeEach(async () => {
 // ─── PUT /api/events/[id]/show-competitive-data ──────────────────────────────
 
 describe("PUT /api/events/[id]/show-competitive-data", () => {
-  it("toggles showCompetitiveData", async () => {
-    const id = await seedEvent();
-    const res = await updateShowCompetitiveData(putCtx({ id }, { showCompetitiveData: false }));
+  it("toggles showCompetitiveData for the authenticated owner", async () => {
+    const { id: ownerId, token } = await seedAuthenticatedUser();
+    const id = await seedEvent({ ownerId });
+    const res = await updateShowCompetitiveData(putCtx({ id }, { showCompetitiveData: false }, token));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.showCompetitiveData).toBe(false);
@@ -79,6 +107,14 @@ describe("PUT /api/events/[id]/show-competitive-data", () => {
     const id = await seedEvent({ ownerId: userId });
     const res = await updateShowCompetitiveData(putCtx({ id }, { showCompetitiveData: false }));
     expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for an ownerless event (no owner authorizes nobody)", async () => {
+    const id = await seedEvent();
+    const res = await updateShowCompetitiveData(putCtx({ id }, { showCompetitiveData: false }));
+    expect(res.status).toBe(403);
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event!.showCompetitiveData).toBe(true);
   });
 });
 
@@ -103,12 +139,23 @@ describe("GET /api/events/[id]/ratings with showCompetitiveData", () => {
     expect(res.status).toBe(403);
   });
 
-  it("allows access when showCompetitiveData is false on ownerless event", async () => {
-    // Ownerless events: the condition `event.ownerId && !isOwner && !isAdmin` is false
+  it("returns 403 when showCompetitiveData is false on ownerless event", async () => {
+    // Ownerless events authorize nobody, so hidden competitive data stays hidden
     const id = await seedEvent({ ownerId: null, showCompetitiveData: false });
     await prisma.playerRating.create({ data: { eventId: id, name: "Bob", rating: 1050, gamesPlayed: 1, wins: 1, draws: 0, losses: 0 } });
     const res = await getRatings(ctx({ id }));
+    expect(res.status).toBe(403);
+  });
+
+  it("allows the authenticated owner to read ratings when showCompetitiveData is false", async () => {
+    const { id: ownerId, token } = await seedAuthenticatedUser();
+    const id = await seedEvent({ ownerId, showCompetitiveData: false });
+    await prisma.playerRating.create({ data: { eventId: id, name: "Carol", rating: 1080, gamesPlayed: 2, wins: 2, draws: 0, losses: 0 } });
+    const res = await getRatings(ctx({ id }, undefined, "GET", token));
     expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.length).toBe(1);
+    expect(body.data[0].name).toBe("Carol");
   });
 });
 

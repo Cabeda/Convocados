@@ -56,9 +56,16 @@ export const PUT: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "gameId and eventPlayerId are required." }, { status: 400 });
   }
 
+  // Bind the supplied game to THIS event — otherwise an owner/admin of event A
+  // could settle shares on a game belonging to event B.
+  const game = await prisma.game.findUnique({ where: { id: gameId }, select: { eventId: true } });
+  if (!game || game.eventId !== eventId) {
+    return Response.json({ error: "gameId does not belong to this event." }, { status: 400 });
+  }
+
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
   // Owner/admin manage any game; a participant may settle within their own game.
-  if (event.ownerId && !isOwner && !isAdmin) {
+  if (!isOwner && !isAdmin) {
     if (!session?.user || !(await isGameParticipant(eventId, gameId, session.user.id))) {
       return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
     }
@@ -90,10 +97,16 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     return Response.json({ error: "gameId and eventPlayerId are required." }, { status: 400 });
   }
 
+  // Bind the supplied game to THIS event (see PUT above).
+  const game = await prisma.game.findUnique({ where: { id: gameId }, select: { eventId: true } });
+  if (!game || game.eventId !== eventId) {
+    return Response.json({ error: "gameId does not belong to this event." }, { status: 400 });
+  }
+
   const session = await getSession(request);
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
   // Owner/admin manage any game; a participant may revert within their own game.
-  if (event.ownerId && !isOwner && !isAdmin) {
+  if (!isOwner && !isAdmin) {
     if (!session?.user || !(await isGameParticipant(eventId, gameId, session.user.id))) {
       return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
     }

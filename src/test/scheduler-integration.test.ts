@@ -31,6 +31,8 @@ beforeEach(async () => {
   await prisma.reminderLog.deleteMany();
   await prisma.player.deleteMany();
   await prisma.event.deleteMany();
+  await prisma.oauthAccessToken.deleteMany();
+  await prisma.oauthClient.deleteMany();
   await prisma.session.deleteMany();
   await prisma.account.deleteMany();
   await prisma.user.deleteMany();
@@ -38,6 +40,33 @@ beforeEach(async () => {
   resetApiRateLimitStore();
   vi.clearAllMocks();
 });
+
+/**
+ * Seed a user plus an OAuth access token that getSession() accepts via
+ * `Authorization: Bearer <token>`. Used to satisfy the owner/admin gate on
+ * the datetime update endpoint with real (unmocked) auth.
+ */
+async function seedOwnerToken() {
+  const userId = `sched-user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  await prisma.user.create({
+    data: { id: userId, name: "Scheduler Owner", email: `${userId}@test.com` },
+  });
+  const clientId = `sched-client-${userId}`;
+  await prisma.oauthClient.create({
+    data: { id: `oauth-client-${userId}`, clientId, redirectUris: "[]" },
+  });
+  const token = `sched-token-${userId}`;
+  await prisma.oauthAccessToken.create({
+    data: {
+      id: `oauth-token-${userId}`,
+      token,
+      clientId,
+      userId,
+      expiresAt: new Date(Date.now() + 3600_000),
+    },
+  });
+  return { userId, token };
+}
 
 function postCtx(body: unknown) {
   return {
@@ -51,11 +80,13 @@ function postCtx(body: unknown) {
   } as any;
 }
 
-function putCtx(id: string, body: unknown) {
+function putCtx(id: string, body: unknown, token?: string) {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (token) headers.authorization = `Bearer ${token}`;
   return {
     request: new Request(`http://localhost/api/events/${id}/datetime`, {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(body),
     }),
     params: { id },
@@ -110,10 +141,14 @@ describe("Event datetime update reschedules reminders", () => {
     expect(originalJobs).toHaveLength(4);
     const originalRunAts = originalJobs.map((j) => j.runAt.getTime());
 
+    // The datetime endpoint is owner/admin-only: make the OAuth user the owner.
+    const { userId, token } = await seedOwnerToken();
+    await prisma.event.update({ where: { id: eventId }, data: { ownerId: userId } });
+
     const newDateTime = new Date(Date.now() + 48 * 60 * 60 * 1000);
     const updateRes = await updateDateTime(putCtx(eventId, {
       dateTime: newDateTime.toISOString(),
-    }));
+    }, token));
     expect(updateRes.status).toBe(200);
 
     const newJobs = await prisma.scheduledJob.findMany({

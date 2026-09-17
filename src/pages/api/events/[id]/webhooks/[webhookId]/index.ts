@@ -10,7 +10,7 @@ async function loadAuthorizedWebhook(eventId: string, webhookId: string, request
   if (!event) return { ok: false as const, response: Response.json({ error: "Not found." }, { status: 404 }) };
 
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (event.ownerId && !isOwner && !isAdmin) {
+  if (!isOwner && !isAdmin) {
     return { ok: false as const, response: Response.json({ error: "Only the event owner can do this." }, { status: 403 }) };
   }
 

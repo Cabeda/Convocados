@@ -432,12 +432,14 @@ describe("DELETE /api/events/[id]/players (protected)", () => {
     expect(res.status).toBe(403);
   });
 
-  it("allows anyone to remove an anonymous player", async () => {
+  it("blocks anonymous removal of an anonymous player (organizer action)", async () => {
     mockAnonymous();
     const id = await seedEvent();
     const p = await testPrisma.player.create({ data: { name: "Anon", eventId: id } });
     const res = await deletePlayer(deleteCtx({ id }, { playerId: p.id }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
+    // The player must still be present.
+    expect(await testPrisma.player.findUnique({ where: { id: p.id } })).not.toBeNull();
   });
 
   it("deletes EventFollow on self-removal", async () => {
@@ -834,8 +836,9 @@ describe("PUT /api/events/[id]/reorder-players", () => {
 
 describe("POST /api/events/[id]/undo-remove", () => {
   it("restores a removed player at their original position", async () => {
-    mockAnonymous();
-    const id = await seedEvent();
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
     await testPrisma.player.create({ data: { name: "Alice", eventId: id, order: 0 } });
     await testPrisma.player.create({ data: { name: "Bob", eventId: id, order: 1 } });
     await testPrisma.player.create({ data: { name: "Charlie", eventId: id, order: 2 } });
@@ -851,8 +854,9 @@ describe("POST /api/events/[id]/undo-remove", () => {
   });
 
   it("resets RSVP to yes when restoring a player into the current game", async () => {
-    mockAnonymous();
-    const id = await seedEvent();
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
     const game = await testPrisma.game.create({
       data: { eventId: id, dateTime: new Date(Date.now() + 86400_000) },
     });
@@ -868,15 +872,17 @@ describe("POST /api/events/[id]/undo-remove", () => {
   });
 
   it("returns 410 when undo window has expired", async () => {
-    mockAnonymous();
-    const id = await seedEvent();
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
     const res = await undoRemove(ctx({ id }, { name: "Bob", order: 0, userId: null, removedAt: Date.now() - 120_000 }));
     expect(res.status).toBe(410);
   });
 
   it("returns 409 when player name already exists", async () => {
-    mockAnonymous();
-    const id = await seedEvent();
+    const owner = await seedUser();
+    mockAuth(owner.id);
+    const id = await seedEvent({ ownerId: owner.id });
     await testPrisma.player.create({ data: { name: "Alice", eventId: id, order: 0 } });
     const res = await undoRemove(ctx({ id }, { name: "Alice", order: 0, userId: null, removedAt: Date.now() }));
     expect(res.status).toBe(409);
@@ -894,6 +900,15 @@ describe("POST /api/events/[id]/undo-remove", () => {
     const res = await undoRemove(ctx({ id }, { name: "", order: "bad" }));
     expect(res.status).toBe(400);
   });
+
+  it("returns 403 for anonymous callers (regression: was unauthenticated)", async () => {
+    mockAnonymous();
+    const owner = await seedUser();
+    const id = await seedEvent({ ownerId: owner.id });
+    await testPrisma.player.create({ data: { name: "Alice", eventId: id, order: 0 } });
+    const res = await undoRemove(ctx({ id }, { name: "Bob", order: 1, userId: null, removedAt: Date.now() }));
+    expect(res.status).toBe(403);
+  });
 });
 
 // ─── PATCH /api/events/[id]/history/[historyId] (authenticated) ──────────────
@@ -910,7 +925,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
   it("updates a history entry when authenticated", async () => {
     const user = await seedUser();
     mockAuth(user.id);
-    const id = await seedEvent();
+    const id = await seedEvent({ ownerId: user.id });
     const history = await seedHistory(id);
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { scoreOne: 3, scoreTwo: 1 }));
     expect(res.status).toBe(200);
@@ -1007,7 +1022,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
   it("triggers ELO processing when scores are set", async () => {
     const user = await seedUser();
     mockAuth(user.id);
-    const id = await seedEvent();
+    const id = await seedEvent({ ownerId: user.id });
     const teams = [
       { team: "A", players: [{ name: "Alice", order: 0 }] },
       { team: "B", players: [{ name: "Bob", order: 0 }] },
@@ -1218,7 +1233,7 @@ describe("PATCH /api/events/[id]/history/[historyId]", () => {
   it("handles status change to cancelled", async () => {
     const user = await seedUser();
     mockAuth(user.id);
-    const id = await seedEvent();
+    const id = await seedEvent({ ownerId: user.id });
     const history = await seedHistory(id);
     const res = await patchHistory(patchCtx({ id, historyId: history.id }, { status: "cancelled" }));
     expect(res.status).toBe(200);
@@ -1395,12 +1410,12 @@ describe("PUT /api/events/[id]/duration", () => {
     expect(res.status).toBe(403);
   });
 
-  it("allows anyone to update duration on ownerless event", async () => {
+  it("returns 403 on ownerless event (owner required)", async () => {
     const user = await seedUser();
     mockAuth(user.id);
     const id = await seedEvent();
     const res = await updateDuration(ctx({ id }, { durationMinutes: 45 }, "PUT"));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
   });
 });
 
@@ -1449,13 +1464,11 @@ describe("PUT /api/events/[id]/split-costs", () => {
     expect(body.splitCostsEnabled).toBe(true);
   });
 
-  it("allows ownerless event to toggle split costs", async () => {
+  it("returns 403 on ownerless event (owner required)", async () => {
     const id = await seedEvent();
     mockAnonymous();
     const res = await updateSplitCosts(putCtx2({ id }, { splitCostsEnabled: false }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.splitCostsEnabled).toBe(false);
+    expect(res.status).toBe(403);
   });
 });
 

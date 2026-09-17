@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/db.server";
 import { Randomize } from "../../../../lib/random";
 import { balanceTeams } from "../../../../lib/elo.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { logEvent } from "../../../../lib/eventLog.server";
 import { createLogger } from "../../../../lib/logger.server";
 import { activeParticipantsWhere } from "../../../../lib/activeParticipants.server";
@@ -17,6 +18,11 @@ export const POST: APIRoute = async ({ params, url, request }) => {
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+  if (!isOwner && !isAdmin) {
+    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+  }
 
   // ADR 0016: when a currentGameId exists, the authoritative player list is
   // GameParticipant (game-scoped), not the legacy Player table (event-scoped).

@@ -72,6 +72,23 @@ describe("PATCH /api/events/[id]/webhooks/[webhookId]", () => {
     expect(res.status).toBe(403);
   });
 
+  it("rejects anonymous edit of a webhook on an owned event", async () => {
+    const owner = await seedUser("owner-anon");
+    const event = await seedEvent(owner.id, "evt-anon");
+    const webhook = await seedWebhook(event.id, "https://example.com/webhook", ["game_full"]);
+
+    vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
+
+    const anonymous = ctx(event.id, webhook.id, { events: ["player_joined"] });
+    expect(anonymous.request.headers.get("authorization")).toBeNull();
+
+    const res = await PATCH(anonymous);
+    expect(res.status).toBe(403);
+
+    const updated = await prisma.webhookSubscription.findUnique({ where: { id: webhook.id } });
+    expect(JSON.parse(updated!.events)).toEqual(["game_full"]);
+  });
+
   it("returns 404 for non-existent webhook", async () => {
     const owner = await seedUser("owner-2");
     const event = await seedEvent(owner.id);
@@ -146,7 +163,7 @@ describe("PATCH /api/events/[id]/webhooks/[webhookId]", () => {
     expect(res.status).toBe(200);
   });
 
-  it("allows ownerless event webhook update", async () => {
+  it("denies webhook update for an ownerless event (no one can be authorized)", async () => {
     const event = await prisma.event.create({
       data: { id: "evt-no-owner", title: "No Owner", location: "Pitch", dateTime: new Date(), maxPlayers: 10 },
     });
@@ -155,6 +172,6 @@ describe("PATCH /api/events/[id]/webhooks/[webhookId]", () => {
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
 
     const res = await PATCH(ctx(event.id, webhook.id, { events: [] }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
   });
 });

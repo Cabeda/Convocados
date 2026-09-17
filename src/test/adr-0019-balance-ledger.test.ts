@@ -29,15 +29,64 @@ function tx(overrides: Partial<WalletTx> & { direction: WalletTx["direction"]; r
   };
 }
 
-function ctx(params: Record<string, string>, body?: unknown) {
+function ctx(params: Record<string, string>, body?: unknown, token: string | null = AUTH_TOKEN) {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.authorization = `Bearer ${token}`;
   return {
     params,
     request: new Request("http://localhost/api/events/x/cost", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(body ?? {}),
     }),
   } as any;
+}
+
+function anonCtx(params: Record<string, string>, body?: unknown) {
+  return ctx(params, body, null);
+}
+
+// ── Auth fixture ─────────────────────────────────────────────────────────────
+// Event-scoped mutations now require the caller to be the event owner (or an
+// admin). Drive real auth through an OAuth bearer token.
+const AUTH_USER_ID = "adr19-auth-owner";
+const AUTH_CLIENT_ID = "adr19-auth-client";
+const AUTH_TOKEN = "tok-adr19-auth-owner";
+
+async function seedAuthOwner() {
+  await prisma.user.upsert({
+    where: { id: AUTH_USER_ID },
+    update: {},
+    create: {
+      id: AUTH_USER_ID,
+      name: "Owner",
+      email: "adr19-owner@test.com",
+      emailVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  });
+  await prisma.oauthClient.upsert({
+    where: { clientId: AUTH_CLIENT_ID },
+    update: {},
+    create: {
+      id: `${AUTH_CLIENT_ID}-row`,
+      clientId: AUTH_CLIENT_ID,
+      redirectUris: "http://localhost/callback",
+    },
+  });
+  await prisma.oauthAccessToken.upsert({
+    where: { token: AUTH_TOKEN },
+    update: { userId: AUTH_USER_ID, expiresAt: new Date(Date.now() + 3_600_000) },
+    create: {
+      id: `${AUTH_TOKEN}-row`,
+      token: AUTH_TOKEN,
+      clientId: AUTH_CLIENT_ID,
+      userId: AUTH_USER_ID,
+      expiresAt: new Date(Date.now() + 3_600_000),
+      scopes: "openid",
+    },
+  });
 }
 
 beforeEach(async () => {
@@ -52,6 +101,7 @@ beforeEach(async () => {
   await prisma.event.deleteMany();
   await prisma.user.deleteMany();
   resetApiRateLimitStore();
+  await seedAuthOwner();
 });
 
 // ─── Test 1: computeMoneyBalance pure function ─────────────────────────────
@@ -131,7 +181,7 @@ describe("getOutstandingBalance ledger vs legacy routing", () => {
 describe("PUT /api/events/[id]/cost scope=this_game", () => {
   it("sets Game.costTotalAmount without changing EventCost.totalAmount", async () => {
     const event = await prisma.event.create({
-      data: { title: "Cost Scope", location: "L", dateTime: new Date(), maxPlayers: 5 },
+      data: { title: "Cost Scope", location: "L", dateTime: new Date(), maxPlayers: 5, ownerId: AUTH_USER_ID },
     });
     const game = await prisma.game.create({ data: { eventId: event.id, dateTime: new Date() } });
     await prisma.event.update({ where: { id: event.id }, data: { currentGameId: game.id } });
@@ -147,6 +197,19 @@ describe("PUT /api/events/[id]/cost scope=this_game", () => {
     expect(updatedGame?.costCurrency).toBe("EUR");
 
     // Template unchanged
+    const template = await prisma.eventCost.findUnique({ where: { eventId: event.id } });
+    expect(template?.totalAmount).toBe(50);
+  });
+
+  it("rejects an anonymous cost mutation on an owned event", async () => {
+    const event = await prisma.event.create({
+      data: { title: "Cost Scope", location: "L", dateTime: new Date(), maxPlayers: 5, ownerId: AUTH_USER_ID },
+    });
+    await prisma.eventCost.create({ data: { eventId: event.id, totalAmount: 50, currency: "EUR" } });
+
+    const res = await putCost(anonCtx({ id: event.id }, { totalAmount: 70, currency: "EUR" }));
+    expect(res.status).toBe(403);
+
     const template = await prisma.eventCost.findUnique({ where: { eventId: event.id } });
     expect(template?.totalAmount).toBe(50);
   });

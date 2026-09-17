@@ -24,7 +24,7 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   const session = await getSession(request);
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
-  if (event.ownerId && !isOwner && !isAdmin) {
+  if (!isOwner && !isAdmin) {
     return Response.json({ error: "Only the event owner can manage subscriptions." }, { status: 403 });
   }
   if (!event.eventCost?.monthlyEnabled) {

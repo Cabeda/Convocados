@@ -279,13 +279,11 @@ describe("PUT /api/events/[id]/location", () => {
     expect(res.status).toBe(403);
   });
 
-  it("allows update on ownerless event even if not owner", async () => {
+  it("returns 403 on ownerless event even if not owner (owner required)", async () => {
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null });
     const event = await seedEvent({ ownerId: null });
     const res = await updateLocation(putCtx({ id: event.id }, { location: "New Place" }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.location).toBe("New Place");
+    expect(res.status).toBe(403);
   });
 
   it("updates location with empty string", async () => {

@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
+import { checkOwnership } from "../../../../lib/auth.helpers.server";
 import { addPlayerToTeams, validateTeams } from "./players";
 import { enqueuePushSetupHintSafe } from "../../../../lib/pushSetupHint";
 
@@ -28,6 +29,12 @@ export const POST: APIRoute = async ({ params, request }) => {
     include: { players: { orderBy: { order: "asc" } } },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  // Undo re-adds a player and can link an account, so it is an organizer action.
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+  if (!isOwner && !isAdmin) {
+    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+  }
 
   // Check the name isn't already taken (someone else re-added with the same name)
   const existing = event.players.find((p) => p.name === name);

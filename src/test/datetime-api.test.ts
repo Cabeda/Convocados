@@ -12,14 +12,63 @@ vi.mock("~/lib/geocode", () => ({
   resolveLocation: vi.fn().mockResolvedValue(null),
 }));
 
-function putCtx(params: Record<string, string>, body: unknown, _userId?: string) {
+// ── Auth fixture ─────────────────────────────────────────────────────────────
+// Event-scoped mutations now require the caller to be the event owner (or an
+// admin). Drive real auth through an OAuth bearer token.
+const AUTH_USER_ID = "dt-auth-owner";
+const AUTH_CLIENT_ID = "dt-auth-client";
+const AUTH_TOKEN = "tok-dt-auth-owner";
+
+async function seedAuthOwner() {
+  await prisma.user.deleteMany({ where: { email: "dt-owner@test.com" } });
+  await prisma.user.upsert({
+    where: { id: AUTH_USER_ID },
+    update: {},
+    create: {
+      id: AUTH_USER_ID,
+      name: "Owner",
+      email: "dt-owner@test.com",
+      emailVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  });
+  await prisma.oauthClient.upsert({
+    where: { clientId: AUTH_CLIENT_ID },
+    update: {},
+    create: {
+      id: `${AUTH_CLIENT_ID}-row`,
+      clientId: AUTH_CLIENT_ID,
+      redirectUris: "http://localhost/callback",
+    },
+  });
+  await prisma.oauthAccessToken.upsert({
+    where: { token: AUTH_TOKEN },
+    update: { userId: AUTH_USER_ID, expiresAt: new Date(Date.now() + 3_600_000) },
+    create: {
+      id: `${AUTH_TOKEN}-row`,
+      token: AUTH_TOKEN,
+      clientId: AUTH_CLIENT_ID,
+      userId: AUTH_USER_ID,
+      expiresAt: new Date(Date.now() + 3_600_000),
+      scopes: "openid",
+    },
+  });
+}
+
+function putCtx(params: Record<string, string>, body: unknown, token: string | null = AUTH_TOKEN) {
   const headers: Record<string, string> = { "content-type": "application/json" };
+  if (token) headers.authorization = `Bearer ${token}`;
   const request = new Request("http://localhost/api/test", {
     method: "PUT",
     headers,
     body: JSON.stringify(body),
   });
   return { request, params } as any;
+}
+
+function anonPutCtx(params: Record<string, string>, body: unknown) {
+  return putCtx(params, body, null);
 }
 
 function postCtx(body: unknown) {
@@ -38,7 +87,7 @@ async function seedEvent(overrides: Partial<{ timezone: string; ownerId: string 
       location: "Pitch A",
       dateTime: new Date(Date.now() + 86400_000),
       timezone: overrides.timezone ?? "UTC",
-      ownerId: overrides.ownerId ?? null,
+      ownerId: overrides.ownerId === undefined ? AUTH_USER_ID : overrides.ownerId,
     },
   });
 }
@@ -51,6 +100,7 @@ beforeEach(async () => {
   await prisma.session.deleteMany();
   await prisma.account.deleteMany();
   await prisma.user.deleteMany();
+  await seedAuthOwner();
 });
 
 // ── POST /api/events — timezone ───────────────────────────────────────────────
@@ -94,7 +144,7 @@ describe("POST /api/events — timezone", () => {
 // ── PUT /api/events/[id]/datetime ─────────────────────────────────────────────
 
 describe("PUT /api/events/[id]/datetime", () => {
-  it("updates dateTime on an ownerless event", async () => {
+  it("updates dateTime on an owned event", async () => {
     const event = await seedEvent();
     const newDate = new Date(Date.now() + 2 * 86400_000).toISOString();
     const res = await updateDateTime(putCtx({ id: event.id }, { dateTime: newDate }));
@@ -103,7 +153,7 @@ describe("PUT /api/events/[id]/datetime", () => {
     expect(updated?.dateTime.toISOString()).toBe(new Date(newDate).toISOString());
   });
 
-  it("updates timezone on an ownerless event", async () => {
+  it("updates timezone on an owned event", async () => {
     const event = await seedEvent();
     const res = await updateDateTime(putCtx({ id: event.id }, { timezone: "Europe/Madrid" }));
     expect(res.status).toBe(200);
@@ -148,13 +198,13 @@ describe("PUT /api/events/[id]/datetime", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 403 when non-owner tries to update an owned event", async () => {
+  it("returns 403 when anonymous tries to update an owned event", async () => {
     const owner = await prisma.user.create({
       data: { id: "owner-1", name: "Owner", email: "owner@test.com", emailVerified: false },
     });
     const event = await seedEvent({ ownerId: owner.id });
-    // No session cookie → treated as anonymous
-    const res = await updateDateTime(putCtx({ id: event.id }, { timezone: "Europe/Paris" }));
+    // No bearer token / session cookie → treated as anonymous
+    const res = await updateDateTime(anonPutCtx({ id: event.id }, { timezone: "Europe/Paris" }));
     expect(res.status).toBe(403);
   });
 

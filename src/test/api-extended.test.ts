@@ -28,25 +28,85 @@ import { PUT as updateSport } from "~/pages/api/events/[id]/sport";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function ctx(params: Record<string, string>, body?: unknown, method = "GET", queryString?: string) {
+// ── Auth fixture ─────────────────────────────────────────────────────────────
+// Event-scoped mutations now require the caller to be the event owner (or an
+// admin); ownerless events authorize nobody. Drive real auth through an OAuth
+// bearer token. Anonymous helpers (anon*) are used for the 401/403 tests.
+const AUTH_USER_ID = "ae-auth-owner";
+const AUTH_CLIENT_ID = "ae-auth-client";
+const AUTH_TOKEN = "tok-ae-auth-owner";
+
+async function seedAuthOwner() {
+  await prisma.user.upsert({
+    where: { id: AUTH_USER_ID },
+    update: {},
+    create: {
+      id: AUTH_USER_ID,
+      name: "Owner",
+      email: "ae-owner@test.com",
+      emailVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  });
+  await prisma.oauthClient.upsert({
+    where: { clientId: AUTH_CLIENT_ID },
+    update: {},
+    create: {
+      id: `${AUTH_CLIENT_ID}-row`,
+      clientId: AUTH_CLIENT_ID,
+      redirectUris: "http://localhost/callback",
+    },
+  });
+  await prisma.oauthAccessToken.upsert({
+    where: { token: AUTH_TOKEN },
+    update: { userId: AUTH_USER_ID, expiresAt: new Date(Date.now() + 3_600_000) },
+    create: {
+      id: `${AUTH_TOKEN}-row`,
+      token: AUTH_TOKEN,
+      clientId: AUTH_CLIENT_ID,
+      userId: AUTH_USER_ID,
+      expiresAt: new Date(Date.now() + 3_600_000),
+      scopes: "openid",
+    },
+  });
+}
+
+function ctx(
+  params: Record<string, string>,
+  body?: unknown,
+  method = "GET",
+  queryString?: string,
+  token: string | null = AUTH_TOKEN,
+) {
   const urlStr = `http://localhost/api/test${queryString ? `?${queryString}` : ""}`;
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (token) headers.authorization = `Bearer ${token}`;
   const request = new Request(urlStr, {
     method: body !== undefined ? (method === "GET" ? "POST" : method) : method,
-    headers: { "content-type": "application/json" },
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return { request, params, url: new URL(urlStr) } as any;
+}
+
+function anonCtx(params: Record<string, string>, body?: unknown, method = "GET", queryString?: string) {
+  return ctx(params, body, method, queryString, null);
 }
 
 function putCtx(params: Record<string, string>, body: unknown) {
   return ctx(params, body, "PUT");
 }
 
-function patchCtx(params: Record<string, string>, body: unknown) {
-  return ctx(params, body, "PATCH");
+function anonPutCtx(params: Record<string, string>, body: unknown) {
+  return anonCtx(params, body, "PUT");
 }
 
-function deleteCtx(params: Record<string, string>, body?: unknown) {
+function anonPatchCtx(params: Record<string, string>, body: unknown) {
+  return anonCtx(params, body, "PATCH");
+}
+
+function anonDeleteCtx(params: Record<string, string>, body?: unknown) {
   const request = new Request("http://localhost/api/test", {
     method: "DELETE",
     headers: { "content-type": "application/json" },
@@ -63,6 +123,7 @@ async function seedEvent(overrides: Record<string, unknown> = {}) {
       dateTime: new Date(Date.now() + 86400_000),
       teamOneName: "Ninjas",
       teamTwoName: "Gunas",
+      ownerId: AUTH_USER_ID,
       ...overrides,
     },
   });
@@ -109,6 +170,7 @@ beforeEach(async () => {
   await prisma.account.deleteMany();
   await prisma.event.deleteMany();
   await prisma.user.deleteMany();
+  await seedAuthOwner();
 });
 
 // ─── GET /api/health ─────────────────────────────────────────────────────────
@@ -141,8 +203,16 @@ describe("PUT /api/events/[id]/balanced", () => {
   it("returns 403 when event has owner and request is not from owner", async () => {
     const user = await seedUser();
     const id = await seedEvent({ ownerId: user.id });
-    const res = await updateBalanced(putCtx({ id }, { balanced: true }));
+    const res = await updateBalanced(anonPutCtx({ id }, { balanced: true }));
     expect(res.status).toBe(403);
+  });
+
+  it("rejects an anonymous mutation on an owned event", async () => {
+    const id = await seedEvent();
+    const res = await updateBalanced(anonPutCtx({ id }, { balanced: true }));
+    expect(res.status).toBe(403);
+    const event = await prisma.event.findUnique({ where: { id } });
+    expect(event!.balanced).toBe(false);
   });
 });
 
@@ -175,7 +245,7 @@ describe("PUT /api/events/[id]/elo", () => {
   it("returns 403 when event has owner and request is not from owner", async () => {
     const user = await seedUser();
     const id = await seedEvent({ ownerId: user.id });
-    const res = await updateElo(putCtx({ id }, { eloEnabled: false }));
+    const res = await updateElo(anonPutCtx({ id }, { eloEnabled: false }));
     expect(res.status).toBe(403);
   });
 });
@@ -199,7 +269,7 @@ describe("PUT /api/events/[id]/hide-elo-in-teams", () => {
   it("returns 403 when event has owner and request is not from owner", async () => {
     const user = await seedUser();
     const id = await seedEvent({ ownerId: user.id });
-    const res = await updateHideEloInTeams(putCtx({ id }, { hideEloInTeams: true }));
+    const res = await updateHideEloInTeams(anonPutCtx({ id }, { hideEloInTeams: true }));
     expect(res.status).toBe(403);
   });
 
@@ -232,7 +302,7 @@ describe("PUT /api/events/[id]/visibility", () => {
   it("returns 403 when event has owner and request is not from owner", async () => {
     const user = await seedUser();
     const id = await seedEvent({ ownerId: user.id });
-    const res = await updateVisibility(putCtx({ id }, { isPublic: true }));
+    const res = await updateVisibility(anonPutCtx({ id }, { isPublic: true }));
     expect(res.status).toBe(403);
   });
 });
@@ -254,7 +324,7 @@ describe("PUT /api/events/[id]/location", () => {
   it("returns 403 when event has owner and request is not from owner", async () => {
     const user = await seedUser();
     const id = await seedEvent({ ownerId: user.id });
-    const res = await updateLocation(putCtx({ id }, { location: "X" }));
+    const res = await updateLocation(anonPutCtx({ id }, { location: "X" }));
     expect(res.status).toBe(403);
   });
 });
@@ -284,7 +354,7 @@ describe("PUT /api/events/[id]/title", () => {
   it("returns 403 when event has owner and request is not from owner", async () => {
     const user = await seedUser();
     const id = await seedEvent({ ownerId: user.id });
-    const res = await updateTitle(putCtx({ id }, { title: "X" }));
+    const res = await updateTitle(anonPutCtx({ id }, { title: "X" }));
     expect(res.status).toBe(403);
   });
 });
@@ -294,7 +364,7 @@ describe("PUT /api/events/[id]/title", () => {
 describe("POST /api/events/[id]/claim", () => {
   it("returns 401 for unauthenticated user", async () => {
     const id = await seedEvent();
-    const res = await claimOwnership(ctx({ id }, {}));
+    const res = await claimOwnership(anonCtx({ id }, {}));
     expect(res.status).toBe(401);
   });
 });
@@ -305,7 +375,7 @@ describe("DELETE /api/events/[id]/claim", () => {
   it("returns 401 for unauthenticated user", async () => {
     const user = await seedUser();
     const id = await seedEvent({ ownerId: user.id });
-    const res = await relinquishOwnership(deleteCtx({ id }));
+    const res = await relinquishOwnership(anonDeleteCtx({ id }));
     expect(res.status).toBe(401);
   });
 });
@@ -321,7 +391,7 @@ describe("POST /api/events/[id]/transfer", () => {
   it("returns 403 for non-owner", async () => {
     const user = await seedUser();
     const id = await seedEvent({ ownerId: user.id });
-    const res = await transferOwnership(ctx({ id }, { targetUserId: "x" }));
+    const res = await transferOwnership(anonCtx({ id }, { targetUserId: "x" }));
     expect(res.status).toBe(403);
   });
 });
@@ -424,7 +494,7 @@ describe("GET /api/events/[id]/ratings", () => {
       data: { eventId: id, name: "Carol", rating: 950, gamesPlayed: 3, wins: 1, draws: 0, losses: 2 },
     });
     // No auth headers — simulates a non-owner viewing the event
-    const res = await getRatings(ctx({ id }));
+    const res = await getRatings(anonCtx({ id }));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toHaveLength(2);
@@ -557,7 +627,7 @@ describe("GET /api/users/[id]", () => {
 describe("PATCH /api/users/[id]", () => {
   it("returns 403 for unauthenticated user", async () => {
     const user = await seedUser();
-    const res = await patchUserProfile(patchCtx({ id: user.id }, { name: "New Name" }));
+    const res = await patchUserProfile(anonPatchCtx({ id: user.id }, { name: "New Name" }));
     expect(res.status).toBe(403);
   });
 });
@@ -566,7 +636,7 @@ describe("PATCH /api/users/[id]", () => {
 
 describe("GET /api/me/games", () => {
   it("returns 401 for unauthenticated user", async () => {
-    const res = await getMyGames(ctx({}));
+    const res = await getMyGames(anonCtx({}));
     expect(res.status).toBe(401);
   });
 });
@@ -582,7 +652,7 @@ describe("PUT /api/events/[id]/team-names ownership", () => {
   it("returns 403 when event has owner and request is not from owner", async () => {
     const user = await seedUser();
     const id = await seedEvent({ ownerId: user.id });
-    const res = await saveTeamNames(putCtx({ id }, { teamOneName: "A", teamTwoName: "B" }));
+    const res = await saveTeamNames(anonPutCtx({ id }, { teamOneName: "A", teamTwoName: "B" }));
     expect(res.status).toBe(403);
   });
 });
@@ -593,7 +663,7 @@ describe("PUT /api/events/[id]/sport ownership", () => {
   it("returns 403 when event has owner and request is not from owner", async () => {
     const user = await seedUser();
     const id = await seedEvent({ ownerId: user.id });
-    const res = await updateSport(putCtx({ id }, { sport: "padel" }));
+    const res = await updateSport(anonPutCtx({ id }, { sport: "padel" }));
     expect(res.status).toBe(403);
   });
 });

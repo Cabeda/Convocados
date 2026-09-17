@@ -1010,18 +1010,18 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   }
   if (!player) return Response.json({ error: "Not found." }, { status: 404 });
 
-  // Protected player check: players with userId can only be removed by themselves or the event owner.
-  if (player.userId) {
-    const isSelf = session?.user?.id === player.userId;
-    const { isOwner, isAdmin } = await checkOwnership(request, player.event.ownerId, session, eventId);
-    if (!isSelf && !isOwner && !isAdmin) {
-      return Response.json({ error: "This player is account-linked and can only be removed by themselves or the event owner." }, { status: 403 });
-    }
+  // Removal is an organizer action, except a player removing themselves.
+  // This must NOT be gated on `player.userId`: unlinked/guest players have
+  // userId === null, and the old `if (player.userId)` guard let anonymous
+  // callers remove them.
+  const { isOwner, isAdmin } = await checkOwnership(request, player.event.ownerId, session, eventId);
+  const isSelf = !!(session?.user?.id && player.userId === session.user.id);
+  if (!isSelf && !isOwner && !isAdmin) {
+    return Response.json({ error: "Only the event owner or the player themselves can remove this player." }, { status: 403 });
   }
 
   // Soft-archive + notify + log + re-index, with the warn-the-rest push gated on (48h + bench-empty).
   // Self-removal (the player is removing themselves) uses actor.kind="self" so the auto-unfollow fires.
-  const isSelf = session?.user?.id && player.userId === session.user.id;
   // For unauthenticated requests, pass null as the actor id (lib skips the Rsvp audit row,
   // which has a FK to User). Real authenticated users get a FK-safe actor id.
   const actorUserId = session?.user?.id ?? player.event.ownerId ?? null;

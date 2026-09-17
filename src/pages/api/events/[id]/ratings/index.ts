@@ -13,7 +13,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   // Block non-admins when competitive data is hidden
   if (!event.showCompetitiveData) {
     const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, params.id);
-    if (event.ownerId && !isOwner && !isAdmin) {
+    if (!isOwner && !isAdmin) {
       return Response.json({ error: "Ratings are hidden for this event." }, { status: 403 });
     }
   }
@@ -81,7 +81,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   }
 
   const { isOwner, isAdmin, session } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (event.ownerId && !isOwner && !isAdmin) {
+  if (!isOwner && !isAdmin) {
     return Response.json({ error: "Only the event owner or admin can set ratings." }, { status: 403 });
   }
 

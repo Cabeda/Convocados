@@ -9,31 +9,89 @@ import { POST as addPlayer, DELETE as removePlayer } from "~/pages/api/events/[i
 import { GET as getEvent } from "~/pages/api/events/[id]/index";
 import { PUT as setOverride, DELETE as clearOverride } from "~/pages/api/events/[id]/cost/override";
 
-function ctx(params: Record<string, string>, body?: unknown) {
+// ── Auth fixture ─────────────────────────────────────────────────────────────
+// Event-scoped mutations now require the caller to be the event owner (or an
+// admin); ownerless events authorize nobody. Drive real auth through an OAuth
+// bearer token. Anonymous helpers are used to assert 403 on owned events.
+const AUTH_USER_ID = "owner-payments-test";
+const AUTH_CLIENT_ID = "client-payments-test";
+const AUTH_TOKEN = "tok-owner-payments-test";
+
+async function seedAuthOwner() {
+  await prisma.user.upsert({
+    where: { id: AUTH_USER_ID },
+    update: {},
+    create: {
+      id: AUTH_USER_ID,
+      name: "Owner",
+      email: "owner-pay@test.com",
+      emailVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  });
+  await prisma.oauthClient.upsert({
+    where: { clientId: AUTH_CLIENT_ID },
+    update: {},
+    create: {
+      id: `${AUTH_CLIENT_ID}-row`,
+      clientId: AUTH_CLIENT_ID,
+      redirectUris: "http://localhost/callback",
+    },
+  });
+  await prisma.oauthAccessToken.upsert({
+    where: { token: AUTH_TOKEN },
+    update: { userId: AUTH_USER_ID, expiresAt: new Date(Date.now() + 3_600_000) },
+    create: {
+      id: `${AUTH_TOKEN}-row`,
+      token: AUTH_TOKEN,
+      clientId: AUTH_CLIENT_ID,
+      userId: AUTH_USER_ID,
+      expiresAt: new Date(Date.now() + 3_600_000),
+      scopes: "openid",
+    },
+  });
+}
+
+function authHeaders(token: string | null = AUTH_TOKEN): Record<string, string> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (token) headers.authorization = `Bearer ${token}`;
+  return headers;
+}
+
+function ctx(params: Record<string, string>, body?: unknown, token: string | null = AUTH_TOKEN) {
   const request = new Request("http://localhost/api/test", {
     method: body !== undefined ? "PUT" : "GET",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders(token),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return { request, params } as any;
+}
+
+function anonCtx(params: Record<string, string>, body?: unknown) {
+  return ctx(params, body, null);
 }
 
 function postCtx(params: Record<string, string>, body: unknown) {
   const request = new Request("http://localhost/api/test", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify(body),
   });
   return { request, params } as any;
 }
 
-function deleteCtx(params: Record<string, string>, body?: unknown) {
+function deleteCtx(params: Record<string, string>, body?: unknown, token: string | null = AUTH_TOKEN) {
   const request = new Request("http://localhost/api/test", {
     method: "DELETE",
-    headers: { "content-type": "application/json" },
+    headers: authHeaders(token),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return { request, params } as any;
+}
+
+function anonDeleteCtx(params: Record<string, string>, body?: unknown) {
+  return deleteCtx(params, body, null);
 }
 
 async function seedEvent(playerNames: string[] = []) {
@@ -42,6 +100,7 @@ async function seedEvent(playerNames: string[] = []) {
       title: "Test Event",
       location: "Pitch A",
       dateTime: new Date(Date.now() + 86400_000),
+      ownerId: AUTH_USER_ID,
     },
   });
   for (let i = 0; i < playerNames.length; i++) {
@@ -53,25 +112,8 @@ async function seedEvent(playerNames: string[] = []) {
 }
 
 async function seedOwnedEvent(playerNames: string[] = []) {
-  const owner = await prisma.user.upsert({
-    where: { id: "owner-payments-test" },
-    update: {},
-    create: { id: "owner-payments-test", name: "Owner", email: "owner-pay@test.com", createdAt: new Date(), updatedAt: new Date() },
-  });
-  const event = await prisma.event.create({
-    data: {
-      title: "Owned Event",
-      location: "Pitch B",
-      dateTime: new Date(Date.now() + 86400_000),
-      ownerId: owner.id,
-    },
-  });
-  for (let i = 0; i < playerNames.length; i++) {
-    await prisma.player.create({
-      data: { name: playerNames[i], eventId: event.id, order: i },
-    });
-  }
-  return event.id;
+  await seedAuthOwner();
+  return seedEvent(playerNames);
 }
 
 beforeEach(async () => {
@@ -83,6 +125,7 @@ beforeEach(async () => {
   await prisma.player.deleteMany();
   await prisma.eventAdmin.deleteMany();
   await prisma.event.deleteMany();
+  await seedAuthOwner();
 });
 
 // ─── PUT /api/events/[id]/cost ───────────────────────────────────────────────
@@ -160,6 +203,7 @@ describe("PUT /api/events/[id]/cost", () => {
         location: "Pitch",
         dateTime: new Date(Date.now() + 86400_000),
         maxPlayers: 2,
+        ownerId: AUTH_USER_ID,
       },
     });
     for (let i = 0; i < 3; i++) {
@@ -172,6 +216,14 @@ describe("PUT /api/events/[id]/cost", () => {
     // Only 2 active players, not the bench player
     expect(body.payments).toHaveLength(2);
     expect(body.payments[0].amount).toBeCloseTo(15);
+  });
+
+  it("rejects an anonymous cost mutation on an owned event", async () => {
+    const eventId = await seedEvent(["Alice"]);
+    const res = await setCost(anonCtx({ id: eventId }, { totalAmount: 60 }));
+    expect(res.status).toBe(403);
+    const cost = await prisma.eventCost.findUnique({ where: { eventId } });
+    expect(cost).toBeNull();
   });
 });
 
@@ -399,6 +451,7 @@ describe("Auto-recalculate payment shares on player changes", () => {
         location: "Pitch",
         dateTime: new Date(Date.now() + 86400_000),
         maxPlayers: 2,
+        ownerId: AUTH_USER_ID,
       },
     });
     for (let i = 0; i < 2; i++) {
@@ -426,6 +479,7 @@ describe("Auto-recalculate payment shares on player changes", () => {
         location: "Pitch",
         dateTime: new Date(Date.now() + 86400_000),
         maxPlayers: 2,
+        ownerId: AUTH_USER_ID,
       },
     });
     for (const name of ["Alice", "Bob", "Charlie"]) {
@@ -464,6 +518,7 @@ describe("Cost persistence across recurring event resets", () => {
         location: "Pitch",
         dateTime: new Date(Date.now() - 7200_000), // 2 hours ago
         isRecurring: true,
+        ownerId: AUTH_USER_ID,
         recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
         nextResetAt: new Date(Date.now() - 3600_000), // 1 hour ago
       },
@@ -528,6 +583,7 @@ describe("Cost persistence across recurring event resets", () => {
         location: "Pitch",
         dateTime: new Date(Date.now() - 7200_000),
         isRecurring: true,
+        ownerId: AUTH_USER_ID,
         recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
         nextResetAt: new Date(Date.now() - 3600_000),
       },
@@ -682,6 +738,7 @@ describe("Structured payment methods on EventCost", () => {
         location: "Pitch",
         dateTime: new Date(Date.now() - 7200_000),
         isRecurring: true,
+        ownerId: AUTH_USER_ID,
         recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
         nextResetAt: new Date(Date.now() - 3600_000),
       },
@@ -764,7 +821,7 @@ describe("PUT /api/events/[id]/cost/override", () => {
     const eventId = await seedOwnedEvent(["Alice"]);
     await setCost(ctx({ id: eventId }, { totalAmount: 50 }));
 
-    const res = await setOverride(ctx({ id: eventId }, {
+    const res = await setOverride(anonCtx({ id: eventId }, {
       paymentMethods: [{ type: "mbway", value: "912345678" }],
     }));
     expect(res.status).toBe(403);
@@ -803,8 +860,7 @@ describe("DELETE /api/events/[id]/cost/override", () => {
 
   it("returns 403 when non-owner tries to clear override on owned event", async () => {
     const eventId = await seedOwnedEvent(["Alice"]);
-    // setCost bypasses auth (no ownerId check in test helper context),
-    // so we set cost directly via prisma
+    // Set the cost directly via prisma so the test isolates the override auth check.
     await prisma.eventCost.create({
       data: {
         eventId,
@@ -814,7 +870,7 @@ describe("DELETE /api/events/[id]/cost/override", () => {
       },
     });
 
-    const res = await clearOverride(deleteCtx({ id: eventId }));
+    const res = await clearOverride(anonDeleteCtx({ id: eventId }));
     expect(res.status).toBe(403);
   });
 });
@@ -827,6 +883,7 @@ describe("Recurrence reset clears temp override", () => {
         location: "Pitch",
         dateTime: new Date(Date.now() - 7200_000),
         isRecurring: true,
+        ownerId: AUTH_USER_ID,
         recurrenceRule: JSON.stringify({ freq: "weekly", interval: 1 }),
         nextResetAt: new Date(Date.now() - 3600_000),
       },

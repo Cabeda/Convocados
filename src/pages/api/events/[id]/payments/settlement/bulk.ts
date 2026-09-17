@@ -18,7 +18,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (event.ownerId && !isOwner && !isAdmin) {
+  if (!isOwner && !isAdmin) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 

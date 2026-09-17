@@ -91,7 +91,7 @@ describe("PUT /api/events/[id]/mvp-elo-enabled", () => {
     expect(body.mvpEloEnabled).toBe(true);
   });
 
-  it("allows ownerless event to be modified by anyone", async () => {
+  it("rejects ownerless event (no owner authorizes nobody)", async () => {
     const event = await prisma.event.create({
       data: { id: "evt-no-owner", title: "No Owner", location: "Pitch", dateTime: new Date(), maxPlayers: 10 },
     });
@@ -99,7 +99,10 @@ describe("PUT /api/events/[id]/mvp-elo-enabled", () => {
     vi.mocked(checkOwnership).mockResolvedValue({ isOwner: false, isAdmin: false, session: null } as any);
 
     const res = await PUT(ctx(event.id, { mvpEloEnabled: true }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
+
+    const unchanged = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(unchanged!.mvpEloEnabled).toBe(false);
   });
 
   it("defaults to false on new events", async () => {

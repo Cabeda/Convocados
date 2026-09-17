@@ -19,6 +19,49 @@ vi.mock("~/lib/geocode", () => ({
   resolveLocation: vi.fn().mockResolvedValue(null),
 }));
 
+// ── Auth fixture ─────────────────────────────────────────────────────────────
+// Event-scoped mutations now require the caller to be the event owner (or an
+// admin). Drive real auth through an OAuth bearer token.
+const AUTH_USER_ID = "gd-auth-owner";
+const AUTH_CLIENT_ID = "gd-auth-client";
+const AUTH_TOKEN = "tok-gd-auth-owner";
+
+async function seedAuthOwner() {
+  await prisma.user.upsert({
+    where: { id: AUTH_USER_ID },
+    update: {},
+    create: {
+      id: AUTH_USER_ID,
+      name: "Owner",
+      email: "gd-owner@test.com",
+      emailVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  });
+  await prisma.oauthClient.upsert({
+    where: { clientId: AUTH_CLIENT_ID },
+    update: {},
+    create: {
+      id: `${AUTH_CLIENT_ID}-row`,
+      clientId: AUTH_CLIENT_ID,
+      redirectUris: "http://localhost/callback",
+    },
+  });
+  await prisma.oauthAccessToken.upsert({
+    where: { token: AUTH_TOKEN },
+    update: { userId: AUTH_USER_ID, expiresAt: new Date(Date.now() + 3_600_000) },
+    create: {
+      id: `${AUTH_TOKEN}-row`,
+      token: AUTH_TOKEN,
+      clientId: AUTH_CLIENT_ID,
+      userId: AUTH_USER_ID,
+      expiresAt: new Date(Date.now() + 3_600_000),
+      scopes: "openid",
+    },
+  });
+}
+
 // Minimal Astro APIContext factory
 function ctx(params: Record<string, string>, body?: unknown, queryString?: string) {
   const urlStr = `http://localhost/api/test${queryString ? `?${queryString}` : ""}`;
@@ -30,18 +73,25 @@ function ctx(params: Record<string, string>, body?: unknown, queryString?: strin
   return { request, params, url: new URL(urlStr) } as any;
 }
 
-function putCtx(params: Record<string, string>, body: unknown) {
+function putCtx(params: Record<string, string>, body: unknown, token: string | null = AUTH_TOKEN) {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (token) headers.authorization = `Bearer ${token}`;
   const request = new Request("http://localhost/api/test", {
     method: "PUT",
-    headers: { "content-type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   return { request, params } as any;
 }
 
+function anonPutCtx(params: Record<string, string>, body: unknown) {
+  return putCtx(params, body, null);
+}
+
 beforeEach(async () => {
   await resetRateLimitStore();
   await resetApiRateLimitStore();
+  await seedAuthOwner();
   await prisma.gameHistory.deleteMany();
   await prisma.teamResult.deleteMany();
   await prisma.player.deleteMany();
@@ -269,6 +319,7 @@ describe("PUT /api/events/:id/duration", () => {
         dateTime: new Date(Date.now() + 86400_000),
         teamOneName: "A",
         teamTwoName: "B",
+        ownerId: AUTH_USER_ID,
       },
     });
     const res = await updateDuration(putCtx({ id: event.id }, { durationMinutes: 120 }));
@@ -285,6 +336,7 @@ describe("PUT /api/events/:id/duration", () => {
         dateTime: new Date(Date.now() + 86400_000),
         teamOneName: "A",
         teamTwoName: "B",
+        ownerId: AUTH_USER_ID,
       },
     });
     const res = await updateDuration(putCtx({ id: event.id }, { durationMinutes: -10 }));
@@ -299,6 +351,7 @@ describe("PUT /api/events/:id/duration", () => {
         dateTime: new Date(Date.now() + 86400_000),
         teamOneName: "A",
         teamTwoName: "B",
+        ownerId: AUTH_USER_ID,
       },
     });
     const res = await updateDuration(putCtx({ id: event.id }, { durationMinutes: 700 }));
@@ -308,5 +361,22 @@ describe("PUT /api/events/:id/duration", () => {
   it("returns 404 for non-existent event", async () => {
     const res = await updateDuration(putCtx({ id: "nonexistent" }, { durationMinutes: 60 }));
     expect(res.status).toBe(404);
+  });
+
+  it("rejects an anonymous mutation on an owned event", async () => {
+    const event = await prisma.event.create({
+      data: {
+        title: "Test",
+        location: "Pitch",
+        dateTime: new Date(Date.now() + 86400_000),
+        teamOneName: "A",
+        teamTwoName: "B",
+        ownerId: AUTH_USER_ID,
+      },
+    });
+    const res = await updateDuration(anonPutCtx({ id: event.id }, { durationMinutes: 120 }));
+    expect(res.status).toBe(403);
+    const unchanged = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(unchanged!.durationMinutes).toBe(60);
   });
 });

@@ -139,7 +139,7 @@ describe("PUT /api/events/[id]/location", () => {
     expect(res.status).toBe(200);
   });
 
-  it("allows ownerless event to be updated", async () => {
+  it("rejects update on ownerless event (no owner authorizes nobody)", async () => {
     const event = await prisma.event.create({
       data: { id: "evt-no-owner", title: "No Owner", location: "Old", dateTime: new Date(), maxPlayers: 10 },
     });
@@ -148,8 +148,9 @@ describe("PUT /api/events/[id]/location", () => {
     vi.mocked(resolveLocation).mockResolvedValue({ latitude: 40.7, longitude: -74 });
 
     const res = await PUT(ctx(event.id, { location: "New York" }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.location).toBe("New York");
+    expect(res.status).toBe(403);
+
+    const unchanged = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(unchanged!.location).toBe("Old");
   });
 });
