@@ -24,6 +24,9 @@ wearCompose = "1.6.2"
 wearTiles = "1.6.2"
 protolayout = "1.4.2"
 playServicesWearable = "20.0.1"
+# Auth 22 removed the legacy GoogleSignIn/GoogleSignInClient API. :wear is
+# minSdk 35, so it authenticates through Credential Manager only and no longer
+# references those classes; the legacy alias is retained for :app history only.
 playServicesAuth = "22.0.0"
 playServicesAuthLegacy = "22.0.0"
 googleIdIdentity = "1.2.0"
@@ -91,6 +94,7 @@ wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-nav
 play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
 play-services-auth-legacy = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuthLegacy" }
 google-id-identity = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleIdIdentity" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 androidx-credentials = { group = "androidx.credentials", name = "credentials", version = "1.6.0" }
 androidx-credentials-play = { group = "androidx.credentials", name = "credentials-play-services-auth", version = "1.6.0" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntime" }

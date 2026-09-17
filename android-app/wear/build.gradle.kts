@@ -54,7 +54,11 @@ android {
 
     defaultConfig {
         applicationId = "com.cabeda.Convocados"
-        minSdk = 30
+        // Credential Manager's Google/password providers require Wear OS API 35+
+        // (Wear OS 5.1). Below that the platform throws
+        // "This API is not supported on Wear OS below API Level 35", which is why
+        // the app previously shipped a legacy GoogleSignIn fallback.
+        minSdk = 35
         targetSdk = 36
         versionCode = (System.currentTimeMillis() / 1000 / 60).toInt()
         versionName = "1.0.2"
@@ -305,9 +309,10 @@ dependencies {
     // Wearable Data Layer (auth sync from phone)
     implementation(libs.play.services.wearable)
 
-    // Google Sign-In (direct login on watch)
-    // WearGoogleSignIn uses the legacy client, which was removed from auth 22.0.0.
-    implementation("com.google.android.gms:play-services-auth:21.3.0")
+    // Sign in with Google on the watch goes through Credential Manager
+    // (androidx.credentials + googleid). Auth 22 removed the legacy
+    // GoogleSignIn/GoogleSignInClient classes; nothing here references them.
+    implementation(libs.play.services.auth)
     implementation(libs.google.id.identity)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play)

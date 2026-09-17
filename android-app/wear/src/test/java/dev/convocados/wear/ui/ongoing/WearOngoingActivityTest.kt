@@ -16,7 +16,8 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+// :wear is minSdk 35, so Robolectric cannot load the APK below that.
+@Config(sdk = [35])
 class WearOngoingActivityTest {
 
     @Test
