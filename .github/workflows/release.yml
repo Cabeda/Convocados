@@ -13,6 +13,12 @@ permissions:
   contents: write
   pull-requests: read
 
+# One release at a time. Each run performs ~10 Play API writes; letting runs
+# overlap burns the daily quota faster and makes version bumps race.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -543,11 +549,11 @@ jobs:
 
       - name: Publish phone app to internal track
         working-directory: android-app
-        run: ./gradlew :app:publishReleaseBundle --no-daemon
+        run: sh ../scripts/play-gradle.sh ./gradlew :app:publishReleaseBundle --no-daemon
 
       - name: Publish wear app to internal track
         working-directory: android-app
-        run: ./gradlew :wear:publishReleaseBundle --no-daemon
+        run: sh ../scripts/play-gradle.sh ./gradlew :wear:publishReleaseBundle --no-daemon
 
       # Auto-promote the same version code through the testing tracks and stage a
       # production draft. The humans-in-the-loop rollout happens in Play Console.
@@ -557,8 +563,8 @@ jobs:
           VERSION: v${{ needs.release.outputs.version }}
         run: |
           set -e
-          ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track alpha --release-status completed --release-name "$VERSION" --no-daemon
-          ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track beta --release-status completed --release-name "$VERSION" --no-daemon
+          sh ../scripts/play-gradle.sh ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track alpha --release-status completed --release-name "$VERSION" --no-daemon
+          sh ../scripts/play-gradle.sh ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track beta --release-status completed --release-name "$VERSION" --no-daemon
 
       # Wear closed/open testing tracks only exist if the Wear OS release type has
       # been opted into them in Play Console. The Wear closed track is custom-named
@@ -570,8 +576,8 @@ jobs:
         env:
           VERSION: v${{ needs.release.outputs.version }}
         run: |
-          ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track "wear:Convocados Wear" --release-status completed --release-name "$VERSION" --no-daemon
-          ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:beta --release-status completed --release-name "$VERSION" --no-daemon
+          sh ../scripts/play-gradle.sh ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track "wear:Convocados Wear" --release-status completed --release-name "$VERSION" --no-daemon
+          sh ../scripts/play-gradle.sh ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:beta --release-status completed --release-name "$VERSION" --no-daemon
 
       - name: Draft production release for phone and wear
         working-directory: android-app
@@ -579,8 +585,8 @@ jobs:
           VERSION: v${{ needs.release.outputs.version }}
         run: |
           set -e
-          ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track production --release-status draft --release-name "$VERSION" --no-daemon
-          ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:production --release-status draft --release-name "$VERSION" --no-daemon
+          sh ../scripts/play-gradle.sh ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track production --release-status draft --release-name "$VERSION" --no-daemon
+          sh ../scripts/play-gradle.sh ./gradlew :wear:promoteReleaseArtifact --from-track wear:internal --promote-track wear:production --release-status draft --release-name "$VERSION" --no-daemon
 
       # Refresh Play Store screenshots from the committed Roborazzi sources and
       # upload them. Runs last so a listing failure never blocks the bundles,
@@ -594,9 +600,8 @@ jobs:
       - name: Publish Play listings (phone + wear screenshots)
         working-directory: android-app
         run: |
-          set -e
-          ./gradlew :app:publishReleaseListing --no-daemon
-          ./gradlew :wear:publishReleaseListing --no-daemon
+          sh ../scripts/play-gradle.sh ./gradlew :app:publishReleaseListing --no-daemon
+          sh ../scripts/play-gradle.sh ./gradlew :wear:publishReleaseListing --no-daemon
 
       - name: Cleanup credentials
         if: always()
