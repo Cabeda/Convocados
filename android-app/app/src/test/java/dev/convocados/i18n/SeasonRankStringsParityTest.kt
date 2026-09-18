@@ -17,6 +17,7 @@ class SeasonRankStringsParityTest {
         "post_game_rank_to_next",
         "post_game_rank_why",
         "post_game_rank_why_aria",
+        "post_game_rank_dismiss",
         "season_rank_how_it_works",
         "rank_explainer_link_desc",
     )

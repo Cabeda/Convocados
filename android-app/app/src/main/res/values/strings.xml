@@ -445,6 +445,7 @@
     <string name="post_game_rank_to_next">%1$s RP to %2$s</string>
     <string name="post_game_rank_why">Why?</string>
     <string name="post_game_rank_why_aria">Why did my Rank change?</string>
+    <string name="post_game_rank_dismiss">Got it</string>
     <string name="season_rank_how_it_works">How Rank works</string>
     <string name="rank_explainer_link_desc">Opens how your Season Rank was calculated</string>
 </resources>

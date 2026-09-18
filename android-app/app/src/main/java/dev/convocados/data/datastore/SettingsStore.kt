@@ -6,6 +6,7 @@ import androidx.core.os.LocaleListCompat
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.convocados.ui.theme.ThemeMode
@@ -23,6 +24,10 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
     private val THEME_KEY = stringPreferencesKey("theme_mode")
     private val AUTO_PAY_ON_JOIN_KEY = booleanPreferencesKey("auto_pay_on_join")
     private val DYNAMIC_COLOR_KEY = booleanPreferencesKey("dynamic_color")
+    // Post-game Season Rank reveals the viewer has dismissed, keyed by the
+    // GameHistory id of the game the reveal described. A Set so dismissing one
+    // game's reveal never suppresses another's.
+    private val DISMISSED_RANK_REVEALS_KEY = stringSetPreferencesKey("dismissed_rank_reveals")
 
     val locale: Flow<String> = context.dataStore.data.map { it[LOCALE_KEY] ?: "en" }
 
@@ -61,5 +66,15 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
 
     suspend fun setDynamicColor(enabled: Boolean) {
         context.dataStore.edit { it[DYNAMIC_COLOR_KEY] = enabled }
+    }
+
+    /** GameHistory ids whose post-game Season Rank reveal has been dismissed. */
+    val dismissedRankReveals: Flow<Set<String>> =
+        context.dataStore.data.map { it[DISMISSED_RANK_REVEALS_KEY] ?: emptySet() }
+
+    suspend fun dismissRankReveal(historyId: String) {
+        context.dataStore.edit { prefs ->
+            prefs[DISMISSED_RANK_REVEALS_KEY] = (prefs[DISMISSED_RANK_REVEALS_KEY] ?: emptySet()) + historyId
+        }
     }
 }

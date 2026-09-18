@@ -26,12 +26,14 @@ import dev.convocados.util.jsNumber
  * Compact reveal of the viewer's Season Rank movement for the just-played
  * Game: before -> after, the Rank Point delta, and progress toward the next
  * Tier (or the provisional unlock counter). Mirrors the web `SeasonRankReveal`;
- * the link to the full explainer is delegated to [onWhyClick].
+ * the link to the full explainer is delegated to [onWhyClick], and dismissing
+ * the card is delegated to [onDismiss].
  */
 @Composable
 fun SeasonRankReveal(
     rank: SeasonRankMovement,
     onWhyClick: () -> Unit,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (!rank.counted) return
@@ -117,7 +119,10 @@ fun SeasonRankReveal(
                 Text(hint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onDismiss, modifier = Modifier.testTag("season_rank_dismiss")) {
+                    Text(stringResource(R.string.post_game_rank_dismiss), fontWeight = FontWeight.SemiBold)
+                }
                 TextButton(onClick = onWhyClick, modifier = Modifier.semantics { contentDescription = whyAria }) {
                     Icon(Icons.Outlined.Info, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))

@@ -40,7 +40,7 @@ class SeasonRankRevealTest {
     fun `shows before after delta and tier and fires the why callback`() {
         var clicked = false
         composeRule.setContent {
-            MaterialTheme { SeasonRankReveal(rank, onWhyClick = { clicked = true }) }
+            MaterialTheme { SeasonRankReveal(rank, onWhyClick = { clicked = true }, onDismiss = {}) }
         }
         composeRule.onNodeWithText("1500").assertIsDisplayed()
         composeRule.onNodeWithText("1532").assertIsDisplayed()
@@ -51,12 +51,23 @@ class SeasonRankRevealTest {
     }
 
     @Test
+    fun `fires the dismiss callback when Got it is tapped`() {
+        var dismissed = false
+        composeRule.setContent {
+            MaterialTheme { SeasonRankReveal(rank, onWhyClick = {}, onDismiss = { dismissed = true }) }
+        }
+        composeRule.onNodeWithText("Got it").performClick()
+        assertTrue(dismissed)
+    }
+
+    @Test
     fun `shows the unlock counter instead of progress when provisional`() {
         composeRule.setContent {
             MaterialTheme {
                 SeasonRankReveal(
                     rank.copy(provisional = true, before = 868.0, after = 900.0, tierAfter = 0, gamesThisSeason = 2),
                     onWhyClick = {},
+                    onDismiss = {},
                 )
             }
         }
@@ -66,7 +77,7 @@ class SeasonRankRevealTest {
     @Test
     fun `renders nothing when the game did not count`() {
         composeRule.setContent {
-            MaterialTheme { SeasonRankReveal(rank.copy(counted = false), onWhyClick = {}) }
+            MaterialTheme { SeasonRankReveal(rank.copy(counted = false), onWhyClick = {}, onDismiss = {}) }
         }
         composeRule.onNodeWithTag("season_rank_reveal").assertDoesNotExist()
     }

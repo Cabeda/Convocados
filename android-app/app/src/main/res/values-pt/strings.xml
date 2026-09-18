@@ -403,6 +403,7 @@
     <string name="post_game_rank_to_next">%1$s RP para %2$s</string>
     <string name="post_game_rank_why">Porquê?</string>
     <string name="post_game_rank_why_aria">Porque mudou a minha Classificação?</string>
+    <string name="post_game_rank_dismiss">Entendi</string>
     <string name="season_rank_how_it_works">Como funciona a Classificação</string>
     <string name="rank_explainer_link_desc">Abre o cálculo da tua Classificação da Época</string>
 </resources>

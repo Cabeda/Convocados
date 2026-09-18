@@ -380,6 +380,7 @@
     <string name="post_game_rank_to_next">%1$s RP bis %2$s</string>
     <string name="post_game_rank_why">Warum?</string>
     <string name="post_game_rank_why_aria">Warum hat sich mein Rang geändert?</string>
+    <string name="post_game_rank_dismiss">Verstanden</string>
     <string name="season_rank_how_it_works">So funktioniert der Rang</string>
     <string name="rank_explainer_link_desc">Öffnet, wie dein Saison-Rang berechnet wurde</string>
 </resources>
