@@ -17,13 +17,13 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   const subId = params.subId ?? "";
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, isPublic: true },
   });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const session = await getSession(request);
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
-  if (event.ownerId && !isOwner && !isAdmin) {
+  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
     return Response.json({ error: "Only the event owner can cancel subscriptions." }, { status: 403 });
   }
 

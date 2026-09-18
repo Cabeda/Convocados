@@ -28,10 +28,17 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.json({ error: "Platform must be 'ios' or 'android'." }, { status: 400 });
   }
 
+  // A push token belongs to exactly one account. Never let a caller reassign
+  // an existing token to themselves — that would hijack another user's pushes.
+  const existing = await prisma.appPushToken.findUnique({ where: { token } });
+  if (existing && existing.userId !== authCtx.userId) {
+    return Response.json({ error: "This push token is registered to another account." }, { status: 409 });
+  }
+
   await prisma.appPushToken.upsert({
     where: { token },
     create: { userId: authCtx.userId, token, platform, locale },
-    update: { userId: authCtx.userId, platform, locale, updatedAt: new Date() },
+    update: { platform, locale, updatedAt: new Date() },
   });
 
   return Response.json({ ok: true });

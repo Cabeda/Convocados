@@ -77,7 +77,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     }
   }
 
-  if (event.ownerId && !isOwner && !isAdmin && !isSelfReport) {
+  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic) && !isSelfReport) {
     return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
   }
 
