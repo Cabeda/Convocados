@@ -54,4 +54,33 @@ class WearOngoingActivityTest {
         WearOngoingActivity.stop(context)
         WearOngoingActivity.stop(context)
     }
+
+    @Test
+    fun `show actually posts the ongoing notification`() {
+        val context = RuntimeEnvironment.getApplication()
+        shadowOf(context).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        WearOngoingActivity.show(context, "Live score", "Northside 3 – 2 Riverside")
+
+        val posted = manager.activeNotifications.any { it.id == WearOngoingActivity.NOTIFICATION_ID }
+        assertTrue(
+            "OngoingActivity.apply() only decorates the builder; without notify() the " +
+                "watch face indicator and recents chip never appear",
+            posted,
+        )
+        assertEquals(1, manager.activeNotifications.size)
+    }
+
+    @Test
+    fun `stop cancels the posted ongoing notification`() {
+        val context = RuntimeEnvironment.getApplication()
+        shadowOf(context).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        WearOngoingActivity.show(context, "Live score", "Northside 3 – 2 Riverside")
+        WearOngoingActivity.stop(context)
+
+        assertTrue(manager.activeNotifications.isEmpty())
+    }
 }

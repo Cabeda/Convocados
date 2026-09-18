@@ -27,6 +27,7 @@ import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.LocalAmbientMode
 import dev.convocados.wear.ui.RememberKeepScreenOn
+import dev.convocados.wear.ui.roundSafeSize
 import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
 import dev.convocados.wear.ui.ongoing.ongoingScoreText
 import dev.convocados.wear.ui.ongoing.shouldShowLiveGameOngoing
@@ -521,7 +522,8 @@ internal fun ScoreEditor(
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
+                .align(Alignment.Center)
+                .roundSafeSize()
                 // Bezel-safe inset so tiles sit inside the round display
                 // instead of touching the screen edge.
                 .padding(8.dp),

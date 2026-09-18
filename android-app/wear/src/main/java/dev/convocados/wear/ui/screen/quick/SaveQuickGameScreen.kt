@@ -2,6 +2,7 @@ package dev.convocados.wear.ui.screen.quick
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -14,6 +15,7 @@ import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import dev.convocados.wear.R
 import dev.convocados.designsystem.ExpressiveSemanticRole
+import dev.convocados.wear.ui.roundSafeWidth
 import dev.convocados.wear.ui.theme.expressiveTokens
 
 @Composable
@@ -22,8 +24,25 @@ fun SaveQuickGameScreen(
     onDone: () -> Unit = {},
 ) {
     LaunchedEffect(Unit) { viewModel.load() }
-    val tokens = expressiveTokens()
     val state by viewModel.uiState.collectAsState()
+    SaveQuickGameContent(
+        state = state,
+        onDone = onDone,
+        onSave = viewModel::saveTo,
+    )
+}
+
+/**
+ * Stateless renderer for deterministic previews and shape-regression
+ * screenshots. Production lifecycle lives in [SaveQuickGameScreen].
+ */
+@Composable
+internal fun SaveQuickGameContent(
+    state: SaveQuickGameUiState,
+    onDone: () -> Unit = {},
+    onSave: (String) -> Unit = {},
+) {
+    val tokens = expressiveTokens()
     val columnState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 
@@ -83,7 +102,7 @@ fun SaveQuickGameScreen(
 
                 items(state.events, key = { it.id }) { event ->
                     Button(
-                        onClick = { viewModel.saveTo(event.id) },
+                        onClick = { onSave(event.id) },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = state.saving == null,
                         label = {
@@ -116,11 +135,18 @@ fun SaveQuickGameScreen(
             }
 
             item {
-                CompactButton(
-                    onClick = onDone,
+                Column(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(stringResource(R.string.done_label))
+                    CompactButton(
+                        onClick = onDone,
+                        // Keep the trailing action clear of the round bezel.
+                        modifier = Modifier.roundSafeWidth(),
+                    ) {
+                        Text(stringResource(R.string.done_label))
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }

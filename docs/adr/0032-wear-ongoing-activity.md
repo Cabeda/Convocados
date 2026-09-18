@@ -23,14 +23,23 @@ fit the physical display area.
    a Quick Game is ongoing from kickoff until its duration elapses. The
    notification text is the running score, refreshed as it changes. It clears
    when the session ends or the scoring screen leaves composition.
-3. **No tile.** The app has no tile, so the guideline's "reference the ongoing
-   activity from the tile" clause does not apply. If a tile is added, it must
-   reference the ongoing activity.
-4. **POST_NOTIFICATIONS is requested** on API 33+ at launch, because the ongoing
+3. **Post the notification, don't just decorate it.** `OngoingActivity.apply(context)`
+   only attaches the ongoing-activity metadata to the `NotificationCompat.Builder`;
+   it does **not** post anything. The screen must call
+   `NotificationManagerCompat.notify(...)` itself, otherwise the watch-face
+   indicator and the recents chip never render — this was the actual cause of the
+   second "Missing ongoing activity" rejection.
+4. **Tiles reference the running session.** The quick-game tile launches the same
+   `WearActivity` entry point as the ongoing activity's touch intent, so the tile
+   carousel always offers a way back into the live session.
+5. **POST_NOTIFICATIONS is requested** on API 33+ at launch, because the ongoing
    notification (and therefore the activity indicator) cannot render without it.
-5. **Content stays inside the display.** Score and quick-game content is laid
-   out within `ScreenScaffold`'s content padding, and round- plus square-display
-   Roborazzi screenshots guard against text or controls being clipped.
+6. **Content stays inside the display.** Wide controls near the top/bottom of a
+   round display are constrained to the display's inscribed square
+   (`ROUND_SAFE_FRACTION` / `roundSafeWidth` / `roundSafeSize`), because
+   `ScreenScaffold`'s content padding is a fixed percentage that is not
+   shape-aware. Round- and square-display Roborazzi screenshots — including small
+   round (227dp) and scrolled-to-the-bottom captures — guard against clipping.
 
 ## Consequences
 
@@ -41,5 +50,5 @@ fit the physical display area.
 - If the notification permission is denied, the activity indicator cannot show;
   the app still functions, but the policy affordance is unavailable until the
   user grants permission.
-- Screenshot tests now cover both display shapes; a regression that clips
-  content on round or square is visible in review.
+- Screenshot tests now cover both display shapes and the compact round form
+  factor; a regression that clips content on round or square is visible in review.

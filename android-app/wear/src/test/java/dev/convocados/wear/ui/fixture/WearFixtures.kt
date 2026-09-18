@@ -1,8 +1,11 @@
 package dev.convocados.wear.ui.fixture
 
 import dev.convocados.wear.data.api.SetScore
+import dev.convocados.wear.data.local.QUICK_SPORT_TENNIS
+import dev.convocados.wear.data.local.QuickGameState
 import dev.convocados.wear.data.local.entity.WearGameEntity
 import dev.convocados.wear.data.local.entity.WearHistoryEntity
+import dev.convocados.wear.ui.screen.quick.SaveQuickGameUiState
 import dev.convocados.wear.ui.screen.score.ScoreUiState
 import java.time.Instant
 
@@ -74,6 +77,32 @@ internal object WearFixtures {
         ),
         scoreOne = 1,
         scoreTwo = 0,
+    )
+
+    val quickSave = SaveQuickGameUiState(
+        quick = QuickGameState(
+            scoreOne = 1,
+            scoreTwo = 0,
+            kickoffEpochMs = now.toEpochMilli(),
+        ),
+        events = emptyList(),
+    )
+
+    val quickScore = QuickGameState(
+        scoreOne = 3,
+        scoreTwo = 2,
+        durationMinutes = 60,
+        alarmIntervalMinutes = 10,
+        kickoffEpochMs = now.toEpochMilli(),
+    )
+
+    val quickTennis = QuickGameState(
+        scoreOne = 1,
+        scoreTwo = 0,
+        sport = QUICK_SPORT_TENNIS,
+        scoreSets = listOf(SetScore(6, 4), SetScore(3, 2)),
+        durationMinutes = 60,
+        kickoffEpochMs = now.toEpochMilli(),
     )
 
     val history = listOf(

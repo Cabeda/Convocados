@@ -26,6 +26,7 @@ import dev.convocados.wear.data.api.displayTennisPoint
 import dev.convocados.wear.data.api.displayTennisPointForTeam
 import dev.convocados.wear.data.api.tennisGameScore
 import dev.convocados.wear.ui.RememberKeepScreenOn
+import dev.convocados.wear.ui.roundSafeSize
 import dev.convocados.wear.ui.ongoing.RememberOngoingActivity
 import dev.convocados.wear.ui.ongoing.ongoingScoreText
 import dev.convocados.wear.ui.ongoing.shouldShowQuickGameOngoing
@@ -60,11 +61,46 @@ fun QuickScoreScreen(
     )
     if (kickoffMs == null) return // no active quick game; caller handles end
 
-    var now by remember { mutableStateOf(Instant.now()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = Instant.now()
-            delay(1000)
+    QuickScoreContent(
+        state = state,
+        onIncrementOne = viewModel::incrementScoreOne,
+        onDecrementOne = viewModel::decrementScoreOne,
+        onIncrementTwo = viewModel::incrementScoreTwo,
+        onDecrementTwo = viewModel::decrementScoreTwo,
+        onNextSet = viewModel::advanceSet,
+        onToggleTiebreak = viewModel::toggleTiebreak,
+        onEnd = onEnd,
+        onSave = onSave,
+    )
+}
+
+/**
+ * Stateless quick-game renderer for deterministic previews and shape-regression
+ * screenshots. Production lifecycle/ongoing-activity wiring lives in
+ * [QuickScoreScreen].
+ */
+@Composable
+internal fun QuickScoreContent(
+    state: QuickScoreUiState,
+    onIncrementOne: () -> Unit,
+    onDecrementOne: () -> Unit,
+    onIncrementTwo: () -> Unit,
+    onDecrementTwo: () -> Unit,
+    onNextSet: () -> Unit,
+    onToggleTiebreak: () -> Unit,
+    onEnd: () -> Unit = {},
+    onSave: () -> Unit = {},
+    nowOverride: Instant? = null,
+) {
+    val kickoffMs = state.kickoffEpochMs ?: return
+
+    var now by remember(nowOverride) { mutableStateOf(nowOverride ?: Instant.now()) }
+    if (nowOverride == null) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                now = Instant.now()
+                delay(1000)
+            }
         }
     }
 
@@ -105,19 +141,26 @@ fun QuickScoreScreen(
                 },
         ) {
             if (isQuickStructuredSport(state.sport)) {
-                QuickSetScoreEditor(
-                    state = state,
-                    onIncrementOne = viewModel::incrementScoreOne,
-                    onDecrementOne = viewModel::decrementScoreOne,
-                    onIncrementTwo = viewModel::incrementScoreTwo,
-                    onDecrementTwo = viewModel::decrementScoreTwo,
-                    onNextSet = viewModel::advanceSet,
-                    onToggleTiebreak = viewModel::toggleTiebreak,
-                )
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    QuickSetScoreEditor(
+                        modifier = Modifier.roundSafeSize(),
+                        state = state,
+                        onIncrementOne = onIncrementOne,
+                        onDecrementOne = onDecrementOne,
+                        onIncrementTwo = onIncrementTwo,
+                        onDecrementTwo = onDecrementTwo,
+                        onNextSet = onNextSet,
+                        onToggleTiebreak = onToggleTiebreak,
+                    )
+                }
             } else {
                 Row(
-                    // Bezel-safe inset so tiles sit inside the round display.
-                    modifier = Modifier.fillMaxSize().padding(8.dp),
+                    // Bezel-safe inset so tiles sit inside the round display;
+                    // roundSafeSize keeps the whole editor inside the bezel.
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .roundSafeSize()
+                        .padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     TeamScoreButton(
@@ -125,8 +168,8 @@ fun QuickScoreScreen(
                         score = state.scoreOne,
                         container = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        onIncrement = viewModel::incrementScoreOne,
-                        onDecrement = viewModel::decrementScoreOne,
+                        onIncrement = onIncrementOne,
+                        onDecrement = onDecrementOne,
                         enabled = true,
                         modifier = Modifier.weight(1f),
                     )
@@ -135,8 +178,8 @@ fun QuickScoreScreen(
                         score = state.scoreTwo,
                         container = MaterialTheme.colorScheme.tertiaryContainer,
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                        onIncrement = viewModel::incrementScoreTwo,
-                        onDecrement = viewModel::decrementScoreTwo,
+                        onIncrement = onIncrementTwo,
+                        onDecrement = onDecrementTwo,
                         enabled = true,
                         modifier = Modifier.weight(1f),
                     )
@@ -190,6 +233,7 @@ private fun QuickSetScoreEditor(
     onDecrementTwo: () -> Unit,
     onNextSet: () -> Unit,
     onToggleTiebreak: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val currentSet = state.scoreSets.lastOrNull()
     val currentGame = currentSet?.tennisGameScore() ?: dev.convocados.wear.data.api.TennisGameScore()
@@ -203,8 +247,7 @@ private fun QuickSetScoreEditor(
     }.ifEmpty { "0-0" }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
+        modifier = modifier
             .padding(start = 4.dp, end = 4.dp, top = 28.dp, bottom = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
