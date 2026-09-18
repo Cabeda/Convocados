@@ -470,7 +470,7 @@ describe("MCP write tools — tools/list surface", () => {
     for (const tool of ["convocados_add_player", "convocados_remove_player", "convocados_randomize_teams", "convocados_update_payment", "convocados_set_score", "convocados_create_event"]) {
       expect(names).toContain(tool);
     }
-    expect(names).toHaveLength(12);
+    expect(names).toHaveLength(13);
   });
 });
 

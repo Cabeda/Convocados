@@ -10,6 +10,11 @@ export interface ToolDef {
   description: string;
   inputSchema: Record<string, unknown>;
   scope: string;
+  /**
+   * When true (default), `tools/call` requires a valid OAuth token. Set false
+   * for tools that anonymous callers may use (read-only public data).
+   */
+  requiresAuth?: boolean;
   handler: (args: Record<string, unknown>, ctx: AuthContext) => Promise<unknown>;
 }
 
@@ -25,11 +30,22 @@ async function listMyGames(_args: Record<string, unknown>, ctx: AuthContext) {
   };
 }
 
-async function getGame(args: Record<string, unknown>, _ctx: AuthContext) {
+async function getGame(args: Record<string, unknown>, ctx: AuthContext) {
   const eventId = args.eventId as string;
   if (!eventId) throw new McpError("eventId required", -32602, 400);
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) throw new McpError("Game not found", -32001, 404);
+
+  // Anonymous callers get link-accessible events, but a password-locked event
+  // reveals only its title (ADR 0034).
+  if (event.accessPassword && !ctx.userId) {
+    return { id: event.id, title: event.title, locked: true, hasPassword: true };
+  }
+
+  const playerCount = event.currentGameId
+    ? await prisma.gameParticipant.count({ where: { gameId: event.currentGameId, archivedAt: null } })
+    : await prisma.player.count({ where: { eventId, archivedAt: null } });
+
   return {
     id: event.id,
     title: event.title,
@@ -37,7 +53,28 @@ async function getGame(args: Record<string, unknown>, _ctx: AuthContext) {
     dateTime: event.dateTime.toISOString(),
     sport: event.sport,
     maxPlayers: event.maxPlayers,
+    playerCount,
+    spotsLeft: Math.max(0, event.maxPlayers - playerCount),
     ownerId: event.ownerId,
+    isPublic: event.isPublic,
+  };
+}
+
+/** Anonymous read: discover public (discoverable) events. */
+async function listPublicEvents(args: Record<string, unknown>) {
+  const raw = Number(args.limit);
+  const limit = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), 50) : 20;
+  const events = await prisma.event.findMany({
+    where: { isPublic: true, archivedAt: null },
+    orderBy: { dateTime: "asc" },
+    take: limit,
+    select: {
+      id: true, title: true, location: true, dateTime: true,
+      sport: true, maxPlayers: true,
+    },
+  });
+  return {
+    events: events.map((e) => ({ ...e, dateTime: e.dateTime.toISOString(), url: `/events/${e.id}` })),
   };
 }
 
@@ -94,10 +131,19 @@ const READ_TOOLS: ToolDef[] = [
   },
   {
     name: "convocados_get_game",
-    description: "Get Game (Event) details by ID. Returns title, location, dateTime, sport.",
+    description: "Get Game (Event) details by ID: title, location, dateTime, sport, players, spots left. Anonymous; a password-locked event returns { locked: true }.",
     inputSchema: { type: "object", properties: { eventId: { type: "string", description: "Event ID" } }, required: ["eventId"] },
     scope: "read:events",
+    requiresAuth: false,
     handler: getGame,
+  },
+  {
+    name: "convocados_list_public_events",
+    description: "List public (discoverable) Games looking for players. Anonymous; no arguments required.",
+    inputSchema: { type: "object", properties: { limit: { type: "number", description: "Max results (1-50, default 20)" } }, additionalProperties: false },
+    scope: "read:events",
+    requiresAuth: false,
+    handler: listPublicEvents,
   },
   {
     name: "convocados_get_history",
