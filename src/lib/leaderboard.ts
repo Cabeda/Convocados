@@ -18,19 +18,12 @@ export interface SeasonMember {
   name: string;
   crewId: string | null;
   crewName: string | null;
-  joinedAt: Date | string;
   withdrawnAt: Date | string | null;
 }
 
 export interface LeaderboardOptions {
   startsAt?: Date | string | null;
   endsAt?: Date | string | null;
-  /**
-   * End of the season's competitive period (completedAt ?? cancelledAt ??
-   * registrationClosesAt). Members enrolled after this date were added
-   * retroactively by the organizer, so their period games count.
-   */
-  seasonEndsAt?: Date | string | null;
 }
 
 export interface PlayerStanding {
@@ -121,14 +114,14 @@ function isValidScore(value: number | null): value is number {
   return value !== null && Number.isInteger(value) && value >= 0;
 }
 
-function isMemberEffective(member: SeasonMember, dateTime: number, seasonEndsAt: number | null = null): boolean {
-  const joinedAt = validDate(member.joinedAt);
+/**
+ * Whole-window eligibility: an enrolled member counts toward every eligible Game
+ * in the Season window, regardless of when they were added. Only withdrawal
+ * removes them, from the withdrawal instant onward.
+ */
+function isMemberEligible(member: SeasonMember, dateTime: number): boolean {
   const withdrawnAt = validDate(member.withdrawnAt);
-  if (withdrawnAt !== null && dateTime >= withdrawnAt) return false;
-  if (joinedAt === null || joinedAt <= dateTime) return true;
-  // Retroactive enrollment: members added after the season period closed were
-  // opted in for the whole period by the organizer, so their period games count.
-  return seasonEndsAt !== null && joinedAt >= seasonEndsAt;
+  return withdrawnAt === null || dateTime < withdrawnAt;
 }
 
 type NormalizedTeamPlayers = [Array<[string, string]>, Array<[string, string]>];
@@ -280,7 +273,6 @@ export function calculateLeaderboard(
   }
 
   const validGames = filterLeaderboardGames(games, options);
-  const seasonEndsAt = validDate(options.seasonEndsAt);
   let gamesCount = 0;
   for (const game of validGames) {
     const dateTime = timeOf(game.dateTime);
@@ -300,11 +292,11 @@ export function calculateLeaderboard(
       const opponentScore = teamIndex === 0 ? scoreTwo : scoreOne;
       for (const [key, displayName] of team) {
         const member = memberByName.get(key);
-        if (members !== undefined && (!member || !isMemberEffective(member, dateTime, seasonEndsAt))) continue;
+        if (members !== undefined && (!member || !isMemberEligible(member, dateTime))) continue;
         const standing = playerStandings.get(key) ?? createStanding(displayName);
         playerStandings.set(key, standing);
         addResult(standing, ownScore, opponentScore);
-        if (member?.crewId && member.crewName && crewStandings.has(member.crewId) && isMemberEffective(member, dateTime, seasonEndsAt)) {
+        if (member?.crewId && member.crewName && crewStandings.has(member.crewId)) {
           const points = crewMemberPoints.get(member.crewId) ?? [];
           points.push(pointsFor(ownScore, opponentScore));
           crewMemberPoints.set(member.crewId, points);

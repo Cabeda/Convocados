@@ -44,7 +44,9 @@ Use cases: casual sessions with guests, holiday matches, unbalanced rosters, fir
 _Avoid_: exhibition, practice, scrimmage
 
 ## Season
-A bounded, optional competition within an **Event**. Account-linked **EventPlayers** join explicitly during registration. Eligible non-friendly **Games** contribute results for participating players, while non-participants in those Games remain absent from Season standings.
+A bounded, optional competition within an **Event**. Account-linked **EventPlayers** join explicitly during registration. **Membership is whole-window**: once enrolled, a player counts for every eligible non-friendly **Game** whose day falls inside the Season window, regardless of when they were added — enrollment has no effective date. Only withdrawal removes them, from the withdrawal moment onward; re-adding re-covers the whole window. A player absent from a Game's lineup simply earns nothing for it.
+
+The Season window is **day-granular**: the opening and closing calendar days count in full, so a Game on either boundary day qualifies regardless of kickoff time. Standings, **Crew** scores, and **Season Rank** are pure replays over the current window, membership, and Crew assignment — editing any of those recomputes immediately, with no separate recalculation step. A completed Season stays frozen until an audited reopen.
 
 A Season moves through registration, active competition, result review, and completion, or is cancelled. It soft-resets each participant's **Season Rank** and resets its own standings and awards, but never resets the Event's long-lived **Skill Rating**, which continues to support team balancing across Seasons. An Event has at most one live Season (`active` or `review`) plus any number of `registration` Seasons with non-overlapping windows (past recording, future prep); at most one window contains a given day. `status` is the lifecycle source of truth; `isCurrent` (today in window, never when cancelled) is derived for display only.
 _Avoid_: league (a possible competition format, not the time boundary), Skill Rating season
@@ -52,7 +54,7 @@ _Avoid_: league (a possible competition format, not the time boundary), Skill Ra
 ## Crew
 A named, Season-specific group of three to five confirmed **Season** participants competing as one entry in the Season standings. Players form Crews themselves; unassigned participants may enter registration as free agents.
 
-Crew membership is independent of **Game** participation and match-team assignment. It creates a shared competitive identity, not an obligation to attend or a guarantee that Crew members always play on the same side. Membership changes never rewrite a Crew's historical Game contributions.
+Crew membership is independent of **Game** participation and match-team assignment. It creates a shared competitive identity, not an obligation to attend or a guarantee that Crew members always play on the same side. Crew assignment is read at calculation time: moving a member between Crews, adding or removing members, or editing the Season window recomputes every affected **Crew Round Score** (pure replay, ADR 0037).
 _Avoid_: Team (the side fielded in one Game), squad (implies a fixed lineup)
 
 ## Season Round

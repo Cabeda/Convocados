@@ -1,7 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { recommendCrews } from "~/lib/crewRecommendation";
 import { calculateLeaderboard, filterLeaderboardGames, type LeaderboardGame, type SeasonMember } from "~/lib/leaderboard";
-import { authorizeSeasonRequest, requireSeasonAdmin, seasonWindowsOverlapByDay, isSeasonCurrent } from "~/lib/seasonSetup.server";
+import {
+  authorizeSeasonRequest,
+  requireSeasonAdmin,
+  seasonAttendanceWindow,
+  seasonCompetitiveWindow,
+  seasonWindowsOverlapByDay,
+  seasonWindowByDay,
+  isSeasonCurrent,
+} from "~/lib/seasonSetup.server";
 
 function game(overrides: Partial<LeaderboardGame> = {}): LeaderboardGame {
   return {
@@ -21,7 +29,6 @@ function member(overrides: Partial<SeasonMember> & { name: string }): SeasonMemb
     name: overrides.name,
     crewId: overrides.crewId ?? null,
     crewName: overrides.crewName ?? null,
-    joinedAt: overrides.joinedAt ?? new Date("2026-01-01T00:00:00.000Z"),
     withdrawnAt: overrides.withdrawnAt ?? null,
   };
 }
@@ -143,5 +150,35 @@ describe("season window coexistence by day", () => {
     expect(isSeasonCurrent({ status: "registration", ...window("2026-03-01T00:00:00.000Z", "2026-04-01T00:00:00.000Z") }, now)).toBe(true);
     expect(isSeasonCurrent({ status: "registration", ...window("2026-01-01T00:00:00.000Z", "2026-02-01T00:00:00.000Z") }, now)).toBe(false);
     expect(isSeasonCurrent({ status: "cancelled", ...window("2026-03-01T00:00:00.000Z", "2026-04-01T00:00:00.000Z") }, now)).toBe(false);
+  });
+});
+
+describe("day-granular competitive window", () => {
+  const window = (opens: string, closes: string) => ({
+    registrationOpensAt: new Date(opens),
+    registrationClosesAt: new Date(closes),
+  });
+
+  it("spans full opening and closing calendar days, ignoring time-of-day", () => {
+    const { startsAt, endsAt } = seasonWindowByDay(window("2026-01-01T00:00:00.000Z", "2026-01-31T00:00:00.000Z"));
+    expect(startsAt.toISOString()).toBe("2026-01-01T00:00:00.000Z");
+    expect(endsAt.toISOString()).toBe("2026-01-31T23:59:59.999Z");
+  });
+
+  it("caps the window at completion/cancellation when the Season ends early", () => {
+    const completedAt = new Date("2026-01-20T12:00:00.000Z");
+    const capped = seasonCompetitiveWindow({ ...window("2026-01-01T00:00:00.000Z", "2026-01-31T00:00:00.000Z"), completedAt, cancelledAt: null });
+    expect(capped.endsAt).toEqual(completedAt);
+    const cancelled = seasonCompetitiveWindow({ ...window("2026-01-01T00:00:00.000Z", "2026-01-31T00:00:00.000Z"), completedAt: null, cancelledAt: completedAt });
+    expect(cancelled.endsAt).toEqual(completedAt);
+  });
+
+  it("attendance window runs from the opening day to now, never past the close of day", () => {
+    const season = window("2026-01-01T00:00:00.000Z", "2026-01-31T00:00:00.000Z");
+    const mid = seasonAttendanceWindow(season, new Date("2026-01-15T09:00:00.000Z"));
+    expect(mid.gte.toISOString()).toBe("2026-01-01T00:00:00.000Z");
+    expect(mid.lte.toISOString()).toBe("2026-01-15T09:00:00.000Z");
+    const after = seasonAttendanceWindow(season, new Date("2026-03-01T00:00:00.000Z"));
+    expect(after.lte.toISOString()).toBe("2026-01-31T23:59:59.999Z");
   });
 });
