@@ -5,6 +5,7 @@ import { checkOwnership } from "../../../../../lib/auth.helpers.server";
 import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 import { logEvent } from "../../../../../lib/eventLog.server";
 import { recalculateAllRatings } from "../../../../../lib/elo.server";
+import { DEFAULT_SIGMA, ratingToMu } from "../../../../../lib/skill";
 
 export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
@@ -114,9 +115,10 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     const oldRating = existing.rating;
     const oldInitial = existing.initialRating;
 
-    // If player has no games yet, also update the live rating
+    // If player has no games yet, also update the live rating and reset the
+    // OpenSkill posterior to a fresh prior around the new scalar.
     const data = existing.gamesPlayed === 0
-      ? { initialRating: clamped, rating: clamped }
+      ? { initialRating: clamped, rating: clamped, ratingMu: ratingToMu(clamped), ratingSigma: DEFAULT_SIGMA }
       : { initialRating: clamped };
 
     const updated = await prisma.playerRating.update({
@@ -156,7 +158,14 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     });
   } else {
     const created = await prisma.playerRating.create({
-      data: { eventId, name, rating: clamped, initialRating: clamped },
+      data: {
+        eventId,
+        name,
+        rating: clamped,
+        ratingMu: ratingToMu(clamped),
+        ratingSigma: DEFAULT_SIGMA,
+        initialRating: clamped,
+      },
     });
 
     // Audit log

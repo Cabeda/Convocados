@@ -288,6 +288,10 @@ model PlayerRating {
   name          String
   userId        String?
   rating        Float    @default(1000)
+  // OpenSkill posterior behind `rating` (see src/lib/skill.ts). Nullable so
+  // rows written before the engine swap seed lazily from `rating`.
+  ratingMu      Float?
+  ratingSigma   Float?
   initialRating Float?
   gamesPlayed   Int      @default(0)
   wins          Int      @default(0)
@@ -344,6 +348,9 @@ model EventPlayer {
   name          String
   userId        String?
   rating        Float    @default(1000)
+  // OpenSkill posterior behind `rating` (see src/lib/skill.ts).
+  ratingMu      Float?
+  ratingSigma   Float?
   gamesPlayed   Int      @default(0)
   wins          Int      @default(0)
   draws         Int      @default(0)

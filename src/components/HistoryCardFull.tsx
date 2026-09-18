@@ -37,7 +37,8 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { useT } from "~/lib/useT";
 import { detectLocale, type TFunction } from "~/lib/i18n";
 import { matchesWithName } from "~/lib/stringMatch";
-import { computeGameUpdates, expectedScore, kFactor, type EloUpdate } from "~/lib/elo";
+import { expectedScore } from "~/lib/elo";
+import { computeSkillUpdates, type SkillUpdate } from "~/lib/skill";
 import { formatDateInTz } from "~/lib/timezones";
 import { isNameInPaymentsSnapshot, isNameInTeamsSnapshot } from "~/lib/snapshotParticipants";
 import { formatSetScore, hasCompletedMatch, matchScoreFromSets, type SetScore } from "~/lib/scoring";
@@ -147,8 +148,9 @@ function eloTooltipText(
 
   const playerInfo = getInfo(playerName);
   const oppAvg = oppTeamNames.reduce((sum, n) => sum + getInfo(n).rating, 0) / (oppTeamNames.length || 1);
+  // Elo's expectedScore is the calibration target for the OpenSkill projection,
+  // so it remains a faithful win-probability estimate.
   const expected = expectedScore(playerInfo.rating, oppAvg);
-  const k = kFactor(playerInfo.gamesPlayed);
 
   const ownScore = isTeamOne ? scoreOne : scoreTwo;
   const oppScore = isTeamOne ? scoreTwo : scoreOne;
@@ -160,8 +162,6 @@ function eloTooltipText(
     t("eloTooltipOpponent", { rating: Math.round(oppAvg) }),
     t("eloTooltipExpected", { pct: Math.round(expected * 100) }),
     t("eloTooltipOutcome", { outcome: outcomeLabel }),
-    t("eloTooltipK", { k }),
-    t("eloTooltipFormula", { delta: `${delta >= 0 ? "+" : ""}${delta}` }),
   ].join("\n");
 }
 
@@ -586,13 +586,13 @@ export function HistoryCardFull({
   };
 
   // ── ELO preview ────────────────────────────────────────────────────────────
-  const liveEloUpdates: EloUpdate[] = useMemo(() => {
+  const liveEloUpdates: SkillUpdate[] = useMemo(() => {
     if (isCancelled || editableTeams.length !== 2 || (isTennisScoring && !hasCompletedMatch(scoreSets))) return [];
     const matchScore = matchScoreFromSets(scoreSets);
     const s1 = isTennisScoring ? matchScore.teamOne : scoreOne === "" ? null : parseInt(scoreOne, 10);
     const s2 = isTennisScoring ? matchScore.teamTwo : scoreTwo === "" ? null : parseInt(scoreTwo, 10);
     if (s1 === null || s2 === null || isNaN(s1) || isNaN(s2)) return [];
-    return computeGameUpdates(playerRatings, editableTeams, s1, s2);
+    return computeSkillUpdates(playerRatings, editableTeams, s1, s2);
   }, [editableTeams, scoreOne, scoreTwo, scoreSets, isTennisScoring, playerRatings, isCancelled]);
 
   const duplicateNames = useMemo(() => {

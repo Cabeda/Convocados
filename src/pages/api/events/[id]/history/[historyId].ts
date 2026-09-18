@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../lib/db.server";
 import { processGame, recalculateAllRatings } from "../../../../../lib/elo.server";
-import { computeGameUpdates } from "../../../../../lib/elo";
+import { computeSkillUpdates } from "../../../../../lib/skill";
 import { MVP_ELO_BONUS } from "../../../../../lib/mvp.constants";
 import { checkOwnership, getSession } from "../../../../../lib/auth.helpers.server";
 import { computeHistoryDeltas } from "./index";
@@ -562,8 +562,14 @@ export const PATCH: APIRoute = async ({ params, request }) => {
     try {
       const snapshot = JSON.parse(updated.teamsSnapshot);
       const ratings = await prisma.playerRating.findMany({ where: { eventId: params.id } });
-      const playerInfos = ratings.map((r) => ({ name: r.name, rating: r.rating, gamesPlayed: r.gamesPlayed }));
-      eloUpdates = computeGameUpdates(playerInfos, snapshot, finalScoreOne, finalScoreTwo)
+      const playerInfos = ratings.map((r) => ({
+        name: r.name,
+        rating: r.rating,
+        gamesPlayed: r.gamesPlayed,
+        mu: r.ratingMu ?? undefined,
+        sigma: r.ratingSigma ?? undefined,
+      }));
+      eloUpdates = computeSkillUpdates(playerInfos, snapshot, finalScoreOne, finalScoreTwo)
         .map((u) => ({ name: u.name, delta: u.delta }));
 
       // Add MVP ELO bonus to displayed deltas

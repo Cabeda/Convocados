@@ -1,8 +1,14 @@
 import { prisma } from "./db.server";
-import { expectedScore, kFactor, type EloUpdate } from "./elo";
+import {
+  computeSkillUpdates,
+  DEFAULT_MU,
+  DEFAULT_RATING,
+  DEFAULT_SIGMA,
+  ratingToMu,
+  SCALE,
+  type SkillUpdate,
+} from "./skill";
 import { MVP_ELO_BONUS } from "./mvp.constants";
-
-const DEFAULT_RATING = 1000;
 
 interface TeamSnapshot {
   team: string;
@@ -11,8 +17,11 @@ interface TeamSnapshot {
 
 /**
  * Process a single game history entry and update player ratings.
- * Returns the ELO deltas for each player.
- * Skips friendly games — they don't affect ratings.
+ *
+ * The scalar `PlayerRating.rating` (the balancing input, a 1000-centred number)
+ * is a projection of an OpenSkill posterior `(mu, sigma)` — see src/lib/skill.ts.
+ * Returns the rating deltas for each player. Skips friendly games — they don't
+ * affect ratings.
  */
 export async function processGame(
   eventId: string,
@@ -20,8 +29,8 @@ export async function processGame(
   teamsSnapshot: TeamSnapshot[],
   scoreOne: number,
   scoreTwo: number,
-): Promise<EloUpdate[]> {
-  // Defensive: never apply ELO to a friendly game, even if a caller forgets.
+): Promise<SkillUpdate[]> {
+  // Defensive: never apply ratings to a friendly game, even if a caller forgets.
   const entry = await prisma.gameHistory.findUnique({
     where: { id: historyId },
     select: { isFriendly: true, eloProcessed: true },
@@ -33,47 +42,54 @@ export async function processGame(
   const teamTwoPlayers = teamsSnapshot[1].players.map((p) => p.name);
   const allNames = [...teamOnePlayers, ...teamTwoPlayers];
 
-  // Get or create ratings for all players
+  // Get or create the OpenSkill posterior for all players.
   const ratings = await Promise.all(
     allNames.map((name) =>
       prisma.playerRating.upsert({
         where: { eventId_name: { eventId, name } },
-        create: { eventId, name, rating: DEFAULT_RATING },
+        create: {
+          eventId,
+          name,
+          rating: DEFAULT_RATING,
+          ratingMu: DEFAULT_MU,
+          ratingSigma: DEFAULT_SIGMA,
+        },
         update: {},
       }),
     ),
   );
   const ratingMap = new Map(ratings.map((r) => [r.name, r]));
 
-  // Calculate team average ELOs
-  const avgElo = (names: string[]) =>
-    names.reduce((sum, n) => sum + (ratingMap.get(n)?.rating ?? DEFAULT_RATING), 0) / names.length;
-
-  const teamOneElo = avgElo(teamOnePlayers);
-  const teamTwoElo = avgElo(teamTwoPlayers);
-
-  // Determine outcome: 1 = team one wins, 0.5 = draw, 0 = team one loses
+  // Outcome: 1 = team one wins, 0.5 = draw, 0 = team one loses.
   const outcome = scoreOne > scoreTwo ? 1 : scoreOne < scoreTwo ? 0 : 0.5;
 
-  const updates: EloUpdate[] = [];
+  const updates = computeSkillUpdates(
+    ratings.map((r) => ({
+      name: r.name,
+      rating: r.rating,
+      gamesPlayed: r.gamesPlayed,
+      mu: r.ratingMu ?? undefined,
+      sigma: r.ratingSigma ?? undefined,
+    })),
+    teamsSnapshot,
+    scoreOne,
+    scoreTwo,
+  );
 
-  // Update each player
-  for (const [name, r] of ratingMap) {
-    const isTeamOne = teamOnePlayers.includes(name);
+  for (const update of updates) {
+    const r = ratingMap.get(update.name);
+    if (!r) continue;
+    const isTeamOne = teamOnePlayers.includes(update.name);
     const playerOutcome = isTeamOne ? outcome : 1 - outcome;
-    const opponentElo = isTeamOne ? teamTwoElo : teamOneElo;
-    const expected = expectedScore(r.rating, opponentElo);
-    const k = kFactor(r.gamesPlayed);
-    const delta = Math.round(k * (playerOutcome - expected));
-    const newRating = r.rating + delta;
-
     const isWin = playerOutcome === 1;
     const isDraw = playerOutcome === 0.5;
 
     await prisma.playerRating.update({
       where: { id: r.id },
       data: {
-        rating: newRating,
+        rating: update.newRating,
+        ratingMu: update.mu,
+        ratingSigma: update.sigma,
         gamesPlayed: { increment: 1 },
         wins: { increment: isWin ? 1 : 0 },
         draws: { increment: isDraw ? 1 : 0 },
@@ -81,10 +97,17 @@ export async function processGame(
       },
     });
 
-    updates.push({ name, oldRating: r.rating, newRating, delta });
+    // EventPlayer caches the rating as an MCP/crew fallback — keep it in sync
+    // (rows may not exist yet, so an update-only mirror never creates one).
+    await prisma.eventPlayer.updateMany({
+      where: { eventId, name: update.name },
+      data: { rating: update.newRating, ratingMu: update.mu, ratingSigma: update.sigma },
+    });
   }
 
-  // Apply MVP ELO bonus if enabled
+  // Apply MVP rating bonus if enabled. The bonus is denominated on the scalar
+  // scale, so it moves `mu` by the same amount / SCALE to keep the projection
+  // exact.
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: { mvpEloEnabled: true },
@@ -104,16 +127,23 @@ export async function processGame(
         .filter(([, count]) => count === maxVotes)
         .map(([name]) => name);
 
+      const bonusMu = MVP_ELO_BONUS / SCALE;
       for (const mvpName of mvpNames) {
         const existingUpdate = updates.find((u) => u.name === mvpName);
         if (existingUpdate) {
           const newRatingWithBonus = existingUpdate.newRating + MVP_ELO_BONUS;
+          const newMuWithBonus = existingUpdate.mu + bonusMu;
           await prisma.playerRating.update({
             where: { eventId_name: { eventId, name: mvpName } },
-            data: { rating: newRatingWithBonus },
+            data: { rating: newRatingWithBonus, ratingMu: newMuWithBonus },
+          });
+          await prisma.eventPlayer.updateMany({
+            where: { eventId, name: mvpName },
+            data: { rating: newRatingWithBonus, ratingMu: newMuWithBonus },
           });
           existingUpdate.newRating = newRatingWithBonus;
           existingUpdate.delta += MVP_ELO_BONUS;
+          existingUpdate.mu = newMuWithBonus;
         }
       }
     }
@@ -130,7 +160,8 @@ export async function processGame(
 
 /**
  * Recalculate all ratings for an event from scratch.
- * Resets all ratings and reprocesses history in chronological order.
+ * Resets all ratings and replays history in chronological order through the
+ * OpenSkill engine (deterministic, so idempotent).
  * Preserves manually-set initial ratings (initialRating field).
  */
 export async function recalculateAllRatings(eventId: string): Promise<number> {
@@ -154,10 +185,18 @@ export async function recalculateAllRatings(eventId: string): Promise<number> {
     }),
   ]);
 
-  // Re-create ratings for players that had manual initial ratings
+  // Re-create ratings for players that had manual initial ratings, seeding the
+  // OpenSkill posterior from the scalar via the inverse projection.
   for (const [name, initial] of initialRatings) {
     await prisma.playerRating.create({
-      data: { eventId, name, rating: initial, initialRating: initial },
+      data: {
+        eventId,
+        name,
+        rating: initial,
+        ratingMu: ratingToMu(initial),
+        ratingSigma: DEFAULT_SIGMA,
+        initialRating: initial,
+      },
     });
   }
 
@@ -186,7 +225,7 @@ export async function recalculateAllRatings(eventId: string): Promise<number> {
 }
 
 /**
- * Balance teams using ELO ratings.
+ * Balance teams using Skill Ratings.
  * Uses greedy balancing: sort by rating desc, then snake-draft to minimize difference.
  */
 export function balanceTeams(
@@ -203,7 +242,7 @@ export function balanceTeams(
   const totals = [0, 0];
   const maxPerTeam = Math.ceil(sorted.length / 2);
 
-  // Snake draft: assign each player to the team with lower total ELO,
+  // Snake draft: assign each player to the team with lower total rating,
   // but enforce a max team size so teams differ by at most 1 player.
   for (const player of sorted) {
     let target: number;
