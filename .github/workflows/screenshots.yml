@@ -64,16 +64,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Cache node_modules
-        uses: actions/cache@v6
-        id: nm-cache
-        with:
-          path: |
-            node_modules
-            src/lib/__generated__
-          key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
-      - if: steps.nm-cache.outputs.cache-hit != 'true'
-        run: pnpm install --frozen-lockfile --prefer-offline
+      # Note: no node_modules cache here. This workflow checks out and runs PR
+      # code, so caching install output under a lockfile key would let an
+      # untrusted branch poison the default branch's cache (CodeQL:
+      # js/actions/cache-poisoning). setup-node's pnpm-store cache is safe.
+      - run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Generate Prisma client
         run: pnpm prisma generate
