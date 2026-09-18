@@ -149,12 +149,15 @@ jobs:
         if: |
           steps.drift.outputs.changed == 'true' &&
           github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository &&
-          secrets.SCREENSHOT_BOT_TOKEN != ''
+          github.event.pull_request.head.repo.full_name == github.repository
         env:
           TOKEN: ${{ secrets.SCREENSHOT_BOT_TOKEN }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
+          if [ -z "$TOKEN" ]; then
+            echo "No SCREENSHOT_BOT_TOKEN configured — skipping commit (artifact uploaded)."
+            exit 0
+          fi
           git config user.name "convocados-screenshots[bot]"
           git config user.email "screenshots@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
