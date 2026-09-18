@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership } from "../../../../lib/auth.helpers.server";
+import { canReadEventFinances } from "../../../../lib/eventReadAccess.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { validatePaymentMethods, normalizePaymentMethod } from "../../../../lib/paymentMethods";
 import type { PaymentMethod } from "../../../../lib/paymentMethods";
@@ -242,11 +243,15 @@ export const PUT: APIRoute = async ({ params, request }) => {
   });
 };
 
-/** GET — get event cost with payments and summary. */
-export const GET: APIRoute = async ({ params }) => {
+/** GET — get event cost with payments and summary. Owner/admin/participant (or ownerless-unlisted link access). */
+export const GET: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  if (!(await canReadEventFinances(request, event))) {
+    return Response.json({ error: "Only event participants can view costs." }, { status: 403 });
+  }
 
   const eventCost = await prisma.eventCost.findUnique({
     where: { eventId },

@@ -2,6 +2,9 @@ import type { APIRoute } from "astro";
 import { promises as fs } from "node:fs";
 import { prisma, prismaReady } from "../../lib/db.server";
 import { SCHEDULER_HEARTBEAT_ID } from "../../lib/scheduler.server";
+import { createLogger } from "../../lib/logger.server";
+
+const log = createLogger("health");
 
 /** Scheduler polls every 5–30s; anything older than 3min means it's down.
  * (3min tolerates maintenance timeouts + rotating deploys without false alarms.) */
@@ -78,9 +81,8 @@ export const GET: APIRoute = async () => {
 
     return Response.json(response);
   } catch (err) {
-    return Response.json(
-      { status: "error", message: err instanceof Error ? err.message : "db unreachable" },
-      { status: 503 },
-    );
+    // Log the detail server-side; never echo internal error text publicly.
+    log.error({ err }, "health check failed");
+    return Response.json({ status: "error" }, { status: 503 });
   }
 };

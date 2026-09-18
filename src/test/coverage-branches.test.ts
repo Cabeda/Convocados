@@ -313,7 +313,7 @@ describe("POST /api/events/[id]/webhooks/[webhookId]/test", () => {
     const webhook = await prisma.webhookSubscription.create({
       data: {
         eventId: event.id,
-        url: "http://localhost:99999/webhook", // will fail to connect
+        url: "https://example.com/webhook", // will fail to connect
         events: "test",
       },
     });
@@ -331,7 +331,7 @@ describe("POST /api/events/[id]/webhooks/[webhookId]/test", () => {
     const webhook = await prisma.webhookSubscription.create({
       data: {
         eventId: event.id,
-        url: "http://localhost:99999/webhook",
+        url: "https://example.com/webhook",
         events: "test",
         secret: "my-secret",
       },

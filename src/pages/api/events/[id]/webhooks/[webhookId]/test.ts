@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
 import { signPayload } from "../../../../../../lib/webhook.server";
 import { checkOwnership } from "../../../../../../lib/auth.helpers.server";
+import { validateWebhookUrl } from "../../../../../../lib/webhookUrl";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 /** POST — send a test payload to a webhook */
@@ -27,6 +28,10 @@ export const POST: APIRoute = async ({ params, request }) => {
     where: { id: webhookId, eventId },
   });
   if (!webhook) return Response.json({ error: "Not found." }, { status: 404 });
+
+  // Re-validate before fetching — rows may predate the create-time guard.
+  const urlError = validateWebhookUrl(webhook.url);
+  if (urlError) return Response.json({ error: urlError }, { status: 400 });
 
   const payload = JSON.stringify({
     event: "test",

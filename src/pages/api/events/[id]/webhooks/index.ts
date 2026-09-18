@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../../../lib/db.server";
 import { checkOwnership } from "../../../../../lib/auth.helpers.server";
+import { validateWebhookUrl } from "../../../../../lib/webhookUrl";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 const MAX_WEBHOOKS_PER_EVENT = 10;
@@ -23,11 +24,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   const url = String(body.url ?? "").trim();
   if (!url) return Response.json({ error: "url is required." }, { status: 400 });
 
-  try {
-    new URL(url);
-  } catch {
-    return Response.json({ error: "Invalid URL." }, { status: 400 });
-  }
+  const urlError = validateWebhookUrl(url);
+  if (urlError) return Response.json({ error: urlError }, { status: 400 });
 
   // Rate limit: max webhooks per event
   const count = await prisma.webhookSubscription.count({ where: { eventId } });

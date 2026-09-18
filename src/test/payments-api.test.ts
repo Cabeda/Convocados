@@ -53,7 +53,7 @@ async function seedUser(id = "user-pay-1") {
   });
 }
 
-async function seedEvent(ownerId: string, id = "evt-pay-1") {
+async function seedEvent(ownerId: string | null, id = "evt-pay-1") {
   return prisma.event.create({
     data: { id, title: "Payment Game", location: "Pitch", dateTime: new Date(), maxPlayers: 10, ownerId },
   });
@@ -66,8 +66,8 @@ describe("GET /api/events/[id]/payments", () => {
   });
 
   it("returns empty payments when no cost is set", async () => {
-    const user = await seedUser();
-    const event = await seedEvent(user.id);
+    // Ownerless unlisted event — anonymous link access is allowed (ADR 0035).
+    const event = await seedEvent(null);
 
     const res = await GET(getCtx(event.id));
     expect(res.status).toBe(200);
@@ -77,8 +77,7 @@ describe("GET /api/events/[id]/payments", () => {
   });
 
   it("returns payments with summary", async () => {
-    const user = await seedUser();
-    const event = await seedEvent(user.id);
+    const event = await seedEvent(null);
     const eventCost = await prisma.eventCost.create({
       data: { eventId: event.id, totalAmount: 100, currency: "EUR" },
     });
