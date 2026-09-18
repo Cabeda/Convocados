@@ -1,2 +1,0 @@
-
-Pixel7a34АнѓЖ*	arm64-v8a2Google:emulator-5554BPixel7aRsdk_gphone64_arm64
