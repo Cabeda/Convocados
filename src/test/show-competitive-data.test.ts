@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
+import { auth } from "~/lib/auth.server";
 
 const prisma = new PrismaClient();
 
@@ -56,6 +57,10 @@ beforeEach(async () => {
   await prisma.user.deleteMany();
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 // ─── PUT /api/events/[id]/show-competitive-data ──────────────────────────────
 
 describe("PUT /api/events/[id]/show-competitive-data", () => {
@@ -85,9 +90,11 @@ describe("PUT /api/events/[id]/show-competitive-data", () => {
 // ─── GET /api/events/[id]/ratings — respects showCompetitiveData ─────────────
 
 describe("GET /api/events/[id]/ratings with showCompetitiveData", () => {
-  it("returns ratings normally when showCompetitiveData is true", async () => {
-    const id = await seedEvent({ showCompetitiveData: true });
+  it("returns ratings to the owner when showCompetitiveData is true", async () => {
+    const ownerId = await seedUser();
+    const id = await seedEvent({ showCompetitiveData: true, ownerId });
     await prisma.playerRating.create({ data: { eventId: id, name: "Alice", rating: 1100, gamesPlayed: 3, wins: 2, draws: 0, losses: 1 } });
+    vi.spyOn(auth.api, "getSession").mockResolvedValue({ user: { id: ownerId, name: "Test User" } } as any);
     const res = await getRatings(ctx({ id }));
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -103,12 +110,19 @@ describe("GET /api/events/[id]/ratings with showCompetitiveData", () => {
     expect(res.status).toBe(403);
   });
 
-  it("allows access when showCompetitiveData is false on ownerless event", async () => {
-    // Ownerless events: the condition `event.ownerId && !isOwner && !isAdmin` is false
+  it("returns 403 for a non-admin even when showCompetitiveData is true on an owned event", async () => {
+    const userId = await seedUser();
+    const id = await seedEvent({ ownerId: userId, showCompetitiveData: true });
+    await prisma.playerRating.create({ data: { eventId: id, name: "Alice", rating: 1100 } });
+    const res = await getRatings(ctx({ id }));
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for an ownerless event (no owner/admin)", async () => {
     const id = await seedEvent({ ownerId: null, showCompetitiveData: false });
     await prisma.playerRating.create({ data: { eventId: id, name: "Bob", rating: 1050, gamesPlayed: 1, wins: 1, draws: 0, losses: 0 } });
     const res = await getRatings(ctx({ id }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
   });
 });
 

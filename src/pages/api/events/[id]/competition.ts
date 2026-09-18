@@ -51,7 +51,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
     data.rankEnabled = body.enabled;
     data.balanced = body.enabled;
     if (!body.enabled) {
-      data.hideEloInTeams = false;
+      data.hideEloInTeams = true;
       data.mvpEloEnabled = false;
     }
   }

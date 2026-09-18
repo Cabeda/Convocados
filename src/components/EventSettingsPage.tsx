@@ -271,7 +271,7 @@ export default function EventSettingsPage({ eventId }: Props) {
   };
 
   const handleToggleCompetition = (v: boolean) => {
-    setEvent((e) => e ? { ...e, eloEnabled: v, rankEnabled: v, balanced: v, ...(v ? {} : { hideEloInTeams: false, mvpEloEnabled: false }) } : e);
+    setEvent((e) => e ? { ...e, eloEnabled: v, rankEnabled: v, balanced: v, ...(v ? {} : { hideEloInTeams: true, mvpEloEnabled: false }) } : e);
     updateSetting("competition", { enabled: v });
   };
 
