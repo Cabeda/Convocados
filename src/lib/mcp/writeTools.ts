@@ -13,8 +13,12 @@ import { recordReceived } from "../payments.server";
 import { isGameEnded } from "../gameStatus";
 import { serializeRecurrenceRule, type RecurrenceRule } from "../recurrence";
 import { getDefaultDurationMinutes } from "../sports";
-import { scheduleEventReminders } from "../scheduler.server";
+import { scheduleEventReminders, cancelEventJobs } from "../scheduler.server";
 import { fromDateTimeLocalValue } from "../timezones";
+import { cancelCurrentGame, CancelError } from "../cancelEvent.server";
+import { upsertRsvp } from "../rsvp.server";
+import { enqueueRsvpAnswerNotification } from "../rsvp-notifications.server";
+import { logEvent } from "../eventLog.server";
 
 /**
  * MCP write tools (V1.5). All mutations reuse the same server-side libs as
@@ -341,6 +345,142 @@ async function createEvent(args: Record<string, unknown>, ctx: AuthContext) {
   return { id: event.id, title: event.title, dateTime: event.dateTime.toISOString() };
 }
 
+/** Update editable Event settings. Only provided fields change. Owner/admin only. */
+async function updateEvent(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  await requireEventAccess(ctx, eventId);
+
+  const data: {
+    title?: string;
+    location?: string;
+    sport?: string;
+    maxPlayers?: number;
+    isPublic?: boolean;
+    timezone?: string;
+    dateTime?: Date;
+  } = {};
+
+  if (args.title !== undefined) {
+    const title = String(args.title).trim().slice(0, 100);
+    if (!title) throw new McpError("title cannot be empty", -32602, 400);
+    data.title = title;
+  }
+  if (args.location !== undefined) {
+    data.location = String(args.location).trim().slice(0, 200);
+  }
+  if (args.sport !== undefined) {
+    const sport = String(args.sport).trim().slice(0, 50);
+    if (!sport) throw new McpError("sport cannot be empty", -32602, 400);
+    data.sport = sport;
+  }
+  if (args.maxPlayers !== undefined) {
+    const maxPlayers = Math.trunc(Number(args.maxPlayers));
+    if (!Number.isFinite(maxPlayers) || maxPlayers < 2 || maxPlayers > 100) {
+      throw new McpError("maxPlayers must be between 2 and 100", -32602, 400);
+    }
+    data.maxPlayers = maxPlayers;
+  }
+  if (args.isPublic !== undefined) {
+    data.isPublic = Boolean(args.isPublic);
+  }
+  if (args.timezone !== undefined) {
+    const timezone = String(args.timezone).trim().slice(0, 100);
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: timezone });
+    } catch {
+      throw new McpError("Invalid timezone", -32602, 400);
+    }
+    data.timezone = timezone;
+  }
+  if (args.dateTime !== undefined) {
+    const dateTime = new Date(String(args.dateTime));
+    if (isNaN(dateTime.getTime())) throw new McpError("Invalid dateTime", -32602, 400);
+    if (dateTime.getTime() <= Date.now()) throw new McpError("dateTime must be in the future", -32602, 400);
+    data.dateTime = dateTime;
+  }
+
+  if (Object.keys(data).length === 0) {
+    throw new McpError("No fields to update — provide at least one of title, location, dateTime, timezone, sport, maxPlayers, isPublic", -32602, 400);
+  }
+
+  await prisma.event.update({ where: { id: eventId }, data });
+
+  if (data.dateTime) {
+    const updated = await prisma.event.findUnique({ where: { id: eventId } });
+    if (updated) {
+      await cancelEventJobs(eventId).catch(() => {});
+      try {
+        await scheduleEventReminders(eventId, updated.dateTime, updated.durationMinutes);
+      } catch {
+        // best-effort rescheduling
+      }
+    }
+  }
+
+  logEvent(eventId, "event_updated", null, ctx.userId, {
+    fields: Object.keys(data),
+    source: "mcp",
+  }).catch(() => {});
+
+  return { id: eventId, updated: Object.keys(data) };
+}
+
+/** Cancel the current Game of an Event. Owner/admin only. */
+async function cancelEvent(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  await requireEventAccess(ctx, eventId);
+  try {
+    const result = await cancelCurrentGame(eventId, { id: ctx.userId, name: null });
+    return { ok: true, eventId, gameId: result.gameId };
+  } catch (err) {
+    if (err instanceof CancelError) throw new McpError(err.message, -32001, err.status);
+    throw err;
+  }
+}
+
+/** Set the caller's RSVP (yes/no/maybe) for a Game. Self-service; any authenticated user. */
+async function rsvp(args: Record<string, unknown>, ctx: AuthContext) {
+  const eventId = args.eventId as string | undefined;
+  if (!eventId) throw new McpError("eventId required", -32602, 400);
+  const status = String(args.status ?? "");
+  if (!["yes", "no", "maybe"].includes(status)) {
+    throw new McpError("status must be 'yes', 'no', or 'maybe'", -32602, 400);
+  }
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, dateTime: true, title: true },
+  });
+  if (!event) throw new McpError("Game not found", -32001, 404);
+  if (event.dateTime.getTime() <= Date.now()) {
+    throw new McpError("The game has already started.", -32001, 409);
+  }
+
+  const typedStatus = status as "yes" | "no" | "maybe";
+  const result = await upsertRsvp(eventId, ctx.userId, typedStatus);
+
+  enqueueRsvpAnswerNotification({
+    eventId,
+    eventTitle: event.title,
+    status: typedStatus,
+    actorUserId: ctx.userId,
+    actorName: null,
+    actorIsLogged: true,
+  }).catch(() => {});
+
+  logEvent(
+    eventId,
+    typedStatus === "yes" ? "rsvp_yes" : typedStatus === "no" ? "rsvp_no" : "rsvp_maybe",
+    null,
+    ctx.userId,
+    { source: "mcp", status: typedStatus },
+  ).catch(() => {});
+
+  return { ok: true, status: result.status, respondedAt: result.respondedAt };
+}
+
 export const WRITE_TOOLS: ToolDef[] = [
   {
     name: "convocados_add_player",
@@ -441,5 +581,50 @@ export const WRITE_TOOLS: ToolDef[] = [
     },
     scope: "create:events",
     handler: createEvent,
+  },
+  {
+    name: "convocados_update_event",
+    description: "Update Event settings (title, location, dateTime, timezone, sport, maxPlayers, isPublic). Only provided fields change. Actor must own or admin the event.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "Event ID" },
+        title: { type: "string", description: "New title" },
+        location: { type: "string", description: "New location text" },
+        dateTime: { type: "string", description: "New ISO 8601 datetime, must be in the future" },
+        timezone: { type: "string", description: "IANA timezone" },
+        sport: { type: "string", description: "Sport id" },
+        maxPlayers: { type: "integer", description: "Players per game (2-100)" },
+        isPublic: { type: "boolean", description: "Public listing flag" },
+      },
+      required: ["eventId"],
+    },
+    scope: "write:events",
+    handler: updateEvent,
+  },
+  {
+    name: "convocados_cancel_event",
+    description: "Cancel the current Game of an Event (reverses payments, snapshots history, advances recurring events). Actor must own or admin the event.",
+    inputSchema: {
+      type: "object",
+      properties: { eventId: { type: "string", description: "Event ID" } },
+      required: ["eventId"],
+    },
+    scope: "write:events",
+    handler: cancelEvent,
+  },
+  {
+    name: "convocados_rsvp",
+    description: "Set YOUR RSVP for a Game to yes, no, or maybe. Self-service for any authenticated user.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "Event ID" },
+        status: { type: "string", enum: ["yes", "no", "maybe"], description: "Your response" },
+      },
+      required: ["eventId", "status"],
+    },
+    scope: "manage:players",
+    handler: rsvp,
   },
 ];
