@@ -14,6 +14,7 @@ import DragHandleIcon from "@mui/icons-material/DragHandle";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import CancelIcon from "@mui/icons-material/Cancel";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import HelpCenterOutlinedIcon from "@mui/icons-material/HelpCenterOutlined";
 import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
@@ -636,7 +637,19 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
             />
 
             {(season.status === "active" || season.status === "review" || season.status === "completed") && (
-              <SeasonRankTable eventId={eventId} seasonId={seasonId} standings={leaderboard?.players} />
+              <Box>
+                <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 0.5 }}>
+                  <Button
+                    size="small"
+                    variant="text"
+                    startIcon={<HelpCenterOutlinedIcon />}
+                    href={`/events/${eventId}/rank-explainer?seasonId=${seasonId}`}
+                  >
+                    {t("seasonRankHowItWorks")}
+                  </Button>
+                </Box>
+                <SeasonRankTable eventId={eventId} seasonId={seasonId} standings={leaderboard?.players} />
+              </Box>
             )}
 
             {!isAdmin ? (

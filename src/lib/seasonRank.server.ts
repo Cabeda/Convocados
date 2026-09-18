@@ -333,6 +333,8 @@ export interface ViewerGameRank {
   tierAfter: number;
   provisional: boolean;
   gamesThisSeason: number;
+  /** Tier band edges for this Event, so the client can draw progress-to-next. */
+  edges: number[];
 }
 
 export async function getViewerGameRank(
@@ -381,5 +383,6 @@ export async function getViewerGameRank(
     tierAfter: viewer.tier,
     provisional: viewer.provisional,
     gamesThisSeason: viewer.games,
+    edges: payload.edges,
   };
 }

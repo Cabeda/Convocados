@@ -100,6 +100,23 @@ export function tierOf(R: number, edges: number[]): number {
 }
 
 /**
+ * Where a displayed Rank sits inside its tier band, for the progress-to-next
+ * bar. At the top tier `nextTier`/`toNext` are null and `pct` is 100.
+ */
+export function tierProgress(
+  display: number,
+  tier: number,
+  edges: number[],
+): { pct: number; toNext: number | null; nextTier: number | null } {
+  const lo = edges[tier] ?? 0;
+  const hi = edges[tier + 1];
+  if (hi === undefined) return { pct: 100, toNext: null, nextTier: null };
+  const span = hi - lo;
+  const pct = span > 0 ? Math.min(100, Math.max(0, Math.round(((display - lo) / span) * 100))) : 0;
+  return { pct, toNext: Math.max(0, hi - display), nextTier: tier + 1 };
+}
+
+/**
  * Percentile-derived (equal-count) tier edges from the established seeded
  * Rank distribution. Returns `tiers` values, the first always 0.
  */
