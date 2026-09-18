@@ -69,6 +69,12 @@ export const GET: APIRoute = async ({ params, request }) => {
     members: crew.memberships.map((membership) => ({ name: membership.eventPlayer.name })),
   }));
 
+  // Another Season is already live, so this completed Season cannot be
+  // reopened (single live competition, ADR 0033). Drives the UI gate.
+  const hasOtherLiveSeason = (await prisma.season.count({
+    where: { eventId, id: { not: season.id }, status: { in: ["active", "review"] } },
+  })) > 0;
+
   const result: Record<string, unknown> = {
     id: season.id,
     eventId: season.eventId,
@@ -78,6 +84,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     registrationClosesAt: season.registrationClosesAt,
     registrationOpen: season.status === "registration" && season.registrationOpensAt <= new Date() && new Date() < season.registrationClosesAt,
     isCurrent: isSeasonCurrent(season),
+    hasOtherLiveSeason,
     activatedAt: season.activatedAt,
     crews: publicCrews,
     viewerEventPlayerId: viewerEventPlayer?.id ?? null,
@@ -364,6 +371,15 @@ async function completeSeason(season: NonNullable<Awaited<ReturnType<typeof getS
 async function reopenSeason(season: NonNullable<Awaited<ReturnType<typeof getSeasonForEvent>>>) {
   if (season.status !== "completed") {
     return Response.json({ error: "Only a completed Season can be reopened." }, { status: 409 });
+  }
+  // Single live competition: a completed Season cannot come back while another
+  // Season is already active or under review (ADR 0033).
+  const rival = await prisma.season.findFirst({
+    where: { eventId: season.eventId, id: { not: season.id }, status: { in: ["active", "review"] } },
+    select: { name: true, status: true },
+  });
+  if (rival) {
+    return Response.json({ error: `This event already has an open Season ("${rival.name}", ${rival.status}). Complete or cancel it before reopening this one.` }, { status: 409 });
   }
   const updated = await prisma.season.update({
     where: { id: season.id },
