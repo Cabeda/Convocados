@@ -43,6 +43,17 @@ export const docsNav: DocsNavSection[] = [
     ],
   },
   {
+    title: "Rank & Rating",
+    items: [
+      { href: "/docs/rank", label: "Overview" },
+      { href: "/docs/rank/elo", label: "Elo in One Game" },
+      { href: "/docs/rank/uncertainty", label: "The Cost of Certainty" },
+      { href: "/docs/rank/payout", label: "Pricing a Win" },
+      { href: "/docs/rank/redesign", label: "The Redesign" },
+      { href: "/docs/rank/glossary", label: "Glossary" },
+    ],
+  },
+  {
     title: "API Reference",
     items: [
       { href: "/docs/api", label: "Overview" },

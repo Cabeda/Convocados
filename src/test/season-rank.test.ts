@@ -3,6 +3,7 @@ import {
   TIER_NAMES,
   provisionalGames,
   kRank,
+  clampExpected,
   seedRank,
   rankDelta,
   applyGame,
@@ -44,9 +45,18 @@ describe("seasonRank — pure core", () => {
   });
 
   describe("seedRank", () => {
-    it("is the skill above the anchor, never negative", () => {
-      expect(seedRank(1000, 879)).toBe(121);
+    it("is the skill above the anchor in Rank Points, never negative", () => {
+      expect(seedRank(1000, 879)).toBe(1210);
       expect(seedRank(800, 879)).toBe(0);
+    });
+  });
+
+  describe("clampExpected", () => {
+    it("bounds the expected score to [1-cap, cap]", () => {
+      expect(clampExpected(0.98)).toBeCloseTo(0.9);
+      expect(clampExpected(0.02)).toBeCloseTo(0.1);
+      expect(clampExpected(0.5)).toBe(0.5);
+      expect(clampExpected(0.7)).toBe(0.7);
     });
   });
 
@@ -59,14 +69,18 @@ describe("seasonRank — pure core", () => {
   });
 
   describe("rankDelta", () => {
-    it("is round(K * (outcome - expected)) against opponent skill", () => {
-      // expected(1100, 1000) ~= 0.6401 -> 32 * (1 - 0.6401) = 11.5 -> 12
-      expect(rankDelta(1100, 1000, 1, { seasonGames: 9, seeded: true, provisionalWindow: 3 })).toBe(12);
-      // loss symmetric: 32 * (0 - 0.3599) = -11.5 -> -12
-      expect(rankDelta(1000, 1100, 0, { seasonGames: 9, seeded: true, provisionalWindow: 3 })).toBe(-12);
+    it("is round(K * (outcome - expected) * SCALE) against opponent skill", () => {
+      // expected(1100, 1000) ~= 0.6401 -> 32 * (1 - 0.6401) * 10 = 115.2 -> 115
+      expect(rankDelta(1100, 1000, 1, { seasonGames: 9, seeded: true, provisionalWindow: 3 })).toBe(115);
+      // loss symmetric: 32 * (0 - 0.3599) * 10 = -115.2 -> -115
+      expect(rankDelta(1000, 1100, 0, { seasonGames: 9, seeded: true, provisionalWindow: 3 })).toBe(-115);
     });
     it("draw is 0 when skills are equal", () => {
       expect(rankDelta(1000, 1000, 0.5, { seasonGames: 9, seeded: true, provisionalWindow: 3 })).toBe(0);
+    });
+    it("still pays a favourite's expected win (clamped expected score)", () => {
+      // Without the clamp this would be round(32 * 0.0031 * 10) = 0.
+      expect(rankDelta(2000, 1000, 1, { seasonGames: 9, seeded: true, provisionalWindow: 3 })).toBe(32);
     });
   });
 
@@ -105,26 +119,27 @@ describe("seasonRank — pure core", () => {
       const games: RankGame[] = [
         { teamOne: ["A"], teamTwo: ["B"], scoreOne: 1, scoreTwo: 0 },
       ];
+      const RP_EDGES = [0, 500, 1000, 1500, 2000, 2500];
       const result = computeSeasonRank({
         games,
         skill: { A: 1100, B: 1000 },
-        seeds: { A: 200, B: 100 },
+        seeds: { A: 2000, B: 1000 },
         seeded: { A: true, B: true },
         provisionalWindow: 3,
-        edges: EDGES,
+        edges: RP_EDGES,
       });
       const a = result.get("A")!;
       const b = result.get("B")!;
       expect(a.gamesThisSeason).toBe(1);
       expect(b.gamesThisSeason).toBe(1);
-      expect(a.hidden).toBe(212);
-      expect(b.hidden).toBe(88);
-      expect(a.display).toBe(212);
-      expect(b.display).toBe(88);
-      expect(a.tier).toBe(4); // 212 in [200,250) -> Diamond
-      expect(b.tier).toBe(1); // 88 in [50,100) -> Silver
-      expect(a.deltas).toEqual([12]);
-      expect(b.deltas).toEqual([-12]);
+      expect(a.hidden).toBe(2115);
+      expect(b.hidden).toBe(885);
+      expect(a.display).toBe(2115);
+      expect(b.display).toBe(885);
+      expect(a.tier).toBe(4); // 2115 in [2000,2500) -> Diamond
+      expect(b.tier).toBe(1); // 885 in [500,1000) -> Silver
+      expect(a.deltas).toEqual([115]);
+      expect(b.deltas).toEqual([-115]);
     });
 
     it("uses the fast K for unseeded players inside the window", () => {
@@ -139,9 +154,9 @@ describe("seasonRank — pure core", () => {
         provisionalWindow: 3,
         edges: EDGES,
       });
-      // K=64 -> 64 * 0.3599 = 23.0 -> 23
-      expect(result.get("A")!.deltas).toEqual([23]);
-      expect(result.get("B")!.deltas).toEqual([-23]);
+      // K=64 -> 64 * 0.3599 * 10 = 230.3 -> 230
+      expect(result.get("A")!.deltas).toEqual([230]);
+      expect(result.get("B")!.deltas).toEqual([-230]);
     });
 
     it("is deterministic and leaves non-participants untouched", () => {

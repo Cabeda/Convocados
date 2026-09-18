@@ -5,6 +5,7 @@ import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
 import { isSettledGameParticipant } from "./participants.server";
 import { isHistoryParticipant } from "./snapshotParticipants";
 import { getWrapUpGameSettlement } from "./settlement.server";
+import { getViewerGameRank, type ViewerGameRank } from "./seasonRank.server";
 
 /**
  * Shared post-game wrap-up status computation.
@@ -39,6 +40,8 @@ export interface PostGameStatusPayload {
   teamTwoName: string;
   gamePayments: Array<{ eventPlayerId: string; name: string; amount: number; status: string; isPayer: boolean }> | null;
   gameConfig: { gameId: string; mode: "tracked" | "untracked"; payerName: string | null; payerIsPlayer: boolean } | null;
+  /** The viewer's Season Rank movement from this Game, when it counted. */
+  seasonRank: ViewerGameRank | null;
 }
 
 export async function computePostGameStatus(
@@ -58,7 +61,7 @@ export async function computePostGameStatus(
   const latestHistory = await prisma.gameHistory.findFirst({
     where: { eventId: event.id },
     orderBy: { dateTime: "desc" },
-    select: { id: true, scoreOne: true, scoreTwo: true, teamsSnapshot: true, paymentsSnapshot: true, status: true, dateTime: true, createdAt: true },
+    select: { id: true, scoreOne: true, scoreTwo: true, teamsSnapshot: true, paymentsSnapshot: true, status: true, dateTime: true, createdAt: true, isFriendly: true },
   });
 
   // ponytail: cancelled games have no post-game actions (no score, no payments, no MVP).
@@ -72,7 +75,7 @@ export async function computePostGameStatus(
       bannerMvpComplete: true, myMvpComplete: true, paidAggregate: { paidCount: 0, totalCount: 0 },
       scoreOne: null, scoreTwo: null,
       teamOneName: event.teamOneName, teamTwoName: event.teamTwoName,
-      gamePayments: null, gameConfig: null,
+      gamePayments: null, gameConfig: null, seasonRank: null,
     };
   }
   const hasScore = !!(latestHistory && latestHistory.scoreOne !== null && latestHistory.scoreTwo !== null);
@@ -323,6 +326,24 @@ export async function computePostGameStatus(
     allComplete = hasScore && allPaid && myMvpComplete;
   }
 
+  // The viewer's Season Rank movement for this Game (players only). Null when
+  // there is no such game, it did not count, or the viewer didn't play.
+  let seasonRank: ViewerGameRank | null = null;
+  if (session?.user && isPlayer && latestHistory) {
+    seasonRank = await getViewerGameRank(
+      event.id,
+      {
+        dateTime: latestHistory.dateTime,
+        status: latestHistory.status,
+        isFriendly: latestHistory.isFriendly,
+        scoreOne: latestHistory.scoreOne,
+        scoreTwo: latestHistory.scoreTwo,
+        teamsSnapshot: latestHistory.teamsSnapshot,
+      },
+      session.user.name,
+    );
+  }
+
   return {
     gameEnded, hasScore, hasCost, allPaid, allComplete, isParticipant, isPlayer,
     latestHistoryId, paymentsSnapshot, costCurrency, costAmount,
@@ -337,5 +358,6 @@ export async function computePostGameStatus(
     gameConfig: wrapUpSettlement
       ? { gameId: wrapUpSettlement.gameId, mode: wrapUpSettlement.mode, payerName: wrapUpSettlement.payerName, payerIsPlayer: wrapUpSettlement.payerIsPlayer }
       : null,
+    seasonRank,
   };
 }

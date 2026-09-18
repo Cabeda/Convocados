@@ -1,0 +1,134 @@
+---
+export const prerender = true;
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import SeasonSimDemo from '../../../components/rank/SeasonSimDemo.tsx';
+---
+
+<DocsLayout title="The redesign" description="Choosing a Skill Rating engine and the Season Rank blueprint, with an interactive season simulator.">
+  <h1>The redesign: one product, two numbers, two jobs</h1>
+  <p class="subtitle">Hidden Skill Rating for fairness. Visible Season Rank for motivation. Don't cross the wires.</p>
+
+  <p>
+    Everything so far points at one conclusion, and Convocados' own ADR already states it:
+    the failure wasn't a bad formula, it was asking <em>one</em> number to do <em>two</em>
+    jobs. <a href="https://github.com/Cabeda/Convocados/blob/main/docs/adr/0031-seasonal-rank-ladder.md">ADR 0031</a>
+    separates them — <strong>Skill Rating is hidden</strong> and drives balancing;
+    <strong>Season Rank is visible</strong> and drives motivation. This page makes both
+    concrete.
+  </p>
+
+  <table>
+    <thead><tr><th></th><th>Skill Rating</th><th>Season Rank</th></tr></thead>
+    <tbody>
+      <tr><td>Job</td><td>Predict performance; balance teams</td><td>Make progress felt; give a goal</td></tr>
+      <tr><td>Audience</td><td>Organizer, matchmaking</td><td>Every player</td></tr>
+      <tr><td>Visibility</td><td>Hidden (admin only)</td><td>Visible to members</td></tr>
+      <tr><td>Horizon</td><td>Lifetime; never resets</td><td>Per Season; soft-resets</td></tr>
+      <tr><td>Engine</td><td>Glicko-2 / OpenSkill</td><td>Transparent point payouts</td></tr>
+      <tr><td>Failure to avoid</td><td>Unfair teams</td><td>"+0 after a win"</td></tr>
+    </tbody>
+  </table>
+
+  <h2>1 · Choosing the Skill Rating engine</h2>
+  <p>
+    Convocados rates individuals whose teams are reshuffled weekly — that is the
+    team-inference problem from <a href="/docs/rank/uncertainty">the uncertainty page</a>,
+    where plain Elo is weakest (it applies a team result to each individual as if the team
+    were one entity).
+  </p>
+
+  <table>
+    <thead><tr><th>Engine</th><th>Uncertainty</th><th>Individual from team result</th><th>Cost</th></tr></thead>
+    <tbody>
+      <tr><td>Elo (today)</td><td>No</td><td>Naive (winner takes all)</td><td>Lowest</td></tr>
+      <tr><td>Glicko-2</td><td>Yes (RD, σ)</td><td>Per-player, head-to-head</td><td>Moderate</td></tr>
+      <tr><td>OpenSkill / TrueSkill</td><td>Yes (Gaussian)</td><td>Yes — the point of it</td><td>Moderate–high</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-info">
+    <strong>Recommendation.</strong> Move the hidden <strong>Skill Rating</strong> to
+    <strong>OpenSkill</strong> (fallback: Glicko-2). It models 5-a-side team results and
+    per-player uncertainty — the two things Elo fakes. Keep the change invisible: it only
+    feeds balancing, so a bad model shows up as unfair teams, not as player confusion. Gate
+    the migration behind a recompute so history stays consistent.
+  </div>
+
+  <h2>2 · The Season Rank blueprint</h2>
+  <ul>
+    <li>
+      <strong>Unit:</strong> Rank Points (RP), whole ladder ×10 — seeds, payouts, and tier
+      edges all in RP, so the maths is unchanged but the numbers are worth chasing.
+    </li>
+    <li>
+      <strong>Payout:</strong> <code>K · (S − clamp(E, 0.1, 0.9))</code>. A win always pays
+      at least <strong>+30 RP</strong>; even games pay most; upsets pay more.
+    </li>
+    <li>
+      <strong>Provisional:</strong> an unlock counter (not a hard 3-game cliff), with the
+      fast-K window driven by evidence.
+    </li>
+    <li>
+      <strong>Seeding &amp; reset:</strong> seed from hidden Skill Rating; soft-reset 50%
+      between Seasons so a Season is a fresh race without discarding skill.
+    </li>
+    <li>
+      <strong>Tiers:</strong> percentile edges frozen at calibration, expressed in RP.
+    </li>
+    <li>
+      <strong>Feedback:</strong> a per-game Rank reveal at score time (before → after,
+      progress to next tier), plus the existing tier-transition modal.
+    </li>
+  </ul>
+
+  <h2>3 · Play a season</h2>
+  <SeasonSimDemo client:visible />
+
+  <p>
+    Switch between <em>current</em> and <em>Rank Points</em> and play a few seasons. Current
+    quietly pays the favourite almost nothing per win; Rank Points pays every game — which
+    is the entire motivation argument, made measurable.
+  </p>
+
+  <h2>4 · Does it answer the two failures?</h2>
+  <ul>
+    <li>
+      <strong>"Static Elo is demoralizing."</strong> Skill Rating is hidden; the public ladder
+      is Season Rank, which soft-resets — everyone starts the race near each other, and
+      improvement is visible per game.
+    </li>
+    <li>
+      <strong>"Two numbers confuse players."</strong> Players see exactly one: Season Rank
+      (plus the Crew ladder). Skill Rating is an organizer tool.
+    </li>
+    <li>
+      <strong>Residual risk to watch:</strong> a skill-anchored reset still favours stronger
+      players over a Season. That is honest — the fix for feeling stuck is visible per-game
+      progress and tiers, not equalising ability.
+    </li>
+  </ul>
+
+  <h2>Check yourself</h2>
+  <details>
+    <summary>The reason to run two systems rather than one is that they serve different…</summary>
+    <p>Purposes and audiences. Two jobs — fair teams versus felt progress — pull in opposite directions.</p>
+  </details>
+  <details>
+    <summary>OpenSkill suits Convocados' Skill Rating because teams are…</summary>
+    <p>Reshuffled every week. Weekly reshuffles make the team a noisy observation of each player.</p>
+  </details>
+  <details>
+    <summary>The visible Season Rank should never show a player…</summary>
+    <p>A hidden Skill Rating. Skill Rating is hidden; exposing it recreates the static-number problem.</p>
+  </details>
+
+  <h2>Primary sources</h2>
+  <p>
+    Re-read the repo's own
+    <a href="https://github.com/Cabeda/Convocados/blob/main/docs/adr/0031-seasonal-rank-ladder.md">ADR 0031</a>
+    (the settled model this redesign delivers), then the
+    <a href="https://arxiv.org/abs/2401.05451">OpenSkill paper</a> for the engine and
+    <a href="https://www.youtube.com/watch?v=-pglxege-gU">Menke's GDC talk</a> for the
+    rank-as-experience layer.
+  </p>
+</DocsLayout>

@@ -1,0 +1,104 @@
+---
+export const prerender = true;
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import UncertaintyDemo from '../../../components/rank/UncertaintyDemo.tsx';
+---
+
+<DocsLayout title="The cost of certainty" description="Glicko's rating deviation, volatility, and rating players from team results.">
+  <h1>The cost of certainty: why Elo can't tell a rookie from a veteran</h1>
+  <p class="subtitle">Two players rated 1500 are not the same player. One number hides that.</p>
+
+  <p>
+    The <a href="/docs/rank/elo">previous page</a> treated every rating as an exact
+    measurement. It isn't. A rating is an <em>estimate</em>, and an estimate should carry
+    an error bar. Elo has none — so it moves a brand-new player and a ten-year veteran as
+    if both were equally known. That is the second structural flaw, and it hits Convocados
+    the moment a Season starts with fresh members.
+  </p>
+
+  <h2>1 · The missing error bar</h2>
+  <p>
+    Glicko's fix (Glickman, 1995) is to give each player a second number: the
+    <strong>rating deviation</strong> (<code>RD</code>), the system's uncertainty about
+    their rating. A rating is then reported as an interval — a 95% confidence range of
+    <code>r ± 2·RD</code>.
+  </p>
+
+  <UncertaintyDemo client:visible />
+
+  <p>
+    The update itself respects <code>RD</code>: the bigger your uncertainty, the further
+    one game can move you. This is why a provisional player belongs at the top of a ladder
+    by the end of a night — the system is learning fast because it knows little.
+  </p>
+
+  <h2>2 · Uncertainty that breathes</h2>
+  <p>Two refinements matter for a weekly hobby league:</p>
+  <ul>
+    <li>
+      <strong>RD grows during inactivity.</strong> Glicko widens the interval for players
+      who sit out a rating period, on the assumption their skill may have drifted. A rating
+      frozen for a year is stale evidence.
+    </li>
+    <li>
+      <strong>Volatility (σ) tracks erratic runs.</strong> Glicko-2 adds a third parameter:
+      repeated results that defy the model raise volatility, so the system expects — and
+      permits — bigger swings rather than treating each upset as noise.
+    </li>
+  </ul>
+
+  <div class="callout callout-info">
+    <strong>Where Convocados stands.</strong> Season Rank substitutes a crude uncertainty
+    rule — <code>K=64</code> for a player's first three counted games, <code>K=32</code>
+    after — and then freezes the payout forever. A real <code>RD</code> would make the
+    transition smooth, widen after a layoff, and let the provisional window be a function
+    of evidence rather than a hard-coded count.
+  </div>
+
+  <h2>3 · Many people, one team</h2>
+  <p>
+    Elo and Glicko are head-to-head. Convocados is 5-a-side: one result, ten players,
+    uneven contribution. Two families handle this:
+  </p>
+  <ul>
+    <li>
+      <strong>TrueSkill</strong> models each player's skill as a Gaussian (mean and
+      variance) and infers individual skill from <em>team</em> outcomes via Bayesian
+      inference; it also models draws explicitly.
+    </li>
+    <li>
+      <strong>OpenSkill</strong> is an open, faster implementation of the Weng–Lin Bayesian
+      approximation, built for asymmetric multi-team games and now the practical choice for
+      teams.
+    </li>
+  </ul>
+  <p>
+    Both beat Elo at <em>team</em> settings, but neither knows who was on the bench or how
+    minutes were shared — a caveat Convocados must handle in product, not maths. Team
+    rating is a task for the balancing layer, not necessarily for the motivational ladder.
+  </p>
+
+  <h2>Check yourself</h2>
+  <details>
+    <summary>Rating deviation measures, for a rating, the system's…</summary>
+    <p>Confidence in the estimate. RD is the system's uncertainty, reported as a confidence interval.</p>
+  </details>
+  <details>
+    <summary>A player who returns after a long layoff should have their rating deviation…</summary>
+    <p>Widened while inactive. Skill may have drifted while away, so the old evidence is stale.</p>
+  </details>
+  <details>
+    <summary>TrueSkill's main advantage over Elo in a team sport is…</summary>
+    <p>Learning from team outcomes. Team results let the model infer each member's contribution.</p>
+  </details>
+
+  <h2>Primary sources</h2>
+  <p>
+    Work through
+    <a href="https://www.glicko.net/glicko/glicko2.pdf">Glickman's worked Glicko-2 example</a>
+    — it is short and shows every parameter. For teams, skim the
+    <a href="https://papers.nips.cc/paper/3079-trueskilltm-a-bayesian-skill-rating-system">TrueSkill paper</a>,
+    then read the
+    <a href="https://arxiv.org/abs/2401.05451">OpenSkill paper</a> for what you'd actually ship.
+  </p>
+</DocsLayout>

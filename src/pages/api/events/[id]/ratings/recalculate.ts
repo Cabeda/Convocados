@@ -13,8 +13,8 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
   const { isOwner, isAdmin, session } = await checkOwnership(request, event.ownerId, undefined, params.id);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
-    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+  if (!isOwner && !isAdmin) {
+    return Response.json({ error: "Only the event owner or admin can do this." }, { status: 403 });
   }
 
   const processed = await recalculateAllRatings(params.id ?? "");

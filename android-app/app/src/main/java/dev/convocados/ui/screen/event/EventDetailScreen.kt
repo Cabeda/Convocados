@@ -75,8 +75,12 @@ import dev.convocados.ui.screen.history.TennisSetEditor
 import dev.convocados.ui.screen.games.formatEventDateInTz
 import dev.convocados.ui.screen.games.formatRelativeDate
 import dev.convocados.ui.screen.games.sportEmoji
+import dev.convocados.ui.screen.rankings.SeasonRankReveal
 import dev.convocados.ui.theme.expressiveMotion
 import dev.convocados.ui.theme.expressiveTokens
+import dev.convocados.util.buildRankExplainerUrl
+import dev.convocados.util.openInCustomTab
+import dev.convocados.util.outcomeFromScore
 import dev.convocados.designsystem.ExpressiveMotion
 import dev.convocados.designsystem.ExpressiveSemanticRole
 import java.time.Duration
@@ -292,12 +296,23 @@ class EventDetailViewModel @Inject constructor(
         viewModelScope.launch { settingsStore.setAutoPayOnJoin(enabled) }
     }
 
+    /** GameHistory ids whose post-game Season Rank reveal the viewer dismissed. */
+    val dismissedRankReveals: StateFlow<Set<String>> = settingsStore.dismissedRankReveals
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    fun dismissRankReveal(historyId: String) {
+        viewModelScope.launch { settingsStore.dismissRankReveal(historyId) }
+    }
+
     private val _user = MutableStateFlow<UserProfile?>(null)
     val user: StateFlow<UserProfile?> = _user
 
     init {
         viewModelScope.launch { runCatching { _user.value = api.fetchUserInfo() } }
     }
+
+    /** Server origin, used to build the public Rank explainer URL. */
+    fun serverUrl(): String = tokenStore.getServerUrl()
 
     fun load(eventId: String) {
         _optimisticTeamResults.value = null
@@ -1232,6 +1247,10 @@ fun EventDetailScreen(
                                     Text(stringResource(R.string.removed_tap_undo, undo.name), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.padding(12.dp).fillMaxWidth())
                                 }
                             }
+                            // Post-game Season Rank reveal — standalone card that
+                            // persists until explicitly dismissed, independent of
+                            // the wrap-up checklist completion (matches web).
+                            PostGameSeasonRankReveal(eventId, ds, viewModel)
                             // Wrap-up
                             HeroWrapUp(eventId, ds, viewModel, effectiveUser, editingScoreId, scoreOne, scoreTwo,
                                 onEditScore = { id, s1, s2 -> editingScoreId = id; scoreOne = s1; scoreTwo = s2 },
@@ -1658,6 +1677,42 @@ internal fun usesStructuredTennisScore(eventSport: String?, history: GameHistory
     // from a structured editor that has been explicitly started. A blank
     // history has no scalar baseline, so it should open the set editor.
     return history?.scoreSets != null || history?.scoreOne == null || history.scoreTwo == null
+}
+
+/**
+ * Standalone post-game Season Rank reveal. Rendered outside [HeroWrapUp]'s
+ * completion gate so it survives the wrap-up checklist finishing, and only
+ * hides once the viewer dismisses it (persisted per GameHistory id) — matching
+ * the web banner behaviour. Renders nothing when the game did not count for the
+ * viewer or the reveal was already dismissed.
+ */
+@Composable
+private fun PostGameSeasonRankReveal(eventId: String, state: EventScreenState, viewModel: EventDetailViewModel) {
+    val pg = state.postGame ?: return
+    if (!pg.isParticipant) return
+    val rank = pg.seasonRank?.takeIf { it.counted } ?: return
+    val dismissKey = pg.latestHistoryId ?: rank.seasonId
+    val dismissed by viewModel.dismissedRankReveals.collectAsStateWithLifecycle()
+    if (dismissKey in dismissed) return
+    val pastHistory = state.history.firstOrNull { it.id == pg.latestHistoryId }
+    val context = LocalContext.current
+    val serverUrl = remember { viewModel.serverUrl() }
+    SeasonRankReveal(
+        rank = rank,
+        onWhyClick = {
+            context.openInCustomTab(
+                buildRankExplainerUrl(
+                    serverUrl = serverUrl,
+                    eventId = eventId,
+                    seasonId = rank.seasonId,
+                    rank = rank.after,
+                    delta = rank.delta,
+                    outcome = outcomeFromScore(pastHistory?.scoreOne, pastHistory?.scoreTwo),
+                )
+            )
+        },
+        onDismiss = { viewModel.dismissRankReveal(dismissKey) },
+    )
 }
 
 @Composable

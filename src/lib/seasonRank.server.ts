@@ -20,6 +20,7 @@ import {
   seedRank,
   softReset,
   tierEdges,
+  tierOf,
   TIER_NAMES,
   type PlayerRank,
   type RankGame,
@@ -36,6 +37,8 @@ export interface SeasonRankPlayer {
   tierName: string | null;
   games: number;
   provisional: boolean;
+  /** Rank Point change for each counted game, oldest first. */
+  deltas: number[];
 }
 
 export interface SeasonRankPayload {
@@ -223,6 +226,7 @@ function toPlayer(name: string, r: PlayerRank | undefined): SeasonRankPlayer {
     tierName: provisional ? null : (TIER_NAMES[tier] ?? null),
     games,
     provisional,
+    deltas: r?.deltas ?? [],
   };
 }
 
@@ -243,6 +247,7 @@ export async function getSeasonRankPayload(eventId: string, seasonId: string): P
           tierName: TIER_NAMES[p.tier] ?? null,
           games: p.games,
           provisional: p.games < PROVISIONAL_MIN,
+          deltas: [],
         })),
         edges: event?.rankTierEdges ? (JSON.parse(event.rankTierEdges) as number[]) : [],
         anchor: event?.rankAnchor ?? 0,
@@ -297,4 +302,74 @@ export async function snapshotSeasonRank(eventId: string, seasonId: string): Pro
 /** Remove a snapshot (cancellation). */
 export async function clearSeasonRankSnapshot(seasonId: string): Promise<void> {
   await prisma.seasonRankSnapshot.deleteMany({ where: { seasonId } });
+}
+
+/**
+ * The viewer's Season Rank movement from one specific Game, for the post-game
+ * reveal. Returns null unless the game actually counted toward the ladder and
+ * the viewer played in it, so the UI never shows a fake "+0".
+ */
+export interface ViewerGameRank {
+  seasonId: string;
+  seasonName: string;
+  counted: boolean;
+  delta: number;
+  before: number;
+  after: number;
+  tierBefore: number;
+  tierAfter: number;
+  provisional: boolean;
+  gamesThisSeason: number;
+  /** Tier band edges for this Event, so the client can draw progress-to-next. */
+  edges: number[];
+}
+
+export async function getViewerGameRank(
+  eventId: string,
+  game: { dateTime: Date; status: string; isFriendly: boolean; scoreOne: number | null; scoreTwo: number | null; teamsSnapshot: string | null },
+  playerName: string,
+): Promise<ViewerGameRank | null> {
+  if (game.status !== "played" || game.isFriendly) return null;
+  if (game.scoreOne === null || game.scoreTwo === null) return null;
+
+  const teams = parseTeamsSnapshot(game.teamsSnapshot);
+  if (!teams) return null;
+  const played = teams.some((team) => team.players.includes(playerName));
+  if (!played) return null;
+
+  // The Season whose period contains this Game (the ladder's window).
+  const season = await prisma.season.findFirst({
+    where: {
+      eventId,
+      status: { not: "cancelled" },
+      registrationOpensAt: { lte: game.dateTime },
+      registrationClosesAt: { gte: game.dateTime },
+    },
+    orderBy: { registrationOpensAt: "desc" },
+    select: { id: true, name: true },
+  });
+  if (!season) return null;
+
+  const payload = await deriveSeasonRank(eventId, season.id);
+  if (!payload) return null;
+  const viewer = payload.players.find((p) => p.name === playerName);
+  if (!viewer || viewer.deltas.length === 0) return null;
+
+  // `deltas` is oldest-first; this Game is the most recent counted one, so its
+  // delta is the last entry.
+  const delta = viewer.deltas[viewer.deltas.length - 1];
+  const before = Math.max(0, Math.round(viewer.hidden - delta));
+  return {
+    seasonId: season.id,
+    seasonName: season.name,
+    counted: true,
+    delta,
+    before,
+    after: viewer.display,
+    tierBefore: tierOf(before, payload.edges),
+    tierAfter: viewer.tier,
+    provisional: viewer.provisional,
+    gamesThisSeason: viewer.games,
+    edges: payload.edges,
+  };
 }

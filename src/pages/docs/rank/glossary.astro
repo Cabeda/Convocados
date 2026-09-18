@@ -1,0 +1,128 @@
+---
+export const prerender = true;
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Glossary" description="Canonical rating and ladder terms used across the Rank & Rating pages.">
+  <h1>Rating &amp; Ladder Glossary</h1>
+  <p class="subtitle">Canonical terms. Use these names everywhere; avoid the listed synonyms.</p>
+
+  <h2>Rating math</h2>
+
+  <h3 id="rating">Rating</h3>
+  <p>
+    A single number estimating a competitor's latent strength, used to <em>predict</em>
+    future results. A rating is a forecast, not a scoreboard.
+    <small>Avoid: points, score, ELO (as a noun for the number).</small>
+  </p>
+
+  <h3 id="skill-rating">Skill Rating</h3>
+  <p>
+    Convocados' lifetime, hidden Elo value used to balance teams. Never resets.
+    <small>Avoid: rank, level, MMR.</small>
+  </p>
+
+  <h3 id="expected-score">Expected score (E)</h3>
+  <p>
+    The probability-weighted points a player is forecast to take from a game, between 0 and
+    1; a draw counts as 0.5. Elo uses <code>E = 1 / (1 + 10^((R_opp − R_you)/400))</code>.
+    <small>Avoid: win probability (E is an average score, not P(win)).</small>
+  </p>
+
+  <h3 id="k-factor">K-factor</h3>
+  <p>
+    The maximum points a rating can move in one game; scales every update. Large K = fast,
+    volatile ratings; small K = stable, slow. <small>Avoid: multiplier, sensitivity.</small>
+  </p>
+
+  <h3 id="update-rule">Update rule</h3>
+  <p>
+    <code>R′ = R + K · (S − E)</code>, where S is the actual score (1 win / 0.5 draw / 0
+    loss). Winning above expectation raises the rating; meeting expectation changes nothing.
+    <small>Avoid: formula, algorithm.</small>
+  </p>
+
+  <h3 id="rating-period">Rating period</h3>
+  <p>
+    A batch of games treated as occurring simultaneously, after which ratings update
+    together. Common in Glicko systems. <small>Avoid: round, matchday.</small>
+  </p>
+
+  <h3 id="rd">Rating deviation (RD)</h3>
+  <p>
+    The uncertainty of a rating estimate. High RD = little evidence (rating moves a lot);
+    low RD = confident (rating moves little).
+    <small>Avoid: confidence, variance, error bar.</small>
+  </p>
+
+  <h3 id="volatility">Volatility (σ)</h3>
+  <p>
+    Glicko-2's measure of how erratic a player's performances are; rises after unexpectedly
+    strong or weak runs. <small>Avoid: consistency, form.</small>
+  </p>
+
+  <h2>Systems</h2>
+
+  <h3 id="elo">Elo</h3>
+  <p>
+    The baseline system: one rating per player, fixed K, expected score from the rating gap.
+    Assumes every rating is equally precise.
+    <small>Avoid: the Elo system's name as an acronym; it is a surname.</small>
+  </p>
+
+  <h3 id="glicko-2">Glicko-2</h3>
+  <p>
+    Elo extended with a rating deviation and volatility per player, updated over rating
+    periods. Handles provisional players and skill change without a manual provisional
+    window. <small>Avoid: Elo2, improved Elo.</small>
+  </p>
+
+  <h3 id="trueskill">TrueSkill</h3>
+  <p>
+    Microsoft's Bayesian model that tracks each skill as a Gaussian (mean + variance),
+    models draws, and infers individual skill from <em>team</em> results.
+    <small>Avoid: Xbox rating.</small>
+  </p>
+
+  <h3 id="openskill">OpenSkill</h3>
+  <p>
+    An open, faster implementation of the Weng–Lin Bayesian approximation, tuned for
+    asymmetric multi-team games like TrueSkill.
+    <small>Avoid: open TrueSkill, clone.</small>
+  </p>
+
+  <h2>Ladder &amp; season layer</h2>
+
+  <h3 id="season-rank">Season Rank</h3>
+  <p>
+    Convocados' visible, 0-based per-Season ladder. Derived on read, moves only in counted
+    Season games, and soft-resets between Seasons.
+    <small>Avoid: MMR, skill rating, points.</small>
+  </p>
+
+  <h3 id="soft-reset">Soft reset</h3>
+  <p>
+    Moving a player part-way back toward a seed value between Seasons, so rank is not
+    inherited fully but skill is not discarded.
+    <small>Avoid: wipe, decay, restart.</small>
+  </p>
+
+  <h3 id="provisional">Provisional</h3>
+  <p>
+    A player's first few counted games, during which the ladder shows an unlock counter
+    instead of a Rank because the estimate is not yet stable.
+    <small>Avoid: placement, calibration, unranked.</small>
+  </p>
+
+  <h3 id="tier">Tier</h3>
+  <p>
+    A named band of Rank (e.g. Bronze…Master) whose edges are fixed at launch. Gives a ladder
+    its sense of place and progression. <small>Avoid: division, league, medal.</small>
+  </p>
+
+  <h3 id="placement">Placement</h3>
+  <p>
+    A deliberate, high-K set of games that establishes a starting Rank. Distinct from
+    Provisional, which is passive. <small>Avoid: qualifiers, seeding games.</small>
+  </p>
+</DocsLayout>

@@ -4,6 +4,7 @@ import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
 import { GET as getPostGameStatus } from "~/pages/api/events/[id]/post-game-status";
 import { getSession, checkOwnership } from "~/lib/auth.helpers.server";
+import { buildRankExplainerHref, outcomeFromScore } from "~/lib/rankExplainer";
 
 vi.mock("~/lib/auth.helpers.server", () => ({
   getSession: vi.fn().mockResolvedValue(null),
@@ -1360,5 +1361,32 @@ describe("isParticipant visibility rules (issue #658)", () => {
     const res = await getPostGameStatus(ctx({ id: event.id }));
     const json = await res.json();
     expect(json.isParticipant).toBe(false);
+  });
+});
+
+// ─── Rank explainer URL contract (pure, no DB) ──────────────────────────
+
+describe("buildRankExplainerHref", () => {
+  it("derives win/draw/loss from the posted score", () => {
+    expect(outcomeFromScore(3, 1)).toBe(1);
+    expect(outcomeFromScore(1, 3)).toBe(0);
+    expect(outcomeFromScore(2, 2)).toBe(0.5);
+    expect(outcomeFromScore(null, 2)).toBe(0.5);
+    expect(outcomeFromScore(2, null)).toBe(0.5);
+  });
+
+  it("pre-fills season, rank, delta and outcome", () => {
+    const href = buildRankExplainerHref("evt1", { seasonId: "s1", rank: 1720, delta: 32, outcome: 1 });
+    expect(href).toBe("/events/evt1/rank-explainer?seasonId=s1&rank=1720&delta=32&outcome=1");
+  });
+
+  it("omits absent params and keeps negative deltas", () => {
+    const href = buildRankExplainerHref("evt1", { seasonId: "s1", rank: 1500, delta: -12, outcome: 0 });
+    expect(href).toBe("/events/evt1/rank-explainer?seasonId=s1&rank=1500&delta=-12&outcome=0");
+    expect(href).not.toContain("opponentAvg");
+  });
+
+  it("rounds a fractional rank", () => {
+    expect(buildRankExplainerHref("evt1", { rank: 1720.6 })).toBe("/events/evt1/rank-explainer?rank=1721");
   });
 });

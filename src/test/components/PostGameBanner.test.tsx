@@ -5,6 +5,7 @@ import { screen, cleanup, waitFor, fireEvent, act } from "@testing-library/react
 import "@testing-library/jest-dom/vitest";
 import { renderWithTheme } from "../render";
 import { PostGameBanner, type PostGameStatus } from "~/components/PostGameBanner";
+import type { SeasonRankMovement } from "~/lib/rankExplainer";
 
 vi.mock("~/components/MvpVotingCard", () => ({
   MvpVotingCard: () => null,
@@ -287,6 +288,76 @@ describe("PostGameBanner untracked mode (each one pays own share)", () => {
     });
     renderWithTheme(<PostGameBanner eventId="evt1" />);
     await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+  });
+});
+
+describe("PostGameBanner Season Rank reveal (rank transparency)", () => {
+  const rank: SeasonRankMovement = {
+    seasonId: "s1",
+    seasonName: "Spring Season",
+    counted: true,
+    delta: 32,
+    before: 1500,
+    after: 1532,
+    tierBefore: 1,
+    tierAfter: 1,
+    provisional: false,
+    gamesThisSeason: 5,
+    edges: [0, 1000, 1600, 2000, 2300, 2600],
+  };
+
+  it("shows before → after and the RP delta when the game counted", async () => {
+    mockFetchStatus({ ...baseStatus, isParticipant: true, seasonRank: rank });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("season-rank-reveal")).toBeInTheDocument());
+    expect(screen.getByText("1500")).toBeInTheDocument();
+    expect(screen.getByText("1532")).toBeInTheDocument();
+    expect(screen.getByText("+32 RP")).toBeInTheDocument();
+  });
+
+  it("shows nothing when seasonRank is null (no fake +0)", async () => {
+    mockFetchStatus({ ...baseStatus, isParticipant: true, seasonRank: null });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+    expect(screen.queryByTestId("season-rank-reveal")).not.toBeInTheDocument();
+  });
+
+  it("shows no reveal when the game did not count", async () => {
+    mockFetchStatus({ ...baseStatus, isParticipant: true, seasonRank: { ...rank, counted: false } });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("post-game-banner")).toBeInTheDocument());
+    expect(screen.queryByTestId("season-rank-reveal")).not.toBeInTheDocument();
+  });
+
+  it("shows the provisional unlock counter instead of a tier", async () => {
+    mockFetchStatus({
+      ...baseStatus,
+      isParticipant: true,
+      seasonRank: { ...rank, provisional: true, after: 900, before: 868, tierAfter: 0, gamesThisSeason: 2 },
+    });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("season-rank-reveal")).toBeInTheDocument());
+    expect(screen.getByText(/Rank unlocks at 3 games/)).toBeInTheDocument();
+    expect(screen.queryByText(/RP to /)).not.toBeInTheDocument();
+  });
+
+  it("links the Why? affordance to the explainer pre-filled with this game's numbers", async () => {
+    mockFetchStatus({
+      ...baseStatus,
+      isParticipant: true,
+      scoreOne: 3,
+      scoreTwo: 1,
+      seasonRank: rank,
+    });
+    renderWithTheme(<PostGameBanner eventId="evt1" />);
+    await waitFor(() => expect(screen.getByTestId("season-rank-reveal")).toBeInTheDocument());
+    const link = screen.getByRole("link", { name: /why did my rank change/i });
+    const href = link.getAttribute("href") ?? "";
+    expect(href).toContain("/events/evt1/rank-explainer");
+    expect(href).toContain("seasonId=s1");
+    expect(href).toContain("rank=1532");
+    expect(href).toContain("delta=32");
+    expect(href).toContain("outcome=1");
   });
 });
 

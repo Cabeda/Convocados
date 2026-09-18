@@ -14,6 +14,8 @@ import SaveIcon from "@mui/icons-material/Save";
 import { useT } from "~/lib/useT";
 import { MvpVotingCard } from "./MvpVotingCard";
 import { PaymentConfigDialog } from "./PaymentConfigDialog";
+import { SeasonRankReveal } from "./rank/SeasonRankReveal";
+import type { SeasonRankMovement } from "~/lib/rankExplainer";
 
 interface PaymentEntry {
   playerName: string;
@@ -46,6 +48,8 @@ export interface PostGameStatus {
   teamTwoName: string;
   gamePayments: Array<{ eventPlayerId: string; name: string; amount: number; status: string; isPayer: boolean }> | null;
   gameConfig: { gameId: string; mode: "tracked" | "untracked"; payerName: string | null; payerIsPlayer: boolean } | null;
+  /** The viewer's Season Rank movement from this Game, when it counted. */
+  seasonRank?: SeasonRankMovement | null;
 }
 
 interface Props {
@@ -301,6 +305,16 @@ export function PostGameBanner({ eventId, initialStatus, onScrollToScore, onScro
             <Typography variant="body2" color="text.secondary">
               {t("postGameSubtitle")}
             </Typography>
+          )}
+
+          {/* Season Rank reveal — the viewer's movement for the just-played game */}
+          {status.seasonRank?.counted && (
+            <SeasonRankReveal
+              eventId={eventId}
+              rank={status.seasonRank}
+              scoreOne={status.scoreOne}
+              scoreTwo={status.scoreTwo}
+            />
           )}
 
           {/* Checklist */}

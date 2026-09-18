@@ -1,0 +1,11 @@
+---
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import RankExplainerPage from "../../../components/RankExplainerPage";
+
+const { id } = Astro.params;
+const title = "How Rank works — Convocados";
+---
+
+<BaseLayout title={title} description="See exactly how this game moved your Season Rank — the inputs, the maths, and a payout you can toy with.">
+  <RankExplainerPage client:only="react" eventId={id!} />
+</BaseLayout>

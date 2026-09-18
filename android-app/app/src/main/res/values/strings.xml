@@ -438,4 +438,14 @@
     <string name="season_edit_details">Edit name &amp; dates</string>
     <string name="season_members">Members</string>
     <string name="season_add_player">Add player</string>
+    <string name="post_game_rank_title">Season Rank</string>
+    <string name="post_game_rank_delta">%1$s RP</string>
+    <string name="post_game_rank_unlock">Rank unlocks at 3 games — %1$d/3</string>
+    <string name="post_game_rank_tier_up">Tier up — you\'re now %1$s</string>
+    <string name="post_game_rank_to_next">%1$s RP to %2$s</string>
+    <string name="post_game_rank_why">Why?</string>
+    <string name="post_game_rank_why_aria">Why did my Rank change?</string>
+    <string name="post_game_rank_dismiss">Got it</string>
+    <string name="season_rank_how_it_works">How Rank works</string>
+    <string name="rank_explainer_link_desc">Opens how your Season Rank was calculated</string>
 </resources>

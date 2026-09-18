@@ -373,4 +373,14 @@
     <string name="tier_down_title">Nuova stagione, nuovo inizio</string>
     <string name="tier_down_body">La tua Classifica è stata azzerata. Sei di nuovo in %1$s — risali.</string>
     <string name="continue_action">Continua</string>
+    <string name="post_game_rank_title">Classifica della Stagione</string>
+    <string name="post_game_rank_delta">%1$s RP</string>
+    <string name="post_game_rank_unlock">La Classifica si sblocca a 3 partite — %1$d/3</string>
+    <string name="post_game_rank_tier_up">Livello superiore — ora sei %1$s</string>
+    <string name="post_game_rank_to_next">%1$s RP a %2$s</string>
+    <string name="post_game_rank_why">Perché?</string>
+    <string name="post_game_rank_why_aria">Perché è cambiata la mia Classifica?</string>
+    <string name="post_game_rank_dismiss">Capito</string>
+    <string name="season_rank_how_it_works">Come funziona la Classifica</string>
+    <string name="rank_explainer_link_desc">Apre come è stata calcolata la tua Classifica della Stagione</string>
 </resources>

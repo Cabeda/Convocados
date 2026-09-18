@@ -10,12 +10,13 @@ export const GET: APIRoute = async ({ params, request }) => {
   const event = await prisma.event.findUnique({ where: { id: params.id } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
 
-  // Block non-admins when competitive data is hidden
-  if (!event.showCompetitiveData) {
-    const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, params.id);
-    if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
-      return Response.json({ error: "Ratings are hidden for this event." }, { status: 403 });
-    }
+  // Skill Rating (the lifetime ELO used for balancing) is an owner/admin tool.
+  // Players use Season Rank as the player-facing ladder, so raw ELO is never
+  // exposed to non-admins — even when showCompetitiveData is on. Season Rank
+  // lives behind its own endpoints and stays player-facing.
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, params.id);
+  if (!isOwner && !isAdmin) {
+    return Response.json({ error: "Ratings are hidden for this event." }, { status: 403 });
   }
 
   const url = new URL(request.url);
@@ -81,7 +82,7 @@ export const PATCH: APIRoute = async ({ params, request }) => {
   }
 
   const { isOwner, isAdmin, session } = await checkOwnership(request, event.ownerId, undefined, eventId);
-  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+  if (!isOwner && !isAdmin) {
     return Response.json({ error: "Only the event owner or admin can set ratings." }, { status: 403 });
   }
 

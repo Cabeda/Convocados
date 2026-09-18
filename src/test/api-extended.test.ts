@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { resetRateLimitStore } from "~/lib/rateLimit.server";
 import { resetApiRateLimitStore } from "~/lib/apiRateLimit.server";
+import { auth } from "~/lib/auth.server";
 
 const prisma = new PrismaClient();
 
@@ -111,6 +112,10 @@ beforeEach(async () => {
   await prisma.user.deleteMany();
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 // ─── GET /api/health ─────────────────────────────────────────────────────────
 
 describe("GET /api/health", () => {
@@ -203,12 +208,12 @@ describe("PUT /api/events/[id]/hide-elo-in-teams", () => {
     expect(res.status).toBe(403);
   });
 
-  it("disabling ELO also resets hideEloInTeams", async () => {
+  it("disabling ELO resets hideEloInTeams to the safe default", async () => {
     const id = await seedEvent();
-    await updateHideEloInTeams(putCtx({ id }, { hideEloInTeams: true }));
+    await updateHideEloInTeams(putCtx({ id }, { hideEloInTeams: false }));
     await updateElo(putCtx({ id }, { eloEnabled: false }));
     const event = await prisma.event.findUnique({ where: { id } });
-    expect(event!.hideEloInTeams).toBe(false);
+    expect(event!.hideEloInTeams).toBe(true);
     expect(event!.eloEnabled).toBe(false);
   });
 });
@@ -397,11 +402,13 @@ describe("GET /api/events/[id]/history", () => {
 // ─── GET /api/events/[id]/ratings ────────────────────────────────────────────
 
 describe("GET /api/events/[id]/ratings", () => {
-  it("returns ratings for event", async () => {
-    const id = await seedEvent();
+  it("returns ratings for the event owner", async () => {
+    const user = await seedUser();
+    const id = await seedEvent({ ownerId: user.id });
     await prisma.playerRating.create({
       data: { eventId: id, name: "Alice", rating: 1050, gamesPlayed: 5, wins: 3, draws: 1, losses: 1 },
     });
+    vi.spyOn(auth.api, "getSession").mockResolvedValue({ user: { id: user.id, name: "Test User" } } as any);
     const res = await getRatings(ctx({ id }));
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -415,7 +422,7 @@ describe("GET /api/events/[id]/ratings", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns ratings for balanced event without auth (public access)", async () => {
+  it("returns 403 for a plain player (Skill Rating is owner/admin only)", async () => {
     const id = await seedEvent({ balanced: true } as any);
     await prisma.playerRating.create({
       data: { eventId: id, name: "Bob", rating: 1100, gamesPlayed: 3, wins: 2, draws: 0, losses: 1 },
@@ -425,13 +432,7 @@ describe("GET /api/events/[id]/ratings", () => {
     });
     // No auth headers — simulates a non-owner viewing the event
     const res = await getRatings(ctx({ id }));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.data).toHaveLength(2);
-    expect(body.data[0].name).toBe("Bob");
-    expect(body.data[0].rating).toBe(1100);
-    expect(body.data[1].name).toBe("Carol");
-    expect(body.data[1].rating).toBe(950);
+    expect(res.status).toBe(403);
   });
 });
 
@@ -473,7 +474,8 @@ describe("GET /api/events/[id]/calendar", () => {
 
 describe("POST /api/events/[id]/ratings/recalculate", () => {
   it("recalculates ratings from history", async () => {
-    const id = await seedEvent();
+    const user = await seedUser();
+    const id = await seedEvent({ ownerId: user.id });
     const teams = [
       { team: "A", players: [{ name: "Alice", order: 0 }] },
       { team: "B", players: [{ name: "Bob", order: 0 }] },
@@ -483,6 +485,7 @@ describe("POST /api/events/[id]/ratings/recalculate", () => {
       scoreTwo: 1,
       teamsSnapshot: JSON.stringify(teams),
     });
+    vi.spyOn(auth.api, "getSession").mockResolvedValue({ user: { id: user.id, name: "Test User" } } as any);
     const res = await recalculateRatings(ctx({ id }, {}));
     expect(res.status).toBe(200);
     const body = await res.json();

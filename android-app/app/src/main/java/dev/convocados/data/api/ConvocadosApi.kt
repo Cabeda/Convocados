@@ -7,6 +7,9 @@ import javax.inject.Singleton
 @Singleton
 class ConvocadosApi @Inject constructor(private val client: ApiClient) {
 
+    /** The configured server origin, for building public web URLs. */
+    val serverUrl: String get() = client.serverUrl
+
     // ── User ──────────────────────────────────────────────────────────────
     suspend fun fetchMyGames(): MyGamesResponse = client.get("/api/me/games")
     suspend fun fetchMyStats(): PlayerStats = client.get("/api/me/stats")
