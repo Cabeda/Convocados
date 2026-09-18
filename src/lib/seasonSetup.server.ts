@@ -28,10 +28,46 @@ export function seasonDayKey(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** First instant (00:00:00.000 UTC) of the calendar day containing `date`. */
+export function seasonDayStart(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
+}
+
+/** First instant of the day *after* the calendar day containing `date`. */
+export function seasonDayEndExclusive(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1, 0, 0, 0, 0));
+}
+
 type SeasonWindow = {
   registrationOpensAt: Date;
   registrationClosesAt: Date;
 };
+
+/**
+ * Inclusive UTC calendar-day bounds of a Season's registration window, for
+ * timestamp comparisons (`startsAt <= dateTime <= endsAt`). Both boundary days
+ * count in full, so a Game on the opening or closing day always qualifies
+ * regardless of its time-of-day. Mirrors `seasonWindowsOverlapByDay`.
+ */
+export function seasonWindowByDay(season: SeasonWindow): { startsAt: Date; endsAt: Date } {
+  return {
+    startsAt: seasonDayStart(season.registrationOpensAt),
+    endsAt: new Date(seasonDayEndExclusive(season.registrationClosesAt).getTime() - 1),
+  };
+}
+
+/**
+ * The Season's competitive window: its day-granular registration window, capped
+ * by completion/cancellation when the Season was ended early.
+ */
+export function seasonCompetitiveWindow(season: SeasonWindow & {
+  completedAt: Date | null;
+  cancelledAt: Date | null;
+}): { startsAt: Date; endsAt: Date } {
+  const { startsAt, endsAt } = seasonWindowByDay(season);
+  const cap = season.completedAt ?? season.cancelledAt;
+  return { startsAt, endsAt: cap && cap < endsAt ? cap : endsAt };
+}
 
 /**
  * Date-only, exclusive-edge window overlap. Cancelled seasons are excluded by
@@ -65,9 +101,10 @@ export function seasonAttendanceWindow(season: {
   registrationOpensAt: Date;
   registrationClosesAt: Date;
 }, now = new Date()): { gte: Date; lte: Date } {
+  const { startsAt, endsAt } = seasonWindowByDay(season);
   return {
-    gte: season.registrationOpensAt,
-    lte: season.registrationClosesAt < now ? season.registrationClosesAt : now,
+    gte: startsAt,
+    lte: now < endsAt ? now : endsAt,
   };
 }
 

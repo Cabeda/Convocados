@@ -42,7 +42,7 @@ function game(
 }
 
 function member(id: string, name: string, crewId: string, crewName: string): SeasonMember {
-  return { membershipId: id, name, crewId, crewName, joinedAt: new Date("2025-01-01"), withdrawnAt: null };
+  return { membershipId: id, name, crewId, crewName, withdrawnAt: null };
 }
 
 function crewByName(result: ReturnType<typeof calculateLeaderboard>, name: string) {
@@ -169,7 +169,7 @@ describe("crew scoring (season-v1 mean-of-members)", () => {
   it("labels each player row with its Crew name (null when unassigned)", () => {
     const members = [
       member("m-a", "Alice", "red", "Red"),
-      { membershipId: "m-b", name: "Bob", crewId: null, crewName: null, joinedAt: new Date("2025-01-01"), withdrawnAt: null },
+      { membershipId: "m-b", name: "Bob", crewId: null, crewName: null, withdrawnAt: null },
     ];
     const result = calculateLeaderboard(
       [game("g1", "2026-01-01", 1, 0, ["Alice"], ["Bob"])],

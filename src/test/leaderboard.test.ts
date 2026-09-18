@@ -53,9 +53,9 @@ describe("calculateLeaderboard", () => {
 
   it("builds Crew standings from effective Season members and ranks ties deterministically", () => {
     const members: SeasonMember[] = [
-      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", joinedAt: new Date("2025-12-01"), withdrawnAt: null },
-      { membershipId: "m-bob", name: "Bob", crewId: "red", crewName: "Red", joinedAt: new Date("2025-12-01"), withdrawnAt: null },
-      { membershipId: "m-carol", name: "Carol", crewId: "blue", crewName: "Blue", joinedAt: new Date("2025-12-01"), withdrawnAt: null },
+      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", withdrawnAt: null },
+      { membershipId: "m-bob", name: "Bob", crewId: "red", crewName: "Red", withdrawnAt: null },
+      { membershipId: "m-carol", name: "Carol", crewId: "blue", crewName: "Blue", withdrawnAt: null },
     ];
 
     const result = calculateLeaderboard([
@@ -72,9 +72,9 @@ describe("calculateLeaderboard", () => {
     expect(result.crews[1]).toMatchObject({ name: "Blue", points: 1, roundsRepresented: 2, roundsCounted: 2 });
   });
 
-  it("does not count a member before joining or after withdrawing", () => {
+  it("counts all period games up to withdrawal, regardless of when the member was added", () => {
     const members: SeasonMember[] = [
-      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", joinedAt: new Date("2026-01-05"), withdrawnAt: new Date("2026-01-15") },
+      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", withdrawnAt: new Date("2026-01-15") },
     ];
     const result = calculateLeaderboard([
       game("before", "2026-01-01", 3, 0, ["Alice"], ["Guest"]),
@@ -83,19 +83,19 @@ describe("calculateLeaderboard", () => {
     ], members);
 
     expect(result.gamesCount).toBe(3);
-    expect(result.players.find((player) => player.name === "Alice")).toMatchObject({ played: 1, points: 3 });
-    expect(result.crews[0]).toMatchObject({ roundsRepresented: 1, points: 3 });
+    expect(result.players.find((player) => player.name === "Alice")).toMatchObject({ played: 2, points: 6 });
+    expect(result.crews[0]).toMatchObject({ roundsRepresented: 2, points: 6 });
   });
 
-  it("counts period games for members enrolled after the season period ended", () => {
+  it("counts all period games regardless of when the member was added", () => {
     const members: SeasonMember[] = [
-      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", joinedAt: new Date("2026-09-10"), withdrawnAt: null },
-      { membershipId: "m-bob", name: "Bob", crewId: "red", crewName: "Red", joinedAt: new Date("2026-09-10"), withdrawnAt: null },
+      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", withdrawnAt: null },
+      { membershipId: "m-bob", name: "Bob", crewId: "red", crewName: "Red", withdrawnAt: null },
     ];
     const result = calculateLeaderboard([
       game("g1", "2026-03-01", 3, 0, ["Alice"], ["Bob"]),
       game("g2", "2026-04-01", 1, 1, ["Alice"], ["Bob"]),
-    ], members, { startsAt: new Date("2026-01-01"), seasonEndsAt: new Date("2026-08-31") });
+    ], members, { startsAt: new Date("2026-01-01"), endsAt: new Date("2026-08-31") });
 
     expect(result.gamesCount).toBe(2);
     expect(result.players.find((player) => player.name === "Alice")).toMatchObject({ played: 2, points: 4 });
@@ -103,33 +103,33 @@ describe("calculateLeaderboard", () => {
     expect(result.crews[0]).toMatchObject({ roundsRepresented: 2 });
   });
 
-  it("still excludes pre-join games while the season period is open", () => {
+  it("counts games played before a member was enrolled while the season is open", () => {
     const members: SeasonMember[] = [
-      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", joinedAt: new Date("2026-06-01"), withdrawnAt: null },
+      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", withdrawnAt: null },
     ];
     const result = calculateLeaderboard([
       game("before", "2026-03-01", 3, 0, ["Alice"], ["Guest"]),
       game("after", "2026-07-01", 3, 0, ["Alice"], ["Guest"]),
-    ], members, { startsAt: new Date("2026-01-01"), seasonEndsAt: new Date("2026-12-31") });
+    ], members, { startsAt: new Date("2026-01-01"), endsAt: new Date("2026-12-31") });
 
-    expect(result.players.find((player) => player.name === "Alice")).toMatchObject({ played: 1, points: 3 });
+    expect(result.players.find((player) => player.name === "Alice")).toMatchObject({ played: 2, points: 6 });
   });
 
-  it("still excludes withdrawn members even with seasonEndsAt set", () => {
+  it("excludes games on or after withdrawal", () => {
     const members: SeasonMember[] = [
-      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", joinedAt: new Date("2026-09-10"), withdrawnAt: new Date("2026-02-01") },
+      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", withdrawnAt: new Date("2026-02-01") },
     ];
     const result = calculateLeaderboard([
       game("g1", "2026-03-01", 3, 0, ["Alice"], ["Guest"]),
-    ], members, { startsAt: new Date("2026-01-01"), seasonEndsAt: new Date("2026-08-31") });
+    ], members, { startsAt: new Date("2026-01-01"), endsAt: new Date("2026-08-31") });
 
     expect(result.players.find((player) => player.name === "Alice")).toMatchObject({ played: 0, points: 0 });
   });
 
   it("supports an explicit season window and keeps zero-appearance members visible", () => {
     const members: SeasonMember[] = [
-      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", joinedAt: new Date("2026-01-01"), withdrawnAt: null },
-      { membershipId: "m-bob", name: "Bob", crewId: "blue", crewName: "Blue", joinedAt: new Date("2026-01-01"), withdrawnAt: null },
+      { membershipId: "m-alice", name: "Alice", crewId: "red", crewName: "Red", withdrawnAt: null },
+      { membershipId: "m-bob", name: "Bob", crewId: "blue", crewName: "Blue", withdrawnAt: null },
     ];
     const result = calculateLeaderboard(
       [game("g1", "2026-01-01", 1, 0, ["Alice"], ["Guest"]), game("g2", "2026-02-01", 0, 1, ["Alice"], ["Guest"])],

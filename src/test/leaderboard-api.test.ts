@@ -309,4 +309,34 @@ describe("GET /api/events/:id/history/leaderboard", () => {
     const body = await response.json();
     expect(body).toMatchObject({ hidden: true, gamesCount: 0, players: [], crews: [] });
   });
+
+  it("counts games on the opening and closing days regardless of time-of-day", async () => {
+    const event = await prisma.event.create({ data: { title: "Day bounds", location: "Pitch", dateTime: new Date("2026-02-01") } });
+    const alice = await prisma.user.create({ data: { id: "day-bounds-alice", name: "Alice", email: "day-bounds-alice@test.com" } });
+    const alicePlayer = await prisma.eventPlayer.create({ data: { eventId: event.id, name: "Alice", userId: alice.id } });
+    const season = await prisma.season.create({
+      data: {
+        eventId: event.id,
+        name: "Day-bounded Season",
+        status: "active",
+        registrationOpensAt: new Date("2026-01-01T00:00:00.000Z"),
+        registrationClosesAt: new Date("2026-01-31T00:00:00.000Z"),
+      },
+    });
+    await prisma.seasonMembership.create({ data: { seasonId: season.id, eventPlayerId: alicePlayer.id, userId: alice.id } });
+    const snapshot = JSON.stringify([{ team: "A", players: [{ name: "Alice" }] }, { team: "B", players: [{ name: "Bob" }] }]);
+    await prisma.gameHistory.createMany({
+      data: [
+        { eventId: event.id, dateTime: new Date("2025-12-31T23:00:00.000Z"), status: "played", scoreOne: 9, scoreTwo: 0, teamOneName: "A", teamTwoName: "B", teamsSnapshot: snapshot },
+        { eventId: event.id, dateTime: new Date("2026-01-01T22:00:00.000Z"), status: "played", scoreOne: 1, scoreTwo: 0, teamOneName: "A", teamTwoName: "B", teamsSnapshot: snapshot },
+        { eventId: event.id, dateTime: new Date("2026-01-31T18:00:00.000Z"), status: "played", scoreOne: 2, scoreTwo: 0, teamOneName: "A", teamTwoName: "B", teamsSnapshot: snapshot },
+        { eventId: event.id, dateTime: new Date("2026-02-01T00:00:00.000Z"), status: "played", scoreOne: 9, scoreTwo: 0, teamOneName: "A", teamTwoName: "B", teamsSnapshot: snapshot },
+      ],
+    });
+
+    const response = await getLeaderboard(context(event.id, `?seasonId=${season.id}`));
+    const body = await response.json();
+    expect(body.gamesCount).toBe(2);
+    expect(body.players.find((player: { name: string }) => player.name === "Alice")).toMatchObject({ played: 2, points: 6 });
+  });
 });

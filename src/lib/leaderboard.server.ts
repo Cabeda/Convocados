@@ -1,6 +1,7 @@
 import { prisma } from "./db.server";
 import { checkOwnership } from "./auth.helpers.server";
 import { calculateLeaderboard, filterLeaderboardGames, type LeaderboardGame, type SeasonMember } from "./leaderboard";
+import { seasonCompetitiveWindow } from "./seasonSetup.server";
 
 export interface LeaderboardScope {
   type: "event" | "season";
@@ -109,21 +110,17 @@ export async function computeLeaderboardPayload(
         name: membership.eventPlayer.name,
         crewId: membership.crewId,
         crewName: membership.crew?.name ?? null,
-        joinedAt: membership.joinedAt,
         withdrawnAt: membership.withdrawnAt,
       }))
     : [];
-  // The season period is the registration window: editing it recomputes the
-  // standings live, adding and removing period games automatically. Completion
-  // still caps the window for seasons ended early.
-  const startsAt = selectedSeason?.registrationOpensAt ?? null;
-  const completedEndsAt = selectedSeason?.completedAt ?? selectedSeason?.cancelledAt ?? null;
-  const closesAt = selectedSeason?.registrationClosesAt ?? null;
-  const endsAt = completedEndsAt && closesAt && completedEndsAt < closesAt ? completedEndsAt : closesAt;
-  // Members enrolled after the season period closed (e.g. a retroactive season
-  // set up after the games) count for the whole period — see isMemberEffective.
-  const seasonEndsAt = selectedSeason?.registrationClosesAt ?? null;
-  const standings = calculateLeaderboard(allGames, selectedSeason ? seasonMembers : undefined, { startsAt, endsAt, seasonEndsAt });
+  // The Season period is the registration window, day-granular: editing it or
+  // its members/crews recomputes the standings live, adding and removing period
+  // games automatically. Completion still caps the window for seasons ended
+  // early.
+  const window = selectedSeason ? seasonCompetitiveWindow(selectedSeason) : null;
+  const startsAt = window?.startsAt ?? null;
+  const endsAt = window?.endsAt ?? null;
+  const standings = calculateLeaderboard(allGames, selectedSeason ? seasonMembers : undefined, { startsAt, endsAt });
 
   return {
     scope: {

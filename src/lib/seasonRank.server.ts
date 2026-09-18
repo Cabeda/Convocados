@@ -13,6 +13,7 @@ import {
   type LeaderboardGame,
   type SeasonMember,
 } from "./leaderboard";
+import { seasonCompetitiveWindow } from "./seasonSetup.server";
 import {
   computeSeasonRank,
   provisionalGames,
@@ -94,15 +95,6 @@ function toGame(row: {
   return teams ? { id: row.id, dateTime: row.dateTime, status: row.status, isFriendly: row.isFriendly, scoreOne: row.scoreOne, scoreTwo: row.scoreTwo, teams } : null;
 }
 
-/** Season window: registration window, capped by completion/cancellation. */
-function seasonWindow(season: { registrationOpensAt: Date; registrationClosesAt: Date; completedAt: Date | null; cancelledAt: Date | null }) {
-  const startsAt = season.registrationOpensAt;
-  const completedEndsAt = season.completedAt ?? season.cancelledAt;
-  const closesAt = season.registrationClosesAt;
-  const endsAt = completedEndsAt && completedEndsAt < closesAt ? completedEndsAt : closesAt;
-  return { startsAt, endsAt };
-}
-
 /**
  * Derive (once) and persist the Event's frozen Rank calibration: anchor = min
  * established Skill Rating, edges = percentile tiers. Re-derived only by an
@@ -159,7 +151,7 @@ export async function deriveSeasonRank(eventId: string, seasonId: string): Promi
   const event = await prisma.event.findUnique({ where: { id: eventId }, select: { rankEnabled: true } });
   const { anchor, edges } = await ensureRankCalibration(eventId);
 
-  const { startsAt, endsAt } = seasonWindow(season);
+  const { startsAt, endsAt } = seasonCompetitiveWindow(season);
   const history = await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "asc" } });
   const allGames = history.map(toGame).filter((g): g is LeaderboardGame => g !== null);
   const qualifying = filterLeaderboardGames(allGames, { startsAt, endsAt });
@@ -276,7 +268,7 @@ export async function snapshotSeasonRank(eventId: string, seasonId: string): Pro
   if (!season || season.eventId !== eventId) return;
 
   const rank = await deriveSeasonRank(eventId, seasonId);
-  const { startsAt, endsAt } = seasonWindow(season);
+  const { startsAt, endsAt } = seasonCompetitiveWindow(season);
   const history = await prisma.gameHistory.findMany({ where: { eventId }, orderBy: { dateTime: "asc" } });
   const allGames = history.map(toGame).filter((g): g is LeaderboardGame => g !== null);
 
@@ -285,14 +277,9 @@ export async function snapshotSeasonRank(eventId: string, seasonId: string): Pro
     name: m.eventPlayer.name,
     crewId: m.crewId,
     crewName: m.crew?.name ?? null,
-    joinedAt: m.joinedAt,
     withdrawnAt: m.withdrawnAt,
   }));
-  const standings = calculateLeaderboard(allGames, seasonMembers, {
-    startsAt,
-    endsAt,
-    seasonEndsAt: season.registrationClosesAt,
-  });
+  const standings = calculateLeaderboard(allGames, seasonMembers, { startsAt, endsAt });
 
   const payload: SnapshotPayload = {
     players: (rank?.players ?? []).map((p) => ({ name: p.name, hidden: p.hidden, display: p.display, tier: p.tier, games: p.games })),
