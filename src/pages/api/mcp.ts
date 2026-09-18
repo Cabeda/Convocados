@@ -1,10 +1,20 @@
 import type { APIRoute } from "astro";
-import { authenticateRequest, requireScope } from "../../lib/authenticate.server";
+import { authenticateRequest, requireScope, type AuthContext } from "../../lib/authenticate.server";
 import { checkApiRateLimit, extractIp } from "../../lib/apiRateLimit.server";
 import { TOOLS } from "../../lib/mcp/tools";
 import { McpError } from "../../lib/mcp/errors";
+import {
+  MODERN_VERSION,
+  SERVER_INFO,
+  SERVER_CAPABILITIES,
+  SERVER_INSTRUCTIONS,
+  isSupportedVersion,
+  negotiateHandshakeVersion,
+  wwwAuthenticate,
+} from "../../lib/mcp/protocol";
 
-const PROTOCOL_VERSION = "2026-07-28";
+/** Explicit empty context for tools that allow anonymous callers. */
+const ANONYMOUS_CTX: AuthContext = { userId: "", scopes: [], authMethod: "oauth" };
 
 function jsonRpcError(
   id: unknown,
@@ -26,6 +36,24 @@ function jsonRpcResult(id: unknown, result: unknown) {
   return Response.json({ jsonrpc: "2.0", id: id ?? null, result }, { status: 200 });
 }
 
+/** JSON-RPC notification — no response body (Streamable HTTP: 202 Accepted). */
+function accepted() {
+  return new Response(null, { status: 202 });
+}
+
+function originOf(request: Request): string {
+  const host =
+    request.headers.get("x-forwarded-host") ??
+    request.headers.get("host") ??
+    "convocados.cabeda.dev";
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
+  return `${proto}://${host}`;
+}
+
+/**
+ * Streamable HTTP GET is only for server-initiated messages, which this server
+ * does not send. 405 with `Allow: POST` is the spec-tolerable answer.
+ */
 export const GET: APIRoute = async () => {
   return Response.json(
     {
@@ -33,11 +61,11 @@ export const GET: APIRoute = async () => {
       id: null,
       error: {
         code: -32600,
-        message: "Use POST with MCP-Protocol-Version and Mcp-Method headers. SSE is deprecated; see server/discover.",
-        data: { hint: "POST /api/mcp with headers MCP-Protocol-Version: 2026-07-28, Mcp-Method, Mcp-Name" },
+        message: "Use POST for MCP requests. This server sends no unsolicited messages.",
+        data: { hint: "POST /api/mcp with a JSON-RPC body" },
       },
     },
-    { status: 405, headers: { Allow: "POST" } }
+    { status: 405, headers: { Allow: "POST" } },
   );
 };
 
@@ -52,44 +80,57 @@ export const POST: APIRoute = async ({ request }) => {
   const id = body?.id ?? null;
   const method = body?.method as string | undefined;
 
-  // ── Header validation (SEP-2243 + stateless core) ────────────────────────
-  const protocolVersion = request.headers.get("MCP-Protocol-Version");
-  if (!protocolVersion) {
-    return jsonRpcError(id, -32600, "Missing MCP-Protocol-Version header");
+  // ── Optional headers (legacy stateless routing). Never required. ─────────
+  const headerVersion = request.headers.get("MCP-Protocol-Version");
+  if (headerVersion && !isSupportedVersion(headerVersion)) {
+    return jsonRpcError(id, -32600, `Unsupported MCP-Protocol-Version: ${headerVersion}`);
   }
-  if (protocolVersion !== PROTOCOL_VERSION) {
-    return jsonRpcError(id, -32600, `Unsupported MCP-Protocol-Version: ${protocolVersion}. Expected ${PROTOCOL_VERSION}`);
+  const metaVersion = body?.params?._meta?.["io.modelcontextprotocol/protocolVersion"] as
+    | string
+    | undefined;
+  if (!headerVersion && metaVersion && !isSupportedVersion(metaVersion)) {
+    return jsonRpcError(id, -32600, `Unsupported MCP-Protocol-Version: ${metaVersion}`);
   }
-
   const mcpMethod = request.headers.get("Mcp-Method");
-  if (!mcpMethod) {
-    return jsonRpcError(id, -32600, "Missing Mcp-Method header");
-  }
-  if (method && mcpMethod !== method) {
+  if (mcpMethod && method && mcpMethod !== method) {
     return jsonRpcError(id, -32600, `Mcp-Method mismatch: header "${mcpMethod}" != body method "${method}"`);
   }
+  const effectiveMethod = method ?? mcpMethod;
 
-  // ── Retired initialize ───────────────────────────────────────────────────
-  if (method === "initialize" || mcpMethod === "initialize") {
-    return jsonRpcError(id, -32601, "initialize is retired in 2026-07-28, use server/discover", { hint: "Call server/discover instead of initialize" });
-  }
-
-  // ── server/discover (no auth required, optional) ────────────────────────
-  if (method === "server/discover" || mcpMethod === "server/discover") {
+  // ── Handshake era: initialize ────────────────────────────────────────────
+  if (effectiveMethod === "initialize") {
+    const clientVersion = body?.params?.protocolVersion as string | undefined;
     return jsonRpcResult(id, {
-      protocolVersion: PROTOCOL_VERSION,
-      serverInfo: { name: "convocados", version: "3.128.6" },
-      capabilities: {
-        tools: { listChanged: false },
-        resources: { listChanged: false },
-      },
-      instructions: "Stateless MCP 2026-07-28. Each request is self-describing. Use tools/list and tools/call with Mcp-Method/Mcp-Name headers.",
+      protocolVersion: negotiateHandshakeVersion(clientVersion),
+      capabilities: SERVER_CAPABILITIES,
+      serverInfo: SERVER_INFO,
+      instructions: SERVER_INSTRUCTIONS,
     });
   }
 
-  // ── Rate limiting (AGENTS: apply to mutations; MCP tools are metered per Mcp-Name) ─
-  const isToolsList = mcpMethod === "tools/list" || method === "tools/list";
-  const isToolsCall = mcpMethod === "tools/call" || method === "tools/call";
+  // Any notification gets 202 with no body.
+  if (effectiveMethod?.startsWith("notifications/")) {
+    return accepted();
+  }
+
+  if (effectiveMethod === "ping") {
+    return jsonRpcResult(id, {});
+  }
+
+  // ── Modern era: server/discover (no auth) ────────────────────────────────
+  if (effectiveMethod === "server/discover") {
+    return jsonRpcResult(id, {
+      protocolVersion: MODERN_VERSION,
+      serverInfo: SERVER_INFO,
+      capabilities: SERVER_CAPABILITIES,
+      instructions: SERVER_INSTRUCTIONS,
+    });
+  }
+
+  const isToolsList = effectiveMethod === "tools/list";
+  const isToolsCall = effectiveMethod === "tools/call";
+
+  // ── Rate limiting (mutations metered; tools/list is cheap) ───────────────
   if (isToolsList || isToolsCall) {
     const preset = isToolsCall ? "write" : "read";
     const ip = extractIp(request);
@@ -101,18 +142,8 @@ export const POST: APIRoute = async ({ request }) => {
     }
   }
 
-  // ── Auth required for tools ─────────────────────────────────────────────
-  const needsAuth = isToolsList || isToolsCall;
-  let authCtx: Awaited<ReturnType<typeof authenticateRequest>> = null;
-  if (needsAuth) {
-    authCtx = await authenticateRequest(request);
-    if (!authCtx) {
-      return jsonRpcError(id, -32001, "Unauthorized: missing or invalid Bearer token", undefined, 401);
-    }
-  }
-
-  // ── tools/list ───────────────────────────────────────────────────────────
-  if (method === "tools/list" || mcpMethod === "tools/list") {
+  // ── tools/list — anonymous (MCP mixed authentication) ────────────────────
+  if (isToolsList) {
     const tools = TOOLS.map((t) => ({
       name: t.name,
       description: t.description,
@@ -125,21 +156,17 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   // ── tools/call ───────────────────────────────────────────────────────────
-  if (method === "tools/call" || mcpMethod === "tools/call") {
+  if (isToolsCall) {
     const params = body?.params ?? {};
     const name: string | undefined = params.name;
     const args: Record<string, unknown> = (params.arguments ?? {}) as Record<string, unknown>;
-
     const mcpName = request.headers.get("Mcp-Name");
-    if (!mcpName) {
-      return jsonRpcError(id, -32600, "Missing Mcp-Name header for tools/call");
-    }
-    if (name && mcpName !== name) {
+    if (mcpName && name && mcpName !== name) {
       return jsonRpcError(id, -32600, `Mcp-Name mismatch: header "${mcpName}" != params.name "${name}"`);
     }
     const toolName = name ?? mcpName;
     if (!toolName) {
-      return jsonRpcError(id, -32602, "Missing tool name");
+      return jsonRpcError(id, -32602, "Missing tool name (params.name)");
     }
 
     const tool = TOOLS.find((t) => t.name === toolName);
@@ -147,13 +174,23 @@ export const POST: APIRoute = async ({ request }) => {
       return jsonRpcError(id, -32601, `Tool not found: ${toolName}`, undefined, 404);
     }
 
-    // scope check
-    if (!requireScope(authCtx!, tool.scope)) {
+    // Mixed auth: anonymous read tools need no token; everything else does.
+    const requiresAuth = tool.requiresAuth !== false;
+    let authCtx: AuthContext | null = null;
+    if (requiresAuth || request.headers.get("authorization")) {
+      authCtx = await authenticateRequest(request);
+    }
+    if (requiresAuth && !authCtx) {
+      return jsonRpcError(id, -32001, "Unauthorized: missing or invalid Bearer token", undefined, 401, {
+        "WWW-Authenticate": wwwAuthenticate(originOf(request), tool.scope),
+      });
+    }
+    if (authCtx && !requireScope(authCtx, tool.scope)) {
       return jsonRpcError(id, -32001, `Forbidden: missing scope ${tool.scope}`, undefined, 403);
     }
 
     try {
-      const data = await tool.handler(args, authCtx!);
+      const data = await tool.handler(args, authCtx ?? ANONYMOUS_CTX);
       return jsonRpcResult(id, {
         content: [{ type: "text" as const, text: JSON.stringify(data) }],
       });
@@ -166,5 +203,5 @@ export const POST: APIRoute = async ({ request }) => {
     }
   }
 
-  return jsonRpcError(id, -32601, `Method not found: ${method ?? mcpMethod}`);
+  return jsonRpcError(id, -32601, `Method not found: ${effectiveMethod ?? "unknown"}`);
 };

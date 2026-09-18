@@ -1,0 +1,86 @@
+---
+export const prerender = true;
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="MCP Server" description="Connect ChatGPT and other MCP clients to Convocados.">
+  <h1>MCP Server</h1>
+  <p class="subtitle">
+    Convocados exposes a Model Context Protocol server so AI assistants can read and
+    manage games on your behalf.
+  </p>
+
+  <h2>Endpoint</h2>
+  <pre><code>https://convocados.cabeda.dev/api/mcp</code></pre>
+  <p>
+    It serves <strong>both</strong> MCP eras from the same URL: the
+    <code>initialize</code> handshake (up to <code>2025-11-25</code>) used by
+    ChatGPT, and the stateless <code>2026-07-28</code> lifecycle
+    (<code>server/discover</code>, no session).
+  </p>
+
+  <h2>Authentication</h2>
+  <ul>
+    <li><strong>Anonymous:</strong> <code>initialize</code>, <code>tools/list</code>,
+      and the read-only public tools work with no token —
+      <code>convocados_list_public_events</code> and
+      <code>convocados_get_game</code> (a password-locked event returns
+      <code>{`{ "locked": true }`}</code>).</li>
+    <li><strong>OAuth 2.1:</strong> every other tool requires a Bearer token. The
+      authorization server supports PKCE (S256) and dynamic client registration,
+      so clients register themselves — there is nothing to configure by hand.</li>
+  </ul>
+  <p>
+    Metadata: <a href="/.well-known/oauth-protected-resource">/.well-known/oauth-protected-resource</a>
+    and <a href="/.well-known/oauth-authorization-server">/.well-known/oauth-authorization-server</a>.
+    A <code>401</code> carries a <code>WWW-Authenticate</code> challenge pointing at the metadata.
+  </p>
+
+  <h2>Connect it to ChatGPT (developer mode)</h2>
+  <ol>
+    <li>Use ChatGPT on the web with a Plus, Pro, Business, Enterprise, or Education plan. Business/Edu admins may need to enable developer mode for the workspace first.</li>
+    <li>Open <strong>Settings → Security and login</strong> (older UI: <strong>Connectors → Advanced settings</strong>) and turn on <strong>Developer mode</strong>.</li>
+    <li>Go to <strong>ChatGPT Plugins</strong>, click the <strong>plus</strong> button, and create an app for a remote MCP server.</li>
+    <li>Name it <em>Convocados</em>, set the MCP server URL to <code>https://convocados.cabeda.dev/api/mcp</code>, and choose <strong>OAuth</strong> authentication.</li>
+    <li>Click <strong>Scan tools</strong>; complete the Convocados consent screen if prompted, then wait for the scan to finish and click <strong>Create</strong>.</li>
+    <li>In a chat, pick <strong>Developer mode</strong> from the plus menu and select the Convocados app.</li>
+  </ol>
+  <p>
+    Read-only tools work without signing in; connecting an account (OAuth) unlocks
+    user-scoped reads and every write action.
+  </p>
+
+  <h2>Tools</h2>
+  <table>
+    <thead><tr><th>Tool</th><th>Auth</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>convocados_list_public_events</code></td><td>Anonymous</td><td>List public games looking for players</td></tr>
+      <tr><td><code>convocados_get_game</code></td><td>Anonymous</td><td>Event details by id (players, spots left)</td></tr>
+      <tr><td><code>convocados_list_my_games</code></td><td>OAuth</td><td>Your owned, admin, and followed games</td></tr>
+      <tr><td><code>convocados_list_players</code></td><td>OAuth</td><td>Roster for a game</td></tr>
+      <tr><td><code>convocados_get_balance</code></td><td>OAuth</td><td>Payment status and balances</td></tr>
+      <tr><td><code>convocados_get_history</code></td><td>OAuth</td><td>Recent games and scores</td></tr>
+      <tr><td><code>convocados_get_ratings</code></td><td>OAuth</td><td>ELO ratings</td></tr>
+      <tr><td><code>convocados_add_player</code></td><td>OAuth</td><td>Add a player to a game</td></tr>
+      <tr><td><code>convocados_remove_player</code></td><td>OAuth</td><td>Remove a player</td></tr>
+      <tr><td><code>convocados_randomize_teams</code></td><td>OAuth</td><td>Randomize or balance teams</td></tr>
+      <tr><td><code>convocados_update_payment</code></td><td>OAuth</td><td>Record a payment</td></tr>
+      <tr><td><code>convocados_set_score</code></td><td>OAuth</td><td>Save a game score</td></tr>
+      <tr><td><code>convocados_create_event</code></td><td>OAuth</td><td>Create a new event</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Example</h2>
+  <p>Handshake, then a tool call (JSON-RPC over POST):</p>
+  <pre><code>{`{"jsonrpc":"2.0","id":1,"method":"initialize",
+ "params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ChatGPT","version":"1"}}}`}</code></pre>
+  <pre><code>{`{"jsonrpc":"2.0","id":2,"method":"tools/call",
+ "params":{"name":"convocados_list_public_events","arguments":{"limit":5}}}`}</code></pre>
+
+  <h2>Writes are organizer-only</h2>
+  <p>
+    A token alone is not enough to mutate an event: write tools additionally verify
+    you are the event owner or an admin (ADR 0022 / ADR 0035). Ownerless public
+    events are read-only until adopted.
+  </p>
+</DocsLayout>

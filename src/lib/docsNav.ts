@@ -52,6 +52,7 @@ export const docsNav: DocsNavSection[] = [
       { href: "/docs/api/webhooks", label: "Webhooks" },
       { href: "/docs/api/push", label: "Push Notifications" },
       { href: "/docs/api/history", label: "History" },
+      { href: "/docs/mcp", label: "MCP Server" },
       { href: "/docs/api-reference", label: "Full Reference" },
     ],
   },
