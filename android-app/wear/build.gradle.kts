@@ -255,7 +255,6 @@ dependencies {
     // Wear Compose
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.wear.compose.foundation)
-    implementation(libs.wear.compose.material)
     implementation(libs.wear.compose.material3)
     implementation(libs.wear.compose.navigation)
     implementation(libs.androidx.compose.ui)
