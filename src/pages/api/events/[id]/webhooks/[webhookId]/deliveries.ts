@@ -1,10 +1,23 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../../../lib/db.server";
+import { checkOwnership } from "../../../../../../lib/auth.helpers.server";
 
 /** GET — list delivery logs for a webhook */
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
   const webhookId = params.webhookId ?? "";
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { ownerId: true, isPublic: true },
+  });
+  if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  // Delivery logs expose endpoint URLs and error details — organizer-only.
+  const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, undefined, eventId);
+  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
+    return Response.json({ error: "Only the event owner can do this." }, { status: 403 });
+  }
 
   const webhook = await prisma.webhookSubscription.findFirst({
     where: { id: webhookId, eventId },

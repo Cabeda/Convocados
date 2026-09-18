@@ -273,7 +273,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   }
 
   const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, params.id);
-  if (event.ownerId && !isOwner && !isAdmin) {
+  if (!isOwner && !isAdmin && (event.ownerId || event.isPublic)) {
     return Response.json({ error: "Only the event owner or admin can add historical games." }, { status: 403 });
   }
 

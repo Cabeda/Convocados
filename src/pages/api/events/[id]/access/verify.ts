@@ -5,8 +5,8 @@ import { rateLimitResponse } from "../../../../../lib/apiRateLimit.server";
 
 /** POST — Verify event password and set access cookie. */
 export const POST: APIRoute = async ({ params, request }) => {
-  // Stricter rate limit for password attempts
-  const limited = await rateLimitResponse(request, "write");
+  // Stricter rate limit for password attempts (auth preset: 10/min per IP).
+  const limited = await rateLimitResponse(request, "auth");
   if (limited) return limited;
 
   const eventId = params.id ?? "";

@@ -1,10 +1,12 @@
 import type { APIRoute } from "astro";
-import { getSession } from "../../../lib/auth.helpers.server";
+import { getSession, checkOwnership } from "../../../lib/auth.helpers.server";
 import {
   getOrCreateUserFeedToken,
   revokeUserTokens,
   getOrCreateEventFeedToken,
 } from "../../../lib/calendarToken.server";
+import { prisma } from "../../../lib/db.server";
+import { isEventParticipant } from "../../../lib/settlement.server";
 import { rateLimitResponse } from "~/lib/apiRateLimit.server";
 
 /** POST — generate (or retrieve) a calendar feed token for the authenticated user */
@@ -23,6 +25,16 @@ export const POST: APIRoute = async ({ request }) => {
   if (scope === "event") {
     if (!eventId) {
       return Response.json({ error: "eventId is required for event scope." }, { status: 400 });
+    }
+    // The feed exposes title/location/schedule, so only people involved in the
+    // event may mint a token for it (owner, admin, or participant).
+    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { ownerId: true } });
+    if (!event) {
+      return Response.json({ error: "Event not found." }, { status: 404 });
+    }
+    const { isOwner, isAdmin } = await checkOwnership(request, event.ownerId, session, eventId);
+    if (!isOwner && !isAdmin && !(await isEventParticipant(eventId, session.user.id))) {
+      return Response.json({ error: "You are not part of this event." }, { status: 403 });
     }
     const token = await getOrCreateEventFeedToken(session.user.id, eventId);
     const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost";
