@@ -144,44 +144,32 @@ test.describe("Snackbar notifications", () => {
     await expect(page.locator('.MuiSnackbar-root button')).toBeVisible();
   });
 
-  test("claim player shows success snackbar", async ({ page, request }) => {
+  test("Skill Rating page is owner/admin-only", async ({ page, request }) => {
     const ip = uniqueIp();
     const api = withIp(request, ip);
 
-    // Create user and sign in
+    // Create user and sign in (the API context becomes the event owner)
     const email = `e2e-notif-claim-${Date.now()}@test.com`;
-    const userId = await createVerifiedUser(request, email, "TestPassword123!", "ClaimTester");
+    await createVerifiedUser(request, email, "TestPassword123!", "ClaimTester");
 
-    // Create event (owned by this user)
-    const eventId = await createEvent(api, "E2E Snackbar Claim Test", 10);
-
-    // Add an anonymous player (not linked to any account)
+    // Create event (owned by this user) with an anonymous player
+    const eventId = await createEvent(api, "E2E Skill Rating Access", 10);
     await api.post(`/api/events/${eventId}/players`, {
       data: { name: "AnonymousPlayer" },
     });
 
-    await page.goto(`/events/${eventId}`);
-    await expect(page.locator("text=AnonymousPlayer")).toBeVisible({ timeout: 10_000 });
+    // Anonymous visitor: the Skill Rating (raw Elo) surface is hidden.
+    await page.goto(`/events/${eventId}/rankings`);
+    await expect(page.locator("text=AnonymousPlayer")).toHaveCount(0);
 
-    // Look for the "Claim as me" button in the rankings page
+    // Owner: signed in, the page is reachable again.
+    const signInRes = await page.context().request.post("/api/auth/sign-in/email", {
+      data: { email, password: "TestPassword123!" },
+    });
+    expect(signInRes.ok()).toBeTruthy();
+
     await page.goto(`/events/${eventId}/rankings`);
     await expect(page.locator("text=AnonymousPlayer")).toBeVisible({ timeout: 10_000 });
-
-    const claimBtn = page.locator('button:has-text("Claim as me"), button[aria-label*="claim"], button[aria-label*="Claim"]').first();
-
-    if (await claimBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await claimBtn.click();
-
-      // Confirm the claim dialog
-      const confirmBtn = page.locator('.MuiDialog-root button:has-text("Claim")').first();
-      if (await confirmBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await confirmBtn.click();
-      }
-
-      // Snackbar should show success
-      await expect(page.locator('.MuiSnackbar-root')).toBeVisible({ timeout: 5_000 });
-      await expect(page.locator('.MuiSnackbar-root')).toContainText(/claimed/i);
-    }
   });
 });
 
