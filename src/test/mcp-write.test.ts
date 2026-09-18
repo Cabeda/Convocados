@@ -470,7 +470,7 @@ describe("MCP write tools — tools/list surface", () => {
     for (const tool of ["convocados_add_player", "convocados_remove_player", "convocados_randomize_teams", "convocados_update_payment", "convocados_set_score", "convocados_create_event"]) {
       expect(names).toContain(tool);
     }
-    expect(names).toHaveLength(13);
+    expect(names).toHaveLength(16);
   });
 });
 
@@ -734,5 +734,115 @@ describe("MCP write tools — additional validation and auth gaps", () => {
     const body: any = await res.json();
     const data = JSON.parse(body.result.content[0].text);
     expect(data.id).toBeTruthy();
+  });
+});
+describe("MCP write tools — update_event", () => {
+  it("updates provided fields for the owner", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_update_event", {
+      eventId: event.id, title: "Renamed", location: "Porto", maxPlayers: 8, isPublic: true,
+    })));
+    expect(res.status).toBe(200);
+    const updated = await prisma.event.findUnique({ where: { id: event.id } });
+    expect(updated?.title).toBe("Renamed");
+    expect(updated?.location).toBe("Porto");
+    expect(updated?.maxPlayers).toBe(8);
+    expect(updated?.isPublic).toBe(true);
+  });
+
+  it("rejects a non-owner", async () => {
+    const owner = await createOwner();
+    const other = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: other.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_update_event", { eventId: event.id, title: "Hacked" })));
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects when no fields are provided", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_update_event", { eventId: event.id })));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a past dateTime", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+    const res = await POST(ctx(callTool("convocados_update_event", {
+      eventId: event.id, dateTime: new Date(Date.now() - 3600_000).toISOString(),
+    })));
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("MCP write tools — cancel_event", () => {
+  it("cancels the current game for the owner", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_cancel_event", { eventId: event.id })));
+    expect(res.status).toBe(200);
+    const game = await prisma.game.findUnique({ where: { id: event.currentGameId! } });
+    expect(game?.status).toBe("cancelled");
+    const history = await prisma.gameHistory.findFirst({ where: { eventId: event.id, status: "cancelled" } });
+    expect(history).toBeTruthy();
+  });
+
+  it("rejects a non-owner", async () => {
+    const owner = await createOwner();
+    const other = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: other.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+    expect((await POST(ctx(callTool("convocados_cancel_event", { eventId: event.id })))).status).toBe(403);
+  });
+
+  it("rejects cancelling an already played game", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    await prisma.game.update({ where: { id: event.currentGameId! }, data: { status: "played" } });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["write:events"], authMethod: "oauth", clientId: "c1" });
+    expect((await POST(ctx(callTool("convocados_cancel_event", { eventId: event.id })))).status).toBe(400);
+  });
+});
+
+describe("MCP write tools — rsvp", () => {
+  it("sets the caller's RSVP", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+
+    const res = await POST(ctx(callTool("convocados_rsvp", { eventId: event.id, status: "yes" })));
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    const data = JSON.parse(body.result.content[0].text);
+    expect(data.status).toBe("yes");
+  });
+
+  it("rejects an invalid status", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    expect((await POST(ctx(callTool("convocados_rsvp", { eventId: event.id, status: "perhaps" })))).status).toBe(400);
+  });
+
+  it("rejects when the game has already started", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id, { dateTime: new Date(Date.now() - 3600_000) });
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["manage:players"], authMethod: "oauth", clientId: "c1" });
+    expect((await POST(ctx(callTool("convocados_rsvp", { eventId: event.id, status: "yes" })))).status).toBe(409);
+  });
+
+  it("rejects when the scope is missing", async () => {
+    const owner = await createOwner();
+    const event = await createEvent(owner.id);
+    mockAuth.mockResolvedValue({ userId: owner.id, scopes: ["read:events"], authMethod: "oauth", clientId: "c1" });
+    expect((await POST(ctx(callTool("convocados_rsvp", { eventId: event.id, status: "yes" })))).status).toBe(403);
   });
 });
