@@ -1,17 +1,22 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { checkOwnership, getSession } from "../../../../lib/auth.helpers.server";
+import { canReadEventFinances } from "../../../../lib/eventReadAccess.server";
 import { rateLimitResponse } from "../../../../lib/apiRateLimit.server";
 import { enqueueNotification, drainNotificationQueue } from "../../../../lib/notificationQueue.server";
 import { recordSelfReported, recordReceived } from "../../../../lib/payments.server";
 
 const VALID_STATUSES = ["pending", "sent", "paid"];
 
-/** GET — list all payments with summary. */
-export const GET: APIRoute = async ({ params }) => {
+/** GET — list all payments with summary. Owner/admin/participant (or ownerless-unlisted link access). */
+export const GET: APIRoute = async ({ params, request }) => {
   const eventId = params.id ?? "";
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return Response.json({ error: "Not found." }, { status: 404 });
+
+  if (!(await canReadEventFinances(request, event))) {
+    return Response.json({ error: "Only event participants can view payments." }, { status: 403 });
+  }
 
   const eventCost = await prisma.eventCost.findUnique({
     where: { eventId },

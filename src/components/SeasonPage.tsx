@@ -54,6 +54,7 @@ interface SeasonPayload {
   viewerEventPlayerId?: string | null;
   viewerMembership?: { id: string; status: string; eventPlayerId: string } | null;
   registrationOpen?: boolean;
+  hasOtherLiveSeason?: boolean;
   leaderboard?: LeaderboardPayload | null;
 }
 
@@ -81,7 +82,7 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const [crewCount, setCrewCount] = useState(2);
   const [crews, setCrews] = useState<CrewDraft[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | "enroll" | "details" | "remove" | "crewDelete" | "cancel" | null>(null);
+  const [busy, setBusy] = useState<"recommend" | "save" | "membership" | "activate" | "bulk" | "enroll" | "details" | "remove" | "crewDelete" | "cancel" | "complete" | "reopen" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [candidates, setCandidates] = useState<MemberCandidate[]>([]);
@@ -91,6 +92,8 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   const [pendingCrewDelete, setPendingCrewDelete] = useState<{ index: number; id?: string; name: string } | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -153,7 +156,11 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
   // the admin signal — admins keep management access after activation too.
   const isManager = !!season?.activeMembers;
   const isRegistration = season?.status === "registration";
-  const isTerminal = season?.status === "completed" || season?.status === "cancelled";
+  const isActiveOrReview = season?.status === "active" || season?.status === "review";
+  const isCompleted = season?.status === "completed";
+  const isCancelled = season?.status === "cancelled";
+  const canReopen = isCompleted && !season?.hasOtherLiveSeason;
+  const isTerminal = isCompleted || isCancelled;
   // Admins may edit Crews at any non-terminal stage (registration, active,
   // review); completed and cancelled Seasons are read-only for everyone.
   const isAdmin = isManager && !isTerminal;
@@ -331,6 +338,31 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
       await load();
     } catch {
       setError(t("seasonActivateError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runLifecycleAction = async (action: "complete" | "reopen") => {
+    setBusy(action);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/events/${eventId}/seasons/${seasonId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error ?? (action === "complete" ? t("seasonCompleteError") : t("seasonReopenError")));
+        return;
+      }
+      setCompleteOpen(false);
+      setReopenOpen(false);
+      await load();
+    } catch {
+      setError(action === "complete" ? t("seasonCompleteError") : t("seasonReopenError"));
     } finally {
       setBusy(null);
     }
@@ -517,15 +549,25 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between" }}>
                     <Box>
                       <Typography variant="subtitle1" fontWeight={700}>
-                        {isRegistration ? t("seasonStartTitle") : t("seasonActiveTitle")}
+                        {isRegistration
+                          ? t("seasonStartTitle")
+                          : isCompleted
+                            ? t("seasonCompletedTitle")
+                            : isCancelled
+                              ? t("seasonCancelledTitle")
+                              : t("seasonActiveTitle")}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {isRegistration
                           ? t("seasonStartRequirements", { crews: qualifyingCrewCount, participants: members.length })
-                          : t("seasonActiveDescription")}
+                          : isCompleted
+                            ? t("seasonCompletedDescription")
+                            : isCancelled
+                              ? t("seasonCancelledDescription")
+                              : t("seasonActiveDescription")}
                       </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                       <Button variant="outlined" component="a" href={`/events/${eventId}/history`}>
                         {t("viewHistory")}
                       </Button>
@@ -538,7 +580,30 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
                           {busy === "activate" ? t("startingSeason") : t("startSeason")}
                         </Button>
                       )}
+                      {isActiveOrReview && (
+                        <Button
+                          variant="contained"
+                          onClick={() => setCompleteOpen(true)}
+                          disabled={busy !== null}
+                        >
+                          {busy === "complete" ? t("completingSeason") : t("completeSeason")}
+                        </Button>
+                      )}
+                      {isCompleted && (
+                        <Button
+                          variant="contained"
+                          onClick={() => setReopenOpen(true)}
+                          disabled={busy !== null || !canReopen}
+                        >
+                          {busy === "reopen" ? t("reopeningSeason") : t("reopenSeason")}
+                        </Button>
+                      )}
                     </Stack>
+                    {isCompleted && !canReopen && (
+                      <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 220 }}>
+                        {t("seasonReopenBlocked")}
+                      </Typography>
+                    )}
                   </Stack>
                 </CardContent>
               </Card>
@@ -766,6 +831,32 @@ export default function SeasonPage({ eventId, seasonId, crewInviteToken }: { eve
             <Button onClick={() => setCancelOpen(false)} disabled={busy !== null}>{t("keepSeason")}</Button>
             <Button color="error" variant="contained" onClick={() => void confirmCancelSeason()} disabled={busy !== null}>
               {busy === "cancel" ? t("cancellingSeason") : t("cancelSeason")}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={completeOpen} onClose={() => busy === null && setCompleteOpen(false)} fullWidth maxWidth="xs">
+          <DialogTitle>{t("completeSeasonTitle")}</DialogTitle>
+          <DialogContent>
+            <DialogContentText>{t("completeSeasonConfirm")}</DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setCompleteOpen(false)} disabled={busy !== null}>{t("cancel")}</Button>
+            <Button variant="contained" onClick={() => void runLifecycleAction("complete")} disabled={busy !== null}>
+              {busy === "complete" ? t("completingSeason") : t("completeSeason")}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={reopenOpen} onClose={() => busy === null && setReopenOpen(false)} fullWidth maxWidth="xs">
+          <DialogTitle>{t("reopenSeasonTitle")}</DialogTitle>
+          <DialogContent>
+            <DialogContentText>{t("reopenSeasonConfirm")}</DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setReopenOpen(false)} disabled={busy !== null}>{t("cancel")}</Button>
+            <Button variant="contained" onClick={() => void runLifecycleAction("reopen")} disabled={busy !== null}>
+              {busy === "reopen" ? t("reopeningSeason") : t("reopenSeason")}
             </Button>
           </DialogActions>
         </Dialog>

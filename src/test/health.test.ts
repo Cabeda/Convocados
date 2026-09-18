@@ -160,27 +160,28 @@ describe("GET /api/health", () => {
     }
   });
 
-  it("returns 503 when database query fails", async () => {
+  it("returns 503 without leaking the internal error text", async () => {
     // Spy on $queryRaw to throw
-    const spy = vi.spyOn(prisma, "$queryRaw").mockRejectedValueOnce(new Error("DB down"));
+    const spy = vi.spyOn(prisma, "$queryRaw").mockRejectedValueOnce(new Error("DB down at /data/secret.db"));
     try {
       const res = await GET(ctx());
       expect(res.status).toBe(503);
       const body = await res.json();
       expect(body.status).toBe("error");
-      expect(body.message).toContain("DB down");
+      expect(body.message).toBeUndefined();
     } finally {
       spy.mockRestore();
     }
   });
 
-  it("returns default message when error has no message", async () => {
+  it("returns 503 with no message when the error has none", async () => {
     const spy = vi.spyOn(prisma, "$queryRaw").mockRejectedValueOnce(null);
     try {
       const res = await GET(ctx());
       expect(res.status).toBe(503);
       const body = await res.json();
-      expect(body.message).toBe("db unreachable");
+      expect(body.status).toBe("error");
+      expect(body.message).toBeUndefined();
     } finally {
       spy.mockRestore();
     }

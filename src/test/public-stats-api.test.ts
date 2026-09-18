@@ -266,13 +266,11 @@ describe("GET /api/users/[id] — publicStats in profile", () => {
     expect(body.publicStats).toBe(true);
   });
 
-  it("returns publicStats false for other users when disabled", async () => {
+  it("hides a private profile from other users", async () => {
     await seedUser("user1", "Test User", "test@test.com", false);
     mockGetSession.mockResolvedValueOnce(null);
 
     const res = await getProfile(profileCtx("user1"));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.publicStats).toBe(false);
+    expect(res.status).toBe(403);
   });
 });
