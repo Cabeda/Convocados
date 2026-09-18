@@ -27,6 +27,7 @@ function seasonResponse(
       viewerEventPlayerId: null as string | null,
       viewerMembership: null as { id: string; status: string; eventPlayerId: string } | null,
       registrationOpen: status === "registration",
+      hasOtherLiveSeason: false,
       crews: crews.map((crew, sortOrder) => ({
         id: crew.id ?? `crew-${sortOrder}`,
         name: crew.name,
@@ -559,6 +560,90 @@ describe("SeasonPage proposal refresh", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[5][1]?.body)).crews).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "North" }),
     ]));
+  });
+});
+
+describe("SeasonPage completion lifecycle", () => {
+  it("completes an active Season only after the confirmation dialog", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const rank = { players: [], edges: [] };
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "active")), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "completed" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "completed")), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    await user.click(screen.getByRole("button", { name: "Complete season" }));
+
+    expect(await screen.findByText("Complete this season?")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => call[1]?.method === "PATCH")).toBe(false);
+
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Complete season" }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some((call) =>
+      call[0] === "/api/events/event-1/seasons/season-1" && call[1]?.method === "PATCH",
+    )).toBe(true));
+    const patchCall = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH")!;
+    expect(JSON.parse(String(patchCall[1]?.body))).toEqual({ action: "complete" });
+  });
+
+  it("reopens a completed Season only after the confirmation dialog", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.mocked(fetch);
+    const rank = { players: [], edges: [] };
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "completed")), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ season: { id: "season-1", status: "active" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(seasonResponse([], "active")), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(rank), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    await user.click(screen.getByRole("button", { name: "Reopen season" }));
+
+    expect(await screen.findByText("Reopen this season?")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => call[1]?.method === "PATCH")).toBe(false);
+
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Reopen season" }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some((call) =>
+      call[0] === "/api/events/event-1/seasons/season-1" && call[1]?.method === "PATCH",
+    )).toBe(true));
+    const patchCall = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH")!;
+    expect(JSON.parse(String(patchCall[1]?.body))).toEqual({ action: "reopen" });
+  });
+
+  it("blocks reopening while another Season is live", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const completed = seasonResponse([], "completed");
+    completed.season.hasOtherLiveSeason = true;
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(completed), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    expect(screen.getByRole("button", { name: "Reopen season" })).toBeDisabled();
+    expect(screen.getByText("Another Season is already active. Complete it before reopening this one.")).toBeInTheDocument();
+  });
+
+  it("hides the lifecycle controls from non-managers", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const readOnly = seasonResponse([], "active");
+    delete (readOnly.season as { activeMembers?: unknown }).activeMembers;
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(readOnly), { status: 200 }));
+
+    renderWithTheme(<SeasonPage eventId="event-1" seasonId="season-1" />);
+    await screen.findByRole("heading", { name: "September Season" });
+
+    expect(screen.queryByRole("button", { name: "Complete season" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reopen season" })).not.toBeInTheDocument();
   });
 });
 
