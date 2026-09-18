@@ -84,11 +84,11 @@ describe("seasonRank.server", () => {
     expect(payload).not.toBeNull();
     const byName = new Map(payload!.players.map((p) => [p.name, p]));
     expect(payload!.gamesCount).toBe(2);
-    // anchor = 1000 -> seeds A=0, B=50, C=100, D=150.
+    // anchor = 1000 -> seeds in Rank Points: A=0, B=500, C=1000, D=1500.
     expect(byName.get("A")!.hidden).toBeGreaterThan(0); // won both, gained
-    expect(byName.get("B")!.hidden).toBeLessThan(50); // lost, dropped below seed
-    expect(byName.get("C")!.hidden).toBeLessThan(100); // lost, dropped below seed
-    expect(byName.get("D")!.hidden).toBe(150); // never played, untouched
+    expect(byName.get("B")!.hidden).toBeLessThan(500); // lost, dropped below seed
+    expect(byName.get("C")!.hidden).toBeLessThan(1000); // lost, dropped below seed
+    expect(byName.get("D")!.hidden).toBe(1500); // never played, untouched
   });
 
   it("freezes a completion snapshot and serves it back", async () => {

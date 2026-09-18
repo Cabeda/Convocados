@@ -12,6 +12,28 @@ export const TIER_NAMES = ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "M
 export const TIER_COLORS = ["#8c6a4a", "#8892a0", "#c9a227", "#3fa8a0", "#5b8def", "#9b6bff"];
 
 /**
+ * Rank Point scale. The whole ladder — seeds, payouts and the derived tier
+ * edges — is denominated in Rank Points (RP). ×10 is a pure denomination
+ * change: every ratio is identical, but a win reads as a number worth chasing
+ * instead of "+1".
+ */
+export const RANK_POINT_SCALE = 10;
+
+/**
+ * Upper bound on the expected score used to price a Season Rank game.
+ * Without it a heavy favourite's win prices at ~0 and rounds away to nothing
+ * (`K·(1−E) < 0.5`). Clamping to [1−cap, cap] guarantees a win always pays
+ * `K·(1−cap)` while leaving the shape of the curve — and therefore even games
+ * — untouched.
+ */
+export const EXPECTED_CLAMP = 0.9;
+
+/** Bound an expected score into [1−cap, cap] so a win can never pay nothing. */
+export function clampExpected(expected: number, cap: number = EXPECTED_CLAMP): number {
+  return Math.min(Math.max(expected, 1 - cap), cap);
+}
+
+/**
  * Provisional window for unseeded players: clamp(round(0.25N), 3, 10) games.
  * `N` is the season's expected game count.
  */
@@ -34,9 +56,9 @@ export function kRank(seasonGames: number, { seeded, provisionalWindow }: KRankO
   return !seeded && seasonGames < provisionalWindow ? 64 : 32;
 }
 
-/** Seed hidden Rank from Skill Rating: `max(0, skill - anchor)`. */
+/** Seed hidden Rank from Skill Rating: `max(0, skill - anchor)` in Rank Points. */
 export function seedRank(skill: number, anchor: number): number {
-  return Math.max(0, skill - anchor);
+  return Math.max(0, skill - anchor) * RANK_POINT_SCALE;
 }
 
 /** Apply a delta to the hidden Rank. */
@@ -55,8 +77,9 @@ export function displayRank(R: number): number {
 }
 
 /**
- * Per-game Rank delta against the opponents' average Skill Rating.
- * `outcome` is 1 (win), 0.5 (draw), or 0 (loss).
+ * Per-game Rank delta in Rank Points, against the opponents' average Skill
+ * Rating (never Season Rank). `outcome` is 1 (win), 0.5 (draw), or 0 (loss).
+ * Expected score is clamped so a win always pays at least `K·(1−cap)` RP.
  */
 export function rankDelta(
   playerSkill: number,
@@ -65,7 +88,8 @@ export function rankDelta(
   options: KRankOptions & { seasonGames: number },
 ): number {
   const k = kRank(options.seasonGames, options);
-  return Math.round(k * (outcome - expectedScore(playerSkill, opponentAvgSkill)));
+  const expected = clampExpected(expectedScore(playerSkill, opponentAvgSkill));
+  return Math.round(k * (outcome - expected) * RANK_POINT_SCALE);
 }
 
 /** Tier index for a displayed Rank: the last band whose edge is <= R. */
