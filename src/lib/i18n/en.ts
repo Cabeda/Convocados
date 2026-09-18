@@ -359,6 +359,9 @@ const en = {
   notifyRecruitmentUrgent: "🚨 TOMORROW — {title} still needs {n} player(s)!",
   notifyOrganizerSharePrompt: "🔗 {title} needs {n} more — share the invite link?",
   notifyFewSpotsLeft: "🔥 Only {n} spot(s) left for {title}",
+  notifySeasonRankTitle: "Season Rank updated",
+  notifySeasonRankBody: "{delta} RP → {rank} ({tier})",
+  notifySeasonRankProvisionalBody: "{delta} RP → unlocks at 3 games ({n}/3)",
 
   // Update banner
   updateAvailable: "A new version is available",

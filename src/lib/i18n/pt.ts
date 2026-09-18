@@ -360,6 +360,9 @@ const pt: TranslationKeys = {
   notifyRecruitmentUrgent: "🚨 AMANHÃ — {title} ainda precisa de {n} jogador(es)!",
   notifyOrganizerSharePrompt: "🔗 {title} precisa de mais {n} — partilhar link?",
   notifyFewSpotsLeft: "🔥 Apenas {n} vaga(s) para {title}",
+  notifySeasonRankTitle: "Classificação da Época atualizada",
+  notifySeasonRankBody: "{delta} RP → {rank} ({tier})",
+  notifySeasonRankProvisionalBody: "{delta} RP → desbloqueia aos 3 jogos ({n}/3)",
 
   // Update banner
   updateAvailable: "Nova versão disponível",

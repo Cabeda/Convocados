@@ -9,6 +9,7 @@ import { logEvent } from "../../../../../lib/eventLog.server";
 import { createLogger } from "../../../../../lib/logger.server";
 import { isSettledGameParticipant } from "../../../../../lib/participants.server";
 import { getGameSettlement, type CurrentGameSettlement } from "../../../../../lib/settlement.server";
+import { notifySeasonRankChanges } from "../../../../../lib/seasonRankNotify.server";
 import { getScoringType, hasCompletedMatch, matchScoreFromSets, parseScalarScore, parseScoreSets, validateScoreSets, type SetScore } from "../../../../../lib/scoring";
 
 const log = createLogger("history-patch");
@@ -590,6 +591,24 @@ export const PATCH: APIRoute = async ({ params, request }) => {
         }
       }
     } catch { /* best-effort */ }
+  }
+
+  // ADR 0031: when this save is the transition from "no score" to a complete
+  // score, push each account-linked player who played their Season Rank
+  // movement. The transition is the de-dup guard: re-saving a score leaves it
+  // set, so a Game notifies a player at most once. Fire-and-forget: never
+  // blocks the response and never throws.
+  const hadNoScore = entry.scoreOne === null || entry.scoreTwo === null;
+  const nowScored = updated.scoreOne !== null && updated.scoreTwo !== null;
+  if (hadNoScore && nowScored && updated.status === "played") {
+    void notifySeasonRankChanges(params.id ?? "", {
+      dateTime: updated.dateTime,
+      status: updated.status,
+      isFriendly: updated.isFriendly,
+      scoreOne: updated.scoreOne,
+      scoreTwo: updated.scoreTwo,
+      teamsSnapshot: updated.teamsSnapshot,
+    });
   }
 
   return Response.json({
