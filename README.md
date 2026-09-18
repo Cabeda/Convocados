@@ -2,7 +2,7 @@
 
 **Organize pickup sports games in seconds** — create events, find courts, randomize fair teams, track scores, and notify players.
 
-[![CI](https://github.com/Cabeda/Convocados/actions/workflows/ci.yml/badge.svg)](https://github.com/Cabeda/Convocados/actions/workflows/ci.yml)
+[![CI](https://github.com/Cabeda/Convocados/actions/workflows/test.yml/badge.svg)](https://github.com/Cabeda/Convocados/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Cabeda)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-00A9E0?logo=kofi&logoColor=white)](https://ko-fi.com/cabeda)

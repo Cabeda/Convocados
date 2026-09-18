@@ -1,4 +1,5 @@
 import { prisma } from "./db.server";
+import { nowMs } from "./now";
 import { isGameEnded } from "./gameStatus";
 import { getSession, checkOwnership } from "./auth.helpers.server";
 import { MVP_VOTING_WINDOW_DAYS } from "./mvp.constants";
@@ -152,9 +153,10 @@ export async function computePostGameStatus(
   if (event.mvpEnabled && latestHistory && latestHistory.status === "played") {
     // Determine if voting window is still open
     const gameEndTime = new Date(latestHistory.dateTime.getTime() + (event.durationMinutes ?? 60) * 60_000);
-    const gameHasEnded = gameEndTime <= new Date();
-    const hoursSinceGameEnd = (Date.now() - gameEndTime.getTime()) / 3_600_000;
-    const daysSinceCreation = (Date.now() - latestHistory.createdAt.getTime()) / 86400_000;
+    const currentMs = nowMs();
+    const gameHasEnded = gameEndTime.getTime() <= currentMs;
+    const hoursSinceGameEnd = (currentMs - gameEndTime.getTime()) / 3_600_000;
+    const daysSinceCreation = (currentMs - latestHistory.createdAt.getTime()) / 86400_000;
     const withinWindow = daysSinceCreation <= MVP_VOTING_WINDOW_DAYS;
 
     // Check if a newer game exists (closes voting for this one)

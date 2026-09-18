@@ -1,0 +1,184 @@
+name: Screenshots
+
+# Regenerates the committed README screenshots (docs/screenshots/web/*) from a
+# deterministic fixture. When the images differ from what is on the branch, the
+# job commits the refreshed PNGs back to the same-repo PR branch. Fork PRs
+# cannot be written to, so they get the images as a build artifact instead.
+#
+# Deliberately NOT part of the required `CI` gate — screenshot churn must never
+# block a merge. See docs/adr/0037-ci-owned-readme-screenshots.md.
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "prisma/seed-screenshots.ts"
+      - "scripts/screenshots/**"
+      - "scripts/screenshots.ts"
+      - "docs/screenshots/web/**"
+      - ".github/workflows/screenshots.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: screenshots-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  # One frozen instant shared by the seed, the server clock seam, and Playwright.
+  CONVOCADOS_FIXED_NOW: "2026-03-14T18:00:00.000Z"
+  DATABASE_URL: file:./screenshots.db
+  BETTER_AUTH_SECRET: screenshots-secret-that-is-long-enough
+  BETTER_AUTH_URL: http://localhost:4321
+  HOST: 0.0.0.0
+  PORT: "4321"
+  VAPID_PUBLIC_KEY: BJ34_OulE3hyvRFANs6bXb8t-8qpffj90-dwfy8V1DD9B44ER-bP181iyp3hXw1wlkaq-VbeLcy_IuQh7aPUYjs
+  VAPID_PRIVATE_KEY: CiPrdEcokfW8WIFvj1bptu0y6ybCtS3YlWlBCjvAF8M
+
+jobs:
+  screenshots:
+    name: Refresh README screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Never react to our own refresh commit — convergence relies on the next
+    # same-day run producing an identical image set.
+    if: github.actor != 'convocados-screenshots[bot]'
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        id: nm-cache
+        with:
+          path: |
+            node_modules
+            src/lib/__generated__
+          key: nm-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('prisma/schema.prisma') }}
+      - if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+
+      - name: Prepare throwaway database
+        run: pnpm prisma migrate deploy
+
+      - name: Seed deterministic fixture
+        run: pnpm db:seed:screenshots
+
+      - name: Build
+        run: pnpm build
+
+      - name: Get Playwright version
+        id: pw-version
+        run: echo "version=$(pnpm playwright --version)" >> $GITHUB_OUTPUT
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.pw-version.outputs.version }}-${{ runner.os }}-chromium
+      - name: Install Playwright
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" != "true" ]; then
+            pnpm playwright install chromium
+          fi
+          pnpm playwright install-deps chromium
+
+      - name: Start server
+        run: |
+          nohup node dist/server/entry.mjs > /tmp/screenshots-server.log 2>&1 &
+          echo $! > /tmp/screenshots-server.pid
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4321/api/health | grep -q '"ok"'; then
+              echo "Server ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed to start"
+          cat /tmp/screenshots-server.log
+          exit 1
+
+      - name: Capture README screenshots
+        run: pnpm screenshots:readme
+
+      - name: Stop server
+        if: always()
+        run: kill "$(cat /tmp/screenshots-server.pid)" 2>/dev/null || true
+
+      - name: Detect drift
+        id: drift
+        run: |
+          if [ -z "$(git status --porcelain -- docs/screenshots/web)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Screenshots already up to date."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git status --porcelain -- docs/screenshots/web
+          fi
+
+      - name: Upload refreshed screenshots
+        if: steps.drift.outputs.changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: readme-screenshots
+          path: docs/screenshots/web/
+          retention-days: 7
+
+      - name: Commit refreshed screenshots
+        id: commit
+        if: |
+          steps.drift.outputs.changed == 'true' &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          secrets.SCREENSHOT_BOT_TOKEN != ''
+        env:
+          TOKEN: ${{ secrets.SCREENSHOT_BOT_TOKEN }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git config user.name "convocados-screenshots[bot]"
+          git config user.email "screenshots@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -- docs/screenshots/web
+          git commit -m "chore(screenshots): refresh README web screenshots"
+          git fetch origin "$BRANCH"
+          git rebase "origin/$BRANCH" || git rebase --abort
+          git push origin "HEAD:$BRANCH"
+
+      - name: Comment on fork PRs
+        if: |
+          steps.drift.outputs.changed == 'true' &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name != github.repository
+        continue-on-error: true
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                "📸 The committed README screenshots are out of date.",
+                "This job can't push to a fork branch — download the `readme-screenshots` artifact from this run and commit it to `docs/screenshots/web/`.",
+              ].join("\n\n"),
+            });

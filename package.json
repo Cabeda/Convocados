@@ -29,6 +29,8 @@
     "k6:spike": "k6 run k6/scripts/spike.js",
     "k6:sse": "k6 run k6/scripts/sse.js",
     "screenshots": "sh -c 'PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx scripts/screenshots.ts'",
+    "screenshots:readme": "sh -c 'PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx scripts/screenshots/readme.ts'",
+    "db:seed:screenshots": "sh -c 'PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx prisma/seed-screenshots.ts'",
     "sync:i18n": "tsx scripts/generate-android-strings.ts",
     "sync:feature-parity-docs": "tsx scripts/generate-feature-parity-docs.ts",
     "db:seed:settlement": "sh -c 'set -a; [ -f ./.env ] && . ./.env; set +a; PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx prisma/seed-settlement-demo.ts'"

@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { prisma } from "../../../../lib/db.server";
 import { parseRecurrenceRule, nextOccurrence } from "../../../../lib/recurrence";
+import { now } from "../../../../lib/now";
 import { fireWebhooks } from "../../../../lib/webhook.server";
 import { autoPriorityEnroll } from "../../../../lib/priority.server";
 import { getSession, checkEventAdmin } from "../../../../lib/auth.helpers.server";
@@ -77,11 +78,11 @@ export const GET: APIRoute = async ({ params, request }) => {
   // Lazy recurrence reset — optimistic lock via compare-and-swap on nextResetAt.
   // Only the request that wins the updateMany (count=1) proceeds; concurrent
   // requests get count=0 and skip, preventing double-snapshots.
-  if (event.isRecurring && event.nextResetAt && event.nextResetAt <= new Date()) {
+  if (event.isRecurring && event.nextResetAt && event.nextResetAt <= now()) {
     const rule = parseRecurrenceRule(event.recurrenceRule);
     if (rule) {
       const currentNextResetAt = event.nextResetAt;
-      const newDateTime = nextOccurrence(event.dateTime, rule, new Date());
+      const newDateTime = nextOccurrence(event.dateTime, rule, now());
       const newNextResetAt = new Date(newDateTime.getTime() + event.durationMinutes * 60 * 1000);
 
       // Atomically claim the reset — only one concurrent request will get count=1
