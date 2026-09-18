@@ -60,11 +60,20 @@ object WearOngoingActivity {
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
 
+        // OngoingActivity.apply() only attaches the ongoing-activity metadata to
+        // the notification builder; it does NOT post the notification. Without
+        // an explicit notify() the watch face indicator and recents chip never
+        // render, which is what Play's "Missing ongoing activity" gate flags.
         OngoingActivity.Builder(context, NOTIFICATION_ID, builder)
             .setStaticIcon(R.drawable.ic_ongoing_game)
             .setTouchIntent(touchIntent)
             .build()
             .apply(context)
+
+        val notificationManager = NotificationManagerCompat.from(context)
+        if (notificationManager.areNotificationsEnabled()) {
+            notificationManager.notify(NOTIFICATION_ID, builder.build())
+        }
     }
 
     fun stop(context: Context) {

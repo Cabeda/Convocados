@@ -16,6 +16,7 @@ import dev.convocados.wear.data.local.QUICK_SPORT_PADEL
 import dev.convocados.wear.data.local.QUICK_SPORT_STANDARD
 import dev.convocados.wear.data.local.QUICK_SPORT_TENNIS
 import dev.convocados.wear.data.local.QuickGameState
+import dev.convocados.wear.ui.roundSafeWidth
 
 @Composable
 fun QuickSetupScreen(
@@ -187,12 +188,21 @@ fun QuickSetupScreen(
 
             // Start button
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = { onStart(duration, if (vibrationEnabled) alarmInterval else 0, sport) },
+                Column(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(stringResource(R.string.start_quick_game))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { onStart(duration, if (vibrationEnabled) alarmInterval else 0, sport) },
+                        // Full-width bottom CTAs get their corners cut by the
+                        // round bezel (Play "Watch shapes"); keep it inside the
+                        // inscribed square.
+                        modifier = Modifier.roundSafeWidth(),
+                    ) {
+                        Text(stringResource(R.string.start_quick_game))
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }
