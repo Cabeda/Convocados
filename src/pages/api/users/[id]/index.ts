@@ -16,6 +16,25 @@ export const GET: APIRoute = async ({ params, request }) => {
 
   if (!user) return Response.json({ error: "User not found." }, { status: 404 });
 
+  // Honor profileVisibility (same rules as /api/users/[id]/stats).
+  const visibility: string = user.profileVisibility || (user.publicStats ? "public" : "private");
+  if (!isOwnProfile) {
+    if (visibility === "private") {
+      return Response.json({ error: "This profile is private." }, { status: 403 });
+    }
+    if (visibility === "participants") {
+      if (!viewerId) {
+        return Response.json({ error: "This profile is private." }, { status: 403 });
+      }
+      const sharedEvent = await prisma.player.findFirst({
+        where: { userId: viewerId, event: { players: { some: { userId } } } },
+      });
+      if (!sharedEvent) {
+        return Response.json({ error: "This profile is private." }, { status: 403 });
+      }
+    }
+  }
+
   // Get all events the profile user owns or joined, including visibility + players
   const ownedEvents = await prisma.event.findMany({
     where: { ownerId: userId },
