@@ -24,5 +24,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     ? (await prisma.eventPlayer.findFirst({ where: { eventId, userId: session.user.id }, select: { name: true } }))?.name ?? null
     : null;
 
-  return Response.json({ ...payload, youName });
+  // Per-game deltas are the viewer's private contribution — strip them from
+  // the shared player list; the post-game status exposes only the viewer's own.
+  const players = payload.players.map(({ deltas: _deltas, ...rest }) => rest);
+
+  return Response.json({ ...payload, players, youName });
 };

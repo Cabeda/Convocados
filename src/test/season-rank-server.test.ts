@@ -4,6 +4,7 @@ import {
   deriveSeasonRank,
   ensureRankCalibration,
   getSeasonRankPayload,
+  getViewerGameRank,
   snapshotSeasonRank,
 } from "~/lib/seasonRank.server";
 
@@ -114,5 +115,42 @@ describe("seasonRank.server", () => {
     const frozenA = frozen!.players.find((p) => p.name === "A")!;
     const liveA = live!.players.find((p) => p.name === "A")!;
     expect(frozenA.hidden).toBeGreaterThan(liveA.hidden); // A lost the extra game live
+  });
+});
+
+describe("getViewerGameRank", () => {
+  const finalGame = {
+    dateTime: new Date("2026-01-03T00:00:00Z"),
+    status: "played",
+    isFriendly: false,
+    scoreOne: 1,
+    scoreTwo: 0,
+    teamsSnapshot: JSON.stringify([
+      { team: "T1", players: [{ name: "A", order: 0 }] },
+      { team: "T2", players: [{ name: "C", order: 0 }] },
+    ]),
+  };
+
+  it("returns the viewer's Rank Point movement for a counted game", async () => {
+    const { event } = await seed();
+    const rank = await getViewerGameRank(event.id, finalGame, "A");
+    expect(rank).not.toBeNull();
+    expect(rank!.counted).toBe(true);
+    expect(rank!.delta).toBeGreaterThan(0);
+    expect(rank!.after - rank!.before).toBe(rank!.delta);
+    expect(rank!.tierAfter).toBeGreaterThanOrEqual(rank!.tierBefore);
+  });
+
+  it("returns null when the viewer did not play the game", async () => {
+    const { event } = await seed();
+    expect(await getViewerGameRank(event.id, finalGame, "D")).toBeNull();
+  });
+
+  it("returns null when the game did not count", async () => {
+    const { event } = await seed();
+    const friendly = { ...finalGame, isFriendly: true };
+    expect(await getViewerGameRank(event.id, friendly, "A")).toBeNull();
+    const unplayed = { ...finalGame, status: "scheduled" };
+    expect(await getViewerGameRank(event.id, unplayed, "A")).toBeNull();
   });
 });
