@@ -16,6 +16,7 @@ import { PrismaClient } from "@prisma/client";
 import { computeGameUpdates } from "../src/lib/elo";
 import { getDefaultDurationMinutes } from "../src/lib/sports";
 import { seedCrewSeason } from "./seed-crew-season";
+import { seedNinjasSeason } from "./seed-ninjas-season";
 import { faker } from "@faker-js/faker";
 
 const prisma = new PrismaClient();
@@ -524,6 +525,12 @@ async function main() {
     // Reuses the same demo user so one `npm run db:seed` yields a complete
     // environment that also exercises Seasons, Crews and standings.
     await seedCrewSeason(prisma, demoUser, now);
+
+    // ── Guaranteed Ninjas Season scenario (Season-completion demo) ──────────
+    // A live, full-roster event with a running (active) Season whose window
+    // overlaps any new Season, reproducing the "can't complete → can't create"
+    // bug. See prisma/seed-ninjas-season.ts.
+    await seedNinjasSeason(prisma, demoUser, now);
   }
 
   const pastCount = await prisma.gameHistory.count();
