@@ -1,0 +1,88 @@
+---
+export const prerender = true;
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import RankMathDemo from '../../../components/rank/RankMathDemo.tsx';
+---
+
+<DocsLayout title="Elo in one game" description="Expected score, the Elo update rule, and why a win can pay nothing.">
+  <h1>Elo in one game: a rating is a forecast</h1>
+  <p class="subtitle">One equation, one widget, and the reason a win can pay nothing.</p>
+
+  <p>
+    Every rating system starts from the same idea: a player's number is an
+    <strong>estimate of hidden strength</strong>, and we test it by predicting the next
+    result. You are not awarded points for winning; you are <em>corrected</em> only when
+    reality differs from the prediction.
+  </p>
+
+  <h2>1 · Expected score</h2>
+  <p>
+    Elo turns the gap between two ratings into <code>E</code>, the share of the points you
+    are forecast to take. Draws count as half a win, so <code>E</code> is an average
+    score, not a win probability.
+  </p>
+
+  <pre><code>E = 1 / (1 + 10^((R_opp − R_you) / 400))</code></pre>
+
+  <p>
+    The <code>400</code> is a scale constant: a 400-point lead means the stronger player is
+    expected to score <strong>10×</strong> the weaker player's points — about 91%. A
+    200-point lead is roughly 76%.
+  </p>
+
+  <h2>2 · The update rule</h2>
+  <p>
+    After the game, move each rating by how far the actual score <code>S</code> (1 win /
+    ½ draw / 0 loss) surprised the forecast:
+  </p>
+
+  <pre><code>R′ = R + K · (S − E)</code></pre>
+  <p>
+    Meeting expectation (<code>S = E</code>) changes nothing. Over-performing gains;
+    under-performing loses. <code>K</code> sets how far one game can move you.
+  </p>
+
+  <RankMathDemo client:visible />
+
+  <div class="callout callout-info">
+    <strong>Why Convocados' "won twice, gained nothing" happens.</strong> At 1720 vs a 1000
+    field your <code>E ≈ 0.984</code>. A win is worth only <code>K·(1 − 0.984)</code> — at
+    K=32 that is <strong>+0.5</strong>, which rounds to <strong>0</strong> on the board. The
+    maths is working exactly as designed; the <em>design</em> is what fails the player.
+    Fixing the payout (a floor, a clamp, or a bigger unit) is
+    <a href="/docs/rank/payout">Pricing a win</a>.
+  </div>
+
+  <h2>3 · What K really controls</h2>
+  <p>
+    K is a dial between two failure modes. Large K finds true skill fast but makes one
+    lucky night swing the number. Small K is stable but leaves new and improving players
+    stuck near their seed. Chess uses tiered K (higher for juniors and new players, lower
+    for masters). Convocados' Season Rank uses <code>K=64</code> for provisional players
+    and <code>32</code> after.
+  </p>
+
+  <h2>Check yourself</h2>
+  <details>
+    <summary>Two players are 400 rating points apart. The stronger player's expected score is closest to…</summary>
+    <p>Ninety percent. A 400-point gap is a 10:1 points ratio, i.e. about 91%.</p>
+  </details>
+  <details>
+    <summary>Raising the K-factor makes each single game…</summary>
+    <p>Change the rating more. Larger K scales the whole surprise term, so one game moves further.</p>
+  </details>
+  <details>
+    <summary>Beating a far weaker opponent pays almost nothing because the result was…</summary>
+    <p>Exactly as expected. <code>S − E ≈ 0</code> when the favourite wins, so the update is near zero.</p>
+  </details>
+
+  <h2>Primary sources</h2>
+  <p>
+    Read
+    <a href="https://www.chess.com/blog/NateSolon/how-elo-ratings-actually-work">"How Elo Ratings Actually Work"</a>
+    (Chess.com) for the friendliest derivation, then skim the
+    <a href="https://en.wikipedia.org/wiki/Elo_rating_system">Wikipedia Elo article</a> for
+    the formulas and worked example. Keep the
+    <a href="/docs/rank/glossary">glossary</a> open as you go.
+  </p>
+</DocsLayout>

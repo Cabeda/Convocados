@@ -1,0 +1,101 @@
+---
+export const prerender = true;
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import PayoutDemo from '../../../components/rank/PayoutDemo.tsx';
+---
+
+<DocsLayout title="Pricing a win" description="Floors, clamps, and the unit you count in when designing a rank payout.">
+  <h1>Pricing a win: floors, clamps, and the unit you count in</h1>
+  <p class="subtitle">Make every win worth something without turning the ladder into a slot machine.</p>
+
+  <p>
+    The <a href="/docs/rank/elo">Elo</a> and <a href="/docs/rank/uncertainty">uncertainty</a>
+    pages explain <em>why</em> a strong player's win paid nothing. This one is the design
+    decision: given that <code>payout = K · (S − E)</code>, what do you change so a win
+    always feels like progress — and what does each lever cost you?
+  </p>
+
+  <h2>1 · The three levers</h2>
+  <ul>
+    <li>
+      <strong>Clamp the expected score.</strong> Cap <code>E</code> so a near-certain win
+      can never be priced at ~0. Symmetric clamp: <code>E ∈ [1−cap, cap]</code>. A 0.90 cap
+      makes any win at least <code>K·0.1</code>.
+    </li>
+    <li>
+      <strong>Change K.</strong> Scales every payout up or down, but also makes ratings (and
+      tier movement) more volatile. The blunt instrument.
+    </li>
+    <li>
+      <strong>Change the unit.</strong> Multiply the whole ladder — seeds, payouts, tier
+      edges — by 10. Cosmetic to the maths, but <code>+3</code> becomes <code>+30</code> and
+      the number feels worth chasing.
+    </li>
+  </ul>
+
+  <div class="callout callout-info">
+    <strong>The distinction that matters.</strong> Scaling the <em>whole</em> ladder ×10 is
+    a denomination change: every ratio is identical, tier bands are 10× wider, nothing moves
+    faster. Scaling only the <em>payout</em> ×10 is really "raise K ×10": tiers fly by and
+    cold streaks hurt ten times as much. Pick deliberately.
+  </div>
+
+  <h2>2 · Design a payout</h2>
+  <PayoutDemo client:visible />
+
+  <p>
+    At the Convocados case (<code>1720 vs 1000</code>, K=32), watch the win cell:
+    <code>none</code> pays <strong>0</strong>; the <code>0.90</code> clamp lifts it;
+    <code>×10</code> turns the whole ladder into <em>Rank Points</em> and the floor becomes
+    a satisfying <strong>+30 RP</strong>.
+  </p>
+
+  <h2>3 · What a floor costs</h2>
+  <p>
+    A guaranteed payout is not free. If a win always pays, a strong player who keeps playing
+    weak fields accrues points for expected results — that is farming. Mitigations:
+  </p>
+  <ul>
+    <li>
+      Prefer a <strong>clamp</strong> over a flat floor: it preserves the shape of the curve
+      (even games still pay the most) and only bounds the extremes.
+    </li>
+    <li>
+      Keep <strong>soft resets</strong> so farming within one Season doesn't compound across
+      Seasons.
+    </li>
+    <li>
+      Price <strong>tier edges</strong> from the seeded distribution, so a +30 RP floor is
+      small against a realistic seed spread — movement stays honest.
+    </li>
+  </ul>
+  <p>
+    This is the same instinct Josh Menke argues for in his GDC talk: the rating should be
+    fair, but the <em>rank</em> is a player-experience object, and an experience that shows
+    "+0" after a win is a bug in the experience, not the maths.
+  </p>
+
+  <h2>Check yourself</h2>
+  <details>
+    <summary>A favourite's win rounds to zero. The cleanest fix is to…</summary>
+    <p>Bound the expected score. Clamping E keeps the curve's shape and only removes the near-zero tail.</p>
+  </details>
+  <details>
+    <summary>Scaling the whole ladder ×10 changes only…</summary>
+    <p>How large it reads. Whole-ladder scaling is a denomination change; every ratio is untouched.</p>
+  </details>
+  <details>
+    <summary>The main risk of a guaranteed minimum payout is…</summary>
+    <p>Farming weak opponents. A floor pays for expected wins, so weak fields become a points source.</p>
+  </details>
+
+  <h2>Primary sources</h2>
+  <p>
+    For the design layer, watch
+    <a href="https://www.youtube.com/watch?v=-pglxege-gU">Josh Menke's GDC talk on skill, matchmaking and ranking</a>
+    — especially the "Ranking Systems" and "Hybrid Systems" chapters. For the maths of the
+    levers, the
+    <a href="https://en.wikipedia.org/wiki/Elo_rating_system">Elo article's K-factor section</a>
+    is enough.
+  </p>
+</DocsLayout>

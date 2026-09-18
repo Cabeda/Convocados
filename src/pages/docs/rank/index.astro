@@ -1,0 +1,48 @@
+---
+export const prerender = true;
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="Rank & Rating" description="How Convocados rates players and prices a win: Elo, Glicko, teams, and the Season Rank redesign.">
+  <h1>Rank &amp; Rating</h1>
+  <p class="subtitle">One equation, four lessons, and the reason a win can pay nothing.</p>
+
+  <p>
+    These pages explain the maths behind Convocados' rankings and the product redesign
+    built on it. The through-line: the failure was never a bad formula — it was asking
+    <em>one</em> number to do <em>two</em> jobs.
+  </p>
+
+  <h2>Two numbers, two jobs</h2>
+  <p>
+    ADR 0031 separates the hidden Skill Rating from the visible Season Rank. They look
+    similar and must not be crossed.
+  </p>
+  <table>
+    <thead><tr><th></th><th>Skill Rating</th><th>Season Rank</th></tr></thead>
+    <tbody>
+      <tr><td>Job</td><td>Predict performance; balance teams</td><td>Make progress felt; give a goal</td></tr>
+      <tr><td>Audience</td><td>Organizer, matchmaking</td><td>Every player</td></tr>
+      <tr><td>Visibility</td><td>Hidden (admin only)</td><td>Visible to members</td></tr>
+      <tr><td>Horizon</td><td>Lifetime; never resets</td><td>Per Season; soft-resets</td></tr>
+      <tr><td>Engine</td><td>Glicko-2 / OpenSkill</td><td>Transparent point payouts</td></tr>
+      <tr><td>Failure to avoid</td><td>Unfair teams</td><td>"+0 after a win"</td></tr>
+    </tbody>
+  </table>
+
+  <h2>In this section</h2>
+  <ol>
+    <li><a href="/docs/rank/elo"><strong>Elo in one game</strong></a> — expected score, the update rule, and what K controls.</li>
+    <li><a href="/docs/rank/uncertainty"><strong>The cost of certainty</strong></a> — Glicko's rating deviation, volatility, and rating teams.</li>
+    <li><a href="/docs/rank/payout"><strong>Pricing a win</strong></a> — floors, clamps, and the unit you count in.</li>
+    <li><a href="/docs/rank/redesign"><strong>The redesign</strong></a> — choosing an engine, the Season Rank blueprint, and a season simulator.</li>
+  </ol>
+
+  <p>See the <a href="/docs/rank/glossary">glossary</a> for the canonical terms used across these pages.</p>
+
+  <div class="callout callout-info">
+    <strong>Reading order.</strong> Each page assumes the one before it. If you only read
+    one, read <a href="/docs/rank/redesign">The redesign</a> — it is the conclusion the
+    other three argue toward.
+  </div>
+</DocsLayout>
