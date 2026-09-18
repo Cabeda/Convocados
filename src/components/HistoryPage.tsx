@@ -16,7 +16,7 @@ import { ThemeModeProvider } from "./ThemeModeProvider";
 import { ResponsiveLayout } from "./ResponsiveLayout";
 import { useT } from "~/lib/useT";
 import { useSession } from "~/lib/auth.client";
-import { computeGameUpdates, type EloUpdate } from "~/lib/elo";
+import { computeSkillUpdates, type SkillUpdate } from "~/lib/skill";
 import { hasCompletedMatch, matchScoreFromSets, type SetScore } from "~/lib/scoring";
 import { ScoreRoller } from "./event/ScoreRoller";
 import { PlayerAutocomplete } from "./event/PlayerAutocomplete";
@@ -82,7 +82,7 @@ function AddHistoricalGameDialog({
   }, [open, defaultTeamOneName, defaultTeamTwoName, sport]);
 
   // ELO preview computation
-  const eloPreview: EloUpdate[] = useMemo(() => {
+  const eloPreview: SkillUpdate[] = useMemo(() => {
     if (team1Players.length === 0 || team2Players.length === 0) return [];
     const tennisScore = isTennisScoring && hasCompletedMatch(scoreSets) ? matchScoreFromSets(scoreSets) : null;
     const s1 = isTennisScoring ? tennisScore?.teamOne ?? null : scoreOne === "" ? null : parseInt(scoreOne, 10);
@@ -92,7 +92,7 @@ function AddHistoricalGameDialog({
       { team: teamOneName, players: team1Players },
       { team: teamTwoName, players: team2Players },
     ];
-    return computeGameUpdates(playerRatings, teams, s1, s2);
+    return computeSkillUpdates(playerRatings, teams, s1, s2);
   }, [team1Players, team2Players, teamOneName, teamTwoName, scoreOne, scoreTwo, scoreSets, isTennisScoring, playerRatings]);
 
   const addPlayerToTeam = (teamIdx: number, playerName?: string) => {
