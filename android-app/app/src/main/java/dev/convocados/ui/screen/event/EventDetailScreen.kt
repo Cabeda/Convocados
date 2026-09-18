@@ -75,8 +75,12 @@ import dev.convocados.ui.screen.history.TennisSetEditor
 import dev.convocados.ui.screen.games.formatEventDateInTz
 import dev.convocados.ui.screen.games.formatRelativeDate
 import dev.convocados.ui.screen.games.sportEmoji
+import dev.convocados.ui.screen.rankings.SeasonRankReveal
 import dev.convocados.ui.theme.expressiveMotion
 import dev.convocados.ui.theme.expressiveTokens
+import dev.convocados.util.buildRankExplainerUrl
+import dev.convocados.util.openInCustomTab
+import dev.convocados.util.outcomeFromScore
 import dev.convocados.designsystem.ExpressiveMotion
 import dev.convocados.designsystem.ExpressiveSemanticRole
 import java.time.Duration
@@ -298,6 +302,9 @@ class EventDetailViewModel @Inject constructor(
     init {
         viewModelScope.launch { runCatching { _user.value = api.fetchUserInfo() } }
     }
+
+    /** Server origin, used to build the public Rank explainer URL. */
+    fun serverUrl(): String = tokenStore.getServerUrl()
 
     fun load(eventId: String) {
         _optimisticTeamResults.value = null
@@ -1676,6 +1683,25 @@ private fun HeroWrapUp(eventId: String, state: EventScreenState, viewModel: Even
                 Text("Game over! Wrap it up", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSecondaryContainer)
             }
             LinearProgressIndicator(progress = { done.toFloat()/total }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surface)
+            pg.seasonRank?.takeIf { it.counted }?.let { rank ->
+                val context = LocalContext.current
+                val serverUrl = remember { viewModel.serverUrl() }
+                SeasonRankReveal(
+                    rank = rank,
+                    onWhyClick = {
+                        context.openInCustomTab(
+                            buildRankExplainerUrl(
+                                serverUrl = serverUrl,
+                                eventId = eventId,
+                                seasonId = rank.seasonId,
+                                rank = rank.after,
+                                delta = rank.delta,
+                                outcome = outcomeFromScore(pastHistory?.scoreOne, pastHistory?.scoreTwo),
+                            )
+                        )
+                    },
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Icon(if (scoreDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, null, Modifier.size(20.dp)); Text(if (scoreDone) stringResource(R.string.post_game_score_done) else stringResource(R.string.record_final_score), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)) }
             if (!scoreDone && pg.latestHistoryId != null) {
                 if (editingScoreId == pg.latestHistoryId) {

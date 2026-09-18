@@ -396,4 +396,13 @@
     <string name="season_edit_details">Editar nome e datas</string>
     <string name="season_members">Membros</string>
     <string name="season_add_player">Adicionar jogador</string>
+    <string name="post_game_rank_title">Classificação da Época</string>
+    <string name="post_game_rank_delta">%1$s RP</string>
+    <string name="post_game_rank_unlock">A Classificação desbloqueia aos 3 jogos — %1$d/3</string>
+    <string name="post_game_rank_tier_up">Subiste de nível — agora és %1$s</string>
+    <string name="post_game_rank_to_next">%1$s RP para %2$s</string>
+    <string name="post_game_rank_why">Porquê?</string>
+    <string name="post_game_rank_why_aria">Porque mudou a minha Classificação?</string>
+    <string name="season_rank_how_it_works">Como funciona a Classificação</string>
+    <string name="rank_explainer_link_desc">Abre o cálculo da tua Classificação da Época</string>
 </resources>

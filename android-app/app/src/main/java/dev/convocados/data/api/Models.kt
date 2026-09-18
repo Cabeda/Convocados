@@ -299,6 +299,24 @@ data class PostGameStatus(
     // Viewer-scoped MVP task: true once THIS user has voted (or has no task).
     val myMvpComplete: Boolean = true,
     val paidAggregate: PaidAggregate? = null,
+    // Season Rank (ADR 0031) movement for the just-played Game. Null unless the
+    // game counted and the viewer played. Mirrors the web `SeasonRankMovement`.
+    val seasonRank: SeasonRankMovement? = null,
+)
+
+@Serializable
+data class SeasonRankMovement(
+    val seasonId: String = "",
+    val seasonName: String = "",
+    val counted: Boolean = false,
+    val delta: Double = 0.0,
+    val before: Double = 0.0,
+    val after: Double = 0.0,
+    val tierBefore: Int = 0,
+    val tierAfter: Int = 0,
+    val provisional: Boolean = false,
+    val gamesThisSeason: Int = 0,
+    val edges: List<Double> = emptyList(),
 )
 
 @Serializable

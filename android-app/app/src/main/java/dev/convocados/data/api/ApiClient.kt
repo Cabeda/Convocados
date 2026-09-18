@@ -47,6 +47,9 @@ class ApiClient @Inject constructor(
 
     private val baseUrl: String get() = tokenStore.getServerUrl()
 
+    /** The configured server origin, for building public web URLs. */
+    val serverUrl: String get() = tokenStore.getServerUrl()
+
     @PublishedApi
     internal suspend fun authenticatedRequest(
         method: HttpMethod,

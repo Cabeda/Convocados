@@ -373,4 +373,13 @@
     <string name="tier_down_title">Neue Saison, neuer Start</string>
     <string name="tier_down_body">Dein Rang wurde zurückgesetzt. Du bist wieder in %1$s — steig erneut auf.</string>
     <string name="continue_action">Weiter</string>
+    <string name="post_game_rank_title">Saison-Rang</string>
+    <string name="post_game_rank_delta">%1$s RP</string>
+    <string name="post_game_rank_unlock">Rang schaltet nach 3 Spielen frei — %1$d/3</string>
+    <string name="post_game_rank_tier_up">Stufe aufgestiegen — du bist jetzt %1$s</string>
+    <string name="post_game_rank_to_next">%1$s RP bis %2$s</string>
+    <string name="post_game_rank_why">Warum?</string>
+    <string name="post_game_rank_why_aria">Warum hat sich mein Rang geändert?</string>
+    <string name="season_rank_how_it_works">So funktioniert der Rang</string>
+    <string name="rank_explainer_link_desc">Öffnet, wie dein Saison-Rang berechnet wurde</string>
 </resources>

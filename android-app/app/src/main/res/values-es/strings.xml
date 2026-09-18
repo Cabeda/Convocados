@@ -373,4 +373,13 @@
     <string name="tier_down_title">Nueva temporada, nuevo comienzo</string>
     <string name="tier_down_body">Tu Clasificación se reinició. Vuelves a %1$s — sube de nuevo.</string>
     <string name="continue_action">Continuar</string>
+    <string name="post_game_rank_title">Clasificación de la Temporada</string>
+    <string name="post_game_rank_delta">%1$s RP</string>
+    <string name="post_game_rank_unlock">La Clasificación se desbloquea a los 3 partidos — %1$d/3</string>
+    <string name="post_game_rank_tier_up">Subiste de nivel — ahora eres %1$s</string>
+    <string name="post_game_rank_to_next">%1$s RP para %2$s</string>
+    <string name="post_game_rank_why">¿Por qué?</string>
+    <string name="post_game_rank_why_aria">¿Por qué cambió mi Clasificación?</string>
+    <string name="season_rank_how_it_works">Cómo funciona la Clasificación</string>
+    <string name="rank_explainer_link_desc">Abre cómo se calculó tu Clasificación de la Temporada</string>
 </resources>

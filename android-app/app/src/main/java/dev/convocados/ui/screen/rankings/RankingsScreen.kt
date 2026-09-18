@@ -24,6 +24,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -48,6 +50,8 @@ import dev.convocados.data.api.PlayerRating
 import dev.convocados.data.api.SeasonRankPayload
 import dev.convocados.data.api.SeasonRankPlayer
 import dev.convocados.data.api.UserProfile
+import dev.convocados.util.buildRankExplainerUrl
+import dev.convocados.util.openInCustomTab
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -194,6 +198,9 @@ class RankingsViewModel @Inject constructor(
     fun clearMessage() {
         _message.value = null
     }
+
+    /** Server origin, used to build the public Rank explainer URL. */
+    fun serverUrl(): String = api.serverUrl
 }
 
 private fun mergeRows(
@@ -337,7 +344,18 @@ fun RankingsScreen(
                 }
 
                 if (!hidden && !loading && seasonRank?.players?.isNotEmpty() == true) {
-                    item { SeasonRankCard(requireNotNull(seasonRank), seasonRankName) }
+                    val rank = requireNotNull(seasonRank)
+                    item {
+                        SeasonRankCard(rank, seasonRankName, onHowItWorks = {
+                            context.openInCustomTab(
+                                buildRankExplainerUrl(
+                                    serverUrl = viewModel.serverUrl(),
+                                    eventId = eventId,
+                                    seasonId = rank.seasonId,
+                                )
+                            )
+                        })
+                    }
                 }
 
                 if (hidden) {
@@ -450,7 +468,7 @@ fun RankingsScreen(
 
     // Season Rank tier transition dialog (ADR 0031)
     transition?.let { tr ->
-        val tierName = TierNames.getOrElse(tr.to) { "" }
+        val tierName = RankTierNames.getOrElse(tr.to) { "" }
         AlertDialog(
             onDismissRequest = { transition = null },
             title = { Text(if (tr.kind == TierTransitionKind.UP) stringResource(R.string.tier_up_title, tierName) else stringResource(R.string.tier_down_title)) },
@@ -476,20 +494,22 @@ enum class TierTransitionKind { UP, DOWN }
 
 data class TierTransition(val kind: TierTransitionKind, val from: Int, val to: Int)
 
-private val TierNames = listOf("Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master")
-private val TierColors = listOf(
-    Color(0xFF8C6A4A), Color(0xFF8892A0), Color(0xFFC9A227),
-    Color(0xFF3FA8A0), Color(0xFF5B8DEF), Color(0xFF9B6BFF),
-)
-
 /** Season Rank ladder (ADR 0031), Variant A: tier + numeric rank + progress. */
-@Composable private fun SeasonRankCard(rank: SeasonRankPayload, seasonName: String?) {
+@Composable private fun SeasonRankCard(rank: SeasonRankPayload, seasonName: String?, onHowItWorks: () -> Unit = {}) {
     val sorted = rank.players.sortedWith(compareBy({ it.provisional }, { -it.display }))
+    val howItWorksAria = stringResource(R.string.rank_explainer_link_desc)
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.season_rank), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            if (!seasonName.isNullOrBlank()) {
-                Text(seasonName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.season_rank), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (!seasonName.isNullOrBlank()) {
+                        Text(seasonName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                TextButton(onClick = onHowItWorks, modifier = Modifier.semantics { contentDescription = howItWorksAria }) {
+                    Text(stringResource(R.string.season_rank_how_it_works), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                }
             }
             Text(stringResource(R.string.season_rank_subtitle, rank.gamesCount), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
@@ -499,11 +519,11 @@ private val TierColors = listOf(
 }
 
 @Composable private fun SeasonRankRow(player: SeasonRankPlayer, edges: List<Double>, highlight: Boolean) {
-    val tierColor = if (player.provisional) MaterialTheme.colorScheme.outline else TierColors.getOrElse(player.tier) { MaterialTheme.colorScheme.primary }
+    val tierColor = if (player.provisional) MaterialTheme.colorScheme.outline else RankTierColors.getOrElse(player.tier) { MaterialTheme.colorScheme.primary }
     Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (player.provisional) "—" else TierNames.getOrElse(player.tier) { "" },
+                if (player.provisional) "—" else RankTierNames.getOrElse(player.tier) { "" },
                 color = tierColor,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
