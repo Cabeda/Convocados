@@ -22,6 +22,7 @@
     "db:seed": "sh -c 'set -a; [ -f ./.env ] && . ./.env; set +a; PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx prisma/seed.ts'",
     "db:seed:settle": "sh -c 'set -a; [ -f ./.env ] && . ./.env; set +a; PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx prisma/seed-settle-demo.ts'",
     "db:seed:rank": "sh -c 'set -a; [ -f ./.env ] && . ./.env; set +a; PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx prisma/seed-rank-demo.ts'",
+    "db:seed:rank-reveal": "sh -c 'set -a; [ -f ./.env ] && . ./.env; set +a; PATH=\"$PWD/node_modules/.pnpm/node_modules/.bin:$PATH\" tsx prisma/seed-rank-reveal.ts'",
     "lhci": "lhci autorun --config=lighthouserc.cjs",
     "k6:smoke": "k6 run k6/scripts/smoke.js",
     "k6:load": "k6 run k6/scripts/load.js",
