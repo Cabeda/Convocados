@@ -10,9 +10,20 @@
  * The game ended ~2h ago, the demo user played and won, so the wrap-up banner
  * shows the Rank movement. Idempotent: re-running wipes and recreates the demo.
  */
+import { readFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+
+/** The dev server's actual port, so printed URLs aren't wrong (scripts/dev.sh writes .dev-port). */
+function localBase(): string {
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL;
+  try {
+    const p = readFileSync(".dev-port", "utf8").trim();
+    if (p) return `http://localhost:${p}`;
+  } catch { /* fall through */ }
+  return "http://localhost:4321";
+}
 
 const DEMO_PASSWORD_HASH = "e85e17b8ccf0231ecc33406b98bf41b3:ac313125f11ad360382987c4c993c93d0346878a4ae3959669711822323fb8c5ac57f53975466b90b60f38ab5e81c263bbabcd821cab003641e4342f92e9dc45";
 const DEMO_EMAIL = "demo@convocados.app";
@@ -154,7 +165,7 @@ async function main() {
     });
   }
 
-  const base = process.env.PUBLIC_BASE_URL ?? "http://localhost:4321";
+  const base = localBase();
   console.log("\n✓ Rank reveal demo seeded");
   console.log(`  Event:   ${base}/events/${event.id}`);
   console.log(`  Season:  ${base}/events/${event.id}/seasons/${season.id}`);
