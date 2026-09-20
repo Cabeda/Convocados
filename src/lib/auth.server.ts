@@ -8,6 +8,7 @@ import { prisma } from "./db.server";
 import { sendVerificationEmail, sendChangeEmailVerification, sendMagicLinkEmail } from "./email.server";
 import { OAUTH_SCOPES } from "./scopes";
 import { hashTrustedClientSecret } from "./trustedClient.server";
+import { repairStaleJwks } from "./jwksRepair.server";
 
 const baseUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:4321";
 
@@ -175,3 +176,36 @@ export const auth = betterAuth({
     ...(process.env.TRUSTED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
   ],
 });
+
+/**
+ * Remove JWKS signing keys that were encrypted with a previous (now-rotated)
+ * auth secret. Without this, rotating BETTER_AUTH_SECRET leaves undecryptable
+ * keys in the `jwks` table and every session lookup throws
+ * "Failed to decrypt private key" — the app looks like sign-in is broken.
+ *
+ * Runs lazily once per server process; subsequent calls share the same promise.
+ * Safe to call on every auth request.
+ */
+let _authKeysHealthy: Promise<void> | null = null;
+export function ensureAuthKeysHealthy(): Promise<void> {
+  if (!_authKeysHealthy) {
+    _authKeysHealthy = (async () => {
+      const ctx = await auth.$context;
+      const removed = await repairStaleJwks(ctx.secretConfig);
+      if (removed > 0) {
+        console.warn(
+          `[auth] removed ${removed} JWKS key(s) that could not be decrypted with the current secret — a new signing key will be minted`,
+        );
+      }
+    })().catch((err) => {
+      console.error("[auth] JWKS self-heal failed (non-fatal)", err);
+      // Allow a later request to retry.
+      _authKeysHealthy = null;
+    });
+  }
+  return _authKeysHealthy;
+}
+
+// Kick the self-heal off as soon as the module loads so page SSR (which reads
+// sessions through auth.api.getSession) recovers without waiting for a request.
+void ensureAuthKeysHealthy();
