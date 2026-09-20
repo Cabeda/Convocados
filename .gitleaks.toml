@@ -6,7 +6,9 @@ useDefault = true
 [allowlist]
 description = "test and example secrets"
 paths = [
-  '''playwright\.config\.ts''',
+  # NOTE: never path-allowlist a whole *config or source* file. playwright.config.ts
+  # was once listed here, which silently exempted a hardcoded VAPID private key from
+  # every scan. Test fixtures belong in e2e/ or src/test/, matched by regex below.
   '''e2e/.*''',
   '''src/test/.*''',
   '''\.env\.example$''',

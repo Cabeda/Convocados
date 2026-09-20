@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { createECDH } from "node:crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -7,10 +8,24 @@ const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3001);
 const BASE_URL = `http://localhost:${PORT}`;
 const DB_PATH = path.resolve(__dirname, "e2e-test.db");
 
-// Test VAPID keys for web push e2e tests — use env vars or fall back to
-// pre-generated test-only keys (these have no security value).
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ?? "BJ34_OulE3hyvRFANs6bXb8t-8qpffj90-dwfy8V1DD9B44ER-bP181iyp3hXw1wlkaq-VbeLcy_IuQh7aPUYjs";
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? "CiPrdEcokfW8WIFvj1bptu0y6ybCtS3YlWlBCjvAF8M";
+// VAPID keys for the push e2e server. Prefer the caller's keys; otherwise mint a
+// fresh pair for this run so no key material ever lives in the repo. A hardcoded
+// private key trips GitHub secret scanning and is a permanent rotation liability.
+function generateVapidKeys(): { publicKey: string; privateKey: string } {
+  const ecdh = createECDH("prime256v1");
+  ecdh.generateKeys();
+  return {
+    publicKey: ecdh.getPublicKey().toString("base64url"),
+    privateKey: ecdh.getPrivateKey().toString("base64url"),
+  };
+}
+
+const vapid =
+  process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
+    ? { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY }
+    : generateVapidKeys();
+const VAPID_PUBLIC_KEY = vapid.publicKey;
+const VAPID_PRIVATE_KEY = vapid.privateKey;
 
 export default defineConfig({
   testDir: "./e2e",
