@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { auth } from "./auth.server";
+import { auth, ensureAuthKeysHealthy } from "./auth.server";
 import { authenticateApiKey } from "./apiKey.server";
 import { prisma } from "./db.server";
 
@@ -80,6 +80,7 @@ export async function authenticateRequest(
 
   // 3. Session auth (cookie-based)
   try {
+    await ensureAuthKeysHealthy();
     const session = await auth.api.getSession({ headers: request.headers });
     if (session?.user) {
       return {
