@@ -1,4 +1,4 @@
-import { auth } from "./auth.server";
+import { auth, ensureAuthKeysHealthy } from "./auth.server";
 import { prisma } from "./db.server";
 
 /**
@@ -43,6 +43,7 @@ export async function getSession(request: Request) {
   }
 
   // 2. Fall back to session cookie auth
+  await ensureAuthKeysHealthy();
   const session = await auth.api.getSession({ headers: request.headers });
   return session;
 }

@@ -29,7 +29,7 @@ import type { Locale } from "~/lib/i18n";
 import { useSession, signOut } from "~/lib/auth.client";
 import { shareForHomeScreen } from "~/lib/pwaInstall";
 import { INSTALL_BANNER_DISMISS_KEY, installBannerDismissed } from "~/lib/pushPrompt";
-import { SignInModal } from "./SignInModal";
+import { SignInButton } from "./SignInButton";
 import SupportLinks from "./SupportLinks";
 
 const LOCALE_OPTIONS: { code: Locale; label: string }[] = [
@@ -354,7 +354,6 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
   const [langAnchor, setLangAnchor] = useState<null | HTMLElement>(null);
   const { data: session, isPending: sessionLoading, refetch: refetchSession } = useSession();
   const [isAdminUser, setIsAdminUser] = useState(false);
-  const [signInOpen, setSignInOpen] = useState(false);
 
   // Where Google redirect should return to: the current page (so in-place
   // login on an event page lands back on that event).
@@ -507,14 +506,19 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
                     <ListItemText>{t("toggleDarkMode")}</ListItemText>
                   </MenuItem>
                 </Menu>
-                <Button
+                <SignInButton
                   color="inherit"
-                  onClick={() => setSignInOpen(true)}
                   size="small"
+                  callbackURL={signInCallbackURL}
+                  onSuccess={() => {
+                    // Revalidate the session so the signed-in UI swaps in without a
+                    // full-page navigation — the user stays on the current page.
+                    refetchSession?.();
+                  }}
                   sx={{ textTransform: "none", fontWeight: 600 }}
                 >
                   {t("signIn")}
-                </Button>
+                </SignInButton>
               </>
             )}
 
@@ -541,18 +545,6 @@ export const ResponsiveLayout: React.FC<{ children: React.ReactNode }> = ({ chil
       <Box component="main" sx={{ flexGrow: 1, width: "100%", pb: 4 }}>
         {children}
       </Box>
-
-      <SignInModal
-        open={signInOpen}
-        onClose={() => setSignInOpen(false)}
-        callbackURL={signInCallbackURL}
-        onSuccess={() => {
-          setSignInOpen(false);
-          // Revalidate the session so the signed-in UI swaps in without a
-          // full-page navigation — the user stays on the current page.
-          refetchSession?.();
-        }}
-      />
 
       <Box component="footer" sx={{
         py: 3, px: 2, mt: "auto",
